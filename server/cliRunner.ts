@@ -30,6 +30,7 @@ import {
 import type { OfficeTools } from './ceo.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
+import { readingOf } from '../shared/usage.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -626,6 +627,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     const cost = Number((b.cost as { total_cost_usd?: unknown } | undefined)?.total_cost_usd);
     if (Number.isFinite(cost)) costUsd = cost;
     const limits = (b.rate_limits ?? {}) as Record<string, { used_percentage?: unknown; resets_at?: unknown } | null>;
+    const readings = Object.entries(limits).flatMap(([type, l]) => readingOf({ type, percent: l?.used_percentage, resetsAt: l?.resets_at }, Date.now()) ?? []);
+    if (readings.length) cb.usage?.(readings);
     for (const [type, l] of Object.entries(limits)) {
       const used = Number(l?.used_percentage);
       if (!Number.isFinite(used)) continue;

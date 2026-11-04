@@ -1,8 +1,15 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
-import { CEO_ID, type AgentCli, type CliView, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
+import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
+import { DELIVERY_LABEL, excerpt, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
+import { suggestionsFor } from '../../../shared/chatParts';
+import { speechText } from '../../../shared/speech';
+import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
+import { retrySend, sendToCeo } from './chatSend';
+import { reduceMotion } from './a11y';
 import { Markdown } from './Markdown';
+import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
 import { MessageBox } from './MessageBox';
 import { MicButton } from './MicButton';
 import { handsFreeProblem, setHandsFree } from './mic';
@@ -332,52 +339,312 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
   );
 }
 
-function Bubble({ m, ceoName }: { m: PhoneMessage; ceoName: string }) {
-  const req = useStore((s) => (m.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
-  if (m.from === 'office') return <div className="bubble-office">{m.text}</div>;
-  const mine = m.from === 'manager';
+const SWIPE_PX = 60;
+const LONG_PRESS_MS = 500;
+
+/** A message the chat can act on: from the office (`m`), or still in this tab's outbox (`out`). */
+type Item = { m: PhoneMessage; out?: undefined } | { m?: undefined; out: OutgoingMessage };
+
+interface BubbleProps {
+  item: Item;
+  ceoName: string;
+  quoted: PhoneMessage | null | undefined; // undefined: not a reply; null: its original is no longer saved
+  highlight: boolean;
+  linked: (text: string) => string;
+  onFloor: (floor: number) => void;
+  onQuote: (id: number) => void;
+  onReply: (id: number) => void;
+  onActions: (item: Item) => void;
+  onArtifact: (messageId: number, artifactId: string) => void;
+}
+
+const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
+
+function DeliveryTick({ d }: { d: Delivery }) {
+  const icon = { sending: '🕓', sent: '✓', read: '✓✓', replied: '↩', failed: '⚠' }[d];
   return (
-    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''}`}>
-      <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'}`}>
+    <span className={`bubble-tick bubble-tick-${d}`} title={DELIVERY_LABEL[d]}>
+      <span aria-hidden>{icon}</span>
+      <span className="sr-only">{DELIVERY_LABEL[d]}</span>
+    </span>
+  );
+}
+
+/** The hover (and keyboard) buttons by a bubble: Reply, and the actions menu. */
+function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined; item: Item; onReply: (id: number) => void; onActions: (item: Item) => void }) {
+  return (
+    <div className="bubble-tools">
+      {id !== undefined && (
+        <button type="button" className="bubble-tool" aria-label="Reply to this message" title="Reply" onClick={() => onReply(id)}>
+          ↩
+        </button>
+      )}
+      <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
+        ⋯
+      </button>
+    </div>
+  );
+}
+
+function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact }: BubbleProps) {
+  const m = item.m;
+  const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
+  const [dx, setDx] = useState(0);
+  const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
+  if (m?.from === 'office') return <div className="bubble-office">{m.text}</div>;
+  const mine = !m || m.from === 'manager';
+  const text = m ? m.text : item.out!.text;
+  const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
+  const at = m ? m.at : item.out!.at;
+  const id = m?.id;
+
+  // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click).
+  const end = () => {
+    const p = press.current;
+    press.current = null;
+    if (!p) return;
+    clearTimeout(p.timer);
+    setDx(0);
+    if (p.swipe && id !== undefined) onReply(id);
+  };
+  const gestures = {
+    onPointerDown: (e: ReactPointerEvent) => {
+      if (e.pointerType === 'mouse' || (e.target as HTMLElement).closest('a, button')) return;
+      const p = { x: e.clientX, y: e.clientY, long: false, swipe: false, timer: 0 };
+      p.timer = window.setTimeout(() => {
+        p.long = true;
+        onActions(item);
+      }, LONG_PRESS_MS);
+      press.current = p;
+    },
+    onPointerMove: (e: ReactPointerEvent) => {
+      const p = press.current;
+      if (!p || p.long) return;
+      const mx = e.clientX - p.x;
+      const my = e.clientY - p.y;
+      if (Math.abs(mx) > 10 || Math.abs(my) > 10) clearTimeout(p.timer);
+      if (Math.abs(my) > 30 || id === undefined) return end();
+      if (mx > 0) setDx(Math.min(mx, SWIPE_PX + 20));
+      p.swipe = mx > SWIPE_PX;
+    },
+    onPointerUp: end,
+    onPointerCancel: end,
+    onContextMenu: (e: ReactMouseEvent) => {
+      if ((e.target as HTMLElement).closest('a')) return;
+      e.preventDefault();
+      if (!press.current?.long) onActions(item);
+    },
+  };
+
+  const quote =
+    quoted === undefined ? null : quoted === null ? (
+      <div className="bubble-quote bubble-quote-gone">↩ The original message is no longer saved</div>
+    ) : (
+      <button
+        type="button"
+        className="bubble-quote"
+        onClick={() => onQuote(quoted.id)}
+        aria-label={`In reply to ${who(quoted, ceoName)}: ${excerpt(speechText(quoted.text, 300), 140)}. Show the original message.`}
+      >
+        <span className="bubble-quote-from">↩ {quoted.from === 'manager' ? 'You' : who(quoted, ceoName)}</span>
+        <span className="bubble-quote-text">{excerpt(quoted.text, 140)}</span>
+      </button>
+    );
+
+  return (
+    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''}`} data-msg={id} tabIndex={-1}>
+      {mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
+      <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
+        {dx > 0 && (
+          <span className={`bubble-swipe ${dx > SWIPE_PX ? 'bubble-swipe-on' : ''}`} aria-hidden>
+            ↩
+          </span>
+        )}
         {!mine && <div className="bubble-from">{ceoName}</div>}
-        {mine ? <div className="bubble-text">{m.text}</div> : <Markdown className="bubble-md" text={m.text} />}
-        {req && req.status === 'pending' && m.from === 'ceo' && <Resume req={req} />}
+        {quote}
+        {mine ? (
+          <div className="bubble-text">
+            {urlParts(text).map((p, i) =>
+              p.url ? (
+                <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
+                  {p.text}
+                </a>
+              ) : (
+                p.text
+              ),
+            )}
+          </div>
+        ) : (
+          text && <Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} />
+        )}
+        {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
+        {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
-          {!mine && <ReplayButton m={m} />}
-          {clock(m.at)}
+          {m && !mine && <ReplayButton m={m} />}
+          {clock(at)}
+          {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
+        </div>
+        {delivery === 'failed' && (
+          <button type="button" className="bubble-retry" onClick={() => retrySend(item.out!.key)}>
+            ⚠ Failed, tap to retry
+          </button>
+        )}
+      </div>
+      {!mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
+    </div>
+  );
+}
+
+/** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, and Retry for a failed send. */
+function MessageActions({ item, ceoName, onReply, onClose }: { item: Item; ceoName: string; onReply: (id: number) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useDialogFocus(ref);
+  useEffect(() => ref.current?.querySelector<HTMLButtonElement>('button')?.focus(), []);
+  const text = item.m ? item.m.text : item.out.text;
+  const from = item.m ? who(item.m, ceoName) : 'you';
+  const act = (fn: () => void) => () => {
+    onClose();
+    fn();
+  };
+  const copy = () => void copyText(text).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied' : "Couldn't reach the clipboard"));
+  // A long-press's lifted finger sends a mouse press and a click onto the backdrop that just opened: not a dismissal.
+  const [openedAt] = useState(() => Date.now());
+  return (
+    <div className="chat-menu-back" onClick={(e) => e.target === e.currentTarget && Date.now() - openedAt > 500 && onClose()}>
+      <div
+        ref={ref}
+        className="chat-menu"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return;
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <div id={titleId} className="chat-menu-title">
+          Message actions · from {from}
+        </div>
+        <div className="chat-menu-quote">{excerpt(text, 120)}</div>
+        <div className="chat-menu-actions">
+          {item.m && (
+            <button type="button" className="btn btn-small" onClick={act(() => onReply(item.m!.id))}>
+              ↩ Reply
+            </button>
+          )}
+          <button type="button" className="btn btn-small" onClick={act(copy)}>
+            📋 Copy text
+          </button>
+          {item.out?.delivery === 'failed' && (
+            <button type="button" className="btn btn-small btn-good" onClick={act(() => retrySend(item.out!.key))}>
+              ⟳ Retry
+            </button>
+          )}
+          <button type="button" className="btn btn-small" onClick={onClose}>
+            Cancel
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-/** The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. */
-export function Chat({ autoFocus = true }: { autoFocus?: boolean }) {
+/** The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a floor chip opens (default: the elevator there). */
+export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFloor?: (repoId: string) => void }) {
   const messages = useStore((s) => s.messages);
+  const outbox = useStore((s) => s.chatOutbox);
   const readAt = useStore((s) => s.phoneReadAt);
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const info = useStore((s) => s.ceo);
   const settings = useStore((s) => s.settings);
+  const repos = useStore((s) => s.repos);
+  const goToFloor = useStore((s) => s.goToFloor);
   const running = useStore((s) => Object.values(s.agents).filter(isBusy).length);
   const [text, setText] = useState('');
+  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [menu, setMenu] = useState<Item | null>(null);
+  const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
+  const [artifactList, setArtifactList] = useState(false);
+  const [flash, setFlash] = useState<number | null>(null);
+  const [atEnd, setAtEnd] = useState(true);
+  // The first message that was unread when the chat opened: the "New messages" divider goes above it.
+  const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
   const scroller = useRef<HTMLDivElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const stick = useRef(true);
+  const opened = useRef(false);
+
+  const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
+  const linked = useMemo(() => (t: string) => linkCeoText(t, floors), [floors]);
+  const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   // Reading the thread marks it read.
   useEffect(() => {
     const last = [...messages].reverse().find((m) => m.from === 'ceo');
     if (last && last.at > readAt) void attempt(() => api.phoneRead(last.at));
   }, [messages, readAt]);
+  // Opening the chat shows the unread divider (or the end); after that it follows new messages only from the end.
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, info.job?.kind]);
+    if (!el) return;
+    if (!opened.current) {
+      opened.current = true;
+      const divider = el.querySelector<HTMLElement>('.chat-unread');
+      if (divider && el.scrollHeight - divider.offsetTop > el.clientHeight) {
+        el.scrollTop = divider.offsetTop - 8;
+        stick.current = false;
+        setAtEnd(false);
+        return;
+      }
+    }
+    if (stick.current) el.scrollTop = el.scrollHeight;
+  }, [messages.length, outbox.length, info.job?.kind]);
+  useEffect(() => {
+    if (flash === null) return;
+    const t = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   if (!ceo) return <p className="muted phone-empty">The corner office is empty.</p>;
-  const send = (t: string) => {
-    const body = t.trim();
-    if (!body) return;
+  const openFloor = (n: number) => {
+    const repo = repos.find((r) => r.floor === n);
+    if (!repo) return;
+    if (onFloor) onFloor(repo.id);
+    else goToFloor(n);
+  };
+  const toEnd = () => {
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion() ? 'auto' : 'smooth' });
+    stick.current = true;
+    setAtEnd(true);
+  };
+  const send = (t: string, to: number | null = replyTo) => {
+    if (!t.trim()) return;
     setText('');
-    void attempt(() => api.messageCeo(body));
+    setReplyTo(null);
+    stick.current = true;
+    sendToCeo(t, to ?? undefined);
+  };
+  const reply = (id: number) => {
+    setReplyTo(id);
+    form.current?.querySelector('textarea')?.focus();
+  };
+  const replyAbout = (id: number, title: string) => {
+    setReplyTo(id);
+    setText((t) => t || `About “${title}”: `);
+    requestAnimationFrame(() => form.current?.querySelector('textarea')?.focus());
+  };
+  const jump = (id: number) => {
+    const el = scroller.current?.querySelector<HTMLElement>(`[data-msg="${id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    el.focus({ preventScroll: true });
+    setFlash(id);
   };
   const replying = ceo.status === 'working' && info.job?.kind === 'chat';
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
@@ -393,6 +660,31 @@ export function Chat({ autoFocus = true }: { autoFocus?: boolean }) {
         : info.queue.length
           ? `next up: ${info.queue[0].label}`
           : 'available';
+  const offer = suggestionsFor(messages);
+  const offered = offer !== null && !outbox.some((o) => o.replyTo === offer.id) ? offer : null;
+  const question = offer ? null : yesNoFor(messages);
+  const answered = question !== null && outbox.some((o) => o.replyTo === question);
+  const shown = artifact && byId.get(artifact.messageId)?.artifacts?.find((a) => a.id === artifact.artifactId);
+  const artifactCount = messages.reduce((n, m) => n + (m.artifacts?.length ?? 0), 0);
+  const quotedNow = replyTo === null ? undefined : byId.get(replyTo);
+  const bubble = (item: Item, key: string | number) => {
+    const to = item.m ? item.m.replyTo : item.out.replyTo;
+    return (
+      <Bubble
+        key={key}
+        item={item}
+        ceoName={ceo.name}
+        quoted={to === undefined ? undefined : (byId.get(to) ?? null)}
+        highlight={item.m !== undefined && flash === item.m.id}
+        linked={linked}
+        onFloor={openFloor}
+        onQuote={jump}
+        onReply={reply}
+        onActions={setMenu}
+        onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
+      />
+    );
+  };
 
   return (
     <div className="phone-chat">
@@ -402,42 +694,131 @@ export function Chat({ autoFocus = true }: { autoFocus?: boolean }) {
           <b>{ceo.name}</b> <span className="muted small">CEO</span>
           <div className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</div>
         </div>
+        {artifactCount > 0 && (
+          <button type="button" className="hands-free" onClick={() => setArtifactList(true)} aria-haspopup="dialog" title="Every artifact in this conversation, newest first">
+            📄 Artifacts ({artifactCount})
+          </button>
+        )}
         <HandsFreeToggle ceoName={ceo.name} />
       </div>
-      <div className="chat-log" ref={scroller} aria-label={`Messages with ${ceo.name}`} tabIndex={0}>
-        {messages.length === 0 && (
-          <p className="muted small phone-empty">
-            Say hi to {ceo.name}. Ask how things are going, hand over a project brief, or ask whether a team should grow. Replies land here, and the phone buzzes when {ceo.name} needs you.
-          </p>
-        )}
-        {messages.map((m) => (
-          <Bubble key={m.id} m={m} ceoName={ceo.name} />
-        ))}
-        {replying && (
-          <div className="bubble-row">
-            <div className="bubble bubble-them bubble-typing">
-              <span />
-              <span />
-              <span />
+      <div className="chat-log-wrap">
+        <div
+          className="chat-log"
+          ref={scroller}
+          aria-label={`Messages with ${ceo.name}`}
+          tabIndex={0}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            stick.current = end;
+            if (end !== atEnd) setAtEnd(end);
+          }}
+        >
+          {messages.length === 0 && outbox.length === 0 && (
+            <p className="muted small phone-empty">
+              Say hi to {ceo.name}. Ask how things are going, hand over a project brief, or ask whether a team should grow. Replies land here, and the phone buzzes when {ceo.name} needs you.
+            </p>
+          )}
+          {messages.map((m) => (
+            <Fragment key={m.id}>
+              {m.id === firstUnread && (
+                <div className="chat-unread" role="separator">
+                  New messages
+                </div>
+              )}
+              {bubble({ m }, m.id)}
+              {m.id === offered?.id && (
+                <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
+                  {offered.suggestions!.map((s) => (
+                    <button key={s} type="button" className="suggestion-chip" onClick={() => send(s, offered.id)} aria-label={`Reply “${s}” to ${ceo.name}`}>
+                      ↩ {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          ))}
+          {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
+          {replying && (
+            <div className="bubble-row">
+              <div className="bubble bubble-them bubble-typing">
+                <span />
+                <span />
+                <span />
+              </div>
             </div>
-          </div>
+          )}
+        </div>
+        {!atEnd && (
+          <button type="button" className="chat-jump" onClick={toEnd} aria-label="Jump to the latest message">
+            ↓ Latest
+          </button>
+        )}
+        {menu && <MessageActions item={menu} ceoName={ceo.name} onReply={reply} onClose={() => setMenu(null)} />}
+        {shown && artifact && (
+          <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
+        )}
+        {artifactList && (
+          <ArtifactList
+            messages={messages}
+            onClose={() => setArtifactList(false)}
+            onOpen={(messageId, artifactId) => {
+              setArtifactList(false);
+              setArtifact({ messageId, artifactId });
+            }}
+          />
         )}
       </div>
       <div className="quick">
+        {question !== null && !answered && (
+          <>
+            <button className="quick-chip quick-answer" onClick={() => send('Yes', question)} aria-label={`Reply Yes to ${ceo.name}'s question`}>
+              ↩ Yes
+            </button>
+            <button className="quick-chip quick-answer" onClick={() => send('No', question)} aria-label={`Reply No to ${ceo.name}'s question`}>
+              ↩ No
+            </button>
+          </>
+        )}
         {QUICK.map((q) => (
-          <button key={q} className="quick-chip" onClick={() => send(q)}>
+          <button key={q} className="quick-chip" onClick={() => send(q, null)}>
             {q}
           </button>
         ))}
       </div>
+      {replyTo !== null && (
+        <div className="chat-reply">
+          <div className="grow chat-reply-body">
+            <b className="small">↩ Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'yourself' : who(quotedNow, ceo.name)) : 'a message'}</b>
+            <div className="chat-reply-text small">{quotedNow ? excerpt(quotedNow.text, 140) : 'The original message is no longer saved'}</div>
+          </div>
+          <button type="button" className="chat-reply-x" aria-label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)}>
+            ✕
+          </button>
+        </div>
+      )}
       <form
+        ref={form}
         className="chat-input"
         onSubmit={(e) => {
           e.preventDefault();
           send(text);
         }}
       >
-        <MessageBox value={text} onChange={setText} placeholder={`Message ${ceo.name}…`} aria-label={`Message ${ceo.name}`} title="Enter sends · Shift+Enter adds a new line" autoFocus={autoFocus} />
+        <MessageBox
+          value={text}
+          onChange={setText}
+          placeholder={replyTo !== null ? 'Write your reply…' : `Message ${ceo.name}…`}
+          aria-label={replyTo !== null ? `Reply to ${quotedNow ? who(quotedNow, ceo.name) : 'a message'}` : `Message ${ceo.name}`}
+          title="Enter sends · Shift+Enter adds a new line · Esc cancels a reply"
+          autoFocus={autoFocus}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape' || replyTo === null) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setReplyTo(null);
+          }}
+        />
         <MicButton kind="phone" value={text} onChange={setText} onSend={send} />
         <button className="btn btn-small btn-good" disabled={!text.trim()}>
           Send
@@ -661,6 +1042,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+      if (e.defaultPrevented) return; // handled inside: a reply or a message's actions closed
       if (e.key === 'Escape' || (!typing && isKey('phone', e.code))) {
         e.preventDefault();
         closeOverlay();

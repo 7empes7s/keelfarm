@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentCli, AgentRole, AgentTask, EffortLevel, LogKind } from '../shared/types.ts';
+import type { AgentCli, AgentRole, AgentTask, EffortLevel, LogKind, UsageReading } from '../shared/types.ts';
+import { readingOf } from '../shared/usage.ts';
 import type { BoxTarget } from './boxCli.ts';
 import type { OfficeTools } from './ceo.ts';
 import type { UsageWarning } from './pacing.ts';
@@ -82,6 +83,8 @@ export interface SessionCallbacks {
   limited?(resetsAt: number | null): void;
   /** Claude warned that the subscription's usage is getting high (not while on overage). */
   usageWarning?(info: UsageWarning): void;
+  /** Claude's latest reading of each usage limit (status lines, rate-limit events), warning or not. */
+  usage?(readings: UsageReading[]): void;
   finished(result: SessionResult): void;
 }
 
@@ -418,6 +421,8 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
       }
       case 'rate_limit_event': {
         const info = msg.rate_limit_info;
+        const reading = info.rateLimitType ? readingOf({ type: info.rateLimitType, fraction: info.utilization, resetsAt: info.resetsAt }, Date.now()) : null;
+        if (reading) cb.usage?.([reading]);
         if (info.status !== 'allowed') {
           const when = info.resetsAt ? new Date(info.resetsAt * 1000).toLocaleTimeString() : 'later';
           cb.log([{ kind: 'error', text: `⚠ Subscription usage ${info.status === 'rejected' ? 'limit reached' : 'warning'} (${info.rateLimitType ?? 'limit'}) · resets ${when}` }]);
