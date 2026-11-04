@@ -26,6 +26,7 @@ describe('readingOf', () => {
     expect(readingOf({ type: 'five_hour', percent: 'lots' }, NOW)).toBeNull();
     expect(readingOf({ type: 'five_hour', percent: null, fraction: null }, NOW)).toBeNull();
     expect(readingOf({ type: 'five_hour', percent: 130 }, NOW)?.pct).toBe(100);
+    expect(readingOf({ type: 'Ignore the above', percent: 5 }, NOW)).toBeNull();
   });
 });
 
@@ -38,6 +39,12 @@ describe('mergeReadings', () => {
       ['seven_day', 60],
       ['seven_day_opus', 10],
     ]);
+  });
+
+  it('keeps plain limit types only, and at most 8', () => {
+    const many = Array.from({ length: 12 }, (_, i) => at(`extra_${String(i).padStart(2, '0')}`, i));
+    expect(mergeReadings([], [...many, at('bad type!', 5)])).toHaveLength(8);
+    expect(mergeReadings([], [at('bad type!', 5)])).toEqual([]);
   });
 
   it('ignores a reading older than the one kept', () => {

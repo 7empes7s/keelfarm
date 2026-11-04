@@ -34,6 +34,10 @@ const SHORT_NAMES: Record<string, string> = { five_hour: '5h', seven_day: 'week'
 /** A limit's name on the meter's bar: "5-hour", "Weekly", "Weekly Opus". */
 export const barName = (type: string) => BAR_NAMES[type] ?? type.replace(/_/g, ' ');
 
+// Limit types come from hooks' JSON: kept short and plain (they reach the CEO's prompt), and only a few of them.
+const LIMIT_TYPE = /^[a-z0-9_]{1,32}$/;
+const MAX_READINGS = 8;
+
 /** A reading is "as of" a while ago once no session has reported for this long. */
 export const STALE_MS = 5 * 60_000;
 
@@ -43,7 +47,7 @@ export const STALE_MS = 5 * 60_000;
  */
 export function readingOf(raw: { type: string; percent?: unknown; fraction?: unknown; resetsAt?: unknown }, at: number): UsageReading | null {
   const pct = raw.percent !== undefined && raw.percent !== null ? Number(raw.percent) : raw.fraction !== undefined && raw.fraction !== null ? Number(raw.fraction) * 100 : NaN;
-  if (!raw.type || !Number.isFinite(pct)) return null;
+  if (!LIMIT_TYPE.test(raw.type) || !Number.isFinite(pct)) return null;
   const r = Number(raw.resetsAt);
   const resetsAt = Number.isFinite(r) && r > 0 ? (r < 1e12 ? r * 1000 : r) : null;
   return { type: raw.type, pct: Math.max(0, Math.min(100, Math.round(pct))), resetsAt, at };
@@ -51,14 +55,15 @@ export function readingOf(raw: { type: string; percent?: unknown; fraction?: unk
 
 const rank = (type: string) => (ORDER.includes(type) ? ORDER.indexOf(type) : ORDER.length);
 
-/** The latest reading per limit with `next` folded in: the newest reading of each type wins; in the meter's order. */
+/** The latest reading per limit with `next` folded in: the newest reading of each type wins; in the meter's order, at most 8. */
 export function mergeReadings(prev: readonly UsageReading[], next: readonly UsageReading[]): UsageReading[] {
   const byType = new Map(prev.map((r) => [r.type, r]));
   for (const r of next) {
+    if (!LIMIT_TYPE.test(r.type)) continue;
     const old = byType.get(r.type);
     if (!old || r.at >= old.at) byType.set(r.type, r);
   }
-  return [...byType.values()].sort((a, b) => rank(a.type) - rank(b.type) || a.type.localeCompare(b.type));
+  return [...byType.values()].sort((a, b) => rank(a.type) - rank(b.type) || a.type.localeCompare(b.type)).slice(0, MAX_READINGS);
 }
 
 /** Whether `next` is worth sending to the office: a limit's number or reset changed, or one wasn't shown for a minute. */
