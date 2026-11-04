@@ -66,6 +66,7 @@ import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSetti
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP } from '../shared/types.ts';
 import { forwardText, nextDelivery } from '../shared/chat.ts';
+import { makeArtifacts, parseCeoMessage, snapshotMessages } from '../shared/chatParts.ts';
 import type {
   AgentActivity,
   AgentCli,
@@ -1136,7 +1137,7 @@ export class Swarm {
       prPreviews: this.previews.prViews(),
       requests: this.state.requests,
       ceo: this.ceoInfo(),
-      messages: this.state.messages.slice(-100),
+      messages: snapshotMessages(this.state.messages.slice(-100)),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
       ops: this.opsNow(),
@@ -5049,7 +5050,11 @@ export class Swarm {
   // ---------- the phone ----------
 
   private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, extra: Pick<PhoneMessage, 'replyTo' | 'delivery'> = {}) {
-    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra };
+    // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
+    const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
+    const id = this.messageSeq++;
+    const artifacts = makeArtifacts(id, parts.artifacts);
+    const m: PhoneMessage = { id, from, text: parts.text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(artifacts && { artifacts }) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     this.state.messages.push(m);
@@ -5057,8 +5062,18 @@ export class Swarm {
     this.broadcast({ type: 'message', message: m });
     this.save();
     // Proposals are notified as such (proposeHire, proposeLetGo).
-    if (from === 'ceo' && !requestId) this.notifier.notify('ceoMessage', this.ceo().name, plainText(m.text), `${this.ceo().name}: ${plainText(m.text, 100)}`);
+    if (from === 'ceo' && !requestId) {
+      const said = m.text || `📎 ${m.artifacts?.map((a) => a.title).join(', ') ?? ''}`;
+      this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
+    }
     return m;
+  }
+
+  /** GET /api/messages/:id/artifacts/:artifactId: an artifact's markdown, for one the snapshot sent without it. */
+  artifact(messageId: number, artifactId: string): { markdown: string } {
+    const a = this.state.messages.find((m) => m.id === messageId)?.artifacts?.find((x) => x.id === artifactId);
+    if (!a?.markdown) throw new HttpError(404, 'That attachment is no longer saved');
+    return { markdown: a.markdown };
   }
 
   /** The team's holiday greeting (shared/themes.ts) from the CEO, once a day while a theme is on. */
