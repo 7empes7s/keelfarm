@@ -58,7 +58,7 @@ code isn't clean yet; it just mustn't get worse.
   the file. `any` is a warning, but counted the same.
 - **Dead code**: a new unused file, export, type or dependency fails. Delete it, or stop exporting it.
 - **File size**: a file that isn't in the baseline may have up to 800 lines; the files already over 800 may grow 5%
-  past their recorded size (`server/swarm.ts`: 5,534 → 5,810). Split before you hit it.
+  past their recorded size (`server/swarm.ts`: 5,596 → 5,875). Split before you hit it.
 - **Fixed something?** The check says so: run `npm run lint:update` (it only ever lowers the baseline) and commit
   `code-health.baseline.json`. `node scripts/codeHealth.mjs --accept` records the run as it is, for a rename or a
   deliberate exception: say why in the PR.
