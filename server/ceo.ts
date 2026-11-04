@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, type AgentCli, type CeoJobKind, type CeoMandate, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type CeoMandate, type QaStatus } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import { ONE_TURN } from './prompts.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
@@ -22,6 +22,7 @@ export interface CeoJob {
   prNumber?: number; // triage: the stuck pull request
   text?: string; // chat: the manager's message(s)
   events?: FollowupEvent[]; // followup: what happened
+  messageIds?: number[]; // chat: those messages' ids, marked read when the job starts
   at: number;
 }
 
@@ -82,7 +83,7 @@ export function prDiffText(d: { files: { path: string; additions: number; deleti
 export interface OfficeHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
-  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
@@ -122,7 +123,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const defs = [
     tool(
       'company_status',
-      'Everything about the company right now: settings, every floor (repo, clone path, brief, profile, QA brief), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
+      'Everything about the company right now: settings, every floor (repo, clone path, brief, profile, QA brief, playbook), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
       {},
       () => run(() => h.companyStatus()),
     ),
@@ -134,11 +135,18 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'set_floor_profile',
-      "Record your read of a floor's project: a one-line summary (kind of project and stack), the QA brief that tells agents what to check when they test a pull request for this kind of project, and how to run the app for the floor's preview monitor.",
+      "Record your read of a floor's project: a one-line summary (kind of project and stack), the QA brief that tells agents what to check when they test a pull request for this kind of project, the playbook every agent there works by, and how to run the app for the floor's preview monitor.",
       {
         floor: z.number().int().describe('Floor number'),
         summary: z.string().max(140).optional().describe('e.g. "3D browser game · Three.js + Vite + TypeScript"'),
         qa_brief: z.string().max(2500).optional().describe('What QA must check on every PR for this project, as short bullet points'),
+        playbook: z
+          .string()
+          .max(PLAYBOOK_MAX)
+          .optional()
+          .describe(
+            'Markdown in every build, fix and QA prompt on this floor: its architecture map (where things live, layers, what must not depend on what), conventions, the skills to use for this stack (e.g. "frontend-design for UI"), known traps. Short: it is paid for on every session. Empty string clears it.',
+          ),
         preview_command: z
           .string()
           .max(2000)
@@ -381,6 +389,7 @@ export function ceoSystemPrompt(o: {
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
+    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
   ].join('\n');
 }
 
@@ -428,7 +437,7 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       return [
         `Floor ${floor.floor} (${floor.fullName}) just joined the company. Its read-only clone is at ${floor.clone}.`,
         'Study it: README, package manifest, source layout, tests, and how far along it is. Then:',
-        "1. set_floor_profile with a one-line summary and a QA brief for this project. If npm run dev / start / preview wouldn't serve the app on PORT, also set preview_command (and preview_env) so the floor's preview monitor can run it.",
+        "1. set_floor_profile with a one-line summary, a QA brief and a playbook for this project. If npm run dev / start / preview wouldn't serve the app on PORT, also set preview_command (and preview_env) so the floor's preview monitor can run it.",
         '2. scale_team to the size the work in sight needs. The floor starts with one agent; two to four is usually plenty to begin with.',
         '3. Check the open issues against that size: the team grows later when work keeps waiting for free agents.',
         floor.mission

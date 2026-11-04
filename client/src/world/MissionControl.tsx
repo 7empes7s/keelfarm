@@ -4,6 +4,7 @@ import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OpsAlarm } from '../../../shared/types';
 import { usageMeter } from '../ops';
+import { readingsNote, usageBars } from '../../../shared/usage';
 import { officeNow } from '../officeTime';
 import { useStore, type Focus } from '../store';
 import { useKeyName } from '../ui/controls';
@@ -123,6 +124,7 @@ export function MissionControl() {
   const ops = useStore((s) => s.ops);
   const repos = useStore((s) => s.repos);
   const usage = useStore((s) => s.usage);
+  const readings = useStore((s) => s.claudeUsage);
 
   const tags = useMemo(
     () =>
@@ -158,9 +160,13 @@ export function MissionControl() {
     { floors: tags.map(({ tag, n }) => ({ ...tag, busy: n.busy, idle: n.idle, errors: n.errors })), total: { busy: t.busy, idle: t.idle, errors: t.errors } },
     drawTeam,
   );
-  const m = usageMeter(usage, officeNow());
+  const now = officeNow();
+  const m = usageMeter(usage, now);
   const meterData: UsageScreen = {
-    ...m,
+    state: m.state,
+    tone: m.tone,
+    bars: usageBars(readings, now),
+    note: readingsNote(readings, now),
     hint: usage.state === 'pacing' ? `Press ${use} to resume full speed` : usage.state === 'paused' ? "A pause at the limit can't be cleared early" : 'New work starts at full speed',
   };
   const meter = useScreen('usage', BOTTOM_PX, meterData, drawUsage);

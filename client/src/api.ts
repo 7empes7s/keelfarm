@@ -75,6 +75,7 @@ export const api = {
       mission?: string;
       summary?: string;
       qaBrief?: string;
+      playbook?: string;
       previewCommand?: string | null;
       previewEnv?: Record<string, string>;
     },
@@ -125,9 +126,11 @@ export const api = {
   doctorIgnore: (id: string) => call<DoctorFinding[]>('POST', '/api/doctor/ignore', { id }),
   /** The demo only: the office doctor's scenarios. */
   demoDoctor: (action: 'restart' | 'stuck' | 'later' | 'unclosed' | 'check') => call<{ text: string; doctor: DoctorFinding[] }>('POST', '/api/doctor/demo', { action }),
-  messageCeo: (text: string) => call('POST', '/api/ceo/message', { text }),
+  /** A message for the CEO, replying to message `replyTo` if given; answers with the posted message's id. */
+  messageCeo: (text: string, replyTo?: number) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo }),
   ceoReview: () => call('POST', '/api/ceo/review'),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
+  artifact: (messageId: number, artifactId: string) => call<{ markdown: string }>('GET', `/api/messages/${messageId}/artifacts/${encodeURIComponent(artifactId)}`),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */
   pongResult: (repoId: string, result: PongResult) => call('POST', `${r(repoId)}/pong`, result),
   /** Decides a team change: a hire with the manager's changes to the new agent, if any. */
