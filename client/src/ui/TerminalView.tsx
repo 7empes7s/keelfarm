@@ -14,19 +14,7 @@ import { closeOverlay, Panel } from './Panel';
 import { loadScreenshot } from '../screenshot';
 import { toolVerb } from '../world/draw';
 import { followAgent } from '../world/camera/rig';
-
-const STATUS_LABEL: Record<string, string> = {
-  idle: 'free',
-  preparing: 'setting up',
-  working: 'working',
-  done: 'done',
-  error: 'needs help',
-  stopped: 'stopped',
-};
-
-export function StatusPill({ status }: { status: string }) {
-  return <span className={`status status-${status}`}>{STATUS_LABEL[status] ?? status}</span>;
-}
+import { StatusPill } from './StatusPill';
 
 function elapsed(from: number | null, to: number | null) {
   if (!from) return '';

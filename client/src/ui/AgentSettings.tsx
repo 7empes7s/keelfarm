@@ -1,16 +1,18 @@
-import { Fragment, useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
 import { api } from '../api';
 import { isBusy, useStore, type Agent } from '../store';
 import type { AgentCli, AgentPromptView, CliView, CloudMachineState, EffortLevel, MachineHost } from '../../../shared/types';
 import { ACCENT_COLORS, BUILDS, FACIAL_HAIR, GLASSES, HAIR_COLORS, HAIR_STYLES, HEADWEAR, OUTFITS, SKIN_TONES, type AgentStyle, type HairStyle, type Outfit } from '../../../shared/looks';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
-import { LookPreview } from '../world/LookPreview';
 import { workerCli } from './floorRows';
 import { confirmDialog } from './Confirm';
 
 // One agent's setup (name, look, coding agent, model, effort), edited in place: the Team tab's row cells and the
 // ⚙️ Setup section of their panel share these. Every change is a PATCH; the `agent` event updates all views.
+
+// The look's 3D preview brings three.js, so it loads when a look editor opens (pocket mode loads no 3D otherwise).
+const LookPreview = lazy(() => import('../world/LookPreview').then((m) => ({ default: m.LookPreview })));
 
 export const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -219,7 +221,9 @@ export function LookEditor({ agent }: { agent: Agent }) {
     <fieldset className="look-editor">
       <legend>Look</legend>
       <div className="look-body">
-        <LookPreview id={agent.id} label={`${agent.name} as they'll look`} />
+        <Suspense fallback={<div className="look-preview" aria-hidden />}>
+          <LookPreview id={agent.id} label={`${agent.name} as they'll look`} />
+        </Suspense>
         <div className="look-fields">
           <PickSelect label="Hair" value={look.hair} options={HAIR_STYLES} labels={HAIR_LABEL} onPick={(hair) => pick({ hair })} />
           <PickSelect label="Facial hair" value={look.facialHair} options={FACIAL_HAIR} onPick={(facialHair) => pick({ facialHair })} />

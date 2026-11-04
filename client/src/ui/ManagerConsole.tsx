@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { TeamStats } from './CareerCard';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
@@ -14,16 +14,19 @@ import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
 import { NotifySettings } from './NotifySettings';
 import { ProfileSettings } from './ProfileSettings';
-import { Panel } from './Overlays';
+import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
-import { StatusPill } from './TerminalView';
+import { StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
-import { TimeLapseTab } from './TimeLapse';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
+import { useMode } from '../pocket/mode';
+
+// The time-lapse drives the 3D sky's clock, so it loads when its tab opens: pocket mode shows the other tabs without 3D.
+const TimeLapseTab = lazy(() => import('./TimeLapse').then((m) => ({ default: m.TimeLapseTab })));
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
@@ -94,6 +97,7 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
 
 function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
   const agents = useStore((s) => s.agents);
+  const pocket = useMode((s) => s.mode === 'pocket');
   const goToFloor = useStore((s) => s.goToFloor);
   const openOverlay = useStore((s) => s.openOverlay);
   // The office's own folder isn't fast-forwarded; its update is on the Office row instead.
@@ -125,9 +129,11 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
         </div>
         <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} title="Floor colour" aria-label={`Floor ${repo.floor} colour`} />
-        <button className="btn btn-small" onClick={() => goToFloor(repo.floor)}>
-          Visit
-        </button>
+        {!pocket && (
+          <button className="btn btn-small" onClick={() => goToFloor(repo.floor)}>
+            Visit
+          </button>
+        )}
       </div>
       <div className="row wrap">
         <label className="toggle">
@@ -190,7 +196,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
   );
 }
 
-function FloorsTab() {
+export function FloorsTab() {
   const repos = useStore((s) => s.repos);
   const officeUpdate = useStore((s) => s.officeUpdate);
   return (
@@ -252,7 +258,7 @@ function FloorBrief({ repo }: { repo: RepoView }) {
   );
 }
 
-function CeoTab() {
+export function CeoTab() {
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const log = useStore((s) => s.logs[CEO_ID]) ?? [];
   const info = useStore((s) => s.ceo);
@@ -426,7 +432,7 @@ function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
   );
 }
 
-function TeamTab() {
+export function TeamTab() {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const settings = useStore((s) => s.settings);
@@ -613,7 +619,8 @@ function IssuesTab({ initialRepo }: { initialRepo?: string }) {
 
 // ---------- settings ----------
 
-function SettingsTab() {
+/** pocket: leave out the notification settings, which pocket mode shows under This device. */
+export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
   const user = useStore((s) => s.user);
@@ -798,7 +805,7 @@ function SettingsTab() {
       <CloudSettings />
       <VoiceSettings />
       <OutsideSettings />
-      <NotifySettings />
+      {!pocket && <NotifySettings />}
       <ThemeSettings />
     </div>
   );
@@ -835,7 +842,11 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
         {tab === 'team' && <TeamTab />}
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}
-        {tab === 'timelapse' && <TimeLapseTab />}
+        {tab === 'timelapse' && (
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <TimeLapseTab />
+          </Suspense>
+        )}
         {tab === 'access' && (
           <div className="tab-grid a11y-grid">
             <AccessibilitySettings />

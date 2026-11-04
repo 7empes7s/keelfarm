@@ -4211,6 +4211,50 @@ input.inline:focus {
   }
 }
 
+/* pocket mode's ⚙️ (PocketConsole.tsx): the console's tabs one column wide, its sections as chips that stay in view */
+.pk-console .pk-console-chips {
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  margin: -12px -12px 12px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border-bottom: 1.5px solid rgba(31, 29, 43, 0.08);
+}
+.pk-console .tab-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pk-console .card,
+.pk-console .floor-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pk-console .row {
+  flex-wrap: wrap;
+}
+.pk-console input,
+.pk-console select,
+.pk-console textarea {
+  max-width: 100%;
+}
+/* the Team tab's roster (not the careers table, which scrolls): each agent's cells wrap onto lines of their own instead of scrolling sideways */
+.pk-console .team:not(.stats-table),
+.pk-console .team:not(.stats-table) tbody {
+  display: block;
+}
+.pk-console .team:not(.stats-table) tr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 6px 0;
+  border-top: 1.5px solid rgba(31, 29, 43, 0.08);
+}
+.pk-console .team:not(.stats-table) td {
+  padding: 0;
+  border: none;
+}
+
 /* the Kanban in pocket mode: one column under the other, so nothing scrolls sideways */
 .kanban-embedded {
   min-width: 0;

@@ -17,8 +17,21 @@ visit. Five tabs, at the bottom:
 | **Team** | Everyone's status and what they're on, with **Message**, **■ Stop**, **↺ Clear desk**, assigning an issue (or a PR to test) and their terminal. |
 | **Approvals** | Team changes waiting for you (new agents to set up and hire, agents leaving), stuck PRs (**Retry QA**, **Send back**, **Merge anyway**, **Close**) and passed PRs on floors without auto-merge. |
 
-Pocket mode uses the same live connection and commands as the 3D office, and loads no 3D at all until you tap
-**🏢 Open the 3D office** (Company tab, or ⚙️).
+**⚙️** (top right) is the manager's console, with the same controls as in the 3D office, one section at a time:
+
+| Section | What's there |
+| --- | --- |
+| **🏢 Floors** | The office's own update, each floor's settings (colour, auto-assign, auto-merge, browser testing, which floors its agents may read, the app preview, sync, disconnect) and **➕ Add a project**: a folder, a GitHub repo or something new. |
+| **🧠 CEO** | The CEO's name, model and effort, what they're told, their terminal, a message box, **Review the company now**, team changes, and each floor's brief and QA brief. |
+| **👩‍💻 Team** | Careers, **+ Agent** per floor, and each agent's name, look, coding agent, model, effort, terminal and **Let go**. |
+| **⚙️ Office** | Every office setting: agent defaults, session limits, the CEO's team changes and reviews, how agents run, the company, your profile, cloud agents, voice, the city outside and themes. |
+| **🛰️ Mission control** | The pipeline, alarms, checks, cost and Claude's usage. |
+| **📱 This device** | Notifications, accessibility and switching to the 3D office. |
+
+Only what needs the 3D building stays there: walking the floors, graphics and camera settings, key bindings, the
+time-lapse and the first-run setup. Pocket mode uses the same live connection and commands as the 3D office, and
+loads no 3D at all until you tap **🏢 Open the 3D office** (Company tab, or ⚙️ → This device), or open an agent's
+look, whose preview is 3D.
 
 ## Install it
 
