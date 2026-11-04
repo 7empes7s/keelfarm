@@ -1,0 +1,253 @@
+/* Pocket mode's own look (pocket/Pocket.tsx), loaded only in pocket mode. */
+@import './pocket-icons.css';
+
+/* Lucide icons in place of emoji, everywhere pocket mode draws text: the font covers only the emoji it replaces. */
+html.pocket-mode {
+  --font: 'Pocket Icons', Fredoka, 'Segoe UI', system-ui, sans-serif;
+  /* ⚙️, ⚠️ and the like ask for emoji presentation; this lets the icon font draw them too */
+  font-variant-emoji: text;
+}
+html.pocket-mode[data-readable-font] {
+  --font: 'Pocket Icons', Verdana, Tahoma, 'Trebuchet MS', 'Segoe UI', sans-serif;
+}
+/* buttons and fields take the page's font (browsers give them their own), so their icons are Lucide too */
+:where(html.pocket-mode) :where(button, select, input, textarea) {
+  font-family: var(--font);
+}
+
+/* ---------- the console (PocketConsole.tsx): the 3D office's console tabs, laid out for a phone ---------- */
+
+/* the sections: one row that scrolls sideways, pinned under the panel's title */
+.pk-console .pk-console-chips {
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-padding-inline: 12px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.pk-console .pk-console-chips::-webkit-scrollbar {
+  display: none;
+}
+.pk-console .pk-chip {
+  flex: none;
+  padding: 8px 14px;
+  border-width: 2px;
+  font-size: 0.9rem;
+  scroll-snap-align: start;
+}
+.pk-console .pk-chip-on {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* cards: the office's outline, lighter, with room to breathe */
+.pk-console .card {
+  gap: 10px;
+  padding: 14px 16px;
+  border-width: 2px;
+  border-radius: 16px;
+  box-shadow: 0 3px 0 rgba(31, 29, 43, 0.85);
+}
+.pk-console .floor-card {
+  border-left-width: 8px;
+}
+.pk-console .card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+.pk-console h3.section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 4px 10px;
+  font-size: 1.1rem;
+}
+.pk-console p.small,
+.pk-console .muted.small {
+  line-height: 1.45;
+}
+.pk-console .floor-card a {
+  color: var(--ink);
+  text-decoration: none;
+}
+.pk-console code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.pk-console summary {
+  padding: 8px 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pk-console .office-badge {
+  color: var(--ink);
+}
+
+/* fields: labels above, big touch targets; 16px text so iPhones don't zoom in on focus */
+.pk-console .field {
+  gap: 6px;
+  margin: 4px 0;
+}
+.pk-console .field > span:first-child {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.pk-console :is(input:not([type='checkbox'], [type='radio'], [type='color'], [type='range']), select, textarea) {
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+.pk-console textarea {
+  min-height: 88px;
+}
+.pk-console .row {
+  gap: 8px;
+}
+.pk-console .btn-small {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.88rem;
+}
+
+/* checkboxes as switches, the label on the left and the switch on the right (all of pocket mode, the Kanban too) */
+.pocket label.toggle:has(> input[type='checkbox']) {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 0;
+}
+.pocket input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #d9d6cf;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pocket input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  box-sizing: border-box;
+  transition: transform 0.15s;
+}
+.pocket input[type='checkbox']:checked {
+  background: var(--good);
+}
+.pocket input[type='checkbox']:checked::after {
+  transform: translateX(18px);
+}
+.pocket input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pocket input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* a choice between options (radios) as cards to pick from */
+.pk-console label.toggle.block:has(> input[type='radio']) {
+  gap: 10px;
+  margin: 8px 0;
+  padding: 12px;
+  border: 2px solid rgba(31, 29, 43, 0.18);
+  border-radius: 14px;
+}
+.pk-console label.toggle.block:has(> input[type='radio']:checked) {
+  border-color: var(--ink);
+  background: #fff4ea;
+  box-shadow: 0 2px 0 var(--ink);
+}
+.pk-console input[type='radio'] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+/* a floor's colour as a round swatch */
+.pk-console input[type='color'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+}
+.pk-console input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.pk-console input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.pk-console input[type='color']::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+/* the Team tab's roster: each agent a small card */
+.pk-console .team:not(.stats-table) tr {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(31, 29, 43, 0.14);
+  border-radius: 12px;
+  background: #fbf9f4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pocket input[type='checkbox'],
+  .pocket input[type='checkbox']::after {
+    transition: none;
+  }
+}
+html[data-reduce-motion] .pocket input[type='checkbox'],
+html[data-reduce-motion] .pocket input[type='checkbox']::after {
+  transition: none;
+}
+
+/* a floor card's ⚙️ (Company tab), beside its name */
+.pocket .pk-floor-settings {
+  flex: none;
+  align-self: flex-start;
+}
+
+/* the look editor (Team → 🎨) fits a phone: two columns that shrink, no minimum wider than the card */
+.pk-console .look-editor {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0 0;
+  border: none;
+}
+.pk-console .look-fields {
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pk-console .look-preview {
+  max-width: 100%;
+}

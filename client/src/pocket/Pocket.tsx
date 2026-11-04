@@ -13,6 +13,7 @@ import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocke
 import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
 import type { ConsoleSection } from './PocketConsole';
+import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
@@ -117,6 +118,9 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
               <b className="pk-floor-name">{name(repo.fullName)}</b>
               <div className="muted small pk-ellipsis">{repo.summary || repo.description || repo.fullName}</div>
             </div>
+            <button className="pk-icon-btn pk-floor-settings" onClick={() => settings('floors')} aria-label={`Floor ${repo.floor} settings`} title="Floor settings">
+              ⚙️
+            </button>
           </div>
           <div className="pk-pipeline" role="list" aria-label={`Floor ${repo.floor} pipeline`}>
             {STAGES.map(([k, icon, label]) => (
@@ -141,9 +145,6 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
             </button>
             <button className="btn btn-small" onClick={() => go('team', repo.id)}>
               Team
-            </button>
-            <button className="btn btn-small btn-ghost" onClick={() => settings('floors')} aria-label={`Floor ${repo.floor} settings`} title="Floor settings">
-              ⚙️
             </button>
           </div>
         </div>
@@ -253,6 +254,11 @@ export default function Pocket() {
     if (tab === 'chat') s.openOverlay({ kind: 'phone', tab: 'chat' });
     else if (s.overlay?.kind === 'phone') s.openOverlay(null);
   }, [tab]);
+  // pocket.css's icons and look apply to the whole page while pocket mode is on (dialogs and toasts included).
+  useEffect(() => {
+    document.documentElement.classList.add('pocket-mode');
+    return () => document.documentElement.classList.remove('pocket-mode');
+  }, []);
   useEffect(() => {
     document.title = `${company || 'cubefarm'} · pocket`;
     return () => void (document.title = 'cubefarm');
