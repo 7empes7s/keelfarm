@@ -4,10 +4,11 @@ import { fmtDuration, fmtPct, fmtUsd, usageMeter } from '../ops';
 import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { CostsSection } from './CostsSection';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
-// lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, and every floor's numbers
-// from the wall as a table.
+// lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
+// from the wall as a table, and where the Claude plan goes (CostsSection.tsx).
 
 async function attempt<T>(fn: () => Promise<T>) {
   try {
@@ -314,6 +315,7 @@ export function OpsTab({ card }: { card?: string }) {
       <div>
         <h3 className="section">🛰️ The numbers</h3>
         <OpsTable />
+        <CostsSection />
       </div>
     </div>
   );

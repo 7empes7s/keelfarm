@@ -248,6 +248,14 @@ export default function Pocket() {
     setSettings(null);
     setTab('chat');
   }, [phone]);
+  // A floor's Kanban asked for from the console (e.g. mission control's cost lists) is the Kanban tab here.
+  const kanban = useStore((s) => (s.overlay?.kind === 'kanban' ? s.overlay.repoId : null));
+  useEffect(() => {
+    if (!kanban) return;
+    useStore.getState().openOverlay(null);
+    setSettings(null);
+    go('kanban', kanban);
+  }, [kanban]);
   // While the chat is on screen, new CEO messages don't toast (the store reads this as the phone's chat being open).
   useEffect(() => {
     const s = useStore.getState();

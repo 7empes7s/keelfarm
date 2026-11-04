@@ -216,6 +216,7 @@ export const useStore = create<State>((set, get) => ({
     sessionLimit: 0,
     defaultModel: 'claude-opus-5-5',
     defaultEffort: 'medium',
+    taskEffort: {},
     runtime: 'terminal',
     defaultCli: 'claude',
     scaling: 'approve',
