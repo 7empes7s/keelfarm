@@ -122,6 +122,16 @@ export class AgentTerminal {
     return rows.join('\n');
   }
 
+  /** The last `n` rows of scrollback and screen as plain text, blank rows at the bottom left out (the CEO's agent_log). */
+  tail(n: number): string[] {
+    const b = this.term.buffer.active;
+    let end = b.length;
+    while (end > 0 && !(b.getLine(end - 1)?.translateToString(true) ?? '').trim()) end--;
+    const rows: string[] = [];
+    for (let i = Math.max(0, end - n); i < end; i++) rows.push(b.getLine(i)?.translateToString(true) ?? '');
+    return rows;
+  }
+
   /** Written to disk so a restarted office still shows what each agent did. */
   /** Resolves once everything written so far is parsed (xterm parses asynchronously). */
   flush(): Promise<void> {

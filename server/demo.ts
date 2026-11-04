@@ -19,6 +19,7 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { guardPath } from './worktreeRead.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -46,6 +47,18 @@ const stalls = new Map<string, () => void>(); // agent id -> silences their runn
 const signOuts = new Map<string, { boxId: string; end: () => void }>(); // agent id -> ends their cloud session as an expired sign-in would
 
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
+/** A small made-up diff for the CEO's pr_diff and worktree_file. */
+const demoDiff = (what: string) =>
+  [
+    'diff --git a/src/App.tsx b/src/App.tsx',
+    '--- a/src/App.tsx',
+    '+++ b/src/App.tsx',
+    '@@ -12,6 +12,14 @@ export function App() {',
+    `+  // ${what}`,
+    "+  const [ready, setReady] = useState(false);",
+    '+  useEffect(() => setReady(true), []);',
+    '   return (',
+  ].join('\n');
 
 // GitHub never gives two PRs the same number, and the office's ledger (coins, careers) counts each PR once by it, so
 // the fake's numbers carry on across restarts (the issues and PRs themselves start over).
@@ -777,6 +790,20 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
         pendingChecks: pr.pendingChecks,
       };
     },
+    // The CEO's pr_diff and worktree_file read made-up changes: the demo has no code on disk.
+    prDiff: async (fullName, number, patch) => {
+      const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
+      if (!pr) throw new Error(`Unknown PR #${number}`);
+      const files = [
+        { path: 'src/App.tsx', additions: Math.ceil(pr.additions * 0.6), deletions: Math.ceil(pr.deletions * 0.5) },
+        { path: 'src/App.test.tsx', additions: Math.floor(pr.additions * 0.4), deletions: Math.floor(pr.deletions * 0.5) },
+      ];
+      return { files, diff: patch ? demoDiff(pr.title) : null };
+    },
+    readWorktree: async (r) => {
+      if (r.mode === 'file') return `// ${guardPath(r.path ?? '')} (demo: a made-up file)\nexport function feature() {\n  return 'works';\n}\n`;
+      return r.mode === 'diff_stat' ? ' src/App.tsx      | 24 +++++++++++++-----\n src/App.test.tsx | 12 ++++++++\n 2 files changed, 31 insertions(+), 5 deletions(-)' : demoDiff('the change');
+    },
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
@@ -1258,6 +1285,23 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       await use('escalate', { floor, pr, reason: `I tried ${tool}, but the office refused: ${refused(out)}` });
       return `PR #${pr} on floor ${floor} is stuck and I couldn't move it, so it's with you now.`;
     },
+    // Woken by office events: look through the real read-only tools, and stay quiet unless something needs the manager.
+    async followup(events: string[]) {
+      const needs: string[] = [];
+      for (const e of events.slice(0, 4)) {
+        const floor = Number(e.match(/floor (\d+)/)?.[1] ?? 0);
+        const pr = Number(e.match(/PR #(\d+)/)?.[1] ?? 0);
+        const agent = e.match(/\(([\w-]+)\)/)?.[1];
+        if (/ merged /.test(e) && pr) await use('pr_diff', { floor, pr });
+        else if (/failed QA/.test(e) && pr) await use('qa_report', { floor, pr });
+        else if (agent && / error | stalled /.test(e)) {
+          await use('agent_log', { agent_id: agent, lines: 50 });
+          if (/ error /.test(e)) needs.push(`${e.split(' (')[0]} is still in an error; reset them from their desk if it keeps happening.`);
+        } else await think('Nothing there needs me.');
+      }
+      if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
+      return needs.length ? needs.join(' ') : 'Nothing to do.';
+    },
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
@@ -1317,6 +1361,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
+    : /^Follow-up:/.test(prompt)
+      ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)
       ? async () => 'Nothing to do.'
       : /just joined the company/.test(prompt)

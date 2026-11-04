@@ -351,6 +351,8 @@ export interface SwarmSettings {
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once
   maxAgents: number; // most agents on a floor: 1 to FLOOR_SEATS (DEFAULT_MAX_AGENTS)
   ceoHeartbeatMin: number; // minutes between the CEO's periodic reviews; 0 = off
+  ceoFollowups: FollowupSettings; // Settings → The CEO: which office events wake the CEO for a follow-up (shared/followups.ts)
+  ceoMandates: CeoMandate[]; // the manager's standing mandates: follow-ups may file issues on the floors they cover
   managerName: string; // what the office calls you
   companyName: string;
   dogName: string; // the office dog's name, on its tag and in the hint when you aim at it
@@ -600,13 +602,32 @@ export interface PhoneMessage {
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
 }
 
-export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
+export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup';
+
+/** Office events that wake the CEO for a follow-up job (shared/followups.ts). */
+export type FollowupKind = 'merged' | 'qaFailed' | 'agentError' | 'stalled' | 'unblocked' | 'audit' | 'usage';
+
+export interface FollowupSettings {
+  kinds: Record<FollowupKind, boolean>;
+  windowMin: number; // events this close together go into one job
+  perHour: number; // most follow-up jobs started in an hour; 0 = follow-ups off
+}
+
+/** "Keep working on X until it's perfected": recorded by the CEO's set_mandate, removable in the CEO tab. */
+export interface CeoMandate {
+  id: string;
+  text: string;
+  floors: number[]; // [] = every floor
+  expiresAt: number | null;
+  at: number;
+}
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO
   job: { kind: CeoJobKind; label: string } | null; // what the CEO is doing now
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
+  followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */
