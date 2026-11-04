@@ -1,5 +1,6 @@
 import { fmtDuration, fmtPct, fmtUsd } from '../ops';
 import { roundRect, SANS } from './draw';
+import type { UsageBar } from '../../../shared/usage';
 
 // 2D canvas painters for mission control's screens in the lobby (MissionControl.tsx). Each takes exactly the numbers
 // it shows, so a screen repaints only when one of them changes.
@@ -268,32 +269,34 @@ export function drawTeam(ctx: CanvasRenderingContext2D, w: number, h: number, d:
 export interface UsageScreen {
   state: string; // Normal / Pacing / Paused
   tone: 'good' | 'warn' | 'bad';
-  limit: string;
-  pct: number | null;
-  resets: string | null;
+  bars: UsageBar[]; // Claude's latest reading per limit
+  note: string | null; // no reading yet, or "as of 12 min ago"
   hint: string;
 }
 
 const TONE = { good: C.good, warn: C.warn, bad: C.bad };
 const STATE_ICON: Record<string, string> = { Normal: '✓', Pacing: '🐢', Paused: '⏸' };
 
-/** The usage meter: normal, pacing or paused, the last warning's limit and fill, and when it resets. */
+/** The usage meter: normal, pacing or paused, then a bar per limit with how full it is and when it resets. */
 export function drawUsage(ctx: CanvasRenderingContext2D, w: number, h: number, d: UsageScreen) {
   frame(ctx, w, h, 'CLAUDE USAGE', d.tone === 'good' ? 'full speed' : 'new work held back');
-  const color = TONE[d.tone];
-  text(ctx, `${STATE_ICON[d.state] ?? ''} ${d.state}`, w / 2, 160, 92, color, 'center');
+  text(ctx, `${STATE_ICON[d.state] ?? ''} ${d.state}`, w / 2, 130, 64, TONE[d.tone], 'center');
   const gx = 60;
   const gw = w - 120;
-  roundRect(ctx, gx, 236, gw, 42, 21);
-  ctx.fillStyle = C.line;
-  ctx.fill();
-  if (d.pct !== null) {
-    roundRect(ctx, gx, 236, Math.max(42, (gw * Math.min(100, d.pct)) / 100), 42, 21);
-    ctx.fillStyle = d.pct >= 90 ? C.bad : d.pct >= 75 ? C.warn : C.good;
+  const bars = d.bars.slice(0, 3);
+  if (!bars.length) text(ctx, d.note ?? '', w / 2, 270, 30, C.dim, 'center', 600, w - 80);
+  bars.forEach((b, i) => {
+    const y = 190 + i * 64;
+    text(ctx, `${b.name}: ${b.pct}%`, gx, y, 28, C.text, 'left', 700);
+    if (b.resets) text(ctx, b.resets, w - gx, y, 24, C.dim, 'right', 600);
+    roundRect(ctx, gx, y + 18, gw, 22, 11);
+    ctx.fillStyle = C.line;
     ctx.fill();
-  }
-  text(ctx, d.limit, w / 2, 320, 34, C.text, 'center', 600, w - 80);
-  text(ctx, d.resets ? `resets ${d.resets}` : 'nothing to reset', w / 2, 368, 30, C.dim, 'center', 600);
+    roundRect(ctx, gx, y + 18, Math.max(22, (gw * Math.min(100, b.pct)) / 100), 22, 11);
+    ctx.fillStyle = TONE[b.tone];
+    ctx.fill();
+  });
+  if (bars.length && d.note) text(ctx, d.note, w / 2, 384, 24, C.dim, 'center', 600, w - 80);
   roundRect(ctx, 60, 404, w - 120, 64, 32);
   ctx.fillStyle = d.tone === 'warn' ? 'rgba(255, 209, 102, 0.16)' : 'rgba(143, 211, 255, 0.08)';
   ctx.fill();

@@ -478,6 +478,17 @@ export interface UsageView {
   warning: UsageWarningView | null; // the latest since the office started, for the usage meter
 }
 
+/**
+ * Claude's latest reading of one usage limit, from any session's status line or rate-limit event. These are the whole
+ * subscription's numbers, so they include usage outside the office (claude.ai, other Claude Code sessions).
+ */
+export interface UsageReading {
+  type: string; // Claude's rate limit type: five_hour, seven_day, seven_day_opus, …
+  pct: number; // how full, 0-100
+  resetsAt: number | null; // epoch ms
+  at: number; // when it was read
+}
+
 /** One floor's numbers on mission control (or the whole office's), computed by the server from its state and history. */
 export interface OpsNumbers {
   // the pipeline, right now
@@ -648,6 +659,7 @@ export interface WorldSnapshot {
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
   usage: UsageView;
+  claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
@@ -695,6 +707,7 @@ export type ServerEvent =
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
+  | { type: 'claudeUsage'; readings: UsageReading[] }
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }

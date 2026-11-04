@@ -4,6 +4,7 @@ import { fmtDuration, fmtPct, fmtUsd, usageMeter } from '../ops';
 import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { UsageBars } from './UsageBars';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, and every floor's numbers
@@ -66,13 +67,13 @@ function UsageCard({ hot }: { hot: boolean }) {
           ⏩ Resume full speed
         </button>
       </div>
-      <div className="usage-gauge" role="meter" aria-label="Claude usage at the last warning" aria-valuemin={0} aria-valuemax={100} aria-valuenow={m.pct ?? 0}>
-        <div style={{ width: `${Math.min(100, m.pct ?? 0)}%`, background: (m.pct ?? 0) >= 90 ? 'var(--bad)' : (m.pct ?? 0) >= 75 ? 'var(--warn)' : 'var(--good)' }} />
-      </div>
-      <div className="small">
-        <b>{m.limit}</b>
-        {m.resets && ` · resets ${m.resets}`}
-      </div>
+      <UsageBars />
+      {usage.warning && (
+        <div className="small">
+          Last warning: <b>{m.limit}</b>
+          {m.resets && ` · resets ${m.resets}`}
+        </div>
+      )}
       <div className="muted small">{why}</div>
       {demo && (
         <div className="row wrap">
