@@ -75,6 +75,7 @@ export const api = {
       mission?: string;
       summary?: string;
       qaBrief?: string;
+      playbook?: string;
       previewCommand?: string | null;
       previewEnv?: Record<string, string>;
     },

@@ -32,7 +32,7 @@ describe("the demo's mission control", () => {
       expect(list.length).toBeGreaterThan(0);
       for (const e of list) expect(e[0] <= NOW && NOW - e[0] <= KEEP_MS).toBe(true);
     }
-    expect(h.merges.every((m) => m[2] === 0)).toBe(true); // never mistaken for a real PR the demo merges later
+    expect(h.merges.every((m) => m[2] < 0)).toBe(true); // never mistaken for a real PR the demo merges later
     const v = opsView(
       [
         { repoId: 'demo-co/a', floor: 1, ready: 0, agents: [], prs: [] },
@@ -43,6 +43,8 @@ describe("the demo's mission control", () => {
     );
     expect(v.floors[0].ciPass).toBeGreaterThan(0.6);
     expect(v.floors[0].ciMs).toBeGreaterThan(2 * 60_000);
+    expect(v.floors[0].qaRoundsPerMerge).toBeGreaterThanOrEqual(1);
+    expect(v.floors[0].qaFirstPass).toBeLessThan(1);
     expect(v.total.leadMs).toBeGreaterThan(20 * 60_000);
     expect(v.ceoCostToday).toBeGreaterThan(0);
     expect(v.total.spark.some((n) => n > 0)).toBe(true);

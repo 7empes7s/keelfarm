@@ -2,7 +2,7 @@ import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@
 import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, type AgentCli, type CeoJobKind, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type QaStatus } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import { ONE_TURN } from './prompts.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
@@ -31,7 +31,7 @@ export const askedFor = (job: Pick<CeoJob, 'kind'>) => job.kind === 'plan' || jo
 export interface OfficeHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
-  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
@@ -66,7 +66,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const defs = [
     tool(
       'company_status',
-      'Everything about the company right now: settings, every floor (repo, clone path, brief, profile, QA brief), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
+      'Everything about the company right now: settings, every floor (repo, clone path, brief, profile, QA brief, playbook), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
       {},
       () => run(() => h.companyStatus()),
     ),
@@ -78,11 +78,18 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'set_floor_profile',
-      "Record your read of a floor's project: a one-line summary (kind of project and stack), the QA brief that tells agents what to check when they test a pull request for this kind of project, and how to run the app for the floor's preview monitor.",
+      "Record your read of a floor's project: a one-line summary (kind of project and stack), the QA brief that tells agents what to check when they test a pull request for this kind of project, the playbook every agent there works by, and how to run the app for the floor's preview monitor.",
       {
         floor: z.number().int().describe('Floor number'),
         summary: z.string().max(140).optional().describe('e.g. "3D browser game · Three.js + Vite + TypeScript"'),
         qa_brief: z.string().max(2500).optional().describe('What QA must check on every PR for this project, as short bullet points'),
+        playbook: z
+          .string()
+          .max(PLAYBOOK_MAX)
+          .optional()
+          .describe(
+            'Markdown in every build, fix and QA prompt on this floor: its architecture map (where things live, layers, what must not depend on what), conventions, the skills to use for this stack (e.g. "frontend-design for UI"), known traps. Short: it is paid for on every session. Empty string clears it.',
+          ),
         preview_command: z
           .string()
           .max(2000)
@@ -312,7 +319,7 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       return [
         `Floor ${floor.floor} (${floor.fullName}) just joined the company. Its read-only clone is at ${floor.clone}.`,
         'Study it: README, package manifest, source layout, tests, and how far along it is. Then:',
-        "1. set_floor_profile with a one-line summary and a QA brief for this project. If npm run dev / start / preview wouldn't serve the app on PORT, also set preview_command (and preview_env) so the floor's preview monitor can run it.",
+        "1. set_floor_profile with a one-line summary, a QA brief and a playbook for this project. If npm run dev / start / preview wouldn't serve the app on PORT, also set preview_command (and preview_env) so the floor's preview monitor can run it.",
         '2. scale_team to the size the work in sight needs. The floor starts with one agent; two to four is usually plenty to begin with.',
         '3. Check the open issues against that size: the team grows later when work keeps waiting for free agents.',
         floor.mission

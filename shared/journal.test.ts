@@ -69,6 +69,7 @@ function repo(patch: Partial<RepoView> = {}): RepoView {
     mission: 'Build the thing',
     summary: 'A web app',
     qaBrief: 'Test it well',
+    playbook: 'Keep it simple',
     localPath: 'C:\\Projects\\r',
     checkoutPath: 'C:\\Projects\\r',
     cloneStatus: 'ready',
@@ -195,7 +196,7 @@ describe('journalEvent: what is kept', () => {
     const secrets = [SECRETS.env, SECRETS.eleven];
     const events: ServerEvent[] = [
       { type: 'agent', agent: agent({ lastError: `crashed with ${SECRETS.anthropic}`, branch: `swarm/${SECRETS.env}`, issueTitle: `Rotate ${SECRETS.github}`, currentTool: `Bash(${SECRETS.env})` }) },
-      { type: 'repo', repo: repo({ mission: SECRETS.env, issues: [{ number: 3, title: `Leak ${SECRETS.jwt}`, body: `token=${SECRETS.env}\nDepends on #1`, url: 'u', labels: [], createdAt: '' }] }) },
+      { type: 'repo', repo: repo({ mission: SECRETS.env, playbook: SECRETS.env, issues: [{ number: 3, title: `Leak ${SECRETS.jwt}`, body: `token=${SECRETS.env}\nDepends on #1`, url: 'u', labels: [], createdAt: '' }] }) },
       { type: 'message', message: { id: 2, from: 'manager', text: `my ElevenLabs key is ${SECRETS.eleven} and env ${SECRETS.env}`, at: 1 } },
       { type: 'qa', qa: qa({ summary: `ran with GITHUB_TOKEN=${SECRETS.github}`, checks: [{ name: 'tests', result: 'fail', details: `stderr: ${SECRETS.env}` }] }) },
       { type: 'request', request: { id: 'r1', kind: 'hire', repoId: 'o/r', agentId: null, name: 'Bo', reason: `needs ${SECRETS.anthropic}`, cli: '', model: '', effort: '', look: 'masculine', color: '', hair: '', skin: '', status: 'pending', note: `not now: ${SECRETS.env}`, createdAt: 1, decidedAt: null, decidedBy: null } },

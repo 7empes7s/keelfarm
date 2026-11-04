@@ -13,10 +13,13 @@ export const KEEP_MS = 7 * DAY_MS;
 export const ALARM_ERROR_MS = 10 * 60_000;
 const MAX_ENTRIES = 4000; // per list, however busy the week was
 
-/** A merged PR: when, its floor's repo, its number (0: the demo's made-up past) and issue → merge time (null: unknown). */
+/** A merged PR: when, its floor's repo, its number (0 or less: the demo's made-up past) and issue → merge time (null: unknown). */
 export type MergeEntry = [at: number, repo: string, pr: number, leadMs: number | null];
-/** A QA verdict: when, the repo, whether it passed, and how long the PR waited for an agent to test it (null: unknown). */
-export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null];
+/**
+ * A QA verdict: when, the repo, whether it passed, how long the PR waited for an agent to test it (null: unknown), and
+ * the PR and its 1-based QA round (absent on entries from before they were recorded).
+ */
+export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null, pr?: number, round?: number];
 /** GitHub's check runs on a commit, all finished: when, the repo, the commit (8 characters), passed, how long they took. */
 export type CheckEntry = [at: number, repo: string, sha: string, pass: boolean, ms: number];
 /** A finished session's reported cost: when, the repo ('' for the CEO), dollars. */
@@ -54,7 +57,9 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
   const list = (v: unknown) => (Array.isArray(v) ? v.filter((e): e is unknown[] => Array.isArray(e) && isNum(e[0]) && typeof e[1] === 'string') : []);
   const h: OpsHistory = {
     merges: list(r.merges).filter((e) => isNum(e[2]) && orNull(e[3])) as MergeEntry[],
-    qa: list(r.qa).filter((e) => typeof e[2] === 'boolean' && orNull(e[3])) as QaEntry[],
+    qa: list(r.qa)
+      .filter((e) => typeof e[2] === 'boolean' && orNull(e[3]))
+      .map((e) => (isNum(e[4]) && isNum(e[5]) ? e.slice(0, 6) : e.slice(0, 4))) as QaEntry[],
     checks: list(r.checks).filter((e) => typeof e[2] === 'string' && typeof e[3] === 'boolean' && isNum(e[4])) as CheckEntry[],
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
   };
@@ -99,8 +104,8 @@ export function recordChecks(h: OpsHistory, repo: string, pulls: Pick<PullInfo, 
   return added;
 }
 
-export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: number | null, now: number) {
-  h.qa.push([now, repo, pass, waitMs === null ? null : Math.max(0, waitMs)]);
+export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: number | null, now: number, pr: number, round: number) {
+  h.qa.push([now, repo, pass, waitMs === null ? null : Math.max(0, waitMs), pr, round]);
   prune(h, now);
 }
 
@@ -143,6 +148,18 @@ export function hourlyCounts(times: number[], now: number, hours = 24): number[]
 
 const share = (hits: number, n: number) => (n ? hits / n : null);
 
+/** The average number of QA verdicts per PR merged in the history, over merges QA tested with their PR recorded. */
+export function qaRoundsPerMerge(merges: MergeEntry[], qa: QaEntry[]): number | null {
+  const rounds = new Map<string, number>();
+  for (const q of qa) {
+    if (q[4] === undefined) continue;
+    const key = `${q[1]}#${q[4]}`;
+    rounds.set(key, (rounds.get(key) ?? 0) + 1);
+  }
+  const counts = merges.flatMap((m) => rounds.get(`${m[1]}#${m[2]}`) ?? []);
+  return counts.length ? counts.reduce((s, n) => s + n, 0) / counts.length : null;
+}
+
 type Flow = Omit<OpsNumbers, 'ready' | 'building' | 'inQa' | 'fixing' | 'toMerge' | 'needsYou' | 'triage' | 'busy' | 'idle' | 'errors'>;
 
 /** Throughput, flow, CI and cost for the repos `mine` accepts. */
@@ -159,6 +176,8 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
     leadMs: median(merges.filter(day).flatMap((m) => (m[3] === null ? [] : [m[3]]))),
     qaWaitMs: median(qa.filter(day).flatMap((q) => (q[3] === null ? [] : [q[3]]))),
     qaPass: share(qa.filter((q) => q[2]).length, qa.length),
+    qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1).length),
+    qaRoundsPerMerge: qaRoundsPerMerge(merges, qa),
     ciPass: share(checks.filter((c) => c[3]).length, checks.length),
     ciRuns: checks.length,
     ciMs: median(checks.map((c) => c[4])),
