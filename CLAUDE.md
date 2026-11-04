@@ -49,7 +49,8 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 
 CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test, for every PR
 and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`, on `ubuntu-latest` always and on `windows-latest`
-and `macos-latest` unless a PR touches nothing OS-sensitive (only `client/`, `e2e/`, docs: they show as skipped).
+unless a PR touches nothing OS-sensitive (only `client/`, `e2e/`, docs: it shows as skipped). No macOS job: this
+copy's office runs on Linux, and GitHub's macOS runners often never start.
 e2e is not part of CI. Locally, `typecheck`, `test` and `build` must pass before you open a PR. Don't run `test:e2e`
 unless an issue asks for it. If your change shows up in the office, boot your own demo office, check it in a real
 browser with the Playwright tools, and put screenshots in the PR. `.github/workflows/release.yml` publishes to npm when the manager runs it from GitHub's Actions tab or pushes a
