@@ -5,6 +5,8 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { FileRef, FileView } from './files.ts';
+import type { UsedView } from './used.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -626,6 +628,8 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+  attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
+  used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -688,6 +692,7 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  files: FileView[]; // the chat's files store, newest first (metadata only)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -720,6 +725,8 @@ export type ServerEvent =
   | { type: 'message'; message: PhoneMessage }
   /** The manager's messages moved on: the CEO read them, or replied. */
   | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
+  /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
+  | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }

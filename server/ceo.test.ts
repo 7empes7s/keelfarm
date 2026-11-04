@@ -108,6 +108,8 @@ describe('office tools', () => {
       rerunChecks: async () => '',
       closePull: async () => '',
       escalate: async () => '',
+      attachFile: async (a) => `attached ${a.path}`,
+      keepFile: () => 'kept',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -121,12 +123,14 @@ describe('office tools', () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       'agent_detail',
+      'attach_file',
       'close_issue',
       'close_pull',
       'company_status',
       'configure_agent',
       'escalate',
       'file_issue',
+      'keep_file',
       'rerun_checks',
       'retry_qa',
       'scale_team',

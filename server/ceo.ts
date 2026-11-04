@@ -42,6 +42,8 @@ export interface OfficeHandlers {
   rerunChecks(a: { floor: number; pr: number }): Promise<string>;
   closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
+  attachFile(a: { path: string }): Promise<string>;
+  keepFile(a: { id: string; keep: boolean; reason: string }): string;
 }
 
 export interface OfficeTools {
@@ -192,6 +194,18 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), pr: z.number().int().positive(), reason: z.string().min(1).max(300).describe('One line: what is wrong and what the manager has to decide') },
       (a) => run(() => h.escalate(a)),
     ),
+    tool(
+      'attach_file',
+      "Send the manager a file you made (a document, slides, spreadsheet, PDF, image, video, markdown, CSV or zip, at most 50 MB) with your next message: it shows on their phone with a preview and Download. The path must be absolute, inside your working folder or the temp folder. Kept on the office server for 30 days unless kept.",
+      { path: z.string().min(1).max(1000).describe('Absolute path of the file') },
+      (a) => run(() => h.attachFile(a)),
+    ),
+    tool(
+      'keep_file',
+      'Keep a file of the chat (by its file id) past its 30 days, or stop keeping it: it then goes 30 days after upload, at once if that has passed.',
+      { id: z.string().regex(/^[a-f0-9]{24}$/).describe('The file id'), keep: z.boolean(), reason: z.string().min(1).max(200).describe('Why, in a few words') },
+      (a) => run(() => h.keepFile(a)),
+    ),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -293,6 +307,7 @@ export function ceoSystemPrompt(o: {
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
+    '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
   ].join('\n');
 }

@@ -7,6 +7,8 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { readPicks } from './picks.ts';
+import type { QuickPicks } from '../shared/used.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type OfficeHost } from './officeUpdate.ts';
@@ -86,6 +88,8 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
+  quickPicks(): Promise<QuickPicks>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
   previews: PreviewBackend;
   /** The running office's own folder and its launcher, for the office's self-update. */
@@ -198,6 +202,7 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  quickPicks: () => readPicks(),
   previews: realPreviews,
   office: realOffice,
   voice: elevenLabs,

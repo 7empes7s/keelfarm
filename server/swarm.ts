@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { WebSocket } from 'ws';
@@ -68,6 +69,9 @@ import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/th
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
 import { forwardText, nextDelivery } from '../shared/chat.ts';
 import { makeArtifacts, parseCeoMessage, snapshotMessages } from '../shared/chatParts.ts';
+import { attachedIds, attachmentLines, MAX_FILES_PER_MESSAGE, SWEEP_MS, type FileRef } from '../shared/files.ts';
+import { groupUsed, toolCalls, type QuickPicks, type ToolCall } from '../shared/used.ts';
+import { checkAttachPath, FileStore } from './files.ts';
 import type {
   AgentActivity,
   AgentCli,
@@ -322,6 +326,8 @@ const CEO_EFFORT: EffortLevel = 'xhigh';
 const CEO_NAME = 'Morgan';
 // The CEO's own folder: its notes about the company live here. Repos are read through their clones.
 const CEO_DIR = path.join(HOME_DIR, 'ceo');
+// The chat's files (server/files.ts): outside every worktree, so agents only ever read them.
+const FILES_DIR = path.join(HOME_DIR, 'files');
 const DEFAULT_PROJECTS_DIR = defaultProjectsDir(path.resolve(import.meta.dirname, '..'));
 const MAX_ISSUES_PER_JOB = 12;
 const KEEP_MESSAGES = 200;
@@ -557,8 +563,15 @@ export class Swarm {
       rerunChecks: (a) => this.triageRerunChecks(a),
       closePull: (a) => this.triageClosePull(a),
       escalate: (a) => this.triageEscalate(a),
+      attachFile: (a) => this.attachFile(a),
+      keepFile: (a) => this.keepFile(a),
     });
   }
+  /** The chat's files store; every change goes out to the tabs as a `files` event. */
+  readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));
+  private ceoAttachments: FileRef[] = []; // attach_file's files, sent with the CEO's next phone message
+  private ceoCalls: ToolCall[] = []; // the CEO's tool calls since its last phone message, for "Used"
+
   private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   private ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
   private messageSeq = 1;
@@ -688,6 +701,8 @@ export class Swarm {
   // ---------- lifecycle ----------
 
   async init() {
+    await this.files.load().catch((err) => console.warn('files: could not load the store', err));
+    void this.files.sweep();
     try {
       const raw = await fs.readFile(STATE_FILE, 'utf8');
       const loaded = JSON.parse(raw) as Partial<Persisted>;
@@ -902,6 +917,7 @@ export class Swarm {
     void this.sweepMachines();
     setInterval(() => this.greet(), 60_000);
     setTimeout(() => this.greet(), 5000);
+    setInterval(() => void this.files.sweep(), SWEEP_MS).unref();
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
     setInterval(() => this.watchdogTick(), WATCHDOG_MS);
@@ -1164,6 +1180,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      files: this.files.list(),
     };
   }
 
@@ -2925,6 +2942,7 @@ export class Swarm {
       issue.labels.length ? `Labels: ${issue.labels.join(', ')}` : '',
       '',
       issue.body?.trim() || '(The issue has no description.)',
+      this.issueFiles(issue.body),
       note ? `\nNote from the manager: ${note}` : '',
     ]
       .filter(Boolean)
@@ -3374,6 +3392,7 @@ export class Swarm {
       'PR description:',
       pr.body.trim() || '(empty)',
       issue ? `\nLinked issue: ${issue.title}\n${issue.body.trim() || '(no description)'}` : '',
+      this.issueFiles(`${pr.body}\n${issue?.body ?? ''}`),
     ]
       .filter((l) => l !== '')
       .join('\n');
@@ -4392,7 +4411,10 @@ export class Swarm {
         ...how,
       },
       {
-        log: (entries) => this.appendLog(a, entries),
+        log: (entries) => {
+          this.appendLog(a, entries);
+          this.ceoCalls.push(...toolCalls(entries));
+        },
         tool: (name) => {
           if (rt.currentTool === name) return;
           rt.currentTool = name;
@@ -4405,7 +4427,7 @@ export class Swarm {
         browserUrl: () => undefined,
         screenshot: () => undefined,
         turn: (text) => {
-          this.postMessage('ceo', text);
+          this.postCeoReply(text);
           this.markDelivery('all', 'replied');
         },
         limited: (at) => this.pauseForLimit(at),
@@ -4428,6 +4450,8 @@ export class Swarm {
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
     if (job?.kind === 'triage') this.endTriage(job);
+    if (this.ceoAttachments.length) this.postCeoReply(''); // files attached after its last reply still reach the phone
+    this.ceoCalls = [];
     if (result.interrupted) this.interrupted(a);
     if (a.status === 'stopped') {
       // the manager already logged the stop
@@ -4450,13 +4474,20 @@ export class Swarm {
   }
 
   /** The manager's phone → the CEO, with a quote of the message it replies to. Injected into a running session, otherwise the CEO picks it up next. */
-  async messageCeo(text: string, replyTo?: number) {
+  async messageCeo(text: string, replyTo?: number, fileIds: readonly string[] = []) {
     const t = text.trim().slice(0, 4000);
-    if (!t) throw new HttpError(400, 'Empty message');
+    if (fileIds.length > MAX_FILES_PER_MESSAGE) throw new HttpError(400, `At most ${MAX_FILES_PER_MESSAGE} files per message`);
+    const attachments = fileIds.map((id) => {
+      const f = this.files.get(id);
+      if (!f) throw new HttpError(400, 'An attached file is no longer saved: attach it again');
+      const { keepReason: _, ...ref } = f;
+      return ref;
+    });
+    if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
     const a = this.ceo();
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
-    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent' });
-    const forward = forwardText(t, quoted);
+    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(attachments.length && { attachments }) });
+    const forward = [forwardText(t, quoted), attachmentLines(attachments, (i) => this.files.pathOf(attachments[i].id))].filter(Boolean).join('\n');
     const rt = this.agentRt.get(a.id)!;
     if (rt.session) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
@@ -5078,7 +5109,7 @@ export class Swarm {
 
   // ---------- the phone ----------
 
-  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, extra: Pick<PhoneMessage, 'replyTo' | 'delivery'> = {}) {
+  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, extra: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'attachments' | 'used'> = {}) {
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
     const id = this.messageSeq++;
@@ -5092,10 +5123,53 @@ export class Swarm {
     this.save();
     // Proposals are notified as such (proposeHire, proposeLetGo).
     if (from === 'ceo' && !requestId) {
-      const said = m.text || `📎 ${m.artifacts?.map((a) => a.title).join(', ') ?? ''}`;
+      const said = m.text || `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`;
       this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
     }
     return m;
+  }
+
+  /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
+  private postCeoReply(text: string) {
+    const attachments = this.ceoAttachments.splice(0);
+    const used = groupUsed(this.ceoCalls.splice(0));
+    this.postMessage('ceo', text, undefined, { ...(attachments.length && { attachments }), ...(used && { used }) });
+  }
+
+  // ---------- files ----------
+
+  /** attach_file: copies a file the CEO made into the store, for its next phone message. */
+  private async attachFile(a: { path: string }): Promise<string> {
+    if (this.ceoAttachments.length >= MAX_FILES_PER_MESSAGE) throw new Error(`At most ${MAX_FILES_PER_MESSAGE} files per message: send this reply first.`);
+    const ok = await checkAttachPath(a.path, [CEO_DIR, os.tmpdir(), FILES_DIR]);
+    const f = await this.files.addCopy(ok.real, { name: ok.name, from: 'ceo' });
+    this.ceoAttachments.push(f);
+    return `Attached ${f.name} (file id ${f.id}). It goes with your next message and is deleted after 30 days unless kept (keep_file). Agents can read it when an issue says "Attached: ${f.id}".`;
+  }
+
+  /** keep_file: keep a file past its 30 days, or let it go again. */
+  private keepFile(a: { id: string; keep: boolean; reason: string }): string {
+    const f = this.files.get(a.id);
+    if (!f) throw new Error(`No file ${a.id}: it expired or was deleted, so there is nothing to keep.`);
+    this.files.setKeep(f.id, a.keep, a.reason);
+    return a.keep ? `${f.name} is kept until someone unkeeps or deletes it.` : `${f.name} is no longer kept: it goes 30 days after it was uploaded.`;
+  }
+
+  /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */
+  async ceoPicks(): Promise<QuickPicks> {
+    const p = await this.backend.quickPicks().catch(() => ({ skills: [], apps: [] }));
+    const used = this.state.messages.flatMap((m) => m.used?.connectors.map((c) => c.name) ?? []).filter((n) => n !== 'Office');
+    const skills = this.state.messages.flatMap((m) => m.used?.skills ?? []).filter((n) => n !== 'a skill');
+    return { skills: [...new Set([...p.skills, ...skills])].sort(), apps: [...new Set([...p.apps, ...used])].sort() };
+  }
+
+  /** The store files an issue hands its agents ("Attached: <id>"), as prompt lines with their local paths. */
+  private issueFiles(body: string | undefined): string {
+    const files = attachedIds(body ?? '')
+      .map((id) => this.files.get(id))
+      .filter((f) => f !== undefined);
+    if (!files.length) return '';
+    return ['Files attached to the issue (read only; they live outside your worktree):', ...files.map((f) => `- ${this.files.pathOf(f.id)} (${f.name}, ${f.type})`)].join('\n');
   }
 
   /** GET /api/messages/:id/artifacts/:artifactId: an artifact's markdown, for one the snapshot sent without it. */

@@ -6,6 +6,7 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
+import { demoPdf, demoPng } from './demoFiles.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
@@ -879,6 +880,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     releaseClis: async () => undefined,
     detectClis: async () =>
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
+    quickPicks: async () => ({
+      skills: ['docx', 'pdf', 'pptx', 'xlsx', 'frontend-design', 'superpowers:brainstorming', 'code-review'],
+      apps: ['Gmail', 'Google Drive', 'Google Docs', 'Google Slides', 'Figma', 'Notion'],
+    }),
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,
@@ -1249,6 +1254,26 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     return n;
   };
 
+  /** Reads what the manager sent, "uses" a skill and Gmail, then makes a PDF and a chart, attaches both and keeps the PDF. */
+  const makeFiles = async (s: DemoStatus, sent: RegExpMatchArray[]) => {
+    for (const f of sent.slice(0, 2)) await read(f[1], f[3].startsWith('image/') ? 1 : 40);
+    await step([{ kind: 'tool', tool: 'Skill', text: '⏺ Skill pdf' }]);
+    await step([{ kind: 'tool', tool: 'mcp__claude_ai_Gmail__search_threads', text: '⏺ Gmail: search "weekly update"' }, { kind: 'result', text: '  ⎿ 3 threads' }]);
+    fs.mkdirSync(opts.cwd, { recursive: true });
+    const pdf = path.join(opts.cwd, 'Weekly report.pdf');
+    const png = path.join(opts.cwd, 'Throughput.png');
+    const lines = s.floors.length ? s.floors.map((f) => `Floor ${f.floor} (${f.repo}): ${plural(f.team.size, 'agent')}, ${plural(f.backlog.length, 'open issue')}, ${plural(f.pullRequests.length, 'pull request')}`) : ['No floors yet.'];
+    fs.writeFileSync(pdf, demoPdf('Weekly report', [...lines, '', 'Made by the demo CEO.']));
+    fs.writeFileSync(png, demoPng(s.floors.length ? s.floors.map((f) => Math.min(1, (f.backlog.length + 1) / 10)) : [0.3, 0.6, 0.45, 0.8]));
+    await step([{ kind: 'tool', tool: 'Write', text: '⏺ Write Weekly report.pdf' }]);
+    const report = await use('attach_file', { path: pdf });
+    await use('attach_file', { path: png });
+    const id = /file id ([a-f0-9]{24})/.exec(report)?.[1];
+    if (id) await use('keep_file', { id, keep: true, reason: 'The weekly report, worth keeping' });
+    const got = sent.length ? `I read ${sent[0][2].trim()}${sent.length > 1 ? ` and ${plural(sent.length - 1, 'other file')}` : ''}. ` : '';
+    return `${got}Here's the weekly report as a PDF, with a throughput chart. I kept the report, so it stays past the usual 30 days.`;
+  };
+
   const scripts = {
     async onboard(floor: number, fullName: string) {
       const s = await status();
@@ -1310,6 +1335,9 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      // Files from the manager (shared/files.ts attachmentLines), or a document asked for: the demo makes one and attaches it.
+      const sent = [...opts.prompt.matchAll(/^- (\S.*?) \(([^,]+), ([^,]+), [^)]*\)$/gm)];
+      if (sent.length || /\b(pdf|slides?|deck|document|report|chart|file)\b/i.test(text)) return makeFiles(s, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);

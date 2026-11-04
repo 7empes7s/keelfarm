@@ -2,6 +2,7 @@
 // through its delivery states, and which CEO messages offer quick Yes / No replies.
 
 import type { Delivery, PhoneMessage } from './types.ts';
+import type { FileRef } from './files.ts';
 
 /** How much of a quoted message is forwarded to the CEO (and shown in the reply's quote). */
 export const QUOTE_CHARS = 300;
@@ -93,13 +94,15 @@ export interface OutgoingMessage {
   key: number; // this phone's own id for it
   text: string;
   replyTo?: number;
+  files?: FileRef[]; // uploaded already: the message carries their ids
   at: number;
   delivery: Extract<Delivery, 'sending' | 'failed'>;
 }
 
-/** The outbox once the office's copy of a message arrived: the send it came from (same text and reply) is done. */
-export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo'>): OutgoingMessage[] {
+/** The outbox once the office's copy of a message arrived: the send it came from (same text, reply and files) is done. */
+export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments'>): OutgoingMessage[] {
   if (m.from !== 'manager') return [...outbox];
-  const i = outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo);
+  const ids = (fs?: readonly FileRef[]) => (fs ?? []).map((f) => f.id).join();
+  const i = outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo && ids(o.files) === ids(m.attachments));
   return i < 0 ? [...outbox] : outbox.filter((_, j) => j !== i);
 }
