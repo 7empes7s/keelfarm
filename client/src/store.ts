@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
@@ -123,6 +123,7 @@ interface State {
   officeCommit?: string | null; // undefined: the server can't update itself
   officeUpdate?: OfficeUpdateView;
   usage: UsageView; // Claude's subscription usage: normal, pacing after a warning, or paused at the limit
+  claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
@@ -251,6 +252,7 @@ export const useStore = create<State>((set, get) => ({
   messages: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
+  claudeUsage: [],
   ops: EMPTY_OPS,
   doctor: [],
   voiceKeySet: false,
@@ -322,6 +324,7 @@ export const useStore = create<State>((set, get) => ({
           officeCommit: d.officeCommit,
           officeUpdate: d.officeUpdate,
           usage: d.usage,
+          claudeUsage: d.claudeUsage ?? [],
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
           clis: d.clis ?? [],
@@ -493,6 +496,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'usage':
         set({ usage: ev.usage });
+        break;
+      case 'claudeUsage':
+        set({ claudeUsage: ev.readings });
         break;
       case 'ops':
         // A new alarm sounds once (rate-limited); the beacons spin until it's handled.

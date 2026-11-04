@@ -3802,6 +3802,20 @@ input.inline:focus {
 .usage-gauge > div {
   height: 100%;
 }
+.usage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.usage-gauge-good > div {
+  background: var(--good);
+}
+.usage-gauge-warn > div {
+  background: var(--warn);
+}
+.usage-gauge-bad > div {
+  background: var(--bad);
+}
 /* The card the console was opened at (an alarm, or the usage meter). */
 .ops-card-hot {
   box-shadow: 0 0 0 4px var(--bad);
@@ -3984,6 +3998,16 @@ input.inline:focus {
   border-radius: 16px;
   padding: 10px 12px;
   box-shadow: 0 3px 0 var(--ink);
+}
+.pk-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font);
+  font-size: 1rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
 }
 .pk-banner {
   padding: 8px 12px;

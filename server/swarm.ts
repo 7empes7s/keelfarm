@@ -37,6 +37,7 @@ import { pruneQaShots, qaShotsDir, readQaShot, removeQaShots, saveQaShots } from
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt, failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from './prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from './qaRetry.ts';
 import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type LastUpdate } from './officeUpdate.ts';
+import { mergeReadings, readingsChanged, readingsLabel } from '../shared/usage.ts';
 import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningView, type UsageWarning, type Waiver, type WorkKind } from './pacing.ts';
 import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
 import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
@@ -99,6 +100,7 @@ import type {
   RepoView,
   ServerEvent,
   SwarmSettings,
+  UsageReading,
   UsageView,
   UsageWarningView,
   WorldSnapshot,
@@ -224,6 +226,7 @@ interface Persisted {
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
+  claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
 }
 
 interface Shot {
@@ -338,6 +341,7 @@ const MAX_ISSUE_FAILURES = 2;
 const MAX_QA_FAILURES = 2;
 // How long the office waits after Claude's usage limit is hit when Claude doesn't say when it resets.
 const LIMIT_PAUSE_MS = 15 * 60_000;
+const READINGS_MS = 3000; // Claude's usage readings arrive with every status line: the office gets them at most this often
 // Everyone on a floor this size or bigger busy at once is a full house (an achievement).
 const FULL_HOUSE = 4;
 // Mission control's numbers are recomputed after these events (debounced), and every half minute for the clock's sake.
@@ -528,6 +532,7 @@ export class Swarm {
     progress: emptyLedger(),
     pong: {},
     officeId: officeId(),
+    claudeUsage: [],
   };
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
@@ -736,6 +741,7 @@ export class Swarm {
         progress: loadLedger(loaded.progress),
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
+        claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
@@ -1137,6 +1143,7 @@ export class Swarm {
       messages: this.state.messages.slice(-100),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
+      claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),
       clis: this.clis,
@@ -3035,6 +3042,7 @@ export class Swarm {
         },
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
+        usage: (readings) => this.recordUsage(readings),
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -3798,6 +3806,8 @@ export class Swarm {
   private lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
   private waiver: Waiver | null = null; // pacing the manager cleared with "Resume full speed"
   private lastUsage = '';
+  private shownReadings: UsageReading[] = []; // the readings the office was last sent
+  private readingsTimer: NodeJS.Timeout | null = null;
 
   /** Backlog issues that can start now, most urgent first: the ones holding up the longest chain of other issues, then the oldest. */
   private readyIssues(repo: PersistedRepo) {
@@ -3948,6 +3958,19 @@ export class Swarm {
       if (usage.state === 'paused') this.notifier.notify('usage', "Claude's usage limit was reached", `The office starts no new work until ${until}; running sessions carry on.`);
       else this.notifier.notify('usage', 'Pacing new work', `Claude warned that usage is high, so new issues start slowly until ${until}.`);
     }
+  }
+
+  /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
+  private recordUsage(readings: UsageReading[]) {
+    this.state.claudeUsage = mergeReadings(this.state.claudeUsage, readings);
+    if (this.readingsTimer || !readingsChanged(this.shownReadings, this.state.claudeUsage)) return;
+    this.readingsTimer = setTimeout(() => {
+      this.readingsTimer = null;
+      this.shownReadings = this.state.claudeUsage;
+      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage });
+      this.save();
+    }, READINGS_MS);
+    this.readingsTimer.unref?.();
   }
 
   /** Pacing and pauses run out on their own: say so when pacing ends. */
@@ -4373,6 +4396,7 @@ export class Swarm {
         turn: (text) => this.postMessage('ceo', text),
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
+        usage: (readings) => this.recordUsage(readings),
         finished: (result) => this.onCeoFinished(a, result),
       },
     );
@@ -5428,7 +5452,7 @@ export class Swarm {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: usageLabel(this.usageNow(), Date.now()),
+          usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
         },
         floors,
         pendingChanges: pending.map(req),

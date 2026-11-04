@@ -6,7 +6,7 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
-import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
+import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
 import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory } from './metrics.ts';
@@ -603,6 +603,36 @@ function fakeUsageWarning(cb: SessionCallbacks) {
   }, 3000);
 }
 
+// Claude's usage readings, made up: they climb through a fast fake window (30 minutes for "5 hours", 6 hours for the
+// week) and reset, so the meter can be seen moving. Running sessions report them every 15 s, like a status line.
+const FAKE_WINDOW_MS = 30 * 60_000;
+const FAKE_WEEK_MS = 6 * 60 * 60_000;
+
+/** The demo's readings at `now`: the 5-hour window, the week and a weekly Sonnet limit. */
+export function demoReadings(now: number): UsageReading[] {
+  const fill = (period: number, from: number, span: number) => ({ pct: Math.round(from + (span * (now % period)) / period), resetsAt: now - (now % period) + period });
+  return [
+    { type: 'five_hour', ...fill(FAKE_WINDOW_MS, 8, 70), at: now },
+    { type: 'seven_day', ...fill(FAKE_WEEK_MS, 35, 40), at: now },
+    { type: 'seven_day_sonnet', ...fill(FAKE_WEEK_MS, 20, 30), at: now },
+  ];
+}
+
+/** A session's callbacks that also report the made-up readings while it runs. */
+function withReadings(cb: SessionCallbacks): SessionCallbacks {
+  const feed = () => cb.usage?.(demoReadings(Date.now()));
+  const first = setTimeout(feed, 4000);
+  const every = setInterval(feed, 15_000);
+  return {
+    ...cb,
+    finished: (result) => {
+      clearTimeout(first);
+      clearInterval(every);
+      cb.finished(result);
+    },
+  };
+}
+
 /** A made-up install and build of 300-900 MB freed, so the idle-desk setting and its phone message can be seen. */
 async function fakeTrim(stillIdle: () => boolean) {
   await new Promise((r) => setTimeout(r, 300));
@@ -838,6 +868,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     startSession: (opts, cb) => {
       // The big company is for measuring the office at full speed, so it never paces.
       if (++sessionsStarted === USAGE_WARNING_AT && !scale) fakeUsageWarning(cb);
+      if (!scale) cb = withReadings(cb);
       return inTerminal(opts, cb, (c) => (opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
     terminals: true,
