@@ -1,0 +1,593 @@
+{
+  "about": "code-health ratchet baseline: npm run lint fails on anything above this. Lower it with npm run lint:update.",
+  "lint": {
+    "client/src/hitchLog.ts": {
+      "unicorn(no-new-array)": 1
+    },
+    "client/src/hitches.ts": {
+      "unicorn(no-new-array)": 1
+    },
+    "client/src/ops.ts": {
+      "unicorn(no-new-array)": 1
+    },
+    "client/src/photo/gate.ts": {
+      "typescript(consistent-type-imports)": 2
+    },
+    "client/src/ui/AppViewer.tsx": {
+      "typescript(no-misused-promises)": 1
+    },
+    "client/src/ui/KanbanView.tsx": {
+      "typescript(no-misused-promises)": 7
+    },
+    "client/src/ui/NotifySettings.tsx": {
+      "typescript(no-meaningless-void-operator)": 1
+    },
+    "client/src/ui/Panel.tsx": {
+      "eslint(no-unused-expressions)": 1
+    },
+    "client/src/ui/Phone.tsx": {
+      "typescript(no-misused-promises)": 1
+    },
+    "client/src/ui/ProjectPicker.tsx": {
+      "typescript(no-misused-promises)": 3
+    },
+    "client/src/ui/SetupWizard.tsx": {
+      "typescript(no-misused-promises)": 2
+    },
+    "client/src/ui/TerminalView.tsx": {
+      "typescript(no-misused-promises)": 4
+    },
+    "client/src/ui/acoustics.test.ts": {
+      "eslint(no-unused-expressions)": 4
+    },
+    "client/src/ui/chatterLines.ts": {
+      "unicorn(prefer-string-starts-ends-with)": 1
+    },
+    "client/src/ui/eventSfx.ts": {
+      "unicorn(no-useless-spread)": 1
+    },
+    "client/src/ui/lofi.test.ts": {
+      "eslint(no-unused-expressions)": 2
+    },
+    "client/src/ui/mic.ts": {
+      "typescript(no-meaningless-void-operator)": 2,
+      "typescript(no-this-alias)": 1
+    },
+    "client/src/ui/notifySteps.ts": {
+      "unicorn(prefer-string-starts-ends-with)": 1
+    },
+    "client/src/ui/scoreMood.test.ts": {
+      "eslint(no-unused-expressions)": 3
+    },
+    "client/src/world/AppMonitor.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/Batched.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/Candidates.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/Character.tsx": {
+      "react-hooks(exhaustive-deps)": 2
+    },
+    "client/src/world/Desk.tsx": {
+      "typescript(no-floating-promises)": 1
+    },
+    "client/src/world/Elevator.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/ErrandDirector.tsx": {
+      "react-hooks(exhaustive-deps)": 1
+    },
+    "client/src/world/Figure.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/HeldSnack.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/Jukebox.tsx": {
+      "react-hooks(exhaustive-deps)": 1
+    },
+    "client/src/world/KanbanBoard.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/KitchenFridge.tsx": {
+      "react-hooks(exhaustive-deps)": 1
+    },
+    "client/src/world/Lobby.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/Props.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/StickyNotes.tsx": {
+      "react-hooks(exhaustive-deps)": 2,
+      "unicorn(no-useless-spread)": 1
+    },
+    "client/src/world/TimeLapseScreen.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/TypingSounds.tsx": {
+      "unicorn(no-new-array)": 5
+    },
+    "client/src/world/camera/BuildingView.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/camera/rig.ts": {
+      "typescript(no-meaningless-void-operator)": 1
+    },
+    "client/src/world/chatterEvents.ts": {
+      "unicorn(no-useless-spread)": 1
+    },
+    "client/src/world/coffeeBreak.ts": {
+      "unicorn(no-thenable)": 1
+    },
+    "client/src/world/desk/DeskStory.tsx": {
+      "typescript(no-floating-promises)": 1
+    },
+    "client/src/world/events/kit.ts": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/events/scenes/Kaiju.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/events/scenes/Ufo.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/events/watch.test.ts": {
+      "unicorn(no-useless-spread)": 1
+    },
+    "client/src/world/face.ts": {
+      "unicorn(no-new-array)": 1
+    },
+    "client/src/world/fridgeState.ts": {
+      "unicorn(no-useless-fallback-in-spread)": 1
+    },
+    "client/src/world/jukeboxSongs.test.ts": {
+      "eslint(no-unused-expressions)": 7
+    },
+    "client/src/world/outside/City.tsx": {
+      "unicorn(no-new-array)": 2
+    },
+    "client/src/world/paint/painter.ts": {
+      "typescript(no-meaningless-void-operator)": 2,
+      "unicorn(no-useless-spread)": 1
+    },
+    "client/src/world/ritualRunner.ts": {
+      "unicorn(no-useless-spread)": 2
+    },
+    "client/src/world/roof/HeldSausage.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/roof/RoofPeople.tsx": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "client/src/world/roof/stargazing.test.ts": {
+      "typescript(require-array-sort-compare)": 2
+    },
+    "client/src/world/snackBreak.ts": {
+      "unicorn(no-thenable)": 1
+    },
+    "client/src/world/stage.test.ts": {
+      "eslint(no-unused-expressions)": 1
+    },
+    "client/src/world/themes/themes.test.ts": {
+      "typescript(require-array-sort-compare)": 1
+    },
+    "client/src/world/toyErrands.test.ts": {
+      "typescript(consistent-type-imports)": 3
+    },
+    "client/src/world/toys/Blasters.tsx": {
+      "unicorn(no-useless-spread)": 2
+    },
+    "client/src/world/toys/ToyWorld.tsx": {
+      "react-hooks(exhaustive-deps)": 1
+    },
+    "client/src/world/toys/pongAi.test.ts": {
+      "eslint(no-unused-expressions)": 1
+    },
+    "client/src/world/weather/WetGlass.tsx": {
+      "unicorn(no-new-array)": 2
+    },
+    "e2e/dog.spec.ts": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "e2e/pong.spec.ts": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "scripts/codeHealthReport.mjs": {
+      "eslint(no-unused-expressions)": 1
+    },
+    "scripts/office.mjs": {
+      "eslint(no-unused-expressions)": 1
+    },
+    "server/agentRunner.ts": {
+      "typescript(no-floating-promises)": 1
+    },
+    "server/boxHelpers.test.ts": {
+      "eslint(no-control-regex)": 1
+    },
+    "server/cliRunner.ts": {
+      "eslint(no-control-regex)": 1,
+      "typescript(no-floating-promises)": 3,
+      "typescript(no-misused-promises)": 1
+    },
+    "server/cloudSignIn.test.ts": {
+      "typescript(no-floating-promises)": 1
+    },
+    "server/demo.ts": {
+      "eslint(no-control-regex)": 2,
+      "typescript(no-misused-promises)": 1,
+      "unicorn(no-useless-spread)": 1,
+      "unicorn(prefer-string-starts-ends-with)": 1
+    },
+    "server/index.ts": {
+      "typescript(no-redundant-type-constituents)": 1
+    },
+    "server/metrics.ts": {
+      "unicorn(no-new-array)": 1
+    },
+    "server/notifier.test.ts": {
+      "typescript(require-array-sort-compare)": 1
+    },
+    "server/notifier.ts": {
+      "eslint(no-control-regex)": 1,
+      "unicorn(no-useless-spread)": 1
+    },
+    "server/previewGateway.test.ts": {
+      "typescript(no-implied-eval)": 2
+    },
+    "server/previewRunner.ts": {
+      "eslint(no-control-regex)": 1
+    },
+    "server/previews.test.ts": {
+      "typescript(require-array-sort-compare)": 1
+    },
+    "server/ptyClient.ts": {
+      "unicorn(no-useless-spread)": 1
+    },
+    "server/ptyHost.test.ts": {
+      "eslint(no-control-regex)": 1
+    },
+    "server/swarm.ts": {
+      "typescript(no-floating-promises)": 5
+    },
+    "server/syncProxy.test.ts": {
+      "typescript(no-implied-eval)": 2
+    },
+    "server/voice.ts": {
+      "unicorn(no-useless-spread)": 1
+    },
+    "server/workspace.test.ts": {
+      "typescript(consistent-type-imports)": 1
+    },
+    "server/workspace.ts": {
+      "typescript(await-thenable)": 1
+    },
+    "shared/speech.ts": {
+      "eslint(no-misleading-character-class)": 2
+    }
+  },
+  "knip": [
+    "exports:client/src/dprControl.ts:HZ_RUN",
+    "exports:client/src/hitchLog.ts:BIG_WS_BYTES",
+    "exports:client/src/hitchLog.ts:CONTEXT_MS",
+    "exports:client/src/hitchLog.ts:SLOW_WS_MS",
+    "exports:client/src/hitchLog.ts:UPLOADS_MANY",
+    "exports:client/src/hitchLog.ts:causeGroup",
+    "exports:client/src/hitches.ts:hitchList",
+    "exports:client/src/photo/flight.ts:ORBIT_SPEED",
+    "exports:client/src/photo/flight.ts:halt",
+    "exports:client/src/photo/gate.ts:saveReplay",
+    "exports:client/src/photo/media.ts:recordingType",
+    "exports:client/src/photo/overlay.ts:frameInsets",
+    "exports:client/src/pocket/PocketTeam.tsx:Status",
+    "exports:client/src/replay.ts:marksBetween",
+    "exports:client/src/replayClock.ts:PREFETCH_REAL_MS",
+    "exports:client/src/screenshot.ts:screenshotUrl",
+    "exports:client/src/ui/AgentSettings.tsx:CLOUD_STATE",
+    "exports:client/src/ui/AgentSettings.tsx:HostSelect",
+    "exports:client/src/ui/CareerCard.tsx:fixed1",
+    "exports:client/src/ui/CareerCard.tsx:pct",
+    "exports:client/src/ui/CareerCard.tsx:tenureText",
+    "exports:client/src/ui/OutsideSettings.tsx:WEATHER_LABELS",
+    "exports:client/src/ui/Overlays.tsx:SoundControls",
+    "exports:client/src/ui/Overlays.tsx:closeOverlay",
+    "exports:client/src/ui/Phone.tsx:setupLine",
+    "exports:client/src/ui/PongHud.tsx:pongStatus",
+    "exports:client/src/ui/a11yPrefs.ts:REDUCE_MOTION",
+    "exports:client/src/ui/babble.ts:BABBLE_PEAK",
+    "exports:client/src/ui/babbleRules.ts:FORMANTS",
+    "exports:client/src/ui/captionRules.ts:SPEECH_CHARS_PER_SEC",
+    "exports:client/src/ui/captions.ts:captionSound",
+    "exports:client/src/ui/colorMath.ts:luminance",
+    "exports:client/src/ui/colorMath.ts:toLab",
+    "exports:client/src/ui/footsteps.ts:footstep",
+    "exports:client/src/ui/footsteps.ts:scuff",
+    "exports:client/src/ui/games/paint.ts:PAPER",
+    "exports:client/src/ui/games/paint.ts:SANS",
+    "exports:client/src/ui/games/paint.ts:roundRect",
+    "exports:client/src/ui/games/pet.ts:COLORS",
+    "exports:client/src/ui/games/pet.ts:NAMES",
+    "exports:client/src/ui/games/petStore.ts:finishedLine",
+    "exports:client/src/ui/keymap.ts:ACTION_IDS",
+    "exports:client/src/ui/keymap.ts:RESERVED",
+    "exports:client/src/ui/keymap.ts:scopesOverlap",
+    "exports:client/src/ui/micSilence.ts:SPEECH_RATIO",
+    "exports:client/src/ui/musicMix.ts:EDGE",
+    "exports:client/src/ui/notifySteps.ts:unblockHow",
+    "exports:client/src/ui/outsideMix.ts:DOOR_CLARITY",
+    "exports:client/src/ui/outsideMix.ts:DOOR_REACH",
+    "exports:client/src/ui/peopleSoundRules.ts:FIRST_MURMUR",
+    "exports:client/src/ui/peopleSoundRules.ts:WALKING",
+    "exports:client/src/ui/peopleSoundRules.ts:chatting",
+    "exports:client/src/ui/peopleSoundRules.ts:nearerWalkers",
+    "exports:client/src/ui/peopleSounds.ts:chairRoll",
+    "exports:client/src/ui/peopleSounds.ts:murmur",
+    "exports:client/src/ui/peopleSounds.ts:sigh",
+    "exports:client/src/ui/peopleSounds.ts:yawn",
+    "exports:client/src/ui/sfx.ts:setGroupLevel",
+    "exports:client/src/ui/sfxMix.ts:VOICE_CAP",
+    "exports:client/src/ui/theatre.ts:useChannels",
+    "exports:client/src/ui/voiceClaim.ts:CLAIM_MS",
+    "exports:client/src/ui/voiceQueue.ts:VOICE_QUEUE_MAX",
+    "exports:client/src/ui/weatherMix.ts:THUNDER_INDOORS",
+    "exports:client/src/world/Batched.tsx:OUTLINE_RANGE",
+    "exports:client/src/world/Batched.tsx:STAND_IN",
+    "exports:client/src/world/Chatter.tsx:greetable",
+    "exports:client/src/world/Desk.tsx:DeskFloorMarker",
+    "exports:client/src/world/Figure.tsx:shirtColor",
+    "exports:client/src/world/Jukebox.tsx:setJukeboxVolume",
+    "exports:client/src/world/SnackLook.tsx:FOOD_LEN",
+    "exports:client/src/world/SpeechBubble.tsx:BUBBLE_TOP",
+    "exports:client/src/world/Toon.tsx:Capsule",
+    "exports:client/src/world/boardHands.ts:HOLD_MS",
+    "exports:client/src/world/boardStats.ts:STATS_WINDOW_MS",
+    "exports:client/src/world/camera/cameraMath.ts:nearFor",
+    "exports:client/src/world/camera/cameraMath.ts:screenBounds",
+    "exports:client/src/world/camera/rig.ts:follow",
+    "exports:client/src/world/camera/rig.ts:screenOf",
+    "exports:client/src/world/chatterEvents.ts:SHIPPED_MS",
+    "exports:client/src/world/coffee.ts:pourProgress",
+    "exports:client/src/world/coffeeBreak.ts:leaveLineSpot",
+    "exports:client/src/world/decor/actions.ts:showTrophy",
+    "exports:client/src/world/decor/actions.ts:thunk",
+    "exports:client/src/world/decor/decor.ts:spotOf",
+    "exports:client/src/world/decor/models.ts:LIGHT_BULBS",
+    "exports:client/src/world/decor/parts.ts:mergeParts",
+    "exports:client/src/world/draw.ts:MONO",
+    "exports:client/src/world/events/director.ts:GAPS",
+    "exports:client/src/world/events/director.ts:setFrequency",
+    "exports:client/src/world/fidgets.ts:WORK_GAP",
+    "exports:client/src/world/fidgets.ts:isReaction",
+    "exports:client/src/world/fidgets.ts:random",
+    "exports:client/src/world/fridgeState.ts:playerAtFridge",
+    "exports:client/src/world/gamepad.ts:TRIGGER_DOWN",
+    "exports:client/src/world/gamepad.ts:bit",
+    "exports:client/src/world/gamepad.ts:isDown",
+    "exports:client/src/world/gfx/pipeline.ts:GLOW_LAYER",
+    "exports:client/src/world/gfx/pipeline.ts:NIGHT_GLOW_LAYER",
+    "exports:client/src/world/gfx/quality.ts:TIERS",
+    "exports:client/src/world/gfx/quality.ts:tierIndex",
+    "exports:client/src/world/gongRun.ts:gongFree",
+    "exports:client/src/world/hiringState.ts:WELCOME_MS",
+    "exports:client/src/world/jukeboxSongs.ts:SCALES",
+    "exports:client/src/world/jukeboxSongs.ts:chordTones",
+    "exports:client/src/world/jukeboxSongs.ts:formOf",
+    "exports:client/src/world/layout.ts:DESK_TOP",
+    "exports:client/src/world/layout.ts:blasterRack",
+    "exports:client/src/world/layout.ts:decorBoxRect",
+    "exports:client/src/world/layout.ts:jukeboxRect",
+    "exports:client/src/world/look.ts:CONFIRM_FRACTION",
+    "exports:client/src/world/look.ts:CONFIRM_MS",
+    "exports:client/src/world/look.ts:MAX_PX",
+    "exports:client/src/world/look.ts:RATIO_MIN_PX",
+    "exports:client/src/world/look.ts:SPIKE_PX",
+    "exports:client/src/world/look.ts:SPIKE_RATIO",
+    "exports:client/src/world/outside/cityLayout.ts:rng",
+    "exports:client/src/world/outside/cityLayout.ts:streetLines",
+    "exports:client/src/world/pongErrands.ts:PONG_SHARE",
+    "exports:client/src/world/presence/Presence.tsx:heldForOthers",
+    "exports:client/src/world/presence/Visitors.tsx:drawVisitorTag",
+    "exports:client/src/world/presence/Visitors.tsx:visitorAgent",
+    "exports:client/src/world/presence/presenceState.ts:ARRIVE_MS",
+    "exports:client/src/world/reactions.ts:NEIGHBOUR_RADIUS",
+    "exports:client/src/world/ritualSchedule.ts:LUNCH",
+    "exports:client/src/world/ritualSchedule.ts:PIZZA",
+    "exports:client/src/world/ritualSchedule.ts:facingTo",
+    "exports:client/src/world/sky/skyLayout.ts:seeded",
+    "exports:client/src/world/socials.ts:CHAT_CHANCE",
+    "exports:client/src/world/socials.ts:VISIT_RANGE",
+    "exports:client/src/world/themes/active.ts:refreshTheme",
+    "exports:client/src/world/themes/birthday.tsx:SONG_S",
+    "exports:client/src/world/themes/halloween.tsx:creak",
+    "exports:client/src/world/themes/halloween.tsx:owl",
+    "exports:client/src/world/themes/kit/Tint.tsx:eveningWeight",
+    "exports:client/src/world/themes/kit/costumes.tsx:CostumeView",
+    "exports:client/src/world/themes/kit/costumes.tsx:costumeGeometry",
+    "exports:client/src/world/themes/kit/crowd.ts:headingOf",
+    "exports:client/src/world/themes/kit/geo.ts:paint",
+    "exports:client/src/world/themes/kit/geo.ts:place",
+    "exports:client/src/world/themes/kit/runs.tsx:sagPoints",
+    "exports:client/src/world/themes/kit/walker.ts:onTheWay",
+    "exports:client/src/world/toyErrands.ts:PLAYER_GAP",
+    "exports:client/src/world/toyErrands.ts:SHOTS",
+    "exports:client/src/world/toyErrands.ts:TOSSES",
+    "exports:client/src/world/toys/blasterSounds.ts:LANDING_JOLT",
+    "exports:client/src/world/toys/blasterSounds.ts:TALL_SURFACE",
+    "exports:client/src/world/toys/darts.ts:STICK",
+    "exports:client/src/world/toys/dogSound.ts:PANT_GAP",
+    "exports:client/src/world/toys/dogSound.ts:TAP_GAP",
+    "exports:client/src/world/toys/dogSound.ts:VOICE_GAP",
+    "exports:client/src/world/toys/mugs.ts:pickUpMug",
+    "exports:client/src/world/toys/npcAim.ts:NPC_EYE",
+    "exports:client/src/world/toys/npcAim.ts:lookAt",
+    "exports:client/src/world/toys/npcAim.ts:normal",
+    "exports:client/src/world/toys/pongAi.ts:CONTACT",
+    "exports:client/src/world/toys/pongPhysics.ts:SWING",
+    "exports:client/src/world/toys/pongPhysics.ts:airAccel",
+    "exports:client/src/world/toys/pongPhysics.ts:cloneBall",
+    "exports:client/src/world/toys/pongPhysics.ts:flightStep",
+    "exports:client/src/world/toys/pongProbe.ts:drillBalls",
+    "exports:client/src/world/toys/pongRunner.ts:PADDLE_HIT",
+    "exports:client/src/world/toys/pongRunner.ts:TIMING",
+    "exports:client/src/world/toys/pongState.ts:centrePaddle",
+    "exports:client/src/world/toys/throwSim.ts:shotView",
+    "exports:client/src/world/toys/throwing.ts:ASSIST",
+    "exports:client/src/world/typing.ts:MOUSE_OFFSET",
+    "exports:client/src/world/walkways.ts:pongSpots",
+    "exports:client/src/world/weather/weatherState.ts:stepWeather",
+    "exports:client/src/world/weather/weatherState.ts:strike",
+    "exports:e2e/helpers.ts:VIEW_KEY",
+    "exports:server/backend.ts:realCloud",
+    "exports:server/box.ts:cloudError",
+    "exports:server/boxCli.ts:TURN_ENDS",
+    "exports:server/boxHelpers.ts:BOX_CODEX_HOOK_SOURCE",
+    "exports:server/boxHelpers.ts:BOX_HOOK_SOURCE",
+    "exports:server/boxHelpers.ts:BOX_LAUNCH_SOURCE",
+    "exports:server/boxHelpers.ts:BOX_NOTIFY_SOURCE",
+    "exports:server/boxHelpers.ts:BOX_RELEASE_SOURCE",
+    "exports:server/boxHelpers.ts:BOX_SEED_CLAUDE_SOURCE",
+    "exports:server/boxHelpers.ts:BOX_STATUSLINE_SOURCE",
+    "exports:server/boxScripts.ts:BOX_CF",
+    "exports:server/boxScripts.ts:BOX_SESSIONS",
+    "exports:server/browser.ts:hasChrome",
+    "exports:server/clis.ts:BOX_CODEX_VERSION",
+    "exports:server/clis.ts:resolveCommand",
+    "exports:server/cloud.ts:CLAUDE_TOKEN_ENV",
+    "exports:server/config.ts:DEMO_MAX",
+    "exports:server/demo.ts:DEMO_TRANSCRIPT",
+    "exports:server/demo.ts:demoChime",
+    "exports:server/demoVisitors.ts:PING_SPOTS",
+    "exports:server/deps.ts:INSTALL_MARKER",
+    "exports:server/deps.ts:npmCi",
+    "exports:server/github.ts:EVIDENCE_BRANCH",
+    "exports:server/handOut.ts:PREP_FAILURES_BEFORE_HOLD",
+    "exports:server/journal.ts:FLUSH_MS",
+    "exports:server/journal.ts:SEGMENT_BYTES",
+    "exports:server/journal.ts:summarize",
+    "exports:server/notifier.ts:loadWebhooks",
+    "exports:server/notifier.ts:sendError",
+    "exports:server/outbox.ts:patchOf",
+    "exports:server/prTheatre.ts:WATCH_EVERY_MS",
+    "exports:server/presence.ts:PING_GAP_MS",
+    "exports:server/presence.ts:due",
+    "exports:server/previewGateway.ts:GATEWAY",
+    "exports:server/previewGateway.ts:GATEWAY_WORKER",
+    "exports:server/previewRunner.ts:PREVIEW_TMP",
+    "exports:server/previewRunner.ts:defaultCommand",
+    "exports:server/previewRunner.ts:fillPlaceholders",
+    "exports:server/previewRunner.ts:previewEnv",
+    "exports:server/terminal.ts:TERM_COLS",
+    "exports:server/terminal.ts:TERM_ROWS",
+    "exports:server/voice.ts:CACHE_MAX_AGE_MS",
+    "exports:server/voice.ts:CACHE_MAX_FILES",
+    "exports:server/voice.ts:DEFAULT_VOICE_MODEL",
+    "exports:server/voice.ts:KEEP_NEWEST_MESSAGES",
+    "exports:server/voice.ts:SYNTH_TIMEOUT_MS",
+    "exports:server/voice.ts:TRANSCRIBE_TIMEOUT_MS",
+    "exports:server/voice.ts:VOICES_TTL_MS",
+    "exports:server/workspace.ts:TRIM_DIRS",
+    "exports:server/workspace.ts:dirSize",
+    "exports:server/workspace.ts:machineDir",
+    "exports:server/workspace.ts:pathForms",
+    "exports:server/workspace.ts:repoDir",
+    "exports:shared/activity.ts:outsideDesk",
+    "exports:shared/careers.ts:PHOTO_DAYS",
+    "exports:shared/careers.ts:STAR_PASSES",
+    "exports:shared/careers.ts:TOY_DAYS",
+    "exports:shared/cloud.ts:FREE_BOX_LIMIT",
+    "exports:shared/journal.ts:compactMessage",
+    "exports:shared/journal.ts:compactQa",
+    "exports:shared/journal.ts:compactRepo",
+    "exports:shared/journal.ts:dedupeKey",
+    "exports:shared/journal.ts:repoPatch",
+    "exports:shared/notify.ts:NOTIFY_CHANNELS",
+    "exports:shared/outside.ts:EVENT_FREQUENCIES",
+    "exports:shared/outside.ts:WEATHER_MODES",
+    "exports:shared/pong.ts:PONG_KEEP",
+    "exports:shared/pong.ts:PONG_POINTS",
+    "exports:shared/presence.ts:BOUNDS",
+    "exports:shared/presence.ts:LABEL_MAX",
+    "exports:shared/presence.ts:cleanLabel",
+    "exports:shared/presence.ts:cleanPose",
+    "exports:shared/presence.ts:isFloor",
+    "exports:shared/themes.ts:GREETINGS",
+    "exports:shared/themes.ts:isThemeId",
+    "types:client/src/replay.ts:ReplayPhase",
+    "types:client/src/store.ts:Toast",
+    "types:client/src/ui/babbleRules.ts:Vowel",
+    "types:client/src/ui/chatterLines.ts:ChatterKind",
+    "types:client/src/ui/chatterLines.ts:GreetMood",
+    "types:client/src/ui/cheerRules.ts:CheerExtra",
+    "types:client/src/ui/keyboards.ts:Hit",
+    "types:client/src/ui/mic.ts:MicRecord",
+    "types:client/src/ui/mic.ts:MicState",
+    "types:client/src/ui/notifySteps.ts:StepId",
+    "types:client/src/ui/notifySteps.ts:StepState",
+    "types:client/src/ui/voiceMessages.ts:SpokenRecord",
+    "types:client/src/world/CoffeeMachine.tsx:CoffeeSnapshot",
+    "types:client/src/world/Jukebox.tsx:JukeboxSnapshot",
+    "types:client/src/world/batch.ts:Shading",
+    "types:client/src/world/camera/rig.ts:TargetPose",
+    "types:client/src/world/doors.ts:OutsideSnapshot",
+    "types:client/src/world/events/director.ts:Running",
+    "types:client/src/world/events/director.ts:Tier",
+    "types:client/src/world/fridgeState.ts:FridgeSnapshot",
+    "types:client/src/world/gfx/grading.ts:Tint",
+    "types:client/src/world/gfx/useGraphics.ts:GfxDecision",
+    "types:client/src/world/hiringState.ts:TourInfo",
+    "types:client/src/world/jukeboxSongs.ts:Note",
+    "types:client/src/world/jukeboxSongs.ts:Section",
+    "types:client/src/world/jukeboxSongs.ts:Texture",
+    "types:client/src/world/jukeboxSongs.ts:Voice",
+    "types:client/src/world/outside/cityLayout.ts:Span",
+    "types:client/src/world/people.ts:Saying",
+    "types:client/src/world/reactionFeed.ts:Queued",
+    "types:client/src/world/sky/skyLayout.ts:Puff",
+    "types:client/src/world/stickies.ts:Stage",
+    "types:client/src/world/themes/newyearClock.ts:NewYearPhase",
+    "types:client/src/world/toys/dogBrain.ts:DogTarget",
+    "types:client/src/world/toys/pongState.ts:Phase",
+    "types:client/src/world/toys/probe.ts:ToyBallState",
+    "types:client/src/world/toys/probe.ts:ToysSnapshot",
+    "types:server/backend.ts:DemoDoctor",
+    "types:server/box.ts:BoxFile",
+    "types:server/box.ts:BoxRun",
+    "types:server/box.ts:BoxSessionOptions",
+    "types:server/box.ts:BoxState",
+    "types:server/boxScripts.ts:LaunchSpec",
+    "types:server/fixOutcome.ts:FixPatch",
+    "types:server/ledger.ts:FloorLedger",
+    "types:server/ledger.ts:PrTrack",
+    "types:server/mergeGate.ts:MergeBookkeeping",
+    "types:server/metrics.ts:CheckEntry",
+    "types:server/metrics.ts:CostEntry",
+    "types:server/metrics.ts:MergeEntry",
+    "types:server/metrics.ts:QaEntry",
+    "types:server/officeUpdate.ts:UpdateStage",
+    "types:server/voice.ts:ClipEntry",
+    "types:server/watchdog.ts:ProblemKind",
+    "types:shared/journal.ts:AgentPatch",
+    "types:shared/journal.ts:MarkKind",
+    "types:shared/types.ts:AgentRuntime",
+    "types:shared/types.ts:CloudCredentialSource",
+    "types:shared/types.ts:PromptPart",
+    "types:shared/types.ts:PushDeviceView"
+  ],
+  "sizes": {
+    "client/src/styles.css": 5193,
+    "client/src/ui/ManagerConsole.tsx": 858,
+    "client/src/ui/sfx.ts": 838,
+    "client/src/world/ErrandDirector.tsx": 851,
+    "client/src/world/draw.ts": 911,
+    "client/src/world/jukeboxSongs.ts": 916,
+    "client/src/world/ritualRunner.ts": 854,
+    "client/src/world/toys/dogBrain.ts": 1257,
+    "server/cliRunner.ts": 983,
+    "server/demo.ts": 1645,
+    "server/swarm.ts": 5534,
+    "server/workspace.ts": 909
+  }
+}

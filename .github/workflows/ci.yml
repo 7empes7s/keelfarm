@@ -63,6 +63,8 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+      # The code-health ratchet: fails only on findings code-health.baseline.json doesn't have (docs/code-health.md).
+      - run: npm run lint
       - run: npm test
       - run: npm run build
       # The npm package as users get it: packed, installed into an empty folder and booted in demo mode.
