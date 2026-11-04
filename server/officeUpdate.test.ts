@@ -119,10 +119,24 @@ describe('last-update.json', () => {
     expect(lastUpdateMessage({ ...ok, ok: false, error: 'npm ci failed' }, null)).toBe('⚠️ Update failed and was rolled back: npm ci failed');
   });
 
+  it('says which stage of a safe update failed', () => {
+    const failed = { ...ok, to: ok.from, target: ok.to, ok: false };
+    expect(lastUpdateMessage({ ...failed, stage: 'preflight', error: 'tests failed (npm test failed (exit 1))' }, null)).toBe(
+      '⚠️ Update to def5678 refused: tests failed (npm test failed (exit 1)) in the preflight; still on abc1234',
+    );
+    expect(lastUpdateMessage({ ...failed, stage: 'probation', error: 'the office exited (1) during its probation' }, null)).toBe(
+      '⚠️ Update to def5678 rolled back: the office exited (1) during its probation; back on abc1234',
+    );
+    expect(lastUpdateMessage({ ...failed, stage: 'check', error: 'the office folder has local changes' }, null)).toBe('⚠️ Update refused: the office folder has local changes; still on abc1234');
+    expect(lastUpdateMessage({ ...ok, to: ok.from }, null)).toBe('The office is already up to date at abc1234');
+  });
+
   it('ignores anything that is not a result', () => {
     expect(parseLastUpdate('not json')).toBeNull();
     expect(parseLastUpdate('{"to":"x"}')).toBeNull();
     expect(parseLastUpdate(JSON.stringify(ok))).toEqual(ok);
+    expect(parseLastUpdate(JSON.stringify({ ...ok, ok: false, stage: 'preflight', target: 'f00' }))).toMatchObject({ stage: 'preflight', target: 'f00' });
+    expect(parseLastUpdate(JSON.stringify({ ...ok, stage: 'sometime' }))?.stage).toBeUndefined();
   });
 
   it('is read once, then deleted', async () => {
