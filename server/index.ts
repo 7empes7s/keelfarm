@@ -290,7 +290,7 @@ app.get(
 app.post('/api/journal/sample', route(() => swarm.journalSample()));
 
 // The CEO and the manager's phone
-app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text))));
+app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined)));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
 app.post(

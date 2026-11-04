@@ -1,6 +1,8 @@
+import { useMemo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { FLOOR_HREF } from './chatLinks';
 
 // Agent-written prose (the CEO's texts and reasons, issues, QA reports) rendered as Markdown.
 // Safe by default: raw HTML is shown as text, never parsed, and only http(s)/mailto links work.
@@ -21,17 +23,19 @@ function remarkHtmlAsText() {
 }
 
 const SAFE_LINK = /^(https?:|mailto:)/i;
-const safeUrl = (url: string) => (SAFE_LINK.test(url.trim()) ? url : '');
+const safeUrl = (url: string) => (SAFE_LINK.test(url.trim()) || FLOOR_HREF.test(url) ? url : '');
+
+const Link = ({ href, children }: { href?: string; children?: ReactNode }) =>
+  href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  ) : (
+    <span className="md-deadlink">{children}</span>
+  );
 
 const components: Components = {
-  a: ({ href, children }) =>
-    href ? (
-      <a href={href} target="_blank" rel="noopener noreferrer">
-        {children}
-      </a>
-    ) : (
-      <span className="md-deadlink">{children}</span>
-    ),
+  a: Link,
   // Images would load arbitrary URLs and blow up the layout; show them as links instead.
   img: ({ src, alt }) =>
     typeof src === 'string' && src ? (
@@ -53,10 +57,28 @@ const components: Components = {
 // remark-breaks keeps single line breaks, as the phone showed them before Markdown.
 const remarkPlugins = [remarkGfm, remarkHtmlAsText, remarkBreaks];
 
-export function Markdown({ text, className }: { text: string; className?: string }) {
+/** `onFloor`: floor chips (ui/chatLinks.ts) are buttons that open the floor; without it they're plain text. */
+export function Markdown({ text, className, onFloor }: { text: string; className?: string; onFloor?: (floor: number) => void }) {
+  const withFloors = useMemo<Components>(
+    () => ({
+      ...components,
+      a: (props) => {
+        const floor = props.href?.match(FLOOR_HREF)?.[1];
+        if (!floor) return <Link href={props.href}>{props.children}</Link>;
+        return onFloor ? (
+          <button type="button" className="floor-chip" onClick={() => onFloor(Number(floor))} title={`Open floor ${floor}`}>
+            {props.children}
+          </button>
+        ) : (
+          <span>{props.children}</span>
+        );
+      },
+    }),
+    [onFloor],
+  );
   return (
     <div className={className ? `md ${className}` : 'md'}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={components} urlTransform={safeUrl}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={withFloors} urlTransform={safeUrl}>
         {text}
       </ReactMarkdown>
     </div>
