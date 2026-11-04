@@ -5,6 +5,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { TaskKind } from './costs.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -346,6 +347,7 @@ export interface SwarmSettings {
   sessionLimit: number; // most agent sessions running at once; 0 = no limit
   defaultModel: string;
   defaultEffort: EffortLevel;
+  taskEffort: Partial<Record<TaskKind, EffortLevel>>; // effort per kind of task (#18); an agent's own wins, and a kind without one runs at the default
   runtime: AgentRuntime;
   defaultCli: AgentCli; // what agents run in their terminals unless they have their own
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once

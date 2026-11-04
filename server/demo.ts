@@ -19,6 +19,7 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { sampleCosts } from './costSample.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -853,6 +854,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     notify: demoNotify,
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
+    seedCosts: (floors, ceo, at) => sampleCosts(floors, ceo, at, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     simulateUsage: demoUsage,
     demoDoctor: {
