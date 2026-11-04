@@ -84,6 +84,7 @@ function repo(pulls: PullInfo[]): RepoView {
     mission: '',
     summary: '',
     qaBrief: '',
+    playbook: '',
     localPath: null,
     checkoutPath: '',
     cloneStatus: 'ready',

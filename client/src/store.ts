@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { speechText } from '../../shared/speech';
+import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -118,11 +119,13 @@ interface State {
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
+  chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   version?: string; // the cubefarm version the server runs
   officeCommit?: string | null; // undefined: the server can't update itself
   officeUpdate?: OfficeUpdateView;
   usage: UsageView; // Claude's subscription usage: normal, pacing after a warning, or paused at the limit
+  claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
@@ -249,8 +252,10 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null },
   messages: [],
+  chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
+  claudeUsage: [],
   ops: EMPTY_OPS,
   doctor: [],
   voiceKeySet: false,
@@ -328,6 +333,7 @@ export const useStore = create<State>((set, get) => ({
           officeCommit: d.officeCommit,
           officeUpdate: d.officeUpdate,
           usage: d.usage,
+          claudeUsage: d.claudeUsage ?? [],
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
           clis: d.clis ?? [],
@@ -467,7 +473,7 @@ export const useStore = create<State>((set, get) => ({
         set({ ceo: ev.ceo });
         break;
       case 'message': {
-        set({ messages: [...get().messages.slice(-199), ev.message] });
+        set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat';
@@ -488,6 +494,9 @@ export const useStore = create<State>((set, get) => ({
         }
         break;
       }
+      case 'delivery':
+        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
+        break;
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
         break;
@@ -499,6 +508,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'usage':
         set({ usage: ev.usage });
+        break;
+      case 'claudeUsage':
+        set({ claudeUsage: ev.readings });
         break;
       case 'ops':
         // A new alarm sounds once (rate-limited); the beacons spin until it's handled.

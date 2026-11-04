@@ -10,6 +10,7 @@ const repo = (o: Partial<PromptFloor> = {}): PromptFloor => ({
   summary: 'A shop',
   mission: 'Sell socks',
   qaBrief: 'Check the cart',
+  playbook: '',
   ...o,
 });
 const agent = (o: Partial<PromptAgent> = {}): PromptAgent => ({ name: 'Margaret', ...o });
@@ -25,6 +26,8 @@ Every pull request is reviewed and tested by a teammate in a fresh session. Once
 Repository: acme/shop (default branch: main)
 Project: A shop
 What the team is building (the manager's brief): Sell socks
+What QA checks on this project (from the CEO):
+Check the cart
 Your worktree: /desk/m
 Your branch: swarm/issue-7-margaret (already checked out, created from origin/main)
 Related repositories you may read for context (do not modify them):
@@ -34,9 +37,10 @@ Workflow:
 2. Implement the change with focused commits and clear messages.
 3. Run the project's existing tests, linters and build (if any) and fix what you broke. Install dependencies first if needed (e.g. npm install when node_modules is missing).
 4. If the project has a web UI, start its dev server in the background on port 5839 (reserved for you, so you don't collide with teammates), then check your change with the Playwright browser tools (mcp__playwright__browser_navigate, browser_snapshot, browser_click, browser_take_screenshot). Stop the dev server when you're done.
-5. Push: git push -u origin swarm/issue-7-margaret
-6. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions>". The body must contain "Closes #<issue number>".
-7. End your final message with the pull request URL on its own line.
+5. Self-review before pushing: read your diff (git diff origin/main...HEAD) against the issue and the QA brief. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.
+6. Push: git push -u origin swarm/issue-7-margaret
+7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".
+8. End your final message with the pull request URL on its own line.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   devPlain: `You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody is watching live to answer questions, so make sensible decisions yourself and record assumptions in the PR description. The manager may occasionally send you messages; follow their instructions.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off, the manager merges it. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
@@ -48,15 +52,18 @@ Workflow:
 2. Implement the change with focused commits and clear messages.
 3. Run the project's existing tests, linters and build (if any) and fix what you broke. Install dependencies first if needed (e.g. npm install when node_modules is missing).
 4. Verify the behaviour you changed as directly as you can.
-5. Push: git push -u origin swarm/issue-7-margaret
-6. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions>". The body must contain "Closes #<issue number>".
-7. End your final message with the pull request URL on its own line.
+5. Self-review before pushing: read your diff (git diff origin/main...HEAD) against the issue. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.
+6. Push: git push -u origin swarm/issue-7-margaret
+7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".
+8. End your final message with the pull request URL on its own line.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   devFixing: `You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody is watching live to answer questions, so make sensible decisions yourself and record assumptions in the PR description. The manager may occasionally send you messages; follow their instructions.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off and GitHub's checks pass, the office merges it by itself. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
 Repository: acme/shop (default branch: main)
 Project: A shop
 What the team is building (the manager's brief): Sell socks
+What QA checks on this project (from the CEO):
+Check the cart
 Your worktree: /desk/m
 You are fixing pull request #42. Its code is checked out on local branch swarm/issue-7-margaret; push fixes with: git push origin HEAD:swarm/issue-7-margaret. Do not open a new pull request.
 Related repositories you may read for context (do not modify them):
@@ -66,8 +73,9 @@ Workflow:
 2. Implement the change with focused commits and clear messages.
 3. Run the project's existing tests, linters and build (if any) and fix what you broke. Install dependencies first if needed (e.g. npm install when node_modules is missing).
 4. If the project has a web UI, start its dev server in the background on port 5839 (reserved for you, so you don't collide with teammates), then check your change with the Playwright browser tools (mcp__playwright__browser_navigate, browser_snapshot, browser_click, browser_take_screenshot). Stop the dev server when you're done.
-5. Push: git push origin HEAD:swarm/issue-7-margaret
-6. Reply with a short summary of what you fixed.
+5. Self-review before pushing: read your diff (git diff origin/main...HEAD) against the issue and the QA brief. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.
+6. Push: git push origin HEAD:swarm/issue-7-margaret
+7. Reply with a short summary of what you fixed and a Self-review line: what it found and you fixed.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   qaFull: `You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). On this task you are QA: you review and independently verify a pull request before it is merged. Your sign-off is the review: on this floor a PR you pass merges by itself as soon as GitHub's checks are green, so nobody else reads the code after you. Be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, the issue's requirements not met, obvious regressions), not for style preferences.
 
@@ -83,7 +91,7 @@ Your worktree: /desk/q. It has the pull request's code checked out on local bran
 
 How to test:
 1. Read the PR description and the linked issue, and work out the acceptance criteria.
-2. Review the code as a careful reviewer would: git diff origin/main...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests.
+2. Review the code as a careful reviewer would: git diff origin/main...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.
 3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).
 4. If the project has a UI, start it in the background on port 5839 (reserved for you) and exercise the change in a real browser with the Playwright tools: navigate, click, type, resize to a phone size, try edge cases, and check the console for errors. Take a screenshot with browser_take_screenshot (no filename) of every important state: the screenshots are attached to the PR as evidence. Stop the server afterwards.
 5. You may write throwaway scripts to probe behaviour, but do not commit them.
@@ -100,7 +108,7 @@ Your worktree: /desk/q. It has the pull request's code checked out on local bran
 
 How to test:
 1. Read the PR description and the linked issue, and work out the acceptance criteria.
-2. Review the code as a careful reviewer would: git diff origin/main...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests.
+2. Review the code as a careful reviewer would: git diff origin/main...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.
 3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).
 4. Exercise the changed behaviour directly (run the program, call the API, write a quick script).
 5. You may write throwaway scripts to probe behaviour, but do not commit them.
@@ -113,7 +121,7 @@ describe('system prompts', () => {
   it('are the same for every agent, by task', () => {
     expect(devSystemPrompt({ ...dev, agent: agent(), repo: repo() })).toBe(`${BEFORE.devFull}
 ${ONE_TURN}`);
-    expect(devSystemPrompt({ ...dev, agent: agent(), repo: repo({ autoMerge: false, browserTesting: false, summary: '', mission: '' }), linked: [] })).toBe(`${BEFORE.devPlain}
+    expect(devSystemPrompt({ ...dev, agent: agent(), repo: repo({ autoMerge: false, browserTesting: false, summary: '', mission: '', qaBrief: '' }), linked: [] })).toBe(`${BEFORE.devPlain}
 ${ONE_TURN}`);
     expect(devSystemPrompt({ ...dev, agent: agent(), repo: repo(), fixing: { pr: 42, headRef: 'swarm/issue-7-margaret' } })).toBe(`${BEFORE.devFixing}
 ${ONE_TURN}`);
@@ -145,8 +153,49 @@ ${ONE_TURN}`);
   it("put a PR's own test step in the QA prompt", () => {
     const step = "3. GitHub's checks run on this PR.";
     const text = qaSystemPrompt({ ...qa, agent: agent(), repo: repo(), testStep: step });
-    expect(text).toContain(`HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests.\n${step}\n4. `);
+    expect(text).toContain(`Only blocking findings decide the verdict; put nits in the summary.\n${step}\n4. `);
     expect(text).not.toContain('test suite');
+  });
+});
+
+describe('self-review and the playbook', () => {
+  const fixing = { pr: 42, headRef: 'swarm/issue-7-margaret' };
+  const playbook = '## Map\n- server/ never imports client/\n## Skills\n- frontend-design for UI';
+  const prompts = (o: Partial<PromptFloor> = {}) => ({
+    build: devSystemPrompt({ ...dev, agent: agent(), repo: repo(o) }),
+    fix: devSystemPrompt({ ...dev, agent: agent(), repo: repo(o), fixing }),
+    test: qaSystemPrompt({ ...qa, agent: agent(), repo: repo(o) }),
+  });
+
+  it('ask builders and fixers to review their own diff, and QA for a code-quality pass instead', () => {
+    const { build, fix, test } = prompts({ playbook });
+    for (const p of [build, fix]) {
+      expect(p).toContain('5. Self-review before pushing: read your diff (git diff origin/main...HEAD) against the issue, the playbook and the QA brief.');
+      expect(p).toContain('a Self-review line: what it found and you fixed');
+      expect(p).toContain('No multi-agent or cloud reviews.');
+    }
+    expect(test).not.toContain('Self-review');
+    expect(test).toContain('code-quality pass on the diff, correctness first, then simplification');
+    expect(test).toContain('Only blocking findings decide the verdict; put nits in the summary.');
+  });
+
+  it('put the floor playbook in every prompt there, after the QA brief', () => {
+    const { build, fix, test } = prompts({ playbook });
+    for (const p of [build, fix]) expect(p).toContain(`What QA checks on this project (from the CEO):\nCheck the cart\nThis floor's playbook (follow it):\n${playbook}\nYour worktree:`);
+    expect(test).toContain(`What to check on this project (from the CEO):\nCheck the cart\nThis floor's playbook (follow it):\n${playbook}\nPull request #42`);
+    const preview = agentPromptPreview({ agent: agent(), repo: repo({ playbook }), port: 5839, slug: 'margaret', linked });
+    for (const part of preview.parts) expect(part.text).toContain(playbook);
+  });
+
+  it('add nothing for an empty playbook', () => {
+    for (const p of Object.values(prompts())) expect(p).not.toContain('playbook');
+  });
+
+  it('stay within their length budget without a playbook', () => {
+    const { build, fix, test } = prompts();
+    expect(build.length).toBeLessThanOrEqual(3100);
+    expect(fix.length).toBeLessThanOrEqual(3100);
+    expect(test.length).toBeLessThanOrEqual(3300);
   });
 });
 

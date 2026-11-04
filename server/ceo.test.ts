@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
-import { FLOOR_SEATS, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
 import { ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, jobLabel, planDependencies, plannedSize, scalePlan, type CeoJob, type DependsRequest, type TeamNow } from './ceo.ts';
 
@@ -142,6 +142,16 @@ describe('office tools', () => {
     const { client, floors } = await connect();
     await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } } });
     expect(floors).toEqual([{ floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } }]);
+  });
+
+  it("takes a floor's playbook up to its length cap", async () => {
+    const { client, floors } = await connect();
+    const playbook = '## Layers\n- server/ never imports client/';
+    await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, playbook } });
+    expect(floors).toEqual([{ floor: 1, playbook }]);
+    const tooLong = await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, playbook: 'x'.repeat(PLAYBOOK_MAX + 1) } });
+    expect(tooLong.isError).toBe(true);
+    expect(floors).toHaveLength(1);
   });
 });
 

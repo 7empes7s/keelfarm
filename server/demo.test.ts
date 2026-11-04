@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { demoGrow, demoPastWeek, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { answerReply, demoGrow, demoPastWeek, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { forwardText, parseForwarded } from '../shared/chat.ts';
 import { KEEP_MS, opsView, startOfDay } from './metrics.ts';
 
 describe('fixPromptPull', () => {
@@ -31,7 +32,7 @@ describe("the demo's mission control", () => {
       expect(list.length).toBeGreaterThan(0);
       for (const e of list) expect(e[0] <= NOW && NOW - e[0] <= KEEP_MS).toBe(true);
     }
-    expect(h.merges.every((m) => m[2] === 0)).toBe(true); // never mistaken for a real PR the demo merges later
+    expect(h.merges.every((m) => m[2] < 0)).toBe(true); // never mistaken for a real PR the demo merges later
     const v = opsView(
       [
         { repoId: 'demo-co/a', floor: 1, ready: 0, agents: [], prs: [] },
@@ -42,6 +43,8 @@ describe("the demo's mission control", () => {
     );
     expect(v.floors[0].ciPass).toBeGreaterThan(0.6);
     expect(v.floors[0].ciMs).toBeGreaterThan(2 * 60_000);
+    expect(v.floors[0].qaRoundsPerMerge).toBeGreaterThanOrEqual(1);
+    expect(v.floors[0].qaFirstPass).toBeLessThan(1);
     expect(v.total.leadMs).toBeGreaterThan(20 * 60_000);
     expect(v.ceoCostToday).toBeGreaterThan(0);
     expect(v.total.spark.some((n) => n > 0)).toBe(true);
@@ -100,5 +103,14 @@ describe("the demo CEO's team sizes", () => {
     expect(demoShrink(floor({ size: 5, free: 3 }, { issuesReadyToStart: 1 }))).toBeNull();
     expect(demoShrink(floor({ size: 5, free: 3 }, { prsAwaitingQa: 1 }))).toBeNull();
     expect(demoShrink(floor({ size: 5, free: 3, pendingLetGos: 2 }))).toBeNull(); // already on their way out
+  });
+});
+
+describe("the demo CEO's answer to a reply", () => {
+  it('quotes the message it answers and reads Yes / No', () => {
+    const forwarded = parseForwarded(forwardText('Yes', { from: 'ceo', text: 'Shall I keep the team on it?' }))!;
+    expect(answerReply(forwarded)).toMatch(/^> Shall I keep the team on it\?\n\nGreat, I'll go ahead/);
+    expect(answerReply({ quote: 'Merge #4?', reply: 'No' })).toContain("I'll leave it");
+    expect(answerReply({ quote: 'q', reply: 'Later, after the release' })).toContain('Noted: "Later, after the release"');
   });
 });

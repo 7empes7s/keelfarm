@@ -37,6 +37,7 @@ import { pruneQaShots, qaShotsDir, readQaShot, removeQaShots, saveQaShots } from
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt, failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from './prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from './qaRetry.ts';
 import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type LastUpdate } from './officeUpdate.ts';
+import { mergeReadings, readingsChanged, readingsLabel } from '../shared/usage.ts';
 import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningView, type UsageWarning, type Waiver, type WorkKind } from './pacing.ts';
 import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
 import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
@@ -66,7 +67,8 @@ import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
 import { effectiveModel } from '../shared/models.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP } from '../shared/types.ts';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
+import { forwardText, nextDelivery } from '../shared/chat.ts';
 import type {
   AgentActivity,
   AgentCli,
@@ -99,8 +101,10 @@ import type {
   QaCheck,
   QaView,
   RepoView,
+  ServerDelivery,
   ServerEvent,
   SwarmSettings,
+  UsageReading,
   UsageView,
   UsageWarningView,
   WorldSnapshot,
@@ -124,6 +128,7 @@ interface PersistedRepo {
   mission: string;
   summary: string;
   qaBrief: string;
+  playbook: string;
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   addedAt: number;
 }
@@ -226,6 +231,7 @@ interface Persisted {
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
+  claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
 }
 
 interface Shot {
@@ -340,6 +346,7 @@ const MAX_ISSUE_FAILURES = 2;
 const MAX_QA_FAILURES = 2;
 // How long the office waits after Claude's usage limit is hit when Claude doesn't say when it resets.
 const LIMIT_PAUSE_MS = 15 * 60_000;
+const READINGS_MS = 3000; // Claude's usage readings arrive with every status line: the office gets them at most this often
 // Everyone on a floor this size or bigger busy at once is a full house (an achievement).
 const FULL_HOUSE = 4;
 // Mission control's numbers are recomputed after these events (debounced), and every half minute for the clock's sake.
@@ -530,6 +537,7 @@ export class Swarm {
     progress: emptyLedger(),
     pong: {},
     officeId: officeId(),
+    claudeUsage: [],
   };
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
@@ -642,7 +650,7 @@ export class Swarm {
       api: backend.telegram,
       // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
-      message: (text) => this.messageCeo(text, 'telegram'),
+      message: async (text) => void (await this.messageCeo(text, undefined, 'telegram')),
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
       log: (line) => console.warn(line),
@@ -711,6 +719,7 @@ export class Swarm {
           mission: r.mission ?? '',
           summary: r.summary ?? '',
           qaBrief: r.qaBrief ?? '',
+          playbook: r.playbook ?? '',
           localPath: r.localPath ?? null,
           preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } },
         })),
@@ -756,6 +765,7 @@ export class Swarm {
         progress: loadLedger(loaded.progress),
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
+        claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
@@ -1059,6 +1069,7 @@ export class Swarm {
       mission: r.mission,
       summary: r.summary,
       qaBrief: r.qaBrief,
+      playbook: r.playbook,
       localPath: r.localPath,
       checkoutPath: this.backend.mainDir(r.fullName),
       cloneStatus: rt.cloneStatus,
@@ -1158,6 +1169,7 @@ export class Swarm {
       messages: this.state.messages.slice(-100),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
+      claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),
       clis: this.clis,
@@ -1447,6 +1459,7 @@ export class Swarm {
       mission: (opts.mission ?? '').trim().slice(0, 4000),
       summary: '',
       qaBrief: '',
+      playbook: '',
       preview: { ...DEFAULT_PREVIEW, env: {} },
       addedAt: Date.now(),
     };
@@ -1548,7 +1561,7 @@ export class Swarm {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief'>> & { previewCommand?: unknown; previewEnv?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown },
   ) {
     const repo = this.repo(id);
     const preview = parsePreviewPatch(patch.previewCommand, patch.previewEnv);
@@ -1565,6 +1578,7 @@ export class Swarm {
     if (typeof patch.mission === 'string') repo.mission = patch.mission.trim().slice(0, 4000);
     if (typeof patch.summary === 'string') repo.summary = patch.summary.trim().slice(0, 140);
     if (typeof patch.qaBrief === 'string') repo.qaBrief = patch.qaBrief.trim().slice(0, 2500);
+    if (typeof patch.playbook === 'string') repo.playbook = patch.playbook.trim().slice(0, PLAYBOOK_MAX);
     this.save();
     this.emitRepo(repo);
     setTimeout(() => this.schedule(), 200);
@@ -3058,6 +3072,7 @@ export class Swarm {
         },
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
+        usage: (readings) => this.recordUsage(readings),
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -3435,7 +3450,7 @@ export class Swarm {
         return [];
       });
       const key = `${repo.id}#${rec.prNumber}`;
-      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now());
+      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round);
       this.qaWaits.delete(key);
       // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
       // and the checks are recorded so a re-run of a red one can count as the fix.
@@ -3821,6 +3836,8 @@ export class Swarm {
   private lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
   private waiver: Waiver | null = null; // pacing the manager cleared with "Resume full speed"
   private lastUsage = '';
+  private shownReadings: UsageReading[] = []; // the readings the office was last sent
+  private readingsTimer: NodeJS.Timeout | null = null;
 
   /** Backlog issues that can start now, most urgent first: the ones holding up the longest chain of other issues, then the oldest. */
   private readyIssues(repo: PersistedRepo) {
@@ -3971,6 +3988,19 @@ export class Swarm {
       if (usage.state === 'paused') this.notifier.notify('usage', "Claude's usage limit was reached", `The office starts no new work until ${until}; running sessions carry on.`);
       else this.notifier.notify('usage', 'Pacing new work', `Claude warned that usage is high, so new issues start slowly until ${until}.`);
     }
+  }
+
+  /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
+  private recordUsage(readings: UsageReading[]) {
+    this.state.claudeUsage = mergeReadings(this.state.claudeUsage, readings);
+    if (this.readingsTimer || !readingsChanged(this.shownReadings, this.state.claudeUsage)) return;
+    this.readingsTimer = setTimeout(() => {
+      this.readingsTimer = null;
+      this.shownReadings = this.state.claudeUsage;
+      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage });
+      this.save();
+    }, READINGS_MS);
+    this.readingsTimer.unref?.();
   }
 
   /** Pacing and pauses run out on their own: say so when pacing ends. */
@@ -4291,7 +4321,7 @@ export class Swarm {
   private enqueueCeo(job: CeoJob) {
     const q = this.state.ceo.queue;
     const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || (j.repoId === job.repoId && j.prNumber === job.prNumber)));
-    if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}` } : job;
+    if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}`, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
     else q.push(job);
     this.emitCeo();
     this.save();
@@ -4346,7 +4376,10 @@ export class Swarm {
       { kind: 'system', text: '' },
       { kind: 'system', text: `━━━ ${label} ━━━` },
     ]);
-    if (job.kind === 'chat') this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
+    if (job.kind === 'chat') {
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
+      if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
+    }
     if (job.kind === 'review') {
       this.state.ceo.lastReviewAt = Date.now();
       this.state.ceo.lastFingerprint = this.fingerprint();
@@ -4393,9 +4426,13 @@ export class Swarm {
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
-        turn: (text) => this.postMessage('ceo', text),
+        turn: (text) => {
+          this.postMessage('ceo', text);
+          this.markDelivery('all', 'replied');
+        },
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
+        usage: (readings) => this.recordUsage(readings),
         finished: (result) => this.onCeoFinished(a, result),
       },
     );
@@ -4434,21 +4471,42 @@ export class Swarm {
     setTimeout(() => this.schedule(), 300);
   }
 
-  /** The manager's phone (or Telegram) → the CEO. Injected into a running session, otherwise the CEO picks it up next. */
-  async messageCeo(text: string, via?: 'telegram') {
+  /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to. Injected into a running session, otherwise the CEO picks it up next. */
+  async messageCeo(text: string, replyTo?: number, via?: 'telegram') {
     const t = text.trim().slice(0, 4000);
     if (!t) throw new HttpError(400, 'Empty message');
     const a = this.ceo();
-    this.postMessage('manager', t, undefined, { telegram: via ? 'in' : undefined });
+    const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
+    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }) });
+    const forward = forwardText(t, quoted);
     const rt = this.agentRt.get(a.id)!;
     if (rt.session) {
-      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${t}` }]);
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
-      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n${t}`);
-      return;
+      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n${forward}`);
+      this.markDelivery([m.id], 'read');
+      return { id: m.id };
     }
-    this.enqueueCeo({ kind: 'chat', text: t, at: Date.now() });
+    this.enqueueCeo({ kind: 'chat', text: forward, messageIds: [m.id], at: Date.now() });
+    return { id: m.id };
+  }
+
+  /** Moves the manager's messages along (shared/chat.ts nextDelivery) and tells the phones which ones moved. */
+  private markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
+    const moved: number[] = [];
+    let to: ServerDelivery | null = null;
+    for (const m of this.state.messages) {
+      if (m.from !== 'manager' || !m.delivery || (ids !== 'all' && !ids.includes(m.id))) continue;
+      const next = nextDelivery(m.delivery, ev);
+      if (next === m.delivery) continue;
+      m.delivery = next as ServerDelivery;
+      to = m.delivery;
+      moved.push(m.id);
+    }
+    if (!to) return;
+    this.broadcast({ type: 'delivery', ids: moved, delivery: to });
+    this.save();
   }
 
   requestReview() {
@@ -5043,13 +5101,14 @@ export class Swarm {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: { telegram?: 'in'; changes?: TeamChange[] } = {}) {
-    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...(opts.telegram ? { telegram: opts.telegram } : {}) };
+  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram'> & { changes?: TeamChange[] } = {}) {
+    const { changes, ...extra } = opts;
+    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, m.text), opts.changes ? teamKeyboard(opts.changes) : undefined).then((why) => {
+      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }
@@ -5434,6 +5493,7 @@ export class Swarm {
           brief: r.mission || null,
           profile: r.summary || null,
           qaBrief: r.qaBrief || null,
+          playbook: r.playbook || null,
           preview: { command: r.preview.command, env: r.preview.env, status: this.previews.view(r).status },
           autoAssign: r.autoAssign,
           autoMerge: r.autoMerge,
@@ -5444,6 +5504,8 @@ export class Swarm {
             mergedToday: nums?.mergedToday ?? 0,
             medianLeadMinutes: nums?.leadMs != null ? Math.round(nums.leadMs / 60_000) : null,
             qaPassRate: nums?.qaPass ?? null,
+            qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
+            qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
           },
           capacity: {
             issuesReadyToStart: this.readyIssues(r).length,
@@ -5490,7 +5552,7 @@ export class Swarm {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: usageLabel(this.usageNow(), Date.now()),
+          usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
         },
         floors,
         pendingChanges: pending.map(req),
@@ -5521,11 +5583,12 @@ export class Swarm {
     );
   }
 
-  private setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; preview_command?: string; preview_env?: Record<string, string> }) {
+  private setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }) {
     const r = this.floorRepo(x.floor);
     const preview = parsePreviewPatch(x.preview_command, x.preview_env);
     if (x.summary !== undefined) r.summary = String(x.summary).trim().slice(0, 140);
     if (x.qa_brief !== undefined) r.qaBrief = String(x.qa_brief).trim().slice(0, 2500);
+    if (x.playbook !== undefined) r.playbook = String(x.playbook).trim().slice(0, PLAYBOOK_MAX);
     r.preview = { ...r.preview, ...preview };
     if (preview.command === null) void this.previews.refreshDefault(r);
     this.emitRepo(r);

@@ -10,7 +10,10 @@ import type { OfficeUpdateState } from '../shared/types.ts';
 //   server → launcher  { type: 'office:update', from: '<full HEAD sha>' }   once drained
 //   launcher → server  { type: 'office:shutdown', restart }                  run shutdown(), then exit 0
 //                      (restart: false when the office quits; agents' CLIs stop instead of waiting in the keeper)
-//   <SWARM_HOME>/last-update.json = { from, to, ok, error?, installed, built, at }, read and deleted on startup
+//   launcher → server  { type: 'office:update-result' }                     it kept this office running (the preflight
+//                      refused the update, or there was nothing to do): read last-update.json now
+//   <SWARM_HOME>/last-update.json = { from, to, target?, ok, stage?, error?, installed, built, at }, read and deleted
+//   on startup or on office:update-result
 
 /** Sessions still running this long after draining started are stopped, and the update goes ahead. */
 export const DRAIN_TIMEOUT_MS = 20 * 60_000;
@@ -65,11 +68,19 @@ export function drainDecision(s: DrainInput): DrainDecision {
   return { state: 'draining', drainingSince: since, send: s.running === 0 || timedOut, timedOut };
 }
 
+/** Where an update failed: before the live office was touched, while switching it, or in the probation after its restart. */
+export type UpdateStage = 'check' | 'preflight' | 'switch' | 'probation';
+const STAGES: UpdateStage[] = ['check', 'preflight', 'switch', 'probation'];
+
 /** What the launcher leaves behind after an update. */
 export interface LastUpdate {
   from: string;
+  /** The commit the office runs afterwards. */
   to: string;
+  /** The commit it tried to update to. */
+  target?: string;
   ok: boolean;
+  stage?: UpdateStage;
   error?: string;
   installed: boolean;
   built: boolean;
@@ -84,7 +95,9 @@ export function parseLastUpdate(raw: string): LastUpdate | null {
     return {
       from: u.from,
       to: typeof u.to === 'string' ? u.to : '',
+      target: typeof u.target === 'string' ? u.target : undefined,
       ok: u.ok,
+      stage: STAGES.includes(u.stage as UpdateStage) ? u.stage : undefined,
       error: typeof u.error === 'string' ? u.error : undefined,
       installed: !!u.installed,
       built: !!u.built,
@@ -106,7 +119,13 @@ export async function takeLastUpdate(home: string): Promise<LastUpdate | null> {
 
 /** The phone message for an update: "Updated the office from abc1234 to def5678 (3 commits)" or why it failed. */
 export function lastUpdateMessage(u: LastUpdate, commits: number | null): string {
-  if (!u.ok) return `⚠️ Update failed and was rolled back: ${u.error || 'unknown error'}`;
+  const [from, to, target] = [u.from, u.to || u.from, u.target || ''].map((sha) => sha.slice(0, 7));
+  const error = u.error || 'unknown error';
+  if (!u.ok && u.stage === 'check') return `⚠️ Update refused: ${error}; still on ${from}`;
+  if (!u.ok && u.stage === 'preflight') return `⚠️ Update${target ? ` to ${target}` : ''} refused: ${error} in the preflight; still on ${from}`;
+  if (!u.ok && u.stage === 'probation') return `⚠️ Update${target ? ` to ${target}` : ''} rolled back: ${error}; back on ${to}`;
+  if (!u.ok) return `⚠️ Update failed and was rolled back: ${error}`;
+  if (u.from === u.to) return `The office is already up to date at ${from}`;
   const n = commits === null ? '' : ` (${commits} commit${commits === 1 ? '' : 's'})`;
   return `⬆️ Updated the office from ${u.from.slice(0, 7)} to ${u.to.slice(0, 7)}${n}`;
 }
@@ -124,7 +143,10 @@ export interface OfficeHost {
   commitsBetween(from: string, to: string): Promise<number | null>;
   /** Read and delete the result the launcher left from the last update. */
   takeLastUpdate(): Promise<LastUpdate | null>;
-  /** Hand the drained office to the launcher, which restarts it (resolves null). The demo resolves with a fake result. */
+  /**
+   * Hand the drained office to the launcher. It restarts the office (never resolves), or keeps it running when the
+   * preflight refuses the update and resolves with that result. The demo resolves with a fake result.
+   */
   update(from: string): Promise<LastUpdate | null>;
 }
 
@@ -142,7 +164,16 @@ export const realOffice: OfficeHost = {
   takeLastUpdate: () => takeLastUpdate(HOME_DIR),
   async update(from) {
     if (!underLauncher()) throw new Error('The office was not started by the launcher');
+    const kept = new Promise<void>((resolve) => {
+      const onMessage = (msg: unknown) => {
+        if ((msg as { type?: unknown } | null)?.type !== 'office:update-result') return;
+        process.off('message', onMessage);
+        resolve();
+      };
+      process.on('message', onMessage);
+    });
     await new Promise<void>((resolve, reject) => process.send!({ type: 'office:update', from }, undefined, {}, (err) => (err ? reject(err) : resolve())));
-    return null;
+    await kept;
+    return (await takeLastUpdate(HOME_DIR)) ?? { from, to: from, ok: false, error: 'the launcher kept the office running without saying why', installed: false, built: false, at: Date.now() };
   },
 };
