@@ -1,23 +1,24 @@
 // Pocket mode (docs/pocket.md): the office as a 2D app for a phone or any touch screen, on the same store, snapshot
-// and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals.
-// Nothing 3D loads here until "Open the 3D office".
+// and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
+// and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office".
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
 import { KanbanView } from '../ui/KanbanView';
-import { NotifySettings } from '../ui/NotifySettings';
-import { AccessibilitySettings } from '../ui/AccessibilitySettings';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
 import { setMode } from './mode';
 import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
 import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
+import type { ConsoleSection } from './PocketConsole';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
 const AppViewer = lazy(() => import('../ui/AppViewer').then((m) => ({ default: m.AppViewer })));
+// The console's tabs, loaded when ⚙️ is first opened.
+const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
 export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
 const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'approvals'];
@@ -61,7 +62,7 @@ function Banners() {
   );
 }
 
-function Company({ go }: { go: (tab: PocketTab, repoId?: string) => void }) {
+function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => void; settings: (section: ConsoleSection) => void }) {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const qa = useStore((s) => s.qa);
@@ -104,7 +105,10 @@ function Company({ go }: { go: (tab: PocketTab, repoId?: string) => void }) {
           </button>
         </div>
       )}
-      {floors.length === 0 && <p className="muted">No projects yet. Connect a repo from the manager's console in the 3D office.</p>}
+      {floors.length === 0 && <p className="muted">No projects yet.</p>}
+      <button className="btn pk-wide" onClick={() => settings('floors')}>
+        ➕ Move in a project
+      </button>
       {floors.map(({ repo, team, busy, p }) => (
         <div key={repo.id} className="pk-card pk-floor" style={{ ['--accent' as string]: repo.color }}>
           <div className="pk-floor-head">
@@ -137,6 +141,9 @@ function Company({ go }: { go: (tab: PocketTab, repoId?: string) => void }) {
             </button>
             <button className="btn btn-small" onClick={() => go('team', repo.id)}>
               Team
+            </button>
+            <button className="btn btn-small btn-ghost" onClick={() => settings('floors')} aria-label={`Floor ${repo.floor} settings`} title="Floor settings">
+              ⚙️
             </button>
           </div>
         </div>
@@ -196,21 +203,12 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ onClose }: { onClose: () => void }) {
+function Settings({ section, pick, onClose }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void }) {
   return (
-    <Panel title="⚙️ This device and notifications" onClose={onClose} className="pk-settings">
-      <NotifySettings />
-      <AccessibilitySettings pocket />
-      <div className="card">
-        <h3>📱 Pocket mode</h3>
-        <p className="muted small">
-          This is the office without the 3D building, for phones and touch screens. It's picked on its own on small or touch screens; this device remembers what you last chose. To reach the office from your phone
-          safely, see <a href="https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md">docs/pocket.md</a>.
-        </p>
-        <button className="btn" onClick={openOffice}>
-          🏢 Open the 3D office
-        </button>
-      </div>
+    <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings">
+      <Suspense fallback={<p className="muted">Loading…</p>}>
+        <PocketConsole section={section} pick={pick} />
+      </Suspense>
     </Panel>
   );
 }
@@ -218,7 +216,7 @@ function Settings({ onClose }: { onClose: () => void }) {
 export default function Pocket() {
   const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? 'company');
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [settings, setSettings] = useState(false);
+  const [settings, setSettings] = useState<ConsoleSection | null>(null);
   const company = useStore((s) => s.settings.companyName);
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
@@ -241,6 +239,14 @@ export default function Pocket() {
     window.addEventListener('cubefarm:open', onOpen);
     return () => window.removeEventListener('cubefarm:open', onOpen);
   }, []);
+  // The console's "Open the phone" (CEO tab) opens the Chat tab here. Only when the phone opens: leaving the Chat
+  // tab closes it a moment later, which must not bring the Chat back.
+  const phone = useStore((s) => s.overlay?.kind === 'phone');
+  useEffect(() => {
+    if (!phone) return;
+    setSettings(null);
+    setTab('chat');
+  }, [phone]);
   // While the chat is on screen, new CEO messages don't toast (the store reads this as the phone's chat being open).
   useEffect(() => {
     const s = useStore.getState();
@@ -269,7 +275,7 @@ export default function Pocket() {
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
         <span className="spacer" />
         {usage !== 'normal' && <span className="chip chip-warn">{usage === 'paused' ? '⏸ paused' : '🐢 pacing'}</span>}
-        <button className="pk-icon-btn" onClick={() => setSettings(true)} aria-label="Settings and notifications" title="Settings and notifications">
+        <button className="pk-icon-btn" onClick={() => setSettings('floors')} aria-label="Settings and notifications" title="Settings and notifications">
           ⚙️
         </button>
       </header>
@@ -283,7 +289,7 @@ export default function Pocket() {
           </div>
         ) : (
           <>
-            {tab === 'company' && <Company go={go} />}
+            {tab === 'company' && <Company go={go} settings={setSettings} />}
             {tab === 'chat' && <Chat autoFocus={false} />}
             {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
             {tab === 'team' && <Team focusRepo={repoId} />}
@@ -303,10 +309,11 @@ export default function Pocket() {
         ))}
       </nav>
       <Toasts />
+      {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} />}
+      {/* after the console, so a terminal or app opened from it shows over it */}
       <Suspense fallback={null}>
         <PocketOverlay />
       </Suspense>
-      {settings && <Settings onClose={() => setSettings(false)} />}
     </div>
   );
 }

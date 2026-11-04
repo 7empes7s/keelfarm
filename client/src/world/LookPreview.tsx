@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { createRoot, useFrame, type ReconcilerRoot, type RootStore } from '@react-three/fiber';
+import { createRoot, extend, useFrame, type ReconcilerRoot, type RootStore } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../store';
 import { appearanceFor } from './appearance';
@@ -27,6 +27,8 @@ let shared: Promise<{ canvas: HTMLCanvasElement; root: ReconcilerRoot<HTMLCanvas
 
 function previewRoot() {
   shared ??= (async () => {
+    // <Canvas> registers three's objects with R3F; a bare root must, or it fails where no Canvas ran first (pocket mode).
+    extend(THREE as unknown as Parameters<typeof extend>[0]);
     const canvas = document.createElement('canvas');
     const root = createRoot(canvas);
     await root.configure({
