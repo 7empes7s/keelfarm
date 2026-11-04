@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { answerReply, demoGrow, demoPastWeek, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
 import { forwardText, parseForwarded } from '../shared/chat.ts';
+import { parseCeoMessage } from '../shared/chatParts.ts';
 import { KEEP_MS, opsView, startOfDay } from './metrics.ts';
 
 describe('fixPromptPull', () => {
@@ -112,5 +113,11 @@ describe("the demo CEO's answer to a reply", () => {
     expect(answerReply(forwarded)).toMatch(/^> Shall I keep the team on it\?\n\nGreat, I'll go ahead/);
     expect(answerReply({ quote: 'Merge #4?', reply: 'No' })).toContain("I'll leave it");
     expect(answerReply({ quote: 'q', reply: 'Later, after the release' })).toContain('Noted: "Later, after the release"');
+  });
+
+  it('answers "Show me the plan" with an artifact', () => {
+    const p = parseCeoMessage(answerReply({ quote: 'Shall I keep the team on it?', reply: 'Show me the plan' }));
+    expect(p.artifacts?.map((a) => a.title)).toEqual(['The plan']);
+    expect(p.text).toMatch(/^> Shall I keep the team on it\?\n\nHere it is\./);
   });
 });
