@@ -1,0 +1,1 @@
+Screenshots for PR of issue #18. Never merged.
