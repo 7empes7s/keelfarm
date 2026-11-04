@@ -190,10 +190,10 @@ describe('the notifier', () => {
     await expect(n.test('push')).rejects.toThrow(/No device gets push yet/);
     await expect(n.test('carrier-pigeon')).rejects.toThrow(/no notification channel/);
     await expect(n.setWebhook('carrier-pigeon', {})).rejects.toThrow(/no chat app/);
-    for (const gone of ['discord', 'slack', 'telegram']) {
-      await expect(n.setWebhook(gone, { url: 'https://old.example/1' })).rejects.toThrow(/no chat app/);
-      await expect(n.test(gone)).rejects.toThrow(/no notification channel/);
-    }
+    for (const gone of ['discord', 'slack', 'telegram']) await expect(n.setWebhook(gone, { url: 'https://old.example/1' })).rejects.toThrow(/no chat app/);
+    for (const gone of ['discord', 'slack']) await expect(n.test(gone)).rejects.toThrow(/no notification channel/);
+    // Telegram is the manager's own bot now (telegramBot.ts), not a webhook.
+    await expect(n.test('telegram')).rejects.toThrow(/Link your Telegram chat first/);
   });
 });
 

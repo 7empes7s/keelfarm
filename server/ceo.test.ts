@@ -108,6 +108,7 @@ describe('office tools', () => {
       rerunChecks: async () => '',
       closePull: async () => '',
       escalate: async () => '',
+      sendTelegram: async () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -131,6 +132,7 @@ describe('office tools', () => {
       'retry_qa',
       'scale_team',
       'send_back',
+      'send_telegram',
       'set_dependencies',
       'set_floor_profile',
     ]);

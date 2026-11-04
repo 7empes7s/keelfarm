@@ -18,6 +18,15 @@ export interface Note {
   title: string;
   body: string;
   line: string;
+  /** Team changes it asks about: Telegram shows a button to approve or decline each. A summary has none. */
+  changes?: TeamChange[];
+}
+
+/** A team change waiting for the manager, as its buttons name it. */
+export interface TeamChange {
+  id: string;
+  name: string;
+  kind: 'hire' | 'let-go';
 }
 
 const PLURAL: Record<NotifyEvent, string> = {
@@ -49,8 +58,8 @@ export function plainText(md: string, max = BODY_MAX): string {
 }
 
 /** A note with its event's icon in front of the title. */
-export function note(event: NotifyEvent | 'test', title: string, body: string, line = title): Note {
-  return { event, title: `${ICON[event]} ${clip(title, 120)}`, body: clip(body), line: clip(line, 120) };
+export function note(event: NotifyEvent | 'test', title: string, body: string, line = title, changes?: TeamChange[]): Note {
+  return { event, title: `${ICON[event]} ${clip(title, 120)}`, body: clip(body), line: clip(line, 120), ...(changes?.length ? { changes } : {}) };
 }
 
 /** Several held notes of one event as a single summary (one note stays itself). `dropped`: more that weren't kept. */

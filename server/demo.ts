@@ -15,6 +15,7 @@ import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
+import { TelegramCallError, type TelegramApi } from './telegramBot.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
@@ -851,6 +852,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     voice: demoVoice,
     weather: demoWeather,
     notify: demoNotify,
+    telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
     demoTeam: (floor) => demoTeam(scale, floor),
@@ -1261,6 +1263,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
+      if (/\btelegram\b/i.test(text)) {
+        const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+        const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
+        return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);
       const closeFloor = close && (s.floors.find((f) => f.backlog.some((i) => i.number === Number(close[1]))) ?? s.floors[0]);
@@ -1441,6 +1449,56 @@ const demoNotify: NotifyTransport = {
     return ok ? 200 : 404;
   },
 };
+
+/**
+ * A fake Bot API with no network: any token in BotFather's shape is the bot @cubefarm_demo_bot (one with "bad" in it is
+ * refused), sends are logged, and getUpdates hands out what the demo's fake manager does (TelegramBot.demo).
+ */
+function demoTelegram(): TelegramApi {
+  let queue: Record<string, unknown>[] = [];
+  let nextUpdate = 1;
+  let nextMessage = 500;
+  let wake: (() => void) | null = null;
+  return {
+    async call(token, method, params, signal) {
+      if (/bad/i.test(token)) throw new TelegramCallError(401, 'Unauthorized');
+      switch (method) {
+        case 'getMe':
+          return { id: Number(token.split(':')[0]), is_bot: true, first_name: 'cubefarm demo', username: 'cubefarm_demo_bot' };
+        case 'getUpdates': {
+          if (!queue.length) {
+            await new Promise<void>((resolve) => {
+              const t = setTimeout(resolve, Number(params.timeout ?? 0) * 1000);
+              t.unref?.();
+              wake = () => (clearTimeout(t), resolve());
+              signal?.addEventListener('abort', wake, { once: true });
+            });
+            wake = null;
+          }
+          if (signal?.aborted) throw new TelegramCallError(0, 'stopped');
+          const out = queue.filter((u) => Number(u.update_id) >= Number(params.offset ?? 0));
+          queue = [];
+          return out;
+        }
+        case 'sendMessage': {
+          const buttons = (params.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)?.inline_keyboard ?? [];
+          const labels = buttons.flat().map((b) => `[${b.text}]`).join(' ');
+          console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
+          return { message_id: ++nextMessage };
+        }
+        case 'answerCallbackQuery':
+          console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
+          return true;
+        default:
+          return true;
+      }
+    },
+    inject(update) {
+      queue.push({ update_id: nextUpdate++, ...update });
+      wake?.();
+    },
+  };
+}
 
 // ---------- weather ----------
 

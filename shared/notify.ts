@@ -13,13 +13,14 @@ export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
 ];
 
 export const NOTIFY_WEBHOOKS: NotifyWebhook[] = ['ntfy'];
-export const NOTIFY_CHANNELS: NotifyChannel[] = ['desktop', 'push', ...NOTIFY_WEBHOOKS];
+export const NOTIFY_CHANNELS: NotifyChannel[] = ['desktop', 'push', ...NOTIFY_WEBHOOKS, 'telegram'];
 
 /** Merges are optional: on a busy office they're the noisiest event. */
 export const DEFAULT_NOTIFY: NotifySettings = {
   events: { needsHuman: true, ceoMessage: true, hire: true, agentError: true, usage: true, merge: false },
-  channels: { desktop: true, push: true, ntfy: true },
+  channels: { desktop: true, push: true, ntfy: true, telegram: true },
   officeUrl: '',
+  telegramMirror: false,
 };
 
 /** An http(s) address the manager's devices can open, or null. */
@@ -38,7 +39,7 @@ export function officeUrl(raw: unknown): string | null {
 
 /** Notification settings from a saved state or a PATCH /api/settings, field by field; anything invalid keeps `base`. */
 export function notifySettings(base: NotifySettings, patch: unknown): NotifySettings {
-  const p = (patch && typeof patch === 'object' ? patch : {}) as { events?: unknown; channels?: unknown; officeUrl?: unknown };
+  const p = (patch && typeof patch === 'object' ? patch : {}) as { events?: unknown; channels?: unknown; officeUrl?: unknown; telegramMirror?: unknown };
   const pick = <K extends string>(keys: readonly K[], from: Record<K, boolean>, raw: unknown): Record<K, boolean> => {
     const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     return Object.fromEntries(keys.map((k) => [k, typeof r[k] === 'boolean' ? r[k] : from[k] ?? false])) as Record<K, boolean>;
@@ -52,6 +53,7 @@ export function notifySettings(base: NotifySettings, patch: unknown): NotifySett
     ),
     channels: pick(NOTIFY_CHANNELS, { ...DEFAULT_NOTIFY.channels, ...base.channels }, p.channels),
     officeUrl: url ?? base.officeUrl ?? '',
+    telegramMirror: typeof p.telegramMirror === 'boolean' ? p.telegramMirror : (base.telegramMirror ?? false),
   };
 }
 

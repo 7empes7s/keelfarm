@@ -229,6 +229,7 @@ const OFFICE_KINDS: Record<string, ActivityKind> = {
   rerun_checks: 'ci',
   close_pull: 'git',
   escalate: 'talk',
+  send_telegram: 'talk',
 };
 
 /**

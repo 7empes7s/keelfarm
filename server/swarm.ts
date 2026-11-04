@@ -51,7 +51,9 @@ import { Ticker } from './ticker.ts';
 import { Outbox } from './outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
-import { clip, plainText, stuckAgents } from './notify.ts';
+import { teamKeyboard, telegramChat } from './telegram.ts';
+import { TelegramBot } from './telegramBot.ts';
+import { clip, plainText, stuckAgents, type TeamChange } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
@@ -548,6 +550,7 @@ export class Swarm {
       rerunChecks: (a) => this.triageRerunChecks(a),
       closePull: (a) => this.triageClosePull(a),
       escalate: (a) => this.triageEscalate(a),
+      sendTelegram: (a) => this.sendTelegram(a),
     });
   }
   private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
@@ -600,6 +603,8 @@ export class Swarm {
   private readonly envSecrets = envSecrets(process.env);
   /** Notifications to the manager's devices and chat apps (docs/pocket.md). The demo's only log what they'd send. */
   readonly notifier: Notifier;
+  /** The manager's own Telegram bot: notifications, the CEO chat both ways, team-change buttons. The demo's is fake. */
+  readonly telegram: TelegramBot;
   /** Settings → Cloud agents: the Upstash account and what cloud agents sign in with (docs/cloud.md). The demo's is fake. */
   readonly cloud: Cloud;
   /** Cloud agents' machines: an Upstash Box each. */
@@ -633,6 +638,15 @@ export class Swarm {
       frame: () => journalFrame(this.snapshot(), this.secrets()),
       secrets: () => this.secrets(),
     });
+    this.telegram = new TelegramBot({
+      api: backend.telegram,
+      // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
+      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+      message: (text) => this.messageCeo(text, 'telegram'),
+      decide: (verdict, id) => this.decideFromTelegram(verdict, id),
+      changed: () => this.notifier.refresh(),
+      log: (line) => console.warn(line),
+    });
     this.notifier = new Notifier({
       transport: backend.notify,
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-secrets.json' : 'secrets.json'),
@@ -641,6 +655,12 @@ export class Swarm {
       broadcast: (note) => this.broadcast({ type: 'notify', note }),
       channelsChanged: (notifyChannels) => this.broadcast({ type: 'notifyChannels', notifyChannels }),
       log: (line) => console.warn(line),
+      telegram: {
+        linked: () => this.telegram.linked(),
+        mirrors: () => this.mirrorsToTelegram(),
+        send: (text, keyboard) => this.telegram.send(text, keyboard),
+        view: () => this.telegram.view(),
+      },
     });
     this.cloud = new Cloud({
       // The demo's fake cloud keeps a file of its own: its tests run beside the notifier's, which share demo-secrets.json.
@@ -779,6 +799,7 @@ export class Swarm {
     await this.voice.init();
     await this.weather.init();
     await this.notifier.init();
+    await this.telegram.init();
     await this.cloud.init();
     if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
@@ -1206,7 +1227,8 @@ export class Swarm {
   /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */
   private secrets(): string[] {
     const key = this.voice.secret();
-    return [...this.envSecrets, ...(key ? [key] : []), ...this.cloud.secretValues()];
+    const bot = this.telegram.secret();
+    return [...this.envSecrets, ...(key ? [key] : []), ...(bot ? [bot] : []), ...this.cloud.secretValues()];
   }
 
   /** POST /api/journal/sample (demo only): writes a made-up working day as yesterday's journal, to replay. */
@@ -1806,6 +1828,7 @@ export class Swarm {
     this.backend.cloud.detach(); // cloud agents' CLIs carry on in their Boxes: their records are final from here
     await this.writeState().catch((err) => console.warn('could not save the state', err));
     await this.journal.close().catch((err) => console.warn('could not write the journal', err));
+    await this.telegram.stop();
     await this.backend.releaseClis(restart); // before the terminals are saved: whatever they print next waits in the keeper
     await this.saveTerminals(true);
     await this.previews.stopAll(this.state.repos);
@@ -4411,12 +4434,12 @@ export class Swarm {
     setTimeout(() => this.schedule(), 300);
   }
 
-  /** The manager's phone → the CEO. Injected into a running session, otherwise the CEO picks it up next. */
-  async messageCeo(text: string) {
+  /** The manager's phone (or Telegram) → the CEO. Injected into a running session, otherwise the CEO picks it up next. */
+  async messageCeo(text: string, via?: 'telegram') {
     const t = text.trim().slice(0, 4000);
     if (!t) throw new HttpError(400, 'Empty message');
     const a = this.ceo();
-    this.postMessage('manager', t);
+    this.postMessage('manager', t, undefined, { telegram: via ? 'in' : undefined });
     const rt = this.agentRt.get(a.id)!;
     if (rt.session) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${t}` }]);
@@ -5019,10 +5042,17 @@ export class Swarm {
 
   // ---------- the phone ----------
 
-  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string) {
-    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}) };
+  /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
+  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: { telegram?: 'in'; changes?: TeamChange[] } = {}) {
+    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...(opts.telegram ? { telegram: opts.telegram } : {}) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
+    if (from === 'ceo' && this.mirrorsToTelegram()) {
+      m.telegram = 'out';
+      void this.telegram.send(telegramChat(this.ceo().name, m.text), opts.changes ? teamKeyboard(opts.changes) : undefined).then((why) => {
+        if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
+      });
+    }
     this.state.messages.push(m);
     if (this.state.messages.length > KEEP_MESSAGES) this.state.messages.splice(0, this.state.messages.length - KEEP_MESSAGES);
     this.broadcast({ type: 'message', message: m });
@@ -5030,6 +5060,37 @@ export class Swarm {
     // Proposals are notified as such (proposeHire, proposeLetGo).
     if (from === 'ceo' && !requestId) this.notifier.notify('ceoMessage', this.ceo().name, plainText(m.text), `${this.ceo().name}: ${plainText(m.text, 100)}`);
     return m;
+  }
+
+  /** CEO messages go to Telegram too: the manager's last message came from there, or Settings mirrors the whole chat. */
+  private mirrorsToTelegram(): boolean {
+    if (!this.telegram.linked()) return false;
+    if (this.state.settings.notify.telegramMirror) return true;
+    return [...this.state.messages].reverse().find((m) => m.from === 'manager')?.telegram === 'in';
+  }
+
+  /** A team-change button pressed on Telegram: the same approve and decline as the lobby's. */
+  private decideFromTelegram(verdict: 'approve' | 'decline', id: string): string {
+    const req = this.state.requests.find((r) => r.id === id);
+    if (verdict === 'approve') this.approveRequest(id);
+    else this.rejectRequest(id);
+    return verdict === 'approve' ? `✅ Done: ${req?.kind === 'let-go' ? `${req.name} leaves` : `${req?.name ?? 'they'} joined`}.` : `✋ Declined${req ? `: ${req.name}` : ''}.`;
+  }
+
+  /** The CEO's send_telegram: to the manager's linked chat only. */
+  private async sendTelegram(a: { text: string }): Promise<string> {
+    if (!this.telegram.linked()) throw new Error("Telegram isn't set up: the manager links their chat in Settings → Notifications → Telegram. Answer here instead.");
+    const text = String(a.text ?? '').trim();
+    if (!text) throw new Error('Write the message.');
+    const why = await this.telegram.send(telegramChat(this.ceo().name, text.slice(0, 4000)));
+    if (why) throw new Error(`It didn't go out: ${why}.`);
+    return "Sent to the manager's Telegram.";
+  }
+
+  /** POST /api/notify/telegram/demo: the demo's fake manager on Telegram (see TelegramBot.demo). */
+  telegramDemo(body: { kind?: unknown; text?: unknown }) {
+    if (!this.backend.demo) throw new HttpError(404, 'Only the demo office has a fake Telegram.');
+    return this.telegram.demo(body);
   }
 
   /** The team's holiday greeting (shared/themes.ts) from the CEO, once a day while a theme is on. */
@@ -5291,8 +5352,9 @@ export class Swarm {
     const asks = [hires.length ? `add ${names(hires)}` : '', leaves.length ? `let ${names(leaves)} go` : ''].filter(Boolean).join(' and ');
     if (made.length) {
       const text = `📈 Floor ${repo.floor}: from ${before} to ${plan.size} agents? I'd ${asks}. ${reason}`;
-      this.postMessage('ceo', hires.length ? `${text} ${hires.length === 1 ? `${hires[0].name} waits` : 'They wait'} in the lobby, where you can set them up before hiring.` : text, made.length === 1 ? made[0].id : undefined);
-      this.notifier.notify('hire', `Floor ${repo.floor}: ${before} → ${plan.size} agents?`, `${this.ceo().name} would ${asks}. ${plainText(reason)}`, `floor ${repo.floor} team change`);
+      const changes = made.map((r) => ({ id: r.id, name: r.name, kind: r.kind }));
+      this.postMessage('ceo', hires.length ? `${text} ${hires.length === 1 ? `${hires[0].name} waits` : 'They wait'} in the lobby, where you can set them up before hiring.` : text, made.length === 1 ? made[0].id : undefined, { changes });
+      this.notifier.notify('hire', `Floor ${repo.floor}: ${before} → ${plan.size} agents?`, `${this.ceo().name} would ${asks}. ${plainText(reason)}`, `floor ${repo.floor} team change`, changes);
     }
     return `Floor ${repo.floor} goes from ${before} to ${plan.size} agents${capped} once the manager agrees: ${asks || 'withdrew the waiting changes'}.`;
   }

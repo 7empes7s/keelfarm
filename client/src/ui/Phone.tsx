@@ -344,6 +344,8 @@ function Bubble({ m, ceoName }: { m: PhoneMessage; ceoName: string }) {
         {req && req.status === 'pending' && m.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {!mine && <ReplayButton m={m} />}
+          {m.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
+          {m.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
           {clock(m.at)}
         </div>
       </div>
