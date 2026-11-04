@@ -21,6 +21,7 @@ import { StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
+import { ToolsTab } from './ToolsSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
 import { useMode } from '../pocket/mode';
@@ -823,6 +824,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
     ['team', '👩‍💻 Team'],
     ['issues', '📝 Issues'],
     ['settings', '⚙️ Settings'],
+    ['tools', '🧰 Tools & skills'],
     ['timelapse', '📼 Time-lapse'],
     ['access', '♿ Accessibility'],
   ];
@@ -842,6 +844,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
         {tab === 'team' && <TeamTab />}
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}
+        {tab === 'tools' && <ToolsTab />}
         {tab === 'timelapse' && (
           <Suspense fallback={<p className="muted">Loading…</p>}>
             <TimeLapseTab />
