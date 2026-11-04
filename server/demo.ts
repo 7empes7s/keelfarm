@@ -571,10 +571,11 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
       for (let k = 0; k < merges; k++) {
         const at = midnight + (9 + rand() * 9) * HOUR_MS; // working hours
         const rounds = rand() < 0.3 ? 2 : 1; // now and then QA failed it once first
-        h.merges.push([at, repo, 0, Math.round((25 + rand() * 200) * min)]);
+        const pr = -++n; // made up, so never a real PR's number
+        h.merges.push([at, repo, pr, Math.round((25 + rand() * 200) * min)]);
         for (let r = 0; r < rounds; r++) {
           const before = (rounds - r) * 20 * min;
-          h.qa.push([at - before, repo, r === rounds - 1, Math.round((1 + rand() * 14) * min)]);
+          h.qa.push([at - before, repo, r === rounds - 1, Math.round((1 + rand() * 14) * min), pr, r + 1]);
           h.checks.push([at - before - 6 * min, repo, `past${String(n++).padStart(4, '0')}`, rand() > 0.12, Math.round((2.5 + rand() * 5) * min)]);
           h.cost.push([at - before, repo, Math.round((0.3 + rand()) * 100) / 100], [at - before - 40 * min, repo, Math.round((0.4 + rand() * 1.2) * 100) / 100]);
         }
@@ -1066,22 +1067,28 @@ const demoPreviews: PreviewBackend = {
 interface Profile {
   summary: string;
   qa: string;
+  playbook: string;
 }
 
 const PROFILES: Record<string, Profile> = {
   'pixel-todo': {
     summary: 'Todo web app · React + Vite + TypeScript',
     qa: '- Add, complete, edit and delete todos; they survive a reload\n- Keyboard only: every action reachable, focus always visible\n- Phone width (375px): nothing overflows or gets cut off\n- No errors in the browser console',
+    playbook:
+      '## Map\n- src/components/: React views, no storage calls\n- src/store/: todo state and localStorage; components use its hooks only\n## Conventions\n- One component per file, tests next to it (*.test.tsx)\n## Skills\n- frontend-design for UI, test-driven-development for store changes\n## Traps\n- localStorage throws in private windows: wrap reads and writes',
   },
   'weather-api': {
     summary: 'REST API · Node + Express',
     qa: '- Every endpoint: happy path, bad input (400), unknown city (404)\n- Response shapes match the OpenAPI document\n- Rate limiting returns 429 with Retry-After\n- Tests and lint pass',
+    playbook:
+      '## Map\n- src/routes/: HTTP only, they call src/services/\n- src/services/: the logic, never imports express\n## Conventions\n- Update openapi.yaml with every endpoint change\n## Skills\n- test-driven-development for services\n## Traps\n- The upstream weather client is rate limited: mock it in tests',
   },
 };
 
 const GENERIC: Profile = {
   summary: 'Web project · early stage',
   qa: '- The app builds and starts\n- The changed feature works end to end in the browser\n- Phone width: nothing overflows\n- No console errors',
+  playbook: '## Conventions\n- Small modules, tests next to the code\n## Skills\n- frontend-design for UI work',
 };
 
 /** A floor in company_status, as far as the demo CEO reads it. */
@@ -1210,12 +1217,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       await step([{ kind: 'tool', tool: 'Glob', text: '⏺ Glob src/**/*' }, { kind: 'result', text: '  ⎿ Found 23 files' }]);
       await read('package.json', 36);
       await think(`${p.summary}. Let me size the team for the work in sight.`);
-      await use('set_floor_profile', { floor, summary: p.summary, qa_brief: p.qa });
+      await use('set_floor_profile', { floor, summary: p.summary, qa_brief: p.qa, playbook: p.playbook });
       const ready = f.capacity.issuesReadyToStart;
       const grow = demoGrow(f, ready);
       const team = grow ? await scale(s, f, grow) : `Its ${plural(f.team.size, 'agent')} can keep up with the ${plural(ready, 'issue')} ready to start.`;
       const next = f.brief ? ' Your brief is next on my list: I plan it as soon as this is done.' : f.backlog.length === 0 ? ' The backlog is empty: tell me what you would like built and I will plan it.' : '';
-      return [`Floor ${floor}: ${p.summary}. I wrote a QA brief for it.`, team, next].filter(Boolean).join(' ');
+      return [`Floor ${floor}: ${p.summary}. I wrote a QA brief and a playbook for it.`, team, next].filter(Boolean).join(' ');
     },
     async plan(floor: number, mission: string) {
       const s = await status();

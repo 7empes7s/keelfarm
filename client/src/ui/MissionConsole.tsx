@@ -250,6 +250,11 @@ const COLUMNS: [string, (n: OpsNumbers) => string, string?][] = [
   ['Merged today', (n) => `${n.mergedToday} (${n.mergedHour} last hour)`],
   ['Lead time', (n) => fmtDuration(n.leadMs), 'Median issue → merge over the last 24 hours'],
   ['QA wait', (n) => fmtDuration(n.qaWaitMs), 'Median wait for a free agent over the last 24 hours'],
+  [
+    'QA first pass',
+    (n) => (n.qaRoundsPerMerge === null ? fmtPct(n.qaFirstPass) : `${fmtPct(n.qaFirstPass)} · ${n.qaRoundsPerMerge.toFixed(1)} rounds/merge`),
+    'Over 7 days: PRs whose first QA round passed · average QA rounds per merged PR',
+  ],
   ['CI', (n) => (n.ciRuns ? `${fmtPct(n.ciPass)} · ${fmtDuration(n.ciMs)}` : '—'), "GitHub's checks over 7 days: pass rate · median time"],
   ['Team', (n) => `${n.busy} busy · ${n.idle} idle${n.errors ? ` · ${n.errors} error` : ''}`],
   ['Cost today', (n) => `~${fmtUsd(n.costToday)}`, "An estimate from finished sessions' reported cost"],

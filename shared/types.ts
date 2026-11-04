@@ -73,6 +73,7 @@ export interface RepoView {
   mission: string; // the manager's brief: what this floor is building
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
+  playbook: string; // the floor's architecture map, conventions, skills to use and traps, for every agent's prompt (up to PLAYBOOK_MAX)
   localPath: string | null; // the manager's own project folder, when the floor lives in one
   checkoutPath: string; // where the floor's main checkout is on disk (localPath, or a clone the office manages)
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
@@ -149,6 +150,9 @@ export type AgentRole = 'agent' | 'ceo';
 
 /** Desks in a floor's room: 12 in the open-plan grid and 3 along the east wall. A team is at most this big. */
 export const FLOOR_SEATS = 15;
+
+/** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
+export const PLAYBOOK_MAX = 3000;
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -472,6 +476,8 @@ export interface OpsNumbers {
   leadMs: number | null; // median issue → merge
   qaWaitMs: number | null; // median wait for an agent to start testing a PR
   qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
+  qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
+  qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
   // GitHub's checks, over 7 days
   ciPass: number | null; // share of check runs that passed, 0-1
   ciRuns: number;

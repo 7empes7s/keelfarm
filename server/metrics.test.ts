@@ -10,6 +10,7 @@ import {
   loadHistory,
   median,
   opsView,
+  qaRoundsPerMerge,
   recordChecks,
   recordCost,
   recordMerges,
@@ -82,22 +83,27 @@ describe('recording the history', () => {
     recordCost(h, 'o/a', 0, NOW);
     recordCost(h, 'o/a', 0.42, NOW);
     h.qa.push([NOW - KEEP_MS - 1, 'o/a', true, 0]);
-    recordQa(h, 'o/a', false, 5 * MIN, NOW);
+    recordQa(h, 'o/a', false, 5 * MIN, NOW, 7, 1);
     expect(h.cost).toEqual([[NOW, 'o/a', 0.42]]);
-    expect(h.qa).toEqual([[NOW, 'o/a', false, 5 * MIN]]);
+    expect(h.qa).toEqual([[NOW, 'o/a', false, 5 * MIN, 7, 1]]);
   });
 
   it('loads only well-formed entries from the state file', () => {
     const h = loadHistory(
       {
         merges: [[NOW - MIN, 'o/a', 3, null], [NOW, 'o/a', 'x', 1], 'junk', [NOW - KEEP_MS - DAY_MS, 'o/a', 1, 2]],
-        qa: [[NOW, 'o/a', true, 60]],
+        qa: [[NOW, 'o/a', true, 60], [NOW, 'o/a', false, null, 3, 2], [NOW, 'o/a', false, null, 'x', 2]],
         checks: [[NOW, 'o/a', 'abc', true]],
         cost: [[NOW, '', 1.5]],
       },
       NOW,
     );
-    expect(h).toEqual({ merges: [[NOW - MIN, 'o/a', 3, null]], qa: [[NOW, 'o/a', true, 60]], checks: [], cost: [[NOW, '', 1.5]] });
+    expect(h).toEqual({
+      merges: [[NOW - MIN, 'o/a', 3, null]],
+      qa: [[NOW, 'o/a', true, 60], [NOW, 'o/a', false, null, 3, 2], [NOW, 'o/a', false, null]],
+      checks: [],
+      cost: [[NOW, '', 1.5]],
+    });
     expect(loadHistory(undefined, NOW)).toEqual(emptyHistory());
   });
 });
@@ -175,7 +181,23 @@ describe('the numbers', () => {
 
   it('is empty-handed rather than wrong with no history', () => {
     const v = opsView([floor()], emptyHistory(), NOW);
-    expect(v.total).toMatchObject({ mergedToday: 0, leadMs: null, qaWaitMs: null, qaPass: null, ciPass: null, ciRuns: 0, ciMs: null, costToday: 0 });
+    expect(v.total).toMatchObject({ mergedToday: 0, leadMs: null, qaWaitMs: null, qaPass: null, qaFirstPass: null, qaRoundsPerMerge: null, ciPass: null, ciRuns: 0, ciMs: null, costToday: 0 });
+  });
+
+  it('count QA rounds per merged PR and how often the first round passes', () => {
+    const h = emptyHistory();
+    // #1 passed first time, #2 failed once then passed, #3 is still open after a failed round
+    recordQa(h, 'o/a', true, null, NOW - 3 * HOUR_MS, 1, 1);
+    recordQa(h, 'o/a', false, null, NOW - 3 * HOUR_MS, 2, 1);
+    recordQa(h, 'o/a', true, null, NOW - 2 * HOUR_MS, 2, 2);
+    recordQa(h, 'o/a', false, null, NOW - HOUR_MS, 3, 1);
+    h.qa.push([NOW - HOUR_MS, 'o/a', true, null]); // from before rounds were recorded
+    h.merges.push([NOW - 2 * HOUR_MS, 'o/a', 1, null], [NOW - HOUR_MS, 'o/a', 2, null], [NOW - HOUR_MS, 'o/a', 9, null]); // #9: merged without QA
+    expect(qaRoundsPerMerge(h.merges, h.qa)).toBe(1.5);
+    const a = opsView([floor(), floor({ repoId: 'o/b', floor: 2 })], h, NOW);
+    expect(a.floors[0]).toMatchObject({ qaFirstPass: 1 / 3, qaRoundsPerMerge: 1.5 });
+    expect(a.floors[1]).toMatchObject({ qaFirstPass: null, qaRoundsPerMerge: null });
+    expect(qaRoundsPerMerge([[NOW, 'o/b', 1, null]], h.qa)).toBeNull(); // the same number on another floor is another PR
   });
 });
 

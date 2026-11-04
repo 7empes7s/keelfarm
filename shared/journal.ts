@@ -199,6 +199,7 @@ export function compactRepo(r: RepoView, secrets: readonly string[] = []): RepoV
     mission: '',
     summary: text(r.summary, 140, secrets),
     qaBrief: '',
+    playbook: '',
     localPath: null,
     checkoutPath: '',
     cloneStatus: r.cloneStatus,

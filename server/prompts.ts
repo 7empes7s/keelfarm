@@ -17,6 +17,8 @@ export interface PromptFloor {
   summary: string;
   mission: string;
   qaBrief: string;
+  /** The floor's architecture map, conventions, skills and traps (markdown); '' adds nothing. */
+  playbook: string;
 }
 
 interface PromptBase {
@@ -56,6 +58,16 @@ export const PLACEHOLDERS = {
 /** In every agent's prompt (the CEO's too): an office session ends with its turn, so nothing wakes them later. */
 export const ONE_TURN = "Your session ends when your turn ends: background tasks and notifications won't wake you. Never end a turn to wait. Wait in the foreground with a timeout, then finish.";
 
+/** The floor's playbook as a prompt section, after the QA brief; nothing when it's empty. */
+const playbookLines = (repo: PromptFloor) => (repo.playbook ? [`This floor's playbook (follow it):\n${repo.playbook}`] : []);
+
+/** What a builder or fixer reviews their diff against: the floor's guidance that's set. */
+const reviewAgainst = (repo: PromptFloor) => ['the issue', repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
+
+/** Builders and fixers check their own diff before QA does: a QA round costs a whole session. */
+const selfReviewStep = (n: number, repo: PromptFloor) =>
+  `${n}. Self-review before pushing: read your diff (git diff origin/${repo.defaultBranch}...HEAD) against ${reviewAgainst(repo)}. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.`;
+
 export const devBranch = (issue: number | string, slug: string) => `swarm/issue-${issue}-${slug}`;
 export const qaBranch = (pr: number | string, slug: string) => `qa/pr-${pr}-${slug}`;
 
@@ -69,6 +81,8 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
     repo.summary ? `Project: ${repo.summary}` : '',
     repo.mission ? `What the team is building (the manager's brief): ${repo.mission}` : '',
+    repo.qaBrief ? `What QA checks on this project (from the CEO):\n${repo.qaBrief}` : '',
+    ...playbookLines(repo),
     `Your worktree: ${cwd}`,
     depsLine ?? '',
     fixing
@@ -83,11 +97,12 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     repo.browserTesting
       ? `4. If the project has a web UI, start its dev server in the background on port ${port} (reserved for you, so you don't collide with teammates), then check your change with the Playwright browser tools (mcp__playwright__browser_navigate, browser_snapshot, browser_click, browser_take_screenshot). Stop the dev server when you're done.`
       : '4. Verify the behaviour you changed as directly as you can.',
-    `5. Push: ${push}`,
+    selfReviewStep(5, repo),
+    `6. Push: ${push}`,
     fixing
-      ? '6. Reply with a short summary of what you fixed.'
-      : `6. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions>". The body must contain "Closes #<issue number>".`,
-    fixing ? '' : '7. End your final message with the pull request URL on its own line.',
+      ? '7. Reply with a short summary of what you fixed and a Self-review line: what it found and you fixed.'
+      : `7. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".`,
+    fixing ? '' : '8. End your final message with the pull request URL on its own line.',
     '',
     'Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.',
     ONE_TURN,
@@ -106,13 +121,14 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     ...(repo.summary ? [`Project: ${repo.summary}`] : []),
     ...(repo.mission ? [`What the team is building (the manager's brief): ${repo.mission}`] : []),
     ...(repo.qaBrief ? [`What to check on this project (from the CEO):\n${repo.qaBrief}`] : []),
+    ...playbookLines(repo),
     `Pull request #${pr.number} "${pr.title}" from branch ${pr.headRefName}: ${pr.url}`,
     `Your worktree: ${cwd}. It has the pull request's code checked out on local branch ${branch}.`,
     ...(depsLine ? [depsLine] : []),
     '',
     'How to test:',
     '1. Read the PR description and the linked issue, and work out the acceptance criteria.',
-    `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests.`,
+    `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.`,
     testStep ?? "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).",
     repo.browserTesting
       ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change in a real browser with the Playwright tools: navigate, click, type, resize to a phone size, try edge cases, and check the console for errors. Take a screenshot with browser_take_screenshot (no filename) of every important state: the screenshots are attached to the PR as evidence. Stop the server afterwards.`

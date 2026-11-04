@@ -64,7 +64,7 @@ import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
 import { effectiveModel } from '../shared/models.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP } from '../shared/types.ts';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
 import type {
   AgentActivity,
   AgentCli,
@@ -122,6 +122,7 @@ interface PersistedRepo {
   mission: string;
   summary: string;
   qaBrief: string;
+  playbook: string;
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   addedAt: number;
 }
@@ -691,6 +692,7 @@ export class Swarm {
           mission: r.mission ?? '',
           summary: r.summary ?? '',
           qaBrief: r.qaBrief ?? '',
+          playbook: r.playbook ?? '',
           localPath: r.localPath ?? null,
           preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } },
         })),
@@ -1038,6 +1040,7 @@ export class Swarm {
       mission: r.mission,
       summary: r.summary,
       qaBrief: r.qaBrief,
+      playbook: r.playbook,
       localPath: r.localPath,
       checkoutPath: this.backend.mainDir(r.fullName),
       cloneStatus: rt.cloneStatus,
@@ -1425,6 +1428,7 @@ export class Swarm {
       mission: (opts.mission ?? '').trim().slice(0, 4000),
       summary: '',
       qaBrief: '',
+      playbook: '',
       preview: { ...DEFAULT_PREVIEW, env: {} },
       addedAt: Date.now(),
     };
@@ -1526,7 +1530,7 @@ export class Swarm {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief'>> & { previewCommand?: unknown; previewEnv?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown },
   ) {
     const repo = this.repo(id);
     const preview = parsePreviewPatch(patch.previewCommand, patch.previewEnv);
@@ -1543,6 +1547,7 @@ export class Swarm {
     if (typeof patch.mission === 'string') repo.mission = patch.mission.trim().slice(0, 4000);
     if (typeof patch.summary === 'string') repo.summary = patch.summary.trim().slice(0, 140);
     if (typeof patch.qaBrief === 'string') repo.qaBrief = patch.qaBrief.trim().slice(0, 2500);
+    if (typeof patch.playbook === 'string') repo.playbook = patch.playbook.trim().slice(0, PLAYBOOK_MAX);
     this.save();
     this.emitRepo(repo);
     setTimeout(() => this.schedule(), 200);
@@ -3412,7 +3417,7 @@ export class Swarm {
         return [];
       });
       const key = `${repo.id}#${rec.prNumber}`;
-      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now());
+      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round);
       this.qaWaits.delete(key);
       // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
       // and the checks are recorded so a re-run of a red one can count as the fix.
@@ -5372,6 +5377,7 @@ export class Swarm {
           brief: r.mission || null,
           profile: r.summary || null,
           qaBrief: r.qaBrief || null,
+          playbook: r.playbook || null,
           preview: { command: r.preview.command, env: r.preview.env, status: this.previews.view(r).status },
           autoAssign: r.autoAssign,
           autoMerge: r.autoMerge,
@@ -5382,6 +5388,8 @@ export class Swarm {
             mergedToday: nums?.mergedToday ?? 0,
             medianLeadMinutes: nums?.leadMs != null ? Math.round(nums.leadMs / 60_000) : null,
             qaPassRate: nums?.qaPass ?? null,
+            qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
+            qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
           },
           capacity: {
             issuesReadyToStart: this.readyIssues(r).length,
@@ -5459,11 +5467,12 @@ export class Swarm {
     );
   }
 
-  private setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; preview_command?: string; preview_env?: Record<string, string> }) {
+  private setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }) {
     const r = this.floorRepo(x.floor);
     const preview = parsePreviewPatch(x.preview_command, x.preview_env);
     if (x.summary !== undefined) r.summary = String(x.summary).trim().slice(0, 140);
     if (x.qa_brief !== undefined) r.qaBrief = String(x.qa_brief).trim().slice(0, 2500);
+    if (x.playbook !== undefined) r.playbook = String(x.playbook).trim().slice(0, PLAYBOOK_MAX);
     r.preview = { ...r.preview, ...preview };
     if (preview.command === null) void this.previews.refreshDefault(r);
     this.emitRepo(r);
