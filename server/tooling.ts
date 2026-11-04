@@ -72,6 +72,13 @@ export function mcpKey(server: string, plugin?: string): string {
 }
 
 const SECRETISH = /(token|secret|password|passwd|api[-_]?key|apikey|auth|bearer|credential)/i;
+/** A package name, maybe scoped and versioned: @scope/name@1.2.3. */
+const SAFE_ARG = /^@?[a-z0-9][\w.-]{0,50}(\/[\w.-]{1,50})?(@[\w.^~-]{1,20})?$/i;
+
+/** A URL path segment or argument that looks like a key (long, with digits or mixed case) becomes ••••. */
+function maskSegment(s: string): string {
+  return s.length >= 20 && /\d/.test(s) && /[A-Za-z]/.test(s) ? '••••' : s;
+}
 
 /** An MCP server's config as one line without its secrets: transport, command or address, and only the names of its env and headers. */
 export function maskServer(config: unknown): string {
@@ -83,18 +90,21 @@ export function maskServer(config: unknown): string {
     let shown = url;
     try {
       const u = new URL(url);
-      shown = `${u.protocol}//${u.host}${u.pathname}`; // no user:password@, no ?query, no #hash
+      // No user:password@, ?query or #hash, and no path segment that could be a key.
+      shown = `${u.protocol}//${u.host}${u.pathname.split('/').map(maskSegment).join('/')}`;
     } catch {
       shown = url.split(/[?#]/)[0].replace(/\/\/[^/@]*@/, '//');
     }
     parts.push(`${str(c.type) || 'http'} ${shown}`);
   } else if (str(c.command)) {
     const args = Array.isArray(c.args) ? c.args.map(String) : [];
+    // Only flags and package names show: anything else (a value, a path, a script) could hold a secret.
     let hide = false;
     const shown = args.slice(0, 6).map((a) => {
-      const masked = hide || (a.includes('=') && SECRETISH.test(a.split('=')[0])) || /^[A-Za-z0-9_\-+/=.]{32,}$/.test(a) ? '••••' : a;
-      hide = /^--?[\w-]*$/.test(a) && SECRETISH.test(a);
-      return masked.length > 40 ? `${masked.slice(0, 39)}…` : masked;
+      const flag = /^--?[A-Za-z][\w-]*$/.test(a);
+      const masked = hide || !(flag || SAFE_ARG.test(a)) || (SECRETISH.test(a) && !flag) || /^[A-Za-z0-9_+/=]{24,}$/.test(a) ? '••••' : a;
+      hide = flag && SECRETISH.test(a);
+      return masked;
     });
     parts.push(`stdio ${path.basename(str(c.command))}${shown.length ? ` ${shown.join(' ')}` : ''}${args.length > 6 ? ' …' : ''}`);
   } else parts.push(str(c.type) || 'unknown');

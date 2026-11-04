@@ -5536,6 +5536,8 @@ export class Swarm {
     if (a.role === 'ceo') throw new Error("That's you: the manager sets the CEO up.");
     const switches = [...(x.tools_off ?? []).map((r) => [r, false] as const), ...(x.tools_on ?? []).map((r) => [r, true] as const), ...(x.tools_reset ?? []).map((r) => [r, null] as const)];
     if (x.cli === undefined && x.model === undefined && x.effort === undefined && !switches.length) throw new Error('Nothing to change: pass cli, model, effort, tools_off, tools_on, tools_reset or a mix.');
+    // Switching off only takes away. Turning on, or undoing a switch, can undo the manager's own: only when they asked.
+    if (!this.ceoAsked && switches.some(([, on]) => on !== false)) throw new Error('tools_on and tools_reset only when the manager asks for it in their message; tools_off is always allowed.');
     // Every name is checked before anything changes.
     const items = this.tooling.items;
     const picked = switches.map(([ref, on]) => {

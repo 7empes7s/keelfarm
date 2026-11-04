@@ -76,6 +76,9 @@ describe('helpers', () => {
 
   it('masks long tokens passed as arguments', () => {
     expect(maskServer({ command: 'x', args: ['abcdefghijklmnopqrstuvwxyz0123456789ABCD'] })).toBe('stdio x ••••');
+    // only flags and package names show: scripts, paths and values don't
+    expect(maskServer({ command: 'node', args: ['-e', "require('x')", '/home/me/key.json', 'chrome-devtools-mcp@1.11.0'] })).toBe('stdio node -e •••• •••• chrome-devtools-mcp@1.11.0');
+    expect(maskServer({ type: 'http', url: 'https://mcp.example.com/u/sk4Fq9xZr2LmN8pQw3Ty7/mcp' })).toBe('http https://mcp.example.com/u/••••/mcp');
   });
 
   it('reads enabled state from settings.json', () => {
