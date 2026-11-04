@@ -1,5 +1,5 @@
 // Settings → Notifications, the parts that get a device set up (docs/pocket.md): the "Get notified on this device"
-// checklist with one button that does the next step (notifyGuide.ts decides, pwa.ts does), one-tap ntfy with its QR
+// checklist with one button that does the next step (notifySteps.ts decides, pwa.ts does), one-tap ntfy with its QR
 // code, and each channel's last send, where push devices are renamed and removed.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
@@ -9,7 +9,7 @@ import { NTFY_APPS, ntfyLinks } from '../../../shared/ntfy';
 import type { NotifyHealth, PushTestView } from '../../../shared/types';
 import { allowNotifications, currentPush, enablePush, preparePush, pushSupport, startWorker, workerState, type PushPrep } from '../pwa';
 import { confirmDialog } from './Confirm';
-import { deviceLabel, guideSteps, nextStep, platformOf, type GuideInput, type StepAction, type WorkerState } from './notifyGuide';
+import { deviceLabel, guideSteps, nextStep, platformOf, type GuideInput, type StepAction, type WorkerState } from './notifySteps';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 

@@ -167,7 +167,7 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   (focus in, trapped, returned); `announce()` speaks to screen readers; `FloorList.tsx` is the list view.
 - `src/pocket/`: pocket mode (docs/pocket.md), the 2D office for phones (`mode.ts` picks it; `App.tsx` loads it or the
   3D `Office.tsx` lazily, so a phone never downloads three.js). `src/pwa.ts` registers the service worker and Web Push
-  (one sign-up step per tap in `pushSteps.ts`; the setup checklist in `ui/notifyGuide.ts`, drawn by `NotifyGuide.tsx`);
+  (one sign-up step per tap in `pushSteps.ts`; the setup checklist in `ui/notifySteps.ts`, drawn by `NotifyGuide.tsx`);
   `src/notifications.ts` shows desktop notifications. `ui/Panel.tsx` is the panel, apart from `Overlays.tsx` (3D).
 - `src/photo/`: photo mode and clips, lazy-loaded except `gate.ts` (on/frozen, the K and I keys, `__swarmPhoto`):
   `PhotoScene.tsx` (its own camera; frozen, the frame loop stops and it draws on change), `post.ts` (filters and depth

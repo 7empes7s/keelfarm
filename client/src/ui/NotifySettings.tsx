@@ -9,7 +9,7 @@ import { confirmDialog } from './Confirm';
 import { showTestNote } from '../notifications';
 import { currentPush, disablePush, pushSupport } from '../pwa';
 import { ChannelHealth, NotifyGuide, NtfyQuick } from './NotifyGuide';
-import { suggestOfficeUrl } from './notifyGuide';
+import { suggestOfficeUrl } from './notifySteps';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md';
 
