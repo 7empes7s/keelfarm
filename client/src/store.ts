@@ -260,7 +260,7 @@ export const useStore = create<State>((set, get) => ({
   voiceSpeaking: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
-  notifyChannels: { webhooks: { ntfy: { set: false, hint: '' } }, pushDevices: 0 },
+  notifyChannels: { webhooks: { ntfy: { set: false, hint: '', last: null } }, pushDevices: 0, devices: [], desktop: null },
   cloud: EMPTY_CLOUD,
   pong: {},
   restarting: false,

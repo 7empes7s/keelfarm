@@ -7,7 +7,9 @@ import { NOTIFY_EVENTS } from '../../../shared/notify';
 import type { NotifyChannel, NotifySettings as Notify, NotifyWebhook } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { showTestNote } from '../notifications';
-import { currentPush, disablePush, enablePush, pushSupport } from '../pwa';
+import { currentPush, disablePush, pushSupport } from '../pwa';
+import { ChannelHealth, NotifyGuide, NtfyQuick } from './NotifyGuide';
+import { suggestOfficeUrl } from './notifyGuide';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md';
 
@@ -164,33 +166,31 @@ const permissionNow = (): NotificationPermission | 'unsupported' => (typeof Noti
 
 /** Desktop notifications and Web Push, for the device this page is open on. */
 function ThisDevice({ notify, save }: { notify: Notify; save: Save }) {
-  const devices = useStore((s) => s.notifyChannels.pushDevices);
+  const devices = useStore((s) => s.notifyChannels.devices.length);
   const [permission, setPermission] = useState(permissionNow);
-  const [here, setHere] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const pushTest = useTest('push');
+  const [here, setHere] = useState(false);
   const support = typeof window === 'undefined' ? 'unsupported' : pushSupport();
   useEffect(() => {
     if (support === 'ok') void currentPush().then((s) => setHere(!!s), () => setHere(false));
   }, [support, devices]);
   const allow = async () => setPermission(await Notification.requestPermission());
-  const togglePush = async (on: boolean) => {
-    setBusy(true);
-    setError('');
-    try {
-      if (on) await enablePush();
-      else await disablePush();
-      setHere(on);
-      setPermission(permissionNow());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <>
+      <div className="notify-hook">
+        <div className="row wrap">
+          <b className="grow">Push to my devices</b>
+          <label className="toggle small">
+            <input type="checkbox" checked={notify.channels.push} onChange={(e) => save({ channels: { ...notify.channels, push: e.target.checked } })} /> On
+          </label>
+        </div>
+        <p className="muted small">Reaches a phone or PC even with the office closed.</p>
+        <NotifyGuide />
+        {here && (
+          <button className="btn btn-small btn-ghost" onClick={() => void disablePush().then(() => setHere(false))}>
+            Stop push to this device
+          </button>
+        )}
+      </div>
       <div className="notify-hook">
         <div className="row wrap">
           <b className="grow">Desktop notifications</b>
@@ -215,46 +215,6 @@ function ThisDevice({ notify, save }: { notify: Notify; save: Save }) {
           )}
         </div>
       </div>
-      <div className="notify-hook">
-        <div className="row wrap">
-          <b className="grow">Push to my devices</b>
-          <label className="toggle small">
-            <input type="checkbox" checked={notify.channels.push} onChange={(e) => save({ channels: { ...notify.channels, push: e.target.checked } })} /> On
-          </label>
-        </div>
-        <p className="muted small">
-          Reaches a phone or PC even with the office closed. {devices ? `${devices} device${devices === 1 ? '' : 's'} signed up.` : 'No devices signed up yet.'}
-        </p>
-        {support === 'insecure' && (
-          <p className="small term-error">
-            Push needs HTTPS (or localhost on the office's own PC). Open the office through an HTTPS address such as Tailscale Serve: see <a href={DOCS}>docs/pocket.md</a>.
-          </p>
-        )}
-        {support === 'unsupported' && <p className="small muted">This browser has no Web Push. On an iPhone, add the office to the home screen first, then turn push on from there.</p>}
-        {support === 'dev' && <p className="small muted">Push works in a built office (npm run build), not under the dev server.</p>}
-        {support === 'ok' && (
-          <div className="row wrap">
-            {here ? (
-              <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => void togglePush(false)}>
-                Stop push to this device
-              </button>
-            ) : (
-              <button className="btn btn-small btn-good" disabled={busy || here === null} onClick={() => void togglePush(true)}>
-                {busy ? 'Signing up…' : 'Push to this device'}
-              </button>
-            )}
-            <button className="btn btn-small" disabled={pushTest.busy || !devices} onClick={() => void pushTest.run()}>
-              Send test
-            </button>
-            <TestResult result={pushTest.result} ok={pushTest.ok} />
-          </div>
-        )}
-        {error && (
-          <div className="term-error small" role="alert">
-            {error}
-          </div>
-        )}
-      </div>
     </>
   );
 }
@@ -264,6 +224,12 @@ export function NotifySettings() {
   const [url, setUrl] = useState(notify.officeUrl);
   useEffect(() => setUrl(notify.officeUrl), [notify.officeUrl]);
   const save: Save = (patch) => void api.updateSettings({ notify: { ...notify, ...patch } }).catch(() => undefined);
+  // Opened at the office's HTTPS address (say Tailscale Serve) with no address for links yet: that's the one.
+  const suggested = suggestOfficeUrl(location, notify.officeUrl);
+  useEffect(() => {
+    if (suggested) save({ officeUrl: suggested });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggested]);
   return (
     <div className="card notify-settings">
       <h3>🔔 Notifications</h3>
@@ -290,12 +256,18 @@ export function NotifySettings() {
       <h4 className="notify-h">This device</h4>
       <ThisDevice notify={notify} save={save} />
       <h4 className="notify-h">Phone app</h4>
-      {WEBHOOKS.map((h) => (
-        <WebhookRow key={h.id} hook={h} notify={notify} save={save} />
-      ))}
+      <NtfyQuick />
+      <details className="notify-own">
+        <summary className="small">Use my own ntfy server or topic</summary>
+        {WEBHOOKS.map((h) => (
+          <WebhookRow key={h.id} hook={h} notify={notify} save={save} />
+        ))}
+      </details>
       <p className="muted small">
-        The topic and token stay on the office's PC and are never shown again. Setup for each, and how to reach the office from your phone safely: <a href={DOCS}>docs/pocket.md</a>.
+        The topic and token stay on the office's PC and are never shown again. More, and how to reach the office from your phone safely: <a href={DOCS}>docs/pocket.md</a>.
       </p>
+      <h4 className="notify-h">Channels</h4>
+      <ChannelHealth />
     </div>
   );
 }
