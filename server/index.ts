@@ -260,8 +260,14 @@ app.get(
 app.put('/api/notify/webhooks/:channel', route((req) => swarm.notifier.setWebhook(String(req.params.channel), req.body ?? {})));
 app.post('/api/notify/test', route((req) => swarm.notifier.test(str(req.body?.channel))));
 app.get('/api/notify/push/key', route(() => swarm.notifier.pushKey()));
-app.post('/api/notify/push/devices', route((req) => swarm.notifier.subscribe(req.body?.subscription)));
+app.post('/api/notify/push/devices', route((req) => swarm.notifier.subscribe(req.body?.subscription, req.body?.name)));
 app.delete('/api/notify/push/devices', route((req) => swarm.notifier.unsubscribe(str(req.body?.endpoint))));
+app.post('/api/notify/push/whois', route((req) => swarm.notifier.whois(str(req.body?.endpoint))));
+app.patch('/api/notify/push/devices/:id', route((req) => swarm.notifier.renameDevice(String(req.params.id), req.body?.name)));
+app.delete('/api/notify/push/devices/:id', route((req) => swarm.notifier.removeDevice(String(req.params.id))));
+app.post('/api/notify/push/devices/:id/test', route((req) => swarm.notifier.testDevice(String(req.params.id))));
+app.post('/api/notify/push/report', route((req) => swarm.notifier.report(req.body?.step, req.body?.error)));
+app.post('/api/notify/ntfy/quick', route(() => swarm.notifier.quickNtfy()));
 // The office's own update: Update now / Later
 app.post('/api/office/update', route((req) => swarm.updateOffice(req.body?.action)));
 // Claude's usage: resume full speed after a usage warning; in the demo, a warning or the limit on demand
