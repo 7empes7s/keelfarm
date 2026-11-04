@@ -2,14 +2,17 @@
 // (desktop notifications), Web Push to the manager's devices and the chat apps' webhooks. Webhook URLs and tokens live
 // in the secrets file next to the ElevenLabs key; the VAPID keys and push subscriptions in <SWARM_HOME>/push.json.
 // None of it is ever logged or sent to a browser, except the VAPID public key a browser subscribes with.
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { NOTIFY_WEBHOOKS, noteTab } from '../shared/notify.ts';
-import type { NoteView, NotifyChannel, NotifyChannelsView, NotifyEvent, NotifySettings, NotifyWebhook } from '../shared/types.ts';
+import { NTFY_SERVER, ntfyTopic } from '../shared/ntfy.ts';
+import type { NoteView, NotifyChannel, NotifyChannelsView, NotifyEvent, NotifyHealth, NotifySettings, NotifyWebhook, PushTestView } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import {
   due,
   nextDue,
+  clip,
   note,
   noteText,
   ntfyPayload,
@@ -73,6 +76,23 @@ const SUBJECT = 'https://github.com/leonvanzyl/cubefarm';
 
 interface Device extends PushSub {
   addedAt: number;
+  name: string;
+}
+
+/** A device's id in the settings: a hash of its endpoint, which is the secret that pushes to it and never leaves here. */
+export const deviceId = (endpoint: string) => crypto.createHash('sha256').update(endpoint).digest('base64url').slice(0, 12);
+
+/** A device's name from the settings: one short line, or `fallback`. */
+export function deviceName(raw: unknown, fallback = 'A device'): string {
+  const s = typeof raw === 'string' ? raw.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  return s ? s.slice(0, 40) : fallback;
+}
+
+/** How a test push went, from the push service's answer. */
+export function pushOutcome(status: number, why: string | null): PushTestView {
+  if (!why) return { outcome: 'delivered', status, message: `The push service accepted it (HTTP ${status}).` };
+  if (status === 404 || status === 410) return { outcome: 'expired', status, message: `This device's sign-up has expired (HTTP ${status}), so the office forgot it: sign it up again.` };
+  return { outcome: 'error', status, message: `It didn't go out: ${why}.` };
 }
 
 interface PushStore {
@@ -97,6 +117,8 @@ export class Notifier {
   private timer: NodeJS.Timeout | null = null;
   private seq = 0;
   private pushWrites: Promise<unknown> = Promise.resolve();
+  /** Each channel's last send (push: per device id), since the office started. */
+  private health = new Map<string, NotifyHealth>();
 
   constructor(private deps: NotifierDeps) {}
 
@@ -119,7 +141,7 @@ export class Notifier {
         vapid: checkVapidKeys(raw.vapid),
         devices: devices.flatMap((d) => {
           const sub = checkSubscription(d);
-          return sub ? [{ ...sub, addedAt: Number((d as Device).addedAt) || 0 }] : [];
+          return sub ? [{ ...sub, addedAt: Number((d as Device).addedAt) || 0, name: deviceName((d as Device).name) }] : [];
         }),
       };
     } catch {
@@ -127,10 +149,15 @@ export class Notifier {
     }
   }
 
-  /** The snapshot's notifyChannels: which chat apps are set up (a hint of each) and how many devices get push. */
+  /** The snapshot's notifyChannels: which chat apps are set up (a hint of each), the push devices and each one's last send. */
   channelsView(): NotifyChannelsView {
-    const webhooks = Object.fromEntries(NOTIFY_WEBHOOKS.map((c) => [c, { set: !!this.webhooks[c], hint: webhookHint(c, this.webhooks[c]) }])) as NotifyChannelsView['webhooks'];
-    return { webhooks, pushDevices: this.push.devices.length };
+    const last = (key: string) => this.health.get(key) ?? null;
+    const webhooks = Object.fromEntries(NOTIFY_WEBHOOKS.map((c) => [c, { set: !!this.webhooks[c], hint: webhookHint(c, this.webhooks[c]), last: last(c) }])) as NotifyChannelsView['webhooks'];
+    const devices = this.push.devices.map((d) => {
+      const id = deviceId(d.endpoint);
+      return { id, name: d.name, addedAt: d.addedAt, last: last(`push:${id}`) };
+    });
+    return { webhooks, pushDevices: devices.length, devices, desktop: last('desktop') };
   }
 
   /** Something happened: tell the manager on every channel that's on, unless the event is off or had its minute. */
@@ -184,15 +211,23 @@ export class Notifier {
     return { publicKey: this.push.vapid.publicKey };
   }
 
-  /** POST /api/notify/push/devices: this device's PushSubscription. The newest MAX_DEVICES are kept. */
-  async subscribe(raw: unknown): Promise<NotifyChannelsView> {
+  /** POST /api/notify/push/devices: this device's PushSubscription and a name for it. The newest MAX_DEVICES are kept. */
+  async subscribe(raw: unknown, name?: unknown): Promise<{ id: string }> {
     const sub = checkSubscription(raw);
     if (!sub) throw new HttpError(400, "That isn't a push subscription from a browser.");
     if (!this.push.vapid) throw new HttpError(409, 'Ask for the push key first.');
+    const old = this.push.devices.find((d) => d.endpoint === sub.endpoint);
     const devices = this.push.devices.filter((d) => d.endpoint !== sub.endpoint);
-    this.push.devices = [...devices, { ...sub, addedAt: this.now() }].slice(-MAX_DEVICES);
+    this.push.devices = [...devices, { ...sub, addedAt: this.now(), name: deviceName(name, old?.name) }].slice(-MAX_DEVICES);
     await this.savePush();
-    return this.changed();
+    this.deps.log(`notify: a device signed up for push (${this.push.devices.length} in all)`);
+    this.changed();
+    return { id: deviceId(sub.endpoint) };
+  }
+
+  /** POST /api/notify/push/whois: the id of the device with this endpoint, or null when the office doesn't know it. */
+  whois(endpoint: string): { id: string | null } {
+    return { id: this.push.devices.some((d) => d.endpoint === endpoint) ? deviceId(endpoint) : null };
   }
 
   /** DELETE /api/notify/push/devices: this device stops getting push. */
@@ -200,6 +235,58 @@ export class Notifier {
     this.push.devices = this.push.devices.filter((d) => d.endpoint !== endpoint);
     await this.savePush();
     return this.changed();
+  }
+
+  /** PATCH /api/notify/push/devices/:id: renames a device. */
+  async renameDevice(id: string, name: unknown): Promise<NotifyChannelsView> {
+    const d = this.device(id);
+    d.name = deviceName(name, d.name);
+    await this.savePush();
+    return this.changed();
+  }
+
+  /** DELETE /api/notify/push/devices/:id: removes a device (from any browser). */
+  async removeDevice(id: string): Promise<NotifyChannelsView> {
+    return this.unsubscribe(this.device(id).endpoint);
+  }
+
+  /** POST /api/notify/push/devices/:id/test: a test push to one device, and what its push service said. */
+  async testDevice(id: string): Promise<PushTestView> {
+    const d = this.device(id);
+    if (!this.push.vapid) throw new HttpError(409, 'Ask for the push key first.');
+    const n = note('test', 'Test from cubefarm', 'Push notifications from the office reach this device.');
+    const payload = JSON.stringify({ title: n.title, body: n.body, tag: `cubefarm-test-${this.now()}`, url: '/' });
+    let status = 0;
+    const why = await this.sendPush(d, payload, noteText(n), (s) => (status = s));
+    return pushOutcome(status, why);
+  }
+
+  /** POST /api/notify/push/report: where a device's push sign-up stopped, for the server log. Never throws. */
+  report(step: unknown, error: unknown): { ok: true } {
+    const s = typeof step === 'string' && /^[a-z]{1,20}$/i.test(step) ? step : 'unknown';
+    this.deps.log(redact(`notify: push sign-up stopped at "${s}": ${clip(typeof error === 'string' ? error : 'no reason given', 200)}`, this.secrets()));
+    return { ok: true };
+  }
+
+  /**
+   * POST /api/notify/ntfy/quick: one-tap ntfy. A new random topic on ntfy.sh replaces the saved one, and a test goes
+   * there (ntfy keeps it for hours, so the app shows it once it subscribes). The topic URL is shown this once.
+   */
+  async quickNtfy(): Promise<{ url: string; test: { ok: boolean; message: string } }> {
+    const url = `${NTFY_SERVER}/${ntfyTopic(crypto.randomBytes(16))}`;
+    await this.setWebhook('ntfy', { url });
+    try {
+      await this.test('ntfy');
+      return { url, test: { ok: true, message: 'A test went to the topic.' } };
+    } catch (err) {
+      return { url, test: { ok: false, message: err instanceof Error ? err.message : String(err) } };
+    }
+  }
+
+  private device(id: string): Device {
+    const d = this.push.devices.find((x) => deviceId(x.endpoint) === id);
+    if (!d) throw new HttpError(404, 'The office doesn\'t know that device (any more).');
+    return d;
   }
 
   // ---------- sending ----------
@@ -224,14 +311,19 @@ export class Notifier {
     const on = (c: NotifyChannel) => (only ? c === only : s.channels[c]);
     const at = this.now();
     const view: NoteView = { id: `${at.toString(36)}-${++this.seq}`, event: n.event, title: n.title, body: n.body, at, url: `/?tab=${noteTab(n.event)}` };
-    if (on('desktop')) this.deps.broadcast(view);
+    if (on('desktop')) {
+      this.deps.broadcast(view);
+      this.health.set('desktop', { at, ok: true, error: '' });
+    }
     const sends: Promise<string | null>[] = [];
     for (const c of NOTIFY_WEBHOOKS) if (on(c) && this.webhooks[c]) sends.push(this.send(this.webhookRequest(c, n, s.officeUrl)));
     if (on('push') && this.push.vapid) {
       const payload = JSON.stringify({ title: view.title, body: view.body, tag: `cubefarm-${view.id}`, url: view.url });
       for (const d of [...this.push.devices]) sends.push(this.sendPush(d, payload, noteText(n)));
     }
-    return Promise.all(sends);
+    const out = await Promise.all(sends);
+    this.changed();
+    return out;
   }
 
   private webhookRequest(c: NotifyWebhook, n: Note, officeUrl: string): NotifyRequest {
@@ -242,17 +334,19 @@ export class Notifier {
     return { channel: c, url: root, headers: { ...json, ...(w.ntfy!.token ? { Authorization: `Bearer ${w.ntfy!.token}` } : {}) }, body: JSON.stringify(ntfyPayload(n, topic, officeUrl)), text };
   }
 
-  private async send(req: NotifyRequest): Promise<string | null> {
+  /** POSTs one request and records how it went under `key` (the channel, or push:<device id>). */
+  private async send(req: NotifyRequest, key: string = req.channel, onStatus?: (status: number) => void): Promise<string | null> {
     const status = await this.deps.transport.post(req).catch(() => 0);
-    if (status >= 200 && status < 300) return null;
-    const why = sendError(req.channel, status);
-    this.deps.log(redact(`notify: ${LABEL[req.channel]} failed: ${why}`, this.secrets()));
+    onStatus?.(status);
+    const why = status >= 200 && status < 300 ? null : sendError(req.channel, status);
+    this.health.set(key, { at: this.now(), ok: !why, error: why ?? '' });
+    if (why) this.deps.log(redact(`notify: ${LABEL[req.channel]} failed: ${why}`, this.secrets()));
     return why;
   }
 
-  private async sendPush(d: Device, payload: string, text: string): Promise<string | null> {
+  private async sendPush(d: Device, payload: string, text: string, onStatus?: (status: number) => void): Promise<string | null> {
     const req = pushRequest(d, payload, this.push.vapid!, SUBJECT, this.now());
-    const why = await this.send({ channel: 'push', ...req, text });
+    const why = await this.send({ channel: 'push', ...req, text }, `push:${deviceId(d.endpoint)}`, onStatus);
     // The browser dropped the subscription (unsubscribed, or site data cleared): stop pushing to it.
     if (why && /HTTP (404|410)/.test(why)) await this.unsubscribe(d.endpoint).catch(() => undefined);
     return why;

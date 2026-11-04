@@ -1,7 +1,7 @@
 import { useStore } from './store';
 import type { PongResult } from '../../shared/pong';
 import type { AgentStyle } from '../../shared/looks';
-import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 
@@ -126,7 +126,8 @@ export const api = {
   doctorIgnore: (id: string) => call<DoctorFinding[]>('POST', '/api/doctor/ignore', { id }),
   /** The demo only: the office doctor's scenarios. */
   demoDoctor: (action: 'restart' | 'stuck' | 'later' | 'unclosed' | 'check') => call<{ text: string; doctor: DoctorFinding[] }>('POST', '/api/doctor/demo', { action }),
-  messageCeo: (text: string) => call('POST', '/api/ceo/message', { text }),
+  /** A message for the CEO, replying to message `replyTo` if given; answers with the posted message's id. */
+  messageCeo: (text: string, replyTo?: number) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo }),
   ceoReview: () => call('POST', '/api/ceo/review'),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */
@@ -155,8 +156,15 @@ export const api = {
   /** The demo only: every cloud agent's sign-in expires. */
   expireSignIns: () => call('POST', '/api/cloud/demo-expire'),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
-  pushSubscribe: (subscription: PushSubscriptionJSON) => call<NotifyChannelsView>('POST', '/api/notify/push/devices', { subscription }),
+  pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),
   pushUnsubscribe: (endpoint: string) => call<NotifyChannelsView>('DELETE', '/api/notify/push/devices', { endpoint }),
+  pushWhois: (endpoint: string) => call<{ id: string | null }>('POST', '/api/notify/push/whois', { endpoint }, false),
+  renamePushDevice: (id: string, name: string) => call<NotifyChannelsView>('PATCH', `/api/notify/push/devices/${encodeURIComponent(id)}`, { name }),
+  removePushDevice: (id: string) => call<NotifyChannelsView>('DELETE', `/api/notify/push/devices/${encodeURIComponent(id)}`),
+  testPushDevice: (id: string) => call<PushTestView>('POST', `/api/notify/push/devices/${encodeURIComponent(id)}/test`, {}, false),
+  /** Where this device's push sign-up stopped, for the office's log. */
+  pushReport: (step: string, error: string) => call('POST', '/api/notify/push/report', { step, error }, false),
+  quickNtfy: () => call<{ url: string; test: { ok: boolean; message: string } }>('POST', '/api/notify/ntfy/quick', {}, false),
   // office progression (#210)
   buyDecor: (repoId: string, item: DecorItem) => call<ProgressView>('POST', `${r(repoId)}/decor/buy`, { item }),
   placeDecor: (repoId: string, body: { item: DecorItem; slot: string | null; from: string | null }) => call<ProgressView>('POST', `${r(repoId)}/decor/place`, body),

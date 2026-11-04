@@ -300,10 +300,11 @@ function compactRequest(r: HireRequestView, secrets: readonly string[]): HireReq
   };
 }
 
-/** A phone message: its text only (no voice), scrubbed and cut short. */
+/** A phone message: its text and what it replies to (no voice or delivery), scrubbed and cut short. */
 export function compactMessage(m: PhoneMessage, secrets: readonly string[] = []): PhoneMessage {
   const out: PhoneMessage = { id: m.id, from: m.from, text: text(m.text, 600, secrets), at: m.at };
   if (m.requestId) out.requestId = m.requestId;
+  if (m.replyTo !== undefined) out.replyTo = m.replyTo;
   return out;
 }
 

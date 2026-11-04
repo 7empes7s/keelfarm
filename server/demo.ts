@@ -7,6 +7,7 @@ import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
+import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
 import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory } from './metrics.ts';
@@ -1091,6 +1092,14 @@ const GENERIC: Profile = {
   playbook: '## Conventions\n- Small modules, tests next to the code\n## Skills\n- frontend-design for UI work',
 };
 
+/** The demo CEO's answer to a reply: the quote it answers, then a word on the answer. */
+export function answerReply({ quote, reply }: { quote: string; reply: string }): string {
+  const q = quote.length > 140 ? `${quote.slice(0, 139).trim()}…` : quote;
+  const said = reply.length > 90 ? `${reply.slice(0, 89).trim()}…` : reply;
+  const answer = /^(yes|yep|sure|ok(ay)?|go)\b/i.test(said) ? "Great, I'll go ahead with that." : /^(no|nope|don't|stop)\b/i.test(said) ? "Understood, I'll leave it as it is." : `Noted: "${said}".`;
+  return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
+}
+
 /** A floor in company_status, as far as the demo CEO reads it. */
 export interface DemoFloor {
   floor: number;
@@ -1268,6 +1277,9 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      // A reply to one of the CEO's messages: answer it, quoting what it answers.
+      const reply = parseForwarded(text);
+      if (reply) return answerReply(reply);
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);
       const closeFloor = close && (s.floors.find((f) => f.backlog.some((i) => i.number === Number(close[1]))) ?? s.floors[0]);
@@ -1290,6 +1302,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       }
       const agents = s.floors.reduce((n, f) => n + f.team.size, 0);
       const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+      const nextFloor = s.floors.find((f) => f.backlog.length);
+      const next = nextFloor && { floor: nextFloor.floor, issue: nextFloor.backlog[0] };
       const pending = s.pendingChanges.length;
       // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders.
       const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} |`);
@@ -1315,6 +1329,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
+        ...(next ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`] : []),
       ].join('\n');
     },
   };
@@ -1361,8 +1376,9 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         setTimeout(() => {
           if (stopped || done) return;
           const said = text.split('\n').slice(1).join(' ').trim() || text;
-          cb.log([{ kind: 'text', text: `● Noted: "${short(said, 70)}"` }]);
-          cb.turn?.(`Noted, I'll factor that in: "${short(said, 90)}"`);
+          const reply = parseForwarded(said);
+          cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
+          cb.turn?.(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`);
         }, 1500),
       );
     },

@@ -65,6 +65,7 @@ import { effectiveModel } from '../shared/models.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
+import { forwardText, nextDelivery } from '../shared/chat.ts';
 import type {
   AgentActivity,
   AgentCli,
@@ -97,6 +98,7 @@ import type {
   QaCheck,
   QaView,
   RepoView,
+  ServerDelivery,
   ServerEvent,
   SwarmSettings,
   UsageView,
@@ -4273,7 +4275,7 @@ export class Swarm {
   private enqueueCeo(job: CeoJob) {
     const q = this.state.ceo.queue;
     const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || (j.repoId === job.repoId && j.prNumber === job.prNumber)));
-    if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}` } : job;
+    if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}`, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
     else q.push(job);
     this.emitCeo();
     this.save();
@@ -4328,7 +4330,10 @@ export class Swarm {
       { kind: 'system', text: '' },
       { kind: 'system', text: `━━━ ${label} ━━━` },
     ]);
-    if (job.kind === 'chat') this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
+    if (job.kind === 'chat') {
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
+      if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
+    }
     if (job.kind === 'review') {
       this.state.ceo.lastReviewAt = Date.now();
       this.state.ceo.lastFingerprint = this.fingerprint();
@@ -4375,7 +4380,10 @@ export class Swarm {
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
-        turn: (text) => this.postMessage('ceo', text),
+        turn: (text) => {
+          this.postMessage('ceo', text);
+          this.markDelivery('all', 'replied');
+        },
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         finished: (result) => this.onCeoFinished(a, result),
@@ -4416,21 +4424,42 @@ export class Swarm {
     setTimeout(() => this.schedule(), 300);
   }
 
-  /** The manager's phone → the CEO. Injected into a running session, otherwise the CEO picks it up next. */
-  async messageCeo(text: string) {
+  /** The manager's phone → the CEO, with a quote of the message it replies to. Injected into a running session, otherwise the CEO picks it up next. */
+  async messageCeo(text: string, replyTo?: number) {
     const t = text.trim().slice(0, 4000);
     if (!t) throw new HttpError(400, 'Empty message');
     const a = this.ceo();
-    this.postMessage('manager', t);
+    const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
+    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent' });
+    const forward = forwardText(t, quoted);
     const rt = this.agentRt.get(a.id)!;
     if (rt.session) {
-      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${t}` }]);
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
-      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n${t}`);
-      return;
+      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n${forward}`);
+      this.markDelivery([m.id], 'read');
+      return { id: m.id };
     }
-    this.enqueueCeo({ kind: 'chat', text: t, at: Date.now() });
+    this.enqueueCeo({ kind: 'chat', text: forward, messageIds: [m.id], at: Date.now() });
+    return { id: m.id };
+  }
+
+  /** Moves the manager's messages along (shared/chat.ts nextDelivery) and tells the phones which ones moved. */
+  private markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
+    const moved: number[] = [];
+    let to: ServerDelivery | null = null;
+    for (const m of this.state.messages) {
+      if (m.from !== 'manager' || !m.delivery || (ids !== 'all' && !ids.includes(m.id))) continue;
+      const next = nextDelivery(m.delivery, ev);
+      if (next === m.delivery) continue;
+      m.delivery = next as ServerDelivery;
+      to = m.delivery;
+      moved.push(m.id);
+    }
+    if (!to) return;
+    this.broadcast({ type: 'delivery', ids: moved, delivery: to });
+    this.save();
   }
 
   requestReview() {
@@ -5024,8 +5053,8 @@ export class Swarm {
 
   // ---------- the phone ----------
 
-  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string) {
-    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}) };
+  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, extra: Pick<PhoneMessage, 'replyTo' | 'delivery'> = {}) {
+    const m: PhoneMessage = { id: this.messageSeq++, from, text: text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     this.state.messages.push(m);

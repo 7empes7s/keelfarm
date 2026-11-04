@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { demoGrow, demoPastWeek, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { answerReply, demoGrow, demoPastWeek, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { forwardText, parseForwarded } from '../shared/chat.ts';
 import { KEEP_MS, opsView, startOfDay } from './metrics.ts';
 
 describe('fixPromptPull', () => {
@@ -102,5 +103,14 @@ describe("the demo CEO's team sizes", () => {
     expect(demoShrink(floor({ size: 5, free: 3 }, { issuesReadyToStart: 1 }))).toBeNull();
     expect(demoShrink(floor({ size: 5, free: 3 }, { prsAwaitingQa: 1 }))).toBeNull();
     expect(demoShrink(floor({ size: 5, free: 3, pendingLetGos: 2 }))).toBeNull(); // already on their way out
+  });
+});
+
+describe("the demo CEO's answer to a reply", () => {
+  it('quotes the message it answers and reads Yes / No', () => {
+    const forwarded = parseForwarded(forwardText('Yes', { from: 'ceo', text: 'Shall I keep the team on it?' }))!;
+    expect(answerReply(forwarded)).toMatch(/^> Shall I keep the team on it\?\n\nGreat, I'll go ahead/);
+    expect(answerReply({ quote: 'Merge #4?', reply: 'No' })).toContain("I'll leave it");
+    expect(answerReply({ quote: 'q', reply: 'Later, after the release' })).toContain('Noted: "Later, after the release"');
   });
 });
