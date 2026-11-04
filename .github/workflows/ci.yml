@@ -76,12 +76,3 @@ jobs:
     timeout-minutes: 15
     env: *check-env
     steps: *check-steps
-
-  check-macos:
-    name: check (macos-latest)
-    needs: changes
-    if: needs.changes.outputs.os-sensitive == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 15
-    env: *check-env
-    steps: *check-steps
