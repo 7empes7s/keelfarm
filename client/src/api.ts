@@ -130,6 +130,7 @@ export const api = {
   messageCeo: (text: string, replyTo?: number) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo }),
   ceoReview: () => call('POST', '/api/ceo/review'),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
+  artifact: (messageId: number, artifactId: string) => call<{ markdown: string }>('GET', `/api/messages/${messageId}/artifacts/${encodeURIComponent(artifactId)}`),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */
   pongResult: (repoId: string, result: PongResult) => call('POST', `${r(repoId)}/pong`, result),
   /** Decides a team change: a hire with the manager's changes to the new agent, if any. */

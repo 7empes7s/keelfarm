@@ -3,11 +3,13 @@ import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
 import { DELIVERY_LABEL, excerpt, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
+import { suggestionsFor } from '../../../shared/chatParts';
 import { speechText } from '../../../shared/speech';
 import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
 import { retrySend, sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { Markdown } from './Markdown';
+import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
 import { MessageBox } from './MessageBox';
 import { MicButton } from './MicButton';
 import { handsFreeProblem, setHandsFree } from './mic';
@@ -337,27 +339,6 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
   );
 }
 
-/** Copies text, also where the async clipboard isn't available (a phone on the office's plain-http address). */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // fall back below
-  }
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', '');
-  ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
-  document.body.appendChild(ta);
-  ta.select();
-  const ok = document.execCommand('copy');
-  ta.remove();
-  return ok;
-}
-
 const SWIPE_PX = 60;
 const LONG_PRESS_MS = 500;
 
@@ -374,6 +355,7 @@ interface BubbleProps {
   onQuote: (id: number) => void;
   onReply: (id: number) => void;
   onActions: (item: Item) => void;
+  onArtifact: (messageId: number, artifactId: string) => void;
 }
 
 const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
@@ -404,7 +386,7 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
   );
 }
 
-function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions }: BubbleProps) {
+function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact }: BubbleProps) {
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
@@ -493,8 +475,9 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
             )}
           </div>
         ) : (
-          <Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} />
+          text && <Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} />
         )}
+        {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
@@ -586,6 +569,8 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [menu, setMenu] = useState<Item | null>(null);
+  const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
+  const [artifactList, setArtifactList] = useState(false);
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
@@ -651,6 +636,11 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     setReplyTo(id);
     form.current?.querySelector('textarea')?.focus();
   };
+  const replyAbout = (id: number, title: string) => {
+    setReplyTo(id);
+    setText((t) => t || `About “${title}”: `);
+    requestAnimationFrame(() => form.current?.querySelector('textarea')?.focus());
+  };
   const jump = (id: number) => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-msg="${id}"]`);
     if (!el) return;
@@ -672,8 +662,12 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         : info.queue.length
           ? `next up: ${info.queue[0].label}`
           : 'available';
-  const question = yesNoFor(messages);
+  const offer = suggestionsFor(messages);
+  const offered = offer !== null && !outbox.some((o) => o.replyTo === offer.id) ? offer : null;
+  const question = offer ? null : yesNoFor(messages);
   const answered = question !== null && outbox.some((o) => o.replyTo === question);
+  const shown = artifact && byId.get(artifact.messageId)?.artifacts?.find((a) => a.id === artifact.artifactId);
+  const artifactCount = messages.reduce((n, m) => n + (m.artifacts?.length ?? 0), 0);
   const quotedNow = replyTo === null ? undefined : byId.get(replyTo);
   const bubble = (item: Item, key: string | number) => {
     const to = item.m ? item.m.replyTo : item.out.replyTo;
@@ -689,6 +683,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         onQuote={jump}
         onReply={reply}
         onActions={setMenu}
+        onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
       />
     );
   };
@@ -701,6 +696,11 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           <b>{ceo.name}</b> <span className="muted small">CEO</span>
           <div className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</div>
         </div>
+        {artifactCount > 0 && (
+          <button type="button" className="hands-free" onClick={() => setArtifactList(true)} aria-haspopup="dialog" title="Every artifact in this conversation, newest first">
+            📄 Artifacts ({artifactCount})
+          </button>
+        )}
         <HandsFreeToggle ceoName={ceo.name} />
       </div>
       <div className="chat-log-wrap">
@@ -729,6 +729,15 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
                 </div>
               )}
               {bubble({ m }, m.id)}
+              {m.id === offered?.id && (
+                <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
+                  {offered.suggestions!.map((s) => (
+                    <button key={s} type="button" className="suggestion-chip" onClick={() => send(s, offered.id)} aria-label={`Reply “${s}” to ${ceo.name}`}>
+                      ↩ {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
@@ -748,6 +757,19 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           </button>
         )}
         {menu && <MessageActions item={menu} ceoName={ceo.name} onReply={reply} onClose={() => setMenu(null)} />}
+        {shown && artifact && (
+          <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
+        )}
+        {artifactList && (
+          <ArtifactList
+            messages={messages}
+            onClose={() => setArtifactList(false)}
+            onOpen={(messageId, artifactId) => {
+              setArtifactList(false);
+              setArtifact({ messageId, artifactId });
+            }}
+          />
+        )}
       </div>
       <div className="quick">
         {question !== null && !answered && (

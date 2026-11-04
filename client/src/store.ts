@@ -5,7 +5,7 @@ import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
-import { speechText } from '../../shared/speech';
+import { messageSpeech } from '../../shared/speech';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
@@ -485,7 +485,7 @@ export const useStore = create<State>((set, get) => ({
           void import('./ui/voiceMessages').then((v) => v.speakMessage(ev.message, arrived, wait));
         }
         // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
-        if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${speechText(ev.message.text, 600)}`);
+        if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
         if (ev.message.from === 'ceo' && !reading) {
           if (!speak) chirp();
           const ceo = get().agents[CEO_ID]?.name ?? 'CEO';

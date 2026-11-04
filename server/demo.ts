@@ -1129,6 +1129,8 @@ const GENERIC: Profile = {
 export function answerReply({ quote, reply }: { quote: string; reply: string }): string {
   const q = quote.length > 140 ? `${quote.slice(0, 139).trim()}…` : quote;
   const said = reply.length > 90 ? `${reply.slice(0, 89).trim()}…` : reply;
+  if (/\bplan\b/i.test(said))
+    return `> ${q}\n\nHere it is.\n\n\`\`\`artifact title="The plan"\n## Next milestone\n\n1. Finish the issues in progress\n2. Merge what passed QA\n3. Plan the next features with you\n\n| Step | Who | When |\n| --- | --- | --- |\n| Build | the team | today |\n| QA | the team | as PRs land |\n| Merge | the office | once checks pass |\n\`\`\`\n\n(I'm the demo CEO, so nothing changes.)`;
   const answer = /^(yes|yep|sure|ok(ay)?|go)\b/i.test(said) ? "Great, I'll go ahead with that." : /^(no|nope|don't|stop)\b/i.test(said) ? "Understood, I'll leave it as it is." : `Noted: "${said}".`;
   return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
 }
@@ -1344,20 +1346,24 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const nextFloor = s.floors.find((f) => f.backlog.length);
       const next = nextFloor && { floor: nextFloor.floor, issue: nextFloor.backlog[0] };
       const pending = s.pendingChanges.length;
-      // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders.
-      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} |`);
+      // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders, the longer part as an
+      // artifact card and the question with suggestion boxes (shared/chatParts.ts).
+      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} | ${f.capacity.issuesReadyToStart} | ${f.capacity.prsAwaitingQa} | ${f.team.free} |`);
       return [
-        `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues.`,
+        `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues. The floor-by-floor report is attached.`,
         '',
         '- The team is *heads down* on the backlog',
         `- ${pending ? `**${pending}** team change${pending === 1 ? ' is' : 's are'} waiting for your decision` : 'No team changes waiting on you'}`,
         '  - QA re-tests every PR after a fix',
         '',
-        '| Floor | Repo | Agents | Issues | PRs |',
-        '| ---: | --- | ---: | ---: | ---: |',
-        ...(rows.length ? rows : ['| – | no projects yet | 0 | 0 | 0 |']),
+        '```artifact title="Floor report"',
+        '## Every floor',
         '',
-        'What I would do next:',
+        '| Floor | Repo | Agents | Issues | PRs | Ready to start | Waiting for QA | Free agents |',
+        '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+        ...(rows.length ? rows : ['| – | no projects yet | 0 | 0 | 0 | 0 | 0 | 0 |']),
+        '',
+        '## What I would do next',
         '',
         '1. Merge anything that passed QA',
         '2. Run `npm run build` on each floor before the next milestone',
@@ -1366,9 +1372,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```bash',
         'SWARM_HOME=/tmp/cubefarm-demo SWARM_PORT=5260 node --import tsx server/index.ts --demo',
         '```',
+        '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
-        ...(next ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`] : []),
+        ...(next
+          ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
+          : []),
       ].join('\n');
     },
   };

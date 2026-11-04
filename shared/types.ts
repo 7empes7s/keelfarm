@@ -639,6 +639,16 @@ export interface PhoneMessage {
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
   replyTo?: number; // the manager's message replies to this one (its id)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
+  suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
+  artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+}
+
+/** A CEO message's artifact: a titled markdown document shown as a card. */
+export interface ChatArtifact {
+  id: string; // `<message id>-<n>`
+  title: string;
+  lead: string; // its first line, plain words, for the card
+  markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
 export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
