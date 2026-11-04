@@ -14,3 +14,36 @@ export function refusal(state: { branch: string; defaultBranch: string; dirty: b
 export function stepsFor(changedFiles: string[], opts: { startMode: boolean }): { install: boolean; build: boolean };
 export function rollbackPlan(progress: { moved: boolean; installed: boolean; built: boolean }): { reset: boolean; install: boolean; build: boolean };
 export function isUpdateCommand(line: string): boolean;
+
+export const BOOT_TIMEOUT_MS: number;
+export const PROBATION_MS: number;
+export type PreflightStep = 'install' | 'test' | 'build' | 'boot';
+export interface StepResult {
+  step: string;
+  ok: boolean;
+  error?: string | null;
+}
+export function preflightSteps(opts: { startMode: boolean }): PreflightStep[];
+export function preflightOutcome(steps: string[], results: StepResult[]): { go: boolean; error: string | null };
+export function isOfficeState(json: unknown): boolean;
+export interface Verdict {
+  done: boolean;
+  ok: boolean;
+  error: string | null;
+}
+export function probationVerdict(watch: {
+  exited: number | string | null | undefined;
+  elapsedMs: number;
+  lastProbe: { ok: boolean; error: string | null } | null;
+  everAnswered: boolean;
+  windowMs?: number;
+}): Verdict;
+export interface PendingMarker {
+  from: string;
+  to: string;
+  startedAt: number;
+  rollingBack: boolean;
+}
+export function parseMarker(raw: string): PendingMarker | null;
+export function pendingAction(marker: PendingMarker | null, head: string): 'rollback' | 'clear' | 'none';
+export function officeUrl(env?: Record<string, string | undefined>): string;
