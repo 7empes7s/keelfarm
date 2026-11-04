@@ -77,7 +77,3 @@ export function holdUps(issues: { number: number; body: string }[]) {
   }
   return out;
 }
-
-// Throwaway (reverted): the ratchet must fail on these.
-export const ratchetDemoUnused = 1;
-Promise.resolve().then(() => {});
