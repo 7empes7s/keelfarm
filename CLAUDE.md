@@ -138,6 +138,7 @@ Shared (`shared/`, imported by both sides):
 - `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings).
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
+- `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
 - `looks.ts`: the look editor's options and `cleanStyle` (an agent's `style`, checked on the server).
 

@@ -566,6 +566,13 @@ export interface HireRequestView {
   decidedBy: 'manager' | 'auto' | null;
 }
 
+/**
+ * Where a manager's message to the CEO is (shared/chat.ts nextDelivery): sending and failed live only in the phone
+ * that sent it; the office records sent, read (the CEO's session took it, or their reply job started) and replied.
+ */
+export type Delivery = 'sending' | 'sent' | 'read' | 'replied' | 'failed';
+export type ServerDelivery = Extract<Delivery, 'sent' | 'read' | 'replied'>;
+
 /** One message in the phone thread between the manager and the CEO. */
 export interface PhoneMessage {
   id: number;
@@ -574,6 +581,8 @@ export interface PhoneMessage {
   at: number;
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
+  replyTo?: number; // the manager's message replies to this one (its id)
+  delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
 }
 
 export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
@@ -657,6 +666,8 @@ export type ServerEvent =
   | { type: 'request'; request: HireRequestView }
   | { type: 'ceo'; ceo: CeoInfo }
   | { type: 'message'; message: PhoneMessage }
+  /** The manager's messages moved on: the CEO read them, or replied. */
+  | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
