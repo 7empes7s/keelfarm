@@ -49,7 +49,7 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 | `npm run bench -- --port <yours>` | after a build: the scale benchmark (`scripts/bench.mjs`): boots the big-company demo headless, visits the lobby and three floors, writes FPS, frame-time p95, CPU per frame, draw calls, triangles, heap, audio nodes and websocket traffic to a JSON report (`--help`) |
 | `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs) |
 
-CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `lint` → `test` → `build` → package smoke test, for every PR
+CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test → `lint`, for every PR
 and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`, on `ubuntu-latest` always and on `windows-latest`
 unless a PR touches nothing OS-sensitive (only `client/`, `e2e/`, docs: it shows as skipped). No macOS job: this
 copy's office runs on Linux, and GitHub's macOS runners often never start.
