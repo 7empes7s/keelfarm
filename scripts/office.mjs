@@ -226,6 +226,7 @@ function npm(args, { cwd = root, env = process.env } = {}) {
     log(`npm ${args.join(' ')}${cwd === root ? '' : `  (in ${cwd})`}`);
     const [cmd, cmdArgs] = WIN ? ['cmd.exe', ['/d', '/s', '/c', `npm ${args.join(' ')}`]] : ['npm', args];
     const proc = spawn(cmd, cmdArgs, { cwd, env, stdio: ['ignore', 'inherit', 'pipe'], windowsHide: true, detached: !WIN });
+    if (cwd !== root) trackPreflight(proc);
     let last = '';
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -309,7 +310,9 @@ async function runUpdate(trigger, asked) {
     stage = 'preflight';
     log(`Preflight: trying ${short(result.target)} in a throwaway worktree before switching to it`);
     await preflight(result.target);
+    if (shuttingDown) return;
   } catch (err) {
+    if (shuttingDown) return; // the preflight was stopped with the launcher: nothing to report
     Object.assign(result, { ok: false, stage, error: oneLine(err) });
     warn(`Update ${stage === 'check' ? 'refused' : `to ${short(result.target)} refused in the preflight`}: ${result.error}. Still on ${short(result.from || '?')}`);
     return keep(result, asked);
@@ -472,6 +475,7 @@ async function bootProbe(dir, env) {
     windowsHide: true,
     detached: !WIN,
   });
+  trackPreflight(proc);
   let last = '';
   let lastError = '';
   const show = (chunk) => {
@@ -580,6 +584,12 @@ function freePort() {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const preflightProcs = new Set(); // what the preflight runs: stopping the launcher kills it rather than waiting
+function trackPreflight(proc) {
+  preflightProcs.add(proc);
+  proc.once('exit', () => preflightProcs.delete(proc));
+}
 
 // ---------- the probation ----------
 
@@ -726,6 +736,7 @@ async function shutdown(code) {
   if (shuttingDown) return;
   shuttingDown = true;
   log('Stopping the office');
+  for (const proc of preflightProcs) killTree(proc); // the live folder doesn't need it to finish
   await stopChildren('stop');
   if (updating) {
     log('Letting the update finish so this folder stays consistent (press Ctrl+C again to quit now)');
