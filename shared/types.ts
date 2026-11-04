@@ -384,10 +384,34 @@ export interface NotifySettings {
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
 }
 
-/** Which chat apps have a webhook saved (only a hint of it: the secret never leaves the server) and how many devices get push. */
+/** A channel's last send since the office started: when, and whether it arrived (else why not). */
+export interface NotifyHealth {
+  at: number;
+  ok: boolean;
+  error: string;
+}
+
+/** A device that gets Web Push. `id` is derived from its subscription, which never leaves the server. */
+export interface PushDeviceView {
+  id: string;
+  name: string;
+  addedAt: number;
+  last: NotifyHealth | null;
+}
+
+/** Which chat apps have a webhook saved (only a hint of it: the secret never leaves the server), the push devices and each channel's last send. */
 export interface NotifyChannelsView {
-  webhooks: Record<NotifyWebhook, { set: boolean; hint: string }>;
+  webhooks: Record<NotifyWebhook, { set: boolean; hint: string; last: NotifyHealth | null }>;
   pushDevices: number;
+  devices: PushDeviceView[];
+  desktop: NotifyHealth | null;
+}
+
+/** A test push to one device: the push service took it, the device is gone (and dropped), or another error. */
+export interface PushTestView {
+  outcome: 'delivered' | 'expired' | 'error';
+  status: number;
+  message: string;
 }
 
 /** A notification the office sent: a browser with the office open but hidden shows it as a desktop notification. */
