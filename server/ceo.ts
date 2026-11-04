@@ -32,7 +32,7 @@ export interface OfficeHandlers {
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
-  configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string }): string;
+  configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
   closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>;
@@ -53,6 +53,7 @@ export interface OfficeTools {
 
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 const CLI = z.enum(['claude', 'codex', 'opencode']);
+const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const run = async (fn: () => string | Promise<string>) => {
@@ -115,12 +116,16 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'configure_agent',
-      "Change an agent's coding agent, model or reasoning effort. Takes effect from their next task.",
+      "Change an agent's coding agent, model, reasoning effort or Tools & skills switches. Takes effect from their next task.",
       {
         agent_id: z.string(),
         cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
         model: z.string().optional().describe('"" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
+        // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.
+        tools_off: TOOL_REFS.describe('Plugins, skills, MCP servers or tools to switch off for them, when the manager asks'),
+        tools_on: TOOL_REFS.describe('… to switch on for them'),
+        tools_reset: TOOL_REFS.describe('… back to the office-wide switch'),
       },
       (a) => run(() => h.configureAgent(a)),
     ),

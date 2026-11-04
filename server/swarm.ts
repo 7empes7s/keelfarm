@@ -54,6 +54,7 @@ import { Notifier } from './notifier.ts';
 import { clip, plainText, stuckAgents } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
+import { cleanSwitches, DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, isToolId, mergeSwitches, officeItems, sessionTools, setSwitch, toolArgsLine, toolSettings, type SessionTools, type ToolInventory, type ToolSwitches } from '../shared/tooling.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
 import { WeatherService } from './weather.ts';
 import { blockers, holdUps, waitsMessage } from '../shared/issues.ts';
@@ -145,6 +146,7 @@ interface PersistedAgent {
   host?: MachineHost; // 'box': their machine is an Upstash Box (docs/cloud.md); absent: a folder on this computer
   boxCli?: BoxCliRecord | null; // a cloud agent's live CLI in their Box, to pick up again after a restart
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
+  tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
   status: AgentStatus;
   issueNumber: number | null;
   issueTitle: string | null;
@@ -514,6 +516,7 @@ export class Swarm {
       listen: { ...DEFAULT_LISTEN },
       notify: notifySettings(DEFAULT_NOTIFY, {}),
       cloud: { ...DEFAULT_CLOUD },
+      tools: DEFAULT_TOOL_SETTINGS,
     },
     repos: [],
     agents: [],
@@ -591,6 +594,7 @@ export class Swarm {
   };
   private lastOfficeView = '';
   private clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)
+  private tooling: ToolInventory = { ...EMPTY_INVENTORY, items: officeItems() }; // Tools & skills (scanned at startup and on demand)
   /** Phone messages read aloud. The demo keeps its own key and clips, so it never touches the real ones. */
   readonly voice: Voice;
   /** The real local weather (Settings → Weather), read by the server so it's cached and survives a restart. */
@@ -705,6 +709,7 @@ export class Swarm {
           task: a.task ?? (a.issueNumber ? 'issue' : null),
           cli: isCli(a.cli) ? a.cli : '',
           sessionCli: a.sessionCli ?? (a.sessionId ? 'claude' : null),
+          tools: cleanSwitches(a.tools),
         })),
         qa: (loaded.qa ?? []).map((q) => ({
           ...q,
@@ -769,6 +774,7 @@ export class Swarm {
       this.state.settings.listen = listenSettings(DEFAULT_LISTEN, loaded.settings?.listen);
       this.state.settings.notify = notifySettings(DEFAULT_NOTIFY, loaded.settings?.notify);
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
+      this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
         Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
@@ -901,6 +907,7 @@ export class Swarm {
         this.broadcast({ type: 'clis', clis });
       })
       .catch((err) => console.warn('could not look for agent CLIs', err));
+    void this.refreshTooling();
     await this.journal.start();
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
@@ -1090,6 +1097,7 @@ export class Swarm {
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
+      ...(a.role !== 'ceo' ? { tools: a.tools ?? {} } : {}), // always sent: a patch can't drop a field
     };
   }
 
@@ -1151,6 +1159,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      tooling: this.tooling,
     };
   }
 
@@ -2689,6 +2698,54 @@ export class Swarm {
     return { terminal: this.terminalFor(a), cli, label: `${a.name}${what ? ` · ${what}` : ''}`.slice(0, 80).trim(), resumeSessionId: resume };
   }
 
+  /**
+   * What the manager's Tools & skills switches take away from a Claude Code session (the Agent SDK runs Claude Code
+   * too), logged so it shows in the agent's terminal. Codex and OpenCode load their own setup: nothing.
+   */
+  private sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined): SessionTools | undefined {
+    if ((cli ?? 'claude') !== 'claude') return undefined;
+    const t = this.state.settings.tools;
+    const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
+    if (tools.disallowed.length || tools.disabledPlugins.length) this.appendLog(a, [{ kind: 'system', text: `🧰 Tools & skills off this session: claude … ${toolArgsLine(tools)}` }]);
+    return tools;
+  }
+
+  // ---------- tools & skills ----------
+
+  /** Scan what a Claude Code session here loads (server/tooling.ts); the floors' checkouts are its projects. */
+  async refreshTooling() {
+    if (this.tooling.scanning) return this.tooling;
+    this.tooling = { ...this.tooling, scanning: true };
+    this.broadcast({ type: 'tooling', tooling: this.tooling });
+    const dirs = this.state.repos.map((r) => this.backend.mainDir(r.fullName));
+    try {
+      this.tooling = await this.backend.toolInventory(dirs);
+    } catch (err) {
+      this.tooling = { ...this.tooling, scanning: false, scannedAt: Date.now(), error: `Could not read your Claude Code setup: ${oneLine(err)}` };
+    }
+    this.broadcast({ type: 'tooling', tooling: this.tooling });
+    return this.tooling;
+  }
+
+  /** One Tools & skills switch: scope 'everyone', 'ceo' or an agent's id; on null follows the scope above. */
+  setToolSwitch(scope: string, id: unknown, on: unknown) {
+    if (!isToolId(id)) throw new HttpError(400, 'Pick a tool, plugin, skill or MCP server from the list.');
+    if (on !== true && on !== false && on !== null) throw new HttpError(400, 'on must be true, false or null.');
+    const t = this.state.settings.tools;
+    if (scope === 'everyone' || scope === 'ceo') {
+      this.state.settings.tools = { ...t, [scope]: setSwitch(t[scope], id, on) };
+      this.save();
+      this.broadcast({ type: 'settings', settings: this.state.settings });
+      return this.state.settings.tools;
+    }
+    const a = this.agent(scope);
+    if (a.role === 'ceo') throw new HttpError(400, "The CEO's switches are the 'ceo' scope.");
+    a.tools = setSwitch(a.tools ?? {}, id, on);
+    this.save();
+    this.emitAgent(a);
+    return a.tools;
+  }
+
   /** The model to ask for (the Agent SDK runs Claude Code). '' lets another coding agent use its own default. */
   private modelFor(a: PersistedAgent, cli: AgentCli | undefined) {
     return effectiveModel(a.model, cli ?? 'claude', this.state.settings, DEFAULT_MODEL);
@@ -3001,6 +3058,7 @@ export class Swarm {
         typed: mode === 'typed',
         reattach: mode === 'reattach',
         agentId: a.id,
+        tools: this.sessionToolsFor(a, how.cli),
         ...how,
       },
       {
@@ -4355,6 +4413,7 @@ export class Swarm {
         additionalDirectories: this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)),
         role: 'ceo',
         office: this.officeTools(),
+        tools: this.sessionToolsFor(a, 'claude'),
         ...how,
       },
       {
@@ -5472,14 +5531,25 @@ export class Swarm {
   }
 
   /** configure_agent: an agent's coding agent, model or effort, from their next task. */
-  private configureAgent(x: { agent_id: string; cli?: string; model?: string; effort?: string }) {
+  private configureAgent(x: { agent_id: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
     const a = this.agentByRef(x.agent_id);
     if (a.role === 'ceo') throw new Error("That's you: the manager sets the CEO up.");
-    if (x.cli === undefined && x.model === undefined && x.effort === undefined) throw new Error('Nothing to change: pass cli, model, effort or a mix.');
-    this.updateAgent(a.id, { cli: x.cli, model: x.model, effort: x.effort });
+    const switches = [...(x.tools_off ?? []).map((r) => [r, false] as const), ...(x.tools_on ?? []).map((r) => [r, true] as const), ...(x.tools_reset ?? []).map((r) => [r, null] as const)];
+    if (x.cli === undefined && x.model === undefined && x.effort === undefined && !switches.length) throw new Error('Nothing to change: pass cli, model, effort, tools_off, tools_on, tools_reset or a mix.');
+    // Every name is checked before anything changes.
+    const items = this.tooling.items;
+    const picked = switches.map(([ref, on]) => {
+      const item = items.find((i) => i.id === ref) ?? items.find((i) => i.name.toLowerCase() === ref.toLowerCase());
+      if (!item) throw new Error(`No tool, plugin, skill or MCP server called "${ref}". Some there are: ${items.filter((i) => !i.locks).slice(0, 15).map((i) => i.name).join(', ')}.`);
+      if (item.locks?.agent) throw new Error(`${item.name} can't be switched for agents: ${item.locks.agent.why}.`);
+      return { item, on };
+    });
+    if (x.cli !== undefined || x.model !== undefined || x.effort !== undefined) this.updateAgent(a.id, { cli: x.cli, model: x.model, effort: x.effort });
+    for (const { item, on } of picked) this.setToolSwitch(a.id, item.id, on);
     const setup = this.setupLabel(a) || 'the office defaults';
-    this.appendLog(a, [{ kind: 'system', text: `⚙️ ${this.ceo().name} set ${a.name} up with ${setup}.` }]);
-    return `${a.name} runs ${setup} from their next task.`;
+    const tools = picked.map(({ item, on }) => `${item.name} ${on === null ? 'as the office has it' : on ? 'on' : 'off'}`).join(', ');
+    this.appendLog(a, [{ kind: 'system', text: `⚙️ ${this.ceo().name} set ${a.name} up with ${setup}${tools ? `; ${tools}` : ''}.` }]);
+    return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.`;
   }
 
   private async fileIssue(x: { floor: number; title: string; body: string }) {

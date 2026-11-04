@@ -7,6 +7,8 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { scanTooling } from './tooling.ts';
+import type { ToolInventory } from '../shared/tooling.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type OfficeHost } from './officeUpdate.ts';
@@ -86,6 +88,8 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
+  toolInventory(projects: string[]): Promise<ToolInventory>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
   previews: PreviewBackend;
   /** The running office's own folder and its launcher, for the office's self-update. */
@@ -198,6 +202,7 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  toolInventory: (projects) => scanTooling(projects),
   previews: realPreviews,
   office: realOffice,
   voice: elevenLabs,

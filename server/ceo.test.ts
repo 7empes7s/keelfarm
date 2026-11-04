@@ -94,12 +94,13 @@ describe('jobLabel', () => {
 describe('office tools', () => {
   const connect = async () => {
     const floors: unknown[] = [];
+    const configured: unknown[] = [];
     const office = createOfficeTools({
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
       scaleTeam: () => '',
-      configureAgent: () => '',
+      configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
       setDependencies: async () => '',
       closeIssue: async () => '',
@@ -113,7 +114,7 @@ describe('office tools', () => {
     await office.server.instance.connect(serverSide);
     const client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(clientSide);
-    return { client, floors };
+    return { client, floors, configured };
   };
 
   it('lists every tool the CEO relies on', async () => {
@@ -134,6 +135,12 @@ describe('office tools', () => {
       'set_dependencies',
       'set_floor_profile',
     ]);
+  });
+
+  it("takes an agent's Tools & skills switches as lists of names", async () => {
+    const { client, configured } = await connect();
+    await client.callTool({ name: 'configure_agent', arguments: { agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] } });
+    expect(configured).toEqual([{ agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] }]);
   });
 
   it('still takes preview_env as a map of strings', async () => {
