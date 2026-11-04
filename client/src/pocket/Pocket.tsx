@@ -301,7 +301,7 @@ export default function Pocket() {
         ) : (
           <>
             {tab === 'company' && <Company go={go} settings={setSettings} />}
-            {tab === 'chat' && <Chat autoFocus={false} />}
+            {tab === 'chat' && <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} />}
             {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
             {tab === 'team' && <Team focusRepo={repoId} />}
             {tab === 'approvals' && <Approvals />}

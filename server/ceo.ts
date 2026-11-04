@@ -20,6 +20,7 @@ export interface CeoJob {
   repoId?: string; // onboard / plan / triage
   prNumber?: number; // triage: the stuck pull request
   text?: string; // chat: the manager's message(s)
+  messageIds?: number[]; // chat: those messages' ids, marked read when the job starts
   at: number;
 }
 

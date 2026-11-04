@@ -6,6 +6,7 @@ import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type Weather
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { speechText } from '../../shared/speech';
+import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -118,6 +119,7 @@ interface State {
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
+  chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   version?: string; // the cubefarm version the server runs
   officeCommit?: string | null; // undefined: the server can't update itself
@@ -250,6 +252,7 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null },
   messages: [],
+  chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
   claudeUsage: [],
@@ -262,7 +265,7 @@ export const useStore = create<State>((set, get) => ({
   voiceSpeaking: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
-  notifyChannels: { webhooks: { ntfy: { set: false, hint: '' } }, pushDevices: 0 },
+  notifyChannels: { webhooks: { ntfy: { set: false, hint: '', last: null } }, pushDevices: 0, devices: [], desktop: null },
   cloud: EMPTY_CLOUD,
   pong: {},
   restarting: false,
@@ -464,7 +467,7 @@ export const useStore = create<State>((set, get) => ({
         set({ ceo: ev.ceo });
         break;
       case 'message': {
-        set({ messages: [...get().messages.slice(-199), ev.message] });
+        set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat';
@@ -485,6 +488,9 @@ export const useStore = create<State>((set, get) => ({
         }
         break;
       }
+      case 'delivery':
+        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
+        break;
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
         break;

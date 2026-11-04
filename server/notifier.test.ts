@@ -7,7 +7,7 @@ import type { WebSocket } from 'ws';
 import { DEFAULT_NOTIFY, notifySettings } from '../shared/notify.ts';
 import type { NoteView, NotifySettings } from '../shared/types.ts';
 import { createDemoBackend } from './demo.ts';
-import { Notifier, type NotifyRequest } from './notifier.ts';
+import { Notifier, deviceId, deviceName, pushOutcome, type NotifyRequest } from './notifier.ts';
 import { Swarm } from './swarm.ts';
 
 const SECRETS = {
@@ -57,7 +57,7 @@ describe('notification secrets', () => {
     expect(sent.filter((m) => JSON.parse(m).type === 'notify').map((m) => (JSON.parse(m).note as NoteView).title)).toEqual(['⚠️ PR #4 needs you', '🔔 Test from cubefarm']);
 
     const snap = swarm.snapshot();
-    expect(snap.notifyChannels.webhooks.ntfy).toEqual({ set: true, hint: 'ntfy.sh/…4242 · with a token' });
+    expect(snap.notifyChannels.webhooks.ntfy).toMatchObject({ set: true, hint: 'ntfy.sh/…4242 · with a token', last: { ok: true } });
     expect(snap.notifyChannels.pushDevices).toBe(1);
     const vapid = JSON.parse(fs.readFileSync(path.join(process.env.SWARM_HOME!, 'demo-push.json'), 'utf8')).vapid.privateKey as string;
     const everything = [JSON.stringify(snap), ...sent, ...out, JSON.stringify(answers)].join('\n');
@@ -111,6 +111,7 @@ describe('notification secrets', () => {
 function notifier(dir: string, status: (req: NotifyRequest) => number, settings: NotifySettings = notifySettings(DEFAULT_NOTIFY, { events: { merge: true } })) {
   const posts: NotifyRequest[] = [];
   const notes: NoteView[] = [];
+  const logs: string[] = [];
   const n = new Notifier({
     transport: { post: async (req) => (posts.push(req), status(req)) },
     secretsFile: path.join(dir, 'secrets.json'),
@@ -118,9 +119,9 @@ function notifier(dir: string, status: (req: NotifyRequest) => number, settings:
     settings: () => settings,
     broadcast: (note) => notes.push(note),
     channelsChanged: () => undefined,
-    log: () => undefined,
+    log: (line) => logs.push(line),
   });
-  return { n, posts, notes };
+  return { n, posts, notes, logs };
 }
 
 describe('the notifier', () => {
@@ -193,5 +194,96 @@ describe('the notifier', () => {
       await expect(n.setWebhook(gone, { url: 'https://old.example/1' })).rejects.toThrow(/no chat app/);
       await expect(n.test(gone)).rejects.toThrow(/no notification channel/);
     }
+  });
+});
+
+describe('push devices', () => {
+  it('have an id that is not their endpoint, a name, and each one its last send', async () => {
+    const dir = tmpDir();
+    const { n } = notifier(dir, (req) => (req.url.includes('broken') ? 500 : 201));
+    await n.pushKey();
+    const phone = subscription('https://push.example.net/push/pushSECRETendpoint4242');
+    const { id } = await n.subscribe(phone, '  Ada\'s iPhone\n');
+    expect(id).toBe(deviceId(phone.endpoint));
+    expect(id).not.toContain('SECRET');
+    expect(n.whois(phone.endpoint)).toEqual({ id });
+    expect(n.whois('https://push.example.net/push/other')).toEqual({ id: null });
+    await n.subscribe(subscription('https://push.example.net/push/broken'), 'Laptop');
+    await n.setWebhook('ntfy', SECRETS.ntfy);
+    expect(n.channelsView().devices.map((d) => [d.name, d.last])).toEqual([
+      ["Ada's iPhone", null],
+      ['Laptop', null],
+    ]);
+
+    vi.useFakeTimers({ now: 5_000 });
+    n.notify('ceoMessage', 'Morgan', 'Floor 2 is done.');
+    await vi.advanceTimersByTimeAsync(30);
+    const view = n.channelsView();
+    expect(view.desktop).toEqual({ at: 5_000, ok: true, error: '' });
+    expect(view.webhooks.ntfy.last).toEqual({ at: 5_000, ok: true, error: '' });
+    expect(view.devices.map((d) => d.last)).toEqual([
+      { at: 5_000, ok: true, error: '' },
+      { at: 5_000, ok: false, error: 'Push answered HTTP 500' },
+    ]);
+    expect(JSON.stringify(view)).not.toContain('SECRET');
+
+    await n.renameDevice(id, 'Phone');
+    await expect(n.renameDevice('nope', 'x')).rejects.toThrow(/doesn't know that device/);
+    const again = notifier(dir, () => 201).n;
+    await again.init();
+    expect(again.channelsView().devices.map((d) => d.name)).toEqual(['Phone', 'Laptop']);
+    await again.removeDevice(id);
+    expect(again.channelsView().devices.map((d) => d.name)).toEqual(['Laptop']);
+  });
+
+  it('test one device and say what its push service answered', async () => {
+    const { n, posts } = notifier(tmpDir(), (req) => (req.url.includes('gone') ? 410 : req.url.includes('limit') ? 429 : 201));
+    await n.pushKey();
+    const ok = await n.subscribe(subscription('https://push.example.net/push/fine'));
+    const gone = await n.subscribe(subscription('https://push.example.net/push/gone'));
+    const busy = await n.subscribe(subscription('https://push.example.net/push/limit'));
+    expect(await n.testDevice(ok.id)).toEqual({ outcome: 'delivered', status: 201, message: 'The push service accepted it (HTTP 201).' });
+    expect(posts.map((p) => p.url)).toEqual(['https://push.example.net/push/fine']);
+    expect(await n.testDevice(busy.id)).toMatchObject({ outcome: 'error', status: 429 });
+    expect(await n.testDevice(gone.id)).toMatchObject({ outcome: 'expired', status: 410 });
+    expect(n.whois('https://push.example.net/push/gone')).toEqual({ id: null });
+    expect(pushOutcome(0, "couldn't reach Push")).toEqual({ outcome: 'error', status: 0, message: "It didn't go out: couldn't reach Push." });
+  });
+
+  it('log where a sign-up stopped, without secrets', async () => {
+    const { n, logs } = notifier(tmpDir(), () => 201);
+    await n.pushKey();
+    await n.subscribe(subscription());
+    logs.length = 0;
+    n.report('subscribe', 'NotAllowedError: no gesture at https://push.example.net/push/pushSECRETendpoint4242');
+    n.report('<script>', 42);
+    expect(logs).toEqual(['notify: push sign-up stopped at "subscribe": NotAllowedError: no gesture at ••••', 'notify: push sign-up stopped at "unknown": no reason given']);
+  });
+
+  it('clean up names', () => {
+    expect(deviceName('  a\tb  ')).toBe('a b');
+    expect(deviceName('', 'Old')).toBe('Old');
+    expect(deviceName(7)).toBe('A device');
+    expect(deviceName('x'.repeat(99))).toHaveLength(40);
+  });
+});
+
+describe('one-tap ntfy', () => {
+  it('saves a new random topic on ntfy.sh and sends it a test', async () => {
+    const { n, posts } = notifier(tmpDir(), () => 200);
+    const a = await n.quickNtfy();
+    expect(a.url).toMatch(/^https:\/\/ntfy\.sh\/cubefarm-[a-z2-9]{25}$/);
+    expect(a.test).toEqual({ ok: true, message: 'A test went to the topic.' });
+    expect(JSON.parse(String(posts[0].body))).toMatchObject({ topic: a.url.split('/').pop(), title: '🔔 Test from cubefarm' });
+    expect(n.channelsView().webhooks.ntfy).toMatchObject({ set: true, last: { ok: true } });
+    const b = await n.quickNtfy();
+    expect(b.url).not.toBe(a.url);
+  });
+
+  it('keeps the topic when the test fails, and says why', async () => {
+    const { n } = notifier(tmpDir(), () => 0);
+    const a = await n.quickNtfy();
+    expect(a.test).toEqual({ ok: false, message: "The test didn't arrive: couldn't reach ntfy." });
+    expect(n.channelsView().webhooks.ntfy.set).toBe(true);
   });
 });

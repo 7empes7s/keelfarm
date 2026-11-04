@@ -384,10 +384,34 @@ export interface NotifySettings {
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
 }
 
-/** Which chat apps have a webhook saved (only a hint of it: the secret never leaves the server) and how many devices get push. */
+/** A channel's last send since the office started: when, and whether it arrived (else why not). */
+export interface NotifyHealth {
+  at: number;
+  ok: boolean;
+  error: string;
+}
+
+/** A device that gets Web Push. `id` is derived from its subscription, which never leaves the server. */
+export interface PushDeviceView {
+  id: string;
+  name: string;
+  addedAt: number;
+  last: NotifyHealth | null;
+}
+
+/** Which chat apps have a webhook saved (only a hint of it: the secret never leaves the server), the push devices and each channel's last send. */
 export interface NotifyChannelsView {
-  webhooks: Record<NotifyWebhook, { set: boolean; hint: string }>;
+  webhooks: Record<NotifyWebhook, { set: boolean; hint: string; last: NotifyHealth | null }>;
   pushDevices: number;
+  devices: PushDeviceView[];
+  desktop: NotifyHealth | null;
+}
+
+/** A test push to one device: the push service took it, the device is gone (and dropped), or another error. */
+export interface PushTestView {
+  outcome: 'delivered' | 'expired' | 'error';
+  status: number;
+  message: string;
 }
 
 /** A notification the office sent: a browser with the office open but hidden shows it as a desktop notification. */
@@ -577,6 +601,13 @@ export interface HireRequestView {
   decidedBy: 'manager' | 'auto' | null;
 }
 
+/**
+ * Where a manager's message to the CEO is (shared/chat.ts nextDelivery): sending and failed live only in the phone
+ * that sent it; the office records sent, read (the CEO's session took it, or their reply job started) and replied.
+ */
+export type Delivery = 'sending' | 'sent' | 'read' | 'replied' | 'failed';
+export type ServerDelivery = Extract<Delivery, 'sent' | 'read' | 'replied'>;
+
 /** One message in the phone thread between the manager and the CEO. */
 export interface PhoneMessage {
   id: number;
@@ -585,6 +616,8 @@ export interface PhoneMessage {
   at: number;
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
+  replyTo?: number; // the manager's message replies to this one (its id)
+  delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
 }
 
 export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
@@ -669,6 +702,8 @@ export type ServerEvent =
   | { type: 'request'; request: HireRequestView }
   | { type: 'ceo'; ceo: CeoInfo }
   | { type: 'message'; message: PhoneMessage }
+  /** The manager's messages moved on: the CEO read them, or replied. */
+  | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }

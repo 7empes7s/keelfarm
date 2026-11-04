@@ -5,15 +5,38 @@
 //   --demo   passed to the server
 //
 // It also updates the office. When the server has drained and sends `office:update` (or you type `u` + Enter here),
-// it stops everything, fast-forwards this folder to origin's default branch, runs npm install if the dependencies
-// changed and, in start mode, npm run build, then starts the office again. A failed step rolls back to the old
-// commit. The result goes to <SWARM_HOME>/last-update.json for the server to report. `npx cubefarm` has no launcher:
-// installed from npm, the office only reports that an update is ready.
+// it first tries origin's default branch in a throwaway worktree while the office keeps running (npm ci, tests,
+// build, a demo boot it probes), and refuses the update if any of it fails. Then it stops everything, fast-forwards
+// this folder, runs npm install if the dependencies changed and, in start mode, npm run build, starts the office
+// again and watches it for a probation. A failed step or probation rolls back to the old commit, and so does the
+// next start when the launcher died before the probation passed (<SWARM_HOME>/update-pending.json). The result goes
+// to <SWARM_HOME>/last-update.json for the server to report. `npx cubefarm` has no launcher: installed from npm, the
+// office only reports that an update is ready.
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
-import { clientPort, isUpdateCommand, parseOfficeArgs, parseSymref, refusal, rollbackPlan, stepsFor, swarmHome } from './officeSteps.mjs';
+import {
+  BOOT_TIMEOUT_MS,
+  PROBATION_MS,
+  clientPort,
+  isOfficeState,
+  isUpdateCommand,
+  officeUrl,
+  parseMarker,
+  parseOfficeArgs,
+  parseSymref,
+  pendingAction,
+  preflightOutcome,
+  preflightSteps,
+  probationVerdict,
+  refusal,
+  rollbackPlan,
+  stepsFor,
+  swarmHome,
+} from './officeSteps.mjs';
 
 const HELP = `
   node scripts/office.mjs [--dev] [--demo] [--no-open]
@@ -32,6 +55,12 @@ const STOP_TIMEOUT_MS = 20_000;
 // --no-save: installs what the pulled package.json and lockfile say without rewriting the lockfile (another npm
 // version would reformat it), which would leave local changes and refuse every later update.
 const INSTALL = ['install', '--no-audit', '--no-fund', '--no-save'];
+// npm steps that take longer are stopped and count as failed.
+const NPM_TIMEOUT_MS = 15 * 60_000;
+// How often the probation asks the office for its state.
+const PROBE_EVERY_MS = 5_000;
+// Ports the preflight's demo office must never take: the live office's and its Vite's.
+const LIVE_PORTS = [4317, 5317];
 
 let opts;
 try {
@@ -90,7 +119,7 @@ function spawnChild(name, args, { ipc = false, env = process.env } = {}) {
     // Elsewhere each child leads its own process group, so the whole tree can be killed at once (Windows: taskkill /T).
     detached: !WIN,
   });
-  const child = { name, proc, stopped: null, exited: new Promise((resolve) => proc.once('exit', resolve)) };
+  const child = { name, proc, stopped: null, exited: new Promise((resolve) => proc.once('exit', (code, signal) => resolve(signal ?? code))) };
   proc.on('error', (err) => warn(`${name}: ${err.message}`));
   proc.once('exit', (code, signal) => onExit(child, signal ?? code));
   children[name] = child;
@@ -104,7 +133,7 @@ function startServer() {
     : [path.join('bin', 'cubefarm.js'), ...demo, ...(opts.open && firstStart ? [] : ['--no-open'])];
   const child = spawnChild('server', args, { ipc: true, env: { ...process.env, SWARM_LAUNCHER: '1' } });
   child.proc.on('message', (msg) => {
-    if (msg?.type === 'office:update') void update(`the office asked, from ${short(String(msg.from ?? ''))}`);
+    if (msg?.type === 'office:update') void update(`the office asked, from ${short(String(msg.from ?? ''))}`, child);
   });
 }
 
@@ -132,6 +161,7 @@ function startChildren() {
 function onExit(child, how) {
   if (children[child.name] === child) children[child.name] = null;
   if (child.stopped || shuttingDown) return;
+  if (child.name === 'server' && onProbation) return; // the probation sees it and rolls back
   if (child.name === 'server' && opts.dev) {
     warn(`Server exited (${how}); waiting for a file change to restart`);
     return;
@@ -187,20 +217,37 @@ function git(args, timeoutMs = 120_000) {
   });
 }
 
-/** npm with its output shown here. On Windows npm is a .cmd, so it goes through cmd.exe (fixed arguments only). */
-function npm(args) {
+/**
+ * npm with its output shown here, in this folder or `cwd`. On Windows npm is a .cmd, so it goes through cmd.exe
+ * (fixed arguments only). Stopped, process tree and all, after NPM_TIMEOUT_MS.
+ */
+function npm(args, { cwd = root, env = process.env } = {}) {
   return new Promise((resolve, reject) => {
-    log(`npm ${args.join(' ')}`);
+    log(`npm ${args.join(' ')}${cwd === root ? '' : `  (in ${cwd})`}`);
     const [cmd, cmdArgs] = WIN ? ['cmd.exe', ['/d', '/s', '/c', `npm ${args.join(' ')}`]] : ['npm', args];
-    const proc = spawn(cmd, cmdArgs, { cwd: root, stdio: ['ignore', 'inherit', 'pipe'], windowsHide: true });
+    const proc = spawn(cmd, cmdArgs, { cwd, env, stdio: ['ignore', 'inherit', 'pipe'], windowsHide: true, detached: !WIN });
+    if (cwd !== root) trackPreflight(proc);
     let last = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killTree(proc);
+    }, NPM_TIMEOUT_MS);
     proc.stderr.on('data', (chunk) => {
       process.stderr.write(chunk);
       const lines = String(chunk).split(/\r?\n/).filter((l) => l.trim());
       if (lines.length) last = lines[lines.length - 1].trim();
     });
-    proc.on('error', (err) => reject(new Error(`npm ${args[0]} failed: ${err.message}`)));
-    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`npm ${args.join(' ')} failed (exit ${code})${last ? `: ${last}` : ''}`))));
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      reject(new Error(`npm ${args[0]} failed: ${err.message}`));
+    });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) return resolve();
+      const why = timedOut ? `timed out after ${NPM_TIMEOUT_MS / 60_000} min` : `exit ${code}`;
+      reject(new Error(`npm ${args.join(' ')} failed (${why})${last ? `: ${last}` : ''}`));
+    });
   });
 }
 
@@ -215,25 +262,34 @@ async function defaultBranch() {
 // ---------- updating ----------
 
 let updating = null; // the running update
+let askedAgain = null; // the server that asked for an update while one was running: it's waiting for one
+let onProbation = false; // the restarted office is being watched: its exit fails the probation instead of quitting
 
-function update(trigger) {
+function update(trigger, asker = null) {
   if (shuttingDown) return Promise.resolve();
   if (updating) {
     log('Already updating');
+    if (asker) askedAgain = asker;
     return updating;
   }
-  updating = runUpdate(trigger).finally(() => {
+  updating = runUpdate(trigger, !!asker).finally(() => {
     updating = null;
+    const again = askedAgain;
+    askedAgain = null;
+    // The office that asked is still the one running (it asked during the probation, say): it waits for an update.
+    if (again && again === children.server && !shuttingDown) void update('the office asked again', again);
   });
   return updating;
 }
 
-async function runUpdate(trigger) {
-  log(`Updating the office (${trigger}): stopping it first`);
-  await stopChildren('update');
-
-  const result = { from: '', to: '', ok: true, installed: false, built: false };
-  const ran = { installed: false, built: false }; // started, even if it then failed
+/**
+ * Check, then try the target commit in a throwaway worktree while the office keeps running. Only if that all passes
+ * does the office stop and switch (switchTo).
+ */
+async function runUpdate(trigger, asked) {
+  log(`Updating the office (${trigger}): checking first, the office keeps running`);
+  const result = { from: '', to: '', target: '', ok: true, installed: false, built: false };
+  let stage = 'check';
   try {
     result.from = await git(['rev-parse', 'HEAD']);
     await git(['fetch', 'origin', '--prune'], 180_000);
@@ -246,11 +302,49 @@ async function runUpdate(trigger) {
       ahead: Number(await git(['rev-list', '--count', `${target}..HEAD`])),
     });
     if (refused) throw new Error(refused);
-    await git(['merge', '--ff-only', target]);
+    result.target = await git(['rev-parse', target]);
+    if (result.target === result.from) {
+      log('Already up to date');
+      return keep(result, asked);
+    }
+    stage = 'preflight';
+    log(`Preflight: trying ${short(result.target)} in a throwaway worktree before switching to it`);
+    await preflight(result.target);
+    if (shuttingDown) return;
+  } catch (err) {
+    if (shuttingDown) return; // the preflight was stopped with the launcher: nothing to report
+    Object.assign(result, { ok: false, stage, error: oneLine(err) });
+    warn(`Update ${stage === 'check' ? 'refused' : `to ${short(result.target)} refused in the preflight`}: ${result.error}. Still on ${short(result.from || '?')}`);
+    return keep(result, asked);
+  }
+  await switchTo(result);
+}
+
+/** The update stopped before the live office was touched: it keeps running, and hears the result if it's waiting. */
+function keep(result, asked) {
+  result.to = result.from;
+  if (!result.ok || asked) writeJson(lastUpdateFile(), { ...result, at: Date.now() });
+  const server = children.server?.proc;
+  if (server?.connected) server.send({ type: 'office:update-result' }, () => undefined);
+  else if (!children.server && !shuttingDown) startServer(); // --dev, its server had exited: start it as an update would
+}
+
+/**
+ * Stop the office, fast-forward this folder to the commit that passed the preflight, install and build in place,
+ * start it again and watch it for its probation. update-pending.json stays until the probation passes, so a launcher
+ * that dies on the way rolls back at its next start.
+ */
+async function switchTo(result) {
+  writeJson(markerFile(), { from: result.from, to: result.target, startedAt: Date.now() });
+  log(green(`Preflight passed: stopping the office to switch to ${short(result.target)}`));
+  await stopChildren('update');
+  const ran = { installed: false, built: false }; // started, even if it then failed
+  let steps = { install: false, build: false };
+  try {
+    await git(['merge', '--ff-only', result.target]);
     const changed = (await git(['diff', '--name-only', result.from, 'HEAD'])).split(/\r?\n/).filter(Boolean);
-    const head = await git(['rev-parse', 'HEAD']);
-    log(head === result.from ? 'Already up to date' : `Fast-forwarded to ${short(head)} (${changed.length} file${changed.length === 1 ? '' : 's'} changed)`);
-    const steps = stepsFor(changed, { startMode });
+    log(`Fast-forwarded to ${short(result.target)} (${changed.length} file${changed.length === 1 ? '' : 's'} changed)`);
+    steps = stepsFor(changed, { startMode });
     if (steps.install) {
       ran.installed = true;
       await npm(INSTALL);
@@ -262,23 +356,47 @@ async function runUpdate(trigger) {
       result.built = true;
     }
   } catch (err) {
-    result.ok = false;
-    result.error = oneLine(err);
+    Object.assign(result, { ok: false, stage: 'switch', error: oneLine(err) });
     warn(`Update failed: ${result.error}`);
-    if (result.from) await rollBack(result, ran);
+    await rollBack(result, ran);
+    clearMarker();
+    return restart(result);
   }
+
+  onProbation = true;
+  await restart(result);
+  const verdict = await watchProbation();
+  if (!verdict) return; // shutting down: the marker stays, and the next start rolls back
+  if (verdict.ok) {
+    clearMarker();
+    return log(green(`Probation passed: the office runs ${short(result.target)}`));
+  }
+  Object.assign(result, { ok: false, stage: 'probation', error: verdict.error, installed: false, built: false });
+  warn(`Probation failed: ${verdict.error}. Rolling back to ${short(result.from)}`);
+  await stopChildren('update');
+  writeJson(markerFile(), { from: result.from, to: result.target, startedAt: Date.now(), rollingBack: true });
+  await rollBack(result, { installed: steps.install, built: steps.build });
+  clearMarker();
+  await restart(result);
+}
+
+/** Write the result for the server to report, and start the office. */
+async function restart(result) {
   result.to = await git(['rev-parse', 'HEAD']).catch(() => result.from);
-  writeLastUpdate({ ...result, at: Date.now() });
+  writeJson(lastUpdateFile(), { ...result, at: Date.now() });
   if (opts.dev) rescan();
   if (shuttingDown) return;
   log(result.ok && result.from !== result.to ? `Updated: ${short(result.from)} → ${short(result.to)}. Starting the office` : 'Starting the office again');
   startChildren();
 }
 
-/** Back to the commit the update started from, with its dependencies and build. Local changes are never touched. */
-async function rollBack(result, ran) {
+/**
+ * Back to the commit the update started from, with its dependencies and build. Local changes are never touched.
+ * `resumed`: a rollback that was cut short, redone in full.
+ */
+async function rollBack(result, ran, resumed = false) {
   const head = await git(['rev-parse', 'HEAD']).catch(() => result.from);
-  const plan = rollbackPlan({ moved: head !== result.from, ...ran });
+  const plan = rollbackPlan({ moved: head !== result.from || resumed, ...ran });
   try {
     if (plan.reset) {
       log(`Rolling back to ${short(result.from)}`);
@@ -298,13 +416,263 @@ async function rollBack(result, ran) {
   }
 }
 
-/** What the server reports on its next start: { from, to, ok, error?, installed, built, at }. */
-function writeLastUpdate(result) {
-  const home = swarmHome();
-  const file = path.join(home, 'last-update.json');
+// ---------- the preflight ----------
+
+/**
+ * Try `sha` in <SWARM_HOME>/update-staging, a throwaway worktree, with its own temporary SWARM_HOME: npm ci, the
+ * tests, the build (start mode), then boot it as a demo office on a free port and probe it. Throws the first failure.
+ */
+async function preflight(sha) {
+  const dir = path.join(swarmHome(), 'update-staging');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-preflight-'));
+  const env = { ...process.env, SWARM_HOME: home, SWARM_PORT: '0' };
+  delete env.SWARM_LAUNCHER;
+  const steps = preflightSteps({ startMode });
+  const work = {
+    prepare: async () => {
+      await removeStaging(dir);
+      await git(['worktree', 'add', '--detach', dir, sha]);
+    },
+    install: () => npm(['ci', '--no-audit', '--no-fund'], { cwd: dir, env }),
+    test: () => npm(['test'], { cwd: dir, env }),
+    build: () => npm(['run', 'build'], { cwd: dir, env }),
+    boot: () => bootProbe(dir, env),
+  };
+  const results = [];
   try {
-    fs.mkdirSync(home, { recursive: true });
-    fs.writeFileSync(`${file}.tmp`, JSON.stringify(result, null, 2));
+    for (const step of ['prepare', ...steps]) {
+      try {
+        await work[step]();
+        results.push({ step, ok: true });
+      } catch (err) {
+        results.push({ step, ok: false, error: oneLine(err) });
+        break;
+      }
+    }
+  } finally {
+    await removeStaging(dir);
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 });
+  }
+  const outcome = preflightOutcome(steps, results);
+  if (!outcome.go) throw new Error(outcome.error);
+}
+
+async function removeStaging(dir) {
+  await git(['worktree', 'remove', '--force', dir]).catch(() => undefined);
+  await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 5 }).catch((err) => warn(`Couldn't remove ${dir}: ${oneLine(err)}`));
+  await git(['worktree', 'prune']).catch(() => undefined);
+}
+
+/** Boot the staged office as a demo and wait for it to answer every probe (bootError), within BOOT_TIMEOUT_MS. */
+async function bootProbe(dir, env) {
+  const port = await freePort();
+  const args = startMode ? [path.join('bin', 'cubefarm.js'), '--demo', '--no-open'] : ['--import', 'tsx', path.join('server', 'index.ts'), '--demo'];
+  log(`Booting it as a demo office on port ${port}`);
+  const proc = spawn(process.execPath, args, {
+    cwd: dir,
+    env: { ...env, SWARM_PORT: String(port), SWARM_HOST: '127.0.0.1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    detached: !WIN,
+  });
+  trackPreflight(proc);
+  let last = '';
+  let lastError = '';
+  const show = (chunk) => {
+    for (const line of String(chunk).split(/\r?\n/).filter((l) => l.trim())) {
+      console.log(`${magenta('[preflight]')} ${line}`);
+      last = line.trim();
+      if (/\b\w*Error\b/.test(line)) lastError = line.trim();
+    }
+  };
+  proc.stdout.on('data', show);
+  proc.stderr.on('data', show);
+  let exited = null;
+  const gone = new Promise((resolve) => {
+    proc.once('exit', (code, signal) => resolve((exited = signal ?? code)));
+    proc.once('error', (err) => resolve((exited = err.message)));
+  });
+  const url = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + BOOT_TIMEOUT_MS;
+  let error = 'no answer';
+  try {
+    while (Date.now() < deadline) {
+      await Promise.race([sleep(1000), gone]);
+      if (exited !== null) throw new Error(`the demo office exited (${exited})${lastError || last ? `: ${lastError || last}` : ''}`);
+      error = await bootError(url, dir);
+      if (!error) return log(green('The demo office answered: /api/state, / and /ws'));
+    }
+    throw new Error(`the demo office didn't answer within ${BOOT_TIMEOUT_MS / 1000} s: ${error}`);
+  } finally {
+    killTree(proc);
+    await Promise.race([gone, sleep(10_000)]);
+    if (!WIN) killGroup(proc.pid);
+  }
+}
+
+/** Why the office at `url` isn't working yet, or null: GET /api/state, then (start mode) GET / and the /ws snapshot. */
+async function bootError(url, dir) {
+  const state = await stateError(url);
+  if (state) return `GET /api/state: ${state}`;
+  if (startMode) {
+    try {
+      const res = await fetch(`${url}/`, { signal: AbortSignal.timeout(5000) });
+      const body = await res.text();
+      const built = fs.readFileSync(path.join(dir, 'dist', 'index.html'), 'utf8');
+      if (res.status !== 200 || body.trim() !== built.trim()) return `GET / didn't serve the built index.html (HTTP ${res.status})`;
+    } catch (err) {
+      return `GET /: ${fetchError(err)}`;
+    }
+  }
+  return wsError(url);
+}
+
+/** Why GET /api/state didn't answer 200 with the office's state, or null. */
+async function stateError(url) {
+  try {
+    const res = await fetch(`${url}/api/state`, { signal: AbortSignal.timeout(5000) });
+    if (res.status !== 200) return `HTTP ${res.status}`;
+    return isOfficeState(await res.json()) ? null : "not the office's state";
+  } catch (err) {
+    return fetchError(err);
+  }
+}
+
+const fetchError = (err) => err?.cause?.code ?? oneLine(err);
+
+/** Why /ws didn't send a snapshot within 10 s, or null. */
+function wsError(url) {
+  return new Promise((resolve) => {
+    let ws = null;
+    const done = (error) => {
+      clearTimeout(timer);
+      try {
+        ws?.close();
+      } catch {
+        // already closed
+      }
+      resolve(error);
+    };
+    const timer = setTimeout(() => done('/ws sent no snapshot within 10 s'), 10_000);
+    try {
+      ws = new WebSocket(`${url.replace(/^http/, 'ws')}/ws`);
+    } catch (err) {
+      return done(`/ws: ${oneLine(err)}`);
+    }
+    ws.addEventListener('message', (ev) => {
+      try {
+        if (JSON.parse(String(ev.data))?.type === 'snapshot') done(null);
+      } catch {
+        // not JSON: wait for the snapshot
+      }
+    });
+    ws.addEventListener('error', () => done('/ws: the websocket failed'));
+    ws.addEventListener('close', () => done('/ws closed before sending a snapshot'));
+  });
+}
+
+/** A free port on loopback, never the live office's or its Vite's. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.once('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(LIVE_PORTS.includes(port) ? freePort() : port));
+    });
+  });
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const preflightProcs = new Set(); // what the preflight runs: stopping the launcher kills it rather than waiting
+function trackPreflight(proc) {
+  preflightProcs.add(proc);
+  proc.once('exit', () => preflightProcs.delete(proc));
+}
+
+// ---------- the probation ----------
+
+/**
+ * Watch the restarted office for PROBATION_MS: it must stay up, and GET /api/state must answer 200 (probationVerdict).
+ * Null when the launcher is shutting down meanwhile.
+ */
+async function watchProbation() {
+  const child = children.server;
+  try {
+    if (!child) return { done: true, ok: false, error: 'the office did not start' };
+    const url = officeUrl();
+    log(`Probation: watching the office for ${PROBATION_MS / 1000} s (${url}/api/state)`);
+    const startedAt = Date.now();
+    let exited = null;
+    void child.exited.then((how) => (exited = how ?? 'gone'));
+    let lastProbe = null;
+    let everAnswered = false;
+    for (;;) {
+      if (shuttingDown) return null;
+      const verdict = probationVerdict({ exited, elapsedMs: Date.now() - startedAt, lastProbe, everAnswered });
+      if (verdict.done) return verdict;
+      await Promise.race([sleep(PROBE_EVERY_MS), child.exited]);
+      if (exited !== null || shuttingDown) continue;
+      const error = await stateError(url);
+      lastProbe = { ok: !error, error };
+      everAnswered ||= !error;
+    }
+  } finally {
+    onProbation = false;
+  }
+}
+
+// ---------- the pending marker ----------
+
+const lastUpdateFile = () => path.join(swarmHome(), 'last-update.json');
+const markerFile = () => path.join(swarmHome(), 'update-pending.json');
+
+function readMarker() {
+  try {
+    return parseMarker(fs.readFileSync(markerFile(), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function clearMarker() {
+  try {
+    fs.rmSync(markerFile(), { force: true, maxRetries: 3 });
+  } catch (err) {
+    warn(`Couldn't remove ${markerFile()}: ${oneLine(err)}`);
+  }
+}
+
+/**
+ * At start, before the office: an update whose probation never passed (the launcher died during it, or systemd
+ * restarted it) is rolled back, so a broken commit can't crash-loop the office.
+ */
+async function recoverPending() {
+  const marker = readMarker();
+  const head = await git(['rev-parse', 'HEAD']).catch(() => '');
+  const action = pendingAction(marker, head);
+  if (action === 'none') return;
+  if (action === 'clear') {
+    log(`Clearing the unconfirmed update to ${short(marker.to)}: this folder is on ${short(head || '?')}`);
+    return clearMarker();
+  }
+  warn(`The update to ${short(marker.to)} was never confirmed (the launcher stopped during its probation): rolling back to ${short(marker.from)}`);
+  writeJson(markerFile(), { ...marker, rollingBack: true });
+  const result = { from: marker.from, to: '', target: marker.to, ok: false, stage: 'probation', error: 'the launcher stopped before its probation passed', installed: false, built: false };
+  const changed = (await git(['diff', '--name-only', marker.from, marker.to]).catch(() => '')).split(/\r?\n/).filter(Boolean);
+  const steps = stepsFor(changed, { startMode });
+  await rollBack(result, { installed: steps.install, built: steps.build }, marker.rollingBack);
+  clearMarker();
+  result.to = await git(['rev-parse', 'HEAD']).catch(() => marker.from);
+  writeJson(lastUpdateFile(), { ...result, at: Date.now() });
+}
+
+/** Write JSON through a temp file and a rename. last-update.json is what the server reports on its next start. */
+function writeJson(file, data) {
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify(data, null, 2));
     fs.renameSync(`${file}.tmp`, file);
   } catch (err) {
     warn(`Couldn't write ${file}: ${oneLine(err)}`);
@@ -368,6 +736,7 @@ async function shutdown(code) {
   if (shuttingDown) return;
   shuttingDown = true;
   log('Stopping the office');
+  for (const proc of preflightProcs) killTree(proc); // the live folder doesn't need it to finish
   await stopChildren('stop');
   if (updating) {
     log('Letting the update finish so this folder stays consistent (press Ctrl+C again to quit now)');
@@ -393,5 +762,10 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (isUpdateCommand(line)) void update('you typed u');
 });
 
+// A Ctrl+C meanwhile waits for it, like for an update.
+updating = recoverPending().finally(() => {
+  updating = null;
+});
+await updating;
 if (opts.dev) watch();
-startChildren();
+if (!shuttingDown) startChildren();
