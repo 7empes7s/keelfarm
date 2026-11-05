@@ -27,6 +27,7 @@ import { catchUp, failedRunId, logTail, noChangeReason, PR_LIMITS_VERSION, QA_ST
 import { conflictFixInstructions, MAX_QA_ROUNDS, qaGate, qaOutcome, type PreQa, type QaNext } from './qaOutcome.ts';
 import { qaInstructions } from './qaPrompt.ts';
 import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecovery.ts';
+import { checkRestart, DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind, type SessionKind } from './health.ts';
 import { reconcileStep, restartMessage, sessionStart, workState, type ReconcileStep, type RestartCounts, type WorkState } from './reconcile.ts';
 import { diagnose, finding, forget, NUDGE_WAIT_MS, nudgeText, QUIET_MS, triage, unclosedIssues, type Problem, type Remedy, type WatchAgent, type WatchMemory } from './watchdog.ts';
 import { sendBackPatch } from './sendBack.ts';
@@ -433,6 +434,7 @@ export class Swarm {
   private state: Persisted = {
     settings: {
       sessionLimit: 0,
+      memory: memorySettings(DEFAULT_MEMORY, {}),
       defaultModel: DEFAULT_MODEL,
       defaultEffort: 'medium',
       runtime: 'terminal',
@@ -498,6 +500,8 @@ export class Swarm {
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: (a) => this.setMandate(a),
       agentLog: (a) => this.agentLog(a),
+      restartAgent: (a) => this.restartAgent(a),
+      messageAgent: (a) => this.messageAgent(a),
       qaReport: (a) => this.qaReport(a),
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
@@ -568,6 +572,17 @@ export class Swarm {
   /** Cloud agents waiting for a sign-in in their terminal (holdForSignIn), by agent id. */
   private signIns = new Map<string, SignIn>();
   private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
+  readonly health = new OfficeHealth({
+    probe: () => this.backend.resources,
+    settings: () => this.state.settings.memory,
+    sessions: () => this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
+    log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
+    alert: (title, body) => this.notifier.notify('memory', title, body),
+    emit: (health) => this.broadcast({ type: 'health', health }),
+    save: () => this.save(),
+    retry: (id, why, requeue) => this.state.agents.filter((a) => a.id === id && a.status === 'stopped' && a.task).forEach((a) => this.recover([a], new Set(), new Set(requeue ? [a] : []), undefined, why)),
+    schedule: () => this.schedule(),
+  });
 
   constructor(private backend: Backend) {
     this.weather = new WeatherService({
@@ -749,6 +764,7 @@ export class Swarm {
       this.state.settings.worldEvents = worldEventSettings(DEFAULT_WORLD_EVENTS, loaded.settings?.worldEvents);
       this.state.settings.listen = listenSettings(DEFAULT_LISTEN, loaded.settings?.listen);
       this.state.settings.notify = notifySettings(DEFAULT_NOTIFY, loaded.settings?.notify);
+      this.state.settings.memory = memorySettings(DEFAULT_MEMORY, loaded.settings?.memory);
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
@@ -852,6 +868,7 @@ export class Swarm {
     ]);
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
+    await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
     // A PR the restart left in "testing" with nobody on it: test it again (the result, if any, was lost).
     for (const rec of orphanedQa(this.state.qa, this.state.agents, BUSY)) this.setQa(rec, { status: 'queued', qaAgentId: null });
@@ -880,6 +897,7 @@ export class Swarm {
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
     setInterval(() => this.watchdogTick(), WATCHDOG_MS);
+    setInterval(() => void this.health.tick(), 10_000);
     void this.backend
       .detectClis()
       .then((clis) => {
@@ -972,12 +990,12 @@ export class Swarm {
    * Agents cut off by a server restart pick their session back up, told what they were doing. QA, demo agents, tasks
    * still being prepared and work whose desk is gone (requeue) start over from the queue, without a strike.
    */
-  private recover(agents: PersistedAgent[], preparing: Set<PersistedAgent>, requeue = new Set<PersistedAgent>(), counts: RestartCounts = { cleared: 0, reattached: 0, resumed: 0, requeued: 0 }) {
+  private recover(agents: PersistedAgent[], preparing: Set<PersistedAgent>, requeue = new Set<PersistedAgent>(), counts: RestartCounts = { cleared: 0, reattached: 0, resumed: 0, requeued: 0 }, why = 'The office server restarted') {
     for (const a of agents) {
       if (!a.task) continue; // its issue or PR closed while the office was down: the startup sync cleared the desk
       const fix = a.task === 'fix' ? this.state.qa.find((q) => q.devAgentId === a.id && q.status === 'fixing') : undefined;
       if (requeue.has(a) || !resumesAfterRestart(a, preparing.has(a), this.backend.demo)) {
-        this.appendLog(a, [{ kind: 'system', text: '↺ The office server restarted. Starting over from the queue.' }]);
+        this.appendLog(a, [{ kind: 'system', text: `↺ ${why}. Starting over from the queue.` }]);
         const rec = a.task === 'qa' ? this.state.qa.find((q) => q.qaAgentId === a.id && q.status === 'testing') : undefined;
         if (rec) this.setQa(rec, { status: 'queued' });
         if (fix) this.setQa(fix, { status: 'failed' });
@@ -986,8 +1004,9 @@ export class Swarm {
         continue;
       }
       if (this.slotsFull()) continue; // stays 'stopped'; the manager can resume it later
+      if (this.health.later(a.id, sessionKind(a), why)) continue; // stays 'stopped' until memory is back
       counts.resumed++;
-      void this.message(a.id, resumeNote(a, fix)).catch((err) => console.warn(`could not resume ${a.name}`, err));
+      void this.message(a.id, resumeNote(a, fix, why)).catch((err) => console.warn(`could not resume ${a.name}`, err));
     }
   }
 
@@ -1126,6 +1145,7 @@ export class Swarm {
       messages: snapshotMessages(this.state.messages.slice(-100)),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
+      health: this.health.view(),
       claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),
@@ -1766,6 +1786,7 @@ export class Swarm {
   /** Run the floor's app from its preview worktree: the default branch, or an open PR. Replaces what it is running now. */
   async startPreview(id: string, pr?: number | null): Promise<PreviewView> {
     const repo = this.repo(id);
+    this.health.ensure('preview');
     return this.previews.start(repo, `${repo.fullName.split('/')[1]} app`, pr);
   }
 
@@ -2649,7 +2670,8 @@ export class Swarm {
     );
   }
 
-  private ensureSlot() {
+  private ensureSlot(kind: SessionKind = 'build') {
+    this.health.ensure(kind);
     if (this.slotsFull()) {
       throw new HttpError(429, `All ${this.state.settings.sessionLimit} session slots are busy. Raise or clear the session limit in the manager's console, or wait.`);
     }
@@ -3146,8 +3168,10 @@ export class Swarm {
     // Dev servers the agent forgot to stop would otherwise keep its port and lock its desk folder.
     void this.releaseDesk(a, repo).catch(() => undefined);
     if (result.interrupted) this.interrupted(a);
+    const killed = this.health.ended(a, sessionKind(a), result.errors, !this.dropping.has(a.id) && a.status !== 'stopped', resumesAfterRestart(a, false, this.backend.demo));
 
-    if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
+    if (killed) Object.assign(a, { status: 'stopped', lastError: killed });
+    else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
     else if (a.task === 'qa') await this.onQaFinished(a, repo, result);
     else if (a.task === 'fix') await this.onFixFinished(a, repo, result);
     else await this.onIssueFinished(a, repo, result);
@@ -3295,7 +3319,7 @@ export class Swarm {
     const tester = agentId ? this.agent(agentId) : null;
     if (tester && (tester.repoId !== repo.id || tester.role === 'ceo')) throw new HttpError(400, `${tester.name} doesn't work on ${repo.fullName}`);
     if (tester && BUSY.includes(tester.status)) throw new HttpError(409, `${tester.name} is busy: ${this.agentDoing(tester)}`);
-    if (tester) this.ensureSlot();
+    if (tester) this.ensureSlot('qa');
     this.clearPrepStrikes(repo.id, prNumber);
     this.queueQa(repo, prNumber, dev ?? null, pr.closesIssues[0] ?? null);
     const queued = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber && q.status === 'queued');
@@ -3747,21 +3771,21 @@ export class Swarm {
   }
 
   /** A message for an agent: sent into their running session, or a follow-up that resumes it. typed: the manager typed it at their CLI's prompt, where it's already running. */
-  async message(id: string, text: string, typed = false) {
+  async message(id: string, text: string, typed = false, who = 'Manager') {
     const a = this.agent(id);
     if (a.role === 'ceo') return this.messageCeo(text);
     const repo = this.repo(a.repoId);
     if (!text.trim()) throw new HttpError(400, 'Empty message');
     const rt = this.agentRt.get(id)!;
     if (rt.session) {
-      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${text}` }]);
+      this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
       if (!typed) rt.session.send(text);
       return;
     }
     if (a.status === 'preparing') throw new HttpError(409, `${a.name} is still setting up; try again in a moment`);
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
-    this.ensureSlot();
-    this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${text}` }]);
+    this.ensureSlot(sessionKind(a));
+    this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
     const cwd = this.deskOf(a, repo);
     a.lastError = null;
     a.startedAt = Date.now();
@@ -3773,6 +3797,7 @@ export class Swarm {
   updateSettings(patch: Partial<SwarmSettings>) {
     const s = this.state.settings;
     if (patch.sessionLimit !== undefined) s.sessionLimit = Math.max(0, Math.round(Number(patch.sessionLimit)) || 0);
+    if (patch.memory !== undefined) s.memory = memorySettings(s.memory, patch.memory);
     // The default model belongs to the default coding agent: a new agent starts on its own default.
     if (isCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) {
       s.defaultCli = patch.defaultCli;
@@ -3917,6 +3942,7 @@ export class Swarm {
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
       const tester = pickTester(free, rec.devAgentId, owed, othersCan, now - rec.updatedAt);
       if (!tester) continue;
+      if (!this.health.admit('qa')) return false;
       void this.runQa(tester, repo, rec);
       return true;
     }
@@ -3925,6 +3951,7 @@ export class Swarm {
       const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
       const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
       if (to === 'wait') continue; // the author gets it when their session ends
+      if (!this.health.admit('fix')) return false;
       void this.runFix(to === 'author' ? author! : (free.find((a) => !owed.has(a.id)) ?? free[0]), repo, rec);
       return true;
     }
@@ -3939,7 +3966,7 @@ export class Swarm {
     if (!repo.autoAssign || !this.mayStart('issue')) return false;
     const agent = this.available(repo)[0];
     const next = agent ? this.readyIssues(repo)[0] : undefined;
-    if (!agent || !next) return false;
+    if (!agent || !next || !this.health.admit('build')) return false;
     // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
     void this.assign(agent.id, next.issue.number).catch((err) => console.warn('auto-assign failed', err));
     return agent.status === 'preparing';
@@ -4488,6 +4515,7 @@ export class Swarm {
   private onCeoFinished(a: PersistedAgent, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || this.officeUpdate.handedOver) return;
+    this.health.ended(a, 'ceo', result.errors, false, false); // its peak teaches the CEO's estimate
     rt.session = null;
     rt.currentTool = null;
     a.endedAt = Date.now();
@@ -5806,6 +5834,22 @@ export class Swarm {
     const lines = rt?.terminal ? rt.terminal.tail(AGENT_LOG_MAX_LINES) : (rt?.log ?? a.logTail).map((l) => l.text);
     const floor = this.state.repos.find((r) => r.id === a.repoId)?.floor ?? null;
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
+  }
+
+  private restartAgent(x: { agent_id: string }) {
+    const a = checkRestart(this.agentByRef(x.agent_id));
+    const resumes = resumesAfterRestart(a, false, this.backend.demo);
+    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
+    return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
+  }
+
+  private async messageAgent(x: { floor: number; agent_id: string; text: string }) {
+    const a = this.agentByRef(x.agent_id);
+    if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
+    const running = !!this.agentRt.get(a.id)?.session;
+    await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
+    return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }
 
   /** qa_report: a PR's latest QA verdict, report and screenshots (as files the CEO can Read). */

@@ -119,6 +119,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `httpError.ts`: `HttpError(status, message)`.
 - `officeUpdate.ts`: the office's self-update: the drain decision, the launcher contract (IPC, `last-update.json`).
 - `pacing.ts`: pacing new work after Claude's usage warnings: the start/skip decision and the usage state.
+- `health.ts`: resource safety (#55): sessions start only when memory and swap leave the headroom (per-kind estimates
+  learned from peaks; the CEO always starts), each agent's processes measured through /proc on Linux (stopped over the
+  ceiling or under pressure), killed sessions resumed twice then re-queued, the health strip's view. `shared/health.ts` has the settings.
 - `presence.ts`: shared presence: relays tabs' poses, emotes and pings on `/ws` to their floor (pure interest and rate
   rules), never saved; `demoVisitors.ts` walks the demo's fake visitors. Names and limits in `shared/presence.ts`.
 - `voice.ts`: phone messages read aloud (docs/voice.md): the ElevenLabs key in `secrets.json`, voices, cached clips;

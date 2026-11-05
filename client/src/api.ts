@@ -5,6 +5,7 @@ import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, Do
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
+import type { HealthView } from '../../shared/health';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -126,6 +127,8 @@ export const api = {
   resumeFullSpeed: () => call<UsageView>('POST', '/api/usage/resume'),
   /** The demo only: a usage warning, or the limit, as if a session had reported it. */
   simulateUsage: (kind: 'warning' | 'limit') => call<UsageView>('POST', '/api/usage/simulate', { kind }),
+  /** The demo only: memory too low for another session, or back. */
+  simulateMemory: (low: boolean) => call<HealthView>('POST', '/api/health/simulate', { low }),
   /** The office doctor: a finding's one-click fix, or Ignore. */
   doctorFix: (id: string, fix: DoctorFix) => call<DoctorFinding[]>('POST', '/api/doctor/fix', { id, fix }),
   doctorIgnore: (id: string) => call<DoctorFinding[]>('POST', '/api/doctor/ignore', { id }),
