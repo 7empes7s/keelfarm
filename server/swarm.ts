@@ -30,8 +30,7 @@ import {
   type OfficeTools,
   type TeamNow,
 } from './ceo.ts';
-import { issueOpen, nameList, pullNow, stillOpen } from './closeCleanup.ts';
-import { fixGoesTo, pickTester, prepHeld } from './handOut.ts';
+import { issueOpen, nameList, pullNow } from './closeCleanup.ts';
 import { HttpError } from './httpError.ts';
 import { issuesResolvedBy } from './issueClaims.ts';
 import { failedRunIds } from './mergeGate.ts';
@@ -64,28 +63,14 @@ import { checkTriageTarget, triageStep, type TriagePr } from './triage.ts';
 import { parsePreviewPatch } from './previews.ts';
 import { PREVIEW_SLUG } from './previewRunner.ts';
 import { pruneQaShots, qaShotFile, qaShotsDir } from './qaShots.ts';
-import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type LastUpdate } from './officeUpdate.ts';
-import { mergeReadings, readingsChanged, readingsLabel } from '../shared/usage.ts';
-import {
-  clampPacingSessions,
-  mayStart,
-  PACING_MS,
-  pacingMessage,
-  resumeRefusal,
-  usageLabel,
-  usageView,
-  waived,
-  warningView,
-  type UsageWarning,
-  type Waiver,
-  type WorkKind,
-} from './pacing.ts';
-import { loadHistory, opsView, recordChecks, recordCost, recordMerges, type OpsFloorState } from './metrics.ts';
+import { mergeReadings, readingsLabel } from '../shared/usage.ts';
+import { clampPacingSessions, usageLabel } from './pacing.ts';
+import { loadHistory, recordCost } from './metrics.ts';
 import { clampTrimIdleMin, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { cliLabel, isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import type { DeskTrim } from './workspace.ts';
-import { floorSpend, mergedPulls, taskEfforts } from './costLedger.ts';
+import { floorSpend, taskEfforts } from './costLedger.ts';
 import { resolveEffort, type TaskKind } from '../shared/costs.ts';
 import {
   addTenure,
@@ -105,7 +90,7 @@ import { clip, plainText, stuckAgents, type TeamChange } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
 import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/tooling.ts';
-import { blockers, holdUps } from '../shared/issues.ts';
+import { blockers } from '../shared/issues.ts';
 import { legacyAgent, legacyRequest, redact as scrub } from '../shared/journal.ts';
 import {
   addFollowup,
@@ -145,22 +130,15 @@ import type {
   EffortLevel,
   HireRequestView,
   MachineHost,
-  OfficeUpdateView,
-  OpsView,
   PhoneMessage,
   PullInfo,
   ServerDelivery,
   SwarmSettings,
-  UsageReading,
-  UsageView,
-  UsageWarningView,
 } from '../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
   type QaRecord,
-  type PrepJob,
-  prepKey,
   type Persisted,
   type Restart,
   DEFAULT_MODEL,
@@ -174,10 +152,6 @@ import {
   KEEP_DECIDED_REQUESTS,
   BUSY,
   FREE,
-  ERROR_COOLDOWN_MS,
-  MAX_ISSUE_FAILURES,
-  LIMIT_PAUSE_MS,
-  READINGS_MS,
   FULL_HOUSE,
   OPS_TICK_MS,
   WATCHDOG_MS,
@@ -188,11 +162,11 @@ import {
 } from './swarm/model.ts';
 import { SHIRTS, HAIR, SKIN, lookFor, LOOKS, pick, slugify } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmQa } from './swarm/qa.ts';
+import { SwarmUpdate } from './swarm/update.ts';
 
 export { HttpError };
 
-export class Swarm extends SwarmQa {
+export class Swarm extends SwarmUpdate {
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
    * a shared one left the next session connected but without any tools while an earlier session still held it.
@@ -677,434 +651,6 @@ export class Swarm extends SwarmQa {
     this.updateAgent(ceo.id, { name: x.ceoName, color: x.ceoColor });
     if (LOOKS.includes(x.ceoLook as AgentLook)) this.updateAgent(ceo.id, { look: x.ceoLook });
     return this.state.settings;
-  }
-
-  // ---------- scheduling ----------
-
-  /**
-   * Can this agent take work now? One whose last session failed sits out a short cooldown, then gets work like everyone
-   * else instead of waiting for the manager to reset them.
-   */
-  protected isFree(a: PersistedAgent) {
-    if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
-    return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
-  }
-
-  /** A floor's agents who can take work now, by desk. */
-  protected available(repo: PersistedRepo) {
-    return this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && this.isFree(a)).sort((x, y) => x.desk - y.desk);
-  }
-
-  protected scheduleOffset = 0;
-  protected pausedUntil = 0; // Claude's usage limit was hit: nothing new starts before this
-  protected pacingUntil = 0; // Claude warned about usage: new issues are paced until this
-  protected pacingLimit: string | null = null; // which of Claude's limits the pacing is for
-  protected lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
-  protected waiver: Waiver | null = null; // pacing the manager cleared with "Resume full speed"
-  protected lastUsage = '';
-  protected shownReadings: UsageReading[] = []; // the readings the office was last sent
-  protected readingsTimer: NodeJS.Timeout | null = null;
-
-  /** Backlog issues that can start now, most urgent first: the ones holding up the longest chain of other issues, then the oldest. */
-  protected readyIssues(repo: PersistedRepo) {
-    const issues = this.repoRt.get(repo.id)!.issues;
-    const open = new Set(issues.map((i) => i.number));
-    const weight = holdUps(issues);
-    return issues
-      .filter(
-        (i) =>
-          !i.labels.some((l) => /^(swarm:skip|wontfix|question)$/i.test(l)) &&
-          !this.issueTaken(repo, i.number) &&
-          !this.isHeld(repo.id, i.number) &&
-          blockers(i.body, open).length === 0 &&
-          (this.issueFailures.get(`${repo.id}#${i.number}`) ?? 0) < MAX_ISSUE_FAILURES,
-      )
-      .map((issue) => ({ issue, ...weight.get(issue.number)! }))
-      .sort((x, y) => y.chain - x.chain || y.waiting - x.waiting || x.issue.number - y.issue.number);
-  }
-
-  /**
-   * Finish work in flight: test queued PRs (oldest first) and get failed ones fixed. Returns true if work started.
-   * Any free agent but the PR's author tests it (handOut.ts pickTester); its author goes on with other work meanwhile. A failed PR goes back to its author when they're free; while the
-   * author is still in a session on it, it waits for them; otherwise any free agent takes it. A PR whose desks keep
-   * failing to set up sits out.
-   */
-  protected startPipelineWork(repo: PersistedRepo): boolean {
-    const free = this.available(repo);
-    if (!free.length) return false;
-    const now = Date.now();
-    const floor = this.floorState(this.repoRt.get(repo.id)!);
-    const waiting = (status: QaRecord['status'], task: PrepJob['task']) =>
-      this.state.qa
-        .filter(
-          (q) =>
-            q.repoId === repo.id &&
-            q.status === status &&
-            stillOpen({ kind: 'pr', number: q.prNumber }, floor) &&
-            !prepHeld(this.prepStrikes.get(prepKey(repo.id, q.prNumber, task)), now),
-        )
-        .sort((x, y) => x.updatedAt - y.updatedAt);
-    const fixes = waiting('failed', 'fix');
-    const owed = new Set(fixes.map((q) => q.devAgentId).filter((id): id is string => !!id));
-    for (const rec of waiting('queued', 'qa')) {
-      const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
-      const tester = pickTester(free, rec.devAgentId, owed, othersCan, now - rec.updatedAt);
-      if (!tester) continue;
-      void this.runQa(tester, repo, rec);
-      return true;
-    }
-    for (const rec of fixes) {
-      const author = this.state.agents.find((a) => a.id === rec.devAgentId && a.repoId === repo.id && a.role !== 'ceo') ?? null;
-      const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
-      const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
-      if (to === 'wait') continue; // the author gets it when their session ends
-      void this.runFix(to === 'author' ? author! : (free.find((a) => !owed.has(a.id)) ?? free[0]), repo, rec);
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Give a free agent the next backlog issue (auto-assign floors only). Returns true if work started. Issues that say
-   * "Depends on #N" wait until #N is closed; the rest go in readyIssues() order.
-   */
-  protected startIssueWork(repo: PersistedRepo): boolean {
-    if (!repo.autoAssign || !this.mayStart('issue')) return false;
-    const agent = this.available(repo)[0];
-    const next = agent ? this.readyIssues(repo)[0] : undefined;
-    if (!agent || !next) return false;
-    // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
-    void this.assign(agent.id, next.issue.number).catch((err) => console.warn('auto-assign failed', err));
-    return agent.status === 'preparing';
-  }
-
-  protected limited() {
-    return Date.now() < this.pausedUntil;
-  }
-
-  /** Claude turned a session away for the usage limit: start nothing new until it resets, rather than failing agent after agent. */
-  protected pauseForLimit(resetsAt: number | null) {
-    const until = (resetsAt ?? Date.now() + LIMIT_PAUSE_MS) + 30_000;
-    if (until <= this.pausedUntil) return;
-    const fresh = Date.now() >= this.pausedUntil;
-    this.pausedUntil = until;
-    if (fresh) this.postMessage('office', `⏸ Claude's usage limit was reached. The office starts no new work until ${new Date(until).toLocaleTimeString()}; sessions already running carry on.`);
-    this.emitUsage();
-  }
-
-  /** Claude warned that usage is getting high: pace new issues until the window resets, rather than run into the limit. */
-  protected paceForWarning(info: UsageWarning) {
-    const now = Date.now();
-    this.lastWarning = warningView(info, now);
-    const until = info.resetsAt && info.resetsAt > now ? info.resetsAt : now + PACING_MS;
-    // The manager already resumed full speed for this window: they topped up, or their usage was reset.
-    if (until <= this.pacingUntil || waived(info, this.waiver, now)) return this.emitUsage();
-    const fresh = now >= this.pacingUntil;
-    this.pacingUntil = until;
-    this.pacingLimit = info.rateLimitType;
-    if (fresh) this.postMessage('office', pacingMessage(info, until, this.state.settings.pacingSessions, now));
-    this.emitUsage();
-  }
-
-  /** The manager's "Resume full speed" (they topped up, or their usage was reset): pacing ends now. A hard pause never does. */
-  resumeFullSpeed(): UsageView {
-    const now = Date.now();
-    const refused = resumeRefusal({ now, pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil });
-    if (refused) throw new HttpError(409, refused);
-    this.waiver = { until: this.pacingUntil, limit: this.pacingLimit };
-    this.pacingUntil = 0;
-    this.postMessage('office', '⏩ You resumed full speed: new issues start as usual again. If Claude turns a session away at the limit, the office still pauses until it resets.');
-    this.emitUsage();
-    setTimeout(() => this.schedule(), 200);
-    return this.usageNow();
-  }
-
-  /** The demo's stand-in for Claude's usage warning or limit (POST /api/usage/simulate), so pacing and the pause can be tried. */
-  simulateUsage(kind: unknown): UsageView {
-    const fake = this.backend.simulateUsage;
-    if (!fake) throw new HttpError(404, 'Usage can only be simulated in the demo office.');
-    if (kind !== 'warning' && kind !== 'limit') throw new HttpError(400, 'kind must be "warning" or "limit"');
-    const usage = fake(kind, Date.now());
-    if ('limitResetsAt' in usage) this.pauseForLimit(usage.limitResetsAt);
-    else {
-      this.waiver = null; // a simulated warning always paces, even after Resume full speed
-      this.paceForWarning(usage);
-    }
-    return this.usageNow();
-  }
-
-  /** May work of this kind start now, as far as Claude's usage goes? */
-  protected mayStart(kind: WorkKind) {
-    return mayStart(kind, { now: Date.now(), pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil, running: this.running(), pacingSessions: this.state.settings.pacingSessions });
-  }
-
-  protected usageNow() {
-    return usageView({ now: Date.now(), pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil }, this.lastWarning);
-  }
-
-  protected emitUsage() {
-    const usage = this.usageNow();
-    const key = JSON.stringify(usage);
-    if (key === this.lastUsage) return;
-    const was = this.lastUsage ? (JSON.parse(this.lastUsage) as typeof usage).state : 'normal';
-    this.lastUsage = key;
-    this.broadcast({ type: 'usage', usage });
-    if (usage.state !== was) {
-      const text = usage.state === 'normal' ? "Claude's usage is back to normal after pacing or a pause" : `Claude's usage is ${usageLabel(usage, Date.now())}`;
-      this.followup({ kind: 'usage', key: 'usage', label: `usage ${usage.state}`, text: `${text}. Check whether team sizes and what is queued still fit.` });
-    }
-    if (usage.state !== was && usage.state !== 'normal') {
-      const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'it resets';
-      if (usage.state === 'paused') this.notifier.notify('usage', "Claude's usage limit was reached", `The office starts no new work until ${until}; running sessions carry on.`);
-      else this.notifier.notify('usage', 'Pacing new work', `Claude warned that usage is high, so new issues start slowly until ${until}.`);
-    }
-  }
-
-  /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
-  protected recordUsage(readings: UsageReading[]) {
-    this.state.claudeUsage = mergeReadings(this.state.claudeUsage, readings);
-    if (this.readingsTimer || !readingsChanged(this.shownReadings, this.state.claudeUsage)) return;
-    this.readingsTimer = setTimeout(() => {
-      this.readingsTimer = null;
-      this.shownReadings = this.state.claudeUsage;
-      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage });
-      this.save();
-    }, READINGS_MS);
-    this.readingsTimer.unref?.();
-  }
-
-  /** Pacing and pauses run out on their own: say so when pacing ends. */
-  protected tickUsage() {
-    if (this.pacingUntil && Date.now() >= this.pacingUntil) {
-      this.pacingUntil = 0;
-      this.postMessage('office', "✅ Claude's usage is back to normal. The office starts new work at full speed again.");
-    }
-    this.emitUsage();
-  }
-
-  // ---------- mission control ----------
-
-  protected opsTimer: NodeJS.Timeout | null = null;
-  protected lastOps = '';
-
-  /** A sync's merges (stamped with their issues' ages) and finished check runs go into mission control's history. */
-  protected recordSync(repo: PersistedRepo, pulls: PullInfo[]) {
-    const now = Date.now();
-    if (recordMerges(this.state.ops, repo.id, pulls, now) + recordChecks(this.state.ops, repo.id, pulls, now) > 0) this.save();
-    void this.spend.ledger.merges(mergedPulls(repo.id, pulls, now));
-  }
-
-  /** Every floor as mission control sees it now. */
-  protected opsNow(): OpsView {
-    const floors: OpsFloorState[] = this.state.repos.map((r) => {
-      const rt = this.repoRt.get(r.id);
-      return {
-        repoId: r.id,
-        floor: r.floor,
-        ready: rt?.lastSync ? this.readyIssues(r).length : 0,
-        agents: this.state.agents.filter((a) => a.repoId === r.id),
-        prs: (rt?.pulls ?? [])
-          .filter((p) => p.state === 'OPEN')
-          .map((p) => {
-            const q = this.state.qa.find((x) => x.repoId === r.id && x.prNumber === p.number);
-            return { number: p.number, qa: q ? this.qaView(q) : null, why: q?.stuckWhy ?? q?.mergeNote ?? null };
-          }),
-      };
-    });
-    return opsView(floors, this.state.ops, Date.now());
-  }
-
-  /** Recompute mission control shortly: changes usually come several at a time. */
-  protected opsSoon() {
-    this.opsTimer ??= setTimeout(() => this.emitOps(), 400);
-  }
-
-  /** Broadcast mission control's numbers, but only when they changed: the wall repaints only then. */
-  protected emitOps() {
-    if (this.opsTimer) clearTimeout(this.opsTimer);
-    this.opsTimer = null;
-    const ops = this.opsNow();
-    const key = JSON.stringify(ops);
-    if (key === this.lastOps) return;
-    this.lastOps = key;
-    this.broadcast({ type: 'ops', ops });
-  }
-
-  /** A failed session releases its issue for someone else; an issue that keeps failing waits for the manager. */
-  protected issueFailed(repo: PersistedRepo, n: number | null) {
-    if (n == null || this.limited()) return; // the usage limit isn't the issue's fault
-    const key = `${repo.id}#${n}`;
-    const failures = (this.issueFailures.get(key) ?? 0) + 1;
-    this.issueFailures.set(key, failures);
-    if (failures === MAX_ISSUE_FAILURES) {
-      this.postMessage('office', `⚠️ Issue #${n} on ${repo.fullName} failed ${failures} sessions in a row, so auto-assign skips it now. Assign it to someone by hand once it's sorted.`);
-    }
-  }
-
-  /**
-   * Hand out work for free session slots. Finishing beats starting: QA and QA fixes on every floor go before any new issue.
-   * Within each phase floors take turns (one job per floor per pass), and the starting floor rotates between calls,
-   * so no repo can hog the slots.
-   */
-  protected schedule() {
-    this.tickUsage();
-    this.progressTick();
-    if (this.officeUpdateTick()) return; // draining for the office's own update
-    this.applyTeamChanges(); // before handing out work, so agents on their way out get none
-    if (this.limited()) return;
-    // Management first: the CEO's jobs are short and shape everyone else's work.
-    this.maybeHeartbeat();
-    this.maybeFollowup();
-    this.startCeoWork();
-    const repos = this.state.repos.filter((r) => {
-      const rt = this.repoRt.get(r.id);
-      return rt && rt.lastSync != null && rt.cloneStatus !== 'error';
-    });
-    if (repos.length === 0) return;
-    this.scheduleOffset = (this.scheduleOffset + 1) % repos.length;
-    const order = [...repos.slice(this.scheduleOffset), ...repos.slice(0, this.scheduleOffset)];
-    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
-      let progress = true;
-      while (progress) {
-        progress = false;
-        for (const repo of order) {
-          if (this.slotsFull()) return;
-          if (start(repo)) progress = true;
-        }
-      }
-    }
-  }
-
-  // ---------- the office's own update ----------
-
-  protected drainInput(): DrainInput {
-    const u = this.officeUpdate;
-    return {
-      now: Date.now(),
-      behind: this.officeHead ? u.behind : 0,
-      launcher: this.backend.office.launcher,
-      autoUpdate: this.state.settings.autoUpdate !== false,
-      requested: u.requested,
-      postponedUntil: u.postponedUntil,
-      postponedBehind: u.postponedBehind,
-      failed: u.failed,
-      failedBehind: u.failedBehind,
-      drainingSince: u.drainingSince,
-      sent: u.sent,
-      running: this.running() - this.inBoxes().length, // cloud agents carry on in their Boxes through the restart
-    };
-  }
-
-  protected officeUpdateView(): OfficeUpdateView {
-    const u = this.officeUpdate;
-    const input = this.drainInput();
-    const d = drainDecision(input);
-    const until = u.postponedUntil ? new Date(u.postponedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const detail = d.state === 'failed' ? u.failed : d.state === 'waiting' ? `Postponed until ${until}, or until a newer commit lands.` : null;
-    return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: u.drainingSince ?? d.drainingSince, running: input.running, detail };
-  }
-
-  protected emitOfficeUpdate() {
-    if (!this.officeHead) return;
-    const view = this.officeUpdateView();
-    const key = JSON.stringify(view);
-    if (key === this.lastOfficeView) return;
-    this.lastOfficeView = key;
-    this.broadcast({ type: 'officeUpdate', officeUpdate: view });
-  }
-
-  /** The own-folder check found the office this many commits behind GitHub. */
-  protected setOfficeBehind(behind: number) {
-    const u = this.officeUpdate;
-    if (u.failed && u.failedBehind === null) u.failedBehind = behind; // only a newer commit retries a failed update by itself
-    u.behind = behind;
-    if (behind === 0) Object.assign(u, { requested: false, failed: null, failedBehind: null });
-    this.officeUpdateTick();
-  }
-
-  /**
-   * Take the office's own update one step (see drainDecision): drain, and once nothing is running, or the drain timed
-   * out, hand it to the launcher. True while nothing new may start.
-   */
-  protected officeUpdateTick(): boolean {
-    if (!this.officeHead) return false;
-    const u = this.officeUpdate;
-    const d = drainDecision(this.drainInput());
-    if (d.state === 'draining' && u.drainingSince === null) {
-      const running = this.running();
-      this.postMessage(
-        'office',
-        `⬆️ Updating the office (${u.behind} new commit${u.behind === 1 ? '' : 's'}). Nothing new starts${running ? ` while ${running} running session${running === 1 ? '' : 's'} finish` : ''}; then it installs and restarts.`,
-      );
-    }
-    u.drainingSince = d.drainingSince;
-    if (d.send) void this.handOver(d.timedOut);
-    this.emitOfficeUpdate();
-    return d.state === 'draining' || d.state === 'updating';
-  }
-
-  /** Drained: hand the update to the launcher. Sessions still running after the timeout stop the way a restart stops them. */
-  protected async handOver(timedOut: boolean) {
-    const u = this.officeUpdate;
-    const from = this.officeHead!;
-    u.sent = true;
-    // Cloud agents working in their Boxes carry on through the restart: the restarted office picks them up.
-    const busy = this.state.agents.filter((a) => BUSY.includes(a.status) && !this.inBoxes().includes(a));
-    if (timedOut) this.postMessage('office', `⏱ ${busy.length} session${busy.length === 1 ? ' was' : 's were'} still running after 20 minutes. Stopped; the work goes back to the queue after the update.`);
-    this.emitOfficeUpdate();
-    u.handedOver = true;
-    await this.writeState().catch((err) => console.warn('could not save the state', err)); // still "working": the restarted office recovers them
-    for (const a of busy) this.agentRt.get(a.id)?.session?.stop();
-    try {
-      const result = await this.backend.office.update(from);
-      if (result) await this.afterUpdate(result); // the demo: nothing restarts
-    } catch (err) {
-      await this.afterUpdate({ from, to: from, ok: false, error: `the launcher didn't take the update: ${oneLine(err)}`, installed: false, built: false, at: Date.now() });
-    }
-  }
-
-  /** An update that didn't restart the office (the demo, or a failed hand-over): recover like a restart would, then report it. */
-  protected async afterUpdate(result: LastUpdate) {
-    const u = this.officeUpdate;
-    Object.assign(u, { sent: false, handedOver: false, requested: false, drainingSince: null });
-    const interrupted = this.state.agents.filter((a) => BUSY.includes(a.status) && !this.inBoxes().includes(a));
-    const preparing = new Set(interrupted.filter((a) => a.status === 'preparing'));
-    for (const a of interrupted) {
-      Object.assign(a, { status: 'stopped', lastError: 'The office updated itself while this agent was working.' });
-      const rt = this.agentRt.get(a.id);
-      if (rt) Object.assign(rt, { session: null, currentTool: null });
-    }
-    this.ensureCeo(interrupted);
-    this.recover(interrupted, preparing);
-    interrupted.forEach((a) => this.emitAgent(a));
-    await this.reportUpdate(result);
-    if (!result.ok) u.failedBehind = u.behind;
-    const own = this.state.repos.find((r) => this.backend.office.isOwnFolder(this.backend.mainDir(r.fullName)));
-    if (own) await this.syncFolder(own);
-    this.emitCeo();
-    this.save();
-    setTimeout(() => this.schedule(), 300);
-  }
-
-  /** One phone message about the last update (the launcher's last-update.json, or the demo's fake). */
-  protected async reportUpdate(result: LastUpdate) {
-    const commits = result.ok && result.to ? await this.backend.office.commitsBetween(result.from, result.to) : null;
-    this.postMessage('office', lastUpdateMessage(result, commits));
-    Object.assign(this.officeUpdate, { failed: result.ok ? null : result.error || 'unknown error', failedBehind: null });
-  }
-
-  /** The manager's Update now (drain now, even with automatic updates off) or Later (not for 2 hours, or until a newer commit). */
-  updateOffice(action: unknown): OfficeUpdateView {
-    if (action !== 'now' && action !== 'later') throw new HttpError(400, 'action must be "now" or "later"');
-    const u = this.officeUpdate;
-    if (!this.officeHead || !this.backend.office.launcher) throw new HttpError(409, 'The office can only update itself when its launcher started it (npm run dev or npm start).');
-    if (u.sent) throw new HttpError(409, 'The update is already under way.');
-    if (u.behind <= 0) throw new HttpError(409, 'The office is up to date: there is nothing to update.');
-    if (action === 'now') Object.assign(u, { requested: true, postponedUntil: null });
-    else Object.assign(u, { requested: false, postponedUntil: Date.now() + POSTPONE_MS, postponedBehind: u.behind });
-    this.officeUpdateTick();
-    setTimeout(() => this.schedule(), 200);
-    return this.officeUpdateView();
   }
 
   // ---------- the CEO ----------
