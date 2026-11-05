@@ -14,7 +14,7 @@ describe('the agent window on phones', () => {
     expect(phoneWindow(1440, false)).toBe(false);
   });
 
-  it('uses 11-12 px text on phones and keeps 13 px on a computer', () => {
+  it('uses 11 px text on phones and keeps 13 px on a computer', () => {
     expect(termFontSize(false, 1440, null)).toBe(13);
     for (const width of [360, 390, 430]) {
       const size = termFontSize(true, width, null);

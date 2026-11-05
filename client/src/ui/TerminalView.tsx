@@ -21,6 +21,7 @@ import { confirmDialog } from './Confirm';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
+import './termPhone.css';
 
 function elapsed(from: number | null, to: number | null) {
   if (!from) return '';
@@ -301,7 +302,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
       ? `Tell ${agent.name}…`
       : canMessage
         ? `Follow-up for ${agent.name}…`
-        : 'Give them work in ⓘ first'
+        : 'Pick work in ⓘ'
     : working
       ? `Tell ${agent.name} something while they work${agent.terminal ? ' (typed into their terminal)' : ''}…`
       : canMessage

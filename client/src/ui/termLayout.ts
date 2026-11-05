@@ -13,7 +13,7 @@ const CELL = { width: 0.6, height: 1.32 };
 /** The xterm padding inside the terminal box (styles.css .live-term-screen .xterm), and the scrollbar's room. */
 const PAD = { x: 14 + 8, y: 12 };
 
-export const TERM_FONT = { desktop: 13, phoneMax: 12, phoneMin: 10, min: 8, max: 20 };
+export const TERM_FONT = { desktop: 13, phoneMax: 11, phoneMin: 10, min: 8, max: 20 };
 /** The columns a phone's terminal shows at least, when its font can get small enough. */
 const PHONE_COLS = 50;
 
@@ -27,7 +27,7 @@ export function termGrid(width: number, height: number, fontSize: number): { col
 
 /**
  * The terminal's font size: the one this device chose with A−/A+, else 13 on a computer, and on a phone the largest
- * of 12…10 px that still fits 50 columns across a window `width` px wide.
+ * of 11…10 px that still fits 50 columns across a window `width` px wide.
  */
 export function termFontSize(phone: boolean, width: number, saved: number | null): number {
   if (saved !== null && Number.isFinite(saved)) return clampFont(saved);
