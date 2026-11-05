@@ -871,7 +871,7 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
     ['access', '♿ Accessibility'],
   ];
   return (
-    <Panel wide title="🧑‍💼 Manager's console" className="ds-console ds-auto-dark">
+    <Panel wide title="🧑‍💼 Manager's console" className="ds-console">
       <div className="tabs" role="tablist" aria-label="Console">
         {tabs.map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? 'tab-on' : ''}`} onClick={() => setTab(k)}>

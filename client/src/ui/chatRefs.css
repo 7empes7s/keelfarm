@@ -9,7 +9,7 @@
   padding: 1px 8px;
   border: 1.5px solid var(--ds-outline);
   border-radius: var(--ds-radius-pill);
-  background: #e7f0ff;
+  background: var(--ds-surface-sunken);
   color: var(--ds-text);
   font: inherit;
   font-size: 0.85em;
@@ -23,7 +23,7 @@
 }
 .ref-chip:hover,
 .ref-chip:focus-visible {
-  background: #ffe9a8;
+  background: var(--ds-surface-hover);
 }
 .ref-chip-label {
   min-width: 0;
@@ -35,7 +35,7 @@
   flex: none;
   padding: 0 5px;
   border-radius: var(--ds-radius-pill);
-  background: rgba(31, 29, 43, 0.08);
+  background: var(--ds-line);
   font-size: 0.85em;
   font-weight: var(--ds-weight);
 }
