@@ -148,7 +148,7 @@ const SCREENS: Screen[] = [
     widths: OFFICE,
     open: async (page) => {
       await office(page);
-      await page.getByTitle(/^Coins:/).click();
+      await page.getByTitle(/^Coins:/).dispatchEvent('click'); // a real click waits for the pill to be "stable", which it never is here
       return dialog(page, /catalogue/i);
     },
     tabs: [],
