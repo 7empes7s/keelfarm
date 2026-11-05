@@ -1,11 +1,12 @@
 import { useId, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useStore, type Agent } from '../store';
-import { costLabel, groupItems, itemState, type ToolItem, type ToolRole, type ToolSwitches } from '../../../shared/tooling';
+import { costLabel, groupItems, itemState, type Profile, type ToolItem, type ToolRole, type ToolSwitches } from '../../../shared/tooling';
 
 // Settings → Tools & skills (and each agent's ⚙️ Setup): what a Claude Code session on the office's computer loads
-// (server/tooling.ts), and switches for Everyone, the CEO or one agent. The office applies them only to the sessions it
-// starts (shared/tooling.ts sessionTools); the manager's own Claude Code files are never touched.
+// (server/tooling.ts), and switches for Everyone, a role profile (builders and fixers, QA), the CEO or one agent. The
+// office applies them only to the sessions it starts (shared/tooling.ts sessionTools); the manager's own Claude Code
+// files are never touched.
 
 async function attempt(fn: () => Promise<unknown>) {
   try {
@@ -20,8 +21,18 @@ function ago(at: number) {
   return min < 1 ? 'just now' : min < 60 ? `${min} min ago` : `${Math.round(min / 60)} h ago`;
 }
 
-function ToolRow({ item, role, everyone, own, scope, pluginOff }: { item: ToolItem; role: ToolRole; everyone: ToolSwitches; own?: ToolSwitches; scope: string; pluginOff: boolean }) {
-  const st = itemState(item, role, everyone, own);
+const RESET: Record<string, string> = { ceo: "the CEO's", build: "the profile's", qa: "the profile's" };
+
+interface Layers {
+  everyone: ToolSwitches;
+  own?: ToolSwitches;
+  profile?: ToolSwitches;
+  lean: Profile | null;
+}
+
+function ToolRow({ item, role, layers, scope, pluginOff }: { item: ToolItem; role: ToolRole; layers: Layers; scope: string; pluginOff: boolean }) {
+  const { everyone, own, profile, lean } = layers;
+  const st = itemState(item, role, everyone, own, profile, lean);
   const on = st.on && !pluginOff;
   const cost = costLabel(item);
   const c = item.contents;
@@ -43,10 +54,12 @@ function ToolRow({ item, role, everyone, own, scope, pluginOff }: { item: ToolIt
         {pluginOff && !st.lock && <span className="chip">off with its plugin</span>}
         {st.from === 'own' && (
           <button className="chip tool-reset" title="Follow Everyone's switch again" onClick={() => void attempt(() => api.switchTool(scope, item.id, null))}>
-            ↺ {scope === 'ceo' ? "the CEO's" : 'their own'}
+            ↺ {RESET[scope] ?? 'their own'}
           </button>
         )}
         {st.from === 'everyone' && own && <span className="chip">as Everyone</span>}
+        {st.from === 'profile' && <span className="chip">as the builders' profile</span>}
+        {st.from === 'lean' && <span className="chip" title="Lean sessions: not in this role's profile until you switch it on">not in the profile</span>}
       </div>
       <div className="muted small tool-desc">{st.lock ? `${item.description} ${st.lock.why}.` : item.description}</div>
       {brings && <div className="muted small tool-desc">{brings}</div>}
@@ -55,20 +68,28 @@ function ToolRow({ item, role, everyone, own, scope, pluginOff }: { item: ToolIt
   );
 }
 
-/** The list for one scope: 'everyone', 'ceo' or an agent's id. */
+const SCOPES = ['everyone', 'ceo', 'build', 'qa'];
+
+/** The list for one scope: 'everyone', 'ceo', a role profile ('build', 'qa') or an agent's id. */
 function ToolsList({ scope }: { scope: string }) {
   const tooling = useStore((s) => s.tooling);
   const tools = useStore((s) => s.settings.tools);
-  const agent = useStore((s) => (scope === 'everyone' || scope === 'ceo' ? null : s.agents[scope]));
+  const agent = useStore((s) => (SCOPES.includes(scope) ? null : s.agents[scope]));
   const runtime = useStore((s) => s.settings.runtime);
   const defaultCli = useStore((s) => s.settings.defaultCli);
   const clis = useStore((s) => s.clis);
   const [query, setQuery] = useState('');
   const id = useId();
   const role: ToolRole = scope === 'ceo' ? 'ceo' : 'agent';
-  const own = scope === 'everyone' ? undefined : scope === 'ceo' ? tools.ceo : (agent?.tools ?? {});
+  // An agent's own switches sit on the builders' profile; Everyone shows its own switches, not a role's lean start.
+  const layers: Layers = {
+    everyone: tools.everyone,
+    own: scope === 'everyone' ? undefined : scope === 'ceo' || scope === 'build' || scope === 'qa' ? tools[scope] : (agent?.tools ?? {}),
+    profile: agent ? tools.build : undefined,
+    lean: !tools.lean || scope === 'everyone' ? null : scope === 'ceo' || scope === 'qa' ? scope : 'build',
+  };
   const groups = useMemo(() => groupItems(tooling.items, query), [tooling.items, query]);
-  const offPlugins = new Set(tooling.items.filter((i) => i.kind === 'plugin' && !itemState(i, role, tools.everyone, own).on).map((i) => i.id));
+  const offPlugins = new Set(tooling.items.filter((i) => i.kind === 'plugin' && !itemState(i, role, layers.everyone, layers.own, layers.profile, layers.lean).on).map((i) => i.id));
   // Codex and OpenCode load their own setup: the switches are Claude Code's.
   const cli = agent && runtime === 'terminal' ? agent.cli || defaultCli : 'claude';
   return (
@@ -96,7 +117,7 @@ function ToolsList({ scope }: { scope: string }) {
           </h4>
           <ul className="tool-rows">
             {g.items.map((item) => (
-              <ToolRow key={item.id} item={item} role={role} everyone={tools.everyone} own={own} scope={scope} pluginOff={!!item.plugin && offPlugins.has(item.plugin)} />
+              <ToolRow key={item.id} item={item} role={role} layers={layers} scope={scope} pluginOff={!!item.plugin && offPlugins.has(item.plugin)} />
             ))}
           </ul>
         </section>
@@ -107,6 +128,7 @@ function ToolsList({ scope }: { scope: string }) {
 
 /** Settings → 🧰 Tools & skills: pick a scope, then switch. */
 export function ToolsTab() {
+  const tools = useStore((s) => s.settings.tools);
   const agents = useStore((s) => s.agents);
   const repos = useStore((s) => s.repos);
   const [scope, setScope] = useState('everyone');
@@ -122,6 +144,8 @@ export function ToolsTab() {
         <span>Switches for</span>
         <select id={`${id}-scope`} value={scope} onChange={(e) => setScope(e.target.value)}>
           <option value="everyone">Everyone (the default)</option>
+          <option value="build">Builders &amp; fixers (role profile)</option>
+          <option value="qa">QA (role profile)</option>
           <option value="ceo">The CEO</option>
           {people.map((a) => (
             <option key={a.id} value={a.id}>
@@ -133,15 +157,26 @@ export function ToolsTab() {
         </select>
       </label>
       <p className="muted small">
-        What a Claude Code session on this computer loads, from your own setup. Every MCP server and plugin costs context in every session: switch off what a role doesn't need. The CEO and each agent follow
-        Everyone unless they have their own switch. Changes apply from their next session; your ~/.claude files are never changed.
+        What a Claude Code session on this computer loads, from your own setup. Every MCP server and plugin costs context in every session: switch off what a role doesn't need. Each kind of session follows
+        Everyone, then its role profile (builders and fixers, QA, the CEO), then an agent's own switches. Changes apply from their next session; your ~/.claude files are never changed.
       </p>
+      <label className="toggle">
+        <input type="checkbox" checked={tools.lean} onChange={(e) => void attempt(() => api.updateSettings({ tools: { ...tools, lean: e.target.checked } }))} />
+        <span>
+          <b>Lean sessions</b>{' '}
+          <span className="muted small">
+            Plugins, MCP servers and claude.ai connectors nobody switched on stay off, except the repo's own and the review plugins builders and QA use. QA keeps the office's browser. The usage view shows
+            what each kind of session loads.
+          </span>
+        </span>
+      </label>
       <details className="small">
         <summary>How the office switches them</summary>
         <p className="muted small">
           MCP servers and built-in tools go into that session's <code>--disallowedTools</code> (<code>mcp__server__*</code>): the server still starts, but its tools are taken out of the session.
           Skills become <code>Skill(name)</code> there too: hidden and refused, though their files stay readable. Plugins are turned off with <code>enabledPlugins</code> in the session's own
-          settings file, which takes its skills, commands, agents and MCP servers with it. The office's own servers and the tools it disables stay as the office needs them.
+          settings file, which takes its skills, commands, agents and MCP servers with it. With every claude.ai connector off, the session runs with <code>ENABLE_CLAUDEAI_MCP_SERVERS=false</code>
+          instead. The office's own servers and the tools it disables stay as the office needs them.
         </p>
       </details>
       <ToolsList scope={scope} />

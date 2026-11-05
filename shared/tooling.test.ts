@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanSwitches, costLabel, groupItems, itemState, mergeSwitches, officeItems, sessionTools, setSwitch, toolArgsLine, toolSettings, type ToolItem } from './tooling';
+import { cleanSwitches, costLabel, DEFAULT_TOOL_SETTINGS, groupItems, itemState, leanDefault, mergeSwitches, officeItems, sessionTools, setSwitch, toolArgsLine, toolsEnv, toolSettings, type ToolItem } from './tooling';
 
 const canva: ToolItem = { id: 'plugin:canva@official', kind: 'plugin', name: 'canva', description: 'Designs in Canva.', source: 'official', cost: { tools: 3 }, contents: { skills: ['canva:brand'], commands: [], agents: [], mcp: ['canva'] } };
 const canvaMcp: ToolItem = { id: 'mcp:plugin_canva_canva', kind: 'mcp', name: 'canva (canva)', description: 'MCP server.', source: 'plugin canva', cost: null, plugin: canva.id };
@@ -29,7 +29,10 @@ describe('scopes', () => {
   it('cleans what is saved or sent, and null follows the scope above', () => {
     expect(cleanSwitches({ 'mcp:a': false, 'skill:b': true, nope: false, 'mcp:c': 'off' })).toEqual({ 'mcp:a': false, 'skill:b': true });
     expect(cleanSwitches(null)).toEqual({});
-    expect(toolSettings({ everyone: {}, ceo: {} }, { everyone: { 'mcp:a': false } })).toEqual({ everyone: { 'mcp:a': false }, ceo: {} });
+    expect(toolSettings(DEFAULT_TOOL_SETTINGS, { everyone: { 'mcp:a': false } })).toEqual({ ...DEFAULT_TOOL_SETTINGS, everyone: { 'mcp:a': false } });
+    expect(toolSettings(DEFAULT_TOOL_SETTINGS, { qa: { 'mcp:a': true }, lean: false })).toEqual({ ...DEFAULT_TOOL_SETTINGS, qa: { 'mcp:a': true }, lean: false });
+    // Settings saved before role profiles: empty profiles, lean on.
+    expect(toolSettings(DEFAULT_TOOL_SETTINGS, { everyone: {}, ceo: {} })).toEqual(DEFAULT_TOOL_SETTINGS);
     expect(setSwitch({ 'mcp:a': false }, 'mcp:a', null)).toEqual({});
     expect(setSwitch({}, 'mcp:a', false)).toEqual({ 'mcp:a': false });
   });
@@ -58,6 +61,46 @@ describe('sessionTools', () => {
   it('logs as a command line', () => {
     expect(toolArgsLine({ disallowed: ['mcp__notion__*'], disabledPlugins: ['canva@official'] })).toBe('--settings {"enabledPlugins":{"canva@official":false}} --disallowedTools … mcp__notion__*');
     expect(toolArgsLine({ disallowed: [], disabledPlugins: [] })).toBe('');
+  });
+});
+
+describe('role profiles (#50)', () => {
+  const review: ToolItem = { id: 'plugin:code-review@official', kind: 'plugin', name: 'code-review', description: 'Reviews a diff.', source: 'official', cost: { tools: 1 } };
+  const gmail: ToolItem = { id: 'mcp:claude_ai_Gmail', kind: 'mcp', name: 'Gmail', description: 'claude.ai connector.', source: 'claude.ai', cost: null };
+  const vercel: ToolItem = { ...gmail, id: 'mcp:claude_ai_Vercel', name: 'Vercel' };
+  const repoMcp: ToolItem = { id: 'mcp:db', kind: 'mcp', name: 'db', description: 'MCP server.', source: 'project shop', cost: null };
+  const all = [...items, review, gmail, vercel, repoMcp];
+
+  it('starts builders and QA with the review plugins and the repo’s own tools, the CEO with none of them', () => {
+    expect(all.filter((i) => leanDefault(i, 'build')).map((i) => i.id)).toEqual(['mcp:plugin_canva_canva', 'skill:pdf', 'plugin:code-review@official', 'mcp:db']);
+    expect(all.filter((i) => leanDefault(i, 'ceo')).map((i) => i.id)).toEqual(['mcp:plugin_canva_canva', 'skill:pdf', 'mcp:db']);
+  });
+
+  it('maps a lean builder to disabled plugins, server patterns and the connectors env, never writing ~/.claude', () => {
+    const t = sessionTools(all, 'agent', {}, 'build');
+    expect(t).toEqual({ disallowed: ['mcp__notion__*'], disabledPlugins: ['canva@official'], noConnectors: true });
+    expect(toolsEnv(t)).toEqual({ ENABLE_CLAUDEAI_MCP_SERVERS: 'false' });
+    expect(toolArgsLine(t)).toBe('ENABLE_CLAUDEAI_MCP_SERVERS=false --settings {"enabledPlugins":{"canva@official":false}} --disallowedTools … mcp__notion__*');
+  });
+
+  it('lets a switch on in the profile, Everyone or the agent win over the lean start', () => {
+    const t = sessionTools(all, 'ceo', mergeSwitches({ 'mcp:notion': true }, { 'mcp:claude_ai_Gmail': true }), 'ceo');
+    expect(t).toEqual({ disallowed: ['mcp__claude_ai_Vercel__*'], disabledPlugins: ['canva@official', 'code-review@official'] });
+    expect(toolsEnv(t)).toEqual({});
+    expect(itemState(gmail, 'agent', {}, undefined, { 'mcp:claude_ai_Gmail': true }, 'qa')).toEqual({ on: true, from: 'profile' });
+    expect(itemState(gmail, 'agent', { 'mcp:claude_ai_Gmail': true }, { 'mcp:claude_ai_Gmail': false }, {}, 'qa')).toEqual({ on: false, from: 'own' });
+    expect(itemState(gmail, 'agent', {}, undefined, {}, 'qa')).toEqual({ on: false, from: 'lean' });
+  });
+
+  it('loads everything nobody switched when lean sessions are off', () => {
+    expect(sessionTools(all, 'agent', {}, null)).toEqual({ disallowed: [], disabledPlugins: [] });
+    expect(sessionTools(all, 'agent', { 'mcp:claude_ai_Gmail': false }, null)).toEqual({ disallowed: ['mcp__claude_ai_Gmail__*'], disabledPlugins: [] });
+    expect(itemState(gmail, 'agent', {}, undefined, {}, null)).toEqual({ on: true, from: 'default' });
+  });
+
+  it('turns connectors off before the inventory is scanned, and keeps the office’s browser for QA', () => {
+    expect(sessionTools([], 'agent', {}, 'qa')).toEqual({ disallowed: [], disabledPlugins: [], noConnectors: true });
+    expect(sessionTools([], 'agent', { 'mcp:playwright': false }, 'qa').disallowed).toEqual([]);
   });
 });
 
