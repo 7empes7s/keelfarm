@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { hitchNote } from '../../hitches';
-import { DEFAULT_PRESET, effectNames, GRAPHICS_PRESETS, governorSample, governorSettle, newGovernor, normalizePreset, type GovernorChange, type GraphicsPreset, type Tier } from './quality';
+import { DEVICE_PROFILE } from './device';
+import { DEFAULT_PRESET, effectNames, GRAPHICS_PRESETS, governorSample, governorSettle, newGovernor, normalizePreset, tierIndex, type GovernorChange, type GraphicsPreset, type Tier } from './quality';
 
 // The viewer's graphics quality (Help → Graphics, saved per browser) and, on Auto, the tier the governor (quality.ts)
 // has settled on, fed by perf.tsx's frame-rate samples. Graphics.tsx draws the tier; Effects.tsx reports when its
@@ -31,7 +32,9 @@ export interface GfxDecision extends GovernorChange {
   at: number;
 }
 
-const governor = newGovernor('high');
+// Auto starts at its highest tier for this device (Low on a phone, device.ts) and never steps above it.
+const AUTO_MAX = DEVICE_PROFILE.maxTier;
+const governor = newGovernor(AUTO_MAX);
 const decisions: GfxDecision[] = [];
 let lastSample: { fps: number; ms: number } | null = null;
 /** What the running effects report about themselves (Effects.tsx): passes, blooming meshes, samples. */
@@ -50,13 +53,17 @@ export function setGraphicsPreset(raw: GraphicsPreset) {
   } catch {
     // storage may be unavailable (private mode); the setting just won't be remembered
   }
-  // Auto starts over at High each time it's picked.
-  if (preset === 'auto' && useGfx.getState().preset !== 'auto') Object.assign(governor, newGovernor('high'));
+  // Auto starts over at its highest tier each time it's picked.
+  if (preset === 'auto' && useGfx.getState().preset !== 'auto') Object.assign(governor, newGovernor(AUTO_MAX));
   useGfx.setState({ preset, tier: preset === 'auto' ? governor.tier : preset });
 }
 
 function decide(change: GovernorChange | null) {
   if (!change) return;
+  if (tierIndex(change.to) > tierIndex(AUTO_MAX)) {
+    governor.tier = change.from;
+    return;
+  }
   decisions.push({ at: Date.now(), ...change });
   hitchNote('gfx', `${change.from} → ${change.to}`);
   if (decisions.length > 20) decisions.shift();

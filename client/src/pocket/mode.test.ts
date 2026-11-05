@@ -22,4 +22,11 @@ describe('pocket mode', () => {
     expect(pickMode({ ...screen, narrow: true, saved: 'pocket', param: '0' })).toBe('office');
     expect(pickMode({ ...screen, param: 'false' })).toBe('office');
   });
+
+  it('goes back to pocket mode after the 3D office crashed while starting, whatever this device chose', () => {
+    expect(pickMode({ ...screen, saved: 'office', crashed: true })).toBe('pocket');
+    expect(pickMode({ ...screen, crashed: true })).toBe('pocket');
+    expect(pickMode({ ...screen, saved: 'office', crashed: false })).toBe('office');
+    expect(pickMode({ ...screen, crashed: true, param: '0' })).toBe('office'); // the URL still decides one visit
+  });
 });
