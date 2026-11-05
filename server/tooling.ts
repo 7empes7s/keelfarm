@@ -17,7 +17,7 @@ export interface ReadFs {
   list(dir: string): string[];
 }
 
-export const diskFs: ReadFs = {
+const diskFs: ReadFs = {
   text: (file) => {
     try {
       return fs.readFileSync(file, 'utf8');
@@ -116,7 +116,7 @@ export function maskServer(config: unknown): string {
 }
 
 /** A .mcp.json's servers: `{ mcpServers: {...} }` or the servers themselves. */
-export function mcpServersOf(file: unknown): Record<string, unknown> {
+function mcpServersOf(file: unknown): Record<string, unknown> {
   const f = obj(file);
   return 'mcpServers' in f ? obj(f.mcpServers) : f;
 }
@@ -153,7 +153,7 @@ interface Found {
 }
 
 /** Skills in a skills folder: one folder each with a SKILL.md. */
-export function skillsIn(r: ReadFs, dir: string): Found[] {
+function skillsIn(r: ReadFs, dir: string): Found[] {
   return r
     .list(dir)
     .map((d) => {
@@ -208,7 +208,7 @@ export function pluginsFromFiles(installed: unknown, settings: unknown): PluginR
 }
 
 /** A plugin and what it brings: its row, and a row for each of its MCP servers. */
-export function pluginItems(r: ReadFs, p: PluginRecord): ToolItem[] {
+function pluginItems(r: ReadFs, p: PluginRecord): ToolItem[] {
   const [name, marketplace = ''] = p.id.split('@');
   const dir = p.installPath;
   const manifest = obj(json(r, path.join(dir, '.claude-plugin', 'plugin.json')));

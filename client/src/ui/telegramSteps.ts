@@ -3,7 +3,7 @@
 import type { TelegramView } from '../../../shared/types';
 import type { StepState } from './notifySteps';
 
-export type TelegramStepId = 'bot' | 'token' | 'start';
+type TelegramStepId = 'bot' | 'token' | 'start';
 
 export interface TelegramStep {
   id: TelegramStepId;
