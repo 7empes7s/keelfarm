@@ -4,6 +4,7 @@ import { isBusy, qaKey, useStore, type Agent } from '../store';
 import { reportCard } from '../world/activityProbe';
 import { useKeyName } from './controls';
 import { agentLabel, signInFor } from './floorRows';
+import { isTouch, openHoldMenu } from '../world/touch/touchState';
 
 // The card at the left edge (clear of their monitor) when you keep someone in your sights for a moment: who they are,
 // what they're on and for how long, what they're doing now and their last few steps, turns and cost on this task, and
@@ -81,6 +82,11 @@ export function AgentCard() {
           <span className="ac-title">{agentLabel(agent, settings, clis)}</span>
         </span>
         <span className="ac-time">{busy && agent.startedAt ? `⏱ ${elapsed(now - agent.startedAt)}` : STATUS[agent.status]}</span>
+        {isTouch && (
+          <button className="ac-more" onClick={() => openHoldMenu({ id: `agent-${agent.id}`, label: `Watch ${agent.name}`, action: { kind: 'terminal', agentId: agent.id } })} aria-label={`More for ${agent.name}`} title="More options">
+            ⋯
+          </button>
+        )}
       </div>
       {signIn && (
         <div className="ac-sign-in">

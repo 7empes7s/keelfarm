@@ -23,6 +23,7 @@ import { useRoof } from '../world/roof/roofState';
 import { RoofHud } from './RoofHud';
 import { usageChip } from '../ops';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
+import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -146,6 +147,7 @@ export function HUD() {
   const toasts = useStore((s) => s.toasts);
   const dismiss = useStore((s) => s.dismissToast);
   const centerDot = useA11y((s) => s.prefs.centerDot);
+  const walked = useTouchStick((s) => s.walked);
   // In the overview, the building view and the follow cam there's no crosshair to aim (camera/rig.ts).
   const onFoot = useCameraView((s) => s.mode) === 'first';
 
@@ -204,7 +206,7 @@ export function HUD() {
       </div>
       {started && !overlay && onFoot && (focus || sip) && (
         <div className="hud-hint">
-          <Key action="interact" /> {!held && <>/ <kbd>Click</kbd> </>}
+          {isTouch ? <kbd>Tap</kbd> : <Key action="interact" />} {!held && !isTouch && <>/ <kbd>Click</kbd> </>}
           {sip ? sipLabel(held) : (dropLabel ?? focus?.label)}
           {!held && focus?.action.kind === 'card' && focus.action.peel && (
             <>
@@ -218,11 +220,20 @@ export function HUD() {
               · <Key action="volumeDown" /> <Key action="volumeUp" /> / <kbd>Scroll</kbd> volume
             </>
           )}
+          {isTouch && focus && !sip && (
+            <button className="hint-more" onClick={() => openHoldMenu(focus)} aria-label={`More for ${focus.label}`} title="More options">
+              ⋯
+            </button>
+          )}
         </div>
       )}
       {started && !overlay && !travel && onFoot && <HeldHint />}
-      {started && !overlay && !locked && !travel && onFoot && <div className="hud-resume">Click to look around</div>}
-      {started && !(settings.setupDone && settings.tutorialStep >= 0) && (
+      {started && !overlay && !locked && !travel && onFoot && !isTouch && <div className="hud-resume">Click to look around</div>}
+      {started && !overlay && !travel && onFoot && isTouch && !walked && <div className="hud-resume">Drag anywhere to walk · a second finger looks · tap to use · hold for more</div>}
+      {started && !(settings.setupDone && settings.tutorialStep >= 0) && isTouch && (
+        <div className="hud-help">Drag anywhere to walk (far to run) · a second finger looks · tap to use · hold, then let go, for more · 📱 for the phone</div>
+      )}
+      {started && !(settings.setupDone && settings.tutorialStep >= 0) && !isTouch && (
         <div className="hud-help">
           <MoveKeys joined /> move · <Key action="run" /> run · <Key action="interact" /> / <kbd>Click</kbd> interact · <Key action="phone" /> phone · <Key action="emote" /> emote · <Key action="ping" /> ping · <Key action="photo" /> photo ·{' '}
           <Key action="overview" /> overview · <Key action="workers" /> workers · <Key action="mute" /> mute · <Key action="help" /> help · <kbd>Esc</kbd> free mouse
