@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { answerReply, demoGrow, demoRefsLine, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { describe, expect, it, vi } from 'vitest';
+import type { LogEntry, SessionOptions, SessionResult } from './agentRunner.ts';
+import { demoPrompts } from './demoPrompts.ts';
+import { answerReply, createDemoBackend, demoGrow, demoRefsLine, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
 import { demoRepoFile } from './demoReads.ts';
 import { parseRefs } from '../shared/chatRefs.ts';
 import { demoPastWeek } from './opsSample.ts';
@@ -122,6 +124,41 @@ describe("the demo CEO's answer to a reply", () => {
     const p = parseCeoMessage(answerReply({ quote: 'Shall I keep the team on it?', reply: 'Show me the plan' }));
     expect(p.artifacts?.map((a) => a.title)).toEqual(['The plan']);
     expect(p.text).toMatch(/^> Shall I keep the team on it\?\n\nHere it is\./);
+  });
+});
+
+describe("the demo's prompts nobody answers", () => {
+  it('answers a guarded write and a question the way the office does', () => {
+    const lines = demoPrompts('/desk/m').map((l) => l.text);
+    expect(lines[0]).toContain('allowed Write');
+    expect(lines[1]).toContain('Auto-answered a question');
+  });
+
+  it('a fake session raises a permission prompt and a question, both answered with no human, and finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      const log: LogEntry[] = [];
+      let result: SessionResult | null = null;
+      let blocked = false;
+      const opts = { cwd: '/demo/desk', prompt: 'Work on issue #3: Add a badge', systemAppend: '', model: 'demo', effort: 'low', browserTesting: false, additionalDirectories: [], role: 'agent', task: 'issue' } as unknown as SessionOptions;
+      createDemoBackend().startSession(opts, {
+        log: (e) => log.push(...e),
+        tool: () => undefined,
+        sessionId: () => undefined,
+        browserUrl: () => undefined,
+        screenshot: () => undefined,
+        blocked: (r) => (blocked ||= !!r),
+        finished: (r) => (result = r),
+      });
+      for (let i = 0; i < 60 && !result; i++) await vi.advanceTimersByTimeAsync(6000);
+      const text = log.map((l) => l.text).join('\n');
+      expect(text).toContain('Auto-answered a permission prompt: allowed Write');
+      expect(text).toContain('Auto-answered a question');
+      expect(blocked).toBe(false);
+      expect(result).toMatchObject({ ok: true });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

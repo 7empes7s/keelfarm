@@ -13,6 +13,7 @@ import { IssueForm } from './KanbanView';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
+import { HealthStrip, MemoryFields } from './HealthStrip';
 import { EffortByKind } from './CostsSection';
 import { NotifySettings } from './NotifySettings';
 import { ProfileSettings } from './ProfileSettings';
@@ -208,6 +209,7 @@ export function FloorsTab() {
     <div className="tab-grid">
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
+        <HealthStrip />
         <h3 className="section">🏢 Floors</h3>
         {repos.length === 0 && <p className="muted">No floors yet. Add a project →</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
@@ -702,6 +704,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           Leave empty so every agent with work runs at once. Agents on the same coding agent share its subscription's usage limits, and each one is its own process on this PC, so set a limit if
           you hit either.
         </p>
+        <MemoryFields memory={settings.memory} set={set} />
         <label className="field">
           <span>Sessions while pacing</span>
           <input
