@@ -497,6 +497,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
+          restartAgent: ok, messageAgent: async () => 'ok',
         },
         () => researching,
       ),
@@ -504,6 +505,7 @@ describe('follow-ups (#27)', () => {
     expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe(`Refused: ${RESEARCH_NO_FILING}`);
     expect(await office.call('scale_team', { floor: 1, size: 3, reason: 'more' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
     expect(await office.call('send_telegram', { text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('message_agent', { floor: 1, agent_id: 'a1', text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
     expect(await office.call('company_status', {})).toBe('ok');
     researching = false;
     expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe('filed');
