@@ -105,6 +105,8 @@ export interface SessionCallbacks {
 export interface SessionHandle {
   send(text: string): void;
   stop(): void;
+  /** Its CLI runs in the terminal keeper, so an office restart doesn't stop it (#74). */
+  kept?: boolean;
 }
 
 /** Async queue used as the streaming-input prompt so the manager can message a running agent. */
@@ -307,6 +309,10 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `🔀 pr_diff PR #${String(input.pr ?? '?')}${floor}`;
     case 'send_telegram':
       return `✈️ send_telegram: ${clip(String(input.text ?? ''), 90)}`;
+    case 'answer_agent':
+      return `💬 answer_agent ${String(input.agent_id ?? '')}: ${clip(String(input.text ?? ''), 90)}`;
+    case 'ask_manager_choice':
+      return `❓ ask_manager_choice ${String(input.agent_id ?? '')}: ${clip(String(input.question ?? ''), 90)}`;
   }
   return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }

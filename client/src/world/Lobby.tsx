@@ -20,6 +20,7 @@ import { Bookshelf, CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, Wal
 import { LobbyRituals } from './Rituals';
 import { Shell } from './Shell';
 import { TimeLapseScreen } from './TimeLapseScreen';
+import { TestLabScreen } from './TestLabScreen';
 import { Ball, Box, Cyl } from './Toon';
 import { Toys } from './toys';
 
@@ -379,6 +380,7 @@ export function Lobby() {
       <Toys floor="lobby" />
       <Directory />
       <TimeLapseScreen />
+      <TestLabScreen />
       <TrophyCabinet />
       <Kiosk />
       <TrophyShelf />

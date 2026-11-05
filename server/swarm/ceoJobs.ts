@@ -40,6 +40,7 @@ import { ceoSessionStep } from '../ceoWaits.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
 import { conversationsView, touchConversation } from '../../shared/conversations.ts';
+import { renotifyDue, toldCeo } from '../../shared/questions.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -58,6 +59,7 @@ import { SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpdate } from './update.ts';
 
 export abstract class SwarmCeo extends SwarmUpdate {
+  protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
   // ---------- the CEO ----------
 
   protected ceoPreempted: CeoJob | null = null; // the background job stopped for the manager's message: it goes back to the queue
@@ -137,6 +139,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
       followups: this.followupView(),
       session: { turns: c.kept.turns, costUsd: Math.round(c.kept.costUsd * 100) / 100, startedAt: c.kept.startedAt, waiting: this.holds.waiting(), consults: this.consults.length },
       held: ceoHeld({ now: Date.now(), pausedUntil: this.pausedUntil, chatQueued: c.queue.some((j) => j.kind === 'chat') }),
+      questions: this.state.questions,
     };
   }
 
@@ -160,7 +163,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
       now: Date.now(),
       pausedUntil: this.pausedUntil,
       draining,
-      handingOver: this.officeUpdate.sent,
+      handingOver: this.officeUpdate.sent && draining,
       busy: !!a && BUSY.includes(a.status),
       job: c.job?.kind ?? null,
       session: !!this.agentRt.get(CEO_ID)?.session,
@@ -266,7 +269,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
     const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + memoryPrompt(this.state.ceo.remember);
+    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0)) + memoryPrompt(this.state.ceo.remember);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
     const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.backend.startSession(
@@ -307,10 +310,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         screenshot: () => undefined,
         // A follow-up that found nothing to do stays off the manager's phone.
         turn: (text) => {
-          if (job.kind === 'followup' && quietReply(text)) {
-            this.ceoChat.finishTurn(text);
-            return;
-          }
+          if (job.kind === 'followup' && quietReply(text)) return void this.ceoChat.finishTurn(text);
           this.postCeoReply(text);
           this.markDelivery('all', 'replied');
         },
@@ -326,7 +326,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
-    if (!rt || this.officeUpdate.handedOver) return;
+    if (!rt || this.officeUpdate.cutOff.has(a.id)) return;
     this.health.ended(a, 'ceo', result.errors, false, false); // its peak teaches the CEO's estimate
     rt.session = null;
     rt.currentTool = null;
@@ -380,6 +380,8 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const attachments = this.ceoFiles.managerFiles(fileIds);
     if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
     const a = this.ceo();
+    const agentAsked = replyTo === undefined ? undefined : this.state.questions.find((q) => q.messageId === replyTo);
+    if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via);
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
     const forward = [forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
@@ -474,11 +476,12 @@ export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- follow-ups (#27) ----------
 
   /** Something happened the CEO may want to follow up on: queued unless Settings → The CEO turned its kind off. */
-  protected followup(ev: Omit<FollowupEvent, 'id' | 'at'>) {
-    if (!addFollowup(this.state.ceo.followups, { ...ev, at: Date.now() }, this.state.settings.ceoFollowups)) return;
+  protected followup(ev: Omit<FollowupEvent, 'id' | 'at'>): boolean {
+    if (!addFollowup(this.state.ceo.followups, { ...ev, at: Date.now() }, this.state.settings.ceoFollowups)) return false;
     this.emitCeo();
     this.save();
     setTimeout(() => this.schedule(), 150);
+    return true;
   }
 
   /** Start a follow-up job when its batch window has passed, unless the hourly cap or Claude's usage holds it. */
@@ -646,7 +649,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'steps'> & { changes?: TeamChange[] } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'steps' | 'question'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
@@ -669,8 +672,8 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.broadcast({ type: 'message', message: m });
     if (touchConversation(this.state.ceo.chats, m)) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
     this.save();
-    // Proposals are notified as such (proposeHire, proposeLetGo).
-    if (from === 'ceo' && !requestId) {
+    // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
+    if (from === 'ceo' && !requestId && !m.question) {
       const said = m.text || `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`;
       this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
     }
@@ -701,8 +704,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
   protected postCeoReply(text: string) {
-    const steps = this.ceoChat.finishTurn(text);
-    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...(steps.length && { steps }) });
+    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...this.ceoChat.finishTurn(text) });
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */
@@ -784,6 +786,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
       const b = this.agentRt.get(a.id)?.blocked, n = blockedNotice(a.name, b, now, this.state.repos.find((r) => r.id === a.repoId)?.floor);
       if (n && b) { b.told = true; this.notifier.notify('agentError', n.title, n.body, n.who); }
     }
+    for (const q of this.state.questions) if (renotifyDue(q, now)) this.notifyQuestion(Object.assign(q, { renotified: true }), true);
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }
 

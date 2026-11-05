@@ -12,6 +12,7 @@ import { retrySend, sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { Markdown } from './Markdown';
+import { QuestionChips } from './QuestionChips';
 import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
 import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
@@ -763,7 +764,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
                   New messages
                 </div>
               )}
-              {bubble({ m }, m.id)}
+              {bubble({ m }, m.id)}{m.question && <QuestionChips m={m} sent={outbox.some((o) => o.replyTo === m.id)} onPick={(s) => send(s, m.id)} onWrite={() => reply(m.id)} />}
               {m.id === offered?.id && (
                 <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
                   {offered.suggestions!.map((s) => (

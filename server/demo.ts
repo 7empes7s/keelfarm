@@ -26,7 +26,7 @@ import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
-import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
+import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
@@ -35,6 +35,7 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { researchBrief } from './demoResearch.ts';
 import { logStreamed, writeReply } from './demoChat.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
+import { demoLabRunner, withLab } from './demoTestLab.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -382,7 +383,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   const pull = fixPromptPull(opts.prompt);
   const issueMatch = opts.prompt.match(/#(\d+):\s*(.+)/);
   const number = kind === 'issue' ? Number(issueMatch?.[1] ?? 0) : pull.number;
-  const title = (kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up';
+  const { answered, question, title } = demoAsks(kind === 'issue', opts, number, (kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up', repos.get(fullName)?.issues ?? []);
   const round = Number(opts.prompt.match(/QA round (\d+)/)?.[1] ?? 1);
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
@@ -395,7 +396,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
-  const script = [header, ...body];
+  const script = [header, ...(question ? [...body.slice(0, 7), () => ((stopped = true), demoAsked(cb, question))] : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
 
   const expired = () => {
     if (stopped) return;
@@ -603,7 +604,7 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
       cb.finished(r);
     },
   });
-  return handle;
+  return Object.assign(handle, { kept: true }); // as if the keeper held it: the demo's update restarts nothing
 }
 
 /**
@@ -878,10 +879,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     },
     // Each agent's machine has a clone of its own, so no other desk ever holds its branch.
     machines: {
-      deskDir: (machine, fullName) => `/demo/machines/${machine}/work/${fullName}`,
+      deskDir: (machine, fullName) => path.join(HOME_DIR, 'machines', machine, 'work', fullName),
       prepareDesk: async (machine, fullName) => {
         await new Promise((r) => setTimeout(r, 900));
-        const dir = `/demo/machines/${machine}/work/${fullName}`;
+        const dir = path.join(HOME_DIR, 'machines', machine, 'work', fullName);
         deskRepo.set(dir, fullName);
         return dir;
       },
@@ -917,10 +918,11 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
       // connectors and plugins unless the session is lean.
       if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
-      return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
+      return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withLab(opts, c), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
     sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
     terminals: true,
+    keeping: () => true,
     reconnectClis: async () => [], // fake sessions end with the office
     hooksReady: () => undefined,
     releaseClis: async () => undefined,
@@ -930,6 +932,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     toolInventory: async (projects) => demoTooling(projects),
     survivalSignals: demoSurvival,
     previews: demoPreviews,
+    testLab: demoLabRunner(),
     office: demoOffice,
     voice: demoVoice,
     weather: demoWeather,
@@ -1410,7 +1413,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         else if (agent && / error | stalled /.test(e)) {
           await use('agent_log', { agent_id: agent, lines: 50 });
           if (/ error /.test(e) && (await use('restart_agent', { agent_id: agent })).startsWith('Refused')) needs.push(`${e.split(' (')[0]} is still in an error and I couldn't restart them; reset them from their desk.`);
-        } else await think('Nothing there needs me.');
+        } else if (!(await demoCeoAnswer(e, use, think))) await think('Nothing there needs me.'); // an agent's question: answered, or on the manager's phone
       }
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
       return needs.length ? needs.join(' ') : 'Nothing to do.';
@@ -1508,7 +1511,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt.replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // shared/ceoMemory.ts memoryPrompt
+  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage

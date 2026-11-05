@@ -2,7 +2,8 @@ import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@
 import { z } from 'zod';
 import { SESSION_HISTORY_INPUT, SESSION_HISTORY_TOOL } from './history.ts';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
-import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
+import { followupLabel, MANDATE_MAX_CHARS, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
+import { followupPrompt } from './followupPrompt.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
 import { PROPOSE_CHARTER, PROPOSE_CHARTER_TEXT, type CharterProposalArgs } from './charterTool.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
@@ -150,7 +151,7 @@ export function qaReportText(
 export interface OfficeHandlers extends WaitHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
-  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
@@ -170,6 +171,8 @@ export interface OfficeHandlers extends WaitHandlers {
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
+  answerAgent(a: { agent_id: string; text: string }): Promise<string>;
+  askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
   qaReport(a: { floor: number; pr: number }): string;
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
@@ -267,6 +270,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
           .describe(
             `Extra environment variables for the preview; {port} and {tmp} are replaced in the values. Replaces the whole set. At most ${PREVIEW_ENV_MAX_CHARS} characters in all, each variable counted as KEY=value plus 2: only what the app needs to run.`,
           ),
+        lab_commands: z.array(z.string().min(1).max(200)).max(20).optional().describe('lab_run commands beyond the defaults (npm test/build/typecheck/lint, playwright and vitest specs), e.g. "tools/check.sh" or "npm run e2e <args>". Replaces the set; [] clears it.'),
       },
       (a) => run(() => h.setFloorProfile(a)),
     ),
@@ -431,6 +435,8 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000) },
       (a) => run(() => h.messageAgent(a)),
     ),
+    tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') }, (a) => run(() => h.answerAgent(a))),
+    tool('ask_manager_choice', "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.", { agent_id: z.string(), question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'), options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'), recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence') }, (a) => run(() => h.askManagerChoice(a))),
     tool(
       'qa_report',
       "A pull request's latest QA verdict, report (summary, checks, fix instructions) and screenshots. Screenshots are file paths you can Read to see them. Read-only.",
@@ -570,25 +576,6 @@ export function ceoSystemPrompt(o: {
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
     '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
-  ].join('\n');
-}
-
-/** The follow-up's prompt: the events with their ids, the mandates in force, and what the CEO may do. */
-function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string {
-  const until = (m: CeoMandate) => (m.expiresAt ? `, until ${new Date(m.expiresAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` : '');
-  return [
-    'Follow-up: the office woke you because of these events since you last looked:',
-    ...events.map((e) => `- [${e.id}] ${e.text}`),
-    '',
-    mandates.length
-      ? `Standing mandates from the manager:\n${mandates.map((m) => `- "${m.text}" (${mandateWhere(m)}${until(m)})`).join('\n')}`
-      : 'There are no standing mandates: file no issues.',
-    '',
-    'Check each event, e.g. a merged PR against its issue\'s acceptance criteria (pr_diff, qa_report), a stuck agent through agent_log and worktree_file. Then, only where it helps:',
-    '- file follow-up issues (file_issue) for gaps, only on floors a mandate covers, at most 12;',
-    '- scale_team when work keeps waiting for free agents;',
-    '- the triage tools, if a pull request is stuck (needs-human).',
-    `Your final message reaches the manager only when it says what you did or what they need to decide. If nothing needs doing, reply exactly "Nothing to do."`,
   ].join('\n');
 }
 

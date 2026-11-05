@@ -3,6 +3,7 @@ import * as github from './github.ts';
 import * as workspace from './workspace.ts';
 import { startSession, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { detachBoxClis, hooksReady, officeProcesses, reconnectBoxClis, reconnectClis, releaseClis, startBoxSignIn, startCliSession, terminalsAvailable, type BoxSignIn, type KeptBoxCli, type ReconnectedCli } from './cliRunner.ts';
+import { keeperHookUrl } from './ptyClient.ts';
 import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
@@ -29,6 +30,8 @@ import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
 import type { UsageWarning } from './pacing.ts';
 import { realResources, type ResourceProbe } from './health.ts';
+import type { LabRunner } from './testLab.ts';
+import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -108,6 +111,8 @@ export interface Backend {
   sessionTranscript(cwd: string, sessionId: string | null, about: Pick<HistoryEntry, 'agent' | 'kind' | 'title' | 'at'>): Promise<{ file: string; sessionId: string } | null>;
   /** Terminals can run here (the native pseudo-terminal module loaded). */
   terminals: boolean;
+  /** New CLIs start in the terminal keeper, which keeps them running through an office restart (#74). */
+  keeping(): boolean;
   /** The office started: the CLIs its terminal keeper kept running through a restart, back in their agents' terminals. */
   reconnectClis(terminalFor: (agentId: string) => AgentTerminal | null): Promise<ReconnectedCli[]>;
   /** The office follows those CLIs' sessions again: hooks that waited for it can come in. */
@@ -126,6 +131,8 @@ export interface Backend {
   previews: PreviewBackend;
   /** Memory, swap and load, and what agents' processes use (server/health.ts). */
   resources: ResourceProbe;
+  /** The test lab's shared browser and heavy commands (#56). */
+  testLab: LabRunner;
   /** The running office's own folder and its launcher, for the office's self-update. */
   office: OfficeHost;
   /** Text to speech for the manager's phone (ElevenLabs). */
@@ -203,6 +210,7 @@ export interface DemoDoctor {
 export const realBackend: Backend = {
   demo: false,
   resources: realResources,
+  testLab: createLabRunner(),
   user: github.currentUser,
   listMyRepos: github.listMyRepos,
   repoMeta: github.repoMeta,
@@ -246,12 +254,14 @@ export const realBackend: Backend = {
   sweepDesks: workspace.sweepDesks,
   trimDesk: workspace.trimDesk,
   releaseDesk: (fullName, agentSlug, port) => workspace.releaseDesk(fullName, agentSlug, port, officeProcesses()),
-  startSession: (opts, cb) => (opts.terminal ? startCliSession(opts, cb) : startSession(opts, cb)),
+  // A CLI started in the terminal keeper outlives an office restart (kept); a Box's is followed through its record.
+  startSession: (opts, cb) => (opts.terminal ? Object.assign(startCliSession(opts, cb), { kept: !opts.box && keeperHookUrl() !== null }) : startSession(opts, cb)),
   sessionTranscript: async (cwd, sessionId) => {
     const file = sessionId ? await findTranscript(claudeProjectsDir(), cwd, sessionId) : null;
     return file && sessionId ? { file, sessionId } : null;
   },
   terminals: terminalsAvailable,
+  keeping: () => keeperHookUrl() !== null,
   reconnectClis: (terminalFor) => (terminalsAvailable ? reconnectClis(terminalFor) : Promise.resolve([])),
   hooksReady,
   releaseClis,

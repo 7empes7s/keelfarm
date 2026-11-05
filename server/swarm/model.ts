@@ -24,6 +24,7 @@ import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
   AgentLook,
+  AgentQuestion,
   AgentRole,
   AgentStatus,
   AgentTask,
@@ -62,6 +63,7 @@ export interface PersistedRepo {
   summary: string;
   qaBrief: string;
   playbook: string;
+  labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   addedAt: number;
@@ -176,6 +178,7 @@ export interface Persisted {
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
+  questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
 }
 
 export interface Shot {

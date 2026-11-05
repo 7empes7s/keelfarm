@@ -47,12 +47,12 @@ export class CeoChat {
     if (live !== this.live) this.set(live, true);
   }
 
-  /** A turn's reply went to the phone: the steps it keeps; nothing is live until the next one. */
-  finishTurn(text: string): string[] {
+  /** A turn's reply went to the phone: the steps it keeps (for its message); nothing is live until the next one. */
+  finishTurn(text: string): Pick<PhoneMessage, 'steps'> {
     const steps = finishedSteps(this.live);
     this.lastReply = text.trim();
     this.set(null);
-    return steps;
+    return steps.length ? { steps } : {};
   }
 
   /** The job ended (or was stopped) with nothing more to say. */

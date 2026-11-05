@@ -291,7 +291,9 @@ input.inline:focus {
 .status-idle {
   background: var(--st-idle, #e9ecef);
 }
-.status-preparing {
+.status-preparing,
+.status-waiting-ceo,
+.status-waiting-you {
   background: var(--st-preparing, #ffe066);
 }
 .status-working {

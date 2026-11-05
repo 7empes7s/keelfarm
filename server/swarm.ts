@@ -6,10 +6,12 @@ import type { BoxCliRecord } from './boxCli.ts';
 import type { ReconnectedCli } from './cliRunner.ts';
 import { DESK_SWEEP_INTERVAL_MS, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS } from './config.ts';
 import { HttpError } from './httpError.ts';
+import { settleMinutes } from './officeUpdate.ts';
 import { orphanedQa } from './qaOrphans.ts';
 import { catchUp, PR_LIMITS_VERSION } from './prOwnership.ts';
 import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecovery.ts';
 import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
+import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { pruneQaShots } from './qaShots.ts';
 import { mergeReadings } from '../shared/usage.ts';
@@ -136,6 +138,7 @@ export class Swarm extends SwarmCeoTools {
         prLimits: loaded.prLimits ?? 1,
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
+        questions: Array.isArray(loaded.questions) ? loaded.questions : [],
         progress: loadLedger(loaded.progress),
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
@@ -176,6 +179,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.listen = listenSettings(DEFAULT_LISTEN, loaded.settings?.listen);
       this.state.settings.notify = notifySettings(DEFAULT_NOTIFY, loaded.settings?.notify);
       this.state.settings.memory = memorySettings(DEFAULT_MEMORY, loaded.settings?.memory);
+      this.state.settings.testLab = testLabSettings(DEFAULT_TEST_LAB, loaded.settings?.testLab);
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
@@ -633,6 +637,7 @@ export class Swarm extends SwarmCeoTools {
     const s = this.state.settings;
     if (patch.sessionLimit !== undefined) s.sessionLimit = Math.max(0, Math.round(Number(patch.sessionLimit)) || 0);
     if (patch.memory !== undefined) s.memory = memorySettings(s.memory, patch.memory);
+    if (patch.testLab !== undefined) s.testLab = testLabSettings(s.testLab, patch.testLab);
     // The default model belongs to the default coding agent: a new agent starts on its own default.
     if (isCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) {
       s.defaultCli = patch.defaultCli;
@@ -656,6 +661,7 @@ export class Swarm extends SwarmCeoTools {
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
     if (typeof patch.autoUpdate === 'boolean') s.autoUpdate = patch.autoUpdate;
+    if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);

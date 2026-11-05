@@ -14,6 +14,7 @@ import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
 import { HealthStrip, MemoryFields } from './HealthStrip';
+import { TestLabCard, TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
 import { NotifySettings } from './NotifySettings';
@@ -22,7 +23,7 @@ import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
-import { StatusPill } from './StatusPill';
+import { badgeStatus, StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
@@ -80,7 +81,7 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
             <button
               className="btn btn-small btn-good"
               disabled={busy || !canUpdateNow(update)}
-              title={tip(canUpdateNow(update), 'Start nothing new, let running sessions finish, then update and restart the office')}
+              title={tip(canUpdateNow(update), 'Update without waiting for more merges: agents keep working while it is checked, then the office restarts for a few seconds')}
               onClick={() => act('now')}
             >
               Update now
@@ -93,11 +94,11 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
       </div>
       {update.detail && update.state !== 'failed' && <div className="muted small">{update.detail}</div>}
       {deadline && update.running > 0 && (
-        <div className="muted small">Sessions still running at {new Date(deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} are stopped, and their work goes back to the queue.</div>
+        <div className="muted small">Sessions a restart would stop that are still running at {new Date(deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} are stopped, and their work goes back to the queue.</div>
       )}
       {!update.launcher && pending && <div className="muted small">{NO_LAUNCHER}</div>}
       {typeof autoUpdate === 'boolean' && (
-        <label className="toggle" title="When an update is ready, start nothing new, let running sessions finish, then update and restart the office">
+        <label className="toggle" title="When merges have settled, check the update while agents keep working, then restart the office for a few seconds">
           <input type="checkbox" checked={autoUpdate} onChange={(e) => void attempt(() => api.updateSettings({ autoUpdate: e.target.checked }))} /> Update automatically
         </label>
       )}
@@ -215,6 +216,7 @@ export function FloorsTab() {
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
         <HealthStrip />
+        <TestLabCard />
         <h3 className="section">🏢 Floors</h3>
         {repos.length === 0 && <p className="muted">No floors yet. Add a project →</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
@@ -512,7 +514,7 @@ export function TeamTab() {
                             ☁
                           </span>
                         )}
-                        <StatusPill status={a.status} />
+                        <StatusPill status={badgeStatus(a)} />
                       </td>
                       <td className="small ds-cell-full roster-doing">
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
@@ -717,6 +719,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           you hit either.
         </p>
         <MemoryFields memory={settings.memory} set={set} />
+        <TestLabFields testLab={settings.testLab} set={set} />
         <label className="field">
           <span>Sessions while pacing</span>
           <input
@@ -824,6 +827,15 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           />
         </label>
         <p className="muted small">A desk left idle this long loses its node_modules and build output to save disk space. Its next task installs them again.</p>
+        {typeof settings.autoUpdate === 'boolean' && (
+          <>
+            <label className="field">
+              <span>Update the office after merges settle (minutes)</span>
+              <input key={settings.updateSettleMin ?? 3} type="number" min={0} max={60} defaultValue={settings.updateSettleMin ?? 3} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.updateSettleMin && set({ updateSettleMin: Number(e.target.value) })} />
+            </label>
+            <p className="muted small">An automatic update waits this long after the latest merge (at most 15 minutes after the first), so a run of merges restarts the office once. Agents keep working meanwhile.</p>
+          </>
+        )}
         <div className="row">
           <button className="btn btn-small" onClick={() => set({ tutorialStep: 0 })}>
             🧭 Replay the tour

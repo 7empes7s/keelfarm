@@ -459,7 +459,6 @@
     "exports:server/boxHelpers.ts:BOX_STATUSLINE_SOURCE",
     "exports:server/boxScripts.ts:BOX_CF",
     "exports:server/boxScripts.ts:BOX_SESSIONS",
-    "exports:server/browser.ts:hasChrome",
     "exports:server/clis.ts:BOX_CODEX_VERSION",
     "exports:server/clis.ts:resolveCommand",
     "exports:server/cloud.ts:CLAUDE_TOKEN_ENV",
@@ -604,7 +603,8 @@
     "server/ceo.ts": 801,
     "server/cliRunner.ts": 989,
     "server/ceo.ts": 803,
-    "server/demo.ts": 1758,
+    "server/demo.ts": 1844,
+    "server/swarm/core.ts": 802,
     "server/workspace.ts": 909,
     "shared/types.ts": 900
   }
