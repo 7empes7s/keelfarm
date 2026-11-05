@@ -228,9 +228,8 @@
   background: var(--ds-surface-sunken);
 }
 
-/* the chat's header holds one row: the CEO's name and what they're doing truncate, never wrap into the buttons */
-.chat-head > .grow,
-.chat-head > .grow > div {
+/* the chat's header holds one line: the CEO's name and what they're doing truncate, never wrap into the buttons */
+.chat-head > .grow {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
