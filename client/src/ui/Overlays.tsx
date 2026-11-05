@@ -440,7 +440,7 @@ export function Overlays() {
     case 'elevator':
       return <ElevatorPanel />;
     case 'manager':
-      return <ManagerConsole initialTab={overlay.tab} initialRepo={overlay.repoId} card={overlay.card} />;
+      return <ManagerConsole key={overlay.history ? JSON.stringify(overlay.history) : undefined} initialTab={overlay.tab} initialRepo={overlay.repoId} card={overlay.card} history={overlay.history} />;
     case 'interview':
       return <Interview requestId={overlay.requestId} />;
     case 'help':

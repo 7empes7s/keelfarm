@@ -48,6 +48,7 @@ const OFFICE_STEPS: Record<string, string> = {
   worktree_file: "Reading an agent's file",
   pr_diff: 'Reading a pull request',
   send_telegram: 'Sending to Telegram',
+  session_history: 'Reading session history',
 };
 
 const TOOL_STEPS: Record<string, string> = {
@@ -115,7 +116,7 @@ export interface OfficeCall {
 }
 
 // The office tools that only read: a stopped job's reply leaves them out of what it did.
-const READS = new Set(['company_status', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff']);
+const READS = new Set(['company_status', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history']);
 
 /**
  * What a stopped job's reply says (#51). Tools the CEO called stay done (the office finishes a call it started, so

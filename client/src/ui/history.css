@@ -1,0 +1,135 @@
+/* The console's 📜 History (ui/HistoryTab.tsx): a logbook of sessions by UTC day, each row edged in its floor's colour. */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.history-filters > input {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.history-filters > select {
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+.history-filters > :is(input, select, .history-chip) {
+  min-height: var(--ds-target);
+}
+.history-day {
+  margin: var(--ds-space-2) 0 var(--ds-space-1);
+  font-size: var(--ds-text-md);
+}
+.history-list,
+.history-transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-3);
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  text-align: left;
+  font: inherit;
+  color: var(--ds-text);
+  background: var(--ds-surface-raised);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-left: 6px solid var(--accent);
+  border-radius: var(--ds-radius-md);
+  cursor: pointer;
+}
+.history-row:hover {
+  background: var(--ds-surface-hover);
+}
+.history-when {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+}
+.history-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.history-outcome.history-good {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.history-outcome.history-bad {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.history-summary {
+  border-left: 6px solid var(--accent);
+}
+.history-summary h3 {
+  overflow-wrap: anywhere;
+}
+.history-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--ds-space-1) var(--ds-space-3);
+  margin: 0;
+}
+.history-facts dt {
+  color: var(--ds-text-muted);
+}
+.history-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.history-item {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  min-width: 0;
+}
+.history-item.history-assistant {
+  background: var(--ds-surface-raised);
+  border: var(--ds-border) solid var(--ds-line);
+}
+.history-item.history-error {
+  background: color-mix(in srgb, var(--ds-bad-fill) 22%, transparent);
+}
+.history-who {
+  font-weight: var(--ds-weight-strong);
+  color: var(--ds-text-muted);
+}
+.history-peek {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: normal;
+}
+.history-text {
+  margin: var(--ds-space-1) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+}
+@media (max-width: 480px) {
+  .history-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .history-when {
+    grid-column: 1 / -1;
+  }
+}
