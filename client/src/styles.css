@@ -4608,6 +4608,28 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   font-weight: 600;
   color: var(--muted);
 }
+.office-failed {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
+}
+.office-failed h2 {
+  margin: 0;
+}
+.office-failed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
 .start-meta {
   flex-wrap: wrap;
 }

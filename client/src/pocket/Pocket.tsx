@@ -8,7 +8,7 @@ import { officeUpdateChip } from '../officeUpdate';
 import { KanbanView } from '../ui/KanbanView';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
-import { setMode } from './mode';
+import { setMode, useMode } from './mode';
 import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
 import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
@@ -55,9 +55,18 @@ function Banners() {
   const loaded = useStore((s) => s.loaded);
   const usage = useStore((s) => s.usage);
   const update = useStore((s) => (s.restarting ? '⟳ The office is restarting…' : officeUpdateChip(s.officeUpdate)));
+  const closedLast = useMode((s) => s.closedLast);
   const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   return (
     <>
+      {closedLast && (
+        <div className="pk-banner pk-banner-bad" role="alert">
+          The 3D office closed last time: {closedLast}.{' '}
+          <button className="btn btn-ghost btn-small" onClick={() => useMode.setState({ closedLast: null })}>
+            OK
+          </button>
+        </div>
+      )}
       {!connected && <div className="pk-banner pk-banner-bad">{loaded ? '📡 Reconnecting to the office…' : '📡 Connecting to the office…'}</div>}
       {usage.state === 'paused' && <div className="pk-banner pk-banner-bad">⏸ Claude's usage limit was reached: no new work starts{until ? ` until ${until}` : ''}.</div>}
       {usage.state === 'pacing' && <div className="pk-banner">🐢 Pacing new work after a usage warning{until ? ` until ${until}` : ''}.</div>}

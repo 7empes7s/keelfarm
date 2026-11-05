@@ -8,6 +8,7 @@
 import { useMemo, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import type * as THREE from 'three';
+import { DEVICE_PROFILE } from '../gfx/device';
 import { DIM_BY, ritualLook } from '../ritualLook';
 import { gloomOf, weatherSky } from '../weather/weatherRules';
 import { weather } from '../weather/weatherState';
@@ -84,7 +85,7 @@ export function DayLights() {
         position={[9, 14, 7]}
         intensity={1.55}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[DEVICE_PROFILE.shadowMap, DEVICE_PROFILE.shadowMap]}
         shadow-bias={-0.0006}
         shadow-normalBias={0.03}
       />
