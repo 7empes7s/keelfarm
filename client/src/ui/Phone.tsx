@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
-import { CEO_ID, type AgentCli, type AgentQuestion, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
+import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
 import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
@@ -12,6 +12,7 @@ import { retrySend, sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { Markdown } from './Markdown';
+import { QuestionChips } from './QuestionChips';
 import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
 import { MessageBox } from './MessageBox';
 import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
@@ -377,23 +378,6 @@ function DeliveryTick({ d }: { d: Delivery }) {
 }
 
 /** The hover (and keyboard) buttons by a bubble: Reply, and the actions menu. */
-/** An agent's question the CEO brought to the manager: its options as one-tap answers, or a reply in their own words. */
-function QuestionChips({ q, sent, onPick, onWrite }: { q: AgentQuestion | undefined; sent: boolean; onPick: (s: string) => void; onWrite: () => void }) {
-  if (!q || sent) return null;
-  return (
-    <div className="suggestions" role="group" aria-label={`Answers to ${q.agentName}'s question`}>
-      {q.options.map((s) => (
-        <button key={s} type="button" className="suggestion-chip" onClick={() => onPick(s)} aria-label={`Answer “${s}” to ${q.agentName}`}>
-          ↩ {s}
-        </button>
-      ))}
-      <button type="button" className="suggestion-chip" onClick={onWrite} aria-label={`Write ${q.agentName} an answer`}>
-        ✍ Write an answer
-      </button>
-    </div>
-  );
-}
-
 function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined; item: Item; onReply: (id: number) => void; onActions: (item: Item) => void }) {
   return (
     <div className="bubble-tools">
@@ -610,7 +594,6 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const [filesOpen, setFilesOpen] = useState(false);
   const att = useAttachments();
   const fileCount = useStore((s) => s.files.length);
-  const questions = useStore((s) => s.ceo.questions) ?? [];
   const drop = useDropZone(att.add);
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
   const [flash, setFlash] = useState<number | null>(null);
@@ -814,8 +797,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
                   New messages
                 </div>
               )}
-              {bubble({ m }, m.id)}
-              {m.question && <QuestionChips q={questions.find((q) => q.id === m.question && q.to === 'manager')} sent={outbox.some((o) => o.replyTo === m.id)} onPick={(s) => send(s, m.id)} onWrite={() => reply(m.id)} />}
+              {bubble({ m }, m.id)}{m.question && <QuestionChips m={m} sent={outbox.some((o) => o.replyTo === m.id)} onPick={(s) => send(s, m.id)} onWrite={() => reply(m.id)} />}
               {m.id === offered?.id && (
                 <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
                   {offered.suggestions!.map((s) => (

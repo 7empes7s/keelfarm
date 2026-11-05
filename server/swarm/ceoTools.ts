@@ -413,7 +413,6 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     if (questionOf(this.state.questions, agentId)) this.setQuestions(this.state.questions.filter((q) => q.agentId !== agentId));
   }
 
-
   /** A session that ended asking something: the agent waits, and a follow-up wakes the CEO (else the manager is asked). */
   protected ask(a: PersistedAgent, repo: PersistedRepo, text: string): boolean {
     const asked = questionFromTurn(scrub(text, this.secrets())); // it goes to the CEO, the chat and notifications
