@@ -50,35 +50,50 @@ export abstract class SwarmContract {
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
 
-  // swarm.ts
-  protected abstract agentDoing(...a: Parameters<Swarm['agentDoing']>): ReturnType<Swarm['agentDoing']>;
-  protected abstract applyTeamChanges(...a: Parameters<Swarm['applyTeamChanges']>): ReturnType<Swarm['applyTeamChanges']>;
+  // ceoJobs.ts
   protected abstract ceo(...a: Parameters<Swarm['ceo']>): ReturnType<Swarm['ceo']>;
   protected abstract ceoInfo(...a: Parameters<Swarm['ceoInfo']>): ReturnType<Swarm['ceoInfo']>;
   protected abstract ceoPromptInput(...a: Parameters<Swarm['ceoPromptInput']>): ReturnType<Swarm['ceoPromptInput']>;
-  protected abstract decide(...a: Parameters<Swarm['decide']>): ReturnType<Swarm['decide']>;
   protected abstract decideFromTelegram(...a: Parameters<Swarm['decideFromTelegram']>): ReturnType<Swarm['decideFromTelegram']>;
-  protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
   protected abstract emitCeo(...a: Parameters<Swarm['emitCeo']>): ReturnType<Swarm['emitCeo']>;
   protected abstract enqueueCeo(...a: Parameters<Swarm['enqueueCeo']>): ReturnType<Swarm['enqueueCeo']>;
   protected abstract ensureCeo(...a: Parameters<Swarm['ensureCeo']>): ReturnType<Swarm['ensureCeo']>;
   protected abstract floorName(...a: Parameters<Swarm['floorName']>): ReturnType<Swarm['floorName']>;
   protected abstract followup(...a: Parameters<Swarm['followup']>): ReturnType<Swarm['followup']>;
-  protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
   protected abstract maybeFollowup(...a: Parameters<Swarm['maybeFollowup']>): ReturnType<Swarm['maybeFollowup']>;
   protected abstract maybeHeartbeat(...a: Parameters<Swarm['maybeHeartbeat']>): ReturnType<Swarm['maybeHeartbeat']>;
-  protected abstract message(...a: Parameters<Swarm['message']>): ReturnType<Swarm['message']>;
   protected abstract messageCeo(...a: Parameters<Swarm['messageCeo']>): ReturnType<Swarm['messageCeo']>;
   protected abstract mirrorsToTelegram(...a: Parameters<Swarm['mirrorsToTelegram']>): ReturnType<Swarm['mirrorsToTelegram']>;
   protected abstract notifyMerge(...a: Parameters<Swarm['notifyMerge']>): ReturnType<Swarm['notifyMerge']>;
   protected abstract notifyNeedsHuman(...a: Parameters<Swarm['notifyNeedsHuman']>): ReturnType<Swarm['notifyNeedsHuman']>;
   protected abstract postMessage(...a: Parameters<Swarm['postMessage']>): ReturnType<Swarm['postMessage']>;
-  protected abstract prAuthor(...a: Parameters<Swarm['prAuthor']>): ReturnType<Swarm['prAuthor']>;
-  protected abstract progressTick(...a: Parameters<Swarm['progressTick']>): ReturnType<Swarm['progressTick']>;
-  protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
-  protected abstract recover(...a: Parameters<Swarm['recover']>): ReturnType<Swarm['recover']>;
-  protected abstract restoreDesk(...a: Parameters<Swarm['restoreDesk']>): ReturnType<Swarm['restoreDesk']>;
   protected abstract startCeoWork(...a: Parameters<Swarm['startCeoWork']>): ReturnType<Swarm['startCeoWork']>;
   protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
+
+  // upkeep.ts
+  protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
+  protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
+  protected abstract prAuthor(...a: Parameters<Swarm['prAuthor']>): ReturnType<Swarm['prAuthor']>;
+  protected abstract progressTick(...a: Parameters<Swarm['progressTick']>): ReturnType<Swarm['progressTick']>;
+  protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
+  protected abstract restoreDesk(...a: Parameters<Swarm['restoreDesk']>): ReturnType<Swarm['restoreDesk']>;
+
+  // team.ts
+  protected abstract applyTeamChanges(...a: Parameters<Swarm['applyTeamChanges']>): ReturnType<Swarm['applyTeamChanges']>;
+  protected abstract approveRequest(...a: Parameters<Swarm['approveRequest']>): ReturnType<Swarm['approveRequest']>;
+  protected abstract decide(...a: Parameters<Swarm['decide']>): ReturnType<Swarm['decide']>;
+  protected abstract rejectRequest(...a: Parameters<Swarm['rejectRequest']>): ReturnType<Swarm['rejectRequest']>;
+
+  // ceoTools.ts
+  protected abstract agentDoing(...a: Parameters<Swarm['agentDoing']>): ReturnType<Swarm['agentDoing']>;
+  protected abstract floorRepo(...a: Parameters<Swarm['floorRepo']>): ReturnType<Swarm['floorRepo']>;
+  protected abstract officeTools(...a: Parameters<Swarm['officeTools']>): ReturnType<Swarm['officeTools']>;
+
+  // swarm.ts
+  protected abstract finishRestart(...a: Parameters<Swarm['finishRestart']>): ReturnType<Swarm['finishRestart']>;
+  protected abstract message(...a: Parameters<Swarm['message']>): ReturnType<Swarm['message']>;
+  protected abstract reconcileRestart(...a: Parameters<Swarm['reconcileRestart']>): ReturnType<Swarm['reconcileRestart']>;
+  protected abstract recover(...a: Parameters<Swarm['recover']>): ReturnType<Swarm['recover']>;
+  protected abstract updateSettings(...a: Parameters<Swarm['updateSettings']>): ReturnType<Swarm['updateSettings']>;
 }

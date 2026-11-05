@@ -1,0 +1,683 @@
+// The CEO: its job queue, follow-ups, triage of stuck PRs, the phone and notifications.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import type { SessionResult } from '../agentRunner.ts';
+import { askedFor, ceoJobPrompt, ceoSystemPrompt, IssueCap, jobLabel, type CeoJob } from '../ceo.ts';
+import { HttpError } from '../httpError.ts';
+import { issuesResolvedBy } from '../issueClaims.ts';
+import { failedRunIds } from '../mergeGate.ts';
+import { checkTriageTarget, triageStep, type TriagePr } from '../triage.ts';
+import { recordCost } from '../metrics.ts';
+import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
+import { speaks } from '../voice.ts';
+import { teamKeyboard, telegramChat } from '../telegram.ts';
+import { clip, plainText, stuckAgents, type TeamChange } from '../notify.ts';
+import { redact as scrub } from '../../shared/journal.ts';
+import {
+  addFollowup,
+  followupEvents,
+  followupStep,
+  followupWaiting,
+  liveMandates,
+  quietReply,
+  takeFollowups,
+  type FollowupEvent,
+} from '../../shared/followups.ts';
+import { dueGreeting } from '../../shared/themes.ts';
+import { CEO_ID } from '../../shared/types.ts';
+import { forwardText, nextDelivery } from '../../shared/chat.ts';
+import { makeArtifacts, parseCeoMessage } from '../../shared/chatParts.ts';
+import type { QuickPicks } from '../../shared/used.ts';
+import { quickPicks } from '../ceoFiles.ts';
+import type { AgentStatus, CeoInfo, PhoneMessage, ServerDelivery } from '../../shared/types.ts';
+import {
+  type PersistedRepo,
+  type PersistedAgent,
+  type QaRecord,
+  CEO_MODEL,
+  CEO_EFFORT,
+  CEO_NAME,
+  CEO_DIR,
+  MAX_ISSUES_PER_JOB,
+  KEEP_MESSAGES,
+  BUSY,
+  FREE,
+  QA_SHOTS_DIR,
+} from './model.ts';
+import { SKIN, lookFor, pick } from './flavour.ts';
+import { SwarmUpdate } from './update.ts';
+
+export abstract class SwarmCeo extends SwarmUpdate {
+  // ---------- the CEO ----------
+
+  protected ceo() {
+    return this.state.agents.find((a) => a.id === CEO_ID)!;
+  }
+
+  /** The company always has a CEO. One cut off by a server restart picks its job back up. */
+  protected ensureCeo(interrupted: PersistedAgent[]) {
+    let a = this.state.agents.find((x) => x.id === CEO_ID);
+    if (!a) {
+      a = {
+        id: CEO_ID,
+        name: CEO_NAME,
+        repoId: '',
+        role: 'ceo',
+        look: lookFor(CEO_NAME),
+        task: null,
+        desk: 0,
+        color: '#e63946',
+        hair: '#2b2118',
+        skin: pick(SKIN),
+        style: null,
+        model: CEO_MODEL,
+        effort: CEO_EFFORT,
+        cli: 'claude',
+        machine: null,
+        status: 'idle',
+        issueNumber: null,
+        issueTitle: null,
+        branch: null,
+        prNumber: null,
+        prUrl: null,
+        startedAt: null,
+        endedAt: null,
+        costUsd: 0,
+        turns: 0,
+        sessionId: null,
+        sessionCli: null,
+        lastError: null,
+        logTail: [],
+      };
+      this.state.agents.push(a);
+      this.agentRt.set(a.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
+      this.appendLog(a, [{ kind: 'system', text: `🏛️ ${a.name} moved into the corner office. The CEO studies every floor, sizes its team and plans its work.` }]);
+    }
+    const i = interrupted.indexOf(a);
+    if (i >= 0) {
+      interrupted.splice(i, 1);
+      a.status = 'idle';
+      a.lastError = null;
+      this.appendLog(a, [{ kind: 'system', text: '↺ The office server restarted. Picking the job back up.' }]);
+    }
+    if (this.state.ceo.job) {
+      this.state.ceo.queue.unshift(this.state.ceo.job);
+      this.state.ceo.job = null;
+    }
+    this.state.ceo.lastReviewAt ??= Date.now(); // the first review comes one heartbeat after the office opens
+  }
+
+  protected ceoFloor(repoId?: string) {
+    const repo = repoId ? this.state.repos.find((r) => r.id === repoId) : undefined;
+    if (!repo) return null;
+    return { floor: repo.floor, fullName: repo.fullName, clone: this.backend.mainDir(repo.fullName), mission: repo.mission, backlog: this.repoRt.get(repo.id)?.issues.length ?? 0 };
+  }
+
+  protected ceoInfo(): CeoInfo {
+    const c = this.state.ceo;
+    const view = (j: CeoJob) => ({ kind: j.kind, label: jobLabel(j, this.ceoFloor(j.repoId)) });
+    const min = this.state.settings.ceoHeartbeatMin;
+    return {
+      queue: c.queue.map(view),
+      job: c.job ? view(c.job) : null,
+      lastReviewAt: c.lastReviewAt,
+      nextReviewAt: min > 0 && c.lastReviewAt ? c.lastReviewAt + min * 60_000 : null,
+      followups: this.followupView(),
+    };
+  }
+
+  protected emitCeo() {
+    this.broadcast({ type: 'ceo', ceo: this.ceoInfo() });
+  }
+
+  /** Queue a job for the CEO: one onboarding and one plan per floor, one review, and chat messages merge into one reply. */
+  protected enqueueCeo(job: CeoJob) {
+    const q = this.state.ceo.queue;
+    const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber)));
+    if (same >= 0 && job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
+    else if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}`, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
+    else q.push(job);
+    this.emitCeo();
+    this.save();
+    setTimeout(() => this.schedule(), 150);
+  }
+
+  /** Start the CEO's next job when they're free and a session slot is open. Replies to the manager go first. */
+  protected startCeoWork(): void {
+    const a = this.state.agents.find((x) => x.id === CEO_ID);
+    const c = this.state.ceo;
+    // A triage whose PR is no longer stuck (the manager stepped in, or it closed) has nothing left to do.
+    const stale = c.queue.filter((j) => j.kind === 'triage' && !this.stuckRecord(j));
+    if (stale.length) {
+      c.queue = c.queue.filter((j) => !stale.includes(j));
+      this.emitCeo();
+      this.save();
+    }
+    if (!a || BUSY.includes(a.status) || c.job || c.queue.length === 0) return;
+    if (this.slotsFull()) return;
+    const rank: Record<CeoJob['kind'], number> = { chat: 0, triage: 0, onboard: 1, plan: 1, followup: 2, review: 2 };
+    // A floor's jobs wait for its clone and first sync, so the CEO has something to read.
+    const ready = (j: CeoJob) => {
+      const rt = j.repoId ? this.repoRt.get(j.repoId) : undefined;
+      return !rt || rt.cloneStatus === 'error' || (rt.cloneStatus === 'ready' && rt.lastSync != null);
+    };
+    const job = [...c.queue].sort((x, y) => rank[x.kind] - rank[y.kind]).find(ready);
+    if (!job) return;
+    c.queue.splice(c.queue.indexOf(job), 1);
+    const rt = job.repoId ? this.repoRt.get(job.repoId) : undefined;
+    if (job.repoId && (!rt || rt.cloneStatus === 'error')) {
+      const repo = this.state.repos.find((r) => r.id === job.repoId);
+      if (repo) this.postMessage('office', `⚠️ ${a.name} couldn't study floor ${repo.floor}: the repository clone failed (${rt?.cloneError ?? 'unknown error'}).`);
+      this.emitCeo();
+      this.save();
+      return this.startCeoWork();
+    }
+    void this.runCeoJob(a, job);
+  }
+
+  protected ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
+    const s = this.state.settings;
+    return { name: a.name, company: s.companyName, manager: s.managerName, notesFile: path.join(CEO_DIR, 'NOTES.md'), sessionLimit: s.sessionLimit, maxAgents: s.maxAgents, scaling: s.scaling };
+  }
+
+  protected async runCeoJob(a: PersistedAgent, job: CeoJob) {
+    const rt = this.agentRt.get(a.id)!;
+    const floor = this.ceoFloor(job.repoId);
+    const label = jobLabel(job, floor);
+    this.state.ceo.job = job;
+    Object.assign(a, { status: 'working' as AgentStatus, task: null, issueNumber: null, issueTitle: label, startedAt: Date.now(), endedAt: null, costUsd: 0, turns: 0, lastError: null });
+    this.appendLog(a, [
+      { kind: 'system', text: '' },
+      { kind: 'system', text: `━━━ ${label} ━━━` },
+    ]);
+    if (job.kind === 'chat') {
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
+      if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
+    }
+    if (job.kind === 'review') {
+      this.state.ceo.lastReviewAt = Date.now();
+      this.state.ceo.lastFingerprint = this.fingerprint();
+    }
+    this.ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB);
+    this.spend.ceoActs = 0;
+    this.ceoAsked = askedFor(job);
+    this.emitAgent(a);
+    this.emitCeo();
+    this.save();
+    await fs.mkdir(CEO_DIR, { recursive: true }).catch(() => undefined);
+    const triage = job.kind === 'triage' ? await this.triagePr(job) : null;
+    if (a.status !== 'working') {
+      // stopped before the session started
+      this.state.ceo.job = null;
+      if (job.kind === 'triage') this.endTriage(job);
+      this.emitCeo();
+      return;
+    }
+    // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
+    const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
+    const kind: TaskKind = `ceo-${job.kind}`;
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null });
+    rt.session = this.backend.startSession(
+      {
+        cwd: CEO_DIR,
+        prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now())),
+        systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
+        model: run.model,
+        effort: run.effort,
+        browserTesting: false,
+        // The clones, and QA's screenshots for qa_report's paths.
+        additionalDirectories: [...this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)), QA_SHOTS_DIR],
+        role: 'ceo',
+        office: this.officeTools(),
+        tools: this.sessionToolsFor(a, 'claude'),
+        ...how,
+      },
+      {
+        log: (entries) => {
+          this.appendLog(a, entries);
+          this.ceoFiles.record(entries);
+        },
+        tool: (name) => {
+          if (rt.currentTool === name) return;
+          rt.currentTool = name;
+          this.emitAgent(a);
+        },
+        sessionId: (id) => {
+          a.sessionId = id;
+          a.sessionCli = id ? 'claude' : null;
+        },
+        browserUrl: () => undefined,
+        screenshot: () => undefined,
+        // A follow-up that found nothing to do stays off the manager's phone.
+        turn: (text) => {
+          if (job.kind === 'followup' && quietReply(text)) return;
+          this.postCeoReply(text);
+          this.markDelivery('all', 'replied');
+        },
+        limited: (at) => this.pauseForLimit(at),
+        usageWarning: (info) => this.paceForWarning(info),
+        usage: (readings) => this.recordUsage(readings),
+        finished: (result) => this.onCeoFinished(a, result),
+      },
+    );
+  }
+
+  protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
+    const rt = this.agentRt.get(a.id);
+    if (!rt || this.officeUpdate.handedOver) return;
+    rt.session = null;
+    rt.currentTool = null;
+    a.endedAt = Date.now();
+    a.costUsd += result.costUsd;
+    a.turns += result.turns;
+    recordCost(this.state.ops, '', result.costUsd, a.endedAt);
+    const job = this.state.ceo.job;
+    this.state.ceo.job = null;
+    if (job?.kind === 'triage') this.endTriage(job);
+    if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
+    this.ceoFiles.endJob();
+    if (result.interrupted) this.interrupted(a);
+    const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
+    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
+    if (a.status === 'stopped') {
+      // the manager already logged the stop
+    } else if (!result.ok) {
+      a.status = 'error';
+      a.lastError = result.errors.join('; ') || 'Session failed';
+      this.appendLog(a, [{ kind: 'error', text: `✗ ${a.lastError}` }]);
+      const what = job ? jobLabel(job, this.ceoFloor(job.repoId)).toLowerCase() : 'working';
+      this.postMessage('office', `⚠️ ${a.name} hit a problem while ${what}: ${a.lastError.slice(0, 240)}`);
+    } else {
+      a.status = 'done';
+      const filed = this.ceoIssues.total ? ` · ${this.ceoIssues.total} issue${this.ceoIssues.total === 1 ? '' : 's'} filed` : '';
+      this.appendLog(a, [{ kind: 'done', text: `✔ Done in ${this.minutes(a)}m · ${a.turns} turns${filed}` }]);
+    }
+    for (const id of this.ceoIssues.repos) void this.syncRepo(id);
+    this.emitAgent(a);
+    this.emitCeo();
+    this.save();
+    setTimeout(() => this.schedule(), 300);
+  }
+
+  /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to and any files. Injected into a running session, otherwise the CEO picks it up next. */
+  async messageCeo(text: string, replyTo?: number, via?: 'telegram', fileIds: readonly string[] = []) {
+    const t = text.trim().slice(0, 4000);
+    const attachments = this.ceoFiles.managerFiles(fileIds);
+    if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
+    const a = this.ceo();
+    const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
+    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
+    const forward = [forwardText(t, quoted), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const rt = this.agentRt.get(a.id)!;
+    if (rt.session) {
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
+      this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
+      this.ceoAsked = true;
+      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n${forward}`);
+      this.markDelivery([m.id], 'read');
+      return { id: m.id };
+    }
+    this.enqueueCeo({ kind: 'chat', text: forward, messageIds: [m.id], at: Date.now() });
+    return { id: m.id };
+  }
+
+  /** Moves the manager's messages along (shared/chat.ts nextDelivery) and tells the phones which ones moved. */
+  protected markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
+    const moved: number[] = [];
+    let to: ServerDelivery | null = null;
+    for (const m of this.state.messages) {
+      if (m.from !== 'manager' || !m.delivery || (ids !== 'all' && !ids.includes(m.id))) continue;
+      const next = nextDelivery(m.delivery, ev);
+      if (next === m.delivery) continue;
+      m.delivery = next as ServerDelivery;
+      to = m.delivery;
+      moved.push(m.id);
+    }
+    if (!to) return;
+    this.broadcast({ type: 'delivery', ids: moved, delivery: to });
+    this.save();
+  }
+
+  requestReview() {
+    if (this.state.repos.length === 0) throw new HttpError(400, 'Connect a repo first: the CEO needs a floor to review.');
+    this.enqueueCeo({ kind: 'review', at: Date.now() });
+  }
+
+  onboardFloor(repoId: string) {
+    const repo = this.repo(repoId);
+    this.enqueueCeo({ kind: 'onboard', repoId: repo.id, at: Date.now() });
+  }
+
+  /** The manager hands the CEO a brief for a floor; the CEO turns it into issues and a team. */
+  planFloor(repoId: string, mission?: string) {
+    const repo = this.repo(repoId);
+    if (typeof mission === 'string') {
+      repo.mission = mission.trim().slice(0, 4000);
+      this.emitRepo(repo);
+    }
+    if (!repo.mission) throw new HttpError(400, 'Write a brief first: what should this floor build?');
+    this.enqueueCeo({ kind: 'plan', repoId: repo.id, at: Date.now() });
+  }
+
+  /** Everything the heartbeat cares about. When it hasn't changed since the last review, the review is skipped. */
+  protected fingerprint() {
+    const data = {
+      repos: this.state.repos.map((r) => {
+        const rt = this.repoRt.get(r.id);
+        return [r.id, r.mission, r.summary, rt?.issues.map((i) => i.number), rt?.pulls.filter((p) => p.state === 'OPEN').map((p) => p.number)];
+      }),
+      agents: this.state.agents.filter((a) => a.role !== 'ceo').map((a) => [a.id, FREE.includes(a.status) ? 'free' : a.status]),
+      qa: this.state.qa.map((q) => [q.repoId, q.prNumber, q.status]),
+      requests: this.state.requests.filter((r) => r.status === 'pending').map((r) => r.id),
+    };
+    return crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex');
+  }
+
+  protected maybeHeartbeat() {
+    const min = this.state.settings.ceoHeartbeatMin;
+    const c = this.state.ceo;
+    if (!min || this.state.repos.length === 0 || c.job?.kind === 'review' || c.queue.some((j) => j.kind === 'review')) return;
+    if (Date.now() < (c.lastReviewAt ?? 0) + min * 60_000) return;
+    if (this.fingerprint() === c.lastFingerprint) {
+      c.lastReviewAt = Date.now(); // nothing changed since the last review
+      this.emitCeo();
+      this.save();
+      return;
+    }
+    this.enqueueCeo({ kind: 'review', at: Date.now() });
+  }
+
+  // ---------- follow-ups (#27) ----------
+
+  /** Something happened the CEO may want to follow up on: queued unless Settings → The CEO turned its kind off. */
+  protected followup(ev: Omit<FollowupEvent, 'id' | 'at'>) {
+    if (!addFollowup(this.state.ceo.followups, { ...ev, at: Date.now() }, this.state.settings.ceoFollowups)) return;
+    this.emitCeo();
+    this.save();
+    setTimeout(() => this.schedule(), 150);
+  }
+
+  /** Start a follow-up job when its batch window has passed, unless the hourly cap or Claude's usage holds it. */
+  protected maybeFollowup() {
+    const f = this.state.ceo.followups;
+    const had = f.pending.length;
+    const step = followupStep(f, { now: Date.now(), settings: this.state.settings.ceoFollowups, usage: this.usageNow().state });
+    if (step.do === 'start') this.enqueueCeo({ kind: 'followup', events: takeFollowups(f, Date.now()), at: Date.now() });
+    else if (f.pending.length !== had) {
+      this.emitCeo();
+      this.save();
+    }
+  }
+
+  protected followupView(): CeoInfo['followups'] {
+    return followupWaiting(this.state.ceo.followups, { now: Date.now(), settings: this.state.settings.ceoFollowups, usage: this.usageNow().state });
+  }
+
+  protected floorName(repo: PersistedRepo) {
+    return `floor ${repo.floor} (${repo.fullName})`;
+  }
+
+  // ---------- triage ----------
+
+  /**
+   * A PR the office can't move on its own (needs-human): the CEO triages it first, at most MAX_TRIAGES times, and the
+   * manager hears when the CEO escalates or takes no action, or when it keeps getting stuck. True: it went to the CEO.
+   */
+  protected stuck(rec: QaRecord, patch: Partial<QaRecord>, why: string): boolean {
+    if (!this.state.qa.includes(rec)) return false; // its PR closed: nothing is stuck
+    this.setQa(rec, { ...patch, status: 'needs-human', stuckWhy: why });
+    const step = triageStep({ kind: 'stuck', triages: rec.triages });
+    if (step.do !== 'triage') {
+      this.escalate(rec, step.do === 'escalate' ? step.note : null);
+      return false;
+    }
+    rec.triages += 1;
+    this.enqueueCeo({ kind: 'triage', repoId: rec.repoId, prNumber: rec.prNumber, at: Date.now() });
+    this.setQa(rec, {}); // the card shows the CEO looking
+    return true;
+  }
+
+  /** Tell the manager a stuck PR needs them, once each time it gets stuck. note: what the CEO adds. */
+  protected escalate(rec: QaRecord, note: string | null) {
+    if (rec.status !== 'needs-human' || rec.escalated) return;
+    this.setQa(rec, { escalated: true });
+    const repo = this.state.repos.find((r) => r.id === rec.repoId);
+    if (repo) this.postMessage('office', `⚠️ PR #${rec.prNumber} on ${repo.fullName} needs you: ${rec.stuckWhy ?? 'it is stuck'}.${note ? ` ${note}` : ''}`);
+  }
+
+  /** The CEO's triage job for this PR, queued or running. */
+  protected triageJob(q: Pick<QaRecord, 'repoId' | 'prNumber'>) {
+    const c = this.state.ceo;
+    return [c.job, ...c.queue].find((j) => j?.kind === 'triage' && j.repoId === q.repoId && j.prNumber === q.prNumber) ?? null;
+  }
+
+  /** The record a triage job is for, while it is still waiting on a decision. */
+  protected stuckRecord(job: CeoJob) {
+    return this.state.qa.find((q) => q.repoId === job.repoId && q.prNumber === job.prNumber && q.status === 'needs-human' && !q.escalated);
+  }
+
+  /** What a triage job's prompt says about its PR: the QA record and GitHub's view of it now. null: no longer stuck. */
+  protected async triagePr(job: CeoJob): Promise<TriagePr | null> {
+    const rec = this.stuckRecord(job);
+    const repo = this.state.repos.find((r) => r.id === job.repoId);
+    if (!rec || !repo) return null;
+    const listed = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === rec.prNumber);
+    const pr = await this.backend.prDetails(repo.fullName, rec.prNumber).catch(() => null);
+    if ((pr ?? listed)?.state !== 'OPEN') return null;
+    return {
+      number: rec.prNumber,
+      title: pr?.title ?? listed?.title ?? '',
+      url: pr?.url ?? listed?.url ?? '',
+      round: rec.round,
+      why: rec.stuckWhy,
+      summary: rec.summary,
+      fixInstructions: rec.fixInstructions,
+      mergeNote: rec.mergeNote,
+      checks: pr?.checks ?? listed?.checks ?? 'none',
+      failedChecks: pr?.failedChecks ?? listed?.failedChecks.map((c) => c.name) ?? [],
+      pendingChecks: pr?.pendingChecks ?? listed?.pendingChecks ?? [],
+      mergeable: pr?.mergeable ?? listed?.mergeable ?? 'UNKNOWN',
+      mergeState: pr?.mergeState ?? listed?.mergeState ?? 'UNKNOWN',
+      triage: rec.triages,
+    };
+  }
+
+  /** A triage job ended (done, failed or stopped): a PR still waiting on a decision goes to the manager. */
+  protected endTriage(job: CeoJob) {
+    const rec = this.stuckRecord(job);
+    const pull = rec && this.repoRt.get(rec.repoId)?.pulls.find((p) => p.number === rec.prNumber);
+    const step = triageStep({ kind: 'ended', acted: !rec || (pull != null && pull.state !== 'OPEN') }); // a closed PR leaves QA on the next sync
+    if (rec && step.do === 'escalate') this.escalate(rec, step.note);
+  }
+
+  /** The stuck PR a triage tool names; refused unless it is on the current triage job's floor (see checkTriageTarget). */
+  protected async triageTarget(x: { floor: number; pr: number }) {
+    const job = this.state.ceo.job;
+    const jobFloor = job?.kind === 'triage' ? (this.state.repos.find((r) => r.id === job.repoId)?.floor ?? null) : null;
+    const repo = this.state.repos.find((r) => r.floor === x.floor);
+    const pr = Number(x.pr);
+    const listed = repo ? this.repoRt.get(repo.id)?.pulls.find((p) => p.number === pr) : undefined;
+    // The last sync may be a minute old and doesn't list closed PRs: ask GitHub about this one.
+    const pull = repo && x.floor === jobFloor ? await this.backend.prDetails(repo.fullName, pr).catch(() => listed) : listed;
+    const rec = repo ? this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === pr) : undefined;
+    checkTriageTarget({ jobFloor, floor: x.floor, pr, pull, status: rec?.status });
+    return { repo: repo!, rec: rec!, listed };
+  }
+
+  protected async triageRetryQa(x: { floor: number; pr: number }) {
+    const { repo, rec } = await this.triageTarget(x);
+    await this.sendToQa(repo.id, rec.prNumber);
+    return `PR #${rec.prNumber} is queued for QA round ${rec.round}.`;
+  }
+
+  protected async triageSendBack(x: { floor: number; pr: number; note: string }) {
+    const { repo, rec } = await this.triageTarget(x);
+    const note = String(x.note ?? '').trim();
+    if (!note) throw new HttpError(400, 'Say what the developer should do: the note goes with the fix.');
+    await this.sendBackToDev(repo.id, rec.prNumber, note, `${this.ceo().name}, the CEO`);
+    return `PR #${rec.prNumber} goes back to a developer with QA's findings and your note.`;
+  }
+
+  protected async triageRerunChecks(x: { floor: number; pr: number }) {
+    const { repo, rec, listed } = await this.triageTarget(x);
+    const runIds = failedRunIds(listed?.failedChecks ?? []);
+    if (!listed || !runIds.length) {
+      const failed = listed?.failedChecks.map((c) => c.name) ?? [];
+      throw new HttpError(409, `PR #${rec.prNumber} has no failed GitHub Actions runs to re-run${failed.length ? ` (${failed.join(', ')} can't be re-run from here)` : ''}.`);
+    }
+    await this.backend.rerunFailedJobs(repo.fullName, runIds);
+    const runs = `${runIds.length} failed run${runIds.length === 1 ? '' : 's'}`;
+    if (rec.passedSha && rec.passedSha === listed.headSha) {
+      // QA signed off on this commit: the merge gate waits for the re-run and merges if it goes green.
+      this.setQa(rec, { status: 'passed', rerunSha: listed.headSha, rerunAt: Date.now(), pendingSince: null, mergeNote: 're-running a failed check' });
+      return `Re-running ${runs} on PR #${rec.prNumber}. QA passed this commit, so it merges if they go green.`;
+    }
+    await this.sendToQa(repo.id, rec.prNumber);
+    return `Re-running ${runs} on PR #${rec.prNumber}, and it is queued for QA round ${rec.round}.`;
+  }
+
+  protected async triageClosePull(x: { floor: number; pr: number; comment: string }) {
+    const { repo, rec, listed } = await this.triageTarget(x);
+    const comment = String(x.comment ?? '').trim();
+    if (!comment) throw new HttpError(400, 'Say why the pull request is closing: the comment is posted on it.');
+    const issues = listed ? issuesResolvedBy(listed) : [];
+    const ceo = this.ceo().name;
+    await this.backend.commentPull(repo.fullName, rec.prNumber, `${comment}\n\n<sub>Closed by ${ceo}, the cubefarm CEO, after triage.${issues.length ? ' Its issue stays open, so it is built again.' : ''}</sub>`);
+    // Closing deletes no branch and leaves the issue open, so the scheduler hands it out again.
+    await this.backend.closePull(repo.fullName, rec.prNumber);
+    this.postMessage('office', `🗂️ ${ceo} closed PR #${rec.prNumber} on floor ${repo.floor}: ${comment.split('\n')[0].slice(0, 200)}`);
+    this.dropRecord(repo, rec.prNumber);
+    this.learnPull(repo, { number: rec.prNumber, headRefName: listed?.headRefName ?? '', closesIssues: listed?.closesIssues ?? [] }, 'CLOSED', true); // built again
+    void this.syncRepo(repo.id);
+    return `Closed PR #${rec.prNumber}.${issues.length ? ` ${issues.map((n) => `#${n}`).join(', ')} stay${issues.length === 1 ? 's' : ''} open, so a developer builds it again.` : ''}`;
+  }
+
+  protected async triageEscalate(x: { floor: number; pr: number; reason: string }) {
+    const { rec } = await this.triageTarget(x);
+    const step = triageStep({ kind: 'escalate', reason: String(x.reason ?? '').split('\n')[0].slice(0, 300) });
+    if (step.do === 'escalate') this.escalate(rec, step.note && `${this.ceo().name}: ${step.note}`);
+    return `The manager has PR #${rec.prNumber} now, with your diagnosis.`;
+  }
+
+  // ---------- the phone ----------
+
+  /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used'> & { changes?: TeamChange[] } = {}) {
+    const { changes, ...extra } = opts;
+    // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
+    const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
+    const id = this.messageSeq++;
+    const artifacts = makeArtifacts(id, parts.artifacts);
+    const m: PhoneMessage = { id, from, text: parts.text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(artifacts && { artifacts }) };
+    const v = this.state.settings.voice;
+    if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
+    if (from === 'ceo' && this.mirrorsToTelegram()) {
+      m.telegram = 'out';
+      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined).then((why) => {
+        if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
+      });
+    }
+    this.state.messages.push(m);
+    if (this.state.messages.length > KEEP_MESSAGES) this.state.messages.splice(0, this.state.messages.length - KEEP_MESSAGES);
+    this.broadcast({ type: 'message', message: m });
+    this.save();
+    // Proposals are notified as such (proposeHire, proposeLetGo).
+    if (from === 'ceo' && !requestId) {
+      const said = m.text || `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`;
+      this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
+    }
+    return m;
+  }
+
+  /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
+  protected postCeoReply(text: string) {
+    this.postMessage('ceo', text, undefined, this.ceoFiles.takeReply());
+  }
+
+  /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */
+  async ceoPicks(): Promise<QuickPicks> {
+    return quickPicks(await this.backend.quickPicks().catch(() => ({ skills: [], apps: [] })), this.state.messages);
+  }
+
+  /** CEO messages go to Telegram too: the manager's last message came from there, or Settings mirrors the whole chat. */
+  protected mirrorsToTelegram(): boolean {
+    if (!this.telegram.linked()) return false;
+    if (this.state.settings.notify.telegramMirror) return true;
+    return [...this.state.messages].reverse().find((m) => m.from === 'manager')?.telegram === 'in';
+  }
+
+  /** A team-change button pressed on Telegram: the same approve and decline as the lobby's. */
+  protected decideFromTelegram(verdict: 'approve' | 'decline', id: string): string {
+    const req = this.state.requests.find((r) => r.id === id);
+    if (verdict === 'approve') this.approveRequest(id);
+    else this.rejectRequest(id);
+    return verdict === 'approve' ? `✅ Done: ${req?.kind === 'let-go' ? `${req.name} leaves` : `${req?.name ?? 'they'} joined`}.` : `✋ Declined${req ? `: ${req.name}` : ''}.`;
+  }
+
+  /** The CEO's send_telegram: to the manager's linked chat only. */
+  protected async sendTelegram(a: { text: string }): Promise<string> {
+    if (!this.telegram.linked()) throw new Error("Telegram isn't set up: the manager links their chat in Settings → Notifications → Telegram. Answer here instead.");
+    const text = String(a.text ?? '').trim();
+    if (!text) throw new Error('Write the message.');
+    const why = await this.telegram.send(telegramChat(this.ceo().name, text.slice(0, 4000)));
+    if (why) throw new Error(`It didn't go out: ${why}.`);
+    return "Sent to the manager's Telegram.";
+  }
+
+  /** POST /api/notify/telegram/demo: the demo's fake manager on Telegram (see TelegramBot.demo). */
+  telegramDemo(body: { kind?: unknown; text?: unknown }) {
+    if (!this.backend.demo) throw new HttpError(404, 'Only the demo office has a fake Telegram.');
+    return this.telegram.demo(body);
+  }
+
+  /** GET /api/messages/:id/artifacts/:artifactId: an artifact's markdown, for one the snapshot sent without it. */
+  artifact(messageId: number, artifactId: string): { markdown: string } {
+    const a = this.state.messages.find((m) => m.id === messageId)?.artifacts?.find((x) => x.id === artifactId);
+    if (!a?.markdown) throw new HttpError(404, 'That attachment is no longer saved');
+    return { markdown: a.markdown };
+  }
+
+  /** The team's holiday greeting (shared/themes.ts) from the CEO, once a day while a theme is on. */
+  protected greet() {
+    const text = dueGreeting(new Date(), this.state.settings.themes, this.state.settings.managerName || this.user || '', this.state.messages);
+    if (text) this.postMessage('ceo', text);
+  }
+
+  // ---------- notifications ----------
+
+  protected notifyNeedsHuman(rec: QaRecord) {
+    const repo = this.state.repos.find((r) => r.id === rec.repoId);
+    const title = this.repoRt.get(rec.repoId)?.pulls.find((p) => p.number === rec.prNumber)?.title;
+    const name = repo?.fullName.split('/')[1] ?? rec.repoId;
+    this.notifier.notify('needsHuman', `PR #${rec.prNumber} needs you`, `${name}${title ? `: ${title}` : ''}. ${rec.stuckWhy ? `Stuck because ${rec.stuckWhy}.` : rec.summary ?? ''}`, `${name} #${rec.prNumber}${title ? ` ${title}` : ''}`);
+  }
+
+  protected notifyMerge(repo: PersistedRepo, n: number, title: string) {
+    const name = repo.fullName.split('/')[1];
+    this.notifier.notify('merge', `Merged PR #${n}`, `${name}${title ? `: ${title}` : ''}`, `${name} #${n}${title ? ` ${title}` : ''}`);
+    const closes = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === n)?.closesIssues ?? [];
+    this.followup(followupEvents.merged(repo.id, this.floorName(repo), n, clip(title, 100), closes));
+  }
+
+  /** Agents stuck in an error for STUCK_ERROR_MS: the manager hears once per error (checked every minute). */
+  protected notifyStuck() {
+    const now = Date.now();
+    for (const { agent: a, key } of stuckAgents(this.state.agents, now, this.toldStuck)) {
+      this.toldStuck.add(key);
+      const repo = this.state.repos.find((r) => r.id === a.repoId);
+      const mins = Math.round((now - (a.endedAt ?? now)) / 60_000);
+      this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
+      if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
+    }
+    for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
+  }
+
+  markPhoneRead(at: number) {
+    const t = Math.min(Number(at) || Date.now(), Date.now());
+    if (t <= this.state.phoneReadAt) return;
+    this.state.phoneReadAt = t;
+    this.broadcast({ type: 'phoneRead', at: t });
+    this.save();
+  }
+}
