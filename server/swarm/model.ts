@@ -22,6 +22,7 @@ import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
   AgentLook,
+  AgentQuestion,
   AgentRole,
   AgentStatus,
   AgentTask,
@@ -173,6 +174,7 @@ export interface Persisted {
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
+  questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
 }
 
 export interface Shot {

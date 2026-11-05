@@ -11,6 +11,8 @@ import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
+import type { AgentQuestion } from './questions.ts';
+export type { AgentQuestion }; // its home is shared/questions.ts
 import type { CeoAwakeSettings, CeoSessionView } from './ceoAwake.ts';
 import type { LabView } from './experiments.ts';
 import type { HistoryEntry } from './history.ts';
@@ -296,6 +298,7 @@ export interface AgentView {
   screenshotAt: number | null;
   lastError: string | null;
   blocked?: string | null; // waiting on a prompt the office couldn't answer (server/unblock.ts): why
+  waiting?: AgentQuestion['to'] | null; // waiting on an answer to their question (shared/questions.ts): from whom
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
@@ -303,7 +306,7 @@ export interface AgentView {
 }
 
 /** The kinds of work the icon over a busy agent shows (shared/activity.ts maps tools and status to them). */
-export type ActivityKind = 'read' | 'edit' | 'test' | 'build' | 'browse' | 'git' | 'ci' | 'qa' | 'fix' | 'talk' | 'run' | 'blocked';
+export type ActivityKind = 'read' | 'edit' | 'test' | 'build' | 'browse' | 'git' | 'ci' | 'qa' | 'fix' | 'talk' | 'run' | 'blocked' | 'waiting';
 
 /** An agent's current activity: a kind and a short, redacted detail ("store.ts", "npm test"; '' for none). */
 export interface AgentActivity {
@@ -411,7 +414,7 @@ export interface SwarmSettings {
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
-export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
+export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
 
 /** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
 export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
@@ -682,6 +685,7 @@ export interface PhoneMessage {
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
+  question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
 }
 
 /** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
@@ -720,6 +724,7 @@ export interface CeoInfo {
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
   session?: CeoSessionView; // its kept session (#28; absent in old journals)
   held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
+  questions?: AgentQuestion[]; // agents waiting on an answer, oldest first (shared/questions.ts; absent in old journals)
 }
 
 /** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */
@@ -849,7 +854,6 @@ export interface Watch {
   /** The workers list is showing: the latest line of every agent. */
   workers: boolean;
 }
-
 
 // ---------- presence: everyone viewing the office appears in it as a visitor ----------
 

@@ -434,6 +434,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     }
     a.status = 'working';
     this.activity.set(a.id, Date.now());
+    this.dropQuestion(a.id); // they moved on
     const how = this.sessionRuntime(a, resumeSessionId);
     const testLab = !box && this.usesTestLab(a, repo);
     const kind = this.taskKind(a);
@@ -617,7 +618,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       this.queueQa(repo, a.prNumber, a, a.issueNumber);
       this.appendLog(a, [{ kind: 'system', text: `📨 Handed PR #${a.prNumber} to QA.` }]);
       this.toast('success', `${a.name} opened PR #${a.prNumber} for #${a.issueNumber}; it's off to QA`);
-    } else {
+    } else if (!this.ask(a, repo, result.text)) {
       this.noPullRequest(a, repo);
     }
   }

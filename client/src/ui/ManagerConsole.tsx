@@ -23,7 +23,7 @@ import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
-import { StatusPill } from './StatusPill';
+import { badgeStatus, StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
@@ -514,7 +514,7 @@ export function TeamTab() {
                             ☁
                           </span>
                         )}
-                        <StatusPill status={a.status} />
+                        <StatusPill status={badgeStatus(a)} />
                       </td>
                       <td className="small ds-cell-full roster-doing">
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}

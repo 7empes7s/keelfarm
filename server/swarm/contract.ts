@@ -89,7 +89,11 @@ export abstract class SwarmContract {
 
   // ceoTools.ts
   protected abstract agentDoing(...a: Parameters<Swarm['agentDoing']>): ReturnType<Swarm['agentDoing']>;
+  protected abstract ask(...a: Parameters<Swarm['ask']>): ReturnType<Swarm['ask']>;
+  protected abstract dropQuestion(...a: Parameters<Swarm['dropQuestion']>): ReturnType<Swarm['dropQuestion']>;
   protected abstract floorRepo(...a: Parameters<Swarm['floorRepo']>): ReturnType<Swarm['floorRepo']>;
+  protected abstract managerAnswer(...a: Parameters<Swarm['managerAnswer']>): ReturnType<Swarm['managerAnswer']>;
+  protected abstract notifyQuestion(...a: Parameters<Swarm['notifyQuestion']>): ReturnType<Swarm['notifyQuestion']>;
   protected abstract officeTools(...a: Parameters<Swarm['officeTools']>): ReturnType<Swarm['officeTools']>;
 
   // sessions.ts

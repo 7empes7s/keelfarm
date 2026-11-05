@@ -503,6 +503,7 @@ export abstract class SwarmQa extends SwarmSessions {
         return;
       }
       if (next.do === 'nudge') {
+        if (this.ask(a, repo, result.text)) return void (a.status = 'done');
         this.fixNudged.add(key);
         a.status = 'done';
         this.spend.outcome(a.id, 'no-commit');

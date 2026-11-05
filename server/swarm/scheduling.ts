@@ -28,6 +28,7 @@ import { opsView, recordChecks, recordMerges, type OpsFloorState } from '../metr
 import { mergedPulls } from '../costLedger.ts';
 import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
+import { questionOf } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import type { OpsView, PullInfo, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
 import {
@@ -53,6 +54,7 @@ export abstract class SwarmScheduling extends SwarmQa {
    */
   protected isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
+    if (questionOf(this.state.questions, a.id)) return false; // waiting on an answer: it resumes their task
     if (this.consulting(a)) return false;
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
   }
