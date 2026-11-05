@@ -21,6 +21,7 @@ import { issuesResolvedBy } from '../issueClaims.ts';
 import { CHECKS_ALERT_MS, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeStep } from '../mergeGate.ts';
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
+import { rebaseHandOffs } from '../../shared/practices.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
 import type { LogLine, PullInfo } from '../../shared/types.ts';
 import {
@@ -71,12 +72,18 @@ export abstract class SwarmMerge extends SwarmRepos {
 
   /** One step toward merging a QA-passed PR. Returns true when it merged. */
   protected async advanceMerge(repo: PersistedRepo, rec: QaRecord, pr: PullInfo): Promise<boolean> {
-    let step = mergeStep(pr, rec, Date.now(), { base: repo.defaultBranch });
+    const upToDate = this.practicesOf(repo, rec.issueNumber, rec.prNumber).upToDate; // #24: merge only what CI saw with the base in
+    const opts = { base: repo.defaultBranch, upToDate };
+    let step = mergeStep(pr, rec, Date.now(), opts);
     if (step.do === 'details') {
       // GitHub works mergeability out lazily and lists often say UNKNOWN; asking about the PR itself gets an answer.
       const d = await this.backend.prDetails(repo.fullName, pr.number);
       pr = { ...pr, headSha: d.headSha, mergeable: d.mergeable, mergeState: d.mergeState };
-      step = mergeStep(pr, rec, Date.now(), { base: repo.defaultBranch, detailed: true });
+      step = mergeStep(pr, rec, Date.now(), { ...opts, detailed: true });
+    }
+    if (step.do === 'behind') {
+      const behind = await this.backend.behindBy(repo.fullName, repo.defaultBranch, pr.headSha);
+      step = mergeStep(pr, rec, Date.now(), { ...opts, detailed: true, behind });
     }
     Object.assign(rec, step.set);
     if (step.do === 'requeue') {
@@ -104,11 +111,17 @@ export abstract class SwarmMerge extends SwarmRepos {
       return step.note === undefined ? false : this.mergeNote(rec, step.note);
     }
     if (step.do === 'update-branch') {
-      // The repo only merges up-to-date branches. GitHub merges the base in cleanly (or refuses); CI checks the result.
+      // The repo only merges up-to-date branches (or the floor wants it, #24). GitHub merges the base in cleanly (or
+      // refuses); CI checks the result, and that exact result is what merges.
       this.mergeNote(rec, `updating the branch with ${repo.defaultBranch}`);
-      await this.backend.updateBranch(repo.fullName, pr.number);
+      try {
+        await this.backend.updateBranch(repo.fullName, pr.number);
+      } catch (err) {
+        if (!upToDate) throw err;
+        return this.sendBack(repo, rec, 'conflict', `It conflicts with ${repo.defaultBranch}: GitHub couldn't merge ${repo.defaultBranch} into it (${oneLine(err)}).`, rec.mergeFixes >= MAX_MERGE_FIXES);
+      }
       const details = await this.backend.prDetails(repo.fullName, pr.number);
-      this.setQa(rec, { passedSha: details.headSha });
+      this.setQa(rec, { passedSha: details.headSha, ...(upToDate ? { updatedSha: details.headSha, mergeNote: `brought up to date with ${repo.defaultBranch}: waiting for CI on the result` } : {}) });
       return false;
     }
     if (step.do !== 'merge') return false;
@@ -184,6 +197,40 @@ export abstract class SwarmMerge extends SwarmRepos {
     this.setQa(rec, { status: 'failed', fixReason: reason, fixInstructions, mergeFixes: rec.mergeFixes + 1, mergeNote: null, pendingSince: null });
     setTimeout(() => this.schedule(), 200);
     return false;
+  }
+
+  /**
+   * Auto-rebase (#24, floors or variants with it on): after a sync, a swarm PR waiting for QA or its merge that
+   * conflicts with the base now goes to its developer (or the next free one) to bring it up to date, before a tester
+   * or the merge gate spends anything on it.
+   */
+  protected rebaseConflicting(repo: PersistedRepo) {
+    const rt = this.repoRt.get(repo.id);
+    if (!rt) return;
+    const records = this.state.qa.filter((q) => q.repoId === repo.id && (rt.fetchedAt ?? 0) >= q.updatedAt && this.practicesOf(repo, q.issueNumber, q.prNumber).autoRebase);
+    for (const n of rebaseHandOffs(rt.pulls, records, true)) {
+      const rec = records.find((q) => q.prNumber === n)!;
+      const pr = rt.pulls.find((p) => p.number === n)!;
+      const why = `${repo.defaultBranch} moved and PR #${n} conflicts with it now: bring it up to date (git fetch origin && git merge origin/${repo.defaultBranch}), resolve the conflicts so both changes keep working, and push.`;
+      this.toast('info', `🔁 PR #${n} conflicts with ${repo.defaultBranch}: a developer brings it up to date${rec.status === 'queued' ? ' before QA' : ''}`);
+      if (rec.status === 'passed' || rec.mergeFixes >= MAX_MERGE_FIXES) {
+        this.sendBack(repo, rec, 'conflict', why, rec.mergeFixes >= MAX_MERGE_FIXES);
+        continue;
+      }
+      // Waiting for QA: as when a tester finds the conflict (qaGate), QA's last findings stay for the test that follows.
+      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeFixes: rec.mergeFixes + 1, mergeNote: null });
+      setTimeout(() => this.schedule(), 200);
+    }
+  }
+
+  /** What leases read (#24): the files open swarm PRs change and the floor's hot files, when anything on the floor uses them. */
+  protected async refreshPractices(repo: PersistedRepo) {
+    const rt = this.repoRt.get(repo.id);
+    if (!rt || !this.leasesWanted(repo)) return;
+    const fp = this.floorPractice(repo.id);
+    const files = await fp.refreshPrFiles(rt.pulls, (n) => this.backend.prDiff(repo.fullName, n, false).then((d) => d.files.map((f) => f.path)));
+    const hot = await fp.refreshHot(() => this.backend.fileHistory(repo.fullName), Date.now());
+    if ((files || hot) && this.repoRt.has(repo.id)) this.emitRepo(repo);
   }
 
   /** Fast-forward the floor's main checkout (usually your own project folder) and report how it stands. */

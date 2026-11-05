@@ -15,6 +15,7 @@ import type { LabView } from './experiments.ts';
 import type { HistoryEntry } from './history.ts';
 import type { HealthView, MemorySettings } from './health.ts';
 import type { TestLabSettings, TestLabView } from './testLab.ts';
+import type { EveryProject, FloorPracticeView } from './practices.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -67,7 +68,7 @@ export interface PullInfo {
   checkRun?: { ms: number; doneAt: number } | null;
 }
 
-export interface RepoView {
+export interface RepoView extends FloorPracticeView {
   id: string; // "owner/name"
   fullName: string;
   description: string;
@@ -403,6 +404,7 @@ export interface SwarmSettings {
   notify: NotifySettings;
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
+  everyProject: EveryProject; // Settings → Every project: the practice switches every floor inherits (#24)
   officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }
 

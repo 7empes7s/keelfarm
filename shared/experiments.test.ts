@@ -16,6 +16,7 @@ import {
   survivalOf,
   survived,
   tCrit,
+  variantPractices,
   type Assignment,
   type Experiment,
 } from './experiments.ts';
@@ -92,6 +93,15 @@ describe('what a variant changes in a session', () => {
     const promoted = { ...stopped, promoted: 'b', floors: ['o/one'] };
     expect(sessionPractice([promoted], null, 'o/one', 'issue')).toMatchObject({ tag: null, prompt: 'Write the failing test first.', effort: 'high' });
     expect(sessionPractice([promoted], null, 'o/two', 'issue').prompt).toBe('');
+  });
+
+  it('gives an issue its variant\'s practice switches whatever kinds it covers, and promoted ones once stopped (#24)', () => {
+    const e = exp({ kinds: ['qa'], variants: [{ id: 'a', name: 'Current', settings: {} }, { id: 'b', name: 'Up to date', settings: { practices: { upToDate: true } } }] });
+    expect(variantPractices([e], b, 'o/one')).toEqual({ upToDate: true });
+    expect(variantPractices([e], { experimentId: 'x1', variantId: 'a' }, 'o/one')).toEqual({});
+    expect(variantPractices([{ ...e, status: 'stopped' }], b, 'o/one')).toEqual({});
+    expect(variantPractices([{ ...e, status: 'stopped', promoted: 'b' }], null, 'o/one')).toEqual({ upToDate: true });
+    expect(makeExperiment({ name: 'n', hypothesis: 'h', variants: [{}, { settings: { practices: { leases: true, junk: 1 } } }] }, { id: 'x', by: 'ceo', now: NOW, seed: 1, floorOk: () => true }).variants[1].settings).toEqual({ practices: { leases: true } });
   });
 
   it("prefers QA agents on the variant's coding agent, never the author", () => {
@@ -219,9 +229,9 @@ describe('definitions', () => {
     ]);
   });
 
-  it('has the five starter experiments as drafts', () => {
+  it('has the starter experiments as drafts, the practice switches among them', () => {
     const s = starterExperiments(NOW);
-    expect(s.map((e) => e.id)).toEqual(['test-first', 'plan-in-pr', 'self-review', 'cross-model-qa', 'fix-effort']);
+    expect(s.map((e) => e.id)).toEqual(['test-first', 'plan-in-pr', 'self-review', 'cross-model-qa', 'fix-effort', 'up-to-date', 'file-leases', 'auto-rebase', 'small-prs']);
     expect(s.every((e) => e.status === 'draft' && e.variants.length === 2)).toBe(true);
     expect(s.find((e) => e.id === 'cross-model-qa')!.variants[1].settings.qaCli).toBe('codex');
   });

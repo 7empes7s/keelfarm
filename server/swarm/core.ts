@@ -27,12 +27,12 @@ import { dailyLogDir, MACHINE_DAILY_DIR, SessionHistory } from '../history.ts';
 import { DEFAULT_HISTORY_DAYS, historyId, type HistoryEntry } from '../../shared/history.ts';
 import type { CostSession } from '../../shared/costs.ts';
 import { Lab, loadLab } from '../experiments.ts';
+import { FloorPractice } from '../practiceState.ts';
+import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
-import { TestLab } from '../testLab.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
-import { OFFICE_DIR } from '../officeUpdate.ts';
 import { Ticker } from '../ticker.ts';
 import { isResync, Outbox } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
@@ -118,6 +118,7 @@ export abstract class SwarmCore extends SwarmContract {
       notify: notifySettings(DEFAULT_NOTIFY, {}),
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
+      everyProject: emptyEveryProject(),
       officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
@@ -204,26 +205,13 @@ export abstract class SwarmCore extends SwarmContract {
   readonly health = new OfficeHealth({
     probe: () => this.backend.resources,
     settings: () => this.state.settings.memory,
-    sessions: () => [
-      ...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
-      ...this.testLab.sessions(),
-    ],
+    sessions: () => [...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })), ...this.labSessions()],
     log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
     alert: (title, body) => this.notifier.notify('memory', title, body),
     emit: (health) => this.broadcast({ type: 'health', health }),
     save: () => this.save(),
     retry: (id, why, requeue) => this.state.agents.filter((a) => a.id === id && a.status === 'stopped' && a.task).forEach((a) => this.recover([a], new Set(), new Set(requeue ? [a] : []), undefined, why)),
     schedule: () => this.schedule(),
-  });
-  /** The test lab (#56): agents' screenshots, browser checks and heavy commands, one shared browser for all. */
-  readonly testLab = new TestLab({
-    runner: () => this.backend.testLab,
-    settings: () => this.state.settings.testLab,
-    refusal: (kind) => this.health.refusal(kind),
-    forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
-    previewUrl: (repoId, pr) => this.labPreviewUrl(repoId, pr),
-    shot: (agentId, file) => this.labShot(agentId, file),
-    emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
@@ -360,7 +348,54 @@ export abstract class SwarmCore extends SwarmContract {
       previewConfig: r.preview,
       preview: this.previews.view(r),
       charter: charterView(r.charter, Date.now()),
+      ...this.practiceView(r),
     };
+  }
+
+  // ---------- version-control practices (#24) ----------
+
+  protected practiceRt = new Map<string, FloorPractice>();
+
+  protected floorPractice(repoId: string): FloorPractice {
+    let p = this.practiceRt.get(repoId);
+    if (!p) this.practiceRt.set(repoId, (p = new FloorPractice()));
+    return p;
+  }
+
+  /**
+   * The practice switches a floor's work runs with: Every project's, the floor's overrides, then (for an issue or PR)
+   * its experiment variant's. `peek`: an issue not started yet, for the variant it would get.
+   */
+  protected practicesOf(r: PersistedRepo, issue?: number | null, pr?: number | null, peek?: { number: number; body: string; labels: string[] }) {
+    const variant = issue != null || pr != null ? this.lab.practices(r.id, issue, pr, peek) : undefined;
+    return effectivePractices(this.state.settings.everyProject.practices, r.practices, variant);
+  }
+
+  /** Whether any of the floor's work may run with leases: the floor's switch, or a running experiment's variant. */
+  protected leasesWanted(r: PersistedRepo) {
+    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases');
+  }
+
+  /** The floor's leases now: each agent building or fixing an issue, and each open swarm PR (shared/practices.ts). */
+  protected leasesOf(r: PersistedRepo): Lease[] {
+    const rt = this.repoRt.get(r.id);
+    if (!rt) return [];
+    const fp = this.floorPractice(r.id);
+    const known = fp.known();
+    const work = this.state.agents
+      .filter((a) => a.repoId === r.id && a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber != null && BUSY.includes(a.status))
+      .map((a) => {
+        const issue = rt.issues.find((i) => i.number === a.issueNumber);
+        return { agentId: a.id, issue: a.issueNumber!, pr: a.prNumber, declared: a.declared ?? null, predicted: issue ? predictFiles(`${issue.title}\n${issue.body}`, known) : [] };
+      });
+    const pulls = rt.pulls.filter((p) => p.state === 'OPEN' && p.headRefName.startsWith('swarm/')).map((p) => ({ number: p.number, issues: p.closesIssues, files: fp.prFiles.get(p.number)?.files ?? [] }));
+    return floorLeases(work, pulls);
+  }
+
+  protected practiceView(r: PersistedRepo): Pick<RepoView, 'practices' | 'practiceOverrides' | 'leases' | 'leaseHolds' | 'hotFiles'> {
+    const leases = this.leasesWanted(r);
+    const fp = this.practiceRt.get(r.id);
+    return { practices: this.practicesOf(r), practiceOverrides: r.practices ?? {}, leases: leases ? this.leasesOf(r) : [], leaseHolds: (leases && fp?.holds) || [], hotFiles: (leases && fp?.hot) || [] };
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
@@ -452,7 +487,7 @@ export abstract class SwarmCore extends SwarmContract {
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
       health: this.health.view(),
-      testLab: this.testLab.view(),
+      testLab: this.labView(),
       claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),
@@ -757,7 +792,7 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected clearTask(a: PersistedAgent) {
-    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null });
+    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null, declared: null });
     this.emitAgent(a);
   }
 }

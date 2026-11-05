@@ -16,6 +16,8 @@ import { sessionStart } from '../reconcile.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
 import { sessionKind } from '../health.ts';
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from '../prompts.ts';
+import { leaseTools } from '../leaseTool.ts';
+import { normPath, overlap, practiceLines, qaPracticeLines } from '../../shared/practices.ts';
 import { recordCost } from '../metrics.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
@@ -38,7 +40,8 @@ import {
 import { slugify } from './flavour.ts';
 import { SCREENS_DIR, screenFile, removeScreens } from './screens.ts';
 import { SwarmAgents } from './agents.ts';
-import type { Requester } from '../testLab.ts';
+import { TestLab, type Requester } from '../testLab.ts';
+import { OFFICE_DIR } from '../officeUpdate.ts';
 import { createLabTools } from '../testLabTools.ts';
 
 const LAB_VIEWER = 'testlab';
@@ -94,6 +97,30 @@ export abstract class SwarmSessions extends SwarmAgents {
     return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook, lab: this.usesTestLab(a, repo) });
   }
 
+  /**
+   * What a session's practice switches add to its instructions (#24): the file rules and diff budget, and for a
+   * builder or fixer with leases on who can call it (Claude Code on this computer), the declare_files step. '' with
+   * every switch off.
+   */
+  protected practicePrompt(a: PersistedAgent, repo: PersistedRepo, cli: AgentCli | undefined, issue = a.issueNumber ?? this.prRecord(a)?.issueNumber) {
+    const p = this.practicesOf(repo, issue, a.prNumber);
+    const declares = p.leases && a.task !== 'qa' && (cli ?? 'claude') === 'claude' && a.host !== 'box' && issue != null;
+    const lines = a.task === 'qa' ? qaPracticeLines(p) : practiceLines(p, { base: repo.defaultBranch, declareTool: declares });
+    return { text: lines.join('\n'), office: declares ? leaseTools((files) => this.declareFiles(a, repo, files)) : undefined };
+  }
+
+  /** declare_files: the agent's lease for their current task, and who else is on those files already. */
+  protected declareFiles(a: PersistedAgent, repo: PersistedRepo, files: string[]) {
+    if (a.issueNumber == null || !this.state.agents.includes(a)) throw new Error('You have no issue to declare files for.');
+    a.declared = [...new Set(files.map(normPath).filter((f) => f && !f.split('/').includes('..')))].slice(0, 30);
+    this.save();
+    this.emitRepo(repo);
+    const others = this.leasesOf(repo).filter((l) => l.issue !== a.issueNumber);
+    const clash = others.map((l) => ({ l, files: overlap(a.declared!, l.files) })).filter((x) => x.files.length);
+    const note = clash.map((x) => `#${x.l.issue}${x.l.pr ? ` (PR #${x.l.pr})` : ''} also touches ${x.files.slice(0, 5).join(', ')}`).join('; ');
+    return `Declared ${a.declared.length} path${a.declared.length === 1 ? '' : 's'}.${note ? ` Heads-up: ${note}. Keep your changes there small, and merge origin/${repo.defaultBranch} before you push.` : ''}`;
+  }
+
   /** The floor's linked repos where the agent reads them: the floor checkouts here, or their copies in a cloud agent's Box. */
   protected linkedDirs(repo: PersistedRepo, a?: PersistedAgent) {
     return this.linkedRepos(repo).map((r) => ({ fullName: r.fullName, dir: a?.host === 'box' ? boxLinkedDir(r.fullName) : this.backend.mainDir(r.fullName) }));
@@ -104,7 +131,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     const a = this.agent(id);
     if (a.role === 'ceo') return ceoPromptPreview(ceoSystemPrompt(this.ceoPromptInput(a)));
     const repo = this.repo(a.repoId);
-    return agentPromptPreview({ agent: a, repo, port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a), officePlaybook: this.state.settings.officePlaybook });
+    const view = agentPromptPreview({ agent: a, repo, port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a), officePlaybook: this.state.settings.officePlaybook });
+    // The floor's practice switches (#24), as a session on it gets them (an experiment's variant can change them per issue).
+    const p = this.practicesOf(repo);
+    const dev = practiceLines(p, { base: repo.defaultBranch, declareTool: true }).join('\n');
+    const qa = qaPracticeLines(p).join('\n');
+    return { ...view, parts: view.parts.map((x, i) => ((i === 1 ? qa : dev) ? { ...x, text: `${x.text}\n\n${i === 1 ? qa : dev}` } : x)) };
   }
 
   protected beginTask(a: PersistedAgent, patch: Partial<PersistedAgent>, banner: string, preparing: string) {
@@ -116,6 +148,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       endedAt: null,
       costUsd: 0,
       turns: 0,
+      declared: null, // a lease is per task
       lastError: null,
       ...patch,
     });
@@ -307,6 +340,30 @@ export abstract class SwarmSessions extends SwarmAgents {
 
   // ---------- the test lab (#56) ----------
 
+  /** Agents' screenshots, browser checks and heavy commands, one shared browser for all. */
+  readonly testLab = new TestLab({
+    runner: () => this.backend.testLab,
+    settings: () => this.state.settings.testLab,
+    refusal: (kind) => this.health.refusal(kind),
+    forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
+    previewUrl: (repoId, pr) => this.labPreviewUrl(repoId, pr),
+    shot: (agentId, file) => this.labShot(agentId, file),
+    emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
+  });
+
+  /** Running lab jobs, for #55's admission (health.ts). */
+  protected labSessions() {
+    return this.testLab.sessions();
+  }
+
+  protected labView() {
+    return this.testLab.view();
+  }
+
+  protected closeTestLab() {
+    return this.testLab.close();
+  }
+
   /** Does this agent's session use the test lab? Claude Code on this computer (the lab's tools reach it over MCP). */
   protected usesTestLab(a: PersistedAgent, repo: PersistedRepo): boolean {
     return this.state.settings.testLab.enabled && repo.browserTesting && a.host !== 'box' && (a.cli || this.state.settings.defaultCli) === 'claude';
@@ -381,8 +438,9 @@ export abstract class SwarmSessions extends SwarmAgents {
     const testLab = !box && this.usesTestLab(a, repo);
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
+    const practice = this.practicePrompt(a, repo, how.cli);
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
-    const system = lab.prompt ? `${systemAppend}\n\n${lab.prompt}` : systemAppend;
+    const system = [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n');
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
     const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
@@ -411,6 +469,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         typed: mode === 'typed',
         reattach: mode === 'reattach',
         agentId: a.id,
+        ...(practice.office ? { office: practice.office } : {}),
         tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
         ...how,
       },
