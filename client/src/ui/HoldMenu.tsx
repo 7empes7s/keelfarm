@@ -29,9 +29,19 @@ export function HoldMenu() {
 
 function Sheet({ focus }: { focus: Focus }) {
   const box = useRef<HTMLDivElement>(null);
+  // Only a press that starts on the backdrop closes it: the click that follows the finger lifting (which opened the
+  // menu) lands on the backdrop too.
+  const pressed = useRef(false);
   useDialogFocus(box);
   return (
-    <div className="hold-backdrop" onClick={(e) => e.target === e.currentTarget && closeHoldMenu()}>
+    <div
+      className="hold-backdrop"
+      onPointerDown={(e) => (pressed.current = e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (pressed.current && e.target === e.currentTarget) closeHoldMenu();
+        pressed.current = false;
+      }}
+    >
       <div ref={box} className="hold-sheet" role="dialog" aria-modal="true" aria-label={`Options: ${focus.label}`} tabIndex={-1} onKeyDown={(e) => e.key === 'Escape' && closeHoldMenu()}>
         <div className="hold-title">{focus.label}</div>
         {holdOptions(focus).map((o) => (

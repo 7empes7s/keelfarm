@@ -230,7 +230,10 @@ export function HUD() {
       {started && !overlay && !travel && onFoot && <HeldHint />}
       {started && !overlay && !locked && !travel && onFoot && !isTouch && <div className="hud-resume">Click to look around</div>}
       {started && !overlay && !travel && onFoot && isTouch && !walked && <div className="hud-resume">Drag anywhere to walk · a second finger looks · tap to use · hold for more</div>}
-      {started && !(settings.setupDone && settings.tutorialStep >= 0) && (
+      {started && !(settings.setupDone && settings.tutorialStep >= 0) && isTouch && (
+        <div className="hud-help">Drag anywhere to walk (far to run) · a second finger looks · tap to use · hold, then let go, for more · 📱 for the phone</div>
+      )}
+      {started && !(settings.setupDone && settings.tutorialStep >= 0) && !isTouch && (
         <div className="hud-help">
           <MoveKeys joined /> move · <Key action="run" /> run · <Key action="interact" /> / <kbd>Click</kbd> interact · <Key action="phone" /> phone · <Key action="emote" /> emote · <Key action="ping" /> ping · <Key action="photo" /> photo ·{' '}
           <Key action="overview" /> overview · <Key action="workers" /> workers · <Key action="mute" /> mute · <Key action="help" /> help · <kbd>Esc</kbd> free mouse

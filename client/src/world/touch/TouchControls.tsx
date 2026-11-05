@@ -20,6 +20,11 @@ import { isTouch, openHoldMenu, touchInput, useHoldMenu, useTouchStick } from '.
 // E or a click, but aimed there), and a hold opens that thing's menu. In the overview and the other views a tap is
 // left to the browser's own click (CameraRig.tsx picks it up) and the joystick pans, as WASD does there.
 
+/** window.__swarmTouch: the last gestures seen, and focusAt(x, y): what a tap there would act on, for QA and Playwright. */
+const recent: string[] = [];
+const probe: { recent: string[]; focusAt?: (x: number, y: number) => string | null } = { recent };
+if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__swarmTouch = probe;
+
 const onFoot = () => cameraMode() === 'first' && !rigOwnsCamera();
 
 /** The view isn't taking fingers: before the start, under a panel, a question or the hold menu, in photo mode. */
@@ -50,6 +55,7 @@ export function TouchControls() {
       ray.setFromCamera(ndc, camera);
       return pickFocus(ray);
     };
+    Object.assign(probe, { focusAt: (x: number, y: number) => focusAt(x, y)?.label ?? null });
     const tap = (x: number, y: number) => {
       if (perch()) return leavePerch();
       const s = useStore.getState();
@@ -64,6 +70,7 @@ export function TouchControls() {
     };
     return (evs: GestureEvent[]) => {
       for (const e of evs) {
+        if (e.type !== 'stick' && e.type !== 'look') recent.push(e.type) > 20 && recent.shift();
         if (e.type === 'stick') {
           const v = stickVector(e.x - e.cx, e.y - e.cy);
           const k = knobOffset(e.x - e.cx, e.y - e.cy);
@@ -100,13 +107,13 @@ export function TouchControls() {
       } catch {
         // already gone
       }
-      handle(fingerDown(g, e.pointerId, e.clientX, e.clientY, performance.now()));
+      handle(fingerDown(g, e.pointerId, e.clientX, e.clientY, e.timeStamp)); // when it happened, not when a slow frame let us see it
     };
     const onMove = (e: PointerEvent) => {
       if (touch(e)) handle(fingerMove(g, e.pointerId, e.clientX, e.clientY));
     };
     const onUp = (e: PointerEvent) => {
-      if (touch(e)) handle(fingerUp(g, e.pointerId, e.clientX, e.clientY, performance.now()));
+      if (touch(e)) handle(fingerUp(g, e.pointerId, e.clientX, e.clientY, e.timeStamp));
     };
     const onCancel = (e: PointerEvent) => {
       if (!touch(e)) return;
