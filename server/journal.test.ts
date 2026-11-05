@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isFrame, journalFrame, KEYFRAME_MS, type JournalAgent } from '../shared/journal.ts';
+import { emptyCharterView } from '../shared/charter.ts';
 import type { AgentView, PullInfo, RepoView, ServerEvent } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import { envSecrets, Journal, parseRange } from './journal.ts';
@@ -94,6 +95,7 @@ function repo(pulls: PullInfo[]): RepoView {
     lastSync: null,
     previewConfig: { command: null, env: {} },
     preview: { status: 'stopped', port: 6301, url: null, ref: null, pr: null, commit: null, startedAt: null, error: null, logTail: [] },
+    charter: emptyCharterView(),
   };
 }
 

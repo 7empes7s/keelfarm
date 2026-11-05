@@ -284,6 +284,8 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `📣 escalate PR #${String(input.pr ?? '?')}${floor}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
     case 'set_mandate':
       return `📌 set_mandate: ${clip(String(input.text ?? ''), 90)}`;
+    case 'propose_charter':
+      return `📜 propose_charter${floor}: ${clip(String(input.reason ?? ''), 90)}`;
     case 'agent_log':
       return `📜 agent_log ${String(input.agent_id ?? '')}`;
     case 'qa_report':

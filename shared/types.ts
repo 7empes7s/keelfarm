@@ -1,5 +1,6 @@
 // Types shared between the swarm server and the 3D client.
 import type { CareerView } from './careers.ts';
+import type { CharterView } from './charter.ts';
 import type { ProgressView, RewardView } from './progress.ts';
 
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
@@ -93,6 +94,7 @@ export interface RepoView {
   syncError?: string;
   previewConfig: PreviewConfig;
   preview: PreviewView;
+  charter: CharterView; // the rest of the floor's charter (#48); `mission` above is its mission
 }
 
 /**

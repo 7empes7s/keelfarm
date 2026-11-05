@@ -75,6 +75,7 @@ import {
   oneLine,
   type SignIn,
 } from './model.ts';
+import { charterView } from '../../shared/charter.ts';
 import { slugify } from './flavour.ts';
 import { SwarmContract } from './contract.ts';
 
@@ -341,6 +342,7 @@ export abstract class SwarmCore extends SwarmContract {
       syncError: rt.syncError,
       previewConfig: r.preview,
       preview: this.previews.view(r),
+      charter: charterView(r.charter, Date.now()),
     };
   }
 
