@@ -737,9 +737,9 @@ input.inline:focus {
   left: 50%;
   transform: translate(-50%, -50%);
   padding: 6px 14px;
-  border: 2px dashed rgba(255, 255, 255, 0.6);
+  border: 2px dashed currentColor;
   border-radius: 999px;
-  color: #fff;
+  color: var(--ds-surface-raised);
   font-weight: 600;
   white-space: nowrap;
   text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
@@ -5039,12 +5039,30 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
     place-items: stretch;
   }
   :root .phone {
+    box-sizing: border-box;
     width: 100%;
     height: 100%;
+    min-width: 0; /* a grid item: its widest row mustn't widen the screen */
+    min-height: 0;
     border: none;
     border-radius: 0;
     box-shadow: none;
     padding: max(10px, var(--ds-safe-top)) max(10px, var(--ds-safe-right)) max(8px, var(--ds-safe-bottom)) max(10px, var(--ds-safe-left));
+  }
+  /* the 3D office on a touch screen: a band of the dimmed view above the window, to tap it closed */
+  html[data-touch] .overlay {
+    padding-top: calc(48px + var(--ds-safe-top));
+  }
+  html[data-touch] .overlay .panel,
+  html[data-touch] .phone {
+    border-top: 4px solid var(--ds-outline);
+    border-radius: 20px 20px 0 0;
+  }
+  html[data-touch] .overlay .panel-head {
+    padding-top: 12px;
+  }
+  html[data-touch] .phone {
+    padding-top: 10px;
   }
   .phone-status {
     display: none;
@@ -5058,7 +5076,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
     margin-bottom: 6px;
     border-radius: 12px;
     border: 3px solid var(--ds-outline);
-    background: #fff;
+    background: var(--ds-surface-raised);
     color: var(--ds-on-color);
     font-weight: 700;
     cursor: pointer;

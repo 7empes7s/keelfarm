@@ -458,6 +458,7 @@ html[data-reduce-motion] {
 
 /* the tabs: one row that scrolls sideways when it doesn't fit, never wrapping into a wall of buttons */
 .ds-console .tabs {
+  flex: none; /* in a panel body of fixed height (a phone's), never squashed to a sliver that taps fall through */
   flex-wrap: nowrap;
   gap: var(--ds-space-2);
   margin: calc(-1 * var(--ds-space-1)) calc(-1 * var(--ds-space-4)) var(--ds-space-4);
