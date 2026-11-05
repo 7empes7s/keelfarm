@@ -66,7 +66,29 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   the default projects folder.
 - `swarm.ts`: the orchestrator. Floors, agents, scheduling/auto-assign, build → QA → fix → merge loop, team changes
   (the CEO's `scale_team`, lobby approvals), CEO job queue, phone messages, persistence (`state.json` / `demo-state.json`), websocket fan-out (through
-  `outbox.ts`).
+  `outbox.ts`). `Swarm` is the façade (index.ts, ceo.ts and the tests use only it); its parts are layers in `server/swarm/`,
+  each an abstract class extending the one before, so a method's code sits in one file but every method is on `Swarm`.
+  Shared fields are `protected`; a lower layer calling a higher one's method declares it in `contract.ts`.
+
+  Where things live (`server/swarm/`, bottom of the chain first):
+
+  | File | What |
+  | --- | --- |
+  | `model.ts`, `flavour.ts`, `screens.ts` | persisted shapes, runtimes, constants; names, colours, looks; screenshots on disk |
+  | `contract.ts` | the methods lower layers call on higher ones (`protected abstract`) |
+  | `core.ts` | state and runtimes, the constructor's services, views and the snapshot, `/ws` clients and broadcast, the state file, lookups |
+  | `repos.ts` | connecting floors, syncing issues and PRs, previews, manager commands on GitHub |
+  | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
+  | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
+  | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
+  | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |
+  | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |
+  | `update.ts` | the office's own update: drain, hand-over to the launcher, the result after a restart |
+  | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
+  | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
+  | `team.ts` | hire and let-go requests, approvals, `scale_team` |
+  | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
+  | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
 - `agentRunner.ts`: one Agent SDK session; options, env stripping, Playwright MCP, and turning the SDK stream into
@@ -81,6 +103,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   `ptyClient.ts` is the office's side (start/connect, spawn, adopt after a restart, local fallback); `ptyProtocol.ts`
   their JSON-lines messages. The launcher's `office:shutdown` says `restart: false` when quitting: CLIs stop then.
   An agent's CLI stays at its prompt after building or fixing (`keepAlive`): follow-ups and prompts typed there reuse it.
+- `unblock.ts`: nothing waits on a human (pure): each Claude Code session's worktree permission rules, every CLI's
+  non-interactive environment (`cliEnv`), the answers to PermissionRequest / Elicitation / AskUserQuestion hooks, and
+  the watchdog's steps for a prompt still on screen (answer it, else the agent is `blocked`, notified after 5 minutes).
 - `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode): detection, Windows `.cmd` shim
   unwrapping, each one's command line, and the helper scripts they call back with.
 - `terminal.ts`: `AgentTerminal`, a headless xterm mirror per agent (replay for late viewers, saved to disk), its

@@ -10,6 +10,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { browserProblem, playwrightMcp } from './browser.ts';
 import { CEO_DISALLOWED, OFFICE_DISALLOWED, type SessionTools } from '../shared/tooling.ts';
 import { VERSION } from './config.ts';
+import { nonInteractiveEnv } from './unblock.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
 // The CEO runs through here too, with the office tools instead of a shell.
@@ -85,6 +86,8 @@ export interface SessionCallbacks {
   usageWarning?(info: UsageWarning): void;
   /** Claude's latest reading of each usage limit (status lines, rate-limit events), warning or not. */
   usage?(readings: UsageReading[]): void;
+  /** The session waits on a prompt the office couldn't answer (the reason), or no longer does (null). */
+  blocked?(reason: string | null): void;
   finished(result: SessionResult): void;
 }
 
@@ -356,7 +359,7 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
     if (/^(ANTHROPIC_|CLAUDE)/i.test(k) && k !== 'CLAUDE_CONFIG_DIR') continue;
     env[k] = v;
   }
-  Object.assign(env, opts.env);
+  Object.assign(env, nonInteractiveEnv(env), opts.env);
   env.CLAUDE_AGENT_SDK_CLIENT_APP = `cubefarm/${VERSION}`;
 
   const mcpServers: Options['mcpServers'] = {};

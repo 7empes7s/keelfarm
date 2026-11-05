@@ -23,6 +23,7 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
@@ -225,6 +226,9 @@ function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: nu
     [{ kind: 'tool', tool: 'Grep', text: '⏺ Grep "useTodos"' }, { kind: 'result', text: '  ⎿ Found 6 matches in 4 files' }],
     [{ kind: 'text', text: "● The state lives in a single hook. I'll extend it and keep the API backwards compatible." }],
     [{ kind: 'tool', tool: 'Edit', text: `⏺ Edit ${file}` }, { kind: 'result', text: '  ⎿ Updated' }],
+    ...(issueNumber % 3 === 0 ? [demoPrompts(opts.cwd)] : []), // now and then, the prompts the office answers for them
+    // and, rarer, one it couldn't: blocked for a moment (the desk's ⛔ sign), until the manager answers it
+    ...(issueNumber % 5 === 0 ? [() => cb.blocked?.(BLOCKED_DEMO), [{ kind: 'error' as const, text: `⛔ Blocked: ${BLOCKED_DEMO}. Open the terminal to answer it.` }], () => cb.blocked?.(null)] : []),
     [{ kind: 'tool', tool: 'Write', text: '⏺ Write src/__tests__/feature.test.ts' }, { kind: 'result', text: '  ⎿ Saved' }],
     [{ kind: 'tool', tool: 'Bash', text: '⏺ $ npm test -- --run' }],
     [

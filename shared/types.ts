@@ -278,6 +278,7 @@ export interface AgentView {
   hasScreenshot: boolean;
   screenshotAt: number | null;
   lastError: string | null;
+  blocked?: string | null; // waiting on a prompt the office couldn't answer (server/unblock.ts): why
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
@@ -285,7 +286,7 @@ export interface AgentView {
 }
 
 /** The kinds of work the icon over a busy agent shows (shared/activity.ts maps tools and status to them). */
-export type ActivityKind = 'read' | 'edit' | 'test' | 'build' | 'browse' | 'git' | 'ci' | 'qa' | 'fix' | 'talk' | 'run';
+export type ActivityKind = 'read' | 'edit' | 'test' | 'build' | 'browse' | 'git' | 'ci' | 'qa' | 'fix' | 'talk' | 'run' | 'blocked';
 
 /** An agent's current activity: a kind and a short, redacted detail ("store.ts", "npm test"; '' for none). */
 export interface AgentActivity {
