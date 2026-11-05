@@ -9,6 +9,12 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   // ---------- the office's own update ----------
 
   /**
+   * The update under way (#74): when the first and the latest commit it brings in were seen (a run of merges settles
+   * into one update), and whether nothing new starts (the drain, or the hand-over if new sessions wouldn't outlive the restart).
+   */
+  protected updateRun = { pendingSince: null as number | null, lastCommitAt: null as number | null, holding: false };
+
+  /**
    * Busy agents an office restart would stop: not cloud agents in their Boxes, nor CLIs in the terminal keeper, which
    * the restarted office picks up again. The CEO's session is resumed instead, as its office tools live in this process.
    */
@@ -32,8 +38,8 @@ export abstract class SwarmUpdate extends SwarmScheduling {
       drainingSince: u.drainingSince,
       sent: u.sent,
       running: this.unkept().length,
-      pendingSince: u.pendingSince,
-      lastCommitAt: u.lastCommitAt,
+      pendingSince: this.updateRun.pendingSince,
+      lastCommitAt: this.updateRun.lastCommitAt,
       settleMs: settleMinutes(this.state.settings.updateSettleMin) * 60_000,
       keeper: this.state.settings.runtime === 'terminal' && this.backend.keeping(),
     };
@@ -62,10 +68,14 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     const u = this.officeUpdate;
     if (u.failed && u.failedBehind === null) u.failedBehind = behind; // only a newer commit retries a failed update by itself
     const now = Date.now();
-    if (behind > 0) u.pendingSince ??= now;
-    if (behind > u.behind) u.lastCommitAt = now; // a newer commit: the update waits for the run of merges to settle
+    const run = this.updateRun;
+    if (behind > 0) run.pendingSince ??= now;
+    if (behind > u.behind) run.lastCommitAt = now; // a newer commit: the update waits for the run of merges to settle
     u.behind = behind;
-    if (behind === 0) Object.assign(u, { requested: false, failed: null, failedBehind: null, pendingSince: null, lastCommitAt: null });
+    if (behind === 0) {
+      Object.assign(u, { requested: false, failed: null, failedBehind: null });
+      Object.assign(run, { pendingSince: null, lastCommitAt: null });
+    }
     this.officeUpdateTick();
   }
 
@@ -89,10 +99,11 @@ export abstract class SwarmUpdate extends SwarmScheduling {
       );
     }
     u.drainingSince = d.drainingSince;
-    u.holding = d.holds || (d.send && !input.keeper);
+    this.updateRun.holding = d.holds || (d.send && !input.keeper);
+    if (d.state === 'draining') this.cancelHolds('Cancelled: the office is restarting for an update. End this job now; pick it up again after the update.');
     if (d.send) void this.handOver(d.timedOut);
     this.emitOfficeUpdate();
-    return u.holding;
+    return this.updateRun.holding;
   }
 
   /**
@@ -125,7 +136,8 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   protected async afterUpdate(result: LastUpdate) {
     const u = this.officeUpdate;
     const interrupted = this.state.agents.filter((a) => u.cutOff.has(a.id) && BUSY.includes(a.status));
-    Object.assign(u, { sent: false, holding: false, requested: false, drainingSince: null, pendingSince: null, lastCommitAt: null, cutOff: new Set<string>() });
+    Object.assign(u, { sent: false, requested: false, drainingSince: null, cutOff: new Set<string>() });
+    this.updateRun = { pendingSince: null, lastCommitAt: null, holding: false };
     const preparing = new Set(interrupted.filter((a) => a.status === 'preparing'));
     for (const a of interrupted) {
       Object.assign(a, { status: 'stopped', lastError: 'The office updated itself while this agent was working.' });

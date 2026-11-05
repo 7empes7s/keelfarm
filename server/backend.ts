@@ -249,7 +249,8 @@ export const realBackend: Backend = {
   sweepDesks: workspace.sweepDesks,
   trimDesk: workspace.trimDesk,
   releaseDesk: (fullName, agentSlug, port) => workspace.releaseDesk(fullName, agentSlug, port, officeProcesses()),
-  startSession: (opts, cb) => (opts.terminal ? startCliSession(opts, cb) : startSession(opts, cb)),
+  // A CLI started in the terminal keeper outlives an office restart (kept); a Box's is followed through its record.
+  startSession: (opts, cb) => (opts.terminal ? Object.assign(startCliSession(opts, cb), { kept: !opts.box && keeperHookUrl() !== null }) : startSession(opts, cb)),
   sessionTranscript: async (cwd, sessionId) => {
     const file = sessionId ? await findTranscript(claudeProjectsDir(), cwd, sessionId) : null;
     return file && sessionId ? { file, sessionId } : null;

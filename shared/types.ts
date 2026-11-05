@@ -11,6 +11,7 @@ import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
+import type { CeoAwakeSettings, CeoSessionView } from './ceoAwake.ts';
 import type { LabView } from './experiments.ts';
 import type { HistoryEntry } from './history.ts';
 import type { HealthView, MemorySettings } from './health.ts';
@@ -383,6 +384,7 @@ export interface SwarmSettings {
   researchMin: number; // a research job's time budget in minutes, after which the CEO wraps up with what it has
   ceoFollowups: FollowupSettings; // Settings → The CEO: which office events wake the CEO for a follow-up (shared/followups.ts)
   ceoMandates: CeoMandate[]; // the manager's standing mandates: follow-ups may file issues on the floors they cover
+  ceoAwake: CeoAwakeSettings; // Settings → The CEO: its kept session, waits and consults (shared/ceoAwake.ts)
   managerName: string; // what the office calls you
   companyName: string;
   dogName: string; // the office dog's name, on its tag and in the hint when you aim at it
@@ -717,6 +719,7 @@ export interface CeoInfo {
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
+  session?: CeoSessionView; // its kept session (#28; absent in old journals)
   held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
 }
 

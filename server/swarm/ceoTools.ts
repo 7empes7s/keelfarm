@@ -1,4 +1,5 @@
 // The CEO's office tools (ceo.ts createOfficeTools): what each one reads and does.
+import crypto from 'node:crypto';
 import {
   checkCloseIssue,
   createOfficeTools,
@@ -15,6 +16,8 @@ import {
   type OfficeTools,
 } from '../ceo.ts';
 import { researchReadOnly } from '../research.ts';
+import { anyMet, ASK_DEFAULT_MIN, ASK_MAX_MIN, waitLabel, waitMs, waitProblem, type WaitCondition, type WaitWorld } from '../ceoWaits.ts';
+import type { Consult } from '../consult.ts';
 import { nameList } from '../closeCleanup.ts';
 import type { CharterProposalArgs } from '../charterTool.ts';
 import { HttpError } from '../httpError.ts';
@@ -69,6 +72,9 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      waitFor: (a) => this.waitFor(a),
+      askManager: (a) => this.askManager(a),
+      consult: (a) => this.consult(a),
       sessionHistory: (a) => this.sessionHistory(a),
     }, () => this.state.ceo.job?.kind === 'research'));
   }
@@ -378,7 +384,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
 
   /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
   protected refuseWhileUpdating() {
-    if (this.officeUpdate.holding) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+    if (this.updateRun.holding) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
   }
 
   protected restartAgent(x: { agent_id: string }) {
@@ -436,5 +442,87 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const repo = this.floorRepo(x.floor);
     const d = await this.backend.prDiff(repo.fullName, Number(x.pr), !!x.patch);
     return prDiffText({ files: d.files, diff: d.diff === null ? null : scrub(d.diff, this.secrets()) });
+  }
+
+  // ---------- the CEO's waits, questions and consults (#28) ----------
+
+  /** The office as wait_for sees it. */
+  protected waitWorld(): WaitWorld {
+    const rt = (floor: number) => {
+      const repo = this.state.repos.find((r) => r.floor === floor);
+      return repo ? { repo, rt: this.repoRt.get(repo.id) } : null;
+    };
+    return {
+      floors: this.state.repos.map((r) => r.floor),
+      qa: (floor, pr) => {
+        const f = rt(floor);
+        const q = f && this.state.qa.find((x) => x.repoId === f.repo.id && x.prNumber === pr);
+        return q ? { status: q.status, summary: q.summary } : null;
+      },
+      pr: (floor, pr) => {
+        const f = rt(floor);
+        return f?.rt?.pulls.find((p) => p.number === pr)?.state ?? f?.rt?.closedPulls.get(pr)?.state ?? null;
+      },
+      issue: (floor, n) => {
+        const f = rt(floor);
+        return f?.rt?.issues.some((i) => i.number === n) ? 'OPEN' : f?.rt?.closedIssues.has(n) ? 'CLOSED' : null;
+      },
+      agent: (id) => {
+        const a = this.state.agents.find((x) => x.id === id || x.name.toLowerCase() === id.toLowerCase());
+        return a ? { name: a.name, status: this.consulting(a) ? 'working' : a.status } : null;
+      },
+      preview: (floor) => {
+        const f = rt(floor);
+        return f ? this.previews.view(f.repo).status : null;
+      },
+      usage: () => this.usageNow().state,
+    };
+  }
+
+  /** wait_for: hold the CEO's job until any condition holds, or the timeout. An issue that leaves the open list has closed. */
+  protected waitFor(x: { conditions: WaitCondition[]; timeout_min?: number }) {
+    const w = this.waitWorld();
+    for (const c of x.conditions) {
+      const problem = waitProblem(c, w);
+      if (problem) throw new Error(problem);
+    }
+    this.ceoWaited = true;
+    const live = (): WaitWorld => {
+      const now = this.waitWorld();
+      return { ...now, issue: (f, n) => now.issue(f, n) ?? 'CLOSED' };
+    };
+    return this.holds.wait(x.conditions.map(waitLabel).join(' or '), () => anyMet(x.conditions, live()), waitMs(x.timeout_min, this.state.settings.ceoAwake.maxWaitMin));
+  }
+
+  /** ask_manager: the question on the manager's phone (with suggestion chips), held until they answer. */
+  protected askManager(x: { question: string; suggestions?: string[]; timeout_min?: number }) {
+    const chips = x.suggestions?.length ? `\n\`\`\`suggestions\n${x.suggestions.join('\n')}\n\`\`\`` : '';
+    const m = this.postMessage('ceo', `${x.question}${chips}`);
+    this.markDelivery('all', 'replied');
+    this.ceoWaited = true;
+    const min = Math.max(1, Math.min(ASK_MAX_MIN, x.timeout_min ?? ASK_DEFAULT_MIN));
+    return this.holds.ask({ id: `q${m.id}`, messageId: m.id, text: x.question, at: Date.now(), waiting: true }, min * 60_000);
+  }
+
+  /** consult: a question for an agent on a floor, queued for a free one (or the one named) and waited for. */
+  protected consult(x: { floor: number; agent_id?: string; question: string; hint?: string }) {
+    const repo = this.floorRepo(x.floor);
+    const named = x.agent_id ? this.agentByRef(x.agent_id) : null;
+    if (named && (named.repoId !== repo.id || named.role === 'ceo')) throw new Error(`${named.name} doesn't work on floor ${repo.floor}.`);
+    if (named?.host === 'box') throw new Error(`${named.name} works in a cloud machine: consult a local agent on floor ${repo.floor}.`);
+    if (!named && !this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.host !== 'box')) throw new Error(`Floor ${repo.floor} has no local agents to consult.`);
+    const awake = this.state.settings.ceoAwake;
+    const c: Consult = { id: crypto.randomUUID(), repoId: repo.id, floor: repo.floor, agentId: named?.id ?? null, question: x.question, hint: x.hint?.trim() || null, at: Date.now(), runningOn: null, startedAt: null, dir: null };
+    this.consults.push(c);
+    this.consultAnswers.set(c.id, null);
+    this.appendLog(this.ceo(), [{ kind: 'system', text: `🔎 Consult queued: ${named ? named.name : `any free agent on floor ${repo.floor}`}` }]);
+    setTimeout(() => this.schedule(), 100);
+    // Queued behind QA and fixes, then its own time cap: the wait allows for both.
+    return this.holds
+      .wait(`${named ? named.name : `floor ${repo.floor}`}'s answer`, () => this.consultAnswers.get(c.id) ?? null, (awake.consultMin + 15) * 60_000)
+      .finally(() => {
+        this.consultAnswers.delete(c.id); // no one waits on it any more
+        if (!c.runningOn) this.consults = this.consults.filter((q) => q !== c);
+      });
   }
 }

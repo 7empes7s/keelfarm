@@ -21,7 +21,7 @@ export const DRAIN_TIMEOUT_MS = 20 * 60_000;
 /** Later: ask again after this long, or sooner when a newer commit lands. */
 export const POSTPONE_MS = 2 * 60 * 60_000;
 /** Batching: an automatic update waits until no commit has landed for this many minutes (Settings)… */
-export const DEFAULT_SETTLE_MIN = 3;
+const DEFAULT_SETTLE_MIN = 3;
 /** …but no longer than this after the first commit it would bring in. */
 export const SETTLE_MAX_MS = 15 * 60_000;
 

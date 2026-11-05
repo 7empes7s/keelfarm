@@ -16,7 +16,6 @@ import { IssueAges } from '../issueAges.ts';
 import { PR_LIMITS_VERSION } from '../prOwnership.ts';
 import { Previews } from '../previews.ts';
 import { DEFAULT_PACING_SESSIONS } from '../pacing.ts';
-import { DEFAULT_SETTLE_MIN } from '../officeUpdate.ts';
 import { emptyHistory } from '../metrics.ts';
 import { DEFAULT_TRIM_IDLE_MIN } from '../deskTrim.ts';
 import { boxVersions } from '../clis.ts';
@@ -50,6 +49,8 @@ import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { CeoFiles } from '../ceoFiles.ts';
+import { consultSessions, type Consult } from '../consult.ts';
+import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
 import { FileStore } from '../files.ts';
 import type {
   AgentActivity,
@@ -98,6 +99,7 @@ export abstract class SwarmCore extends SwarmContract {
       researchMin: DEFAULT_RESEARCH_MIN,
       ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
       ceoMandates: [],
+      ceoAwake: { ...DEFAULT_CEO_AWAKE },
       managerName: '',
       companyName: '',
       dogName: DEFAULT_DOG_NAME,
@@ -105,7 +107,6 @@ export abstract class SwarmCore extends SwarmContract {
       setupDone: false,
       tutorialStep: 0,
       autoUpdate: true,
-      updateSettleMin: DEFAULT_SETTLE_MIN,
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
       dailyLogDir: '',
@@ -125,7 +126,7 @@ export abstract class SwarmCore extends SwarmContract {
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups() },
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null } },
     messages: [],
     phoneReadAt: 0,
     prLimits: PR_LIMITS_VERSION,
@@ -144,6 +145,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
   protected researchGuard = new ResearchGuard(); // the running research job's time budget
+  protected consults: Consult[] = []; // the CEO's consults (#28), queued and running, oldest first
   protected messageSeq = 1;
   protected agentRt = new Map<string, AgentRuntime>();
   protected seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
@@ -179,9 +181,6 @@ export abstract class SwarmCore extends SwarmContract {
     failedBehind: null as number | null,
     drainingSince: null as number | null,
     sent: false,
-    pendingSince: null as number | null, // the first commit this update would bring in was seen then (batching, #74)
-    lastCommitAt: null as number | null, // and the latest one
-    holding: false, // nothing new starts (the drain, or the hand-over when new sessions wouldn't outlive the restart)
     cutOff: new Set<string>(), // agents whose sessions the hand-over stopped: recovered like after a restart
   };
   protected lastOfficeView = '';
@@ -208,7 +207,7 @@ export abstract class SwarmCore extends SwarmContract {
   readonly health = new OfficeHealth({
     probe: () => this.backend.resources,
     settings: () => this.state.settings.memory,
-    sessions: () => this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
+    sessions: () => [...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })), ...consultSessions(this.consults)],
     log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
     alert: (title, body) => this.notifier.notify('memory', title, body),
     emit: (health) => this.broadcast({ type: 'health', health }),
@@ -720,7 +719,7 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected running() {
-    return this.state.agents.filter((a) => BUSY.includes(a.status)).length;
+    return this.state.agents.filter((a) => BUSY.includes(a.status)).length + this.consults.filter((c) => c.runningOn).length;
   }
 
   /** Cloud agents working on a task in their Box, which an office restart doesn't stop. */
@@ -731,7 +730,7 @@ export abstract class SwarmCore extends SwarmContract {
   /** True when the manager has set a session limit and every slot is taken. The CEO never takes a slot (#46). */
   protected slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length >= limit;
+    return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length + this.consults.filter((c) => c.runningOn).length >= limit;
   }
 
   protected agentSlug(a: PersistedAgent) {

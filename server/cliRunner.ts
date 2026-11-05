@@ -27,6 +27,7 @@ import {
   type SessionResult,
 } from './agentRunner.ts';
 import type { OfficeTools } from './ceo.ts';
+import { consultDeny } from './consult.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
@@ -719,7 +720,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
           cb.tool(name);
           if (name === 'mcp__playwright__browser_navigate' && typeof input.url === 'string') cb.browserUrl(input.url);
         }
-        return ALLOW;
+        return (opts.readOnly && consultDeny(name)) || ALLOW;
       }
       case 'PostToolUse':
       case 'PostToolUseFailure': {
@@ -841,7 +842,6 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     stop() {
       finish({ ok: false, text: '', errors: ['Stopped by manager'] });
     },
-    kept: !inBox && keeperHookUrl() !== null,
   };
 
   if (adopt && live) {

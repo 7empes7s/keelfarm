@@ -11,7 +11,7 @@ type Internals = {
   schedule(): void;
   setOfficeBehind(behind: number): void;
   officeHead: string | null;
-  officeUpdate: { pendingSince: number | null; lastCommitAt: number | null; holding: boolean };
+  updateRun: { pendingSince: number | null; lastCommitAt: number | null; holding: boolean };
   agentRt: Map<string, { session: unknown }>;
 };
 
@@ -42,7 +42,7 @@ async function office(runtime: 'terminal' | 'sdk' = 'terminal') {
   for (let n = 0; n < 300 && !workers().every((a) => a.status === 'working' && i.agentRt.get(a.id)?.session); n++) await new Promise((r) => setTimeout(r, 10));
   expect(workers().map((a) => a.status)).toEqual(['working', 'working']);
   /** The settle window passing: as if the commits had landed minutes ago. */
-  const settle = () => Object.assign(i.officeUpdate, { pendingSince: Date.now() - 10 * 60_000, lastCommitAt: Date.now() - 4 * 60_000 });
+  const settle = () => Object.assign(i.updateRun, { pendingSince: Date.now() - 10 * 60_000, lastCommitAt: Date.now() - 4 * 60_000 });
   return { swarm, repo, i, workers, handOvers, settle, done: (r: Partial<LastUpdate> = {}) => finish({ from: FROM, to: 'b'.repeat(40), ok: true, installed: false, built: true, at: Date.now(), ...r }) };
 }
 
@@ -76,7 +76,7 @@ describe("the office's own update with the terminal keeper", () => {
 
     // The preflight runs: the kept sessions carry on, and new work starts as usual.
     for (const b of before) expect(i.agentRt.get(b.id)?.session).toBe(b.session);
-    expect(i.officeUpdate.holding).toBe(false);
+    expect(i.updateRun.holding).toBe(false);
     const newcomer = swarm.hireAgent(repo.id, { name: 'Cy' });
     i.schedule();
     expect(swarm.snapshot().agents.find((a) => a.id === newcomer.id)?.status).toMatch(/preparing|working/);
