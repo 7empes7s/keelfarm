@@ -101,6 +101,8 @@ export interface SessionCallbacks {
 export interface SessionHandle {
   send(text: string): void;
   stop(): void;
+  /** Its CLI runs in the terminal keeper, so an office restart doesn't stop it (#74). */
+  kept?: boolean;
 }
 
 /** Async queue used as the streaming-input prompt so the manager can message a running agent. */

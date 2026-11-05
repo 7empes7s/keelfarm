@@ -392,7 +392,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
 
   /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
   protected refuseWhileUpdating() {
-    if (this.officeUpdate.drainingSince !== null || this.officeUpdate.sent) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+    if (this.updateRun.holding) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
   }
 
   protected restartAgent(x: { agent_id: string }) {

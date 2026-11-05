@@ -4,9 +4,10 @@ import { HOME_DIR } from './config.ts';
 import { git } from './exec.ts';
 import type { OfficeUpdateState } from '../shared/types.ts';
 
-// The office updating itself (#37). The server only decides when: it drains (starts nothing new, lets running
-// sessions finish) and then hands the update to the launcher (scripts/office.mjs), which pulls, installs, builds and
-// restarts it. Contract with the launcher:
+// The office updating itself (#37, #74). The server only decides when: it lets a run of merges settle into one update,
+// drains the sessions an office restart would stop (CLIs in the terminal keeper and in Boxes carry on through it), and
+// hands the update to the launcher (scripts/office.mjs), which runs the preflight while work goes on, then switches,
+// installs, builds and restarts it. Contract with the launcher:
 //   server → launcher  { type: 'office:update', from: '<full HEAD sha>' }   once drained
 //   launcher → server  { type: 'office:shutdown', restart }                  run shutdown(), then exit 0
 //                      (restart: false when the office quits; agents' CLIs stop instead of waiting in the keeper)
@@ -19,6 +20,25 @@ import type { OfficeUpdateState } from '../shared/types.ts';
 export const DRAIN_TIMEOUT_MS = 20 * 60_000;
 /** Later: ask again after this long, or sooner when a newer commit lands. */
 export const POSTPONE_MS = 2 * 60 * 60_000;
+/** Batching: an automatic update waits until no commit has landed for this many minutes (Settings)… */
+const DEFAULT_SETTLE_MIN = 3;
+/** …but no longer than this after the first commit it would bring in. */
+export const SETTLE_MAX_MS = 15 * 60_000;
+
+/** The settle window's minutes from a setting: 0 (no wait) to 60, else the default. */
+export function settleMinutes(v: unknown): number {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && v !== null && v !== '' ? Math.max(0, Math.min(60, n)) : DEFAULT_SETTLE_MIN;
+}
+
+/**
+ * When a run of commits has settled: settleMs after the latest one, at most SETTLE_MAX_MS (or settleMs, if longer)
+ * after the first. null: no commit is being waited for.
+ */
+export function settleAt(pendingSince: number | null, lastCommitAt: number | null, settleMs: number): number | null {
+  if (pendingSince === null) return null;
+  return Math.min((lastCommitAt ?? pendingSince) + settleMs, pendingSince + Math.max(settleMs, SETTLE_MAX_MS));
+}
 
 /** Started by the launcher: an IPC channel and SWARM_LAUNCHER=1. Anything else (tsx, the demo, QA) only reports. */
 export function underLauncher(proc: { send?: unknown; env: Record<string, string | undefined> } = process): boolean {
@@ -37,7 +57,11 @@ export interface DrainInput {
   failedBehind: number | null; // how far behind it was after that failure: only a newer commit retries on its own
   drainingSince: number | null;
   sent: boolean; // handed to the launcher
-  running: number; // sessions still running
+  running: number; // sessions an office restart would stop (not CLIs in the terminal keeper or in a Box)
+  pendingSince: number | null; // the first commit of this update was seen then (null: don't wait for more)
+  lastCommitAt: number | null; // the latest one
+  settleMs: number;
+  keeper: boolean; // new sessions start in the terminal keeper, so work may go on while the launcher runs the preflight
 }
 
 export interface DrainDecision {
@@ -46,26 +70,33 @@ export interface DrainDecision {
   /** Hand the update to the launcher now: nothing is running, or the drain timed out (`timedOut`). */
   send: boolean;
   timedOut: boolean;
+  /** Nothing new starts: while draining, and while the launcher has it if new sessions wouldn't outlive the restart. */
+  holds: boolean;
+  /** Settling: when the update goes ahead unless another commit lands. */
+  updateAt: number | null;
 }
 
 /**
- * Where the office's own update stands and what to do about it. Draining (start nothing new, let running sessions
- * finish) happens when there is an update, a launcher, and either autoUpdate is on or the manager pressed Update now.
- * Later holds an automatic update back for POSTPONE_MS or until a newer commit lands ('waiting'); a failed update is
- * only retried automatically for a newer commit.
+ * Where the office's own update stands and what to do about it. An update is due when there is one, a launcher, and
+ * either autoUpdate is on or the manager pressed Update now. An automatic one first settles (more commits may come),
+ * then drains: nothing new starts while the sessions a restart would stop finish (up to DRAIN_TIMEOUT_MS). With none
+ * of those, it goes to the launcher at once. Later holds an automatic update back for POSTPONE_MS or until a newer
+ * commit lands ('waiting'); a failed update is only retried automatically for a newer commit.
  */
 export function drainDecision(s: DrainInput): DrainDecision {
-  const idle = (state: OfficeUpdateState): DrainDecision => ({ state, drainingSince: null, send: false, timedOut: false });
-  if (s.sent) return { state: 'updating', drainingSince: s.drainingSince, send: false, timedOut: false };
+  const idle = (state: OfficeUpdateState, updateAt: number | null = null): DrainDecision => ({ state, drainingSince: null, send: false, timedOut: false, holds: false, updateAt });
+  if (s.sent) return { state: 'updating', drainingSince: s.drainingSince, send: false, timedOut: false, holds: !s.keeper, updateAt: null };
   if (s.behind <= 0) return idle('none');
   if (!s.launcher) return idle(s.failed ? 'failed' : 'available');
   const postponed = s.postponedUntil !== null && s.now < s.postponedUntil && s.behind <= s.postponedBehind;
   const failedHold = s.failed !== null && s.behind <= (s.failedBehind ?? Infinity);
   const due = s.requested || (s.autoUpdate && !postponed && !failedHold);
   if (!due) return idle(s.failed ? 'failed' : s.autoUpdate && postponed ? 'waiting' : 'available');
+  const at = s.requested || s.drainingSince !== null ? null : settleAt(s.pendingSince, s.lastCommitAt, s.settleMs);
+  if (at !== null && s.now < at) return idle('settling', at);
   const since = s.drainingSince ?? s.now;
   const timedOut = s.running > 0 && s.now - since >= DRAIN_TIMEOUT_MS;
-  return { state: 'draining', drainingSince: since, send: s.running === 0 || timedOut, timedOut };
+  return { state: 'draining', drainingSince: since, send: s.running === 0 || timedOut, timedOut, holds: true, updateAt: null };
 }
 
 /** Where an update failed: before the live office was touched, while switching it, or in the probation after its restart. */

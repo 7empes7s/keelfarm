@@ -184,7 +184,7 @@ export abstract class SwarmCore extends SwarmContract {
     failedBehind: null as number | null,
     drainingSince: null as number | null,
     sent: false,
-    handedOver: false, // sessions cut off by the hand-over are the restarted office's to recover
+    cutOff: new Set<string>(), // agents whose sessions the hand-over stopped: recovered like after a restart
   };
   protected lastOfficeView = '';
   protected clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)

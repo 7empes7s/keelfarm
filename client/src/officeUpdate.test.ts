@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, officeUpdateChip, officeUpdateText, restartExpected, shouldReload } from './officeUpdate';
 import type { OfficeUpdateView } from '../../shared/types';
 
-const u = (over: Partial<OfficeUpdateView>): OfficeUpdateView => ({ state: 'none', behind: 0, launcher: true, drainingSince: null, running: 0, detail: null, ...over });
+const u = (over: Partial<OfficeUpdateView>): OfficeUpdateView => ({ state: 'none', behind: 0, launcher: true, drainingSince: null, running: 0, updateAt: null, holds: false, detail: null, ...over });
 
 describe('officeUpdateText', () => {
   it('says each state in plain words', () => {
@@ -12,7 +12,9 @@ describe('officeUpdateText', () => {
     expect(officeUpdateText(u({ state: 'draining', behind: 3, running: 2 }))).toBe('Waiting for 2 sessions to finish');
     expect(officeUpdateText(u({ state: 'waiting', behind: 3, running: 1 }))).toBe('Waiting for 1 session to finish');
     expect(officeUpdateText(u({ state: 'draining', behind: 3 }))).toBe('Updating shortly…');
-    expect(officeUpdateText(u({ state: 'updating', behind: 3 }))).toBe('Updating…');
+    expect(officeUpdateText(u({ state: 'updating', behind: 3, holds: true }))).toBe('Updating…');
+    expect(officeUpdateText(u({ state: 'updating', behind: 3 }))).toBe('Checking the update; agents keep working, then the office restarts for a few seconds');
+    expect(officeUpdateText(u({ state: 'settling', behind: 3, updateAt: 1_000_000 + 90_000 }), 1_000_000)).toBe('Updating in 2 min, 3 commits; agents keep working');
     expect(officeUpdateText(u({ state: 'failed', detail: 'npm ci failed' }))).toBe('Last update failed: npm ci failed');
   });
 });
@@ -26,6 +28,7 @@ describe('officeUpdateChip', () => {
     expect(officeUpdateChip(u({ state: 'draining', running: 2 }))).toBe('⟳ Updating the office after 2 sessions finish');
     expect(officeUpdateChip(u({ state: 'waiting', running: 1 }))).toBe('⟳ Updating the office after 1 session finishes');
     expect(officeUpdateChip(u({ state: 'updating' }))).toBe('⟳ Updating the office…');
+    expect(officeUpdateChip(u({ state: 'settling', behind: 1, updateAt: 1_000_000 + 10_000 }), 1_000_000)).toBe('⟳ Updating in 1 min, 1 commit');
   });
 });
 
@@ -42,6 +45,8 @@ describe('buttons', () => {
     expect(canUpdateNow(u({ state: 'updating', behind: 2 }))).toBe(false);
     expect(canPostpone(u({ state: 'draining', behind: 2 }))).toBe(true);
     expect(canPostpone(u({ state: 'updating', behind: 2 }))).toBe(false);
+    expect(canUpdateNow(u({ state: 'settling', behind: 2 }))).toBe(true);
+    expect(canPostpone(u({ state: 'settling', behind: 2 }))).toBe(true);
   });
 });
 

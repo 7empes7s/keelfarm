@@ -543,7 +543,7 @@ export abstract class SwarmSessions extends SwarmAgents {
   protected async onFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return; // fired
-    if (this.officeUpdate.handedOver && a.host !== 'box') return; // stopped for the office's update: recovered like after a restart
+    if (this.officeUpdate.cutOff.has(a.id)) return; // stopped for the office's update: recovered like after a restart
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
     rt.currentTool = rt.blocked = null;
