@@ -32,8 +32,10 @@ import { cleanStyle } from '../shared/looks.ts';
 import { clampResearchMin } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../shared/types.ts';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
 import { SWEEP_MS } from '../shared/files.ts';
+import { clampHistoryDays } from '../shared/history.ts';
+import { readingsLabel } from '../shared/usage.ts';
 import type { AgentLook, CloudSettings, HireRequestView, SwarmSettings } from '../shared/types.ts';
 import {
   type PersistedAgent,
@@ -127,6 +129,8 @@ export class Swarm extends SwarmCeoTools {
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
       if (!isCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
       this.state.settings.trimIdleDesksMin = clampTrimIdleMin(this.state.settings.trimIdleDesksMin);
+      this.state.settings.historyDays = clampHistoryDays(this.state.settings.historyDays);
+      if (typeof this.state.settings.dailyLogDir !== 'string') this.state.settings.dailyLogDir = '';
       if (!this.state.settings.defaultModel && this.state.settings.defaultCli === 'claude') this.state.settings.defaultModel = DEFAULT_MODEL;
       // "Max concurrent sessions" (default 4) became an optional session limit. The old default goes; a limit the manager chose stays.
       const old = this.state.settings as SwarmSettings & { maxConcurrent?: number; permissionMode?: string };
@@ -159,6 +163,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
       this.state.settings.ceoAwake = ceoAwakeSettings(undefined, loaded.settings?.ceoAwake);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
+      this.state.settings.officePlaybook = typeof loaded.settings?.officePlaybook === 'string' ? loaded.settings.officePlaybook.slice(0, OFFICE_PLAYBOOK_MAX) : DEFAULT_OFFICE_PLAYBOOK;
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
         Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
@@ -276,6 +281,7 @@ export class Swarm extends SwarmCeoTools {
       void this.voice.prune();
       void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
       void this.spend.ledger.prune();
+      void this.sweepHistory();
       void this.lab.checkSurvival((id) => this.state.repos.find((r) => r.id === id)?.fullName ?? null, (name, since) => this.backend.survivalSignals(name, since));
     }, this.backend.demo ? 60_000 : TRIM_SWEEP_MS);
     setInterval(() => {
@@ -300,6 +306,8 @@ export class Swarm extends SwarmCeoTools {
     void this.refreshTooling();
     await this.journal.start();
     await this.spend.ledger.load();
+    await this.history.load();
+    void this.sweepHistory();
     // A fresh demo office has a week of spending to look at.
     if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
     if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
@@ -476,6 +484,11 @@ export class Swarm extends SwarmCeoTools {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
       setTimeout(() => void this.trimIdleDesks(), 1000);
     }
+    if (typeof patch.dailyLogDir === 'string') s.dailyLogDir = patch.dailyLogDir.trim() ? path.resolve(patch.dailyLogDir.trim()) : '';
+    if (patch.historyDays !== undefined) {
+      s.historyDays = clampHistoryDays(patch.historyDays);
+      setTimeout(() => void this.sweepHistory(), 500);
+    }
     if (patch.voice !== undefined) {
       const keepDays = s.voice.keepDays;
       s.voice = voiceSettings(s.voice, patch.voice);
@@ -496,6 +509,8 @@ export class Swarm extends SwarmCeoTools {
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
     }
+    if (patch.tools !== undefined) s.tools = toolSettings(s.tools, patch.tools);
+    if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
       const next: CloudSettings = cloudSettings(s.cloud, patch.cloud);
       if (next.machineKind === 'box' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
@@ -506,6 +521,11 @@ export class Swarm extends SwarmCeoTools {
     this.emitCeo();
     setTimeout(() => this.schedule(), 200);
     return s;
+  }
+
+  /** The history's sweep (#49): past the retention goes, and finished days get their totals in the daily log. */
+  private sweepHistory() {
+    return this.history.sweep(this.state.settings.historyDays, readingsLabel(this.state.claudeUsage, Date.now())).catch((err) => console.warn('could not sweep the session history', err));
   }
 
   /** The setup wizard: who you are, the company, and your CEO. */

@@ -9,6 +9,7 @@ import { CLIS } from './clis.ts';
 import { DEMO_PICKS, demoMakeFiles, sentFiles, wantsFile } from './demoFiles.ts';
 import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
+import { charTokens } from '../shared/startup.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
 import { keyName } from '../shared/termKeys.ts';
@@ -27,6 +28,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
+import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
@@ -332,6 +334,7 @@ function demoTooling(projects: string[]): ToolInventory {
     superpowers: plugin('superpowers', 'Skills for planning, test-driven development and debugging.', { skills: [['brainstorming', 'Use before any creative work: explores intent before building.'], ['test-driven-development', 'Write the failing test first, then the code.'], ['systematic-debugging', 'Find the root cause before proposing fixes.']] }),
     github: plugin('github', 'GitHub issues, pull requests and Actions through GitHub’s MCP server.', { mcp: { github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer demo-not-a-real-token' } } } }),
     'commit-commands': plugin('commit-commands', 'Commit, push and open a PR in one command.', { commands: ['commit', 'commit-push-pr', 'clean_gone'] }),
+    'code-review': plugin('code-review', 'Reviews a diff for bugs and project conventions.', { skills: [['code-review', 'Reviews the current diff at a chosen effort.']] }),
     figma: plugin('figma', 'Turn Figma designs into code.', { skills: [['figma-design-to-code', 'Implements a Figma frame as components.']], mcp: { figma: { type: 'http', url: 'https://mcp.figma.com/mcp' } } }),
   };
   const files: Record<string, string> = Object.assign({}, ...Object.values(plugins).map((p) => p.files));
@@ -343,6 +346,7 @@ function demoTooling(projects: string[]): ToolInventory {
       notion: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: 'demo-secret-never-shown' } },
       linear: { type: 'http', url: 'https://mcp.linear.app/mcp?key=demo-secret-never-shown' },
     },
+    claudeAiMcpEverConnected: ['claude.ai Gmail', 'claude.ai Google Drive', 'claude.ai Vercel'],
   });
   if (projects[0]) files[path.join(projects[0], '.mcp.json')] = JSON.stringify({ mcpServers: { sentry: { type: 'http', url: 'https://mcp.sentry.dev/mcp' } } });
   const pluginList = Object.entries(plugins).map(([name, p]) => ({ id: `${name}@claude-plugins-official`, enabled: name !== 'figma', installPath: p.dir, version: '1.0.0' }));
@@ -902,8 +906,12 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       // The big company is for measuring the office at full speed, so it never paces.
       if (++sessionsStarted === USAGE_WARNING_AT && !scale) fakeUsageWarning(cb);
       if (!scale) cb = withReadings(cb);
+      // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
+      // connectors and plugins unless the session is lean.
+      if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
       return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
+    sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
     terminals: true,
     reconnectClis: async () => [], // fake sessions end with the office
     hooksReady: () => undefined,
@@ -1202,7 +1210,7 @@ export function demoRefsLine(floors: readonly DemoFloor[]): string {
 }
 
 interface DemoStatus {
-  company: { scaling: string }; // how team changes go, in words ("team changes apply straight away")
+  company: { scaling: string; officePlaybook: string | null }; // how team changes go, in words ("team changes apply straight away"); the office playbook
   floors: DemoFloor[];
   pendingChanges: unknown[];
 }
@@ -1407,6 +1415,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
         const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
         return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
+      // "add to the office playbook: run the linter first": a bullet through the real tool, refused past its cap.
+      const rule = text.match(/\boffice playbook\b[^:]*:\s*(.+)/i)?.[1]?.trim();
+      if (rule) {
+        const out = await use('set_office_playbook', { playbook: [s.company.officePlaybook, `- ${rule}`].filter(Boolean).join('\n') });
+        return out.startsWith('Refused') ? `I couldn't add it: ${refused(out)}` : `Added to the office playbook: "${short(rule, 80)}". ${out}`;
       }
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);

@@ -31,6 +31,7 @@ import { consultRefusal } from './consult.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
+import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
@@ -503,6 +504,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const launched: string[] = []; // every prompt the CLI was given, as given (Codex: finds its main thread)
   let mainThread: string | null = opts.resumeSessionId ?? null;
   let kept: string | null = opts.resumeSessionId ?? null; // the Claude session the agent has saved to resume
+  let measured = !!opts.resumeSessionId; // a new session's first turn is measured once, from its transcript at its end (#50)
   const usageResets = new Map<string, number | null>();
   const warned = new Set<string>();
   let done = false;
@@ -702,6 +704,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         cb.sessionId(id);
       }
     }
+    const startup = event === 'Stop' && !measured && cli === 'claude' && !inBox && typeof b.transcript_path === 'string' ? transcriptStartup(b.transcript_path, opts.cwd) : null;
+    if (event === 'Stop') measured = true;
+    if (startup) cb.startup?.(startup);
     switch (event) {
       case 'PreToolUse': {
         const name = String(b.tool_name ?? '');

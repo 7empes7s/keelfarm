@@ -4,6 +4,7 @@
 // demand. The aggregation below is pure.
 import fs from 'node:fs/promises';
 import { dayKey } from '../shared/journal.ts';
+import { charTokens, startupParts, startupRows, type StartupContext, type StartupPart } from '../shared/startup.ts';
 import type { EffortLevel, PullInfo } from '../shared/types.ts';
 import {
   isTaskKind,
@@ -136,7 +137,7 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
     });
   }
 
-  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds };
+  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions) };
 }
 
 /** GET /api/costs' query: `days` from 1 to 30 (7 when unset), `repoId` a floor (`isFloor`) or unset for all of them. */
@@ -242,6 +243,13 @@ export interface CostRun {
   startedAt: number;
   round: number | null;
   exp?: string | null; // the experiment variant it runs (shared/experiments.ts)
+  /** The office's texts the session starts with, sized (shared/startup.ts); the measured startup once it's known. */
+  known?: StartupPart[];
+  startup?: StartupContext;
+  /** For the session history (#49), never the ledger: where it ran, its Claude Code session, what it was about. */
+  cwd?: string;
+  sessionId?: string | null;
+  title?: string;
 }
 
 /** The agent fields a session's line is made from. */
@@ -269,7 +277,7 @@ export class SessionCosts {
   constructor(
     readonly ledger: CostLedger,
     private limited: () => boolean,
-    private onSession: (s: CostSession) => void = () => undefined,
+    private onSession: (s: CostSession, run: CostRun | null) => void = () => undefined,
   ) {}
 
   start(agentId: string, run: CostRun) {
@@ -284,6 +292,12 @@ export class SessionCosts {
     this.runs.delete(agentId);
     this.outcomes.delete(agentId);
     return run;
+  }
+
+  /** The session's first turn was measured: its startup context, split into the office's texts and the rest. */
+  startup(agentId: string, tokens: number, memoryChars: number) {
+    const run = this.runs.get(agentId);
+    if (run && !run.startup) run.startup = startupParts(tokens, [...(run.known ?? []), { label: 'CLAUDE.md files', tokens: charTokens(memoryChars) }]);
   }
 
   /** What the task's handler made of the session that just ended. */
@@ -327,8 +341,9 @@ export class SessionCosts {
       tokens: null,
       outcome: sessionOutcome({ interrupted: !!result.interrupted, watchdog, stopped: how.stopped, limited: this.limited(), ok: result.ok, hint }),
       ...(run?.exp ? { exp: run.exp } : {}),
+      ...(run?.startup ? { startup: run.startup } : {}),
     };
-    this.onSession({ type: 'session', ...line });
+    this.onSession({ type: 'session', ...line }, run);
     return this.ledger.session(line);
   }
 }

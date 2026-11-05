@@ -1,9 +1,10 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { SESSION_HISTORY_INPUT, SESSION_HISTORY_TOOL } from './history.ts';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
 import { HttpError } from './httpError.ts';
@@ -149,6 +150,7 @@ export interface OfficeHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
@@ -173,6 +175,7 @@ export interface OfficeHandlers {
   waitFor(a: { conditions: WaitCondition[]; timeout_min?: number }): Promise<string>;
   askManager(a: { question: string; suggestions?: string[]; timeout_min?: number }): Promise<string>;
   consult(a: { floor: number; agent_id?: string; question: string; hint?: string }): Promise<string>;
+  sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
 
 export interface ExperimentToolInput {
@@ -267,6 +270,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
           ),
       },
       (a) => run(() => h.setFloorProfile(a)),
+    ),
+    tool(
+      'set_office_playbook',
+      "Replace the office-wide playbook: the rules every build, fix and QA prompt on every floor starts with, above the floor's own playbook. Only small, proven rules that hold on every project; floor specifics go in set_floor_profile. Paid for on every session: keep it short.",
+      { playbook: z.string().max(OFFICE_PLAYBOOK_MAX).describe(`Markdown bullets, at most ${OFFICE_PLAYBOOK_MAX} characters. Empty string clears it.`) },
+      (a) => run(() => h.setOfficePlaybook(a)),
     ),
     tool(
       'scale_team',
@@ -444,6 +453,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), pr: z.number().int().positive(), patch: z.boolean().optional().describe('Include the diff itself') },
       (a) => run(() => h.prDiff(a)),
     ),
+    tool('session_history', SESSION_HISTORY_TOOL, SESSION_HISTORY_INPUT, (a) => run(() => h.sessionHistory(a))),
     tool(
       'send_telegram',
       "Send the manager a message on their linked Telegram chat, only when they ask for something there (\"send me the plan on Telegram\"). Refused when Telegram isn't set up. It never reaches anyone else.",

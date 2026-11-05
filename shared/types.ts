@@ -12,6 +12,7 @@ import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { CeoAwakeSettings, CeoSessionView } from './ceoAwake.ts';
 import type { LabView } from './experiments.ts';
+import type { HistoryEntry } from './history.ts';
 import type { HealthView, MemorySettings } from './health.ts';
 
 export type AgentStatus =
@@ -161,6 +162,16 @@ export const FLOOR_SEATS = 15;
 
 /** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
 export const PLAYBOOK_MAX = 3000;
+
+/** The longest the office-wide playbook may be (#50): it is in every builder's, fixer's and QA's prompt, on every floor. */
+export const OFFICE_PLAYBOOK_MAX = 1200;
+
+/** The office-wide playbook a new office starts with: small rules the prompts don't already say. */
+export const DEFAULT_OFFICE_PLAYBOOK = [
+  '- A fix comes with a test that fails without it.',
+  "- Don't reformat, rename or move code you aren't changing.",
+  '- Never run, edit or restart anything outside your worktree and reserved port: no live services, no other desks.',
+].join('\n');
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -380,6 +391,8 @@ export interface SwarmSettings {
   autoUpdate?: boolean; // update the office itself once it's quiet (absent on servers without self-update)
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
+  dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
+  historyDays: number; // days the session history and its transcripts are kept; 0 = forever
   voice: VoiceSettings;
   themes: ThemeSettings; // holiday themes: Settings → Themes (shared/themes.ts)
   weather: WeatherSettings; // Settings → Weather: the calm cycle, off, or the manager's real local weather
@@ -388,6 +401,7 @@ export interface SwarmSettings {
   notify: NotifySettings;
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
+  officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
@@ -805,6 +819,8 @@ export type ServerEvent =
   | { type: 'cloud'; cloud: CloudView }
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
+  /** A session (or merge) went into the history (#49): an open History screen shows it. */
+  | { type: 'history'; entry: HistoryEntry }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }
