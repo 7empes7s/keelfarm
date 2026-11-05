@@ -59,6 +59,7 @@ export interface PersistedRepo {
   summary: string;
   qaBrief: string;
   playbook: string;
+  labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */

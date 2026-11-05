@@ -38,6 +38,11 @@ import {
 import { slugify } from './flavour.ts';
 import { SCREENS_DIR, screenFile, removeScreens } from './screens.ts';
 import { SwarmAgents } from './agents.ts';
+import type { Requester } from '../testLab.ts';
+import { createLabTools } from '../testLabTools.ts';
+
+const LAB_VIEWER = 'testlab';
+const LAB_PREVIEW_MS = 5 * 60_000;
 
 export abstract class SwarmSessions extends SwarmAgents {
   // ---------- terminals ----------
@@ -86,7 +91,7 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   protected buildSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, fixing?: { pr: number; headRef: string }, deps?: DepsOutcome) {
-    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook });
+    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook, lab: this.usesTestLab(a, repo) });
   }
 
   /** The floor's linked repos where the agent reads them: the floor checkouts here, or their copies in a cloud agent's Box. */
@@ -300,6 +305,54 @@ export abstract class SwarmSessions extends SwarmAgents {
     this.launchSession(a, repo, cwd, prompt, systemAppend, resumeSessionId, outputSchema, mode);
   }
 
+  // ---------- the test lab (#56) ----------
+
+  /** Does this agent's session use the test lab? Claude Code on this computer (the lab's tools reach it over MCP). */
+  protected usesTestLab(a: PersistedAgent, repo: PersistedRepo): boolean {
+    return this.state.settings.testLab.enabled && repo.browserTesting && a.host !== 'box' && (a.cli || this.state.settings.defaultCli) === 'claude';
+  }
+
+  /** The lab's tools for one session, bound to its agent, floor and worktree. */
+  protected labTools(a: PersistedAgent, repo: PersistedRepo, cwd: string) {
+    const who = (): Requester => ({ agentId: a.id, agent: a.name, repoId: repo.id, floor: repo.floor, fullName: repo.fullName, defaultBranch: repo.defaultBranch, worktree: cwd, pr: a.prNumber ?? null, labCommands: repo.labCommands ?? [] });
+    return createLabTools({ submit: (input) => this.testLab.submit(who(), input), status: () => this.testLab.status(a.id) });
+  }
+
+  /** The address of a floor's app for the lab: the PR's preview (the PR theatre's), else the floor's, started if need be. */
+  protected async labPreviewUrl(repoId: string, pr: number | null): Promise<string> {
+    const repo = this.repo(repoId);
+    const now = () => (pr ? this.previews.prViews().find((v) => v.repoId === repoId && v.pr === pr) : this.previews.view(repo));
+    const v = now();
+    if (!v || v.status === 'stopped' || v.status === 'error') await (pr ? this.startPrPreview(repoId, pr) : this.startPreview(repoId));
+    for (const until = Date.now() + LAB_PREVIEW_MS; Date.now() < until; await new Promise((r) => setTimeout(r, 2000))) {
+      this.previews.watch(LAB_VIEWER, repoId, pr); // kept up while the lab uses it; the theatre stops it once idle
+      const x = now();
+      if (x?.status === 'running' && x.url) return x.url;
+      if (x?.status === 'error' || x?.status === 'unconfigured') throw new Error(`The ${pr ? `PR #${pr} ` : ''}preview didn't start: ${x.error ?? 'no command to run the app'}. Start your dev server and give its url instead.`);
+    }
+    throw new Error("The preview didn't start in 5 minutes: start your dev server and give its url instead.");
+  }
+
+  /** A screenshot the lab took for an agent: their screen in the office, and QA's evidence, as a Playwright one would. */
+  protected labShot(agentId: string, file: string) {
+    const a = this.state.agents.find((x) => x.id === agentId);
+    if (a) void fs.readFile(file).then((data) => this.screenTaken(a, data, 'image/png'), () => undefined);
+  }
+
+  protected screenTaken(a: PersistedAgent, data: Buffer, mime: string) {
+    const rt = this.agentRt.get(a.id);
+    if (!rt) return;
+    const at = Date.now();
+    rt.screenshot = { data, mime, at };
+    rt.shots.push({ data, mime, url: rt.browserUrl, at });
+    if (rt.shots.length > 12) rt.shots.shift();
+    this.broadcast({ type: 'screen', agentId: a.id, url: rt.browserUrl, at });
+    void removeScreens(a.id)
+      .then(() => fs.mkdir(SCREENS_DIR, { recursive: true }))
+      .then(() => fs.writeFile(screenFile(a.id, mime), data))
+      .catch((err) => console.warn('could not save screenshot', err));
+  }
+
   protected launchSession(
     a: PersistedAgent,
     repo: PersistedRepo,
@@ -325,6 +378,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.status = 'working';
     this.activity.set(a.id, Date.now());
     const how = this.sessionRuntime(a, resumeSessionId);
+    const testLab = !box && this.usesTestLab(a, repo);
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
@@ -342,7 +396,9 @@ export abstract class SwarmSessions extends SwarmAgents {
         systemAppend: system,
         model: run.model,
         effort: run.effort,
-        browserTesting: repo.browserTesting,
+        // A session on the test lab (#56) gets its lab_* tools instead of a browser of its own.
+        browserTesting: repo.browserTesting && !testLab,
+        ...(testLab ? { office: this.labTools(a, repo, cwd) } : {}),
         additionalDirectories: linked ?? (a.host === 'box' ? [] : this.linkedRepos(repo).map((r) => this.backend.mainDir(r.fullName))),
         role: a.role,
         task: a.task,
@@ -378,17 +434,7 @@ export abstract class SwarmSessions extends SwarmAgents {
           rt.browserUrl = url;
           this.emitAgent(a);
         },
-        screenshot: (data, mime) => {
-          const at = Date.now();
-          rt.screenshot = { data, mime, at };
-          rt.shots.push({ data, mime, url: rt.browserUrl, at });
-          if (rt.shots.length > 12) rt.shots.shift();
-          this.broadcast({ type: 'screen', agentId: a.id, url: rt.browserUrl, at });
-          void removeScreens(a.id)
-            .then(() => fs.mkdir(SCREENS_DIR, { recursive: true }))
-            .then(() => fs.writeFile(screenFile(a.id, mime), data))
-            .catch((err) => console.warn('could not save screenshot', err));
-        },
+        screenshot: (data, mime) => this.screenTaken(a, data, mime),
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),

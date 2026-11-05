@@ -297,6 +297,14 @@ app.post('/api/usage/resume', route(() => swarm.resumeFullSpeed()));
 app.post('/api/usage/simulate', route((req) => swarm.simulateUsage(req.body?.kind)));
 // The health strip (#55): in the demo, low memory on demand
 app.post('/api/health/simulate', route((req) => swarm.health.simulate(req.body?.low === true)));
+// The test lab desk's thumbnails (#56): a recent result's first screenshot.
+app.get('/api/testlab/shot/:id', (req, res) => {
+  const file = swarm.testLab.shotFile(String(req.params.id));
+  res.setHeader('Cache-Control', 'no-store');
+  if (!file) return void res.status(404).end();
+  res.setHeader('Content-Type', 'image/png');
+  res.sendFile(file, { dotfiles: 'allow' }, (err) => err && !res.headersSent && res.status(404).end()); // it sits in .lab/
+});
 // The office doctor (#262): a finding's one-click fix or Ignore; in the demo, its scenarios
 app.post('/api/doctor/fix', route((req) => swarm.doctorFix(req.body?.id, req.body?.fix)));
 app.post('/api/doctor/ignore', route((req) => swarm.doctorIgnore(req.body?.id)));

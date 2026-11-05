@@ -14,6 +14,7 @@ import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { LabView } from './experiments.ts';
 import type { HistoryEntry } from './history.ts';
 import type { HealthView, MemorySettings } from './health.ts';
+import type { TestLabSettings, TestLabView } from './testLab.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -371,6 +372,7 @@ export interface QaShotView {
 export interface SwarmSettings {
   sessionLimit: number; // most agent sessions running at once; 0 = no limit
   memory: MemorySettings; // memory headroom, the per-session ceiling and learned estimates (shared/health.ts)
+  testLab: TestLabSettings; // the test lab's switch and how many jobs it runs at once (shared/testLab.ts)
   defaultModel: string;
   defaultEffort: EffortLevel;
   taskEffort: Partial<Record<TaskKind, EffortLevel>>; // effort per kind of task (#18); an agent's own wins, and a kind without one runs at the default
@@ -768,6 +770,7 @@ export interface WorldSnapshot {
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
   experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
+  testLab?: TestLabView; // the test lab desk (#56): its queue, running jobs and recent results; absent in a replay
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -806,6 +809,7 @@ export type ServerEvent =
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }
+  | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[] }
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }

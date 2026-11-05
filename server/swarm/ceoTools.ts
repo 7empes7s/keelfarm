@@ -24,6 +24,7 @@ import { readingsLabel } from '../../shared/usage.ts';
 import { usageLabel } from '../pacing.ts';
 import { floorSpend } from '../costLedger.ts';
 import { checkRestart, sessionKind } from '../health.ts';
+import { labPattern } from '../testLab.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
 import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
@@ -216,12 +217,14 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     );
   }
 
-  protected setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }) {
+  protected setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }) {
     const r = this.floorRepo(x.floor);
     const preview = parsePreviewPatch(x.preview_command, x.preview_env);
+    const lab = x.lab_commands?.map(labPattern);
     if (x.summary !== undefined) r.summary = String(x.summary).trim().slice(0, 140);
     if (x.qa_brief !== undefined) r.qaBrief = String(x.qa_brief).trim().slice(0, 2500);
     if (x.playbook !== undefined) r.playbook = String(x.playbook).trim().slice(0, PLAYBOOK_MAX);
+    if (lab) r.labCommands = lab;
     r.preview = { ...r.preview, ...preview };
     if (preview.command === null) void this.previews.refreshDefault(r);
     this.emitRepo(r);

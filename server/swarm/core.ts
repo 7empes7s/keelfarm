@@ -30,6 +30,9 @@ import { Lab, loadLab } from '../experiments.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
+import { TestLab } from '../testLab.ts';
+import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
+import { OFFICE_DIR } from '../officeUpdate.ts';
 import { Ticker } from '../ticker.ts';
 import { isResync, Outbox } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
@@ -84,6 +87,7 @@ export abstract class SwarmCore extends SwarmContract {
     settings: {
       sessionLimit: 0,
       memory: memorySettings(DEFAULT_MEMORY, {}),
+      testLab: testLabSettings(DEFAULT_TEST_LAB, {}),
       defaultModel: DEFAULT_MODEL,
       defaultEffort: 'medium',
       taskEffort: {},
@@ -200,13 +204,26 @@ export abstract class SwarmCore extends SwarmContract {
   readonly health = new OfficeHealth({
     probe: () => this.backend.resources,
     settings: () => this.state.settings.memory,
-    sessions: () => this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
+    sessions: () => [
+      ...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
+      ...this.testLab.sessions(),
+    ],
     log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
     alert: (title, body) => this.notifier.notify('memory', title, body),
     emit: (health) => this.broadcast({ type: 'health', health }),
     save: () => this.save(),
     retry: (id, why, requeue) => this.state.agents.filter((a) => a.id === id && a.status === 'stopped' && a.task).forEach((a) => this.recover([a], new Set(), new Set(requeue ? [a] : []), undefined, why)),
     schedule: () => this.schedule(),
+  });
+  /** The test lab (#56): agents' screenshots, browser checks and heavy commands, one shared browser for all. */
+  readonly testLab = new TestLab({
+    runner: () => this.backend.testLab,
+    settings: () => this.state.settings.testLab,
+    refusal: (kind) => this.health.refusal(kind),
+    forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
+    previewUrl: (repoId, pr) => this.labPreviewUrl(repoId, pr),
+    shot: (agentId, file) => this.labShot(agentId, file),
+    emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
@@ -435,6 +452,7 @@ export abstract class SwarmCore extends SwarmContract {
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
       health: this.health.view(),
+      testLab: this.testLab.view(),
       claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),

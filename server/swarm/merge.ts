@@ -20,6 +20,7 @@ import {
 import { issuesResolvedBy } from '../issueClaims.ts';
 import { CHECKS_ALERT_MS, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeStep } from '../mergeGate.ts';
 import { PREVIEW_SLUG } from '../previewRunner.ts';
+import { LAB_SLUG } from '../testLabRunner.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
 import type { LogLine, PullInfo } from '../../shared/types.ts';
 import {
@@ -234,7 +235,7 @@ export abstract class SwarmMerge extends SwarmRepos {
       const agents = this.state.agents.filter((a) => a.repoId === repo.id);
       const keep = {
         // Floor desks: the previews', and those of agents not on a machine yet. Old desks go once their agents moved.
-        desks: [...agents.filter((a) => !a.machine).map((a) => this.agentSlug(a)), PREVIEW_SLUG, ...this.previews.prSlugs(repo)],
+        desks: [...agents.filter((a) => !a.machine).map((a) => this.agentSlug(a)), PREVIEW_SLUG, LAB_SLUG, ...this.previews.prSlugs(repo)],
         branches: [...agents.flatMap((a) => (a.branch ? [a.branch] : [])), ...pulls.filter((p) => p.state === 'OPEN').map((p) => p.headRefName)],
       };
       const r = await this.backend.sweepDesks(repo.fullName, keep);

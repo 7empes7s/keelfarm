@@ -14,6 +14,7 @@ import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
 import { HealthStrip, MemoryFields } from './HealthStrip';
+import { TestLabCard, TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
 import { NotifySettings } from './NotifySettings';
@@ -213,6 +214,7 @@ export function FloorsTab() {
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
         <HealthStrip />
+        <TestLabCard />
         <h3 className="section">🏢 Floors</h3>
         {repos.length === 0 && <p className="muted">No floors yet. Add a project →</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
@@ -714,6 +716,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           you hit either.
         </p>
         <MemoryFields memory={settings.memory} set={set} />
+        <TestLabFields testLab={settings.testLab} set={set} />
         <label className="field">
           <span>Sessions while pacing</span>
           <input

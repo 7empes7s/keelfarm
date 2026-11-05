@@ -10,6 +10,7 @@ import { orphanedQa } from './qaOrphans.ts';
 import { catchUp, PR_LIMITS_VERSION } from './prOwnership.ts';
 import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecovery.ts';
 import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
+import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { pruneQaShots } from './qaShots.ts';
 import { mergeReadings } from '../shared/usage.ts';
@@ -159,6 +160,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.listen = listenSettings(DEFAULT_LISTEN, loaded.settings?.listen);
       this.state.settings.notify = notifySettings(DEFAULT_NOTIFY, loaded.settings?.notify);
       this.state.settings.memory = memorySettings(DEFAULT_MEMORY, loaded.settings?.memory);
+      this.state.settings.testLab = testLabSettings(DEFAULT_TEST_LAB, loaded.settings?.testLab);
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
@@ -464,6 +466,7 @@ export class Swarm extends SwarmCeoTools {
     const s = this.state.settings;
     if (patch.sessionLimit !== undefined) s.sessionLimit = Math.max(0, Math.round(Number(patch.sessionLimit)) || 0);
     if (patch.memory !== undefined) s.memory = memorySettings(s.memory, patch.memory);
+    if (patch.testLab !== undefined) s.testLab = testLabSettings(s.testLab, patch.testLab);
     // The default model belongs to the default coding agent: a new agent starts on its own default.
     if (isCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) {
       s.defaultCli = patch.defaultCli;
