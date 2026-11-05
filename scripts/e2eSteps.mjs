@@ -35,12 +35,12 @@ export function webServerCommand(env) {
   return env.E2E_SKIP_BUILD === '1' ? boot : `npm run build && ${boot}`;
 }
 
-/** Whether Google Chrome and Playwright's headless Chromium are installed, looked up the way Playwright does. */
+/** Whether Google Chrome, Playwright's headless Chromium and its WebKit are installed, looked up the way Playwright does. */
 export function installedBrowsers() {
   const { registry } = createRequire(import.meta.url)('playwright-core/lib/server/registry/index');
   const has = (name) => {
     const file = registry.findExecutable(name)?.executablePath('javascript');
     return !!file && fs.existsSync(file);
   };
-  return { chrome: has('chrome'), chromium: has('chromium-headless-shell') };
+  return { chrome: has('chrome'), chromium: has('chromium-headless-shell'), webkit: has('webkit') };
 }

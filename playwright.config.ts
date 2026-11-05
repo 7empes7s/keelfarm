@@ -18,7 +18,8 @@ if (!process.env.E2E_SWARM_HOME) {
   process.on('exit', () => fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 }));
 }
 
-const { browser } = pickBrowser(process.env, installedBrowsers());
+const installed = installedBrowsers();
+const { browser } = pickBrowser(process.env, installed);
 
 const chromium = {
   ...devices['Desktop Chrome'],
@@ -50,6 +51,8 @@ export default defineConfig({
   projects: [
     { name: 'smoke', testMatch: 'smoke.spec.ts', use: chromium },
     { name: 'chromium', testIgnore: 'smoke.spec.ts', dependencies: ['smoke'], use: chromium },
+    // The phone 3D office's taps on Safari's engine too (#83), when WebKit is installed (never downloaded mid-run).
+    ...(installed.webkit ? [{ name: 'iphone', testMatch: 'touch.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
   ],
   webServer: {
     command: webServerCommand(process.env),
