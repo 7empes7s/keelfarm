@@ -66,7 +66,29 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   the default projects folder.
 - `swarm.ts`: the orchestrator. Floors, agents, scheduling/auto-assign, build → QA → fix → merge loop, team changes
   (the CEO's `scale_team`, lobby approvals), CEO job queue, phone messages, persistence (`state.json` / `demo-state.json`), websocket fan-out (through
-  `outbox.ts`).
+  `outbox.ts`). `Swarm` is the façade (index.ts, ceo.ts and the tests use only it); its parts are layers in `server/swarm/`,
+  each an abstract class extending the one before, so a method's code sits in one file but every method is on `Swarm`.
+  Shared fields are `protected`; a lower layer calling a higher one's method declares it in `contract.ts`.
+
+  Where things live (`server/swarm/`, bottom of the chain first):
+
+  | File | What |
+  | --- | --- |
+  | `model.ts`, `flavour.ts`, `screens.ts` | persisted shapes, runtimes, constants; names, colours, looks; screenshots on disk |
+  | `contract.ts` | the methods lower layers call on higher ones (`protected abstract`) |
+  | `core.ts` | state and runtimes, the constructor's services, views and the snapshot, `/ws` clients and broadcast, the state file, lookups |
+  | `repos.ts` | connecting floors, syncing issues and PRs, previews, manager commands on GitHub |
+  | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
+  | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
+  | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
+  | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |
+  | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |
+  | `update.ts` | the office's own update: drain, hand-over to the launcher, the result after a restart |
+  | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
+  | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
+  | `team.ts` | hire and let-go requests, approvals, `scale_team` |
+  | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
+  | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
 - `agentRunner.ts`: one Agent SDK session; options, env stripping, Playwright MCP, and turning the SDK stream into
@@ -136,6 +158,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `costLedger.ts`: the cost ledger (#18): a line per finished session (task kind, effort, cost, outcome) and merged PR in
   `<SWARM_HOME>/costs.jsonl`, 30 days, never in the snapshot; it backs Mission control's "Where the plan goes"
   (`GET /api/costs`) and company_status's spend. Kinds, waste rules and effort per kind: `shared/costs.ts`.
+- `experiments.ts`: the lab (#23): A/B experiments on harness practices in `state.json`, the variant each new issue in a
+  running one gets (seeded, stratified by floor and size), what it changes in its sessions (`launchSession`), and its PR's
+  outcome and survival. The rules and statistics are pure, in `shared/experiments.ts`; `experimentSample.ts` is the demo's.
 - `journal.ts`: the time-lapse journal (`<SWARM_HOME>/journal/<day>/`): records what `Swarm.broadcast` sends, a file
   per 10-minute keyframe, pruning, and the reads behind `/api/journal/*`. The rules (what's kept, secrets, seeking,
   marks) are in `shared/journal.ts`; `journalSample.ts` is the demo's made-up day.

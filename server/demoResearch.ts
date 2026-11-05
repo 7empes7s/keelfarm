@@ -1,0 +1,50 @@
+// The demo CEO's research brief (#20): a canned summary, a "Research: <topic>" artifact with real source links and
+// made-up findings, and the suggestion boxes a real research job ends with (server/research.ts).
+import { short } from './research.ts';
+
+/** The demo's answer to a research job; `where` names the floor it looked at. */
+export function researchBrief(topic: string, where: string): string {
+  return [
+    `I looked at current docs, two comparable products and ${where}.`,
+    '- **A** reuses what is there: smallest change, 1 issue.',
+    '- **B** adds a small service: more room to grow, 2 issues.',
+    '- **C** buys it off the shelf: fastest, but a new dependency.',
+    'I recommend **B**. The full brief, with sources, is attached.',
+    '',
+    `\`\`\`artifact title="Research: ${short(topic)}"`,
+    '## Question',
+    '',
+    `${topic}`,
+    '',
+    '## Findings',
+    '',
+    '- Current docs recommend doing it on the server side ([MDN](https://developer.mozilla.org/en-US/docs/Web)) *(fact)*',
+    '- Comparable products ship it as a separate module ([web.dev](https://web.dev/)) *(fact)*',
+    `- ${where} already has most of the plumbing *(from the code)*`,
+    '- Users will want it on phones first *(guess)*',
+    '',
+    '## Options',
+    '',
+    '| Option | How it works here | Effort | Risks | Plan cost |',
+    '| --- | --- | ---: | --- | --- |',
+    '| A | Extend the existing module | 1 issue | Gets crowded | Low |',
+    '| B | A small service of its own | 2 issues | Two moving parts | Medium |',
+    '| C | An off-the-shelf package | 1 issue | Lock-in, licence | Low |',
+    '',
+    '## Recommendation',
+    '',
+    'B: it keeps the core simple and grows with the project.',
+    '',
+    '## Open questions',
+    '',
+    '- Does it need to work offline?',
+    '```',
+    '',
+    "(I'm the demo CEO: the sources are real pages, the findings are made up.) Which way shall we go?",
+    '```suggestions',
+    'Go with B',
+    'Plan A and B',
+    'Dig deeper on C',
+    '```',
+  ].join('\n');
+}

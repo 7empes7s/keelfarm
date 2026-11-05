@@ -3,12 +3,16 @@ import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
+import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
+import type { TaskKind } from '../shared/costs.ts';
 import { HttpError } from './httpError.ts';
 import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
+import { DEFAULT_RESEARCH_MIN, RESEARCH_NO_FILING, researchPrompt, short } from './research.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
-import { ASK_MAX_MIN, WAIT_KINDS, type WaitCondition } from './ceoWaits.ts';
+import type { WaitCondition } from './ceoWaits.ts';
+import { waitTools } from './ceoWaitTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -24,8 +28,31 @@ export interface CeoJob {
   prNumber?: number; // triage: the stuck pull request
   text?: string; // chat: the manager's message(s)
   events?: FollowupEvent[]; // followup: what happened
-  messageIds?: number[]; // chat: those messages' ids, marked read when the job starts
+  messageIds?: number[]; // chat / research / a plan picked from research: the manager's messages, marked read when the job starts
+  topic?: string; // research: what to research
+  pick?: string; // plan: the option the manager picked from the CEO's research
+  brief?: string; // plan: where that research brief was saved
   at: number;
+}
+
+/** Queue a CEO job: one onboarding and one plan per floor, one review, one research per topic; chat messages and follow-up events merge. */
+export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
+  const same = q.findIndex(
+    (j) =>
+      j.kind === job.kind &&
+      (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
+  );
+  if (same < 0) q.push(job);
+  else if (job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
+  else if (job.kind === 'chat') q[same] = { ...q[same], text: `${q[same].text}\n${job.text}`, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] };
+  else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
+}
+
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
+
+/** The CEO's next job among those `ready`: replies to the manager and triage first, reviews and follow-ups last. */
+export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
+  return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find(ready);
 }
 
 /** What the CEO's tools do. Implemented by the swarm; errors are returned to the CEO as tool errors. */
@@ -41,6 +68,7 @@ const noMandate = (floor: number) =>
  * message); in a follow-up only on a floor a mandate covers; never otherwise.
  */
 export function issueRefusal(o: { kind: CeoJobKind | null; asked: boolean; floor: number; mandate: CeoMandate | null }): string | null {
+  if (o.kind === 'research') return RESEARCH_NO_FILING;
   if (o.asked) return null;
   if (o.kind === 'followup') return o.mandate ? null : noMandate(o.floor);
   return NOT_ASKED;
@@ -134,6 +162,7 @@ export interface OfficeHandlers {
   attachFile(a: { path: string }): Promise<string>;
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
+  defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
@@ -144,6 +173,34 @@ export interface OfficeHandlers {
   waitFor(a: { conditions: WaitCondition[]; timeout_min?: number }): Promise<string>;
   askManager(a: { question: string; suggestions?: string[]; timeout_min?: number }): Promise<string>;
   consult(a: { floor: number; agent_id?: string; question: string; hint?: string }): Promise<string>;
+}
+
+export interface ExperimentToolInput {
+  name: string;
+  hypothesis: string;
+  floors?: number[];
+  kinds?: TaskKind[];
+  variants: { name: string; prompt?: string; qa_lens?: string; effort?: EffortLevel; model?: string; qa_cli?: AgentCli; tools_off?: string[] }[];
+  min_sample?: number;
+}
+
+/** define_experiment's input as an experiment's (shared/experiments.ts): floors by number, effort and model for every kind it covers. */
+export function experimentInput(a: ExperimentToolInput, floorId: (floor: number) => string | null): ExperimentInput {
+  const floors = (a.floors ?? []).map((n) => {
+    const id = floorId(n);
+    if (!id) throw new Error(`There is no floor ${n}`);
+    return id;
+  });
+  const kinds = a.kinds?.length ? a.kinds : LAB_KINDS;
+  const each = <T>(v: T | undefined) => (v ? Object.fromEntries(kinds.map((k) => [k, v])) : undefined);
+  return {
+    name: a.name,
+    hypothesis: a.hypothesis,
+    floors,
+    kinds: a.kinds ?? [],
+    minSample: a.min_sample,
+    variants: a.variants.map((v) => ({ name: v.name, settings: { prompt: v.prompt, qaLens: v.qa_lens, effort: each(v.effort), model: each(v.model), qaCli: v.qa_cli, toolsOff: v.tools_off } })),
+  };
 }
 
 export interface OfficeTools {
@@ -157,18 +214,6 @@ export interface OfficeTools {
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 const CLI = z.enum(['claude', 'codex', 'opencode']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
-/** The most any of the waiting tools returns: what happened, an answer, a consult's reply. */
-export const WAIT_OUTPUT_MAX = 6500;
-/** Cut to WAIT_OUTPUT_MAX, keeping the lines (an answer's list and file:line references). */
-const capWait = (s: string) => (s.length > WAIT_OUTPUT_MAX ? `${s.slice(0, WAIT_OUTPUT_MAX - 1)}…` : s);
-const WAIT_CONDITION = z.object({
-  kind: z.enum(WAIT_KINDS as [WaitCondition['kind'], ...WaitCondition['kind'][]]),
-  floor: z.number().int().positive().optional(),
-  pr: z.number().int().positive().optional(),
-  issue: z.number().int().positive().optional(),
-  agent_id: z.string().min(1).max(100).optional(),
-  usage: z.enum(['normal', 'pacing', 'paused']).optional(),
-});
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const run = async (fn: () => string | Promise<string>) => {
@@ -334,6 +379,32 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.setMandate(a)),
     ),
     tool(
+      'define_experiment',
+      "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
+      {
+        name: z.string().min(1).max(80),
+        hypothesis: z.string().min(1).max(600).describe('What you expect a variant to change, and on which numbers'),
+        floors: z.array(z.number().int().positive()).max(20).optional().describe('Floors it covers; leave out for every floor'),
+        kinds: z.array(z.enum(['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict'])).max(5).optional().describe('Sessions its variants change; leave out for all of them'),
+        variants: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(40),
+              prompt: z.string().max(1500).optional().describe('Added to build and fix instructions, e.g. "Write the failing test first."'),
+              qa_lens: z.string().max(1500).optional().describe('Added to QA instructions'),
+              effort: EFFORT.optional().describe("Effort for the sessions it changes"),
+              model: z.string().max(80).optional().describe('Model for the Claude Code sessions it changes'),
+              qa_cli: CLI.optional().describe('QA by a free agent on this coding agent when there is one (cross-model QA)'),
+              tools_off: TOOL_REFS.describe('Tools & skills switched off'),
+            }),
+          )
+          .min(2)
+          .max(4),
+        min_sample: z.number().int().min(3).max(200).optional().describe('PRs per variant before any verdict (default 10)'),
+      },
+      (a) => run(() => h.defineExperiment(a)),
+    ),
+    tool(
       'agent_log',
       `An agent's last terminal lines (default ${AGENT_LOG_DEFAULT}, at most ${AGENT_LOG_MAX}) and a summary of their current or last session, secrets masked. Read-only.`,
       { agent_id: z.string().describe('An id (or name) from company_status'), lines: z.number().int().min(1).max(AGENT_LOG_MAX).optional() },
@@ -379,36 +450,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
       (a) => run(() => h.sendTelegram(a)),
     ),
-    tool(
-      'wait_for',
-      "Wait, holding this job, until any of the conditions holds: pr_qa (floor, pr: QA's verdict), pr_merged (floor, pr), issue_closed (floor, issue), agent_idle (agent_id), preview_running (floor), usage (usage: normal, pacing or paused). Returns what happened, or that it timed out. Your session slot is free while you wait.",
-      {
-        conditions: z.array(WAIT_CONDITION).min(1).max(5),
-        timeout_min: z.number().int().min(1).max(30).optional().describe('Default 10, at most 30 (or Settings → The CEO)'),
-      },
-      (a) => run(async () => capWait(await h.waitFor(a))),
-    ),
-    tool(
-      'ask_manager',
-      `Ask the manager a question on their phone and wait for their reply (up to ${ASK_MAX_MIN} minutes). If they don't answer in time, end the job saying you're waiting; their reply comes back as a new job.`,
-      {
-        question: z.string().min(1).max(1000),
-        suggestions: z.array(z.string().min(1).max(60)).max(4).optional().describe('Replies they can tap'),
-        timeout_min: z.number().int().min(1).max(ASK_MAX_MIN).optional().describe('Default 30'),
-      },
-      (a) => run(async () => capWait(await h.askManager(a))),
-    ),
-    tool(
-      'consult',
-      "Ask an agent on a floor a question about its code (\"how does the restore approval flow work?\"): a named agent, or any free agent there. They answer in a short read-only session (no edits, commits or PRs) with file:line references; you wait for it. Several consults may run at once. Quote long answers in an artifact.",
-      {
-        floor: z.number().int().positive(),
-        agent_id: z.string().min(1).max(100).optional().describe('An id or name; leave out for any free agent on the floor'),
-        question: z.string().min(1).max(2000),
-        hint: z.string().max(200).optional().describe('A role or skill, e.g. "as a security reviewer", "use the architecture skill"'),
-      },
-      (a) => run(async () => capWait(await h.consult(a))),
-    ),
+    ...waitTools(h, run),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -490,6 +532,7 @@ export function ceoSystemPrompt(o: {
     '- Understand each project: what it is, its stack and how far along it is. Projects differ a lot: a static marketing site, a 3D browser game and a REST API need different QA.',
     `- Size each floor's team from its throughput (team, throughput, capacity and spend in company_status: costPerMerge is 7 days' cost per merged PR, wasteToday what sessions without a result cost today): grow it when issues ready to start or PRs waiting for QA keep waiting for free agents, shrink it when agents sit idle with nothing ready. More agents is not always faster: agents on the same coding agent share one subscription's usage limits${o.sessionLimit ? `, at most ${o.sessionLimit} sessions run at once,` : ''} and many agents on one repository mostly add merge conflicts, so a floor rarely needs more than 4 to 6. A floor holds at most ${o.maxAgents}. When the manager asks for a different size, follow that.`,
     "- Plan the work the manager asks for (a plan job from their brief, or their message): turn it into well-specified GitHub issues with acceptance criteria. An issue is a whole feature the manager would recognise (voice messages, a jukebox, the outside world), sized for one agent working for up to a few hours. Agents have large context windows and handle long jobs. Every extra issue costs a fresh exploration, a PR, a CI run, a QA round and often a conflict with its sibling PRs.",
+    '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',
     '- Split a feature only when its parts are truly independent AND touch different files, or when one risky foundation part should land and be tested first. Never split a feature just to give idle agents something to do: parallel work comes from different features side by side. Unrelated small fixes are still their own issues.',
     "- Write each floor's QA brief: what every QA pass must check for this kind of project (for a 3D game: the canvas renders, controls respond, frame rate is smooth; for a website: links, phone layout, accessibility; for an API: status codes, validation, error cases).",
     '',
@@ -537,8 +580,10 @@ function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string
   ].join('\n');
 }
 
-export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = []): string {
+export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = [], researchMin = DEFAULT_RESEARCH_MIN): string {
   switch (job.kind) {
+    case 'research':
+      return researchPrompt(job.topic ?? '', floor, researchMin);
     case 'followup':
       return followupPrompt(job.events ?? [], mandates);
     case 'triage':
@@ -575,11 +620,13 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       if (!floor) return 'A floor you were asked to plan has been removed. Reply "Nothing to do."';
       return [
         `The manager has a brief for floor ${floor.floor} (${floor.fullName}, clone at ${floor.clone}):`,
-        `"""${floor.mission}"""`,
+        `"""${floor.mission || job.topic || ''}"""`,
+        ...(job.pick ? [`They picked from your research on it: "${job.pick}".${job.brief ? ` Your research brief: ${job.brief} (read it first).` : ''} Plan that pick.`] : []),
         '',
         'Plan the next milestone toward it:',
         `- Read the current code and the ${floor.backlog} open issues first, so you build on what exists and do not duplicate anything.`,
         '- One issue per whole feature. Split a feature only when its parts are independent and touch different files, or a risky foundation part should land first. Only for an empty or nearly empty repository does a skeleton issue come first, with the others depending on it.',
+        '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',
         '- File the issues.',
         '- Make sure the team size fits the work: scale_team when ready issues would keep waiting for free agents.',
         '- Update the floor profile and QA brief if the brief changes what the project is.',
@@ -614,6 +661,8 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
       return `Triaging PR #${job.prNumber ?? '?'} · ${where}`;
     case 'followup':
       return `Following up on ${followupLabel(job.events ?? [])}`;
+    case 'research':
+      return `Researching "${short(job.topic ?? '')}"`;
   }
 }
 

@@ -77,6 +77,7 @@ bin/cubefarm.js  the `npx cubefarm` command: checks the machine, starts the serv
 scripts/office.mjs  the launcher for a checkout (npm run dev / demo / start): runs the office and updates it
 server/  Node + Express + ws
   swarm.ts        orchestrator: floors, agents, scheduling, persistence, websocket fan-out
+  swarm/          its layers, one area each (CLAUDE.md, "Where things live")
   agentRunner.ts  the older Agent SDK runtime (Settings → How agents run): Claude Code through the SDK, as a log
   cliRunner.ts    the default: one agent as the real CLI (Claude Code, Codex, OpenCode) in a pseudo-terminal: hooks, turn endings, the CEO's tools over MCP
   ptyHost.ts      the terminal keeper: its own process holding the CLIs' terminals and hooks through office restarts

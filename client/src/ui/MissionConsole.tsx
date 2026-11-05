@@ -6,6 +6,7 @@ import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '.
 import { confirmDialog } from './Confirm';
 import { CostsSection } from './CostsSection';
 import { clearDesk } from './dangerActions';
+import { ExperimentsSection } from './ExperimentsSection';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 
@@ -351,6 +352,7 @@ export function OpsTab({ card }: { card?: string }) {
         <h3 className="section">🛰️ The numbers</h3>
         <OpsTable />
         <CostsSection />
+        <ExperimentsSection />
       </div>
     </div>
   );

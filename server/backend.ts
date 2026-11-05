@@ -23,6 +23,8 @@ import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
+import type { SurvivalSignals } from '../shared/experiments.ts';
+import type { LabState } from './experiments.ts';
 import type { UsageWarning } from './pacing.ts';
 import { realResources, type ResourceProbe } from './health.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -102,6 +104,8 @@ export interface Backend {
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
+  /** The default branch's commits and the issues filed since `since`: what says whether merged PRs survived (#23). */
+  survivalSignals(fullName: string, since: number): Promise<SurvivalSignals>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
   previews: PreviewBackend;
   /** Memory, swap and load, and what agents' processes use (server/health.ts). */
@@ -124,6 +128,8 @@ export interface Backend {
   seedCosts?(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
+  /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
+  seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */
   simulateUsage?(kind: 'warning' | 'limit', now: number): UsageWarning | { limitResetsAt: number };
   /** The demo only: the office doctor's scenarios (a restart with desks gone and work finished, a stuck session). */
@@ -225,6 +231,7 @@ export const realBackend: Backend = {
   detectClis,
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
+  survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,
   voice: elevenLabs,

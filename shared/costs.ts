@@ -3,9 +3,9 @@
 import type { EffortLevel } from './types.ts';
 
 /** What a session was for. Fixes are split by why the PR went back; the CEO's by its job. */
-export type TaskKind = 'issue' | 'qa' | 'fix-qa' | 'fix-checks' | 'fix-conflict' | 'ceo-chat' | 'ceo-review' | 'ceo-plan' | 'ceo-onboard' | 'ceo-triage' | 'ceo-followup' | 'ceo-wait' | 'consult';
+export type TaskKind = 'issue' | 'qa' | 'fix-qa' | 'fix-checks' | 'fix-conflict' | 'ceo-chat' | 'ceo-review' | 'ceo-plan' | 'ceo-onboard' | 'ceo-triage' | 'ceo-followup' | 'ceo-research' | 'ceo-wait' | 'consult';
 
-export const TASK_KINDS: TaskKind[] = ['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict', 'ceo-chat', 'ceo-review', 'ceo-plan', 'ceo-onboard', 'ceo-triage', 'ceo-followup', 'ceo-wait', 'consult'];
+export const TASK_KINDS: TaskKind[] = ['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict', 'ceo-chat', 'ceo-review', 'ceo-plan', 'ceo-onboard', 'ceo-triage', 'ceo-followup', 'ceo-research', 'ceo-wait', 'consult'];
 
 export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   issue: 'Building an issue',
@@ -19,6 +19,7 @@ export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   'ceo-onboard': 'CEO onboarding',
   'ceo-triage': 'CEO triage',
   'ceo-followup': 'CEO follow-up',
+  'ceo-research': 'CEO research',
   'ceo-wait': 'CEO job that waited',
   consult: 'Consult for the CEO',
 };
@@ -69,6 +70,7 @@ export interface CostSession {
   usd: number;
   tokens: number | null; // when the CLI reports them
   outcome: SessionOutcome;
+  exp?: string; // `${experiment}/${variant}` while its issue is in a running experiment (shared/experiments.ts)
 }
 
 /** A merged PR, one line of the cost ledger: what the sessions' cost is divided by. */

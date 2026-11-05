@@ -14,7 +14,6 @@ import {
   ceoSystemPrompt,
   checkCloseIssue,
   createOfficeTools,
-  WAIT_OUTPUT_MAX,
   floorCapacity,
   IssueCap,
   issueRefusal,
@@ -33,6 +32,8 @@ import {
   type DependsRequest,
   type TeamNow,
 } from './ceo.ts';
+import { WAIT_OUTPUT_MAX } from './ceoWaitTools.ts';
+import { RESEARCH_NO_FILING, RESEARCH_READ_ONLY, researchReadOnly } from './research.ts';
 
 describe('seats', () => {
   it('match the desks the client draws', () => {
@@ -151,6 +152,7 @@ describe('office tools', () => {
       waitFor: async (a) => (calls.push(['wait_for', a]), 'PR #7 on floor 1 merged.'),
       askManager: async (a) => (calls.push(['ask_manager', a]), 'The manager answered: yes'),
       consult: async (a) => (calls.push(['consult', a]), `Ada on floor 1 says:\n${'x'.repeat(20_000)}`),
+      defineExperiment: (a) => (calls.push(['define_experiment', a]), 'defined'),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -172,6 +174,7 @@ describe('office tools', () => {
       'company_status',
       'configure_agent',
       'consult',
+      'define_experiment',
       'escalate',
       'file_issue',
       'keep_file',
@@ -233,6 +236,17 @@ describe('office tools', () => {
     const res = (await client.callTool({ name: 'consult', arguments: { floor: 1, question: 'Why?' } })) as { content: { text: string }[] };
     expect(res.content[0].text.length).toBeLessThanOrEqual(WAIT_OUTPUT_MAX);
     expect(res.content[0].text).toMatch(/^Ada on floor 1 says:\n/);
+  });
+
+  it('define_experiment takes 2 to 4 variants and the lab kinds only', async () => {
+    const { client, calls } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'define_experiment', arguments: args })).isError;
+    const v = (name: string, more = {}) => ({ name, ...more });
+    expect(await ok({ name: 'Test first', hypothesis: 'Fewer rounds', variants: [v('Current'), v('Test first', { prompt: 'Write the failing test first.', effort: 'high' })] })).toBe(true);
+    expect(await ok({ name: 'One', hypothesis: 'h', variants: [v('Only')] })).toBe(false);
+    expect(await ok({ name: 'CEO', hypothesis: 'h', kinds: ['ceo-chat'], variants: [v('A'), v('B')] })).toBe(false);
+    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'gemini' })] })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['define_experiment']);
   });
 
   it("takes an agent's Tools & skills switches as lists of names", async () => {
@@ -511,6 +525,36 @@ describe('follow-ups (#27)', () => {
     expect(refused).toMatch(/No standing mandate .* floor 2/);
     expect(refused).toMatch(/final message/);
     expect(refused).toMatch(/set_mandate/);
+  });
+
+  it('refuses file_issue during research, even after a message from the manager', () => {
+    for (const asked of [false, true]) expect(issueRefusal({ kind: 'research', asked, floor: 3, mandate })).toBe(RESEARCH_NO_FILING);
+    expect(RESEARCH_NO_FILING).toMatch(/suggestions/);
+    expect(RESEARCH_NO_FILING).toMatch(/plan job/);
+  });
+
+  it('refuses every tool that acts while research runs, and keeps the read-only ones', async () => {
+    let researching = true;
+    const ok = () => 'ok';
+    const office = createOfficeTools(
+      researchReadOnly(
+        {
+          companyStatus: ok, agentDetail: ok, setFloorProfile: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
+          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
+          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok,
+          waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok',
+        },
+        () => researching,
+      ),
+    );
+    expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe(`Refused: ${RESEARCH_NO_FILING}`);
+    expect(await office.call('scale_team', { floor: 1, size: 3, reason: 'more' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('send_telegram', { text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('message_agent', { floor: 1, agent_id: 'a1', text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('company_status', {})).toBe('ok');
+    researching = false;
+    expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe('filed');
   });
 
   it('keeps the old rule for every other job', () => {

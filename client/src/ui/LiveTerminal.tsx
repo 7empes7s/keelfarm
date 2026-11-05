@@ -3,7 +3,9 @@ import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
-import type { TermClientMessage, TermServerMessage } from '../../../shared/types';
+import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../shared/types';
+import { activeMods, consumeMods, keySequence, NO_MODS, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
+import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
 
 // An agent's real terminal: their CLI's screen streamed from the office (/ws/term), and what you type sent back to it.
 // Opening it late shows everything so far: the office keeps a copy of each agent's screen and scrollback.
@@ -32,11 +34,22 @@ const THEME: ITheme = {
   brightWhite: '#ffffff',
 };
 
-export function LiveTerminal({ agentId, className }: { agentId: string; className?: string }) {
+export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: string; cli?: AgentCli; className?: string }) {
   const host = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState(false);
   const [connected, setConnected] = useState(true);
   const [focused, setFocused] = useState(false);
+  const [keysOn, setKeysOn] = useTermKeysPref();
+  // The key bar's sticky modifiers, read by the terminal's input too, so they apply to the phone keyboard's next key.
+  const [mods, setModsState] = useState<ModState>(NO_MODS);
+  const modsRef = useRef(mods);
+  const setMods = (m: ModState) => {
+    modsRef.current = m;
+    setModsState(m);
+  };
+  const lastModTap = useRef<Partial<Record<Mod, number>>>({});
+  const termRef = useRef<Terminal | null>(null);
+  const sendRef = useRef<(data: string) => void>(() => undefined);
 
   useEffect(() => {
     const el = host.current!;
@@ -65,6 +78,8 @@ export function LiveTerminal({ agentId, className }: { agentId: string; classNam
     const send = (m: TermClientMessage) => {
       if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
     };
+    termRef.current = term;
+    sendRef.current = (data) => send({ t: 'input', data });
     const fitAndTell = () => {
       try {
         fit.fit();
@@ -104,7 +119,14 @@ export function LiveTerminal({ agentId, className }: { agentId: string; classNam
     };
     connect();
 
-    const input = term.onData((data) => send({ t: 'input', data }));
+    const input = term.onData((data) => {
+      const armed = activeMods(modsRef.current);
+      if (armed.size && !data.startsWith('\x1b')) {
+        data = textSequence(data, armed);
+        setMods(consumeMods(modsRef.current));
+      }
+      send({ t: 'input', data });
+    });
     // Esc belongs to the CLI (it interrupts Claude Code) while you're typing in the terminal, not to the panel.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') e.stopPropagation();
@@ -129,16 +151,40 @@ export function LiveTerminal({ agentId, className }: { agentId: string; classNam
       input.dispose();
       el.removeEventListener('keydown', onKey);
       ws?.close();
+      termRef.current = null;
+      sendRef.current = () => undefined;
       term.dispose();
     };
   }, [agentId]);
 
+  const press = (k: BarKey) => {
+    const term = termRef.current;
+    if ('mod' in k) {
+      const now = performance.now();
+      setMods(tapMod(modsRef.current, k.mod, now - (lastModTap.current[k.mod] ?? -Infinity)));
+      lastModTap.current[k.mod] = now;
+      return;
+    }
+    if ('paste' in k) {
+      void navigator.clipboard?.readText().then((text) => text && termRef.current?.paste(text), () => undefined);
+      return;
+    }
+    const armed = activeMods(modsRef.current);
+    if ('key' in k) sendRef.current(keySequence(k.key, new Set([...armed, ...(k.mods ?? [])]), term?.modes.applicationCursorKeysMode));
+    else sendRef.current(textSequence(k.text, armed));
+    setMods(consumeMods(modsRef.current));
+  };
+
   return (
     <div className={`live-term ${className ?? ''}`}>
       <div className="live-term-screen" ref={host} />
+      {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} />}
       <div className="live-term-foot">
         <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />
-        {!connected ? 'Reconnecting…' : live ? (focused ? 'Typing goes straight to the agent · Esc goes to them too; click outside to use the office keys' : 'Live · click the terminal to type into it') : 'Not running · a message below picks the session back up'}
+        <span className="grow">{!connected ? 'Reconnecting…' : live ? (focused ? 'Typing goes straight to the agent · Esc goes to them too; click outside to use the office keys' : 'Live · click the terminal to type into it') : 'Not running · a message below picks the session back up'}</span>
+        <button type="button" className="live-term-keys-toggle" aria-pressed={keysOn} title={keysOn ? 'Hide the terminal key bar' : 'Show a bar of terminal keys: Esc, Tab, arrows, Ctrl…'} onClick={() => setKeysOn(!keysOn)}>
+          ⌨ Keys
+        </button>
       </div>
     </div>
   );
