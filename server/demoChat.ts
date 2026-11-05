@@ -37,7 +37,7 @@ export function logStreamed(entries: LogEntry[], opts: SessionOptions, cb: Sessi
   if (opts.stream) for (const e of entries) if (e.kind === 'text') cb.text?.(e.text.replace(/^● /, ''), true);
 }
 
-/** The reply as it is written, a few words at a time, in about five seconds at most (the real one comes a block at a time), then logged. */
+/** The reply as it is written, a few words at a time, in about five seconds at most (the real one comes a block at a time), then logged as the turn's reply. */
 export async function writeReply(reply: string, opts: SessionOptions, cb: SessionCallbacks, stopped: () => boolean) {
   const words = reply.split(/(?<=\s)/);
   const n = Math.max(4, Math.ceil(words.length / 40));
@@ -47,4 +47,5 @@ export async function writeReply(reply: string, opts: SessionOptions, cb: Sessio
     await new Promise((r) => setTimeout(r, 120));
   }
   cb.log([{ kind: 'text', text: `● ${reply}` }]);
+  cb.turn?.(reply);
 }

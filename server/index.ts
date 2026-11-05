@@ -12,6 +12,7 @@ import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
 import { createDemoBackend } from './demo.ts';
+import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
 import { underLauncher } from './officeUpdate.ts';
@@ -24,6 +25,7 @@ import { HttpError, Swarm } from './swarm.ts';
 import { historyFilter } from './history.ts';
 
 const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
+if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });
 // Sessions the office picks back up while it starts need the address their CLIs call back on before it listens.
@@ -200,6 +202,7 @@ app.get('/api/history/:id', route(async (req) => (await swarm.history.detail(Str
 // The lab (#23): the manager defines experiments, starts, stops and promotes them; the results come on /ws.
 app.post('/api/experiments', route((req) => swarm.lab.define(req.body, 'manager')));
 app.post('/api/experiments/:id', route((req) => swarm.lab.act(String(req.params.id), req.body?.action, req.body?.variant ?? null)));
+app.post('/api/experiments/:id/every-project', route((req) => swarm.adoptPractices(String(req.params.id), req.body?.variant)));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
   const shot = swarm.screenshot(String(req.params.id));

@@ -30,9 +30,9 @@ import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
+import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
-import { logStreamed, seedDemoNotes, writeReply } from './demoChat.ts';
+import { logStreamed, writeReply } from './demoChat.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -121,8 +121,8 @@ function seed(fullName: string, description: string, titles: [string, string][])
 }
 
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage.\n\nObjective: O1'],
-  ['Todos should support due dates', 'Add an optional due date and highlight overdue items.\n\nObjective: O2'],
+  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
+  ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
@@ -671,7 +671,6 @@ async function fakeTrim(stillIdle: () => boolean) {
 export function createDemoBackend(scale: DemoScale | null = null): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
-  seedDemoNotes();
   // Tie each fake session back to its repo via the desk directory name.
   const deskRepo = new Map<string, string>();
   // Desks whose pretend dependencies are installed: the first task on a desk installs, the next ones skip.
@@ -760,6 +759,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       if (headSha && pr.headSha !== headSha) throw new Error('Head branch was modified. Review and try the merge again.');
       mergedSinceSync.set(fullName, (mergedSinceSync.get(fullName) ?? 0) + 1);
       pr.state = 'MERGED';
+      demoMerged(r.pulls);
       // Now and then a merge leaves another open PR conflicting, so conflict fixes (before QA and after it) can be seen.
       for (const other of r.pulls) if (other.state === 'OPEN' && Math.random() < 0.25) Object.assign(other, { mergeable: 'CONFLICTING', mergeState: 'DIRTY' });
       pr.mergedAt = now();
@@ -781,6 +781,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       Object.assign(pr, { headSha: fakeSha(), mergeState: 'CLEAN' });
       runChecks(pr, false);
     },
+    ...demoPractices,
     failedRunLog: async (_fullName, runId) =>
       [
         `build\tRun npm test\t2025-01-01T00:00:00Z > vitest run (run ${runId})`,
@@ -1536,7 +1537,6 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · CEO` }]);
         const reply = await run();
         await writeReply(reply, opts, cb, () => stopped);
-        cb.turn?.(reply);
         finish(true, reply);
       } catch (err) {
         finish(false, '', stopped ? 'Stopped by manager' : (err as Error).message);

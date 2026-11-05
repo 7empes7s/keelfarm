@@ -5,6 +5,8 @@ import { TASK_KIND_LABELS, type TaskKind } from '../../../shared/costs';
 import { fmtMetric, LAB_KINDS, METRICS, type ExperimentInput, type ExperimentView, type LabTag, type MeanCi, type Metric, type PracticeSettings } from '../../../shared/experiments';
 import type { AgentCli, EffortLevel, RepoView } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
+import { confirmDialog } from './Confirm';
+import { describePractices } from '../../../shared/practices';
 import './experiments.css';
 
 // Mission control → Experiments (#23): A/B tests of harness practices on real issues. Each experiment's numbers per
@@ -24,6 +26,7 @@ function describe(s: PracticeSettings): string {
   if (model.length) parts.push(`model ${model.join('/')}`);
   if (s.qaCli) parts.push(`QA by ${s.qaCli} agents`);
   if (s.toolsOff?.length) parts.push(`${s.toolsOff.join(', ')} off`);
+  if (s.practices) parts.push(describePractices(s.practices));
   return parts.join(' · ') || 'the office as it is';
 }
 
@@ -113,6 +116,30 @@ function ExperimentCard({ e, repos }: { e: ExperimentView; repos: RepoView[] }) 
       .catch(() => undefined) // api() already toasted the error
       .finally(() => setBusy(false));
   };
+  // The evidence first: the verdict and the variant's numbers, then the one tap.
+  const everyProject = async (v: ExperimentView['variants'][number]) => {
+    const ok = await confirmDialog({
+      title: `Make ${v.name} every project's default?`,
+      icon: '📌',
+      body: (
+        <>
+          <p>
+            Settings → Every project gets: <b>{describePractices(v.settings.practices ?? {})}</b>. Floors that override a switch keep their own.
+          </p>
+          <p className="small">The evidence: {e.result.summary}.</p>
+          {e.result.winner !== v.id && <p className="small">⚠️ The experiment hasn't shown {v.name} to be better yet.</p>}
+        </>
+      ),
+      confirm: 'Make it the default',
+      tone: e.result.winner === v.id ? 'good' : 'warn',
+    });
+    if (!ok) return;
+    setBusy(true);
+    void api
+      .everyProject(e.id, v.id)
+      .catch(() => undefined)
+      .finally(() => setBusy(false));
+  };
   const floors = e.floors.length ? e.floors.map((id) => `floor ${repos.find((r) => r.id === id)?.floor ?? id}`).join(', ') : 'every floor';
   const kinds = (e.kinds.length ? e.kinds : LAB_KINDS).map((k) => TASK_KIND_LABELS[k].replace(/^./, (c) => c.toLowerCase())).join(', ');
   const winner = e.result.winner ? e.variants.find((v) => v.id === e.result.winner) : null;
@@ -168,6 +195,14 @@ function ExperimentCard({ e, repos }: { e: ExperimentView; repos: RepoView[] }) 
             </select>
           </label>
         )}
+        {e.status === 'stopped' &&
+          e.variants
+            .filter((v) => v.settings.practices && Object.keys(v.settings.practices).length)
+            .map((v) => (
+              <button key={v.id} className="btn btn-small" disabled={busy} onClick={() => void everyProject(v)} title="Its practice switches become Settings → Every project's defaults">
+                📌 {v.id.toUpperCase()} for every project
+              </button>
+            ))}
         {winner && e.status === 'running' && <span className="small muted">{winner.name} looks better: stop the experiment to make it the default.</span>}
         <span className="spacer" />
         {e.status !== 'running' && (
