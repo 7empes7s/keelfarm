@@ -5,6 +5,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -275,6 +276,7 @@ export interface AgentView {
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
+  tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's (absent for the CEO, whose are in settings)
 }
 
 /** The kinds of work the icon over a busy agent shows (shared/activity.ts maps tools and status to them). */
@@ -373,13 +375,14 @@ export interface SwarmSettings {
   listen: ListenSettings;
   notify: NotifySettings;
   cloud: CloudSettings;
+  tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
 export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'merge';
 
-/** Where it tells them: this browser, Web Push to their devices, or a chat app's webhook. */
-export type NotifyChannel = 'desktop' | 'push' | 'ntfy';
+/** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
+export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
 
 /** The chat apps, whose webhook URLs and tokens live in the server's secrets file. */
 export type NotifyWebhook = 'ntfy';
@@ -388,6 +391,7 @@ export interface NotifySettings {
   events: Record<NotifyEvent, boolean>;
   channels: Record<NotifyChannel, boolean>; // a chat app also needs its webhook saved
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
+  telegramMirror: boolean; // every CEO message also goes to Telegram (otherwise only replies to messages sent from there)
 }
 
 /** A channel's last send since the office started: when, and whether it arrived (else why not). */
@@ -411,6 +415,19 @@ export interface NotifyChannelsView {
   pushDevices: number;
   devices: PushDeviceView[];
   desktop: NotifyHealth | null;
+  telegram: TelegramView;
+}
+
+/** The manager's Telegram bot (docs/pocket.md): its token and their chat id stay on the server. */
+export interface TelegramView {
+  set: boolean; // a bot token is saved
+  bot: string; // its username, e.g. "my_office_bot"
+  linked: boolean; // the manager pressed Start in their chat
+  chat: string; // that chat's first name, for "Linked to …"
+  linking: boolean; // a Start link is waiting to be pressed
+  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages
+  error: string; // why the last read failed, while retrying
+  last: NotifyHealth | null; // its last send
 }
 
 /** A test push to one device: the push service took it, the device is gone (and dropped), or another error. */
@@ -624,6 +641,7 @@ export interface PhoneMessage {
   at: number;
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
+  telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
   replyTo?: number; // the manager's message replies to this one (its id)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
@@ -709,6 +727,7 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -754,6 +773,7 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
+  | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }

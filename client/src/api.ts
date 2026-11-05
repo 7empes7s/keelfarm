@@ -1,7 +1,7 @@
 import { useStore } from './store';
 import type { PongResult } from '../../shared/pong';
 import type { AgentStyle } from '../../shared/looks';
-import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 
@@ -112,6 +112,10 @@ export const api = {
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
   updateSettings: (patch: Partial<SwarmSettings>) => call('PATCH', '/api/settings', patch),
+  /** Tools & skills: scan the manager's Claude Code setup again. */
+  refreshTools: () => call('POST', '/api/tools/refresh'),
+  /** One switch for 'everyone', 'ceo' or an agent's id; on null follows Everyone. */
+  switchTool: (scope: string, id: string, on: boolean | null) => call('POST', '/api/tools/switch', { scope, id, on }),
   updateOffice: async (action: 'now' | 'later') => {
     const u = await call<OfficeUpdateView>('POST', '/api/office/update', { action });
     useStore.getState().setOfficeUpdate(u);
@@ -166,6 +170,12 @@ export const api = {
   /** Where this device's push sign-up stopped, for the office's log. */
   pushReport: (step: string, error: string) => call('POST', '/api/notify/push/report', { step, error }, false),
   quickNtfy: () => call<{ url: string; test: { ok: boolean; message: string } }>('POST', '/api/notify/ntfy/quick', {}, false),
+  // The manager's Telegram bot. No toasts: the settings show why a token was refused.
+  setTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/notify/telegram', { token }, false),
+  telegramLink: () => call<{ startUrl: string }>('POST', '/api/notify/telegram/link', {}, false),
+  removeTelegram: () => call<TelegramView>('DELETE', '/api/notify/telegram'),
+  /** The demo only: the fake manager on Telegram presses Start, writes, replies, or presses a team change's button. */
+  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
   // office progression (#210)
   buyDecor: (repoId: string, item: DecorItem) => call<ProgressView>('POST', `${r(repoId)}/decor/buy`, { item }),
   placeDecor: (repoId: string, body: { item: DecorItem; slot: string | null; from: string | null }) => call<ProgressView>('POST', `${r(repoId)}/decor/place`, body),

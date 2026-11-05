@@ -23,16 +23,17 @@ All three run `scripts/office.mjs`, the launcher: `--dev` runs the server from s
 npm test             # run every test once (Vitest)
 npm run test:watch   # re-run tests as you edit
 npm run typecheck
+npm run lint         # the code-health ratchet (below)
 npm run build
 npm run test:e2e     # optional browser smoke tests (Playwright): builds, boots a demo office and drives it
 ```
 
 - Tests sit next to the code they cover as `*.test.ts`, anywhere under `client/`, `server/`, `shared/` or `scripts/` (e.g. `shared/issues.test.ts`). Vitest finds them through `vitest.config.ts`; `tsc` type-checks them and the Vite build leaves them out, since nothing in the app imports them.
 - Keep them fast and offline: no network, no GitHub (`gh`), no Claude sessions and no real `~/.cubefarm`. Test pure logic directly, fake anything that would spend usage, and use a temp `SWARM_HOME` and random free ports for anything that needs a server. `npm test` already points `SWARM_HOME` at a temp folder.
-- e2e is not part of CI. Before a pull request, `typecheck`, `test` and `build` must pass. Don't run `test:e2e` unless an issue asks for it. If your change shows up in the office, boot your own demo office, check it in a real browser with the Playwright tools, and put screenshots in the pull request. QA then tests every pull request in a real browser in a demo office.
+- e2e is not part of CI. Before a pull request, `typecheck`, `lint`, `test` and `build` must pass. Don't run `test:e2e` unless an issue asks for it. If your change shows up in the office, boot your own demo office, check it in a real browser with the Playwright tools, and put screenshots in the pull request. QA then tests every pull request in a real browser in a demo office.
 - `npm run test:e2e` is an optional local tool. It runs `e2e/*.spec.ts` headless with software WebGL against a demo office on port 4399 (`E2E_PORT` changes it) with a temp `SWARM_HOME`. It uses your installed Google Chrome when there is one, otherwise (or with `E2E_BROWSER=chromium`) Playwright's Chromium. If that browser is missing it stops at once and says so: run `npx playwright install chromium` once, into the shared cache (leave `PLAYWRIGHT_BROWSERS_PATH` unset). Just built? `E2E_SKIP_BUILD=1` reuses `dist/` instead of building again. Wait on what the page shows rather than sleeping, and don't rely on pointer lock, which a headless browser may not grant.
 - One e2e spec file per feature (`e2e/coffee.spec.ts`, `toys.spec.ts`, …), sharing `e2e/helpers.ts` (the `test` that fails on console errors and failed requests, `enterOffice`, `startAt`). New e2e tests go in their feature's spec file or a new one, never appended to `smoke.spec.ts`, which keeps only the core boot and runs first (`playwright.config.ts`).
-- GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci`, `npm run typecheck`, `npm test` and `npm run build` for every pull request and every push to `main`, then packs the npm package, installs it into an empty folder and boots it in demo mode (`scripts/smoke-package.mjs`). That `check` job always runs on Ubuntu, and on Windows for every push to `main`, every manual run and every pull request that touches something OS-sensitive (`server/`, `shared/`, `scripts/`, `bin/`, `.github/`, `package.json`, the lockfile or the root configs); a pull request that only changes `client/`, `e2e/` or docs shows `check (windows-latest)` as skipped, which counts as passing. CI runs no browser tests. It needs no secrets.
+- GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci`, `npm run typecheck`, `npm test` and `npm run build` for every pull request and every push to `main`, then packs the npm package, installs it into an empty folder and boots it in demo mode (`scripts/smoke-package.mjs`), and last runs `npm run lint`. That `check` job always runs on Ubuntu, and on Windows for every push to `main`, every manual run and every pull request that touches something OS-sensitive (`server/`, `shared/`, `scripts/`, `bin/`, `.github/`, `package.json`, the lockfile or the root configs); a pull request that only changes `client/`, `e2e/` or docs shows `check (windows-latest)` as skipped, which counts as passing. CI runs no browser tests. It needs no secrets.
 
 ### The agents' browser tool
 
@@ -45,6 +46,25 @@ npm test && npm run build && node scripts/smoke-package.mjs
 ```
 
 Read its release notes first: a release that moves to a new Playwright may change which Chrome versions it supports.
+
+## Code health
+
+`npm run lint` (`scripts/codeHealth.mjs`) is a ratchet: it runs oxlint with type information (`.oxlintrc.json`), knip
+(`knip.jsonc`) and a file-size count, and fails only on what `code-health.baseline.json` doesn't already list. The
+code isn't clean yet; it just mustn't get worse.
+
+- **Lint**: counted per file and rule. A new floating or misused promise, `==` (other than `== null`), a hook with missing deps, a type
+  imported as a value or any other finding over a file's count fails, and the output lists that rule's findings in
+  the file. `any` is a warning, but counted the same.
+- **Dead code**: a new unused file, export, type or dependency fails. Delete it, or stop exporting it.
+- **File size**: a file that isn't in the baseline may have up to 800 lines; the files already over 800 may grow 5%
+  past their recorded size (`server/swarm.ts`: 5,596 → 5,875). Split before you hit it.
+- **Fixed something?** The check says so: run `npm run lint:update` (it only ever lowers the baseline) and commit
+  `code-health.baseline.json`. `node scripts/codeHealth.mjs --accept` records the run as it is, for a rename or a
+  deliberate exception: say why in the PR.
+- No formatter runs and nothing is reformatted: keep matching the code around you.
+
+[docs/code-health.md](docs/code-health.md) has the measured report and the cleanup backlog.
 
 ## Architecture
 

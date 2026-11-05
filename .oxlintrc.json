@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "oxc", "unicorn"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "no-unused-vars": "error",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "typescript/no-explicit-any": "warn",
+    "typescript/consistent-type-imports": "error",
+    "typescript/unbound-method": "off",
+    "typescript/no-misused-spread": "off",
+    "typescript/no-base-to-string": "off",
+    "typescript/restrict-template-expressions": "off"
+  },
+  "overrides": [
+    {
+      "files": ["client/**"],
+      "plugins": ["typescript", "oxc", "unicorn", "react"],
+      "rules": {
+        "react-hooks/rules-of-hooks": "error",
+        "react-hooks/exhaustive-deps": "warn",
+        "react/immutability": "off",
+        "react/purity": "off",
+        "react/refs": "off",
+        "react/use-memo": "off",
+        "react/set-state-in-effect": "off",
+        "react/globals": "off",
+        "react/static-components": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist/**", "dist-server/**", "node_modules/**", "playwright-report/**", "test-results/**", ".swarm-home/**", ".code-health/**"]
+}

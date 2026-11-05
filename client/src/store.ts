@@ -6,6 +6,7 @@ import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
+import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
 import { messageSpeech } from '../../shared/speech';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { showDesktopNote } from './notifications';
@@ -47,7 +48,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'timelapse' | 'access';
+export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'tools' | 'timelapse' | 'access';
 
 export interface Focus {
   id: string;
@@ -138,6 +139,7 @@ interface State {
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
+  tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
@@ -242,6 +244,7 @@ export const useStore = create<State>((set, get) => ({
     listen: { provider: 'off', autoSend: false, handsFree: false },
     notify: DEFAULT_NOTIFY,
     cloud: DEFAULT_CLOUD,
+    tools: DEFAULT_TOOL_SETTINGS,
   },
   clis: [],
   repos: [],
@@ -268,8 +271,15 @@ export const useStore = create<State>((set, get) => ({
   voiceSpeaking: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
-  notifyChannels: { webhooks: { ntfy: { set: false, hint: '', last: null } }, pushDevices: 0, devices: [], desktop: null },
+  notifyChannels: {
+    webhooks: { ntfy: { set: false, hint: '', last: null } },
+    pushDevices: 0,
+    devices: [],
+    desktop: null,
+    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null },
+  },
   cloud: EMPTY_CLOUD,
+  tooling: EMPTY_INVENTORY,
   pong: {},
   restarting: false,
   visitors: [],
@@ -341,6 +351,7 @@ export const useStore = create<State>((set, get) => ({
           ticker: d.ticker ?? [],
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           cloud: d.cloud ?? EMPTY_CLOUD,
+          tooling: d.tooling ?? EMPTY_INVENTORY,
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
           pong: d.pong ?? {},
           restarting: false,
@@ -534,6 +545,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'cloud':
         set({ cloud: ev.cloud });
+        break;
+      case 'tooling':
+        set({ tooling: ev.tooling });
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.

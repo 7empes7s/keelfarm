@@ -120,12 +120,13 @@ describe('office tools', () => {
   const connect = async () => {
     const floors: unknown[] = [];
     const calls: [string, unknown][] = [];
+    const configured: unknown[] = [];
     const office = createOfficeTools({
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
       scaleTeam: () => '',
-      configureAgent: () => '',
+      configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
       setDependencies: async () => '',
       closeIssue: async () => '',
@@ -139,12 +140,13 @@ describe('office tools', () => {
       qaReport: (a) => (calls.push(['qa_report', a]), 'report'),
       worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
+      sendTelegram: async () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
     const client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(clientSide);
-    return { client, floors, calls };
+    return { client, floors, calls, configured };
   };
 
   it('lists every tool the CEO relies on', async () => {
@@ -165,6 +167,7 @@ describe('office tools', () => {
       'retry_qa',
       'scale_team',
       'send_back',
+      'send_telegram',
       'set_dependencies',
       'set_floor_profile',
       'set_mandate',
@@ -188,6 +191,12 @@ describe('office tools', () => {
     expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
     expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
+  });
+
+  it("takes an agent's Tools & skills switches as lists of names", async () => {
+    const { client, configured } = await connect();
+    await client.callTool({ name: 'configure_agent', arguments: { agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] } });
+    expect(configured).toEqual([{ agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] }]);
   });
 
   it('still takes preview_env as a map of strings', async () => {
