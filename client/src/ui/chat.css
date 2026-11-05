@@ -227,3 +227,12 @@
   border-radius: var(--ds-radius-md);
   background: var(--ds-surface-sunken);
 }
+
+/* the chat's header: with Artifacts, Files, Conversations and Memory, its buttons wrap below the CEO's name */
+.chat-head {
+  flex-wrap: wrap;
+  row-gap: var(--ds-space-2);
+}
+.chat-head > .grow {
+  min-width: 7rem;
+}

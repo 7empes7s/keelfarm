@@ -1458,7 +1458,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt;
+  const prompt = opts.prompt.replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // shared/ceoMemory.ts memoryPrompt
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage

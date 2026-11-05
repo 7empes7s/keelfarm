@@ -67,11 +67,13 @@ export function startConversation(s: ChatsState, sessionId: string | null, now: 
   return prune(s);
 }
 
-/** Makes `id` the current conversation; returns the CEO session to resume in it. Throws for one that's gone. */
+/** Makes `id` the current conversation (one left empty goes); returns the CEO session to resume in it. Throws for one that's gone. */
 export function openConversation(s: ChatsState, id: string, sessionId: string | null): string | null {
   const to = s.list.find((c) => c.id === id);
   if (!to) throw new Error('That conversation is no longer saved.');
-  currentConversation(s).sessionId = sessionId;
+  const left = currentConversation(s);
+  left.sessionId = sessionId;
+  if (left.count === 0 && !left.pinned) s.list = s.list.filter((c) => c !== left);
   s.current = id;
   return to.sessionId;
 }

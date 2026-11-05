@@ -39,6 +39,10 @@ describe('the conversation store', () => {
     expect(s.current).toBe(first);
     expect(s.list.find((c) => c.id !== first)?.sessionId).toBe('sess-2');
     expect(() => openConversation(s, 'cgone', null)).toThrow(/no longer saved/);
+    startConversation(s, null, 9);
+    const empty = s.current;
+    openConversation(s, first, null);
+    expect(s.list.some((c) => c.id === empty)).toBe(false); // a new one left empty goes
   });
 
   it('lists pinned ones first, then the latest, without sessions', () => {
