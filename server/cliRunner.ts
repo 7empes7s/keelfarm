@@ -30,6 +30,7 @@ import {
 import type { OfficeTools } from './ceo.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
+import { readingOf } from '../shared/usage.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -626,6 +627,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     const cost = Number((b.cost as { total_cost_usd?: unknown } | undefined)?.total_cost_usd);
     if (Number.isFinite(cost)) costUsd = cost;
     const limits = (b.rate_limits ?? {}) as Record<string, { used_percentage?: unknown; resets_at?: unknown } | null>;
+    const readings = Object.entries(limits).flatMap(([type, l]) => readingOf({ type, percent: l?.used_percentage, resetsAt: l?.resets_at }, Date.now()) ?? []);
+    if (readings.length) cb.usage?.(readings);
     for (const [type, l] of Object.entries(limits)) {
       const used = Number(l?.used_percentage);
       if (!Number.isFinite(used)) continue;
@@ -844,6 +847,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         ? { type: 'command', command: `node ${BOX_BIN}/statusline.cjs ${events}`, padding: 0 }
         : { type: 'command', command: `${shellArg(process.execPath)} ${shellArg(path.join(BIN_DIR, 'statusline.cjs'))} ${shellArg(hookUrl)}`, padding: 0 },
       ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : {}),
+      // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
+      ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),
     };
     const servers: Record<string, unknown> = {};
     if (browser) servers.playwright = browser;
@@ -879,6 +884,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     codexHook: box ? `${BOX_BIN}/codex-hook.cjs` : path.join(BIN_DIR, 'codex-hook.cjs'),
     plugin: box ? '' : pathToFileURL(path.join(BIN_DIR, 'opencode-plugin.mjs')).href,
     browser,
+    ...(cli === 'claude' && opts.tools ? { tools: opts.tools } : {}),
     ...(box ? { node: 'node', posix: true } : {}),
   });
 

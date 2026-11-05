@@ -6,7 +6,10 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
-import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
+import { buildInventory, memoryFs } from './tooling.ts';
+import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
+import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
+import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
 import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory } from './metrics.ts';
@@ -15,6 +18,7 @@ import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
+import { TelegramCallError, type TelegramApi } from './telegramBot.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
@@ -299,6 +303,42 @@ export function fixPromptPull(prompt: string): { number: number; title?: string 
   return { number: Number(m?.[1] ?? 0), title: m?.[2]?.trim() };
 }
 
+// ---------- tools & skills ----------
+
+/** A made-up Claude Code setup, read by the real inventory parser from files in memory (never this computer's ~/.claude). */
+function demoTooling(projects: string[]): ToolInventory {
+  const home = path.join(HOME_DIR, 'demo-claude');
+  const plugin = (name: string, description: string, opts: { skills?: [string, string][]; commands?: string[]; mcp?: Record<string, unknown> }) => {
+    const dir = path.join(home, 'plugins', 'cache', 'claude-plugins-official', name, '1.0.0');
+    const files: Record<string, string> = { [path.join(dir, '.claude-plugin', 'plugin.json')]: JSON.stringify({ name, description }) };
+    for (const [s, d] of opts.skills ?? []) files[path.join(dir, 'skills', s, 'SKILL.md')] = `---\nname: ${s}\ndescription: ${d}\n---\n`;
+    for (const c of opts.commands ?? []) files[path.join(dir, 'commands', `${c}.md`)] = `# ${c}`;
+    if (opts.mcp) files[path.join(dir, '.mcp.json')] = JSON.stringify({ mcpServers: opts.mcp });
+    return { dir, files };
+  };
+  const plugins = {
+    canva: plugin('canva', 'Create and edit Canva designs from Claude Code.', { skills: [['brand-check', 'Checks a design against the brand kit.'], ['resize-for-social-media', 'Resizes a design for each social network.']], mcp: { canva: { type: 'http', url: 'https://mcp.canva.com/mcp' } } }),
+    superpowers: plugin('superpowers', 'Skills for planning, test-driven development and debugging.', { skills: [['brainstorming', 'Use before any creative work: explores intent before building.'], ['test-driven-development', 'Write the failing test first, then the code.'], ['systematic-debugging', 'Find the root cause before proposing fixes.']] }),
+    github: plugin('github', 'GitHub issues, pull requests and Actions through GitHub’s MCP server.', { mcp: { github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer demo-not-a-real-token' } } } }),
+    'commit-commands': plugin('commit-commands', 'Commit, push and open a PR in one command.', { commands: ['commit', 'commit-push-pr', 'clean_gone'] }),
+    figma: plugin('figma', 'Turn Figma designs into code.', { skills: [['figma-design-to-code', 'Implements a Figma frame as components.']], mcp: { figma: { type: 'http', url: 'https://mcp.figma.com/mcp' } } }),
+  };
+  const files: Record<string, string> = Object.assign({}, ...Object.values(plugins).map((p) => p.files));
+  files[path.join(home, 'skills', 'pdf', 'SKILL.md')] = '---\nname: pdf\ndescription: Reads, fills and merges PDF files.\n---\n';
+  files[path.join(home, 'skills', 'release-notes', 'SKILL.md')] = '---\nname: release-notes\ndescription: Writes release notes from merged pull requests.\n---\n';
+  const global = path.join(home, '.claude.json');
+  files[global] = JSON.stringify({
+    mcpServers: {
+      notion: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: 'demo-secret-never-shown' } },
+      linear: { type: 'http', url: 'https://mcp.linear.app/mcp?key=demo-secret-never-shown' },
+    },
+  });
+  if (projects[0]) files[path.join(projects[0], '.mcp.json')] = JSON.stringify({ mcpServers: { sentry: { type: 'http', url: 'https://mcp.sentry.dev/mcp' } } });
+  const pluginList = Object.entries(plugins).map(([name, p]) => ({ id: `${name}@claude-plugins-official`, enabled: name !== 'figma', installPath: p.dir, version: '1.0.0' }));
+  const items = buildInventory(memoryFs(files), { configDir: home, globalConfig: global, projects, pluginList });
+  return { items, scannedAt: Date.now(), scanning: false, error: null, via: 'the demo’s made-up setup' };
+}
+
 function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
   const timers: NodeJS.Timeout[] = [];
   let stopped = false;
@@ -330,9 +370,11 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
 
+  const tools = opts.tools ? toolArgsLine(opts.tools) : '';
   const header: Step = [
     { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
     { kind: 'system', text: `  cwd ${opts.cwd}` },
+    ...(tools ? [{ kind: 'system' as const, text: `  $ claude --session-id … ${tools}` }] : []),
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
@@ -571,10 +613,11 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
       for (let k = 0; k < merges; k++) {
         const at = midnight + (9 + rand() * 9) * HOUR_MS; // working hours
         const rounds = rand() < 0.3 ? 2 : 1; // now and then QA failed it once first
-        h.merges.push([at, repo, 0, Math.round((25 + rand() * 200) * min)]);
+        const pr = -++n; // made up, so never a real PR's number
+        h.merges.push([at, repo, pr, Math.round((25 + rand() * 200) * min)]);
         for (let r = 0; r < rounds; r++) {
           const before = (rounds - r) * 20 * min;
-          h.qa.push([at - before, repo, r === rounds - 1, Math.round((1 + rand() * 14) * min)]);
+          h.qa.push([at - before, repo, r === rounds - 1, Math.round((1 + rand() * 14) * min), pr, r + 1]);
           h.checks.push([at - before - 6 * min, repo, `past${String(n++).padStart(4, '0')}`, rand() > 0.12, Math.round((2.5 + rand() * 5) * min)]);
           h.cost.push([at - before, repo, Math.round((0.3 + rand()) * 100) / 100], [at - before - 40 * min, repo, Math.round((0.4 + rand() * 1.2) * 100) / 100]);
         }
@@ -601,6 +644,36 @@ function fakeUsageWarning(cb: SessionCallbacks) {
     cb.log([{ kind: 'error', text: `⚠ Subscription usage warning (five_hour) · resets ${new Date(resetsAt).toLocaleTimeString()} (demo)` }]);
     cb.usageWarning?.({ resetsAt, rateLimitType: 'five_hour', utilization: 0.82 });
   }, 3000);
+}
+
+// Claude's usage readings, made up: they climb through a fast fake window (30 minutes for "5 hours", 6 hours for the
+// week) and reset, so the meter can be seen moving. Running sessions report them every 15 s, like a status line.
+const FAKE_WINDOW_MS = 30 * 60_000;
+const FAKE_WEEK_MS = 6 * 60 * 60_000;
+
+/** The demo's readings at `now`: the 5-hour window, the week and a weekly Sonnet limit. */
+export function demoReadings(now: number): UsageReading[] {
+  const fill = (period: number, from: number, span: number) => ({ pct: Math.round(from + (span * (now % period)) / period), resetsAt: now - (now % period) + period });
+  return [
+    { type: 'five_hour', ...fill(FAKE_WINDOW_MS, 8, 70), at: now },
+    { type: 'seven_day', ...fill(FAKE_WEEK_MS, 35, 40), at: now },
+    { type: 'seven_day_sonnet', ...fill(FAKE_WEEK_MS, 20, 30), at: now },
+  ];
+}
+
+/** A session's callbacks that also report the made-up readings while it runs. */
+function withReadings(cb: SessionCallbacks): SessionCallbacks {
+  const feed = () => cb.usage?.(demoReadings(Date.now()));
+  const first = setTimeout(feed, 4000);
+  const every = setInterval(feed, 15_000);
+  return {
+    ...cb,
+    finished: (result) => {
+      clearTimeout(first);
+      clearInterval(every);
+      cb.finished(result);
+    },
+  };
 }
 
 /** A made-up install and build of 300-900 MB freed, so the idle-desk setting and its phone message can be seen. */
@@ -838,6 +911,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     startSession: (opts, cb) => {
       // The big company is for measuring the office at full speed, so it never paces.
       if (++sessionsStarted === USAGE_WARNING_AT && !scale) fakeUsageWarning(cb);
+      if (!scale) cb = withReadings(cb);
       return inTerminal(opts, cb, (c) => (opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
     terminals: true,
@@ -846,11 +920,13 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     releaseClis: async () => undefined,
     detectClis: async () =>
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
+    toolInventory: async (projects) => demoTooling(projects),
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,
     weather: demoWeather,
     notify: demoNotify,
+    telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
     demoTeam: (floor) => demoTeam(scale, floor),
@@ -1066,23 +1142,39 @@ const demoPreviews: PreviewBackend = {
 interface Profile {
   summary: string;
   qa: string;
+  playbook: string;
 }
 
 const PROFILES: Record<string, Profile> = {
   'pixel-todo': {
     summary: 'Todo web app · React + Vite + TypeScript',
     qa: '- Add, complete, edit and delete todos; they survive a reload\n- Keyboard only: every action reachable, focus always visible\n- Phone width (375px): nothing overflows or gets cut off\n- No errors in the browser console',
+    playbook:
+      '## Map\n- src/components/: React views, no storage calls\n- src/store/: todo state and localStorage; components use its hooks only\n## Conventions\n- One component per file, tests next to it (*.test.tsx)\n## Skills\n- frontend-design for UI, test-driven-development for store changes\n## Traps\n- localStorage throws in private windows: wrap reads and writes',
   },
   'weather-api': {
     summary: 'REST API · Node + Express',
     qa: '- Every endpoint: happy path, bad input (400), unknown city (404)\n- Response shapes match the OpenAPI document\n- Rate limiting returns 429 with Retry-After\n- Tests and lint pass',
+    playbook:
+      '## Map\n- src/routes/: HTTP only, they call src/services/\n- src/services/: the logic, never imports express\n## Conventions\n- Update openapi.yaml with every endpoint change\n## Skills\n- test-driven-development for services\n## Traps\n- The upstream weather client is rate limited: mock it in tests',
   },
 };
 
 const GENERIC: Profile = {
   summary: 'Web project · early stage',
   qa: '- The app builds and starts\n- The changed feature works end to end in the browser\n- Phone width: nothing overflows\n- No console errors',
+  playbook: '## Conventions\n- Small modules, tests next to the code\n## Skills\n- frontend-design for UI work',
 };
+
+/** The demo CEO's answer to a reply: the quote it answers, then a word on the answer. */
+export function answerReply({ quote, reply }: { quote: string; reply: string }): string {
+  const q = quote.length > 140 ? `${quote.slice(0, 139).trim()}…` : quote;
+  const said = reply.length > 90 ? `${reply.slice(0, 89).trim()}…` : reply;
+  if (/\bplan\b/i.test(said))
+    return `> ${q}\n\nHere it is.\n\n\`\`\`artifact title="The plan"\n## Next milestone\n\n1. Finish the issues in progress\n2. Merge what passed QA\n3. Plan the next features with you\n\n| Step | Who | When |\n| --- | --- | --- |\n| Build | the team | today |\n| QA | the team | as PRs land |\n| Merge | the office | once checks pass |\n\`\`\`\n\n(I'm the demo CEO, so nothing changes.)`;
+  const answer = /^(yes|yep|sure|ok(ay)?|go)\b/i.test(said) ? "Great, I'll go ahead with that." : /^(no|nope|don't|stop)\b/i.test(said) ? "Understood, I'll leave it as it is." : `Noted: "${said}".`;
+  return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
+}
 
 /** A floor in company_status, as far as the demo CEO reads it. */
 export interface DemoFloor {
@@ -1210,12 +1302,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       await step([{ kind: 'tool', tool: 'Glob', text: '⏺ Glob src/**/*' }, { kind: 'result', text: '  ⎿ Found 23 files' }]);
       await read('package.json', 36);
       await think(`${p.summary}. Let me size the team for the work in sight.`);
-      await use('set_floor_profile', { floor, summary: p.summary, qa_brief: p.qa });
+      await use('set_floor_profile', { floor, summary: p.summary, qa_brief: p.qa, playbook: p.playbook });
       const ready = f.capacity.issuesReadyToStart;
       const grow = demoGrow(f, ready);
       const team = grow ? await scale(s, f, grow) : `Its ${plural(f.team.size, 'agent')} can keep up with the ${plural(ready, 'issue')} ready to start.`;
       const next = f.brief ? ' Your brief is next on my list: I plan it as soon as this is done.' : f.backlog.length === 0 ? ' The backlog is empty: tell me what you would like built and I will plan it.' : '';
-      return [`Floor ${floor}: ${p.summary}. I wrote a QA brief for it.`, team, next].filter(Boolean).join(' ');
+      return [`Floor ${floor}: ${p.summary}. I wrote a QA brief and a playbook for it.`, team, next].filter(Boolean).join(' ');
     },
     async plan(floor: number, mission: string) {
       const s = await status();
@@ -1261,6 +1353,15 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      // A reply to one of the CEO's messages: answer it, quoting what it answers.
+      const reply = parseForwarded(text);
+      if (reply) return answerReply(reply);
+      // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
+      if (/\btelegram\b/i.test(text)) {
+        const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+        const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
+        return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);
       const closeFloor = close && (s.floors.find((f) => f.backlog.some((i) => i.number === Number(close[1]))) ?? s.floors[0]);
@@ -1283,21 +1384,27 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       }
       const agents = s.floors.reduce((n, f) => n + f.team.size, 0);
       const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+      const nextFloor = s.floors.find((f) => f.backlog.length);
+      const next = nextFloor && { floor: nextFloor.floor, issue: nextFloor.backlog[0] };
       const pending = s.pendingChanges.length;
-      // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders.
-      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} |`);
+      // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders, the longer part as an
+      // artifact card and the question with suggestion boxes (shared/chatParts.ts).
+      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} | ${f.capacity.issuesReadyToStart} | ${f.capacity.prsAwaitingQa} | ${f.team.free} |`);
       return [
-        `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues.`,
+        `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues. The floor-by-floor report is attached.`,
         '',
         '- The team is *heads down* on the backlog',
         `- ${pending ? `**${pending}** team change${pending === 1 ? ' is' : 's are'} waiting for your decision` : 'No team changes waiting on you'}`,
         '  - QA re-tests every PR after a fix',
         '',
-        '| Floor | Repo | Agents | Issues | PRs |',
-        '| ---: | --- | ---: | ---: | ---: |',
-        ...(rows.length ? rows : ['| – | no projects yet | 0 | 0 | 0 |']),
+        '```artifact title="Floor report"',
+        '## Every floor',
         '',
-        'What I would do next:',
+        '| Floor | Repo | Agents | Issues | PRs | Ready to start | Waiting for QA | Free agents |',
+        '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+        ...(rows.length ? rows : ['| – | no projects yet | 0 | 0 | 0 | 0 | 0 | 0 |']),
+        '',
+        '## What I would do next',
         '',
         '1. Merge anything that passed QA',
         '2. Run `npm run build` on each floor before the next milestone',
@@ -1306,8 +1413,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```bash',
         'SWARM_HOME=/tmp/cubefarm-demo SWARM_PORT=5260 node --import tsx server/index.ts --demo',
         '```',
+        '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
+        ...(next
+          ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
+          : []),
       ].join('\n');
     },
   };
@@ -1354,8 +1465,9 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         setTimeout(() => {
           if (stopped || done) return;
           const said = text.split('\n').slice(1).join(' ').trim() || text;
-          cb.log([{ kind: 'text', text: `● Noted: "${short(said, 70)}"` }]);
-          cb.turn?.(`Noted, I'll factor that in: "${short(said, 90)}"`);
+          const reply = parseForwarded(said);
+          cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
+          cb.turn?.(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`);
         }, 1500),
       );
     },
@@ -1441,6 +1553,56 @@ const demoNotify: NotifyTransport = {
     return ok ? 200 : 404;
   },
 };
+
+/**
+ * A fake Bot API with no network: any token in BotFather's shape is the bot @cubefarm_demo_bot (one with "bad" in it is
+ * refused), sends are logged, and getUpdates hands out what the demo's fake manager does (TelegramBot.demo).
+ */
+function demoTelegram(): TelegramApi {
+  let queue: Record<string, unknown>[] = [];
+  let nextUpdate = 1;
+  let nextMessage = 500;
+  let wake: (() => void) | null = null;
+  return {
+    async call(token, method, params, signal) {
+      if (/bad/i.test(token)) throw new TelegramCallError(401, 'Unauthorized');
+      switch (method) {
+        case 'getMe':
+          return { id: Number(token.split(':')[0]), is_bot: true, first_name: 'cubefarm demo', username: 'cubefarm_demo_bot' };
+        case 'getUpdates': {
+          if (!queue.length) {
+            await new Promise<void>((resolve) => {
+              const t = setTimeout(resolve, Number(params.timeout ?? 0) * 1000);
+              t.unref?.();
+              wake = () => (clearTimeout(t), resolve());
+              signal?.addEventListener('abort', wake, { once: true });
+            });
+            wake = null;
+          }
+          if (signal?.aborted) throw new TelegramCallError(0, 'stopped');
+          const out = queue.filter((u) => Number(u.update_id) >= Number(params.offset ?? 0));
+          queue = [];
+          return out;
+        }
+        case 'sendMessage': {
+          const buttons = (params.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)?.inline_keyboard ?? [];
+          const labels = buttons.flat().map((b) => `[${b.text}]`).join(' ');
+          console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
+          return { message_id: ++nextMessage };
+        }
+        case 'answerCallbackQuery':
+          console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
+          return true;
+        default:
+          return true;
+      }
+    },
+    inject(update) {
+      queue.push({ update_id: nextUpdate++, ...update });
+      wake?.();
+    },
+  };
+}
 
 // ---------- weather ----------
 

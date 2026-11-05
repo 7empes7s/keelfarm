@@ -7,6 +7,8 @@ export const SPEECH_MAX_CHARS = 1500;
 /** What the settings' Test button says, in ElevenLabs' voice or the browser's. */
 export const SAMPLE_LINE = "Hi! This is how I'll sound when I message you from the office.";
 
+import type { PhoneMessage } from './types.ts';
+
 const EMOJI = /[\p{Extended_Pictographic}\p{Regional_Indicator}\u{1F3FB}-\u{1F3FF}‍︎️⃣]/gu;
 const URL = /\b(?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"]/gi;
 
@@ -44,6 +46,13 @@ export function speechText(text: string, max = SPEECH_MAX_CHARS): string {
     lines.push(/[.!?:;,…]$/.test(line) ? line : `${line}.`);
   }
   return cut(lines.join(' ').replace(/\s+([.,!?;:])/g, '$1'), max);
+}
+
+/** A phone message's words aloud: its text, then its attachments by title, never their contents. */
+export function messageSpeech(m: Pick<PhoneMessage, 'text' | 'artifacts'>, max = SPEECH_MAX_CHARS): string {
+  const titles = m.artifacts?.map((a) => a.title) ?? [];
+  const extra = !titles.length ? '' : titles.length === 1 ? `Plus an attachment: ${titles[0]}.` : `Plus ${titles.length} attachments: ${titles.join('; ')}.`;
+  return [speechText(m.text, max), extra].filter(Boolean).join(' ');
 }
 
 /** Cut at the last sentence end within `max`; with none in its second half, at the last word, with an ellipsis. */

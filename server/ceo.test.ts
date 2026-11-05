@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
-import { FLOOR_SEATS, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
 import { ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, jobLabel, planDependencies, plannedSize, scalePlan, type CeoJob, type DependsRequest, type TeamNow } from './ceo.ts';
 
@@ -94,12 +94,13 @@ describe('jobLabel', () => {
 describe('office tools', () => {
   const connect = async () => {
     const floors: unknown[] = [];
+    const configured: unknown[] = [];
     const office = createOfficeTools({
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
       scaleTeam: () => '',
-      configureAgent: () => '',
+      configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
       setDependencies: async () => '',
       closeIssue: async () => '',
@@ -108,12 +109,13 @@ describe('office tools', () => {
       rerunChecks: async () => '',
       closePull: async () => '',
       escalate: async () => '',
+      sendTelegram: async () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
     const client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(clientSide);
-    return { client, floors };
+    return { client, floors, configured };
   };
 
   it('lists every tool the CEO relies on', async () => {
@@ -131,15 +133,32 @@ describe('office tools', () => {
       'retry_qa',
       'scale_team',
       'send_back',
+      'send_telegram',
       'set_dependencies',
       'set_floor_profile',
     ]);
+  });
+
+  it("takes an agent's Tools & skills switches as lists of names", async () => {
+    const { client, configured } = await connect();
+    await client.callTool({ name: 'configure_agent', arguments: { agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] } });
+    expect(configured).toEqual([{ agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] }]);
   });
 
   it('still takes preview_env as a map of strings', async () => {
     const { client, floors } = await connect();
     await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } } });
     expect(floors).toEqual([{ floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } }]);
+  });
+
+  it("takes a floor's playbook up to its length cap", async () => {
+    const { client, floors } = await connect();
+    const playbook = '## Layers\n- server/ never imports client/';
+    await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, playbook } });
+    expect(floors).toEqual([{ floor: 1, playbook }]);
+    const tooLong = await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, playbook: 'x'.repeat(PLAYBOOK_MAX + 1) } });
+    expect(tooLong.isError).toBe(true);
+    expect(floors).toHaveLength(1);
   });
 });
 

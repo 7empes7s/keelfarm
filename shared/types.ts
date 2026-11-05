@@ -5,6 +5,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -73,6 +74,7 @@ export interface RepoView {
   mission: string; // the manager's brief: what this floor is building
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
+  playbook: string; // the floor's architecture map, conventions, skills to use and traps, for every agent's prompt (up to PLAYBOOK_MAX)
   localPath: string | null; // the manager's own project folder, when the floor lives in one
   checkoutPath: string; // where the floor's main checkout is on disk (localPath, or a clone the office manages)
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
@@ -149,6 +151,9 @@ export type AgentRole = 'agent' | 'ceo';
 
 /** Desks in a floor's room: 12 in the open-plan grid and 3 along the east wall. A team is at most this big. */
 export const FLOOR_SEATS = 15;
+
+/** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
+export const PLAYBOOK_MAX = 3000;
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -271,6 +276,7 @@ export interface AgentView {
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
+  tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's (absent for the CEO, whose are in settings)
 }
 
 /** The kinds of work the icon over a busy agent shows (shared/activity.ts maps tools and status to them). */
@@ -367,13 +373,14 @@ export interface SwarmSettings {
   listen: ListenSettings;
   notify: NotifySettings;
   cloud: CloudSettings;
+  tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
 export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'merge';
 
-/** Where it tells them: this browser, Web Push to their devices, or a chat app's webhook. */
-export type NotifyChannel = 'desktop' | 'push' | 'ntfy';
+/** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
+export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
 
 /** The chat apps, whose webhook URLs and tokens live in the server's secrets file. */
 export type NotifyWebhook = 'ntfy';
@@ -382,6 +389,7 @@ export interface NotifySettings {
   events: Record<NotifyEvent, boolean>;
   channels: Record<NotifyChannel, boolean>; // a chat app also needs its webhook saved
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
+  telegramMirror: boolean; // every CEO message also goes to Telegram (otherwise only replies to messages sent from there)
 }
 
 /** A channel's last send since the office started: when, and whether it arrived (else why not). */
@@ -405,6 +413,19 @@ export interface NotifyChannelsView {
   pushDevices: number;
   devices: PushDeviceView[];
   desktop: NotifyHealth | null;
+  telegram: TelegramView;
+}
+
+/** The manager's Telegram bot (docs/pocket.md): its token and their chat id stay on the server. */
+export interface TelegramView {
+  set: boolean; // a bot token is saved
+  bot: string; // its username, e.g. "my_office_bot"
+  linked: boolean; // the manager pressed Start in their chat
+  chat: string; // that chat's first name, for "Linked to …"
+  linking: boolean; // a Start link is waiting to be pressed
+  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages
+  error: string; // why the last read failed, while retrying
+  last: NotifyHealth | null; // its last send
 }
 
 /** A test push to one device: the push service took it, the device is gone (and dropped), or another error. */
@@ -478,6 +499,17 @@ export interface UsageView {
   warning: UsageWarningView | null; // the latest since the office started, for the usage meter
 }
 
+/**
+ * Claude's latest reading of one usage limit, from any session's status line or rate-limit event. These are the whole
+ * subscription's numbers, so they include usage outside the office (claude.ai, other Claude Code sessions).
+ */
+export interface UsageReading {
+  type: string; // Claude's rate limit type: five_hour, seven_day, seven_day_opus, …
+  pct: number; // how full, 0-100
+  resetsAt: number | null; // epoch ms
+  at: number; // when it was read
+}
+
 /** One floor's numbers on mission control (or the whole office's), computed by the server from its state and history. */
 export interface OpsNumbers {
   // the pipeline, right now
@@ -496,6 +528,8 @@ export interface OpsNumbers {
   leadMs: number | null; // median issue → merge
   qaWaitMs: number | null; // median wait for an agent to start testing a PR
   qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
+  qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
+  qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
   // GitHub's checks, over 7 days
   ciPass: number | null; // share of check runs that passed, 0-1
   ciRuns: number;
@@ -590,6 +624,13 @@ export interface HireRequestView {
   decidedBy: 'manager' | 'auto' | null;
 }
 
+/**
+ * Where a manager's message to the CEO is (shared/chat.ts nextDelivery): sending and failed live only in the phone
+ * that sent it; the office records sent, read (the CEO's session took it, or their reply job started) and replied.
+ */
+export type Delivery = 'sending' | 'sent' | 'read' | 'replied' | 'failed';
+export type ServerDelivery = Extract<Delivery, 'sent' | 'read' | 'replied'>;
+
 /** One message in the phone thread between the manager and the CEO. */
 export interface PhoneMessage {
   id: number;
@@ -598,6 +639,19 @@ export interface PhoneMessage {
   at: number;
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
+  telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
+  replyTo?: number; // the manager's message replies to this one (its id)
+  delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
+  suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
+  artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+}
+
+/** A CEO message's artifact: a titled markdown document shown as a card. */
+export interface ChatArtifact {
+  id: string; // `<message id>-<n>`
+  title: string;
+  lead: string; // its first line, plain words, for the card
+  markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
 export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
@@ -639,6 +693,7 @@ export interface WorldSnapshot {
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
   usage: UsageView;
+  claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
@@ -651,6 +706,7 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -681,9 +737,12 @@ export type ServerEvent =
   | { type: 'request'; request: HireRequestView }
   | { type: 'ceo'; ceo: CeoInfo }
   | { type: 'message'; message: PhoneMessage }
+  /** The manager's messages moved on: the CEO read them, or replied. */
+  | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
+  | { type: 'claudeUsage'; readings: UsageReading[] }
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }
@@ -693,6 +752,7 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
+  | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }

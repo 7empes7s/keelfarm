@@ -2711,6 +2711,65 @@ input.inline:focus {
 .setup-wrap + .term-split {
   min-height: 260px;
 }
+/* Settings → Tools & skills (ToolsSettings.tsx) */
+.tools-card {
+  grid-column: 1 / -1;
+}
+.tools-list input[type='search'] {
+  min-width: 0;
+}
+.tool-group {
+  margin: 10px 0 4px;
+}
+.tool-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tool-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid #0001;
+}
+.tool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.tool-desc {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-name {
+  overflow-wrap: anywhere;
+}
+.tool-reset {
+  cursor: pointer;
+}
+.tool-note {
+  padding: 6px 10px;
+  border-radius: 10px;
+  margin: 0;
+}
+.tool-error {
+  color: #b00020;
+}
+.agent-tools summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin: 6px 0;
+}
+@media (max-width: 520px) {
+  .tool-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .agent-setup h3 {
   margin: 0;
 }
@@ -3081,6 +3140,14 @@ input.inline:focus {
   color: #d9480f;
   font-weight: 600;
 }
+/* the log, its "jump to latest" button and the message actions sit in one box */
+.chat-log-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
 .chat-log {
   flex: 1;
   overflow: auto;
@@ -3095,6 +3162,387 @@ input.inline:focus {
 }
 .bubble-row-me {
   justify-content: flex-end;
+}
+.bubble-row {
+  align-items: center;
+  gap: 4px;
+  outline: none;
+  border-radius: 18px;
+  transition: background 0.3s;
+}
+.bubble-row-flash {
+  background: rgba(255, 196, 0, 0.35);
+}
+.bubble {
+  position: relative;
+  touch-action: pan-y; /* a sideways swipe is the chat's: reply */
+  -webkit-touch-callout: none;
+}
+.bubble-tools {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.bubble-row:hover .bubble-tools,
+.bubble-tools:focus-within {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* touch: hold or swipe the bubble instead; the buttons still show for a keyboard */
+  .bubble-tools:not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+.bubble-tool {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px solid rgba(31, 29, 43, 0.25);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.bubble-tool:hover,
+.bubble-tool:focus-visible {
+  border-color: var(--ink);
+  outline: none;
+  background: #ffe9a8;
+}
+.bubble-swipe {
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.4;
+}
+.bubble-swipe-on {
+  opacity: 1;
+}
+.bubble-quote {
+  display: block;
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 3px 8px;
+  border: none;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: rgba(31, 29, 43, 0.07);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.bubble-quote:focus-visible {
+  outline: 2px solid var(--ink);
+}
+.bubble-quote-gone {
+  cursor: default;
+  font-style: italic;
+  color: var(--muted);
+}
+.bubble-quote-from {
+  display: block;
+  font-weight: 700;
+}
+.bubble-quote-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.bubble-tick {
+  font-weight: 700;
+}
+.bubble-tick-read,
+.bubble-tick-replied {
+  color: #2b7a3d;
+}
+.bubble-failed {
+  border-style: dashed;
+  background: #ffe3e0;
+}
+.bubble-retry {
+  display: block;
+  margin: 4px 0 2px auto;
+  padding: 2px 8px;
+  border: 1.5px solid #c92a2a;
+  border-radius: 999px;
+  background: #fff;
+  color: #c92a2a;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.floor-chip {
+  display: inline-block;
+  padding: 0 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: #e7f0ff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 700;
+  cursor: pointer;
+}
+.floor-chip:hover,
+.floor-chip:focus-visible {
+  background: #ffe9a8;
+}
+.chat-unread {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #c2410c;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-unread::before,
+.chat-unread::after {
+  content: '';
+  flex: 1;
+  border-top: 1.5px solid currentColor;
+}
+.chat-jump {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  padding: 4px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 2px 0 var(--ink);
+  cursor: pointer;
+}
+.chat-menu-back {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(31, 29, 43, 0.25);
+  z-index: 2;
+}
+.chat-menu {
+  width: 100%;
+  max-width: 340px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--ink);
+  outline: none;
+}
+.chat-menu-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.chat-menu-quote {
+  margin: 4px 0 8px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.chat-menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* the CEO's suggestion boxes and artifacts (ui/ChatArtifacts.tsx) */
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 6px 6px;
+}
+.suggestion-chip {
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 5px 11px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: #fff4ec;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.suggestion-chip:hover {
+  background: #ffe2cf;
+}
+.artifact-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 6px 0 2px;
+  padding: 7px 9px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 0 var(--ink);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.artifact-card:hover {
+  background: #fff8e6;
+}
+.artifact-card-icon {
+  font-size: 1.3rem;
+}
+.artifact-card-body {
+  display: flex;
+  flex-direction: column;
+}
+.artifact-card-title,
+.artifact-card-lead {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artifact-card-title {
+  font-size: 0.85rem;
+}
+.artifact-card-lead {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.artifact-card-open {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+/* full-screen on a phone, a side panel on a wider screen */
+.artifact-back {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(31, 29, 43, 0.35);
+}
+.artifact-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  outline: none;
+}
+@media (min-width: 720px) {
+  .artifact-sheet {
+    width: min(640px, 55vw);
+    border-left: 3px solid var(--ink);
+    box-shadow: -4px 0 0 rgba(31, 29, 43, 0.15);
+  }
+}
+.artifact-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border-bottom: 2px solid rgba(31, 29, 43, 0.12);
+}
+.artifact-title {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.artifact-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+.artifact-md {
+  font-size: 0.95rem;
+}
+.artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 2px solid rgba(31, 29, 43, 0.12);
+  background: #fff;
+}
+.artifact-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.artifact-items li {
+  margin-bottom: 10px;
+}
+.artifact-when {
+  display: block;
+  margin: 2px 0 0 4px;
+}
+html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) {
+  background: #fff;
+  border-color: #000;
+}
+.chat-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 0;
+  background: #fff;
+}
+.chat-reply-body {
+  min-width: 0;
+  padding: 3px 8px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: #f4f1ea;
+}
+.chat-reply-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.chat-reply-x {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px solid rgba(31, 29, 43, 0.3);
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+.quick-answer {
+  border-color: var(--accent);
+  background: #fff4ec;
 }
 .bubble {
   max-width: 86%;
@@ -3811,6 +4259,20 @@ input.inline:focus {
 .usage-gauge > div {
   height: 100%;
 }
+.usage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.usage-gauge-good > div {
+  background: var(--good);
+}
+.usage-gauge-warn > div {
+  background: var(--warn);
+}
+.usage-gauge-bad > div {
+  background: var(--bad);
+}
 /* The card the console was opened at (an alarm, or the usage meter). */
 .ops-card-hot {
   box-shadow: 0 0 0 4px var(--bad);
@@ -3993,6 +4455,16 @@ input.inline:focus {
   border-radius: 16px;
   padding: 10px 12px;
   box-shadow: 0 3px 0 var(--ink);
+}
+.pk-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font);
+  font-size: 1rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
 }
 .pk-banner {
   padding: 8px 12px;
@@ -4376,6 +4848,25 @@ input.inline:focus {
   padding: 6px 0;
   border-top: 1px dashed rgba(31, 29, 43, 0.15);
   overflow-wrap: anywhere;
+}
+
+/* ui/TelegramSettings.tsx */
+.telegram-go {
+  margin-top: 4px;
+  white-space: normal;
+  max-width: 100%;
+}
+.telegram-demo {
+  margin-top: 8px;
+}
+.telegram-demo .row {
+  margin-top: 6px;
+}
+.telegram-demo input {
+  min-width: 0;
+}
+.bubble-via {
+  opacity: 0.8;
 }
 
 /* ui/CloudSettings.tsx */

@@ -8,9 +8,10 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 
 ## SAFETY (read first)
 
-- The live office runs from `C:\Projects\office-swarm` on this machine, on ports 4317 (server) and 5317 (Vite),
-  with its state in `~/.cubefarm`. Never edit or run anything there, never read or write `~/.cubefarm` directly, and
-  never use ports 4317 or 5317.
+- The live office runs from `/root/keelfarm` on this Linux machine (`node scripts/office.mjs --no-open` under the
+  systemd unit `cubefarm.service`), on port 4317 (5317 is its Vite's), with its state in `/root/.cubefarm`. Never edit
+  or run anything in `/root/keelfarm`, never read or write the office's own state in `/root/.cubefarm` (your machine's
+  folder under it is yours), and never use ports 4317 or 5317.
 - Test only in demo mode (fake GitHub, fake agents, no Claude usage), with an isolated `SWARM_HOME` and your reserved
   `SWARM_PORT` (from your job instructions):
 
@@ -40,6 +41,7 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` over client, server, shared, the `.ts` in scripts and the configs |
+| `npm run lint` | the code-health ratchet (`scripts/codeHealth.mjs`): oxlint (type-aware), knip and the file-size budget, failing only on what `code-health.baseline.json` doesn't list; `npm run lint:update` lowers it |
 | `npm test` | Vitest, once (`npm run test:watch` to re-run on edits) |
 | `npm run build` | typecheck, `vite build` to `dist/`, then the server bundled into `dist-server/` (`scripts/build-server.mjs`) |
 | `npm run test:e2e` | optional, local only: Playwright (`e2e/`, `playwright.config.ts`): builds (`E2E_SKIP_BUILD=1` reuses your `dist/`), boots a demo office on `E2E_PORT` (default 4399; set it to your reserved port) with a temp `SWARM_HOME`, and smoke-tests it headless in a local Google Chrome, else Playwright's Chromium. Stops at once if the browser is missing: never install it mid-task |
@@ -47,11 +49,11 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 | `npm run bench -- --port <yours>` | after a build: the scale benchmark (`scripts/bench.mjs`): boots the big-company demo headless, visits the lobby and three floors, writes FPS, frame-time p95, CPU per frame, draw calls, triangles, heap, audio nodes and websocket traffic to a JSON report (`--help`) |
 | `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs) |
 
-CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test, for every PR
+CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test → `lint`, for every PR
 and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`, on `ubuntu-latest` always and on `windows-latest`
 unless a PR touches nothing OS-sensitive (only `client/`, `e2e/`, docs: it shows as skipped). No macOS job: this
 copy's office runs on Linux, and GitHub's macOS runners often never start.
-e2e is not part of CI. Locally, `typecheck`, `test` and `build` must pass before you open a PR. Don't run `test:e2e`
+e2e is not part of CI. Locally, `typecheck`, `lint`, `test` and `build` must pass before you open a PR. Don't run `test:e2e`
 unless an issue asks for it. If your change shows up in the office, boot your own demo office, check it in a real
 browser with the Playwright tools, and put screenshots in the PR. `.github/workflows/release.yml` publishes to npm when the manager runs it from GitHub's Actions tab or pushes a
 `v*` tag (npm trusted publishing, tied to that file name); never publish or tag releases yourself.
@@ -111,6 +113,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   service worker keeping the apps' root paths under it.
 - `qaShots.ts`: QA's screenshots of each PR's latest round, kept for the app viewer's QA panel.
 - `previewRunner.ts`: checks out, installs and runs a floor's app in its preview worktree; kills the process tree.
+- `tooling.ts`: Settings → Tools & skills' inventory: what a Claude Code session here loads (`claude plugin list --json`,
+  plugin folders, skills, MCP configs), read only, secrets masked. The switches (Everyone, the CEO, each agent) and how
+  they become a session's `--disallowedTools` / `enabledPlugins` are pure, in `shared/tooling.ts`.
 - `httpError.ts`: `HttpError(status, message)`.
 - `officeUpdate.ts`: the office's self-update: the drain decision, the launcher contract (IPC, `last-update.json`).
 - `pacing.ts`: pacing new work after Claude's usage warnings: the start/skip decision and the usage state.
@@ -138,6 +143,7 @@ Shared (`shared/`, imported by both sides):
 - `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings).
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
+- `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
 - `looks.ts`: the look editor's options and `cleanStyle` (an agent's `style`, checked on the server).
 
@@ -210,6 +216,14 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
 - 2D UI follows docs/design.md: tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
   `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to `e2e/layout.spec.ts`.
 
+## Code health
+
+- `npm run lint` fails on findings the baseline doesn't have: a new lint finding in a file (per rule), a new unused
+  file/export/type/dependency (knip), a new file over 800 lines, or a file over 800 grown past its recorded size + 5%.
+  Fix it; don't silence it. Fixed old ones? `npm run lint:update` and commit `code-health.baseline.json`.
+  `--accept` (record as is) only for renames or a stated exception. No formatter, no reformatting. CONTRIBUTING.md
+  and docs/code-health.md have the details and the cleanup backlog.
+
 ## Tests
 
 - Vitest, `*.test.ts` next to the code, anywhere under `client/`, `server/`, `shared/` or `scripts/`
@@ -224,6 +238,6 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
 - One issue per PR, `Closes #<n>` in the body. Keep the diff small and on-topic.
 - Many PRs merge in parallel and auto-merge sends conflicts back: don't reformat, reorder or rename code you aren't
   changing, and don't touch unrelated files.
-- Before opening it: `typecheck`, `test` and `build`. `test:e2e` only when an issue asks for it; CI doesn't run it.
+- Before opening it: `typecheck`, `lint`, `test` and `build`. `test:e2e` only when an issue asks for it; CI doesn't run it.
 - Say how you verified it and list your assumptions. UI changes get screenshots from the demo office.
 - Never push to `main`, never force-push, never merge your own PR.

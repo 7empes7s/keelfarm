@@ -12,6 +12,7 @@ import { setMode } from './mode';
 import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
 import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
+import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
 import './pocket.css';
 
@@ -92,6 +93,10 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
           <span>Approvals →</span>
         </button>
       )}
+      <button className="pk-card pk-usage" onClick={() => settings('ops')} aria-label="Claude usage: open Mission control">
+        <b className="small">🤖 Claude usage</b>
+        <UsageBars />
+      </button>
       {ceo && (
         <div className="pk-card pk-ceo">
           <span className="avatar" style={{ background: ceo.color }}>
@@ -296,7 +301,7 @@ export default function Pocket() {
         ) : (
           <>
             {tab === 'company' && <Company go={go} settings={setSettings} />}
-            {tab === 'chat' && <Chat autoFocus={false} />}
+            {tab === 'chat' && <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} />}
             {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
             {tab === 'team' && <Team focusRepo={repoId} />}
             {tab === 'approvals' && <Approvals />}

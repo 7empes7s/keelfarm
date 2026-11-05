@@ -7,6 +7,7 @@ import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { workerCli } from './floorRows';
 import { confirmDialog } from './Confirm';
+import { AgentTools } from './ToolsSettings';
 
 // One agent's setup (name, look, coding agent, model, effort), edited in place: the Team tab's row cells and the
 // ⚙️ Setup section of their panel share these. Every change is a PATCH; the `agent` event updates all views.
@@ -275,7 +276,7 @@ export function PromptPreview({ agent }: { agent: Agent }) {
   const context = useStore((s) => {
     const r = s.repos.find((x) => x.id === agent.repoId);
     const o = s.settings;
-    return JSON.stringify(r ? [r.fullName, r.defaultBranch, r.autoMerge, r.browserTesting, r.links, r.mission, r.summary, r.qaBrief] : [o.companyName, o.managerName, o.sessionLimit, o.maxAgents, o.scaling]);
+    return JSON.stringify(r ? [r.fullName, r.defaultBranch, r.autoMerge, r.browserTesting, r.links, r.mission, r.summary, r.qaBrief, r.playbook] : [o.companyName, o.managerName, o.sessionLimit, o.maxAgents, o.scaling]);
   });
   useEffect(() => {
     if (!open) return;
@@ -372,6 +373,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
         </label>
       </div>
       <LookEditor agent={agent} />
+      <AgentTools agent={agent} />
       <PromptPreview agent={agent} />
       <p className="muted small">Name and model save when you leave them; the rest, and looks, as you pick them. Running sessions aren't restarted.</p>
     </section>

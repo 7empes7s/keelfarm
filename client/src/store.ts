@@ -1,11 +1,13 @@
 import { create } from 'zustand';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
-import { speechText } from '../../shared/speech';
+import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
+import { messageSpeech } from '../../shared/speech';
+import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -45,7 +47,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'timelapse' | 'access';
+export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'tools' | 'timelapse' | 'access';
 
 export interface Focus {
   id: string;
@@ -118,11 +120,13 @@ interface State {
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
+  chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   version?: string; // the cubefarm version the server runs
   officeCommit?: string | null; // undefined: the server can't update itself
   officeUpdate?: OfficeUpdateView;
   usage: UsageView; // Claude's subscription usage: normal, pacing after a warning, or paused at the limit
+  claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
@@ -134,6 +138,7 @@ interface State {
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
+  tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
@@ -236,6 +241,7 @@ export const useStore = create<State>((set, get) => ({
     listen: { provider: 'off', autoSend: false, handsFree: false },
     notify: DEFAULT_NOTIFY,
     cloud: DEFAULT_CLOUD,
+    tools: DEFAULT_TOOL_SETTINGS,
   },
   clis: [],
   repos: [],
@@ -249,8 +255,10 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null },
   messages: [],
+  chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
+  claudeUsage: [],
   ops: EMPTY_OPS,
   doctor: [],
   voiceKeySet: false,
@@ -260,8 +268,15 @@ export const useStore = create<State>((set, get) => ({
   voiceSpeaking: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
-  notifyChannels: { webhooks: { ntfy: { set: false, hint: '', last: null } }, pushDevices: 0, devices: [], desktop: null },
+  notifyChannels: {
+    webhooks: { ntfy: { set: false, hint: '', last: null } },
+    pushDevices: 0,
+    devices: [],
+    desktop: null,
+    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null },
+  },
   cloud: EMPTY_CLOUD,
+  tooling: EMPTY_INVENTORY,
   pong: {},
   restarting: false,
   visitors: [],
@@ -322,6 +337,7 @@ export const useStore = create<State>((set, get) => ({
           officeCommit: d.officeCommit,
           officeUpdate: d.officeUpdate,
           usage: d.usage,
+          claudeUsage: d.claudeUsage ?? [],
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
           clis: d.clis ?? [],
@@ -332,6 +348,7 @@ export const useStore = create<State>((set, get) => ({
           ticker: d.ticker ?? [],
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           cloud: d.cloud ?? EMPTY_CLOUD,
+          tooling: d.tooling ?? EMPTY_INVENTORY,
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
           pong: d.pong ?? {},
           restarting: false,
@@ -461,7 +478,7 @@ export const useStore = create<State>((set, get) => ({
         set({ ceo: ev.ceo });
         break;
       case 'message': {
-        set({ messages: [...get().messages.slice(-199), ev.message] });
+        set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat';
@@ -473,7 +490,7 @@ export const useStore = create<State>((set, get) => ({
           void import('./ui/voiceMessages').then((v) => v.speakMessage(ev.message, arrived, wait));
         }
         // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
-        if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${speechText(ev.message.text, 600)}`);
+        if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
         if (ev.message.from === 'ceo' && !reading) {
           if (!speak) chirp();
           const ceo = get().agents[CEO_ID]?.name ?? 'CEO';
@@ -482,6 +499,9 @@ export const useStore = create<State>((set, get) => ({
         }
         break;
       }
+      case 'delivery':
+        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
+        break;
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
         break;
@@ -493,6 +513,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'usage':
         set({ usage: ev.usage });
+        break;
+      case 'claudeUsage':
+        set({ claudeUsage: ev.readings });
         break;
       case 'ops':
         // A new alarm sounds once (rate-limited); the beacons spin until it's handled.
@@ -519,6 +542,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'cloud':
         set({ cloud: ev.cloud });
+        break;
+      case 'tooling':
+        set({ tooling: ev.tooling });
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.

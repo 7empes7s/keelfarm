@@ -3,7 +3,7 @@ import { TeamStats } from './CareerCard';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore, type ManagerTab } from '../store';
-import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
+import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
 import { CLAUDE_MODELS, modelSuggestions } from '../../../shared/models';
 import { CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
@@ -23,6 +23,7 @@ import { StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
+import { ToolsTab } from './ToolsSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
 import { useMode } from '../pocket/mode';
@@ -256,6 +257,17 @@ function FloorBrief({ repo }: { repo: RepoView }) {
           defaultValue={repo.qaBrief}
           placeholder="What every QA pass must check on this project."
           onBlur={(e) => e.target.value !== repo.qaBrief && void attempt(() => api.updateRepo(repo.id, { qaBrief: e.target.value }))}
+        />
+      </details>
+      <details className="small">
+        <summary>Playbook{repo.playbook ? '' : ' (none yet)'}</summary>
+        <textarea
+          key={repo.playbook}
+          rows={8}
+          maxLength={PLAYBOOK_MAX}
+          defaultValue={repo.playbook}
+          placeholder="For every agent on this floor: where things live and what must not depend on what, conventions, the skills to use for this stack, known traps."
+          onBlur={(e) => e.target.value !== repo.playbook && void attempt(() => api.updateRepo(repo.id, { playbook: e.target.value }))}
         />
       </details>
     </div>
@@ -828,6 +840,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
     ['team', '👩‍💻 Team'],
     ['issues', '📝 Issues'],
     ['settings', '⚙️ Settings'],
+    ['tools', '🧰 Tools & skills'],
     ['timelapse', '📼 Time-lapse'],
     ['access', '♿ Accessibility'],
   ];
@@ -847,6 +860,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
         {tab === 'team' && <TeamTab />}
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}
+        {tab === 'tools' && <ToolsTab />}
         {tab === 'timelapse' && (
           <Suspense fallback={<p className="muted">Loading…</p>}>
             <TimeLapseTab />
