@@ -29,6 +29,7 @@ import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
+import { OFFICE_PLAYBOOK_MAX } from '../../shared/officePlaybook.ts';
 import type { HireRequestView } from '../../shared/types.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
@@ -45,6 +46,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
+      setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
       scaleTeam: acts((a) => this.scaleTeam(a)),
       configureAgent: acts((a) => this.configureAgent(a)),
       fileIssue: (a) => this.fileIssue(a),
@@ -183,6 +185,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          officePlaybook: s.officePlaybook || null,
         },
         floors,
         pendingChanges: pending.map(req),
@@ -224,6 +227,16 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     this.emitRepo(r);
     this.save();
     return `Saved floor ${r.floor}'s profile.`;
+  }
+
+  /** The office-wide playbook (#50), from Settings or set_office_playbook; over its cap it's refused, not cut. */
+  setOfficePlaybook(text: unknown): string {
+    const t = typeof text === 'string' ? text.trim() : '';
+    if (t.length > OFFICE_PLAYBOOK_MAX) throw new HttpError(400, `The office playbook is ${t.length} characters: keep it to ${OFFICE_PLAYBOOK_MAX}, it is in every session's prompt.`);
+    this.state.settings.officePlaybook = t;
+    this.save();
+    this.broadcast({ type: 'settings', settings: this.state.settings });
+    return t;
   }
 
   /** configure_agent: an agent's coding agent, model or effort, from their next task. */

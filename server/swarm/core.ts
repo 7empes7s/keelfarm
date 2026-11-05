@@ -41,6 +41,7 @@ import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../share
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS } from '../../shared/types.ts';
+import { DEFAULT_OFFICE_PLAYBOOK } from '../../shared/officePlaybook.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { questionOf, waitingOn } from '../../shared/questions.ts';
 import { CeoFiles } from '../ceoFiles.ts';
@@ -109,6 +110,7 @@ export abstract class SwarmCore extends SwarmContract {
       notify: notifySettings(DEFAULT_NOTIFY, {}),
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
+      officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
     agents: [],

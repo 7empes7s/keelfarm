@@ -389,6 +389,7 @@ export interface SwarmSettings {
   notify: NotifySettings;
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
+  officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */

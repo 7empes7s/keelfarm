@@ -50,3 +50,8 @@ ul.costs-list {
   list-style: none;
   padding-left: 0;
 }
+.ops-table.costs-table td.costs-parts {
+  white-space: normal;
+  text-align: left;
+  min-width: 9em;
+}

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
+import { OFFICE_PLAYBOOK_MAX } from '../shared/officePlaybook.ts';
 import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
@@ -147,6 +148,7 @@ export interface OfficeHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
@@ -264,6 +266,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
           ),
       },
       (a) => run(() => h.setFloorProfile(a)),
+    ),
+    tool(
+      'set_office_playbook',
+      "Replace the office-wide playbook: the rules every build, fix and QA prompt on every floor starts with, above the floor's own playbook. Only small, proven rules that hold on every project; floor specifics go in set_floor_profile. Paid for on every session: keep it short.",
+      { playbook: z.string().max(OFFICE_PLAYBOOK_MAX).describe(`Markdown bullets, at most ${OFFICE_PLAYBOOK_MAX} characters. Empty string clears it.`) },
+      (a) => run(() => h.setOfficePlaybook(a)),
     ),
     tool(
       'scale_team',
@@ -419,18 +427,8 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000) },
       (a) => run(() => h.messageAgent(a)),
     ),
-    tool(
-      'answer_agent',
-      "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.",
-      { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') },
-      (a) => run(() => h.answerAgent(a)),
-    ),
-    tool(
-      'ask_manager_choice',
-      "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.",
-      { agent_id: z.string(), question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'), options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'), recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence') },
-      (a) => run(() => h.askManagerChoice(a)),
-    ),
+    tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') }, (a) => run(() => h.answerAgent(a))),
+    tool('ask_manager_choice', "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.", { agent_id: z.string(), question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'), options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'), recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence') }, (a) => run(() => h.askManagerChoice(a))),
     tool(
       'qa_report',
       "A pull request's latest QA verdict, report (summary, checks, fix instructions) and screenshots. Screenshots are file paths you can Read to see them. Read-only.",

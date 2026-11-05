@@ -11,6 +11,7 @@ import { failedRunIds } from '../mergeGate.ts';
 import { checkTriageTarget, triageStep, type TriagePr } from '../triage.ts';
 import { recordCost } from '../metrics.ts';
 import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
+import { officeParts } from '../../shared/startup.ts';
 import { speaks } from '../voice.ts';
 import { teamKeyboard, telegramChat } from '../telegram.ts';
 import { blockedNotice } from '../unblock.ts';
@@ -254,12 +255,14 @@ export abstract class SwarmCeo extends SwarmUpdate {
     // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
     const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null });
+    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0));
+    const system = ceoSystemPrompt(this.ceoPromptInput(a));
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }) });
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
-        prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0)),
-        systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
+        prompt,
+        systemAppend: system,
         model: run.model,
         effort: run.effort,
         browserTesting: false,
@@ -295,6 +298,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
+        startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
         finished: (result) => this.onCeoFinished(a, result),
       },
     );
