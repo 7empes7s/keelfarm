@@ -10,6 +10,7 @@ import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
+import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
 
 export type AgentStatus =
@@ -366,6 +367,7 @@ export interface SwarmSettings {
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once
   maxAgents: number; // most agents on a floor: 1 to FLOOR_SEATS (DEFAULT_MAX_AGENTS)
   ceoHeartbeatMin: number; // minutes between the CEO's periodic reviews; 0 = off
+  researchMin: number; // a research job's time budget in minutes, after which the CEO wraps up with what it has
   ceoFollowups: FollowupSettings; // Settings → The CEO: which office events wake the CEO for a follow-up (shared/followups.ts)
   ceoMandates: CeoMandate[]; // the manager's standing mandates: follow-ups may file issues on the floors they cover
   managerName: string; // what the office calls you
@@ -657,6 +659,7 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
 }
 
@@ -687,7 +690,7 @@ export interface ChatArtifact {
   markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
-export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup';
+export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup' | 'research';
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO
@@ -744,6 +747,7 @@ export interface WorldSnapshot {
   files: FileView[]; // the chat's files store, newest first (metadata only)
   questions: AgentQuestion[]; // agents waiting on an answer, oldest first
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
+  experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -794,6 +798,7 @@ export type ServerEvent =
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
   | { type: 'tooling'; tooling: ToolInventory }
+  | { type: 'experiments'; experiments: LabView }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }

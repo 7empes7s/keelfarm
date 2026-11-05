@@ -11,6 +11,7 @@ import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
+import { keyName } from '../shared/termKeys.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
 import { takeLastUpdate, underLauncher, type OfficeHost } from './officeUpdate.ts';
@@ -23,10 +24,12 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoAnswered, demoCeoAnswer, demoPrompts, demoQuestion } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
+import { researchBrief } from './demoResearch.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -565,6 +568,9 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
   let line = '';
   term.bind({
     write: (data) => {
+      // Keys with no character (Esc, arrows, Shift+Tab, Ctrl+C…) are echoed by name, so the key bar can be checked here.
+      const key = keyName(data);
+      if (key) return term.write(`\x1b[2m⟨${key}⟩\x1b[0m`);
       for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
         if (ch === '\r') {
           const text = line.trim();
@@ -910,6 +916,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
     quickPicks: async () => DEMO_PICKS,
     toolInventory: async (projects) => demoTooling(projects),
+    survivalSignals: demoSurvival,
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,
@@ -920,6 +927,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
+    seedLab: sampleLab,
     simulateUsage: demoUsage,
     demoDoctor: {
       dropDesk: (dir) => {
@@ -1310,6 +1318,16 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const team = grow ? ` ${await scale(s, f, grow)}` : '';
       return `I turned the brief into three issues on floor ${floor}. #${n} sets up the skeleton; the other two say "Depends on #${n}", so nobody starts them early.${team}`;
     },
+    // Research: look outward and inward, then bring options with sources, filing nothing (server/research.ts).
+    async research(topic: string, floor: number | null) {
+      const s = await status();
+      const f = s.floors.find((x) => x.floor === floor) ?? s.floors[0];
+      await step([{ kind: 'tool', tool: 'WebSearch', text: `⏺ Web Search("${short(topic, 60)} best practices")` }, { kind: 'result', text: '  ⎿ Did 1 search' }]);
+      await step([{ kind: 'tool', tool: 'WebFetch', text: '⏺ Fetch(https://developer.mozilla.org/en-US/docs/Web)' }, { kind: 'result', text: '  ⎿ Received 48.2KB' }]);
+      if (f) await read(`${f.repo}/README.md`, 40);
+      await think('Three distinct ways to do it. Facts and guesses kept apart.');
+      return researchBrief(topic, f ? `floor ${f.floor} (\`${f.repo.split('/').pop()}\`)` : 'your floors');
+    },
     async review() {
       const s = await status();
       await think('Checking each floor for work waiting on free agents, and agents waiting on work.');
@@ -1443,6 +1461,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
+    : prompt.startsWith('Research for the manager:')
+      ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
     : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)
