@@ -205,7 +205,7 @@ async function layoutProblems(root: Locator): Promise<string[]> {
         const box = x.getBoundingClientRect();
         const name = (x.getAttribute('aria-label') || x.innerText || x.getAttribute('title') || `button.${x.className} in .${x.parentElement?.className}`).trim().slice(0, 60);
         const vw = document.documentElement.clientWidth;
-        if (box.left < -1 || box.right > vw + 1 || box.top < -1 || box.bottom > innerHeight + 1) out.push(`"${name}" can't be scrolled fully into the viewport`);
+        if (box.left < -1 || box.right > vw + 1 || box.top < -1 || box.bottom > innerHeight + 1) out.push(`"${name}" can't be scrolled fully into the viewport (${Math.round(box.left)},${Math.round(box.top)}–${Math.round(box.right)},${Math.round(box.bottom)} of ${vw}x${innerHeight})`);
         else {
           const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
           if (!hit || (hit !== x && !x.contains(hit))) out.push(`"${name}" is covered by ${hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : 'nothing'}`);

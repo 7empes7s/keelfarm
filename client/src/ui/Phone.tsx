@@ -1131,7 +1131,6 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
               key={k}
               role="tab"
               aria-selected={tab === k}
-              aria-label={badge > 0 ? `${label}, ${badge} new` : label}
               className={`phone-tab ${tab === k ? 'phone-tab-on' : ''}`}
               onClick={() => (k === 'games' && tab === 'games' ? setGame(null) : setTab(k))}
             >
@@ -1140,6 +1139,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
                 {badge > 0 && <span className="badge badge-dot">{badge}</span>}
               </span>
               <span>{label}</span>
+              {badge > 0 && <span className="sr-only">, {badge} new</span>}
             </button>
           ))}
         </nav>

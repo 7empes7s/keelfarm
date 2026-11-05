@@ -131,8 +131,7 @@ code {
   padding: 14px 32px;
   border-radius: 18px;
   background: var(--accent);
-  color: #fff;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+  color: var(--ds-on-color);
   box-shadow: 0 5px 0 var(--ds-shadow-color);
 }
 a.btn {
@@ -379,6 +378,19 @@ input.inline:focus {
   flex-wrap: wrap;
   justify-content: flex-end;
   max-width: 50vw;
+}
+/* a narrow window: the status pills, the chips and the workers list stack under the floor's card instead of over it */
+@media (max-width: 600px) {
+  .hud-status {
+    top: calc(2 * var(--ds-space-10) + var(--ds-space-4));
+    max-width: calc(100vw - 2 * var(--ds-space-4));
+  }
+  .hud-chips {
+    top: calc(4 * var(--ds-space-10) + var(--ds-space-4));
+  }
+  .workers {
+    top: calc(5 * var(--ds-space-10) + var(--ds-space-4));
+  }
 }
 .hud-banner {
   position: absolute;
@@ -3000,7 +3012,7 @@ input.inline:focus {
   background: rgba(21, 21, 31, 0.28);
 }
 .phone {
-  width: min(400px, 100%);
+  width: min(400px, 100%, 100vw - 2 * var(--ds-space-4));
   height: min(760px, calc(100vh - 32px));
   display: flex;
   flex-direction: column;
@@ -3113,7 +3125,7 @@ input.inline:focus {
   background: none;
   border: none;
   padding: 0;
-  color: #3a56d4;
+  color: var(--ds-link);
   font-family: var(--font);
   font-weight: 600;
   cursor: pointer;

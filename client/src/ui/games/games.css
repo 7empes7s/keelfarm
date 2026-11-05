@@ -113,7 +113,7 @@
 .game-title {
   padding: 2px 10px;
   font-size: 0.95rem;
-  color: var(--ink);
+  color: var(--ds-on-color);
   background: color-mix(in srgb, var(--game) 45%, #fff);
   border: 2px solid var(--ds-outline);
   border-radius: 999px;
