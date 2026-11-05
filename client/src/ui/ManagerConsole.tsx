@@ -30,6 +30,7 @@ import { AwakeSettings, CeoMandates, CeoSession, FollowupSettings } from './CeoF
 import { ToolsTab } from './ToolsSettings';
 import { OfficePlaybook } from './OfficePlaybook';
 import { AccessibilitySettings } from './AccessibilitySettings';
+import { CharterTab } from './CharterTab';
 import { OutsideSettings } from './OutsideSettings';
 import { useMode } from '../pocket/mode';
 
@@ -857,10 +858,12 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
   const [tab, setTab] = useState<ManagerTab>(initialTab ?? 'floors');
   const pending = useStore((s) => pendingRequests(s.requests).length);
   const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
+  const proposals = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
   const tabs: [ManagerTab, string][] = [
     ['floors', '🏢 Floors & repos'],
     ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
     ['ceo', `🧠 CEO${pending ? ` (${pending})` : ''}`],
+    ['charter', `🎯 Charter${proposals ? ` (${proposals})` : ''}`],
     ['team', '👩‍💻 Team'],
     ['issues', '📝 Issues'],
     ['settings', '⚙️ Settings'],
@@ -882,6 +885,7 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
         {tab === 'floors' && <FloorsTab />}
         {tab === 'ops' && <OpsTab card={card} />}
         {tab === 'ceo' && <CeoTab />}
+        {tab === 'charter' && <CharterTab initialRepo={initialRepo} />}
         {tab === 'team' && <TeamTab />}
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}

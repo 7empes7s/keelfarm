@@ -4,6 +4,7 @@ import { SESSION_HISTORY_INPUT, SESSION_HISTORY_TOOL } from './history.ts';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
+import { PROPOSE_CHARTER, PROPOSE_CHARTER_TEXT, type CharterProposalArgs } from './charterTool.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
@@ -12,8 +13,7 @@ import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
 import { DEFAULT_RESEARCH_MIN, RESEARCH_NO_FILING, researchPrompt, short } from './research.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
-import type { WaitCondition } from './ceoWaits.ts';
-import { waitTools } from './ceoWaitTools.ts';
+import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -146,7 +146,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers {
+export interface OfficeHandlers extends WaitHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
@@ -164,6 +164,7 @@ export interface OfficeHandlers {
   attachFile(a: { path: string }): Promise<string>;
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
+  proposeCharter(a: CharterProposalArgs): string;
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
@@ -172,9 +173,6 @@ export interface OfficeHandlers {
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
-  waitFor(a: { conditions: WaitCondition[]; timeout_min?: number }): Promise<string>;
-  askManager(a: { question: string; suggestions?: string[]; timeout_min?: number }): Promise<string>;
-  consult(a: { floor: number; agent_id?: string; question: string; hint?: string }): Promise<string>;
   sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
 
@@ -229,7 +227,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const defs = [
     tool(
       'company_status',
-      'Everything about the company right now: settings, every floor (repo, clone path, brief, profile, QA brief, playbook), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
+      'Everything about the company right now: settings, every floor (repo, clone path, charter, profile, QA brief, playbook), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
       {},
       () => run(() => h.companyStatus()),
     ),
@@ -387,6 +385,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       },
       (a) => run(() => h.setMandate(a)),
     ),
+    tool('propose_charter', PROPOSE_CHARTER_TEXT, PROPOSE_CHARTER, (a) => run(() => h.proposeCharter(a))),
     tool(
       'define_experiment',
       "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
@@ -561,6 +560,7 @@ export function ceoSystemPrompt(o: {
     "- Agents run the office's default coding agent, model and effort. Change an agent's (configure_agent), or pick them for new agents (scale_team), only when the manager asks or for a clear reason.",
     '- Issues: the same agents build and test, so PRs queued for QA (capacity.prsAwaitingQa) mean fewer, bigger issues, not more. Most briefs need 1 to 4 issues. Write "Depends on #N" only when an issue truly cannot start until #N\'s code is merged, because it waits until #N is closed. Keep dependency chains to two steps at most. The office starts the issues that hold up others first. Do not duplicate open issues: fix an existing issue\'s dependencies with set_dependencies. File at most 12 issues per job, or per message from the manager.',
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
+    '- Charters: each issue names its objective ("Objective: O2"); ask the manager before filing a non-goal. Change charters only with propose_charter.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
@@ -591,7 +591,7 @@ function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string
   ].join('\n');
 }
 
-export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = [], researchMin = DEFAULT_RESEARCH_MIN): string {
+export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; charter?: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = [], researchMin = DEFAULT_RESEARCH_MIN): string {
   switch (job.kind) {
     case 'research':
       return researchPrompt(job.topic ?? '', floor, researchMin);
@@ -621,6 +621,7 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
         "1. set_floor_profile with a one-line summary, a QA brief and a playbook for this project. If npm run dev / start / preview wouldn't serve the app on PORT, also set preview_command (and preview_env) so the floor's preview monitor can run it.",
         '2. scale_team to the size the work in sight needs. The floor starts with one agent; two to four is usually plenty to begin with.',
         '3. Check the open issues against that size: the team grows later when work keeps waiting for free agents.',
+        ...(floor.charter ? [] : ['No charter yet: draft one with propose_charter.']),
         floor.mission
           ? `4. The manager's brief for this floor, for your notes: """${floor.mission}"""\nFile no issues: planning it is a job of its own, when the manager asks for it.`
           : floor.backlog === 0
@@ -633,8 +634,10 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
         `The manager has a brief for floor ${floor.floor} (${floor.fullName}, clone at ${floor.clone}):`,
         `"""${floor.mission || job.topic || ''}"""`,
         ...(job.pick ? [`They picked from your research on it: "${job.pick}".${job.brief ? ` Your research brief: ${job.brief} (read it first).` : ''} Plan that pick.`] : []),
+        ...(floor.charter ? ['', floor.charter] : []),
         '',
         'Plan the next milestone toward it:',
+        '- With charter objectives, end each issue with a line "Objective: O<n>". A part of the brief that is a non-goal or serves no objective: file nothing for it; ask the manager, or propose_charter.',
         `- Read the current code and the ${floor.backlog} open issues first, so you build on what exists and do not duplicate anything.`,
         '- One issue per whole feature. Split a feature only when its parts are independent and touch different files, or a risky foundation part should land first. Only for an empty or nearly empty repository does a skeleton issue come first, with the others depending on it.',
         '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',

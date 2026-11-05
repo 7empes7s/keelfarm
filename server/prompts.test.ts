@@ -23,7 +23,8 @@ const qa = { port: 5839, cwd: '/desk/q', branch: qaBranch(42, 'margaret'), pr };
 const BEFORE = {
   devFull: `Repository: acme/shop (default branch: main)
 Project: A shop
-What the team is building (the manager's brief): Sell socks
+Project charter (keep every change inside it):
+Mission: Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
 You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
@@ -59,7 +60,8 @@ Workflow:
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   devFixing: `Repository: acme/shop (default branch: main)
 Project: A shop
-What the team is building (the manager's brief): Sell socks
+Project charter (keep every change inside it):
+Mission: Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
 You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
@@ -79,7 +81,8 @@ Workflow:
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   qaFull: `Repository: acme/shop (default branch: main)
 Project: A shop
-What the team is building (the manager's brief): Sell socks
+Project charter (keep every change inside it):
+Mission: Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
 
@@ -263,5 +266,31 @@ describe('fix prompts', () => {
   it('show the tail of a failed run, or nothing without one', () => {
     expect(failedLogLines('123', 'Error: boom')).toEqual(['Last lines of gh run view 123 --log-failed:', '```', 'Error: boom', '```']);
     expect(failedLogLines('123', '')).toEqual([]);
+  });
+});
+
+describe('the charter (#48)', () => {
+  const charter = { objectives: [{ id: 'O1', outcome: 'Checkout in 3 taps', measure: 'tested on a phone' }], standards: ['Prices are never rounded'], nonGoals: ['Shipping'], focus: 'O1' };
+  const block = 'Project charter (keep every change inside it):\nMission: Sell socks\nCurrent focus: O1\nStandards (must always hold; breaking one fails QA):\n- Prices are never rounded\nObjectives:\n- O1: Checkout in 3 taps (met when: tested on a phone)\nNon-goals (out of scope): Shipping';
+  const all = (name: string) => [
+    devSystemPrompt({ ...dev, agent: agent({ name }), repo: repo({ charter }) }),
+    devSystemPrompt({ ...dev, agent: agent({ name }), repo: repo({ charter }), fixing: { pr: 42, headRef: 'swarm/issue-7-margaret' } }),
+    qaSystemPrompt({ ...qa, agent: agent({ name }), repo: repo({ charter }) }),
+  ];
+
+  it('is in the floor context every build, fix and QA prompt opens with, the same bytes for every agent', () => {
+    for (const [a, b] of all('Margaret').map((p, i) => [p, all('Ada')[i]])) {
+      const context = floorContext(repo({ charter }));
+      expect(context).toContain(`Project: A shop\n${block}\n`);
+      expect(a.startsWith(`${context}\n`)).toBe(true);
+      expect(b.startsWith(`${context}\n`)).toBe(true);
+    }
+  });
+
+  it("has builders, fixers and QA check the diff against its standards and the issue's objective", () => {
+    const [build, fix, test] = all('Margaret');
+    for (const p of [build, fix]) expect(p).toContain("against the issue, the charter's standards and the issue's objective and the QA brief.");
+    expect(test).toContain("Check it against the charter's standards and the issue's objective too: breaking a standard fails the PR. Report it as charterCheck");
+    expect(qaSystemPrompt({ ...qa, agent: agent(), repo: repo() })).not.toContain('charterCheck');
   });
 });

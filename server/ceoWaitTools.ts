@@ -2,7 +2,6 @@
 // the swarm's (server/swarm/ceoTools.ts); createOfficeTools (ceo.ts) adds them to the office's MCP server.
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { OfficeHandlers } from './ceo.ts';
 import { ASK_MAX_MIN, WAIT_KINDS, type WaitCondition } from './ceoWaits.ts';
 
 /** The most any of the waiting tools returns: what happened, an answer, a consult's reply. */
@@ -18,9 +17,16 @@ const WAIT_CONDITION = z.object({
   usage: z.enum(['normal', 'pacing', 'paused']).optional(),
 });
 
+/** The office's side of the waiting tools (part of OfficeHandlers). */
+export interface WaitHandlers {
+  waitFor(a: { conditions: WaitCondition[]; timeout_min?: number }): Promise<string>;
+  askManager(a: { question: string; suggestions?: string[]; timeout_min?: number }): Promise<string>;
+  consult(a: { floor: number; agent_id?: string; question: string; hint?: string }): Promise<string>;
+}
+
 type Run = (fn: () => Promise<string>) => Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }>;
 
-export function waitTools(h: Pick<OfficeHandlers, 'waitFor' | 'askManager' | 'consult'>, run: Run) {
+export function waitTools(h: WaitHandlers, run: Run) {
   return [
     tool(
       'wait_for',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compress, isFrame, journalEvent, KEYFRAME_MS, marksOf, type JournalAgent, type JournalFrame, type JournalLine } from '../shared/journal.ts';
 import { CEO_ID, type RepoView } from '../shared/types.ts';
 import { SAMPLE_FROM_MIN, SAMPLE_TO_MIN, sampleDay, seeded } from './journalSample.ts';
+import { emptyCharterView } from '../shared/charter.ts';
 
 const MIN = 60_000;
 
@@ -65,6 +66,7 @@ const floor = (id: string, n: number, issues: number): RepoView => ({
   lastSync: null,
   previewConfig: { command: null, env: {} },
   preview: { status: 'stopped', port: 6301, url: null, ref: null, pr: null, commit: null, startedAt: null, error: null, logTail: [] },
+  charter: emptyCharterView(),
 });
 
 const base: JournalFrame = {

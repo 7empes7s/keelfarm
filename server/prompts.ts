@@ -3,6 +3,7 @@
 // task decides which one (build an issue, test a pull request, fix one), and they carry the office's workflow and
 // safety rules.
 
+import { charterOf, emptyCharter, renderCharter, type CharterParts } from '../shared/charter.ts';
 import type { AgentPromptView } from '../shared/types.ts';
 
 export interface PromptAgent {
@@ -19,6 +20,8 @@ export interface PromptFloor {
   qaBrief: string;
   /** The floor's architecture map, conventions, skills and traps (markdown); '' adds nothing. */
   playbook: string;
+  /** The rest of the floor's charter (#48); with `mission`, the block every prompt starts with. */
+  charter?: CharterParts;
 }
 
 interface PromptBase {
@@ -63,9 +66,14 @@ const BLOCKED_LINE = 'If truly stuck (e.g. no credentials), end with "BLOCKED: <
 
 export const ONE_TURN = "Your session ends when your turn ends: background tasks and notifications won't wake you. Never end a turn to wait. Wait in the foreground with a timeout, then finish.";
 
+/** The floor's charter (#48), in the stable floor context: the same bytes on every session there. */
+const charterBlock = (repo: PromptFloor) => renderCharter(charterOf(repo.mission, repo.charter ?? emptyCharter()));
+/** Standards or objectives to check a diff against (a mission alone has none). */
+const charterRules = (repo: PromptFloor) => !!(repo.charter?.standards.length || repo.charter?.objectives.length);
+
 /**
  * What every builder, fixer and QA session on a floor starts with, byte for byte the same whoever runs it and on
- * whichever task (#50): the playbooks and the floor's brief before anything task-specific, so prompt caching reuses
+ * whichever task (#50): the playbooks and the floor's charter before anything task-specific, so prompt caching reuses
  * the prefix. Agent names, ports, branches and PRs come after it.
  */
 export function floorContext(repo: PromptFloor, officePlaybook = ''): string {
@@ -73,7 +81,7 @@ export function floorContext(repo: PromptFloor, officePlaybook = ''): string {
     officePlaybook ? `Every project's playbook (follow it):\n${officePlaybook}` : '',
     `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
     repo.summary ? `Project: ${repo.summary}` : '',
-    repo.mission ? `What the team is building (the manager's brief): ${repo.mission}` : '',
+    charterBlock(repo),
     repo.qaBrief ? `What QA checks on this project (from the CEO):\n${repo.qaBrief}` : '',
     repo.playbook ? `This floor's playbook (follow it):\n${repo.playbook}` : '',
   ]
@@ -82,7 +90,8 @@ export function floorContext(repo: PromptFloor, officePlaybook = ''): string {
 }
 
 /** What a builder or fixer reviews their diff against: the floor's guidance that's set. */
-const reviewAgainst = (repo: PromptFloor) => ['the issue', repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
+const reviewAgainst = (repo: PromptFloor) =>
+  ['the issue', charterRules(repo) && "the charter's standards and the issue's objective", repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
 
 /** Builders and fixers check their own diff before QA does: a QA round costs a whole session. */
 const selfReviewStep = (n: number, repo: PromptFloor) =>
@@ -142,7 +151,7 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     '',
     'How to test:',
     '1. Read the PR description and the linked issue, and work out the acceptance criteria.',
-    `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.`,
+    `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.${charterRules(repo) ? ` Check it against the charter's standards and the issue's objective too: breaking a standard fails the PR. Report it as charterCheck, one line starting "ok" or "violation:".` : ''}`,
     testStep ?? "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).",
     repo.browserTesting
       ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change in a real browser with the Playwright tools: navigate, click, type, resize to a phone size, try edge cases, and check the console for errors. Take a screenshot with browser_take_screenshot (no filename) of every important state: the screenshots are attached to the PR as evidence. Stop the server afterwards.`
