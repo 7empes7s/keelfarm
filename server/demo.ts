@@ -601,7 +601,7 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
       cb.finished(r);
     },
   });
-  return handle;
+  return Object.assign(handle, { kept: true }); // as if the keeper held it: the demo's update restarts nothing
 }
 
 /**
@@ -919,6 +919,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     },
     sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
     terminals: true,
+    keeping: () => true,
     reconnectClis: async () => [], // fake sessions end with the office
     hooksReady: () => undefined,
     releaseClis: async () => undefined,

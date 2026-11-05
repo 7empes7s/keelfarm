@@ -156,7 +156,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
       now: Date.now(),
       pausedUntil: this.pausedUntil,
       draining,
-      handingOver: this.officeUpdate.sent,
+      handingOver: this.officeUpdate.sent && draining,
       busy: !!a && BUSY.includes(a.status),
       job: c.job?.kind ?? null,
       session: !!this.agentRt.get(CEO_ID)?.session,
@@ -307,7 +307,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
-    if (!rt || this.officeUpdate.handedOver) return;
+    if (!rt || this.officeUpdate.cutOff.has(a.id)) return;
     this.health.ended(a, 'ceo', result.errors, false, false); // its peak teaches the CEO's estimate
     rt.session = null;
     rt.currentTool = null;

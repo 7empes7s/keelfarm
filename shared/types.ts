@@ -390,6 +390,7 @@ export interface SwarmSettings {
   setupDone: boolean; // the first-run setup wizard has been completed or skipped
   tutorialStep: number; // index of the current tutorial step; -1 when finished or skipped
   autoUpdate?: boolean; // update the office itself once it's quiet (absent on servers without self-update)
+  updateSettleMin?: number; // an automatic update waits this long after the latest commit (at most 15 min after the first), so a run of merges is one restart
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
   dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
@@ -617,14 +618,16 @@ export interface DoctorFinding {
  * Where the office's own update stands. none: up to date · available: new commits on GitHub · waiting / draining:
  * starting nothing new while running sessions finish · updating: handed to the launcher · failed: see detail.
  */
-export type OfficeUpdateState = 'none' | 'available' | 'waiting' | 'draining' | 'updating' | 'failed';
+export type OfficeUpdateState = 'none' | 'available' | 'waiting' | 'settling' | 'draining' | 'updating' | 'failed';
 
 export interface OfficeUpdateView {
   state: OfficeUpdateState;
   behind: number; // commits the office's folder is behind GitHub
   launcher: boolean; // started by npm run dev / npm start, which can install the update and restart the office
   drainingSince: number | null;
-  running: number; // sessions still running
+  running: number; // sessions still running that an office restart would stop (CLIs in the terminal keeper or a Box carry on)
+  updateAt: number | null; // settling: when the update goes ahead unless another commit lands
+  holds: boolean; // nothing new starts until the office has restarted
   detail: string | null;
 }
 

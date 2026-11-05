@@ -3,6 +3,7 @@ import * as github from './github.ts';
 import * as workspace from './workspace.ts';
 import { startSession, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { detachBoxClis, hooksReady, officeProcesses, reconnectBoxClis, reconnectClis, releaseClis, startBoxSignIn, startCliSession, terminalsAvailable, type BoxSignIn, type KeptBoxCli, type ReconnectedCli } from './cliRunner.ts';
+import { keeperHookUrl } from './ptyClient.ts';
 import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
@@ -108,6 +109,8 @@ export interface Backend {
   sessionTranscript(cwd: string, sessionId: string | null, about: Pick<HistoryEntry, 'agent' | 'kind' | 'title' | 'at'>): Promise<{ file: string; sessionId: string } | null>;
   /** Terminals can run here (the native pseudo-terminal module loaded). */
   terminals: boolean;
+  /** New CLIs start in the terminal keeper, which keeps them running through an office restart (#74). */
+  keeping(): boolean;
   /** The office started: the CLIs its terminal keeper kept running through a restart, back in their agents' terminals. */
   reconnectClis(terminalFor: (agentId: string) => AgentTerminal | null): Promise<ReconnectedCli[]>;
   /** The office follows those CLIs' sessions again: hooks that waited for it can come in. */
@@ -252,6 +255,7 @@ export const realBackend: Backend = {
     return file && sessionId ? { file, sessionId } : null;
   },
   terminals: terminalsAvailable,
+  keeping: () => keeperHookUrl() !== null,
   reconnectClis: (terminalFor) => (terminalsAvailable ? reconnectClis(terminalFor) : Promise.resolve([])),
   hooksReady,
   releaseClis,

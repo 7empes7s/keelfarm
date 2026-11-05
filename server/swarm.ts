@@ -6,6 +6,7 @@ import type { BoxCliRecord } from './boxCli.ts';
 import type { ReconnectedCli } from './cliRunner.ts';
 import { DESK_SWEEP_INTERVAL_MS, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS } from './config.ts';
 import { HttpError } from './httpError.ts';
+import { settleMinutes } from './officeUpdate.ts';
 import { orphanedQa } from './qaOrphans.ts';
 import { catchUp, PR_LIMITS_VERSION } from './prOwnership.ts';
 import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecovery.ts';
@@ -492,6 +493,7 @@ export class Swarm extends SwarmCeoTools {
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
     if (typeof patch.autoUpdate === 'boolean') s.autoUpdate = patch.autoUpdate;
+    if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);

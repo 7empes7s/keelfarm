@@ -16,6 +16,7 @@ import { IssueAges } from '../issueAges.ts';
 import { PR_LIMITS_VERSION } from '../prOwnership.ts';
 import { Previews } from '../previews.ts';
 import { DEFAULT_PACING_SESSIONS } from '../pacing.ts';
+import { DEFAULT_SETTLE_MIN } from '../officeUpdate.ts';
 import { emptyHistory } from '../metrics.ts';
 import { DEFAULT_TRIM_IDLE_MIN } from '../deskTrim.ts';
 import { boxVersions } from '../clis.ts';
@@ -104,6 +105,7 @@ export abstract class SwarmCore extends SwarmContract {
       setupDone: false,
       tutorialStep: 0,
       autoUpdate: true,
+      updateSettleMin: DEFAULT_SETTLE_MIN,
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
       dailyLogDir: '',
@@ -177,7 +179,10 @@ export abstract class SwarmCore extends SwarmContract {
     failedBehind: null as number | null,
     drainingSince: null as number | null,
     sent: false,
-    handedOver: false, // sessions cut off by the hand-over are the restarted office's to recover
+    pendingSince: null as number | null, // the first commit this update would bring in was seen then (batching, #74)
+    lastCommitAt: null as number | null, // and the latest one
+    holding: false, // nothing new starts (the drain, or the hand-over when new sessions wouldn't outlive the restart)
+    cutOff: new Set<string>(), // agents whose sessions the hand-over stopped: recovered like after a restart
   };
   protected lastOfficeView = '';
   protected clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)

@@ -841,6 +841,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     stop() {
       finish({ ok: false, text: '', errors: ['Stopped by manager'] });
     },
+    kept: !inBox && keeperHookUrl() !== null,
   };
 
   if (adopt && live) {
