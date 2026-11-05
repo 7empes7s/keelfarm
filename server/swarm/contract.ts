@@ -3,22 +3,49 @@
 import type { Swarm } from '../swarm.ts';
 
 export abstract class SwarmContract {
+  // merge.ts
+  protected abstract advanceMerges(...a: Parameters<Swarm['advanceMerges']>): ReturnType<Swarm['advanceMerges']>;
+  protected abstract askGitHub(...a: Parameters<Swarm['askGitHub']>): ReturnType<Swarm['askGitHub']>;
+  protected abstract cleanUpClosed(...a: Parameters<Swarm['cleanUpClosed']>): ReturnType<Swarm['cleanUpClosed']>;
+  protected abstract closeResolvedIssues(...a: Parameters<Swarm['closeResolvedIssues']>): ReturnType<Swarm['closeResolvedIssues']>;
+  protected abstract learnIssueClosed(...a: Parameters<Swarm['learnIssueClosed']>): ReturnType<Swarm['learnIssueClosed']>;
+  protected abstract learnPull(...a: Parameters<Swarm['learnPull']>): ReturnType<Swarm['learnPull']>;
+  protected abstract settleLearned(...a: Parameters<Swarm['settleLearned']>): ReturnType<Swarm['settleLearned']>;
+  protected abstract sweepFloor(...a: Parameters<Swarm['sweepFloor']>): ReturnType<Swarm['sweepFloor']>;
+  protected abstract syncFolder(...a: Parameters<Swarm['syncFolder']>): ReturnType<Swarm['syncFolder']>;
+
   // swarm.ts
+  protected abstract assign(...a: Parameters<Swarm['assign']>): ReturnType<Swarm['assign']>;
   protected abstract boxState(...a: Parameters<Swarm['boxState']>): ReturnType<Swarm['boxState']>;
   protected abstract ceoInfo(...a: Parameters<Swarm['ceoInfo']>): ReturnType<Swarm['ceoInfo']>;
+  protected abstract clearPrepStrikes(...a: Parameters<Swarm['clearPrepStrikes']>): ReturnType<Swarm['clearPrepStrikes']>;
+  protected abstract decide(...a: Parameters<Swarm['decide']>): ReturnType<Swarm['decide']>;
   protected abstract decideFromTelegram(...a: Parameters<Swarm['decideFromTelegram']>): ReturnType<Swarm['decideFromTelegram']>;
   protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
+  protected abstract enqueueCeo(...a: Parameters<Swarm['enqueueCeo']>): ReturnType<Swarm['enqueueCeo']>;
+  protected abstract ensureAgent(...a: Parameters<Swarm['ensureAgent']>): ReturnType<Swarm['ensureAgent']>;
+  protected abstract fireAgent(...a: Parameters<Swarm['fireAgent']>): ReturnType<Swarm['fireAgent']>;
+  protected abstract floorName(...a: Parameters<Swarm['floorName']>): ReturnType<Swarm['floorName']>;
+  protected abstract followup(...a: Parameters<Swarm['followup']>): ReturnType<Swarm['followup']>;
   protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
   protected abstract limited(...a: Parameters<Swarm['limited']>): ReturnType<Swarm['limited']>;
   protected abstract messageCeo(...a: Parameters<Swarm['messageCeo']>): ReturnType<Swarm['messageCeo']>;
   protected abstract mirrorsToTelegram(...a: Parameters<Swarm['mirrorsToTelegram']>): ReturnType<Swarm['mirrorsToTelegram']>;
+  protected abstract notifyMerge(...a: Parameters<Swarm['notifyMerge']>): ReturnType<Swarm['notifyMerge']>;
   protected abstract notifyNeedsHuman(...a: Parameters<Swarm['notifyNeedsHuman']>): ReturnType<Swarm['notifyNeedsHuman']>;
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract opsNow(...a: Parameters<Swarm['opsNow']>): ReturnType<Swarm['opsNow']>;
   protected abstract opsSoon(...a: Parameters<Swarm['opsSoon']>): ReturnType<Swarm['opsSoon']>;
   protected abstract port(...a: Parameters<Swarm['port']>): ReturnType<Swarm['port']>;
   protected abstract postMessage(...a: Parameters<Swarm['postMessage']>): ReturnType<Swarm['postMessage']>;
+  protected abstract prAuthor(...a: Parameters<Swarm['prAuthor']>): ReturnType<Swarm['prAuthor']>;
   protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
+  protected abstract queueQa(...a: Parameters<Swarm['queueQa']>): ReturnType<Swarm['queueQa']>;
+  protected abstract recordSync(...a: Parameters<Swarm['recordSync']>): ReturnType<Swarm['recordSync']>;
+  protected abstract saveTerminals(...a: Parameters<Swarm['saveTerminals']>): ReturnType<Swarm['saveTerminals']>;
+  protected abstract schedule(...a: Parameters<Swarm['schedule']>): ReturnType<Swarm['schedule']>;
+  protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
+  protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
   protected abstract usageNow(...a: Parameters<Swarm['usageNow']>): ReturnType<Swarm['usageNow']>;
 }
