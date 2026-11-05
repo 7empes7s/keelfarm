@@ -119,7 +119,7 @@ app.post(
   })),
 );
 app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n))));
-app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined)));
+app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
 app.post('/api/repos/:repo/onboard', route((req) => swarm.onboardFloor(repoId(req))));
 // The floor's app, for the preview monitor
 app.post(
@@ -188,6 +188,9 @@ app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.par
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
+// The lab (#23): the manager defines experiments, starts, stops and promotes them; the results come on /ws.
+app.post('/api/experiments', route((req) => swarm.lab.define(req.body, 'manager')));
+app.post('/api/experiments/:id', route((req) => swarm.lab.act(String(req.params.id), req.body?.action, req.body?.variant ?? null)));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
   const shot = swarm.screenshot(String(req.params.id));
@@ -313,6 +316,7 @@ app.post(
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
+app.get('/api/messages/:id/refs/:index/file', route((req) => swarm.refFile(Number(req.params.id), Number(req.params.index))));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
 app.post(
   '/api/requests/:id/approve',

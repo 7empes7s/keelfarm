@@ -212,7 +212,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
 
       <div className={`term-split ${agent.hasScreenshot ? 'term-split-2' : ''}`}>
         {agent.terminal ? (
-          <LiveTerminal agentId={agent.id} />
+          <LiveTerminal agentId={agent.id} cli={cli} />
         ) : (
           <div
             className="term"

@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
 import { MANDATE_MAX_CHARS } from '../shared/followups.ts';
 import {
@@ -32,6 +32,7 @@ import {
   type DependsRequest,
   type TeamNow,
 } from './ceo.ts';
+import { RESEARCH_NO_FILING, RESEARCH_READ_ONLY, researchReadOnly } from './research.ts';
 
 describe('seats', () => {
   it('match the desks the client draws', () => {
@@ -127,6 +128,7 @@ describe('office tools', () => {
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
+      setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
@@ -147,6 +149,7 @@ describe('office tools', () => {
       worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
+      defineExperiment: (a) => (calls.push(['define_experiment', a]), 'defined'),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -166,6 +169,7 @@ describe('office tools', () => {
       'close_pull',
       'company_status',
       'configure_agent',
+      'define_experiment',
       'escalate',
       'file_issue',
       'keep_file',
@@ -181,6 +185,7 @@ describe('office tools', () => {
       'set_dependencies',
       'set_floor_profile',
       'set_mandate',
+      'set_office_playbook',
       'worktree_file',
     ]);
   });
@@ -203,6 +208,17 @@ describe('office tools', () => {
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
   });
 
+  it('define_experiment takes 2 to 4 variants and the lab kinds only', async () => {
+    const { client, calls } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'define_experiment', arguments: args })).isError;
+    const v = (name: string, more = {}) => ({ name, ...more });
+    expect(await ok({ name: 'Test first', hypothesis: 'Fewer rounds', variants: [v('Current'), v('Test first', { prompt: 'Write the failing test first.', effort: 'high' })] })).toBe(true);
+    expect(await ok({ name: 'One', hypothesis: 'h', variants: [v('Only')] })).toBe(false);
+    expect(await ok({ name: 'CEO', hypothesis: 'h', kinds: ['ceo-chat'], variants: [v('A'), v('B')] })).toBe(false);
+    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'gemini' })] })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['define_experiment']);
+  });
+
   it("takes an agent's Tools & skills switches as lists of names", async () => {
     const { client, configured } = await connect();
     await client.callTool({ name: 'configure_agent', arguments: { agent_id: 'ada', tools_off: ['canva', 'mcp:notion'], tools_reset: ['pdf'] } });
@@ -213,6 +229,13 @@ describe('office tools', () => {
     const { client, floors } = await connect();
     await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } } });
     expect(floors).toEqual([{ floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } }]);
+  });
+
+  it('takes the office playbook up to its length cap (#50)', async () => {
+    const { client, calls } = await connect();
+    expect((await client.callTool({ name: 'set_office_playbook', arguments: { playbook: '- Minimal diff.' } })).isError).toBeFalsy();
+    expect((await client.callTool({ name: 'set_office_playbook', arguments: { playbook: 'x'.repeat(OFFICE_PLAYBOOK_MAX + 1) } })).isError).toBe(true);
+    expect(calls).toEqual([['set_office_playbook', { playbook: '- Minimal diff.' }]]);
   });
 
   it("takes a floor's playbook up to its length cap", async () => {
@@ -479,6 +502,35 @@ describe('follow-ups (#27)', () => {
     expect(refused).toMatch(/No standing mandate .* floor 2/);
     expect(refused).toMatch(/final message/);
     expect(refused).toMatch(/set_mandate/);
+  });
+
+  it('refuses file_issue during research, even after a message from the manager', () => {
+    for (const asked of [false, true]) expect(issueRefusal({ kind: 'research', asked, floor: 3, mandate })).toBe(RESEARCH_NO_FILING);
+    expect(RESEARCH_NO_FILING).toMatch(/suggestions/);
+    expect(RESEARCH_NO_FILING).toMatch(/plan job/);
+  });
+
+  it('refuses every tool that acts while research runs, and keeps the read-only ones', async () => {
+    let researching = true;
+    const ok = () => 'ok';
+    const office = createOfficeTools(
+      researchReadOnly(
+        {
+          companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
+          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
+          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok,
+        },
+        () => researching,
+      ),
+    );
+    expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe(`Refused: ${RESEARCH_NO_FILING}`);
+    expect(await office.call('scale_team', { floor: 1, size: 3, reason: 'more' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('send_telegram', { text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('message_agent', { floor: 1, agent_id: 'a1', text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('company_status', {})).toBe('ok');
+    researching = false;
+    expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe('filed');
   });
 
   it('keeps the old rule for every other job', () => {

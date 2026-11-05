@@ -21,8 +21,11 @@ import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
+import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
+import type { SurvivalSignals } from '../shared/experiments.ts';
+import type { LabState } from './experiments.ts';
 import type { UsageWarning } from './pacing.ts';
 import { realResources, type ResourceProbe } from './health.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -54,6 +57,10 @@ export interface Backend {
   prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
   /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
   readWorktree(r: WorktreeRead): Promise<string>;
+  /** Chat file refs (repoFile.ts): the floor's main checkout has this plain file. */
+  hasRepoFile(fullName: string, rel: string): boolean;
+  /** A chat file ref's text on the floor's default branch; throws with what the viewer says. */
+  readRepoFile(fullName: string, branch: string, rel: string): Promise<string>;
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
@@ -102,6 +109,8 @@ export interface Backend {
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
+  /** The default branch's commits and the issues filed since `since`: what says whether merged PRs survived (#23). */
+  survivalSignals(fullName: string, since: number): Promise<SurvivalSignals>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
   previews: PreviewBackend;
   /** Memory, swap and load, and what agents' processes use (server/health.ts). */
@@ -124,6 +133,8 @@ export interface Backend {
   seedCosts?(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
+  /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
+  seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */
   simulateUsage?(kind: 'warning' | 'limit', now: number): UsageWarning | { limitResetsAt: number };
   /** The demo only: the office doctor's scenarios (a restart with desks gone and work finished, a stuck session). */
@@ -197,6 +208,8 @@ export const realBackend: Backend = {
   prDetails: github.prDetails,
   prDiff: github.prDiff,
   readWorktree,
+  hasRepoFile: (fullName, rel) => checkoutFile(workspace.mainDir(fullName), rel) !== null,
+  readRepoFile: (fullName, branch, rel) => readRepoFile(workspace.mainDir(fullName), `origin/${branch}`, rel),
   issueDetails: github.issueDetails,
   commentPull: github.commentPull,
   uploadEvidence: github.uploadEvidence,
@@ -225,6 +238,7 @@ export const realBackend: Backend = {
   detectClis,
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
+  survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,
   voice: elevenLabs,

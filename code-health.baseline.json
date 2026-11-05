@@ -251,7 +251,13 @@
       "eslint(no-control-regex)": 1
     },
     "server/swarm.ts": {
-      "typescript(no-floating-promises)": 5
+      "typescript(no-floating-promises)": 1
+    },
+    "server/swarm/agents.ts": {
+      "typescript(no-floating-promises)": 3
+    },
+    "server/swarm/merge.ts": {
+      "typescript(no-floating-promises)": 1
     },
     "server/syncProxy.test.ts": {
       "typescript(no-implied-eval)": 2
@@ -596,7 +602,6 @@
     "client/src/world/toys/dogBrain.ts": 1257,
     "server/cliRunner.ts": 989,
     "server/demo.ts": 1755,
-    "server/swarm.ts": 5891,
     "server/workspace.ts": 909,
     "shared/types.ts": 848
   }

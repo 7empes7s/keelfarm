@@ -1,11 +1,12 @@
 // Where the Claude plan goes (#18): the kinds of task a session can be, what came of it, the cost ledger's view, and
 // which reasoning effort a session runs at. Pure, shared by the server (the ledger) and the client (the usage view).
+import type { StartupContext, StartupRow } from './startup.ts';
 import type { EffortLevel } from './types.ts';
 
 /** What a session was for. Fixes are split by why the PR went back; the CEO's by its job. */
-export type TaskKind = 'issue' | 'qa' | 'fix-qa' | 'fix-checks' | 'fix-conflict' | 'ceo-chat' | 'ceo-review' | 'ceo-plan' | 'ceo-onboard' | 'ceo-triage' | 'ceo-followup';
+export type TaskKind = 'issue' | 'qa' | 'fix-qa' | 'fix-checks' | 'fix-conflict' | 'ceo-chat' | 'ceo-review' | 'ceo-plan' | 'ceo-onboard' | 'ceo-triage' | 'ceo-followup' | 'ceo-research';
 
-export const TASK_KINDS: TaskKind[] = ['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict', 'ceo-chat', 'ceo-review', 'ceo-plan', 'ceo-onboard', 'ceo-triage', 'ceo-followup'];
+export const TASK_KINDS: TaskKind[] = ['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict', 'ceo-chat', 'ceo-review', 'ceo-plan', 'ceo-onboard', 'ceo-triage', 'ceo-followup', 'ceo-research'];
 
 export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   issue: 'Building an issue',
@@ -19,6 +20,7 @@ export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   'ceo-onboard': 'CEO onboarding',
   'ceo-triage': 'CEO triage',
   'ceo-followup': 'CEO follow-up',
+  'ceo-research': 'CEO research',
 };
 
 export const isTaskKind = (x: unknown): x is TaskKind => TASK_KINDS.includes(x as TaskKind);
@@ -67,6 +69,8 @@ export interface CostSession {
   usd: number;
   tokens: number | null; // when the CLI reports them
   outcome: SessionOutcome;
+  exp?: string; // `${experiment}/${variant}` while its issue is in a running experiment (shared/experiments.ts)
+  startup?: StartupContext; // what its first turn loaded (shared/startup.ts), when the CLI reported it
 }
 
 /** A merged PR, one line of the cost ledger: what the sessions' cost is divided by. */
@@ -164,6 +168,7 @@ export interface CostsView {
   top: CostItem[];
   waste: CostWaste[]; // newest first
   kinds: CostKindRow[];
+  startup: StartupRow[]; // what each kind of task loads before its first step (#50)
 }
 
 /** Settings → effort per kind: what the ledger says this kind cost, e.g. "QA averaged $0.84 at medium (23), $0.40 at low (5)". */

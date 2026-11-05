@@ -1,7 +1,7 @@
 // The phone chat with the CEO, its pure rules: what a reply forwards to the CEO, how a manager's message moves
-// through its delivery states, and which CEO messages offer quick Yes / No replies.
+// through its delivery states, which CEO messages offer quick Yes / No replies, and which message starts research.
 
-import type { Delivery, PhoneMessage } from './types.ts';
+import type { CeoHeld, Delivery, PhoneMessage } from './types.ts';
 import type { FileRef } from './files.ts';
 
 /** How much of a quoted message is forwarded to the CEO (and shown in the reply's quote). */
@@ -39,6 +39,15 @@ export function parseForwarded(text: string): { quote: string; reply: string } |
   return m ? { quote: m[1], reply: m[2].trim() } : null;
 }
 
+/** What the chat's 🔎 button puts before the message box's text: a message starting with it starts a research job. */
+export const RESEARCH_PREFIX = 'Research: ';
+
+/** The topic of a "Research: <topic>" message (the 🔎 button's, or typed), or null for any other message. */
+export function researchTopic(text: string): string | null {
+  const m = text.match(/^\s*(?:🔎\s*)?research\s*:\s*([\s\S]+)/i);
+  return m ? m[1].trim().slice(0, 1000) || null : null;
+}
+
 /** What moves a manager's message along: the POST answered (or not), a retry, the CEO took it, the CEO replied. */
 export type DeliveryEvent = 'posted' | 'failed' | 'retry' | 'read' | 'replied';
 
@@ -68,11 +77,17 @@ export function nextDelivery(d: Delivery, ev: DeliveryEvent): Delivery {
 /** The words a screen reader and the bubble's tick say for a delivery state. */
 export const DELIVERY_LABEL: Record<Delivery, string> = {
   sending: 'Sending…',
-  sent: 'Sent',
+  sent: 'Queued',
   read: 'Read',
   replied: 'Replied',
   failed: 'Failed, tap to retry',
 };
+
+/** The banner above the composer while the CEO can't take the manager's message (#46): why, and when it can. */
+export function heldBanner(held: CeoHeld): string {
+  const at = new Date(held.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `Usage limit: resumes ${at}. Your message waits until then.`;
+}
 
 /** True when a CEO message ends with a question, so the phone offers Yes / No. Trailing emphasis and quotes are ignored. */
 export function isQuestion(text: string): boolean {
