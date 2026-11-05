@@ -128,7 +128,7 @@ export abstract class SwarmCore extends SwarmContract {
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null } },
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
     messages: [],
     phoneReadAt: 0,
     prLimits: PR_LIMITS_VERSION,
@@ -488,6 +488,7 @@ export abstract class SwarmCore extends SwarmContract {
       prPreviews: this.previews.prViews(),
       requests: this.state.requests,
       ceo: this.ceoInfo(),
+      chat: this.chatView(),
       messages: snapshotMessages(this.state.messages.slice(-100)),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),

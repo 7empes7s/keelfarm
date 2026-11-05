@@ -30,17 +30,25 @@ import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/to
 import { describePractices, emptyEveryProject, everyProjectSettings } from '../shared/practices.ts';
 import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
+import { conversationsView, loadChats, openConversation, pinConversation, searchConversations, startConversation } from '../shared/conversations.ts';
+import { loadMemory, removeNote, saveNote, type MemoryNote } from '../shared/ceoMemory.ts';
+import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
+import { forwardText } from '../shared/chat.ts';
+import { messageGoesIn } from './ceoLane.ts';
+import type { CeoJob } from './ceo.ts';
+import { CeoChat } from './ceoChat.ts';
+import { snapshotMessages } from '../shared/chatParts.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
 import { SWEEP_MS } from '../shared/files.ts';
 import { clampHistoryDays } from '../shared/history.ts';
 import { readingsLabel } from '../shared/usage.ts';
-import type { AgentLook, CloudSettings, HireRequestView, SwarmSettings } from '../shared/types.ts';
+import type { AgentLook, CloudSettings, CeoChatView, HireRequestView, PhoneMessage, SwarmSettings } from '../shared/types.ts';
 import {
   type PersistedAgent,
   type Persisted,
@@ -51,6 +59,8 @@ import {
   OPS_TICK_MS,
   WATCHDOG_MS,
   QA_SHOTS_DIR,
+  CEO_DIR,
+  CONVERSATIONS_DIR,
   TERMINAL_SAVE_MS,
   clampMaxAgents,
 } from './swarm/model.ts';
@@ -60,7 +70,12 @@ import { SwarmCeoTools } from './swarm/ceoTools.ts';
 
 export { HttpError };
 
+// A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
+const STOP_SETTLE_MS = 15_000;
+
 export class Swarm extends SwarmCeoTools {
+  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }));
+
   // ---------- lifecycle ----------
 
   async init() {
@@ -117,7 +132,7 @@ export class Swarm extends SwarmCeoTools {
           mergeNote: null,
         })),
         requests: (loaded.requests ?? []).map((raw) => legacyRequest<HireRequestView>(raw)),
-        ceo: { ...this.state.ceo, ...loaded.ceo, followups: loadFollowups(loaded.ceo?.followups) },
+        ceo: { ...this.state.ceo, ...loaded.ceo, followups: loadFollowups(loaded.ceo?.followups), chats: loadChats(loaded.ceo?.chats, loaded.messages ?? [], Date.now()), remember: loadMemory(loaded.ceo?.remember) },
         messages: loaded.messages ?? [],
         phoneReadAt: loaded.phoneReadAt ?? 0,
         prLimits: loaded.prLimits ?? 1,
@@ -470,6 +485,152 @@ export class Swarm extends SwarmCeoTools {
     if (a.task === null) a.task = 'issue';
     const fixing = a.task === 'fix' && a.prNumber ? { pr: a.prNumber, headRef: a.branch } : undefined;
     this.startAgentSession(a, repo, cwd, text, this.buildSystemAppend(a, repo, cwd, a.branch, fixing), a.sessionId, undefined, typed ? 'typed' : null);
+  }
+
+  // ---------- the CEO chat (#51) ----------
+
+  /** The chat's live reply, conversations and the manager's notes, for the snapshot. */
+  protected chatView(): CeoChatView {
+    return { live: this.ceoChat.live, current: this.state.ceo.chats.current, conversations: conversationsView(this.state.ceo.chats), memory: this.state.ceo.remember };
+  }
+
+  private lastManagerMessage() {
+    return [...this.state.messages].reverse().find((m) => m.from === 'manager');
+  }
+
+  /** A manager's message as the CEO gets it: with the message it replies to, and its files. */
+  private forwardOf(m: PhoneMessage) {
+    const quoted = m.replyTo === undefined ? undefined : this.state.messages.find((x) => x.id === m.replyTo);
+    return [forwardText(m.text, quoted), this.ceoFiles.forwardLines(m.attachments ?? [])].filter(Boolean).join('\n');
+  }
+
+  /** POST /api/ceo/stop: ends the CEO's job. Tools it called stay done (the office finishes them); its reply says what they did. */
+  async stopCeo() {
+    const a = this.ceo();
+    if (!BUSY.includes(a.status)) throw new HttpError(409, `${a.name} isn't working on anything right now.`);
+    const steps = finishedSteps(this.ceoChat.live);
+    this.stopAgent(a.id);
+    this.ceoChat.endJob();
+    const calls = await this.ceoChat.settled(STOP_SETTLE_MS);
+    this.postMessage('ceo', stopReply(calls), undefined, steps.length ? { steps } : {});
+    this.markDelivery('all', 'replied');
+  }
+
+  /** POST /api/ceo/messages/:id/edit: the manager's last message, edited and sent again. An answer to the old version stops. */
+  editMessage(id: number, text: string) {
+    const t = text.trim().slice(0, 4000);
+    if (!t) throw new HttpError(400, 'Write the message first.');
+    const m = this.lastManagerMessage();
+    if (!m || m.id !== id) throw new HttpError(409, 'Only your last message can be edited.');
+    if (m.text === t) return;
+    Object.assign(m, { text: t, edited: Date.now(), delivery: 'sent' });
+    this.broadcast({ type: 'ceoChat', message: m });
+    this.save();
+    const c = this.state.ceo;
+    const queued = c.queue.find((j) => j.kind === 'chat' && j.messageIds?.includes(id));
+    if (queued) {
+      queued.text = this.forwardOf(m);
+      return;
+    }
+    const again = `The manager edited their last message. Answer this version instead:\n${this.forwardOf(m)}`;
+    const rt = this.agentRt.get(CEO_ID);
+    if (c.job?.messageIds?.includes(id)) this.stopAgent(CEO_ID);
+    else if (rt?.session && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: c.job?.kind ?? null, session: true })) return rt.session.send(again); // like messageCeo: a background job is preempted instead
+    this.enqueueCeo({ kind: 'chat', text: again, messageIds: [id], at: Date.now() });
+  }
+
+  /** POST /api/ceo/retry: the CEO answers the manager's last message afresh (its answer failed, or missed). */
+  retryCeo() {
+    const c = this.state.ceo;
+    if (c.job?.kind === 'chat' || c.queue.some((j) => j.kind === 'chat')) throw new HttpError(409, `${this.ceo().name} is already on your message: wait for the reply, or stop it first.`);
+    const m = this.lastManagerMessage();
+    if (!m) throw new HttpError(409, 'Nothing to retry yet: send a message first.');
+    this.enqueueCeo({ kind: 'chat', text: `The manager asked you to try again: answer their last message afresh.\n${this.forwardOf(m)}`, messageIds: [m.id], at: Date.now() });
+  }
+
+  /** Switching conversations waits for a reply on its way: it belongs to the one it was asked in. Background jobs don't hold it. */
+  private chatFree() {
+    const c = this.state.ceo;
+    const replying = (j: CeoJob | null) => j?.kind === 'chat' || j?.kind === 'research';
+    if (replying(c.job) || c.queue.some(replying)) throw new HttpError(409, `${this.ceo().name} is still answering you: wait for the reply, or stop it, before switching conversations.`);
+  }
+
+  /** The phone shows another conversation's thread, and the CEO carries on that conversation's session (null: a fresh one). */
+  private switchThread(messages: PhoneMessage[], sessionId: string | null) {
+    this.state.messages = messages;
+    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
+    this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
+    this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
+    this.save();
+  }
+
+  /** POST /api/ceo/conversations: a new conversation, with a fresh CEO session; the CEO's notes carry over. */
+  async newConversation() {
+    this.chatFree();
+    const s = this.state.ceo.chats;
+    if (this.state.messages.length) {
+      await this.ceoChat.saveThread(s.current, this.state.messages);
+      void this.ceoChat.dropThreads(startConversation(s, this.ceo().sessionId, Date.now()));
+    }
+    this.switchThread([], null);
+    return { id: s.current };
+  }
+
+  /** POST /api/ceo/conversations/:id/open: carries on an earlier conversation. */
+  async openConversation(id: string) {
+    const s = this.state.ceo.chats;
+    if (id === s.current) return;
+    this.chatFree();
+    if (!s.list.some((c) => c.id === id)) throw new HttpError(404, 'That conversation is no longer saved.');
+    const thread = await this.ceoChat.loadThread(id);
+    await this.ceoChat.saveThread(s.current, this.state.messages);
+    this.switchThread(thread, openConversation(s, id, this.ceo().sessionId));
+  }
+
+  pinConversation(id: string, pinned: boolean) {
+    try {
+      pinConversation(this.state.ceo.chats, id, pinned);
+    } catch (err) {
+      throw new HttpError(404, (err as Error).message);
+    }
+    this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
+    this.save();
+  }
+
+  /** GET /api/ceo/conversations/search?q=: conversations whose title or messages match, with a snippet each. */
+  async searchConversations(q: string) {
+    const s = this.state.ceo.chats;
+    const threads = new Map<string, PhoneMessage[]>();
+    await Promise.all(s.list.map(async (c) => threads.set(c.id, c.id === s.current ? this.state.messages : await this.ceoChat.loadThread(c.id))));
+    return { hits: searchConversations(conversationsView(s), threads, q.slice(0, 200)) };
+  }
+
+  /** GET /api/ceo/notes: the CEO's NOTES.md, for "What the CEO remembers" (read-only). */
+  ceoNotes() {
+    return this.ceoChat.notes();
+  }
+
+  /** The manager's pinned notes, saved through `change` (shared/ceoMemory.ts), which throws what to fix. */
+  private changeMemory(change: (notes: MemoryNote[]) => MemoryNote[]) {
+    try {
+      this.state.ceo.remember = change(this.state.ceo.remember);
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+    this.broadcast({ type: 'ceoChat', memory: this.state.ceo.remember });
+    this.save();
+  }
+
+  addMemory(text: string) {
+    this.changeMemory((n) => saveNote(n, text, Date.now()));
+  }
+
+  editMemory(id: string, text: string) {
+    this.changeMemory((n) => saveNote(n, text, Date.now(), id));
+  }
+
+  deleteMemory(id: string) {
+    this.changeMemory((n) => removeNote(n, id));
   }
 
   updateSettings(patch: Partial<SwarmSettings>) {

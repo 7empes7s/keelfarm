@@ -1,17 +1,29 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useMode } from './pocket/mode';
 import { Captions, LiveRegions } from './ui/CaptionStrip';
 import { ConfirmDialog } from './ui/Confirm';
+import { OfficeBoundary } from './ui/OfficeBoundary';
 
 // Each loads only when it's shown: a phone in pocket mode never fetches three.js.
-const Office = lazy(() => import('./Office'));
+const loadOffice = () => lazy(() => import('./Office'));
 const Pocket = lazy(() => import('./pocket/Pocket'));
 
 export function App() {
   const mode = useMode((s) => s.mode);
+  // A fresh lazy component per attempt: React keeps a failed import's error otherwise.
+  const [attempt, setAttempt] = useState(0);
+  const Office = useMemo(loadOffice, [attempt]);
   return (
     <>
-      <Suspense fallback={<div className="app-loading">Loading the office…</div>}>{mode === 'pocket' ? <Pocket /> : <Office />}</Suspense>
+      <Suspense fallback={<div className="app-loading">Loading the office…</div>}>
+        {mode === 'pocket' ? (
+          <Pocket />
+        ) : (
+          <OfficeBoundary onRetry={() => setAttempt((n) => n + 1)}>
+            <Office />
+          </OfficeBoundary>
+        )}
+      </Suspense>
       <ConfirmDialog />
       <Captions />
       <LiveRegions />

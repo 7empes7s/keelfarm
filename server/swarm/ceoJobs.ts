@@ -38,6 +38,8 @@ import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
 import { ceoSessionStep } from '../ceoWaits.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
+import { memoryPrompt } from '../../shared/ceoMemory.ts';
+import { conversationsView, touchConversation } from '../../shared/conversations.ts';
 import { renotifyDue, toldCeo } from '../../shared/questions.ts';
 import {
   type PersistedRepo,
@@ -244,6 +246,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB);
     this.spend.ceoActs = 0;
     this.ceoAsked = askedFor(job);
+    this.ceoChat.startJob();
     this.ceoWaited = false;
     this.emitAgent(a);
     this.emitCeo();
@@ -266,7 +269,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
     const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0));
+    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0)) + memoryPrompt(this.state.ceo.remember);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
     const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.backend.startSession(
@@ -282,6 +285,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         role: 'ceo',
         office: this.officeTools(),
         tools: this.sessionToolsFor(a, 'claude'),
+        stream: true,
         keepAlive: awake.keepAlive,
         ...how,
       },
@@ -289,7 +293,9 @@ export abstract class SwarmCeo extends SwarmUpdate {
         log: (entries) => {
           this.appendLog(a, entries);
           this.ceoFiles.record(entries);
+          this.ceoChat.log(entries);
         },
+        text: (text, done) => this.ceoChat.text(text, done),
         tool: (name) => {
           if (rt.currentTool === name) return;
           rt.currentTool = name;
@@ -304,7 +310,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         screenshot: () => undefined,
         // A follow-up that found nothing to do stays off the manager's phone.
         turn: (text) => {
-          if (job.kind === 'followup' && quietReply(text)) return;
+          if (job.kind === 'followup' && quietReply(text)) return void this.ceoChat.finishTurn(text);
           this.postCeoReply(text);
           this.markDelivery('all', 'replied');
         },
@@ -340,6 +346,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
+    this.ceoChat.endJob();
     if (result.interrupted) this.interrupted(a);
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
     const run = this.spend.take(a.id);
@@ -642,7 +649,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'question'> & { changes?: TeamChange[] } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'steps' | 'question'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
@@ -663,6 +670,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.state.messages.push(m);
     if (this.state.messages.length > KEEP_MESSAGES) this.state.messages.splice(0, this.state.messages.length - KEEP_MESSAGES);
     this.broadcast({ type: 'message', message: m });
+    if (touchConversation(this.state.ceo.chats, m)) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
     this.save();
     // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
     if (from === 'ceo' && !requestId && !m.question) {
@@ -696,7 +704,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
   protected postCeoReply(text: string) {
-    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job) });
+    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...this.ceoChat.finishTurn(text) });
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */

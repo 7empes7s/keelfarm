@@ -8,7 +8,7 @@ import { officeUpdateChip } from '../officeUpdate';
 import { KanbanView } from '../ui/KanbanView';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
-import { setMode } from './mode';
+import { setMode, useMode } from './mode';
 import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
 import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
@@ -55,9 +55,18 @@ function Banners() {
   const loaded = useStore((s) => s.loaded);
   const usage = useStore((s) => s.usage);
   const update = useStore((s) => (s.restarting ? '⟳ The office is restarting…' : officeUpdateChip(s.officeUpdate)));
+  const closedLast = useMode((s) => s.closedLast);
   const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   return (
     <>
+      {closedLast && (
+        <div className="pk-banner pk-banner-bad" role="alert">
+          The 3D office closed last time: {closedLast}.{' '}
+          <button className="btn btn-ghost btn-small" onClick={() => useMode.setState({ closedLast: null })}>
+            OK
+          </button>
+        </div>
+      )}
       {!connected && <div className="pk-banner pk-banner-bad">{loaded ? '📡 Reconnecting to the office…' : '📡 Connecting to the office…'}</div>}
       {usage.state === 'paused' && <div className="pk-banner pk-banner-bad">⏸ Claude's usage limit was reached: no new work starts{until ? ` until ${until}` : ''}.</div>}
       {usage.state === 'pacing' && <div className="pk-banner">🐢 Pacing new work after a usage warning{until ? ` until ${until}` : ''}.</div>}
@@ -234,6 +243,7 @@ export default function Pocket() {
   const ceoName = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const usage = useStore((s) => s.usage.state);
   const connected = useStore((s) => s.connected);
+  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the header (#81)
 
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
@@ -305,7 +315,14 @@ export default function Pocket() {
         <b className="pk-title">{company || 'cubefarm'}</b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
         <span className="spacer" />
-        {usage !== 'normal' && <span className="chip chip-warn">{usage === 'paused' ? '⏸ paused' : '🐢 pacing'}</span>}
+        {usage !== 'normal' && (
+          // On the Chat tab only its icon: the chat's buttons need the room.
+          <span className="chip chip-warn" title={usage === 'paused' ? 'Paused by the usage limit' : 'Pacing new work'}>
+            {usage === 'paused' ? '⏸' : '🐢'}
+            <span className={tab === 'chat' ? 'sr-only' : undefined}>{usage === 'paused' ? ' paused' : ' pacing'}</span>
+          </span>
+        )}
+        {tab === 'chat' && <div className="pk-head-tools" ref={setChatTools} />}
         <button className="pk-icon-btn" onClick={() => setSettings('floors')} aria-label="Settings and notifications" title="Settings and notifications">
           ⚙️
         </button>
@@ -321,7 +338,7 @@ export default function Pocket() {
         ) : (
           <>
             {tab === 'company' && <Company go={go} settings={setSettings} />}
-            {tab === 'chat' && <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} />}
+            {tab === 'chat' && <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={chatTools} />}
             {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
             {tab === 'team' && <Team focusRepo={repoId} />}
             {tab === 'approvals' && <Approvals />}

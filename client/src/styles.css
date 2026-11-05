@@ -3241,6 +3241,7 @@ input.inline:focus {
 
 /* chat */
 .phone-chat {
+  position: relative; /* the + sheet's backdrop */
   flex: 1;
   min-height: 0;
   display: flex;
@@ -3249,8 +3250,9 @@ input.inline:focus {
 .chat-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 12px;
   border-bottom: 2px solid rgba(31, 29, 43, 0.08);
   background: var(--ds-surface-raised);
 }
@@ -3765,14 +3767,6 @@ input.inline:focus {
   white-space: nowrap;
   max-width: 120px;
 }
-.chat-attach {
-  flex: none;
-  padding: 4px 6px;
-  border: 0;
-  background: none;
-  font-size: 1.15rem;
-  cursor: pointer;
-}
 .chat-dropping .chat-log-wrap {
   outline: 3px dashed var(--accent);
   outline-offset: -6px;
@@ -4096,6 +4090,9 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
     opacity: 1;
   }
 }
+.quick:empty {
+  display: none;
+}
 .quick {
   display: flex;
   gap: 6px;
@@ -4122,6 +4119,101 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   gap: 6px;
   padding: 8px 10px 10px;
   background: var(--ds-surface-raised);
+}
+/* one row at any width: the +, the box, the mic and Send (or Stop) */
+.chat-input > :not(.msg-box) {
+  flex: none;
+}
+.chat-plus,
+.chat-tool {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--ds-outline);
+  border-radius: 50%;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-tool {
+  border-radius: 12px;
+}
+.chat-plus:hover,
+.chat-tool:hover {
+  background: var(--ds-surface-hover);
+}
+.chat-tool .chat-tool-n {
+  top: -7px;
+  right: -7px;
+}
+/* ui/ChatActionsSheet.tsx: a bottom sheet over the chat, a small popover by the + on a wide screen */
+.chat-sheet-back {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+  background: var(--ds-scrim);
+}
+.chat-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 14px;
+  background: var(--ds-surface-raised);
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+  outline: none;
+}
+.chat-sheet-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chat-sheet-item,
+.chat-sheet-quick {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 12px;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-sheet-item {
+  flex: 1 1 140px;
+}
+.chat-sheet-quick {
+  flex: 1 1 100%;
+  border-color: var(--ds-line-strong);
+  border-radius: 999px;
+}
+:is(.chat-sheet-item, .chat-sheet-quick):hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+}
+.chat-sheet-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@media (min-width: 720px) {
+  .pocket .chat-sheet-back {
+    padding-bottom: 66px; /* above the composer, by the + */
+    background: transparent;
+  }
+  .pocket .chat-sheet {
+    width: 340px;
+  }
 }
 
 /* ui/MicButton.tsx: the 🎙 by a message box's Send, and what it's doing */
@@ -4183,23 +4275,9 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .mic-status kbd {
   color: var(--ink);
 }
-/* the phone's hands-free switch */
-.hands-free {
-  flex: none;
-  padding: 3px 9px;
-  border: 2px solid var(--ds-outline);
-  border-radius: 999px;
-  background: var(--ds-surface-raised);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.hands-free:hover {
-  background: #ffe9a8;
-}
-.hands-free-on {
+/* the phone's hands-free switch, on */
+.hands-free-on,
+.hands-free-on:hover {
   background: #c9f2d3;
 }
 
@@ -4639,6 +4717,28 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   font-weight: 600;
   color: var(--muted);
 }
+.office-failed {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
+}
+.office-failed h2 {
+  margin: 0;
+}
+.office-failed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
 .start-meta {
   flex-wrap: wrap;
 }
@@ -4693,6 +4793,11 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-dot-on {
   background: var(--good);
+}
+.pk-head-tools {
+  flex: none;
+  display: flex;
+  gap: 6px;
 }
 .pk-icon-btn {
   flex: none;
@@ -4980,27 +5085,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-/* the CEO's name and what they're doing, a line each: a long job label doesn't take the conversation's room */
-.pocket .chat-head .grow,
-.pocket .chat-head .grow > div {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* on a phone the message box gets a row of its own, its buttons the row under it */
-@media (max-width: 480px) {
-  .pocket .chat-input {
-    flex-wrap: wrap;
-  }
-  .pocket .chat-input .msg-box {
-    order: -1;
-    flex: 1 1 100%;
-  }
-  .pocket .chat-input .btn-good {
-    margin-left: auto;
-  }
 }
 .pocket .md pre {
   white-space: pre-wrap;

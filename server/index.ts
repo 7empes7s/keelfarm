@@ -12,6 +12,7 @@ import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
 import { createDemoBackend } from './demo.ts';
+import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
 import { underLauncher } from './officeUpdate.ts';
@@ -24,6 +25,7 @@ import { HttpError, Swarm } from './swarm.ts';
 import { historyFilter } from './history.ts';
 
 const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
+if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });
 // Sessions the office picks back up while it starts need the address their CLIs call back on before it listens.
@@ -333,6 +335,18 @@ app.post(
 );
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
+// The chat closer to Claude's (#51): stop, edit and retry, conversations, and what the CEO remembers
+app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
+app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
+app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
+app.post('/api/ceo/conversations', route(() => swarm.newConversation()));
+app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
+app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));
+app.post('/api/ceo/conversations/:id/pin', route((req) => swarm.pinConversation(String(req.params.id), req.body?.pinned === true)));
+app.get('/api/ceo/notes', route(() => swarm.ceoNotes()));
+app.post('/api/ceo/memory', route((req) => swarm.addMemory(str(req.body?.text))));
+app.put('/api/ceo/memory/:id', route((req) => swarm.editMemory(String(req.params.id), str(req.body?.text))));
+app.delete('/api/ceo/memory/:id', route((req) => swarm.deleteMemory(String(req.params.id))));
 app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
 app.get('/api/messages/:id/refs/:index/file', route((req) => swarm.refFile(Number(req.params.id), Number(req.params.index))));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));

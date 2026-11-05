@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { coversView, useStore } from './store';
 import { effectiveTier, gfxLabel, gfxPaused, useGfx } from './world/gfx/useGraphics';
+import { DEVICE_PROFILE } from './world/gfx/device';
 import { DPR, dprSample, dprSettle, newDpr } from './dprControl';
 import { glCounts, hitchFrame, hitchNote, hitchResume, hitchSummary, setHitchContext, startHitchRecorder, watchGl } from './hitches';
 import { statsLine } from './hitchLog';
@@ -11,8 +12,8 @@ import { statsLine } from './hitchLog';
 // the tab is in the background, the resolution steps down when frames get slow (and Auto graphics, world/gfx,
 // drops its effects first, from the same frame-rate samples), and `?stats` shows what the canvas costs.
 
-/** Highest device pixel ratio the canvas renders at (the adaptive resolution never goes below 1). */
-export const MAX_DPR = 1.75;
+/** Highest device pixel ratio the canvas renders at (the adaptive resolution never goes below 1); lower on phones. */
+export const MAX_DPR = DEVICE_PROFILE.maxDpr;
 
 /** `?stats` in the URL shows the FPS readout. Without it nothing is mounted or measured. */
 export const statsEnabled = new URLSearchParams(window.location.search).has('stats');

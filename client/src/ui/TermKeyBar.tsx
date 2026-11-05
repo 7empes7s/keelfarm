@@ -9,14 +9,17 @@ import type { AgentCli } from '../../../shared/types';
 const PREF = 'cubefarm:termKeys';
 const touch = typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-/** Whether this device shows the bar: on for touch screens unless switched off, off elsewhere unless switched on. */
-export function useTermKeysPref(): [boolean, (on: boolean) => void] {
+/**
+ * Whether this device shows the bar: on for touch screens unless switched off, off elsewhere unless switched on.
+ * The phone's terminal-first window (#86) passes `off` so it starts hidden there until ⌨ turns it on.
+ */
+export function useTermKeysPref(fallback = touch): [boolean, (on: boolean) => void] {
   const [on, setOn] = useState(() => {
     try {
       const saved = localStorage.getItem(PREF);
-      return saved ? saved === 'on' : touch;
+      return saved ? saved === 'on' : fallback;
     } catch {
-      return touch;
+      return fallback;
     }
   });
   const save = (v: boolean) => {
@@ -86,9 +89,11 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
   );
 }
 
-export function TermKeyBar({ cli, mods, onPress }: { cli: AgentCli; mods: ModState; onPress: (k: BarKey) => void }) {
+/** `dock` (the default) moves the bar onto the phone keyboard while it's up; a window already above it passes false. */
+export function TermKeyBar({ cli, mods, onPress, dock = true }: { cli: AgentCli; mods: ModState; onPress: (k: BarKey) => void; dock?: boolean }) {
   const [more, setMore] = useState(false);
-  const inset = useKeyboardInset();
+  const keyboard = useKeyboardInset();
+  const inset = dock ? keyboard : 0;
   const key = (k: BarKey) => <KeyButton key={k.label} k={k} latch={'mod' in k ? mods[k.mod] : undefined} onPress={onPress} />;
   const bar = (
     <div className={`term-keys ${inset ? 'term-keys-docked' : ''}`} style={inset ? { bottom: inset } : undefined} role="toolbar" aria-label="Terminal keys">

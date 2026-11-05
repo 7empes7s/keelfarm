@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
@@ -14,11 +14,12 @@ import { emptyLabView, type LabView } from '../../shared/experiments';
 import { emptyEveryProject } from '../../shared/practices';
 import { messageSpeech } from '../../shared/speech';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
+import { applyChat, EMPTY_CHAT } from './ceoChat';
 import type { FileView } from '../../shared/files';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
-import { needsManager, qaCardNote, type CardTone } from './qaCard';
+import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
 import { claimVoice } from './ui/voiceClaim';
@@ -128,6 +129,7 @@ interface State {
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
+  chat: CeoChatView; // the live reply, conversations and pinned notes (#51)
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
@@ -281,6 +283,7 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
+  chat: EMPTY_CHAT,
   files: [],
   chatOutbox: [],
   phoneReadAt: 0,
@@ -364,6 +367,7 @@ export const useStore = create<State>((set, get) => ({
           requests: d.requests,
           ceo: d.ceo,
           messages: d.messages,
+          chat: d.chat ?? EMPTY_CHAT,
           files: d.files ?? [],
           phoneReadAt: d.phoneReadAt,
           version: d.version,
@@ -535,6 +539,9 @@ export const useStore = create<State>((set, get) => ({
         }
         break;
       }
+      case 'ceoChat':
+        set(applyChat(get(), ev));
+        break;
       case 'files':
         set({ files: ev.files });
         break;
@@ -678,6 +685,8 @@ export const useStore = create<State>((set, get) => ({
 
 // ---------- derived helpers ----------
 
+export { floorPrCounts } from './floorCounts';
+
 export const qaKey = (repoId: string, prNumber: number) => `${repoId}#${prNumber}`;
 
 export const repoOnFloor = (repos: RepoView[], floor: number) => repos.find((r) => r.floor === floor) ?? null;
@@ -799,29 +808,4 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     .map((p) => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, agent: authorOf(p.number, p.headRefName) }));
 
   return { backlog, progress, qa, ready, merged };
-}
-
-export interface FloorPrCounts {
-  /** Open PRs in the Kanban's In QA column: queued, testing, failed, fixing, needs-human and untested ones. */
-  inQa: number;
-  /** Open PRs that passed QA (the Ready to merge column). */
-  ready: number;
-  /** Open PRs waiting on the manager (needs-human, and the CEO isn't triaging them); also counted in inQa. */
-  needsYou: number;
-}
-
-/**
- * A floor's PR counts, matching kanbanFor's columns. Only open PRs count: QA records outlive their PR's merge or
- * close, so counting records instead drifts further from the board with every merge.
- */
-export function floorPrCounts(repo: RepoView, qaRecords: Record<string, QaView>): FloorPrCounts {
-  const counts: FloorPrCounts = { inQa: 0, ready: 0, needsYou: 0 };
-  for (const p of repo.pulls) {
-    if (p.state !== 'OPEN') continue;
-    const rec = qaRecords[qaKey(repo.id, p.number)];
-    if (rec?.status === 'passed') counts.ready++;
-    else counts.inQa++;
-    if (needsManager(rec)) counts.needsYou++;
-  }
-  return counts;
 }
