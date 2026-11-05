@@ -126,11 +126,11 @@ export function Interview({ requestId }: { requestId: string }) {
               aria-label="Your note for the CEO"
             />
             <div className="doc-actions">
-              <button className="btn btn-bad" disabled={busy} onClick={() => void decide(false)}>
+              <button className="btn btn-bad" data-decision disabled={busy} onClick={() => void decide(false)}>
                 {hire ? 'Decline' : 'Keep them'}
               </button>
               <span className="spacer" />
-              <button className="btn btn-good" disabled={busy} onClick={() => void decide(true)}>
+              <button className="btn btn-good" data-decision disabled={busy} onClick={() => void decide(true)}>
                 {hire ? `Hire ${name}` : `Let ${req.name} go`}
               </button>
             </div>

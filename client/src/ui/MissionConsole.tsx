@@ -5,7 +5,9 @@ import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { CostsSection } from './CostsSection';
+import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
+import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
@@ -132,9 +134,6 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
               <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: alarm.agentId! })}>
                 Terminal
               </button>
-              <button className="btn btn-small btn-good" title="Clear their desk so they take new work" onClick={() => void attempt(() => api.reset(alarm.agentId!))}>
-                Clear desk
-              </button>
             </>
           )
         )}
@@ -142,6 +141,9 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
         <button className="btn btn-small btn-ghost" onClick={() => goToFloor(alarm.floor)}>
           Visit floor {alarm.floor}
         </button>
+        {alarm.kind !== 'pr' && alarm.agentId && (
+          <Menu label="More for this alarm" title={alarm.text} items={[{ label: '↺ Clear desk…', hint: 'Clear their desk so they take new work', danger: true, onSelect: () => void clearDeskOf(alarm.agentId!) }]} />
+        )}
       </div>
     </div>
   );
@@ -156,12 +158,30 @@ const FIXES: Record<DoctorFix, [string, string]> = {
   'close-issue': ['Close issue', 'Close the issue on GitHub as completed'],
 };
 
+/** Fixes that are hard to undo: they go in the card's ⋯ and confirm first (docs/design.md). */
+const RISKY: DoctorFix[] = ['clear', 'close-issue'];
+
+const clearDeskOf = (id: string) => {
+  const a = useStore.getState().agents[id];
+  return a ? clearDesk(a) : Promise.resolve(false);
+};
+
 async function applyFix(f: DoctorFinding, fix: DoctorFix) {
+  if (RISKY.includes(fix) && document.pointerLockElement) document.exitPointerLock();
+  if (fix === 'clear') {
+    const ok = await confirmDialog({
+      icon: '↺',
+      tone: 'danger',
+      title: 'Clear their desk?',
+      body: 'They drop the task they had and take new work.',
+      confirm: 'Clear desk',
+    });
+    if (!ok) return;
+  }
   if (fix === 'close-issue') {
-    if (document.pointerLockElement) document.exitPointerLock();
     const ok = await confirmDialog({
       icon: '🩺',
-      tone: 'warn',
+      tone: 'danger',
       title: `Close issue #${f.issueNumber}?`,
       body: <p>It's closed on GitHub as completed, with a comment saying PR #{f.prNumber} resolved it.</p>,
       confirm: 'Close issue',
@@ -185,11 +205,13 @@ function DoctorCard({ finding: f, repo }: { finding: DoctorFinding; repo: RepoVi
         </div>
       </div>
       <div className="row wrap">
-        {f.fixes.map((fix, i) => (
-          <button key={fix} className={`btn btn-small ${i === 0 ? 'btn-good' : ''}`} title={FIXES[fix][1]} onClick={() => void applyFix(f, fix)}>
-            {FIXES[fix][0]}
-          </button>
-        ))}
+        {f.fixes
+          .filter((fix) => !RISKY.includes(fix))
+          .map((fix, i) => (
+            <button key={fix} className={`btn btn-small ${i === 0 ? 'btn-good' : ''}`} title={FIXES[fix][1]} onClick={() => void applyFix(f, fix)}>
+              {FIXES[fix][0]}
+            </button>
+          ))}
         {f.agentId && (
           <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: f.agentId! })}>
             Terminal
@@ -199,6 +221,13 @@ function DoctorCard({ finding: f, repo }: { finding: DoctorFinding; repo: RepoVi
         <button className="btn btn-small btn-ghost" title="Hide it until it goes away" onClick={() => void attempt(() => api.doctorIgnore(f.id))}>
           Ignore
         </button>
+        {f.fixes.some((fix) => RISKY.includes(fix)) && (
+          <Menu
+            label="More fixes"
+            title={f.text}
+            items={f.fixes.filter((fix) => RISKY.includes(fix)).map((fix) => ({ label: `${FIXES[fix][0]}…`, hint: FIXES[fix][1], danger: true, onSelect: () => void applyFix(f, fix) }))}
+          />
+        )}
       </div>
     </div>
   );
@@ -274,7 +303,7 @@ function OpsTable() {
     ['All floors', '#1f1d2b', ops.total],
   ];
   return (
-    <div className="ops-table-wrap">
+    <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="The numbers, per floor">
       <table className="ops-table">
         <thead>
           <tr>
