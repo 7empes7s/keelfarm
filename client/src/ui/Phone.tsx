@@ -11,6 +11,9 @@ import { reduceMotion } from './a11y';
 import { Markdown } from './Markdown';
 import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
 import { MessageBox } from './MessageBox';
+import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
+import { useAttachments } from './chatUpload';
+import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { closeOverlay } from './Panel';
@@ -356,6 +359,7 @@ interface BubbleProps {
   onReply: (id: number) => void;
   onActions: (item: Item) => void;
   onArtifact: (messageId: number, artifactId: string) => void;
+  onFile: (id: string) => void;
 }
 
 const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
@@ -386,7 +390,7 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
   );
 }
 
-function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact }: BubbleProps) {
+function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile }: BubbleProps) {
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
@@ -397,6 +401,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
   const at = m ? m.at : item.out!.at;
   const id = m?.id;
+  const files: FileRef[] = (m ? m.attachments : item.out!.files) ?? [];
 
   // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click).
   const end = () => {
@@ -463,7 +468,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {!mine && <div className="bubble-from">{ceoName}</div>}
         {quote}
         {mine ? (
-          <div className="bubble-text">
+          text && <div className="bubble-text">
             {urlParts(text).map((p, i) =>
               p.url ? (
                 <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
@@ -477,7 +482,11 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         ) : (
           text && <Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} />
         )}
+        {files.map((f) => (
+          <FileCard key={f.id} file={f} onOpen={onFile} />
+        ))}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
+        {m?.used && <UsedLine used={m.used} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
@@ -571,6 +580,12 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const [menu, setMenu] = useState<Item | null>(null);
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
   const [artifactList, setArtifactList] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const att = useAttachments();
+  const fileCount = useStore((s) => s.files.length);
+  const drop = useDropZone(att.add);
+  const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
@@ -625,12 +640,19 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     stick.current = true;
     setAtEnd(true);
   };
-  const send = (t: string, to: number | null = replyTo) => {
-    if (!t.trim()) return;
+  const send = (t: string, to: number | null = replyTo, files: FileRef[] = []) => {
+    if (!t.trim() && !files.length) return;
     setText('');
     setReplyTo(null);
     stick.current = true;
-    sendToCeo(t, to ?? undefined);
+    sendToCeo(t, to ?? undefined, files);
+  };
+  // The message box's own send carries the tray's files; quick chips and suggestions send text only.
+  const sendTyped = () => {
+    if (att.busy) return;
+    if (!text.trim() && !att.ready.length) return;
+    send(text, replyTo, att.ready);
+    att.clear();
   };
   const reply = (id: number) => {
     setReplyTo(id);
@@ -684,12 +706,13 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         onReply={reply}
         onActions={setMenu}
         onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
+        onFile={setViewing}
       />
     );
   };
 
   return (
-    <div className="phone-chat">
+    <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
         <Avatar name={ceo.name} color={ceo.color} />
         <div className="grow">
@@ -699,6 +722,11 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         {artifactCount > 0 && (
           <button type="button" className="hands-free" onClick={() => setArtifactList(true)} aria-haspopup="dialog" title="Every artifact in this conversation, newest first">
             📄 Artifacts ({artifactCount})
+          </button>
+        )}
+        {fileCount > 0 && (
+          <button type="button" className="hands-free" onClick={() => setFilesOpen(true)} aria-haspopup="dialog" title="Every file in this conversation: keep or delete them">
+            📎 Files ({fileCount})
           </button>
         )}
         <HandsFreeToggle ceoName={ceo.name} />
@@ -760,6 +788,16 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
         )}
+        {viewing && <FileViewer id={viewing} onClose={() => setViewing(null)} />}
+        {filesOpen && (
+          <FilesList
+            onClose={() => setFilesOpen(false)}
+            onOpen={(id) => {
+              setFilesOpen(false);
+              setViewing(id);
+            }}
+          />
+        )}
         {artifactList && (
           <ArtifactList
             messages={messages}
@@ -799,14 +837,22 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           </button>
         </div>
       )}
+      <AttachTray pending={att.pending} onRemove={att.remove} />
+      {slash.picks}
       <form
         ref={form}
         className="chat-input"
         onSubmit={(e) => {
           e.preventDefault();
-          send(text);
+          sendTyped();
+        }}
+        onPaste={(e) => {
+          if (!e.clipboardData.files.length) return;
+          e.preventDefault();
+          att.add([...e.clipboardData.files]);
         }}
       >
+        <AttachButtons onFiles={att.add} />
         <MessageBox
           value={text}
           onChange={setText}
@@ -815,6 +861,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           title="Enter sends · Shift+Enter adds a new line · Esc cancels a reply"
           autoFocus={autoFocus}
           onKeyDown={(e) => {
+            if (slash.onKeyDown(e)) return;
             if (e.key !== 'Escape' || replyTo === null) return;
             e.preventDefault();
             e.stopPropagation();
@@ -822,7 +869,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           }}
         />
         <MicButton kind="phone" value={text} onChange={setText} onSend={send} />
-        <button className="btn btn-small btn-good" disabled={!text.trim()}>
+        <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
           Send
         </button>
       </form>

@@ -4,6 +4,7 @@ import type { AgentStyle } from '../../shared/looks';
 import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { DecorItem, ProgressView } from '../../shared/progress';
+import type { QuickPicks } from '../../shared/used';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -131,7 +132,10 @@ export const api = {
   /** The demo only: the office doctor's scenarios. */
   demoDoctor: (action: 'restart' | 'stuck' | 'later' | 'unclosed' | 'check') => call<{ text: string; doctor: DoctorFinding[] }>('POST', '/api/doctor/demo', { action }),
   /** A message for the CEO, replying to message `replyTo` if given; answers with the posted message's id. */
-  messageCeo: (text: string, replyTo?: number) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo }),
+  messageCeo: (text: string, replyTo?: number, files?: string[]) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }) }),
+  ceoPicks: () => call<QuickPicks>('GET', '/api/ceo/picks', undefined, false),
+  keepFile: (id: string, keep: boolean) => call('POST', `/api/files/${id}/keep`, { keep }),
+  deleteFile: (id: string, toast = true) => call('DELETE', `/api/files/${id}`, undefined, toast),
   ceoReview: () => call('POST', '/api/ceo/review'),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   artifact: (messageId: number, artifactId: string) => call<{ markdown: string }>('GET', `/api/messages/${messageId}/artifacts/${encodeURIComponent(artifactId)}`),
