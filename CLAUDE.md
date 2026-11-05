@@ -81,6 +81,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   `ptyClient.ts` is the office's side (start/connect, spawn, adopt after a restart, local fallback); `ptyProtocol.ts`
   their JSON-lines messages. The launcher's `office:shutdown` says `restart: false` when quitting: CLIs stop then.
   An agent's CLI stays at its prompt after building or fixing (`keepAlive`): follow-ups and prompts typed there reuse it.
+- `unblock.ts`: nothing waits on a human (pure): each Claude Code session's worktree permission rules, every CLI's
+  non-interactive environment (`cliEnv`), the answers to PermissionRequest / Elicitation / AskUserQuestion hooks, and
+  the watchdog's steps for a prompt still on screen (answer it, else the agent is `blocked`, notified after 5 minutes).
 - `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode): detection, Windows `.cmd` shim
   unwrapping, each one's command line, and the helper scripts they call back with.
 - `terminal.ts`: `AgentTerminal`, a headless xterm mirror per agent (replay for late viewers, saved to disk), its

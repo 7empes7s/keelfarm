@@ -74,6 +74,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
         <Status status={agent.status} />
       </div>
       {agent.lastError && !working && <div className="term-error small pk-error">⚠️ {agent.lastError}</div>}
+      {agent.blocked && working && <div className="term-error small pk-error">⛔ Blocked: {agent.blocked}</div>}
       {signIn && <div className="small pk-sign-in">🔑 Waiting for you to sign {signIn} in, in their terminal.</div>}
       <div className="pk-actions">
         {signIn && (

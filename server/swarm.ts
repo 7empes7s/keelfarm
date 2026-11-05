@@ -52,7 +52,7 @@ import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
 import { Ticker } from './ticker.ts';
-import { Outbox } from './outbox.ts';
+import { isResync, Outbox } from './outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
 import { teamKeyboard, telegramChat } from './telegram.ts';
@@ -62,6 +62,7 @@ import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
 import { cleanSwitches, DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, isToolId, mergeSwitches, officeItems, sessionTools, setSwitch, toolArgsLine, toolSettings, type SessionTools, type ToolInventory, type ToolSwitches } from '../shared/tooling.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
+import { blockedNotice } from './unblock.ts';
 import { WeatherService } from './weather.ts';
 import { blockers, holdUps, waitsMessage } from '../shared/issues.ts';
 import { dayKey, journalFrame, legacyAgent, legacyRequest, redact as scrub } from '../shared/journal.ts';
@@ -91,7 +92,6 @@ import type {
   AgentView,
   CeoInfo,
   CliView,
-  ClientEvent,
   CloudSettings,
   DoctorFinding,
   DoctorFix,
@@ -262,6 +262,7 @@ interface AgentRuntime {
   shots: Shot[]; // every screenshot of the current session (QA evidence)
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
+  blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
 }
 
 interface RepoRuntime {
@@ -416,15 +417,6 @@ const terminalFile = (agentId: string) => path.join(TERMINALS_DIR, `${agentId}.a
 const TERMINAL_SAVE_MS = 20_000;
 
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
-
-/** A tab's message on /ws asking for the live office again (ClientEvent 'resync'). */
-function isResync(raw: unknown): boolean {
-  try {
-    return (JSON.parse(String(raw)) as Partial<ClientEvent> | null)?.type === 'resync';
-  } catch {
-    return false;
-  }
-}
 
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 
@@ -1105,6 +1097,7 @@ export class Swarm {
       hasScreenshot: !!rt.screenshot,
       screenshotAt: rt.screenshot?.at ?? null,
       lastError: a.lastError,
+      blocked: rt.blocked?.reason ?? null,
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
@@ -1116,8 +1109,9 @@ export class Swarm {
   private activityOf(a: PersistedAgent): AgentActivity | null {
     const chat = a.role === 'ceo' && this.state.ceo.job?.kind === 'chat';
     const { status, task, issueNumber, prNumber, startedAt } = a;
-    const currentTool = this.agentRt.get(a.id)?.currentTool ?? null;
-    return agentActivity({ status, task, currentTool, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
+    const rt = this.agentRt.get(a.id);
+    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
+    return agentActivity({ status, task, currentTool: rt?.currentTool ?? null, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 
   private qaView(q: QaRecord): QaView {
@@ -3135,6 +3129,7 @@ export class Swarm {
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
+        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -3181,7 +3176,7 @@ export class Swarm {
     if (this.officeUpdate.handedOver && a.host !== 'box') return; // stopped for the office's update: recovered like after a restart
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
-    rt.currentTool = null;
+    rt.currentTool = rt.blocked = null;
     const run = this.spend.take(a.id);
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
@@ -5360,6 +5355,10 @@ export class Swarm {
       const mins = Math.round((now - (a.endedAt ?? now)) / 60_000);
       this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
       if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
+    }
+    for (const a of this.state.agents) { // blocked on a prompt the watchdog couldn't answer: told once (unblock.ts)
+      const b = this.agentRt.get(a.id)?.blocked, n = blockedNotice(a.name, b, now, this.state.repos.find((r) => r.id === a.repoId)?.floor);
+      if (n && b) { b.told = true; this.notifier.notify('agentError', n.title, n.body, n.who); }
     }
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }

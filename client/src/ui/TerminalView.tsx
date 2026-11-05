@@ -185,6 +185,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
         {agent.costUsd > 0 && <span className="muted" title="API-equivalent cost reported by the coding agent; subscription usage is billed by plan">≈${agent.costUsd.toFixed(2)}</span>}
       </div>
       {agent.lastError && agent.status !== 'working' && !signIn && <div className="term-error">⚠️ {agent.lastError}</div>}
+      {agent.blocked && agent.status === 'working' && <div className="term-error">⛔ Blocked: {agent.blocked}. Answer it in the terminal.</div>}
       {signIn && (
         <div className="sign-in-note" role="status">
           <span className="grow">
