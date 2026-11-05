@@ -23,7 +23,7 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
-import { answerHook } from './unblock.ts';
+import { demoPrompts } from './demoPrompts.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -204,21 +204,6 @@ function screenshotSvg(title: string, url: string, hue: number) {
 type Step = LogEntry[] | (() => void);
 
 const BLOCKED_DEMO = "a permission prompt the office couldn't answer";
-
-/**
- * The prompts a real session can raise, answered by the office exactly as it answers them there (unblock.ts): a
- * write to a folder Claude Code guards (a skill in the worktree's .claude) and a question nobody is there to answer.
- */
-export function demoPrompts(cwd: string): LogEntry[] {
-  const asks = [
-    { hook_event_name: 'PermissionRequest', tool_name: 'Write', tool_input: { file_path: path.join(cwd, '.claude', 'skills', 'release', 'SKILL.md') } },
-    { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Should the badge be red or blue?' }] } },
-  ];
-  return asks.flatMap((b) => {
-    const a = answerHook(b, [cwd]);
-    return a ? [{ kind: 'system' as const, text: a.note }] : [];
-  });
-}
 
 function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: number, issueTitle: string): Step[] {
   const branch = path.basename(opts.cwd);

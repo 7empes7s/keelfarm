@@ -176,5 +176,10 @@ export function watchdogStep(w: Waiting, now: number, roots: string[]): Watchdog
   return { do: 'wait' };
 }
 
-/** A blocked agent the manager should now hear about: blocked NOTIFY_BLOCKED_MS and not told yet. */
-export const blockedNotice = (b: { since: number; told: boolean } | null | undefined, now: number) => !!b && !b.told && now - b.since >= NOTIFY_BLOCKED_MS;
+/** The manager's notice for a blocked agent, once it has been blocked NOTIFY_BLOCKED_MS and they weren't told yet; else null. */
+export function blockedNotice(name: string, b: { reason: string; since: number; told: boolean } | null | undefined, now: number, floor?: number): { title: string; body: string; who: string } | null {
+  if (!b || b.told || now - b.since < NOTIFY_BLOCKED_MS) return null;
+  const on = floor === undefined ? '' : ` on floor ${floor}`;
+  const reason = b.reason.replace(/\.$/, '').slice(0, 200);
+  return { title: `${name} is blocked`, body: `Waiting ${Math.round((now - b.since) / 60_000)} minutes on ${reason}${on}. Open their terminal to answer it.`, who: floor === undefined ? name : `${name} (floor ${floor})` };
+}

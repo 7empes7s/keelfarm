@@ -49,7 +49,7 @@ import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
 import { Ticker } from './ticker.ts';
-import { Outbox } from './outbox.ts';
+import { isResync, Outbox } from './outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
 import { Notifier } from './notifier.ts';
 import { teamKeyboard, telegramChat } from './telegram.ts';
@@ -84,7 +84,6 @@ import type {
   AgentView,
   CeoInfo,
   CliView,
-  ClientEvent,
   CloudSettings,
   DoctorFinding,
   DoctorFix,
@@ -487,15 +486,6 @@ function parseReport(result: SessionResult): QaReport | null {
 }
 
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
-
-/** A tab's message on /ws asking for the live office again (ClientEvent 'resync'). */
-function isResync(raw: unknown): boolean {
-  try {
-    return (JSON.parse(String(raw)) as Partial<ClientEvent> | null)?.type === 'resync';
-  } catch {
-    return false;
-  }
-}
 
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 
@@ -1154,8 +1144,7 @@ export class Swarm {
     const { status, task, issueNumber, prNumber, startedAt } = a;
     const rt = this.agentRt.get(a.id);
     if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
-    const currentTool = rt?.currentTool ?? null;
-    return agentActivity({ status, task, currentTool, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
+    return agentActivity({ status, task, currentTool: rt?.currentTool ?? null, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 
   private qaView(q: QaRecord): QaView {
@@ -3166,10 +3155,7 @@ export class Swarm {
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
-        blocked: (reason) => {
-          rt.blocked = reason ? { reason, since: Date.now(), told: false } : null;
-          this.emitAgent(a);
-        },
+        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -3207,8 +3193,7 @@ export class Swarm {
     if (this.officeUpdate.handedOver && a.host !== 'box') return; // stopped for the office's update: recovered like after a restart
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
-    rt.currentTool = null;
-    rt.blocked = null;
+    rt.currentTool = rt.blocked = null;
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
     a.turns += result.turns;
@@ -5344,13 +5329,9 @@ export class Swarm {
       this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
       if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
     }
-    // Blocked on a prompt the watchdog couldn't answer (unblock.ts): told once, NOTIFY_BLOCKED_MS in.
-    for (const a of this.state.agents) {
-      const b = this.agentRt.get(a.id)?.blocked;
-      if (!b || !blockedNotice(b, now)) continue;
-      b.told = true;
-      const repo = this.state.repos.find((r) => r.id === a.repoId);
-      this.notifier.notify('agentError', `${a.name} is blocked`, `Waiting ${Math.round((now - b.since) / 60_000)} minutes on ${clip(b.reason.replace(/\.$/, ''), 200)}${repo ? ` on floor ${repo.floor}` : ''}. Open their terminal to answer it.`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
+    for (const a of this.state.agents) { // blocked on a prompt the watchdog couldn't answer: told once (unblock.ts)
+      const b = this.agentRt.get(a.id)?.blocked, n = blockedNotice(a.name, b, now, this.state.repos.find((r) => r.id === a.repoId)?.floor);
+      if (n && b) { b.told = true; this.notifier.notify('agentError', n.title, n.body, n.who); }
     }
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }

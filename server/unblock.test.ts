@@ -125,10 +125,11 @@ describe('the prompt watchdog', () => {
   });
 
   it("tells the manager only after five minutes blocked, and once", () => {
-    expect(blockedNotice({ since: at, told: false }, at + NOTIFY_BLOCKED_MS - 1)).toBe(false);
-    expect(blockedNotice({ since: at, told: false }, at + NOTIFY_BLOCKED_MS)).toBe(true);
-    expect(blockedNotice({ since: at, told: true }, at + NOTIFY_BLOCKED_MS * 2)).toBe(false);
-    expect(blockedNotice(null, at)).toBe(false);
+    const b = { reason: "a permission prompt the office couldn't answer.", since: at, told: false };
+    expect(blockedNotice('Ada', b, at + NOTIFY_BLOCKED_MS - 1)).toBeNull();
+    expect(blockedNotice('Ada', b, at + NOTIFY_BLOCKED_MS, 2)).toEqual({ title: 'Ada is blocked', body: "Waiting 5 minutes on a permission prompt the office couldn't answer on floor 2. Open their terminal to answer it.", who: 'Ada (floor 2)' });
+    expect(blockedNotice('Ada', { ...b, told: true }, at + NOTIFY_BLOCKED_MS * 2)).toBeNull();
+    expect(blockedNotice('Ada', null, at)).toBeNull();
   });
 
   it("recognises Claude Code's permission dialog on screen", () => {
