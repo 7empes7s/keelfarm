@@ -89,6 +89,15 @@ const inside = (file: string, root: string) => {
 };
 
 /**
+ * The folders a session may write in (permissionAnswer's roots): its worktree first, then its machine's temp folders
+ * and its own session folder. Never its additional directories: linked repos' clones (the CEO's are every floor's
+ * main clone, maybe the manager's own project folder) are read-only references.
+ */
+export function sessionRoots(cwd: string, env: Record<string, string> | undefined, sessionDir: string): string[] {
+  return [cwd, ...['TMPDIR', 'TEMP', 'TMP'].flatMap((k) => env?.[k] ?? []), sessionDir];
+}
+
+/**
  * The office's answer to a permission question: allow, unless the call writes a file outside the session's own
  * folders (`roots[0]` is its worktree; then its temp folder and the like), which is denied with the reason.
  */

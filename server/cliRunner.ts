@@ -30,7 +30,7 @@ import type { OfficeTools } from './ceo.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
-import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -517,8 +517,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const nudged = new Set<string>();
   let trustKeys = 0; // keys pressed on a folder-trust question (a few at most)
   let trustedAt = 0;
-  // The folders the session may write in (unblock.ts permissionAnswer): its worktree first.
-  const roots = [opts.cwd, ...opts.additionalDirectories, ...['TMPDIR', 'TEMP', 'TMP'].flatMap((k) => opts.env?.[k] ?? []), dir];
+  const roots = sessionRoots(opts.cwd, opts.env, dir); // the folders the session may write in
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
   let promptTimer: NodeJS.Timeout | undefined;

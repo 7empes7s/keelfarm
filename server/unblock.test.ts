@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { launchArgs, type LaunchContext } from './clis.ts';
-import { ANSWER_AFTER_MS, answerHook, blockedNotice, cliEnv, DEFAULT_REPLY, nonInteractiveEnv, NOTIFY_BLOCKED_MS, permissionAnswer, permissionScreen, PROTECTED_DIRS, rulePath, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { ANSWER_AFTER_MS, answerHook, blockedNotice, cliEnv, DEFAULT_REPLY, nonInteractiveEnv, NOTIFY_BLOCKED_MS, permissionAnswer, permissionScreen, PROTECTED_DIRS, rulePath, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 
 const home = os.homedir();
 const worktree = path.join(home, '.cubefarm', 'machines', 'm1', 'work', 'acme__shop');
@@ -73,6 +73,18 @@ describe('answerHook', () => {
     const no = answerHook({ hook_event_name: 'PermissionRequest', tool_name: 'Edit', tool_input: { file_path: path.join(home, '.claude', 'CLAUDE.md') } }, roots)!;
     expect(no.reply.hookSpecificOutput).toMatchObject({ decision: { behavior: 'deny', message: expect.stringContaining('outside your worktree') } });
     expect(no.note).toContain('denied Edit');
+  });
+
+  it("denies writes to a linked repo's clone, though the session gets it as an additional directory", () => {
+    const linked = path.join(home, '.cubefarm', 'workspaces', 'acme__api', 'main');
+    const sessionDir = path.join(home, '.cubefarm', 'sessions', 't1');
+    const r = sessionRoots(worktree, { TMPDIR: temp, TEMP: temp }, sessionDir);
+    expect(r).toEqual([worktree, temp, temp, sessionDir]);
+    for (const file of [path.join(linked, '.git', 'config'), path.join(linked, '.claude', 'settings.json'), path.join(linked, 'src', 'a.ts')]) {
+      const a = answerHook({ hook_event_name: 'PermissionRequest', tool_name: 'Write', tool_input: { file_path: file } }, r)!;
+      expect(a.reply.hookSpecificOutput).toMatchObject({ decision: { behavior: 'deny' } });
+    }
+    expect(answerHook({ hook_event_name: 'PermissionRequest', tool_name: 'Write', tool_input: { file_path: path.join(sessionDir, 'x.json') } }, r)!.note).toContain('allowed');
   });
 
   it('declines MCP forms and answers questions with the default reply', () => {
