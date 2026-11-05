@@ -29,21 +29,15 @@ export function nextConsult(queue: readonly Consult[], repoId: string, free: rea
   return null;
 }
 
-/** Built-in tools a consult session doesn't get (--disallowedTools), on top of the office's. */
-export const CONSULT_DISALLOWED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash(git push:*)', 'Bash(git commit:*)', 'Bash(gh pr:*)'];
+/** Built-in tools a consult session doesn't get (--disallowedTools), on top of the office's: no edits and no shell. */
+export const CONSULT_DISALLOWED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell'];
 
-// An allowlist: tools that only read, and shell commands that only read, with nothing chained, piped or redirected.
+// An allowlist of tools that only read. No shell: a command's options can run programs (git -c, rg --pre…).
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'Skill', 'ToolSearch']);
-const READ_COMMANDS = /^(git\s+(log|show|diff|status|blame|grep|ls-files|rev-parse|branch\s+--list)|ls|cat|head|tail|wc|grep|rg|tree|pwd)(\s|$)/;
-const SHELL_TRICKS = /[;&|<>`$(){}\n\\]/;
 
 /** Why a consult session's tool call is refused (the pre-tool check behind CONSULT_DISALLOWED), or null to allow it. */
-export function consultRefusal(tool: string, input: Record<string, unknown>): string | null {
-  if (READ_TOOLS.has(tool)) return null;
-  if (tool !== 'Bash' && tool !== 'PowerShell') return `This is a read-only consult: ${tool} isn't available. Read the code with Read, Glob and Grep.`;
-  const cmd = String(input.command ?? '').trim();
-  if (READ_COMMANDS.test(cmd) && !SHELL_TRICKS.test(cmd)) return null;
-  return 'This is a read-only consult: only simple read commands (git log/show/diff/blame, ls, cat, grep, rg) run, with no pipes, chaining or redirects. No edits, commits, pushes or pull requests.';
+export function consultRefusal(tool: string): string | null {
+  return READ_TOOLS.has(tool) ? null : `This is a read-only consult: ${tool} isn't available. Read the code with Read, Glob and Grep.`;
 }
 
 /** The consult session's prompt: the CEO's question, any role or skill hint, and the rules. Kept short: it's paid for. */
@@ -52,7 +46,7 @@ export function consultPrompt(c: Pick<Consult, 'question' | 'hint' | 'floor'>, f
     `${ceo}, the CEO, asks you a question about floor ${c.floor} (${fullName})${c.hint ? `, ${c.hint}` : ''}:`,
     `"""${c.question}"""`,
     '',
-    'Read the code to answer. This is a read-only consult: no edits, commits, pushes or pull requests.',
+    'Read the code with Read, Glob and Grep to answer. This is a read-only consult: no shell, edits, commits, pushes or pull requests.',
     'Answer in under 300 words, with file:line references (e.g. src/app.ts:120) for every claim.',
   ].join('\n');
 }

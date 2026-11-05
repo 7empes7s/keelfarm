@@ -715,7 +715,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
           cb.tool(name);
           if (name === 'mcp__playwright__browser_navigate' && typeof input.url === 'string') cb.browserUrl(input.url);
         }
-        const refused = opts.readOnly ? consultRefusal(name, input) : null;
+        const refused = opts.readOnly ? consultRefusal(name) : null;
         return refused ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refused } } : ALLOW;
       }
       case 'PostToolUse':

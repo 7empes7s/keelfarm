@@ -136,7 +136,7 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
 // is approved. The office's rules (branches, pull requests, QA leaving GitHub alone) are in their instructions only.
 const allowAll: CanUseTool = async (_toolName, input) => ({ behavior: 'allow', updatedInput: input });
 const readOnly: CanUseTool = async (toolName, input) => {
-  const why = consultRefusal(toolName, input);
+  const why = consultRefusal(toolName);
   return why ? { behavior: 'deny', message: why } : { behavior: 'allow', updatedInput: input };
 };
 

@@ -24,22 +24,12 @@ describe('nextConsult', () => {
 });
 
 describe('consultRefusal (read-only)', () => {
-  it('refuses edits, commits, pushes and pull requests', () => {
-    for (const tool of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']) expect(consultRefusal(tool, { file_path: 'a.ts' })).toMatch(/read-only/);
-    for (const command of ['git push origin HEAD', 'git commit -am x', 'git -C repo push', 'cd x && git reset --hard', 'gh pr create --fill', 'gh issue comment 3 -b hi', 'gh api -X POST repos/a/b/issues']) {
-      expect(consultRefusal('Bash', { command })).toMatch(/read-only/);
-    }
-  });
-
-  it('refuses anything not on the read-only allowlist', () => {
-    for (const command of ['gh issue view 3', 'git log && git push', 'cat a > b', 'git diff | sh', 'echo $(git push)', 'npm test', 'rm -rf src', 'sed -i s/a/b/ x']) expect(consultRefusal('Bash', { command })).toMatch(/read-only/);
-    for (const tool of ['Agent', 'WebFetch', 'mcp__github__create_pull_request', 'mcp__playwright__browser_navigate']) expect(consultRefusal(tool, {})).toMatch(/read-only/);
+  it('refuses edits, the shell and every other tool', () => {
+    for (const tool of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'PowerShell', 'Agent', 'WebFetch', 'mcp__github__create_pull_request']) expect(consultRefusal(tool)).toMatch(/read-only/);
   });
 
   it('lets it read', () => {
-    for (const command of ['git log --oneline -5', 'git diff origin/main', 'grep -rn approve src', 'rg approve', 'ls src']) expect(consultRefusal('Bash', { command })).toBeNull();
-    expect(consultRefusal('Read', { file_path: 'a.ts' })).toBeNull();
-    expect(consultRefusal('Grep', { pattern: 'x' })).toBeNull();
+    for (const tool of ['Read', 'Glob', 'Grep']) expect(consultRefusal(tool)).toBeNull();
   });
 });
 
@@ -48,7 +38,7 @@ describe('consult prompt and answer', () => {
     const p = consultPrompt({ question: 'How does approval work?', hint: 'as a security reviewer', floor: 1 }, 'o/keel', 'Morgan');
     expect(p).toMatch(/floor 1 \(o\/keel\), as a security reviewer/);
     expect(p).toMatch(/file:line/);
-    expect(p).toMatch(/no edits, commits, pushes or pull requests/);
+    expect(p).toMatch(/no shell, edits, commits, pushes or pull requests/);
   });
 
   it('says who answered, capped', () => {
