@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
+import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
+import type { TaskKind } from '../shared/costs.ts';
 import { HttpError } from './httpError.ts';
 import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
@@ -133,11 +135,40 @@ export interface OfficeHandlers {
   attachFile(a: { path: string }): Promise<string>;
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
+  defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   qaReport(a: { floor: number; pr: number }): string;
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+}
+
+export interface ExperimentToolInput {
+  name: string;
+  hypothesis: string;
+  floors?: number[];
+  kinds?: TaskKind[];
+  variants: { name: string; prompt?: string; qa_lens?: string; effort?: EffortLevel; model?: string; qa_cli?: AgentCli; tools_off?: string[] }[];
+  min_sample?: number;
+}
+
+/** define_experiment's input as an experiment's (shared/experiments.ts): floors by number, effort and model for every kind it covers. */
+export function experimentInput(a: ExperimentToolInput, floorId: (floor: number) => string | null): ExperimentInput {
+  const floors = (a.floors ?? []).map((n) => {
+    const id = floorId(n);
+    if (!id) throw new Error(`There is no floor ${n}`);
+    return id;
+  });
+  const kinds = a.kinds?.length ? a.kinds : LAB_KINDS;
+  const each = <T>(v: T | undefined) => (v ? Object.fromEntries(kinds.map((k) => [k, v])) : undefined);
+  return {
+    name: a.name,
+    hypothesis: a.hypothesis,
+    floors,
+    kinds: a.kinds ?? [],
+    minSample: a.min_sample,
+    variants: a.variants.map((v) => ({ name: v.name, settings: { prompt: v.prompt, qaLens: v.qa_lens, effort: each(v.effort), model: each(v.model), qaCli: v.qa_cli, toolsOff: v.tools_off } })),
+  };
 }
 
 export interface OfficeTools {
@@ -314,6 +345,32 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
         expires_in_hours: z.number().positive().max(24 * 90).optional().describe('When it ends, if the manager said; leave out for no end'),
       },
       (a) => run(() => h.setMandate(a)),
+    ),
+    tool(
+      'define_experiment',
+      "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
+      {
+        name: z.string().min(1).max(80),
+        hypothesis: z.string().min(1).max(600).describe('What you expect a variant to change, and on which numbers'),
+        floors: z.array(z.number().int().positive()).max(20).optional().describe('Floors it covers; leave out for every floor'),
+        kinds: z.array(z.enum(['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict'])).max(5).optional().describe('Sessions its variants change; leave out for all of them'),
+        variants: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(40),
+              prompt: z.string().max(1500).optional().describe('Added to build and fix instructions, e.g. "Write the failing test first."'),
+              qa_lens: z.string().max(1500).optional().describe('Added to QA instructions'),
+              effort: EFFORT.optional().describe("Effort for the sessions it changes"),
+              model: z.string().max(80).optional().describe('Model for the Claude Code sessions it changes'),
+              qa_cli: CLI.optional().describe('QA by a free agent on this coding agent when there is one (cross-model QA)'),
+              tools_off: TOOL_REFS.describe('Tools & skills switched off'),
+            }),
+          )
+          .min(2)
+          .max(4),
+        min_sample: z.number().int().min(3).max(200).optional().describe('PRs per variant before any verdict (default 10)'),
+      },
+      (a) => run(() => h.defineExperiment(a)),
     ),
     tool(
       'agent_log',

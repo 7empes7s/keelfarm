@@ -145,6 +145,7 @@ describe('office tools', () => {
       worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
+      defineExperiment: (a) => (calls.push(['define_experiment', a]), 'defined'),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -164,6 +165,7 @@ describe('office tools', () => {
       'close_pull',
       'company_status',
       'configure_agent',
+      'define_experiment',
       'escalate',
       'file_issue',
       'keep_file',
@@ -197,6 +199,17 @@ describe('office tools', () => {
     expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
     expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
+  });
+
+  it('define_experiment takes 2 to 4 variants and the lab kinds only', async () => {
+    const { client, calls } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'define_experiment', arguments: args })).isError;
+    const v = (name: string, more = {}) => ({ name, ...more });
+    expect(await ok({ name: 'Test first', hypothesis: 'Fewer rounds', variants: [v('Current'), v('Test first', { prompt: 'Write the failing test first.', effort: 'high' })] })).toBe(true);
+    expect(await ok({ name: 'One', hypothesis: 'h', variants: [v('Only')] })).toBe(false);
+    expect(await ok({ name: 'CEO', hypothesis: 'h', kinds: ['ceo-chat'], variants: [v('A'), v('B')] })).toBe(false);
+    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'gemini' })] })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['define_experiment']);
   });
 
   it("takes an agent's Tools & skills switches as lists of names", async () => {

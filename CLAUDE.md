@@ -130,6 +130,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `costLedger.ts`: the cost ledger (#18): a line per finished session (task kind, effort, cost, outcome) and merged PR in
   `<SWARM_HOME>/costs.jsonl`, 30 days, never in the snapshot; it backs Mission control's "Where the plan goes"
   (`GET /api/costs`) and company_status's spend. Kinds, waste rules and effort per kind: `shared/costs.ts`.
+- `experiments.ts`: the lab (#23): A/B experiments on harness practices in `state.json`, the variant each new issue in a
+  running one gets (seeded, stratified by floor and size), what it changes in its sessions (`launchSession`), and its PR's
+  outcome and survival. The rules and statistics are pure, in `shared/experiments.ts`; `experimentSample.ts` is the demo's.
 - `journal.ts`: the time-lapse journal (`<SWARM_HOME>/journal/<day>/`): records what `Swarm.broadcast` sends, a file
   per 10-minute keyframe, pruning, and the reads behind `/api/journal/*`. The rules (what's kept, secrets, seeking,
   marks) are in `shared/journal.ts`; `journalSample.ts` is the demo's made-up day.

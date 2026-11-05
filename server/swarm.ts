@@ -12,7 +12,7 @@ import { CloudError } from './box.ts';
 import { Cloud, officeId, redact } from './cloud.ts';
 import type { PrDetails } from './github.ts';
 import { defaultProjectsDir, DESK_SWEEP_INTERVAL_MS, HOME_DIR, LOG_BUFFER, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
-import { askedFor, ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, issueRefusal, jobLabel, MANDATE_NOT_ASKED, planDependencies, prDiffText, agentLogText, qaReportText, AGENT_LOG_MAX as AGENT_LOG_MAX_LINES, plannedSize, scalePlan, type CeoJob, type OfficeTools, type TeamNow } from './ceo.ts';
+import { askedFor, ceoJobPrompt, experimentInput, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, issueRefusal, jobLabel, MANDATE_NOT_ASKED, planDependencies, prDiffText, agentLogText, qaReportText, AGENT_LOG_MAX as AGENT_LOG_MAX_LINES, plannedSize, scalePlan, type CeoJob, type OfficeTools, type TeamNow } from './ceo.ts';
 import { afterClose, ASK_AGAIN_MS, closedWhy, closuresHeld, forgettable, issueOpen, nameList, pullNow, stillOpen, stoppedMessage, toAsk, toHold, type Closure, type FloorState, type KnownPull, type LearnedPull } from './closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from './deps.ts';
 import { setUpDesk } from './deskSetup.ts';
@@ -47,6 +47,9 @@ import { MACHINES_DIR, type DeskTrim } from './workspace.ts';
 import { envSecrets, Journal } from './journal.ts';
 import { CostLedger, costsRequest, floorSpend, mergedPulls, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
 import { resolveEffort, type CostsView, type TaskKind } from '../shared/costs.ts';
+import { Lab, loadLab, type LabState } from './experiments.ts';
+import { preferCli } from '../shared/experiments.ts';
+import { lookFor, NAMES } from './agentNames.ts';
 import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
@@ -243,6 +246,7 @@ interface Persisted {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
+  experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
 }
 
 interface Shot {
@@ -295,26 +299,6 @@ const FLOOR_COLORS = ['#ff8a5b', '#4fb3e8', '#8fd14f', '#c77dff', '#ffc93c', '#f
 const SHIRTS = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261', '#9b5de5', '#f15bb5', '#00bbf9', '#06d6a0', '#ffbe0b', '#8338ec', '#fb5607', '#3a86ff'];
 const HAIR = HAIR_COLORS;
 const SKIN = SKIN_TONES;
-// New agents are named after computing pioneers, then fictional detectives.
-const NAMES = [
-  'Ada', 'Linus', 'Grace', 'Alan', 'Margaret', 'Dennis', 'Barbara', 'Ken', 'Radia', 'Guido', 'Hedy', 'Tim', 'Katherine',
-  'Bjarne', 'Frances', 'Edsger', 'Anita', 'Donald', 'Sophie', 'Yukihiro', 'Jean', 'Niklaus', 'Karen', 'Brendan',
-  'Sherlock', 'Marple', 'Poirot', 'Nancy', 'Columbo', 'Fletcher', 'Watson', 'Morse', 'Holmes', 'Maigret',
-];
-
-// Names that get the feminine character look: everyone in the name pool above, plus common first names
-// for agents the manager names themselves. The manager can always change an agent's look in the console.
-const FEMININE_NAMES = new Set(
-  (
-    'ada grace margaret barbara radia hedy katherine frances anita sophie jean karen marple nancy fletcher ' +
-    'alice amanda amelia amy ana anna anne aisha astrid ava bella beth carla caroline charlotte chloe claire clara ' +
-    'diana elena elizabeth ella ellie emily emma eva fatima fiona freya georgia hannah harper helen holly ingrid iris ' +
-    'isabella ivy jane jasmine jessica julia kate laura leah leila lena lily linda lisa lucy maria marie mary maya mei ' +
-    'mia mila monica naomi natalie nina nora olivia paula priya rachel rose ruby sandra sara sarah scarlett sofia ' +
-    'stella susan tess tessa tina vera victoria yuki zara zoe'
-  ).split(' '),
-);
-const lookFor = (name: string): AgentLook => (FEMININE_NAMES.has(name.trim().split(/\s+/)[0].toLowerCase()) ? 'feminine' : 'masculine');
 const LOOKS: AgentLook[] = ['feminine', 'masculine'];
 // Every agent runs Claude Opus 5.5 at medium effort unless the manager overrides it.
 const DEFAULT_MODEL = 'claude-opus-5-5';
@@ -477,6 +461,7 @@ export class Swarm {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
+    experiments: loadLab(undefined, Date.now()),
   };
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
@@ -501,6 +486,7 @@ export class Swarm {
       attachFile: (a) => this.ceoFiles.attach(a),
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
+      defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       qaReport: (a) => this.qaReport(a),
       worktreeFile: (a) => this.worktreeFile(a),
@@ -574,6 +560,8 @@ export class Swarm {
   private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   private spend: SessionCosts;
+  /** The experiments (#23): the variant each new issue in one gets, and what came of it. */
+  readonly lab = new Lab(() => this.state.experiments, { save: () => this.save(), emit: (experiments) => this.broadcast({ type: 'experiments', experiments }), floorOk: (id) => this.state.repos.some((r) => r.id === id) });
 
   constructor(private backend: Backend) {
     this.weather = new WeatherService({
@@ -595,7 +583,7 @@ export class Swarm {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited());
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line) => this.lab.session(line));
     this.journal = new Journal({
       dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
       frame: () => journalFrame(this.snapshot(), this.secrets()),
@@ -724,6 +712,7 @@ export class Swarm {
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
+        experiments: loadLab(loaded.experiments, Date.now()),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
@@ -876,6 +865,7 @@ export class Swarm {
       void this.voice.prune();
       void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
       void this.spend.ledger.prune();
+      void this.lab.checkSurvival((id) => this.state.repos.find((r) => r.id === id)?.fullName ?? null, (name, since) => this.backend.survivalSignals(name, since));
     }, this.backend.demo ? 60_000 : TRIM_SWEEP_MS);
     setInterval(() => {
       this.state.repos.forEach((r, i) => setTimeout(() => void this.sweepFloor(r.id), i * 1500));
@@ -900,6 +890,7 @@ export class Swarm {
     await this.spend.ledger.load();
     // A fresh demo office has a week of spending to look at.
     if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
+    if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();
@@ -1154,6 +1145,7 @@ export class Swarm {
       pong: this.state.pong,
       files: this.files.list(),
       tooling: this.tooling,
+      experiments: this.lab.view(),
     };
   }
 
@@ -2718,10 +2710,10 @@ export class Swarm {
    * What the manager's Tools & skills switches take away from a Claude Code session (the Agent SDK runs Claude Code
    * too), logged so it shows in the agent's terminal. Codex and OpenCode load their own setup: nothing.
    */
-  private sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined): SessionTools | undefined {
+  private sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined, off: string[] = []): SessionTools | undefined {
     if ((cli ?? 'claude') !== 'claude') return undefined;
     const t = this.state.settings.tools;
-    const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
+    const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', { ...mergeSwitches(t.everyone, a.tools), ...Object.fromEntries(off.map((id) => [id, false])) });
     if (tools.disallowed.length || tools.disabledPlugins.length) this.appendLog(a, [{ kind: 'system', text: `🧰 Tools & skills off this session: claude … ${toolArgsLine(tools)}` }]);
     return tools;
   }
@@ -2989,6 +2981,7 @@ export class Swarm {
       .filter(Boolean)
       .join('\n');
 
+    this.lab.assign(repo.id, issue);
     this.startAgentSession(a, repo, cwd, prompt, this.buildSystemAppend(a, repo, cwd, branch, undefined, desk.deps));
   }
 
@@ -3052,7 +3045,9 @@ export class Swarm {
     this.activity.set(a.id, Date.now());
     const how = this.sessionRuntime(a, resumeSessionId);
     const kind = this.taskKind(a);
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, how.cli), startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null });
+    const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
+    const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
+    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag });
     this.emitAgent(a);
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
@@ -3061,7 +3056,7 @@ export class Swarm {
       {
         cwd,
         prompt,
-        systemAppend,
+        systemAppend: lab.prompt ? `${systemAppend}\n\n${lab.prompt}` : systemAppend,
         model: run.model,
         effort: run.effort,
         browserTesting: repo.browserTesting,
@@ -3077,7 +3072,7 @@ export class Swarm {
         typed: mode === 'typed',
         reattach: mode === 'reattach',
         agentId: a.id,
-        tools: this.sessionToolsFor(a, how.cli),
+        tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
         ...how,
       },
       {
@@ -3951,7 +3946,8 @@ export class Swarm {
     const owed = new Set(fixes.map((q) => q.devAgentId).filter((id): id is string => !!id));
     for (const rec of waiting('queued', 'qa')) {
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
-      const tester = pickTester(free, rec.devAgentId, owed, othersCan, now - rec.updatedAt);
+      const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
+      const tester = pickTester(preferCli(free, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
       if (!tester) continue;
       void this.runQa(tester, repo, rec);
       return true;
@@ -4096,6 +4092,7 @@ export class Swarm {
     const now = Date.now();
     if (recordMerges(this.state.ops, repo.id, pulls, now) + recordChecks(this.state.ops, repo.id, pulls, now) > 0) this.save();
     void this.spend.ledger.merges(mergedPulls(repo.id, pulls, now));
+    this.lab.pulls(repo.id, pulls);
   }
 
   /** Every floor as mission control sees it now. */
@@ -5706,6 +5703,7 @@ export class Swarm {
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
+          experiments: this.lab.summary(), // only the manager starts, stops and promotes them
         },
         floors,
         pendingChanges: pending.map(req),

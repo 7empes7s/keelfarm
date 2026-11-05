@@ -4,6 +4,7 @@ import type { AgentStyle } from '../../shared/looks';
 import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
+import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 
@@ -156,6 +157,8 @@ export const api = {
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   costs: (days: number, repo?: string) => call<CostsView>('GET', `/api/costs?days=${days}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`),
+  defineExperiment: (input: ExperimentInput) => call<Experiment>('POST', '/api/experiments', input),
+  experimentAction: (id: string, action: 'start' | 'stop' | 'promote' | 'delete', variant?: string | null) => call<Experiment | null>('POST', `/api/experiments/${encodeURIComponent(id)}`, { action, variant }),
   journalEvents: (from: number, to: number, seek: boolean) => call<JournalChunk>('GET', `/api/journal/events?from=${Math.floor(from)}&to=${Math.ceil(to)}${seek ? '&seek=1' : ''}`),
   journalSample: () => call<{ day: string }>('POST', '/api/journal/sample'),
   /** Saves (or with empty fields removes) a chat app's webhook. No toast: the settings show why it was refused. */

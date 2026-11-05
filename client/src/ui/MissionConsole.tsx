@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { CostsSection } from './CostsSection';
+import { ExperimentsSection } from './ExperimentsSection';
 import { UsageBars } from './UsageBars';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
@@ -322,6 +323,7 @@ export function OpsTab({ card }: { card?: string }) {
         <h3 className="section">🛰️ The numbers</h3>
         <OpsTable />
         <CostsSection />
+        <ExperimentsSection />
       </div>
     </div>
   );
