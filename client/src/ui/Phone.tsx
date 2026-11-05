@@ -10,6 +10,7 @@ import { speechText } from '../../../shared/speech';
 import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
 import { retrySend, sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
+import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { Markdown } from './Markdown';
 import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
 import { MessageBox } from './MessageBox';
@@ -644,6 +645,24 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     }
     if (stick.current) el.scrollTop = el.scrollHeight;
   }, [messages.length, outbox.length, info.job?.kind]);
+  // At the end, the newest message stays in view while the log resizes (the keyboard), a picture loads, or the page is put back.
+  const hasCeo = ceo !== undefined;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const follow = () => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    };
+    const resized = new ResizeObserver(follow);
+    resized.observe(el);
+    el.addEventListener('load', follow, true);
+    window.addEventListener(VIEWPORT_EVENT, follow);
+    return () => {
+      resized.disconnect();
+      el.removeEventListener('load', follow, true);
+      window.removeEventListener(VIEWPORT_EVENT, follow);
+    };
+  }, [hasCeo]);
   useEffect(() => {
     if (flash === null) return;
     const t = setTimeout(() => setFlash(null), 1600);
@@ -664,6 +683,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     setReplyTo(null);
     stick.current = true;
     sendToCeo(t, to ?? undefined, files);
+    resetViewport();
   };
   // The message box's own send carries the tray's files; quick chips and suggestions send text only.
   const sendTyped = () => {
@@ -879,7 +899,12 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           att.add([...e.clipboardData.files]);
         }}
       >
-        <AttachButtons onFiles={att.add} />
+        <AttachButtons
+          onFiles={(files) => {
+            att.add(files);
+            resetViewport(); // back from the photo picker or the camera
+          }}
+        />
         <MessageBox
           value={text}
           onChange={setText}
