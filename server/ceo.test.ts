@@ -14,6 +14,7 @@ import {
   ceoSystemPrompt,
   checkCloseIssue,
   createOfficeTools,
+  WAIT_OUTPUT_MAX,
   floorCapacity,
   IssueCap,
   issueRefusal,
@@ -147,6 +148,9 @@ describe('office tools', () => {
       worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
+      waitFor: async (a) => (calls.push(['wait_for', a]), 'PR #7 on floor 1 merged.'),
+      askManager: async (a) => (calls.push(['ask_manager', a]), 'The manager answered: yes'),
+      consult: async (a) => (calls.push(['consult', a]), `Ada on floor 1 says:\n${'x'.repeat(20_000)}`),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -161,11 +165,13 @@ describe('office tools', () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       'agent_detail',
       'agent_log',
+      'ask_manager',
       'attach_file',
       'close_issue',
       'close_pull',
       'company_status',
       'configure_agent',
+      'consult',
       'escalate',
       'file_issue',
       'keep_file',
@@ -181,6 +187,7 @@ describe('office tools', () => {
       'set_dependencies',
       'set_floor_profile',
       'set_mandate',
+      'wait_for',
       'worktree_file',
     ]);
   });
@@ -201,6 +208,31 @@ describe('office tools', () => {
     expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
     expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
+  });
+
+  it("checks the waiting tools' inputs (#28)", async () => {
+    const { client, calls } = await connect();
+    const ok = async (name: string, args: Record<string, unknown>) => !(await client.callTool({ name, arguments: args })).isError;
+    expect(await ok('wait_for', { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }, { kind: 'usage', usage: 'normal' }], timeout_min: 30 })).toBe(true);
+    expect(await ok('wait_for', { conditions: [] })).toBe(false);
+    expect(await ok('wait_for', { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }], timeout_min: 31 })).toBe(false);
+    expect(await ok('wait_for', { conditions: [{ kind: 'lunch' }] })).toBe(false);
+    expect(await ok('wait_for', { conditions: Array(6).fill({ kind: 'usage' }) })).toBe(false);
+    expect(await ok('ask_manager', { question: 'Ship it?', suggestions: ['Yes', 'No'], timeout_min: 120 })).toBe(true);
+    expect(await ok('ask_manager', { question: 'Ship it?', timeout_min: 121 })).toBe(false);
+    expect(await ok('ask_manager', { question: 'Ship it?', suggestions: ['a', 'b', 'c', 'd', 'e'] })).toBe(false);
+    expect(await ok('ask_manager', { question: 'Ship it?', suggestions: ['x'.repeat(61)] })).toBe(false);
+    expect(await ok('consult', { floor: 1, question: 'How does the restore approval flow work?', hint: 'as a security reviewer' })).toBe(true);
+    expect(await ok('consult', { floor: 1, agent_id: 'ada', question: '' })).toBe(false);
+    expect(await ok('consult', { floor: 1, question: 'x'.repeat(2001) })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['wait_for', 'ask_manager', 'consult']);
+  });
+
+  it("caps what the waiting tools return (#28)", async () => {
+    const { client } = await connect();
+    const res = (await client.callTool({ name: 'consult', arguments: { floor: 1, question: 'Why?' } })) as { content: { text: string }[] };
+    expect(res.content[0].text.length).toBeLessThanOrEqual(WAIT_OUTPUT_MAX);
+    expect(res.content[0].text).toMatch(/^Ada on floor 1 says:\n/);
   });
 
   it("takes an agent's Tools & skills switches as lists of names", async () => {

@@ -8,6 +8,7 @@ import { HttpError } from './httpError.ts';
 import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
+import { ASK_MAX_MIN, WAIT_KINDS, type WaitCondition } from './ceoWaits.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -140,6 +141,9 @@ export interface OfficeHandlers {
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+  waitFor(a: { conditions: WaitCondition[]; timeout_min?: number }): Promise<string>;
+  askManager(a: { question: string; suggestions?: string[]; timeout_min?: number }): Promise<string>;
+  consult(a: { floor: number; agent_id?: string; question: string; hint?: string }): Promise<string>;
 }
 
 export interface OfficeTools {
@@ -153,6 +157,18 @@ export interface OfficeTools {
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 const CLI = z.enum(['claude', 'codex', 'opencode']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
+/** The most any of the waiting tools returns: what happened, an answer, a consult's reply. */
+export const WAIT_OUTPUT_MAX = 6500;
+/** Cut to WAIT_OUTPUT_MAX, keeping the lines (an answer's list and file:line references). */
+const capWait = (s: string) => (s.length > WAIT_OUTPUT_MAX ? `${s.slice(0, WAIT_OUTPUT_MAX - 1)}…` : s);
+const WAIT_CONDITION = z.object({
+  kind: z.enum(WAIT_KINDS as [WaitCondition['kind'], ...WaitCondition['kind'][]]),
+  floor: z.number().int().positive().optional(),
+  pr: z.number().int().positive().optional(),
+  issue: z.number().int().positive().optional(),
+  agent_id: z.string().min(1).max(100).optional(),
+  usage: z.enum(['normal', 'pacing', 'paused']).optional(),
+});
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const run = async (fn: () => string | Promise<string>) => {
@@ -363,6 +379,36 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
       (a) => run(() => h.sendTelegram(a)),
     ),
+    tool(
+      'wait_for',
+      "Wait, holding this job, until any of the conditions holds: pr_qa (floor, pr: QA's verdict), pr_merged (floor, pr), issue_closed (floor, issue), agent_idle (agent_id), preview_running (floor), usage (usage: normal, pacing or paused). Returns what happened, or that it timed out. Your session slot is free while you wait.",
+      {
+        conditions: z.array(WAIT_CONDITION).min(1).max(5),
+        timeout_min: z.number().int().min(1).max(30).optional().describe('Default 10, at most 30 (or Settings → The CEO)'),
+      },
+      (a) => run(async () => capWait(await h.waitFor(a))),
+    ),
+    tool(
+      'ask_manager',
+      `Ask the manager a question on their phone and wait for their reply (up to ${ASK_MAX_MIN} minutes). If they don't answer in time, end the job saying you're waiting; their reply comes back as a new job.`,
+      {
+        question: z.string().min(1).max(1000),
+        suggestions: z.array(z.string().min(1).max(60)).max(4).optional().describe('Replies they can tap'),
+        timeout_min: z.number().int().min(1).max(ASK_MAX_MIN).optional().describe('Default 30'),
+      },
+      (a) => run(async () => capWait(await h.askManager(a))),
+    ),
+    tool(
+      'consult',
+      "Ask an agent on a floor a question about its code (\"how does the restore approval flow work?\"): a named agent, or any free agent there. They answer in a short read-only session (no edits, commits or PRs) with file:line references; you wait for it. Several consults may run at once. Quote long answers in an artifact.",
+      {
+        floor: z.number().int().positive(),
+        agent_id: z.string().min(1).max(100).optional().describe('An id or name; leave out for any free agent on the floor'),
+        question: z.string().min(1).max(2000),
+        hint: z.string().max(200).optional().describe('A role or skill, e.g. "as a security reviewer", "use the architecture skill"'),
+      },
+      (a) => run(async () => capWait(await h.consult(a))),
+    ),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -452,6 +498,7 @@ export function ceoSystemPrompt(o: {
     '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
+    '- To see something through, wait_for it (a PR\'s QA or merge, an issue, an agent, a preview) instead of ending the job; ask_manager when you need their answer to go on; consult an agent who knows a floor\'s code. Put long consult answers in an artifact, with their file:line references and who said it ("Ada on floor 1 says: …").',
     `- ${ONE_TURN}`,
     '',
     'Rules:',

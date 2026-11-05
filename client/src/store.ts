@@ -6,6 +6,7 @@ import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
+import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
 import { messageSpeech } from '../../shared/speech';
@@ -235,6 +236,7 @@ export const useStore = create<State>((set, get) => ({
     ceoHeartbeatMin: 60,
     ceoFollowups: DEFAULT_FOLLOWUPS,
     ceoMandates: [],
+    ceoAwake: DEFAULT_CEO_AWAKE,
     managerName: '',
     companyName: '',
     dogName: DEFAULT_DOG_NAME,

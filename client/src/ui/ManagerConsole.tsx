@@ -25,7 +25,7 @@ import { StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
-import { CeoMandates, FollowupSettings } from './CeoFollowups';
+import { AwakeSettings, CeoMandates, CeoSession, FollowupSettings } from './CeoFollowups';
 import { ToolsTab } from './ToolsSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
@@ -378,6 +378,7 @@ export function CeoTab() {
         </div>
       </div>
       <div>
+        <CeoSession />
         <CeoMandates />
         <h3 className="section">📄 Team changes {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
         {pending.length === 0 && <p className="muted small">None waiting. The CEO grows or shrinks a floor's team when its work calls for it (Settings → Team changes from the CEO).</p>}
@@ -757,6 +758,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
         </label>
         <p className="muted small">A review checks team sizes, stuck PRs and floor profiles, and is skipped when nothing changed since the last one. It never files issues: new work only comes from you. The CEO's own model and effort are on the CEO tab.</p>
         <FollowupSettings />
+        <AwakeSettings />
       </div>
       <div className="card">
         <h3>⌨️ How agents run</h3>

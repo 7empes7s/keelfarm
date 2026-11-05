@@ -71,7 +71,8 @@ export function cliEnv(base: NodeJS.ProcessEnv, launchEnv: Record<string, string
     if (/^(NO_COLOR|FORCE_COLOR|TERM_PROGRAM|TERM_PROGRAM_VERSION|CODEX_THREAD_ID|OPENCODE_CONFIG_CONTENT)$/i.test(k)) continue;
     env[k] = v;
   }
-  return Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor' }, nonInteractiveEnv(env), where.machine, launchEnv);
+  // The CEO's wait_for and ask_manager hold an office tool call open for up to 2 hours.
+  return Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor', MCP_TOOL_TIMEOUT: String(150 * 60_000) }, nonInteractiveEnv(env), where.machine, launchEnv);
 }
 
 export type PermissionAnswer = { behavior: 'allow' } | { behavior: 'deny'; message: string };

@@ -35,7 +35,7 @@ import { checkTriageTarget, triageStep, type TriagePr } from './triage.ts';
 import { DEFAULT_PREVIEW, Previews, parsePreviewPatch } from './previews.ts';
 import { PREVIEW_SLUG } from './previewRunner.ts';
 import { pruneQaShots, qaShotFile, qaShotsDir, readQaShot, removeQaShots, saveQaShots } from './qaShots.ts';
-import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt, failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from './prompts.ts';
+import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt, failedLogLines, noPushNudge, ONE_TURN, ownPrLine, qaBranch, qaSystemPrompt } from './prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from './qaRetry.ts';
 import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type LastUpdate } from './officeUpdate.ts';
 import { mergeReadings, readingsChanged, readingsLabel } from '../shared/usage.ts';
@@ -79,6 +79,10 @@ import { makeArtifacts, parseCeoMessage, snapshotMessages } from '../shared/chat
 import { SWEEP_MS } from '../shared/files.ts';
 import type { QuickPicks } from '../shared/used.ts';
 import { CeoFiles, quickPicks } from './ceoFiles.ts';
+import { CeoHolds } from './ceoHold.ts';
+import { anyMet, ASK_DEFAULT_MIN, ASK_MAX_MIN, ceoSessionStep, waitLabel, waitMs, waitProblem, type WaitCondition, type WaitWorld } from './ceoWaits.ts';
+import { CONSULT_DISALLOWED, consultAnswer, consultPrompt, nextConsult, type Consult } from './consult.ts';
+import { ceoAwakeSettings, DEFAULT_CEO_AWAKE } from '../shared/ceoAwake.ts';
 import { parseReport, QA_SCHEMA, type QaReport } from './qaReport.ts';
 import { FileStore } from './files.ts';
 import type {
@@ -219,6 +223,7 @@ interface CeoState {
   lastReviewAt: number | null;
   lastFingerprint: string | null; // company state at the last review; unchanged means the next review is skipped
   followups: FollowupState; // office events waiting for a follow-up job (shared/followups.ts)
+  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null }; // its kept session (#28)
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */
@@ -439,6 +444,7 @@ export class Swarm {
       ceoHeartbeatMin: 60,
       ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
       ceoMandates: [],
+      ceoAwake: { ...DEFAULT_CEO_AWAKE },
       managerName: '',
       companyName: '',
       dogName: DEFAULT_DOG_NAME,
@@ -461,7 +467,7 @@ export class Swarm {
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups() },
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null } },
     messages: [],
     phoneReadAt: 0,
     prLimits: PR_LIMITS_VERSION,
@@ -502,6 +508,9 @@ export class Swarm {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      waitFor: (a) => this.waitFor(a),
+      askManager: (a) => this.askManager(a),
+      consult: (a) => this.consult(a),
     });
   }
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -509,6 +518,10 @@ export class Swarm {
   private ceoFiles = new CeoFiles(this.files, CEO_DIR);
 
   private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
+  private holds = new CeoHolds(() => this.emitCeo()); // the CEO's waits, questions and consults (#28)
+  private ceoWaited = false; // the current CEO job waited (the ledger's ceo-wait)
+  private consults: Consult[] = []; // queued and running, oldest first
+  private consultAnswers = new Map<string, string>();
   private ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
   private messageSeq = 1;
   private agentRt = new Map<string, AgentRuntime>();
@@ -767,6 +780,7 @@ export class Swarm {
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
+      this.state.settings.ceoAwake = ceoAwakeSettings(undefined, loaded.settings?.ceoAwake);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
@@ -1082,9 +1096,9 @@ export class Swarm {
       host: a.host === 'box' ? 'box' : 'local',
       ...(a.host === 'box' ? { cloud: this.boxMachines.stateOf(a.machine ?? machineName(a.id)), needsSignIn: !!a.needsSignIn } : {}),
       terminal: !!rt.terminal,
-      status: a.status,
+      status: this.consulting(a) ? 'working' : a.status,
       issueNumber: a.issueNumber,
-      issueTitle: a.issueTitle,
+      issueTitle: this.consulting(a) ? `Consult for ${this.ceo().name}` : a.issueTitle,
       branch: a.branch,
       prNumber: a.prNumber,
       prUrl: a.prUrl,
@@ -1333,7 +1347,7 @@ export class Swarm {
   }
 
   private running() {
-    return this.state.agents.filter((a) => BUSY.includes(a.status)).length;
+    return this.state.agents.filter((a) => BUSY.includes(a.status)).length + this.consults.filter((c) => c.runningOn).length;
   }
 
   /** Cloud agents working on a task in their Box, which an office restart doesn't stop. */
@@ -1344,7 +1358,8 @@ export class Swarm {
   /** True when the manager has set a session limit and every slot is taken. */
   private slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    return limit > 0 && this.running() >= limit;
+    // A CEO waiting on something holds no slot (#28).
+    return limit > 0 && this.running() - (this.holds.waiting() ? 1 : 0) >= limit;
   }
 
   private agentSlug(a: PersistedAgent) {
@@ -3842,6 +3857,7 @@ export class Swarm {
     if (patch.ceoHeartbeatMin !== undefined) s.ceoHeartbeatMin = Math.max(0, Math.min(1440, Math.round(Number(patch.ceoHeartbeatMin)) || 0));
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
+    if (patch.ceoAwake !== undefined) s.ceoAwake = ceoAwakeSettings(s.ceoAwake, patch.ceoAwake);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
     if (typeof patch.companyName === 'string') s.companyName = patch.companyName.trim().slice(0, 60);
     if (typeof patch.dogName === 'string') s.dogName = patch.dogName.trim().slice(0, 24) || DEFAULT_DOG_NAME;
@@ -3907,6 +3923,7 @@ export class Swarm {
    */
   private isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
+    if (this.consulting(a)) return false;
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
   }
 
@@ -4189,7 +4206,8 @@ export class Swarm {
     if (repos.length === 0) return;
     this.scheduleOffset = (this.scheduleOffset + 1) % repos.length;
     const order = [...repos.slice(this.scheduleOffset), ...repos.slice(0, this.scheduleOffset)];
-    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
+    // Consults come after QA and fixes, before new issues (#28).
+    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startConsultWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
       let progress = true;
       while (progress) {
         progress = false;
@@ -4264,6 +4282,7 @@ export class Swarm {
       );
     }
     u.drainingSince = d.drainingSince;
+    if (d.state === 'draining') this.cancelHolds('Cancelled: the office is restarting for an update. End this job now; pick it up again after the update.');
     if (d.send) void this.handOver(d.timedOut);
     this.emitOfficeUpdate();
     return d.state === 'draining' || d.state === 'updating';
@@ -4408,6 +4427,7 @@ export class Swarm {
       lastReviewAt: c.lastReviewAt,
       nextReviewAt: min > 0 && c.lastReviewAt ? c.lastReviewAt + min * 60_000 : null,
       followups: this.followupView(),
+      session: { turns: c.kept.turns, costUsd: Math.round(c.kept.costUsd * 100) / 100, startedAt: c.kept.startedAt, waiting: this.holds.waiting(), consults: this.consults.length },
     };
   }
 
@@ -4486,6 +4506,7 @@ export class Swarm {
     this.ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB);
     this.spend.ceoActs = 0;
     this.ceoAsked = askedFor(job);
+    this.ceoWaited = false;
     this.emitAgent(a);
     this.emitCeo();
     this.save();
@@ -4498,8 +4519,14 @@ export class Swarm {
       this.emitCeo();
       return;
     }
-    // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
-    const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
+    // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer; with keep-alive on,
+    // every job does until its context fills up or it sat idle too long (#28).
+    const awake = this.state.settings.ceoAwake;
+    const step = ceoSessionStep(awake, { sessionId: a.sessionId, turns: this.state.ceo.kept.turns, lastEndedAt: this.state.ceo.kept.lastEndedAt }, Date.now());
+    const resume = step.resume || (job.kind === 'chat' && !step.why);
+    if (!resume || !this.state.ceo.kept.startedAt) this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: Date.now(), lastEndedAt: null };
+    if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
+    const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
     const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null });
     rt.session = this.backend.startSession(
@@ -4515,6 +4542,7 @@ export class Swarm {
         role: 'ceo',
         office: this.officeTools(),
         tools: this.sessionToolsFor(a, 'claude'),
+        keepAlive: awake.keepAlive,
         ...how,
       },
       {
@@ -4557,6 +4585,9 @@ export class Swarm {
     a.costUsd += result.costUsd;
     a.turns += result.turns;
     recordCost(this.state.ops, '', result.costUsd, a.endedAt);
+    this.cancelHolds('The job ended.');
+    const kept = this.state.ceo.kept;
+    Object.assign(kept, { turns: kept.turns + result.turns, costUsd: kept.costUsd + result.costUsd, lastEndedAt: a.endedAt });
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
     if (job?.kind === 'triage') this.endTriage(job);
@@ -4564,7 +4595,9 @@ export class Swarm {
     this.ceoFiles.endJob();
     if (result.interrupted) this.interrupted(a);
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
-    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
+    const run = this.spend.take(a.id);
+    if (run && this.ceoWaited) run.kind = 'ceo-wait';
+    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, run, 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
     } else if (!result.ok) {
@@ -4595,6 +4628,14 @@ export class Swarm {
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
     const forward = [forwardText(t, quoted), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const rt = this.agentRt.get(a.id)!;
+    const asked = this.holds.answer(replyTo, [t, this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n')); // no quote: it answers the question asked
+    if (asked && !asked.resume) {
+      // ask_manager's answer: it goes to the waiting tool call, not into the session as a new message (#28).
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager answered: ${forward}` }]);
+      this.ceoAsked = true;
+      this.markDelivery([m.id], 'read');
+      return { id: m.id };
+    }
     if (rt.session) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
@@ -5930,5 +5971,164 @@ export class Swarm {
     const repo = this.floorRepo(x.floor);
     const d = await this.backend.prDiff(repo.fullName, Number(x.pr), !!x.patch);
     return prDiffText({ files: d.files, diff: d.diff === null ? null : scrub(d.diff, this.secrets()) });
+  }
+
+  // ---------- the CEO's waits, questions and consults (#28) ----------
+
+  private consulting(a: PersistedAgent) {
+    return this.consults.some((c) => c.runningOn === a.id);
+  }
+
+  /** End the CEO's waits and questions, and consults no session waits for any more. */
+  private cancelHolds(why: string) {
+    if (!this.holds.waiting()) return;
+    this.holds.cancel(why);
+    this.consults = this.consults.filter((c) => c.runningOn);
+  }
+
+  /** The office as wait_for sees it. */
+  private waitWorld(): WaitWorld {
+    const rt = (floor: number) => {
+      const repo = this.state.repos.find((r) => r.floor === floor);
+      return repo ? { repo, rt: this.repoRt.get(repo.id) } : null;
+    };
+    return {
+      floors: this.state.repos.map((r) => r.floor),
+      qa: (floor, pr) => {
+        const f = rt(floor);
+        const q = f && this.state.qa.find((x) => x.repoId === f.repo.id && x.prNumber === pr);
+        return q ? { status: q.status, summary: q.summary } : null;
+      },
+      pr: (floor, pr) => {
+        const f = rt(floor);
+        return f?.rt?.pulls.find((p) => p.number === pr)?.state ?? f?.rt?.closedPulls.get(pr)?.state ?? null;
+      },
+      issue: (floor, n) => {
+        const f = rt(floor);
+        return f?.rt?.issues.some((i) => i.number === n) ? 'OPEN' : f?.rt?.closedIssues.has(n) ? 'CLOSED' : null;
+      },
+      agent: (id) => {
+        const a = this.state.agents.find((x) => x.id === id || x.name.toLowerCase() === id.toLowerCase());
+        return a ? { name: a.name, status: this.consulting(a) ? 'working' : a.status } : null;
+      },
+      preview: (floor) => {
+        const f = rt(floor);
+        return f ? this.previews.view(f.repo).status : null;
+      },
+      usage: () => this.usageNow().state,
+    };
+  }
+
+  /** wait_for: hold the CEO's job until any condition holds, or the timeout. An issue that leaves the open list has closed. */
+  private waitFor(x: { conditions: WaitCondition[]; timeout_min?: number }) {
+    const w = this.waitWorld();
+    for (const c of x.conditions) {
+      const problem = waitProblem(c, w);
+      if (problem) throw new Error(problem);
+    }
+    this.ceoWaited = true;
+    const live = (): WaitWorld => {
+      const now = this.waitWorld();
+      return { ...now, issue: (f, n) => now.issue(f, n) ?? 'CLOSED' };
+    };
+    return this.holds.wait(x.conditions.map(waitLabel).join(' or '), () => anyMet(x.conditions, live()), waitMs(x.timeout_min, this.state.settings.ceoAwake.maxWaitMin));
+  }
+
+  /** ask_manager: the question on the manager's phone (with suggestion chips), held until they answer. */
+  private askManager(x: { question: string; suggestions?: string[]; timeout_min?: number }) {
+    const chips = x.suggestions?.length ? `\n\`\`\`suggestions\n${x.suggestions.join('\n')}\n\`\`\`` : '';
+    const m = this.postMessage('ceo', `${x.question}${chips}`);
+    this.markDelivery('all', 'replied');
+    this.ceoWaited = true;
+    const min = Math.max(1, Math.min(ASK_MAX_MIN, x.timeout_min ?? ASK_DEFAULT_MIN));
+    return this.holds.ask({ id: `q${m.id}`, messageId: m.id, text: x.question, at: Date.now(), waiting: true }, min * 60_000);
+  }
+
+  /** consult: a question for an agent on a floor, queued for a free one (or the one named) and waited for. */
+  private consult(x: { floor: number; agent_id?: string; question: string; hint?: string }) {
+    const repo = this.floorRepo(x.floor);
+    const named = x.agent_id ? this.agentByRef(x.agent_id) : null;
+    if (named && (named.repoId !== repo.id || named.role === 'ceo')) throw new Error(`${named.name} doesn't work on floor ${repo.floor}.`);
+    if (named?.host === 'box') throw new Error(`${named.name} works in a cloud machine: consult a local agent on floor ${repo.floor}.`);
+    if (!named && !this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.host !== 'box')) throw new Error(`Floor ${repo.floor} has no local agents to consult.`);
+    const awake = this.state.settings.ceoAwake;
+    const c: Consult = { id: crypto.randomUUID(), repoId: repo.id, floor: repo.floor, agentId: named?.id ?? null, question: x.question, hint: x.hint?.trim() || null, at: Date.now(), runningOn: null };
+    this.consults.push(c);
+    this.appendLog(this.ceo(), [{ kind: 'system', text: `🔎 Consult queued: ${named ? named.name : `any free agent on floor ${repo.floor}`}` }]);
+    setTimeout(() => this.schedule(), 100);
+    // Queued behind QA and fixes, then its own time cap: the wait allows for both.
+    return this.holds
+      .wait(`${named ? named.name : `floor ${repo.floor}`}'s answer`, () => this.consultAnswers.get(c.id) ?? null, (awake.consultMin + 15) * 60_000)
+      .then((text) => {
+        this.consultAnswers.delete(c.id);
+        if (!c.runningOn) this.consults = this.consults.filter((q) => q !== c);
+        return text;
+      });
+  }
+
+  /** A free agent on this floor takes the next consult (nextConsult). True: one started. */
+  private startConsultWork(repo: PersistedRepo): boolean {
+    const free = this.available(repo).filter((a) => a.host !== 'box' && !this.agentRt.get(a.id)?.session);
+    const pick = nextConsult(this.consults, repo.id, free.map((a) => a.id), this.state.settings.ceoAwake.consultMax);
+    const a = pick && this.state.agents.find((x) => x.id === pick.agentId);
+    if (!pick || !a) return false;
+    this.startConsult(a, pick.consult, repo);
+    return true;
+  }
+
+  /** A consult session: the agent's own worktree (or the floor's clone of main), read-only, under its time cap. */
+  private startConsult(a: PersistedAgent, c: Consult, repo: PersistedRepo) {
+    const rt = this.agentRt.get(a.id)!;
+    c.runningOn = a.id;
+    const startedAt = Date.now();
+    const desk = a.machine ? this.deskOf(a, repo) : null;
+    const cwd = desk && this.backend.deskExists(desk) ? desk : this.backend.mainDir(repo.fullName);
+    this.appendLog(a, [{ kind: 'system', text: '' }, { kind: 'system', text: `━━━ 🔎 consult · ${this.ceo().name} asks: ${clip(c.question, 200)} ━━━` }]);
+    this.emitAgent(a);
+    const run = this.spend.start(a.id, { kind: 'consult', effort: resolveEffort(a.effort, 'consult', this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, 'claude') || a.model, startedAt, round: null });
+    const t = this.state.settings.tools;
+    const tools = sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
+    const inTerminal = this.state.settings.runtime === 'terminal' && this.backend.terminals;
+    const finished = (result: SessionResult) => {
+      clearTimeout(cap);
+      rt.session = null;
+      rt.currentTool = null;
+      this.consults = this.consults.filter((q) => q !== c);
+      const text = result.ok ? consultAnswer(a.name, repo.floor, result.text) : `${a.name} couldn't answer: ${result.errors.join('; ') || 'the consult session failed'}.`;
+      this.appendLog(a, [{ kind: result.ok ? 'done' : 'error', text: `🔎 consult · ${result.ok ? 'answered' : 'no answer'} in ${Math.max(1, Math.round((Date.now() - startedAt) / 60_000))}m` }]);
+      void this.spend.record({ ...a, startedAt, issueNumber: null, prNumber: null }, repo.id, run, 'consult', result, { stopped: false, ceoHint: 'done' });
+      this.consultAnswers.set(c.id, text);
+      this.holds.check();
+      this.emitAgent(a);
+      setTimeout(() => this.schedule(), 300);
+    };
+    rt.session = this.backend.startSession(
+      {
+        cwd,
+        prompt: consultPrompt(c, repo.fullName, this.ceo().name),
+        systemAppend: `You are ${a.name}, an agent on floor ${repo.floor}, answering a question from the CEO. ${ONE_TURN}`,
+        model: run.model,
+        effort: run.effort,
+        browserTesting: false,
+        additionalDirectories: [],
+        role: a.role,
+        tools: { ...tools, disallowed: [...tools.disallowed, ...CONSULT_DISALLOWED] },
+        readOnly: true,
+        agentId: a.id,
+        ...(inTerminal ? { terminal: this.terminalFor(a), cli: 'claude' as const, label: `${a.name} · consult` } : {}),
+      },
+      {
+        log: (entries) => this.appendLog(a, entries),
+        tool: (name) => {
+          rt.currentTool = name;
+          this.emitAgent(a);
+        },
+        sessionId: () => undefined, // their own task's session stays the one to resume
+        browserUrl: () => undefined,
+        screenshot: () => undefined,
+        finished,
+      },
+    );
+    const cap = setTimeout(() => rt.session?.stop(), this.state.settings.ceoAwake.consultMin * 60_000);
   }
 }
