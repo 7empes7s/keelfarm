@@ -1,8 +1,10 @@
 // The CEO's follow-ups (#27): which office events wake the CEO (Settings → The CEO), and on the CEO tab the events
-// waiting for a follow-up and the manager's standing mandates, each with a remove button.
+// waiting for a follow-up and the manager's standing mandates, each with a ⋯ menu to remove it.
 import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
+import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 import { DEFAULT_FOLLOWUPS, FOLLOWUP_KINDS, MANDATE_MAX_CHARS, mandateWhere } from '../../../shared/followups';
 import type { CeoMandate, FollowupSettings as Followups } from '../../../shared/followups';
 
@@ -45,9 +47,20 @@ function MandateRow({ m, all }: { m: CeoMandate; all: CeoMandate[] }) {
     <div className="card small" style={{ padding: 8, marginBottom: 6, opacity: expired ? 0.6 : 1 }}>
       <div className="row">
         <span style={{ flex: 1 }}>“{m.text}”</span>
-        <button className="btn btn-small btn-bad" aria-label={`Remove the mandate “${m.text}”`} onClick={() => save({ ceoMandates: all.filter((x) => x.id !== m.id) })}>
-          Remove
-        </button>
+        <Menu
+          label={`More for the mandate “${m.text}”`}
+          title="Mandate"
+          items={[
+            {
+              label: 'Remove…',
+              danger: true,
+              onSelect: () =>
+                void confirmDialog({ tone: 'danger', title: 'Remove this mandate?', body: 'The CEO stops acting on it.', confirm: 'Remove' }).then((ok) => {
+                  if (ok) save({ ceoMandates: all.filter((x) => x.id !== m.id) });
+                }),
+            },
+          ]}
+        />
       </div>
       <div className="muted">
         {mandateWhere(m)}

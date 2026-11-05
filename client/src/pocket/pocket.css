@@ -23,7 +23,6 @@ html.pocket-mode[data-readable-font] {
   gap: 8px;
   overflow-x: auto;
   scroll-padding-inline: 12px;
-  scroll-snap-type: x proximity;
   scrollbar-width: none;
 }
 .pk-console .pk-console-chips::-webkit-scrollbar {
@@ -31,88 +30,28 @@ html.pocket-mode[data-readable-font] {
 }
 .pk-console .pk-chip {
   flex: none;
-  padding: 8px 14px;
-  border-width: 2px;
-  font-size: 0.9rem;
-  scroll-snap-align: start;
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-4);
+  border: var(--ds-border) solid var(--ds-outline);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
 }
 .pk-console .pk-chip-on {
-  background: var(--ink);
-  color: #fff;
+  background: var(--accent);
+  color: var(--ds-on-color);
+  box-shadow: var(--ds-shadow-1);
 }
 
-/* cards: the office's outline, lighter, with room to breathe */
-.pk-console .card {
-  gap: 10px;
-  padding: 14px 16px;
-  border-width: 2px;
-  border-radius: 16px;
-  box-shadow: 0 3px 0 rgba(31, 29, 43, 0.85);
-}
-.pk-console .floor-card {
-  border-left-width: 8px;
-}
-.pk-console .card h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 2px 0 0;
-  font-size: 1.05rem;
-}
-.pk-console h3.section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 18px 4px 10px;
-  font-size: 1.1rem;
-}
-.pk-console p.small,
-.pk-console .muted.small {
-  line-height: 1.45;
-}
-.pk-console .floor-card a {
-  color: var(--ink);
-  text-decoration: none;
-}
-.pk-console code {
-  overflow-wrap: anywhere;
-  word-break: break-all;
-}
-.pk-console summary {
-  padding: 8px 0;
-  font-weight: 600;
-  cursor: pointer;
-}
-.pk-console .office-badge {
-  color: var(--ink);
-}
-
-/* fields: labels above, big touch targets; 16px text so iPhones don't zoom in on focus */
-.pk-console .field {
-  gap: 6px;
-  margin: 4px 0;
-}
+/* cards, headings, fields and buttons come from the design system's console rules (design.css, .ds-console) */
 .pk-console .field > span:first-child {
-  color: var(--muted);
+  color: var(--ds-text-muted);
   font-size: 0.8rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
-.pk-console :is(input:not([type='checkbox'], [type='radio'], [type='color'], [type='range']), select, textarea) {
-  min-height: 44px;
-  border-radius: 12px;
-  font-size: 16px;
-}
 .pk-console textarea {
   min-height: 88px;
-}
-.pk-console .row {
-  gap: 8px;
-}
-.pk-console .btn-small {
-  min-height: 36px;
-  padding: 6px 12px;
-  font-size: 0.88rem;
 }
 
 /* checkboxes as switches, the label on the left and the switch on the right (all of pocket mode, the Kanban too) */
@@ -122,6 +61,7 @@ html.pocket-mode[data-readable-font] {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+  min-height: var(--ds-target);
   padding: 6px 0;
 }
 .pocket input[type='checkbox'] {
@@ -132,9 +72,9 @@ html.pocket-mode[data-readable-font] {
   width: 44px;
   height: 26px;
   margin: 0;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ds-outline);
   border-radius: 999px;
-  background: #d9d6cf;
+  background: var(--ds-line-strong);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -145,7 +85,7 @@ html.pocket-mode[data-readable-font] {
   left: 2px;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ds-outline);
   border-radius: 50%;
   background: #fff;
   box-sizing: border-box;
@@ -171,13 +111,13 @@ html.pocket-mode[data-readable-font] {
   gap: 10px;
   margin: 8px 0;
   padding: 12px;
-  border: 2px solid rgba(31, 29, 43, 0.18);
+  border: 2px solid var(--ds-line-strong);
   border-radius: 14px;
 }
 .pk-console label.toggle.block:has(> input[type='radio']:checked) {
-  border-color: var(--ink);
-  background: #fff4ea;
-  box-shadow: 0 2px 0 var(--ink);
+  border-color: var(--ds-outline);
+  background: var(--ds-surface-hover);
+  box-shadow: var(--ds-shadow-1);
 }
 .pk-console input[type='radio'] {
   flex: none;
@@ -185,39 +125,6 @@ html.pocket-mode[data-readable-font] {
   height: 20px;
   margin: 2px 0 0;
   accent-color: var(--accent);
-}
-
-/* a floor's colour as a round swatch */
-.pk-console input[type='color'] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  overflow: hidden;
-  cursor: pointer;
-}
-.pk-console input[type='color']::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-.pk-console input[type='color']::-webkit-color-swatch {
-  border: none;
-  border-radius: 50%;
-}
-.pk-console input[type='color']::-moz-color-swatch {
-  border: none;
-  border-radius: 50%;
-}
-
-/* the Team tab's roster: each agent a small card */
-.pk-console .team:not(.stats-table) tr {
-  margin: 8px 0;
-  padding: 10px 12px;
-  border: 1.5px solid rgba(31, 29, 43, 0.14);
-  border-radius: 12px;
-  background: #fbf9f4;
 }
 
 @media (prefers-reduced-motion: reduce) {

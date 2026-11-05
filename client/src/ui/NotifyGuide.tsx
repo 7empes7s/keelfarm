@@ -9,6 +9,7 @@ import { NTFY_APPS, ntfyLinks } from '../../../shared/ntfy';
 import type { NotifyHealth, PushTestView } from '../../../shared/types';
 import { allowNotifications, currentPush, enablePush, preparePush, pushSupport, startWorker, workerState, type PushPrep } from '../pwa';
 import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 import { deviceLabel, guideSteps, nextStep, platformOf, type GuideInput, type StepAction, type WorkerState } from './notifySteps';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -318,12 +319,14 @@ export function ChannelHealth() {
             <button className="btn btn-small" onClick={() => void test(d.id)}>
               Test
             </button>
-            <button className="btn btn-small btn-ghost" onClick={() => void rename(d.id, d.name)}>
-              Rename
-            </button>
-            <button className="btn btn-small btn-ghost" onClick={() => void remove(d.id, d.name)}>
-              Remove
-            </button>
+            <Menu
+              label={`More for ${d.name}`}
+              title={d.name}
+              items={[
+                { label: 'Rename…', onSelect: () => void rename(d.id, d.name) },
+                { label: 'Remove this device…', hint: 'The office stops pushing to it', danger: true, onSelect: () => void remove(d.id, d.name) },
+              ]}
+            />
           </div>
           <Health last={d.last} />
           {results[d.id] && (
