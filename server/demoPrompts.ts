@@ -3,6 +3,9 @@ import path from 'node:path';
 import type { LogEntry } from './agentRunner.ts';
 import { answerHook } from './unblock.ts';
 
+/** The prompt a fake session is blocked on now and then, until the manager answers it. */
+export const BLOCKED_DEMO = "a permission prompt the office couldn't answer";
+
 /**
  * The prompts a real session can raise, answered by the office exactly as it answers them there (unblock.ts): a
  * write to a folder Claude Code guards (a skill in the worktree's .claude) and a question nobody is there to answer.

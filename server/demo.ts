@@ -24,7 +24,7 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
-import { demoPrompts } from './demoPrompts.ts';
+import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -203,8 +203,6 @@ function screenshotSvg(title: string, url: string, hue: number) {
 }
 
 type Step = LogEntry[] | (() => void);
-
-const BLOCKED_DEMO = "a permission prompt the office couldn't answer";
 
 function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: number, issueTitle: string): Step[] {
   const branch = path.basename(opts.cwd);
