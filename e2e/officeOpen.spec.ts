@@ -59,7 +59,7 @@ test.describe('the 3D office from pocket mode on a phone', () => {
 
 // These fail on purpose, so the console errors and the failed request they cause are expected: Playwright's own test.
 bare.describe('the 3D office failing to open', () => {
-  bare.use(PHONE);
+  bare.use({ ...PHONE, serviceWorkers: 'block' }); // the office's worker would fetch the chunk past page.route
 
   bare('a chunk that will not load shows the error screen, and Back to pocket works', async ({ page }) => {
     await page.route(/\/assets\/Office-[^/]+\.js$/, (route) => route.abort());

@@ -24,8 +24,8 @@ const SETTLED_MS = 15_000;
 function useBootSteps() {
   const started = useStore((s) => s.started);
   useEffect(() => {
-    if (!started) return void bootStep('starting the 3D view');
-    bootStep('entering the office');
+    bootStep(started ? 'entering the office' : 'starting the 3D view');
+    if (!started) return;
     const t = setTimeout(bootDone, SETTLED_MS);
     return () => clearTimeout(t);
   }, [started]);
