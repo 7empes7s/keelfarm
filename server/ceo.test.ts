@@ -510,7 +510,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
-          restartAgent: ok, messageAgent: async () => 'ok',
+          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok,
         },
         () => researching,
       ),

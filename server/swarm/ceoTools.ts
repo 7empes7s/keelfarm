@@ -323,10 +323,18 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
   }
 
+  /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
+  protected refuseWhileUpdating() {
+    if (this.officeUpdate.drainingSince !== null || this.officeUpdate.sent) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+  }
+
   protected restartAgent(x: { agent_id: string }) {
     const a = checkRestart(this.agentByRef(x.agent_id));
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
-    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    if (resumes) {
+      this.refuseWhileUpdating();
+      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
   }
@@ -335,6 +343,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const a = this.agentByRef(x.agent_id);
     if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
     const running = !!this.agentRt.get(a.id)?.session;
+    if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }

@@ -46,9 +46,9 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
 }
 
-const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
 
-/** The CEO's next job among those `ready`: replies to the manager and triage first, reviews and follow-ups last. */
+/** The CEO's next job among those `ready`: replies to the manager first (#46: a preempted job never comes before the reply), then triage, reviews and follow-ups last. */
 export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
   return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find(ready);
 }

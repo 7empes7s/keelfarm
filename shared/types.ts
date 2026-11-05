@@ -677,6 +677,13 @@ export interface CeoInfo {
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
+  held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
+}
+
+/** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */
+export interface CeoHeld {
+  reason: 'usage';
+  until: number;
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */

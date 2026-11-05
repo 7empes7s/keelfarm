@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
+import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
 import { speechText } from '../../../shared/speech';
 import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
@@ -570,10 +570,8 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const readAt = useStore((s) => s.phoneReadAt);
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const info = useStore((s) => s.ceo);
-  const settings = useStore((s) => s.settings);
   const repos = useStore((s) => s.repos);
   const goToFloor = useStore((s) => s.goToFloor);
-  const running = useStore((s) => Object.values(s.agents).filter(isBusy).length);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [menu, setMenu] = useState<Item | null>(null);
@@ -679,8 +677,8 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           ? 'researching…'
           : `busy: ${info.job?.label ?? 'working'}`
       : chatQueued
-        ? settings.sessionLimit && running >= settings.sessionLimit
-          ? `will reply when a session slot frees up (${running}/${settings.sessionLimit} busy)`
+        ? info.held
+          ? 'held by the usage limit'
           : 'reading your message…'
         : info.queue.length
           ? `next up: ${info.queue[0].label}`
@@ -836,6 +834,11 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           <button type="button" className="chat-reply-x" aria-label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)}>
             ✕
           </button>
+        </div>
+      )}
+      {chatQueued && info.held && (
+        <div className="chat-held small" role="status">
+          ⏸ {heldBanner(info.held)}
         </div>
       )}
       <AttachTray pending={att.pending} onRemove={att.remove} />
