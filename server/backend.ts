@@ -26,6 +26,7 @@ import type { CostRecord } from '../shared/costs.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
 import type { UsageWarning } from './pacing.ts';
+import { realResources, type ResourceProbe } from './health.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
@@ -107,6 +108,8 @@ export interface Backend {
   survivalSignals(fullName: string, since: number): Promise<SurvivalSignals>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
   previews: PreviewBackend;
+  /** Memory, swap and load, and what agents' processes use (server/health.ts). */
+  resources: ResourceProbe;
   /** The running office's own folder and its launcher, for the office's self-update. */
   office: OfficeHost;
   /** Text to speech for the manager's phone (ElevenLabs). */
@@ -181,6 +184,7 @@ export interface DemoDoctor {
 
 export const realBackend: Backend = {
   demo: false,
+  resources: realResources,
   user: github.currentUser,
   listMyRepos: github.listMyRepos,
   repoMeta: github.repoMeta,

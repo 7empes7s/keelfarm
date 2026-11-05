@@ -1,4 +1,4 @@
-import type { AgentPatch, AgentView, LogLine, RepoPatch, RepoView, ServerEvent } from '../shared/types.ts';
+import type { AgentPatch, AgentView, ClientEvent, LogLine, RepoPatch, RepoView, ServerEvent } from '../shared/types.ts';
 import { catchUp, latestListed, NO_WATCH, parseWatch, sameWatch, seesAll, type Watch } from '../shared/watch.ts';
 
 // What the office sends its tabs over /ws, made to scale (#228). Most events go out as they happen, but those that come
@@ -27,6 +27,15 @@ export interface OutboxHost {
 
 /** How often batched changes go out: at most four times a second per agent. */
 export const FLUSH_MS = 250;
+
+/** A tab's message on /ws asking for the live office again (ClientEvent 'resync'). */
+export function isResync(raw: unknown): boolean {
+  try {
+    return (JSON.parse(String(raw)) as Partial<ClientEvent> | null)?.type === 'resync';
+  } catch {
+    return false;
+  }
+}
 
 const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
 

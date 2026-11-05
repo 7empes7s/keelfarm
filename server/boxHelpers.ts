@@ -56,6 +56,9 @@ process.stdin.on('end', () => {
   if (b.hook_event_name === 'PreToolUse') {
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'Approved by cubefarm' } }));
   }
+  // Nobody can answer in a Box either: its own dialogs are allowed, MCP forms declined (unblock.ts on this computer).
+  if (b.hook_event_name === 'PermissionRequest') process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } }));
+  if (b.hook_event_name === 'Elicitation') process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'Elicitation', action: 'decline' } }));
 });
 `;
 

@@ -24,6 +24,7 @@ import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
+import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
@@ -225,6 +226,9 @@ function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: nu
     [{ kind: 'tool', tool: 'Grep', text: '⏺ Grep "useTodos"' }, { kind: 'result', text: '  ⎿ Found 6 matches in 4 files' }],
     [{ kind: 'text', text: "● The state lives in a single hook. I'll extend it and keep the API backwards compatible." }],
     [{ kind: 'tool', tool: 'Edit', text: `⏺ Edit ${file}` }, { kind: 'result', text: '  ⎿ Updated' }],
+    ...(issueNumber % 3 === 0 ? [demoPrompts(opts.cwd)] : []), // now and then, the prompts the office answers for them
+    // and, rarer, one it couldn't: blocked for a moment (the desk's ⛔ sign), until the manager answers it
+    ...(issueNumber % 5 === 0 ? [() => cb.blocked?.(BLOCKED_DEMO), [{ kind: 'error' as const, text: `⛔ Blocked: ${BLOCKED_DEMO}. Open the terminal to answer it.` }], () => cb.blocked?.(null)] : []),
     [{ kind: 'tool', tool: 'Write', text: '⏺ Write src/__tests__/feature.test.ts' }, { kind: 'result', text: '  ⎿ Saved' }],
     [{ kind: 'tool', tool: 'Bash', text: '⏺ $ npm test -- --run' }],
     [
@@ -683,8 +687,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     if (!f) throw new Error(`${dir} is not a folder`);
     return f;
   };
+  let lowMemory = false; // the health strip's Simulate low memory: too little left for another session (a big company: a big server)
   return {
     demo: true,
+    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, simulate: (low) => void (lowMemory = low) },
     user: async () => 'demo-manager',
     listMyRepos: async (): Promise<GhRepoSummary[]> =>
       [...repos.values()].map((r) => ({ nameWithOwner: r.fullName, description: r.description, visibility: 'PUBLIC', updatedAt: now() })),
@@ -1341,7 +1347,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         else if (/failed QA/.test(e) && pr) await use('qa_report', { floor, pr });
         else if (agent && / error | stalled /.test(e)) {
           await use('agent_log', { agent_id: agent, lines: 50 });
-          if (/ error /.test(e)) needs.push(`${e.split(' (')[0]} is still in an error; reset them from their desk if it keeps happening.`);
+          if (/ error /.test(e) && (await use('restart_agent', { agent_id: agent })).startsWith('Refused')) needs.push(`${e.split(' (')[0]} is still in an error and I couldn't restart them; reset them from their desk.`);
         } else await think('Nothing there needs me.');
       }
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');

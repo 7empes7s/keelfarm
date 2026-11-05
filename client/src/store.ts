@@ -5,6 +5,7 @@ import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
+import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
 import { emptyLabView, type LabView } from '../../shared/experiments';
@@ -130,6 +131,7 @@ interface State {
   officeCommit?: string | null; // undefined: the server can't update itself
   officeUpdate?: OfficeUpdateView;
   usage: UsageView; // Claude's subscription usage: normal, pacing after a warning, or paused at the limit
+  health: HealthView | null; // memory, load and sessions for the health strip (null: a server without it, or a replay)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
@@ -224,6 +226,7 @@ export const useStore = create<State>((set, get) => ({
   // Until the server's snapshot arrives; setupDone stays true so the wizard doesn't flash while loading.
   settings: {
     sessionLimit: 0,
+    memory: DEFAULT_MEMORY,
     defaultModel: 'claude-opus-5-5',
     defaultEffort: 'medium',
     taskEffort: {},
@@ -267,6 +270,7 @@ export const useStore = create<State>((set, get) => ({
   chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
+  health: null,
   claudeUsage: [],
   ops: EMPTY_OPS,
   doctor: [],
@@ -348,6 +352,7 @@ export const useStore = create<State>((set, get) => ({
           officeCommit: d.officeCommit,
           officeUpdate: d.officeUpdate,
           usage: d.usage,
+          health: d.health ?? null,
           claudeUsage: d.claudeUsage ?? [],
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
@@ -528,6 +533,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'usage':
         set({ usage: ev.usage });
+        break;
+      case 'health':
+        set({ health: ev.health });
         break;
       case 'claudeUsage':
         set({ claudeUsage: ev.readings });

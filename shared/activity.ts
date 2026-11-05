@@ -17,6 +17,7 @@ export const ACTIVITY_ICONS: Record<ActivityKind, string> = {
   fix: '🔧',
   talk: '💬',
   run: '⚙️',
+  blocked: '⛔',
 };
 
 /** What each kind is called on the hover card ("editing · store.ts"). */
@@ -32,6 +33,7 @@ export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   fix: 'fixing a PR',
   talk: 'talking to you',
   run: 'running',
+  blocked: 'blocked on',
 };
 
 /** The longest detail shown over a head. */
@@ -180,7 +182,7 @@ function commandKind(words: string[]): ActivityKind | null {
 }
 
 // When a line runs several commands, the sign shows the one that says most about the work.
-const RANK: Record<ActivityKind, number> = { ci: 9, test: 8, build: 7, git: 6, edit: 5, browse: 4, read: 3, run: 2, qa: 1, fix: 1, talk: 1 };
+const RANK: Record<ActivityKind, number> = { ci: 9, test: 8, build: 7, git: 6, edit: 5, browse: 4, read: 3, run: 2, qa: 1, fix: 1, talk: 1, blocked: 0 };
 
 // A word worth showing after the program: a subcommand or a short name. Long mixes of letters and digits could be a
 // key passed on the command line, so the sign stops before them.

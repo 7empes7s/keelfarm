@@ -294,7 +294,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         plugin: [ctx.plugin],
         instructions: [ctx.files.system],
         autoupdate: false, // several agents starting at once must not each reinstall it
-        permission: { edit: 'allow', bash: 'allow', webfetch: 'allow' }, // it can't stop to ask either
+        permission: { edit: 'allow', bash: 'allow', webfetch: 'allow', doom_loop: 'allow', external_directory: 'allow' }, // it can't stop to ask either
         ...opencodeLocal(local),
         ...(ctx.browser ? { mcp: { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } } } : {}),
       };
