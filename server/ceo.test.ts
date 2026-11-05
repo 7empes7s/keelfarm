@@ -32,6 +32,7 @@ import {
   type DependsRequest,
   type TeamNow,
 } from './ceo.ts';
+import { RESEARCH_NO_FILING } from './research.ts';
 
 describe('seats', () => {
   it('match the desks the client draws', () => {
@@ -475,6 +476,12 @@ describe('follow-ups (#27)', () => {
     expect(refused).toMatch(/No standing mandate .* floor 2/);
     expect(refused).toMatch(/final message/);
     expect(refused).toMatch(/set_mandate/);
+  });
+
+  it('refuses file_issue during research, even after a message from the manager', () => {
+    for (const asked of [false, true]) expect(issueRefusal({ kind: 'research', asked, floor: 3, mandate })).toBe(RESEARCH_NO_FILING);
+    expect(RESEARCH_NO_FILING).toMatch(/suggestions/);
+    expect(RESEARCH_NO_FILING).toMatch(/plan job/);
   });
 
   it('keeps the old rule for every other job', () => {

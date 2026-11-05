@@ -26,6 +26,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
+import { researchBrief } from './demoResearch.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -1297,6 +1298,16 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const team = grow ? ` ${await scale(s, f, grow)}` : '';
       return `I turned the brief into three issues on floor ${floor}. #${n} sets up the skeleton; the other two say "Depends on #${n}", so nobody starts them early.${team}`;
     },
+    // Research: look outward and inward, then bring options with sources, filing nothing (server/research.ts).
+    async research(topic: string, floor: number | null) {
+      const s = await status();
+      const f = s.floors.find((x) => x.floor === floor) ?? s.floors[0];
+      await step([{ kind: 'tool', tool: 'WebSearch', text: `⏺ Web Search("${short(topic, 60)} best practices")` }, { kind: 'result', text: '  ⎿ Did 1 search' }]);
+      await step([{ kind: 'tool', tool: 'WebFetch', text: '⏺ Fetch(https://developer.mozilla.org/en-US/docs/Web)' }, { kind: 'result', text: '  ⎿ Received 48.2KB' }]);
+      if (f) await read(`${f.repo}/README.md`, 40);
+      await think('Three distinct ways to do it. Facts and guesses kept apart.');
+      return researchBrief(topic, f ? `floor ${f.floor} (\`${f.repo.split('/').pop()}\`)` : 'your floors');
+    },
     async review() {
       const s = await status();
       await think('Checking each floor for work waiting on free agents, and agents waiting on work.');
@@ -1424,6 +1435,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
+    : prompt.startsWith('Research for the manager:')
+      ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
     : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUOTE_CHARS, excerpt, forwardText, isQuestion, nextDelivery, parseForwarded, settleOutbox, yesNoFor, type OutgoingMessage } from './chat.ts';
+import { QUOTE_CHARS, RESEARCH_PREFIX, excerpt, forwardText, isQuestion, nextDelivery, parseForwarded, researchTopic, settleOutbox, yesNoFor, type OutgoingMessage } from './chat.ts';
 import type { PhoneMessage } from './types.ts';
 
 describe('forwardText', () => {
@@ -30,6 +30,19 @@ describe('forwardText', () => {
   it('reads the quote back (the demo CEO answers with it)', () => {
     expect(parseForwarded('Message from the manager: Replying to your message: «Go?» Yes')).toEqual({ quote: 'Go?', reply: 'Yes' });
     expect(parseForwarded('Just a message')).toBeNull();
+  });
+});
+
+describe('researchTopic', () => {
+  it("reads the topic of the 🔎 button's message and a typed one", () => {
+    expect(researchTopic(`${RESEARCH_PREFIX}voice notes on phones`)).toBe('voice notes on phones');
+    expect(researchTopic('  research:   how others do onboarding ')).toBe('how others do onboarding');
+    expect(researchTopic('🔎 Research: dark mode')).toBe('dark mode');
+  });
+
+  it('is null for other messages', () => {
+    expect(researchTopic('Can you research dark mode?')).toBeNull();
+    expect(researchTopic('Research:   ')).toBeNull();
   });
 });
 

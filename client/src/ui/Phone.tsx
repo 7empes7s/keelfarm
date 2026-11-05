@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
+import { DELIVERY_LABEL, excerpt, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
 import { speechText } from '../../../shared/speech';
 import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
@@ -676,7 +676,9 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     ceo.status === 'working'
       ? replying
         ? 'typing…'
-        : `busy: ${info.job?.label ?? 'working'}`
+        : info.job?.kind === 'research'
+          ? 'researching…'
+          : `busy: ${info.job?.label ?? 'working'}`
       : chatQueued
         ? settings.sessionLimit && running >= settings.sessionLimit
           ? `will reply when a session slot frees up (${running}/${settings.sessionLimit} busy)`
@@ -869,6 +871,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           }}
         />
         <MicButton kind="phone" value={text} onChange={setText} onSend={send} />
+        {/* Research: the CEO brainstorms with the web and the manager's apps, and brings options with sources (server/research.ts). */}
+        <button type="button" className="btn btn-small" disabled={!text.trim() || researchTopic(text) !== null} onClick={() => send(`${RESEARCH_PREFIX}${text.trim()}`, null)} aria-label={`Ask ${ceo.name} to research this`} title="Research it: options with sources, from the web and your apps">
+          🔎
+        </button>
         <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
           Send
         </button>

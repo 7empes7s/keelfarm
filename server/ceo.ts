@@ -7,6 +7,7 @@ import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type QaStatu
 import { HttpError } from './httpError.ts';
 import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
+import { DEFAULT_RESEARCH_MIN, RESEARCH_NO_FILING, researchPrompt, short } from './research.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
@@ -23,8 +24,31 @@ export interface CeoJob {
   prNumber?: number; // triage: the stuck pull request
   text?: string; // chat: the manager's message(s)
   events?: FollowupEvent[]; // followup: what happened
-  messageIds?: number[]; // chat: those messages' ids, marked read when the job starts
+  messageIds?: number[]; // chat / research / a plan picked from research: the manager's messages, marked read when the job starts
+  topic?: string; // research: what to research
+  pick?: string; // plan: the option the manager picked from the CEO's research
+  brief?: string; // plan: where that research brief was saved
   at: number;
+}
+
+/** Queue a CEO job: one onboarding and one plan per floor, one review, one research per topic; chat messages and follow-up events merge. */
+export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
+  const same = q.findIndex(
+    (j) =>
+      j.kind === job.kind &&
+      (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
+  );
+  if (same < 0) q.push(job);
+  else if (job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
+  else if (job.kind === 'chat') q[same] = { ...q[same], text: `${q[same].text}\n${job.text}`, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] };
+  else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
+}
+
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
+
+/** The CEO's next job: replies to the manager and triage first, among those `ready`. Research, the long one, waits out pacing too. */
+export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean, usage: 'normal' | 'pacing' | 'paused'): CeoJob | undefined {
+  return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find((j) => ready(j) && (j.kind !== 'research' || usage === 'normal'));
 }
 
 /** What the CEO's tools do. Implemented by the swarm; errors are returned to the CEO as tool errors. */
@@ -40,6 +64,7 @@ const noMandate = (floor: number) =>
  * message); in a follow-up only on a floor a mandate covers; never otherwise.
  */
 export function issueRefusal(o: { kind: CeoJobKind | null; asked: boolean; floor: number; mandate: CeoMandate | null }): string | null {
+  if (o.kind === 'research') return RESEARCH_NO_FILING;
   if (o.asked) return null;
   if (o.kind === 'followup') return o.mandate ? null : noMandate(o.floor);
   return NOT_ASKED;
@@ -430,6 +455,7 @@ export function ceoSystemPrompt(o: {
     '- Understand each project: what it is, its stack and how far along it is. Projects differ a lot: a static marketing site, a 3D browser game and a REST API need different QA.',
     `- Size each floor's team from its throughput (team, throughput, capacity and spend in company_status: costPerMerge is 7 days' cost per merged PR, wasteToday what sessions without a result cost today): grow it when issues ready to start or PRs waiting for QA keep waiting for free agents, shrink it when agents sit idle with nothing ready. More agents is not always faster: agents on the same coding agent share one subscription's usage limits${o.sessionLimit ? `, at most ${o.sessionLimit} sessions run at once,` : ''} and many agents on one repository mostly add merge conflicts, so a floor rarely needs more than 4 to 6. A floor holds at most ${o.maxAgents}. When the manager asks for a different size, follow that.`,
     "- Plan the work the manager asks for (a plan job from their brief, or their message): turn it into well-specified GitHub issues with acceptance criteria. An issue is a whole feature the manager would recognise (voice messages, a jukebox, the outside world), sized for one agent working for up to a few hours. Agents have large context windows and handle long jobs. Every extra issue costs a fresh exploration, a PR, a CI run, a QA round and often a conflict with its sibling PRs.",
+    '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',
     '- Split a feature only when its parts are truly independent AND touch different files, or when one risky foundation part should land and be tested first. Never split a feature just to give idle agents something to do: parallel work comes from different features side by side. Unrelated small fixes are still their own issues.',
     "- Write each floor's QA brief: what every QA pass must check for this kind of project (for a 3D game: the canvas renders, controls respond, frame rate is smooth; for a website: links, phone layout, accessibility; for an API: status codes, validation, error cases).",
     '',
@@ -475,8 +501,10 @@ function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string
   ].join('\n');
 }
 
-export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = []): string {
+export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = [], researchMin = DEFAULT_RESEARCH_MIN): string {
   switch (job.kind) {
+    case 'research':
+      return researchPrompt(job.topic ?? '', floor, researchMin);
     case 'followup':
       return followupPrompt(job.events ?? [], mandates);
     case 'triage':
@@ -513,11 +541,13 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       if (!floor) return 'A floor you were asked to plan has been removed. Reply "Nothing to do."';
       return [
         `The manager has a brief for floor ${floor.floor} (${floor.fullName}, clone at ${floor.clone}):`,
-        `"""${floor.mission}"""`,
+        `"""${floor.mission || job.topic || ''}"""`,
+        ...(job.pick ? [`They picked from your research on it: "${job.pick}".${job.brief ? ` Your research brief: ${job.brief} (read it first).` : ''} Plan that pick.`] : []),
         '',
         'Plan the next milestone toward it:',
         `- Read the current code and the ${floor.backlog} open issues first, so you build on what exists and do not duplicate anything.`,
         '- One issue per whole feature. Split a feature only when its parts are independent and touch different files, or a risky foundation part should land first. Only for an empty or nearly empty repository does a skeleton issue come first, with the others depending on it.',
+        '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',
         '- File the issues.',
         '- Make sure the team size fits the work: scale_team when ready issues would keep waiting for free agents.',
         '- Update the floor profile and QA brief if the brief changes what the project is.',
@@ -552,6 +582,8 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
       return `Triaging PR #${job.prNumber ?? '?'} · ${where}`;
     case 'followup':
       return `Following up on ${followupLabel(job.events ?? [])}`;
+    case 'research':
+      return `Researching "${short(job.topic ?? '')}"`;
   }
 }
 

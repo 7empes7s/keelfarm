@@ -230,6 +230,7 @@ export const useStore = create<State>((set, get) => ({
     scaling: 'approve',
     maxAgents: DEFAULT_MAX_AGENTS,
     ceoHeartbeatMin: 60,
+    researchMin: 20,
     ceoFollowups: DEFAULT_FOLLOWUPS,
     ceoMandates: [],
     managerName: '',
