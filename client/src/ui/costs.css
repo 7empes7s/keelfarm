@@ -1,0 +1,52 @@
+/* Mission control → Where the plan goes (ui/CostsSection.tsx). The tables are .ops-table ones: these rules win by
+   specificity, whatever order the stylesheets load in. */
+
+.ops-table.costs-table td:last-child,
+.ops-table.costs-table thead th:last-child {
+  font-weight: inherit;
+}
+.ops-table.costs-table thead th {
+  text-align: right;
+}
+.ops-table.costs-table thead th:first-child {
+  text-align: left;
+}
+.costs-floor {
+  border-left: 5px solid var(--accent);
+}
+.costs-total {
+  margin: 8px 0;
+}
+.costs-total > .row > b {
+  font-size: 1.3rem;
+}
+.costs-waste-pill {
+  background: #fde2e7;
+  color: #a3123a;
+}
+.costs-kinds {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.costs-kinds li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 7.5em;
+  gap: 8px;
+  padding: 2px 0;
+}
+.costs-kinds li > :last-child {
+  text-align: right;
+}
+.costs-list {
+  margin: 4px 0 8px;
+  padding-left: 1.4em;
+}
+.costs-list li {
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+ul.costs-list {
+  list-style: none;
+  padding-left: 0;
+}

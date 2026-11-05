@@ -12,6 +12,7 @@ import { IssueForm } from './KanbanView';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
+import { EffortByKind } from './CostsSection';
 import { NotifySettings } from './NotifySettings';
 import { ProfileSettings } from './ProfileSettings';
 import { Panel } from './Panel';
@@ -682,6 +683,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
             ))}
           </select>
         </label>
+        <EffortByKind />
         <p className="muted small">
           {terminal
             ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'

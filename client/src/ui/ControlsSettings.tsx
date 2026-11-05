@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { SENSITIVITY_MAX, SENSITIVITY_MIN, useLookPrefs } from '../world/look';
 import { pad, padName, watchPads } from '../world/gamepad';
+import { isTouch, setTouchSensitivity, TOUCH_SENS_MAX, TOUCH_SENS_MIN, useTouchLook } from '../world/touch/touchState';
 import { clearBinding, resetControls, setBinding, setPadSensitivity, useControls } from './controls';
 import { ACTIONS, PAD_SENSITIVITY_MAX, PAD_SENSITIVITY_MIN, SLOTS, actionDef, exactKeyLabel, findConflicts, keyLabel, type ActionDef, type ActionId } from './keymap';
 
@@ -60,6 +61,22 @@ function GamepadSettings() {
       <p className="muted small pad-map">
         Left stick walks (click it to run) · right stick looks · <b>A</b> uses (like E) · <b>B</b> goes back (Esc) · <b>X</b> picks up or drops · triggers throw and fire · <b>Y</b> reloads · <b>Start</b> the phone ·{' '}
         <b>Select</b> the overview (twice: the building) · <b>LB</b>/<b>RB</b> turn the overview, where the left stick pans, the right stick zooms and <b>A</b> opens what's in the middle.
+      </p>
+    </div>
+  );
+}
+
+function TouchSettings() {
+  const sens = useTouchLook((s) => s.sensitivity);
+  return (
+    <div className="mouse-settings">
+      <label className="mouse-sens">
+        <span>Look sensitivity</span>
+        <input type="range" min={TOUCH_SENS_MIN} max={TOUCH_SENS_MAX} step={0.05} value={sens} onChange={(e) => setTouchSensitivity(Number(e.target.value))} />
+        <b>{sens.toFixed(2)}×</b>
+      </label>
+      <p className="muted small pad-map">
+        Drag anywhere to walk (push far to run) · a second finger looks around · tap something to use it · hold it, then let go, for more options.
       </p>
     </div>
   );
@@ -153,6 +170,12 @@ export function ControlsSettings() {
       )}
       <h3>Mouse</h3>
       <MouseSettings />
+      {isTouch && (
+        <>
+          <h3>Touch</h3>
+          <TouchSettings />
+        </>
+      )}
       <h3>Gamepad</h3>
       <GamepadSettings />
       <div className="controls-reset">

@@ -11,6 +11,19 @@ export type Pick = (point: THREE.Vector3, root: THREE.Object3D) => Focus | null;
 
 export const interactables = new Map<THREE.Object3D, Focus & { range: number; pick?: Pick }>();
 
+/** What `ray` lands on first among the interactables, if it's within that one's range: the crosshair's aim, or a tap's. */
+export function pickFocus(ray: THREE.Raycaster): Focus | null {
+  ray.far = 8;
+  for (const h of ray.intersectObjects([...interactables.keys()], true)) {
+    let o: THREE.Object3D | null = h.object;
+    while (o && !interactables.has(o)) o = o.parent;
+    if (!o) continue;
+    const info = interactables.get(o)!;
+    return h.distance <= info.range ? (info.pick?.(h.point, o) ?? { id: info.id, label: info.label, action: info.action }) : null;
+  }
+  return null;
+}
+
 export function useInteractable<T extends THREE.Object3D>(focus: Focus | null, range = 3.2, pick?: Pick) {
   const ref = useRef<T>(null);
   const key = focus ? `${focus.id}|${focus.label}` : '';

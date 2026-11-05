@@ -22,6 +22,7 @@ import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
 import type { OpsHistory } from './metrics.ts';
+import type { CostRecord } from '../shared/costs.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
 
@@ -116,6 +117,8 @@ export interface Backend {
   cloud: CloudBackend;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
+  /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
+  seedCosts?(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */

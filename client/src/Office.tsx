@@ -8,6 +8,9 @@ import { ReplayBar } from './ui/TimeLapse';
 import { Overlays } from './ui/Overlays';
 import { StartScreen } from './ui/StartScreen';
 import { Tutorial } from './ui/Tutorial';
+import { HoldMenu } from './ui/HoldMenu';
+import { TouchStick } from './ui/TouchStick';
+import { useTouchPage } from './ui/touchMode';
 
 // Photo mode's panel loads the first time it's opened; the HUD and the tutorial hide while it's on.
 const PhotoPanel = lazy(() => import('./photo/PhotoPanel'));
@@ -15,6 +18,7 @@ const PhotoPanel = lazy(() => import('./photo/PhotoPanel'));
 export default function Office() {
   const photo = usePhotoGate((s) => s.active);
   useEffect(installPhoto, []);
+  useTouchPage();
   return (
     <>
       <Game />
@@ -25,8 +29,10 @@ export default function Office() {
       ) : (
         <HUD />
       )}
+      {!photo && <TouchStick />}
       <ReplayBar />
       <Overlays />
+      <HoldMenu />
       {!photo && <Tutorial />}
       <StartScreen />
       {statsEnabled && <StatsReadout />}

@@ -45,6 +45,8 @@ import { boxVersions, cliLabel, isCli } from './clis.ts';
 import { machineName, type MachineProvider } from './machines.ts';
 import { MACHINES_DIR, type DeskTrim } from './workspace.ts';
 import { envSecrets, Journal } from './journal.ts';
+import { CostLedger, costsRequest, floorSpend, mergedPulls, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
+import { resolveEffort, type CostsView, type TaskKind } from '../shared/costs.ts';
 import { sampleDay, seeded } from './journalSample.ts';
 import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
@@ -427,6 +429,7 @@ export class Swarm {
       sessionLimit: 0,
       defaultModel: DEFAULT_MODEL,
       defaultEffort: 'medium',
+      taskEffort: {},
       runtime: 'terminal',
       defaultCli: 'claude',
       scaling: 'approve',
@@ -472,23 +475,24 @@ export class Swarm {
    * a shared one left the next session connected but without any tools while an earlier session still held it.
    */
   private officeTools(): OfficeTools {
+    const acts = this.spend.acts;
     return createOfficeTools({
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
-      setFloorProfile: (a) => this.setFloorProfile(a),
-      scaleTeam: (a) => this.scaleTeam(a),
-      configureAgent: (a) => this.configureAgent(a),
+      setFloorProfile: acts((a) => this.setFloorProfile(a)),
+      scaleTeam: acts((a) => this.scaleTeam(a)),
+      configureAgent: acts((a) => this.configureAgent(a)),
       fileIssue: (a) => this.fileIssue(a),
-      setDependencies: (a) => this.setDependencies(a),
-      closeIssue: (a) => this.closeIssue(a),
-      retryQa: (a) => this.triageRetryQa(a),
-      sendBack: (a) => this.triageSendBack(a),
-      rerunChecks: (a) => this.triageRerunChecks(a),
-      closePull: (a) => this.triageClosePull(a),
-      escalate: (a) => this.triageEscalate(a),
+      setDependencies: acts((a) => this.setDependencies(a)),
+      closeIssue: acts((a) => this.closeIssue(a)),
+      retryQa: acts((a) => this.triageRetryQa(a)),
+      sendBack: acts((a) => this.triageSendBack(a)),
+      rerunChecks: acts((a) => this.triageRerunChecks(a)),
+      closePull: acts((a) => this.triageClosePull(a)),
+      escalate: acts((a) => this.triageEscalate(a)),
       attachFile: (a) => this.ceoFiles.attach(a),
       keepFile: (a) => this.ceoFiles.keep(a),
-      setMandate: (a) => this.setMandate(a),
+      setMandate: acts((a) => this.setMandate(a)),
       agentLog: (a) => this.agentLog(a),
       qaReport: (a) => this.qaReport(a),
       worktreeFile: (a) => this.worktreeFile(a),
@@ -560,6 +564,8 @@ export class Swarm {
   /** Cloud agents waiting for a sign-in in their terminal (holdForSignIn), by agent id. */
   private signIns = new Map<string, SignIn>();
   private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
+  /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
+  private spend: SessionCosts;
 
   constructor(private backend: Backend) {
     this.weather = new WeatherService({
@@ -581,6 +587,7 @@ export class Swarm {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited());
     this.journal = new Journal({
       dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
       frame: () => journalFrame(this.snapshot(), this.secrets()),
@@ -860,6 +867,7 @@ export class Swarm {
       void this.trimIdleDesks();
       void this.voice.prune();
       void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
+      void this.spend.ledger.prune();
     }, this.backend.demo ? 60_000 : TRIM_SWEEP_MS);
     setInterval(() => {
       this.state.repos.forEach((r, i) => setTimeout(() => void this.sweepFloor(r.id), i * 1500));
@@ -881,6 +889,9 @@ export class Swarm {
       .catch((err) => console.warn('could not look for agent CLIs', err));
     void this.refreshTooling();
     await this.journal.start();
+    await this.spend.ledger.load();
+    // A fresh demo office has a week of spending to look at.
+    if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();
@@ -3034,6 +3045,8 @@ export class Swarm {
     a.status = 'working';
     this.activity.set(a.id, Date.now());
     const how = this.sessionRuntime(a, resumeSessionId);
+    const kind = this.taskKind(a);
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, how.cli), startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null });
     this.emitAgent(a);
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
@@ -3043,8 +3056,8 @@ export class Swarm {
         cwd,
         prompt,
         systemAppend,
-        model: this.modelFor(a, how.cli),
-        effort: a.effort || this.state.settings.defaultEffort,
+        model: run.model,
+        effort: run.effort,
         browserTesting: repo.browserTesting,
         additionalDirectories: linked ?? (a.host === 'box' ? [] : this.linkedRepos(repo).map((r) => this.backend.mainDir(r.fullName))),
         role: a.role,
@@ -3121,9 +3134,18 @@ export class Swarm {
     a.costUsd += result.costUsd;
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, result.costUsd, Date.now());
+    void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...result, ok: false }, { stopped: false });
     // The login its servers turned away is forgotten, so the Box reads as signed out until the manager signs it in again.
     await this.boxMachines.signOut(this.machineOf(a), cli).catch(() => undefined);
     this.holdForSignIn(a, cli, again, true);
+  }
+
+  private taskKind = (a: PersistedAgent) => taskKindOf(a.task, this.prRecord(a)?.fixReason);
+  private prRecord = (a: PersistedAgent) => (a.prNumber === null ? undefined : this.state.qa.find((q) => q.repoId === a.repoId && q.prNumber === a.prNumber));
+
+  /** GET /api/costs: the usage view over the last `days` days, for one floor or all of them. */
+  costsView(days: unknown, repoId: unknown): CostsView {
+    return costsRequest(this.spend.ledger.all(), days, repoId, (id) => this.state.repos.some((r) => r.id === id));
   }
 
   private async onFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
@@ -3133,6 +3155,7 @@ export class Swarm {
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
     rt.currentTool = rt.blocked = null;
+    const run = this.spend.take(a.id);
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
     a.turns += result.turns;
@@ -3141,11 +3164,14 @@ export class Swarm {
     // Dev servers the agent forgot to stop would otherwise keep its port and lock its desk folder.
     void this.releaseDesk(a, repo).catch(() => undefined);
     if (result.interrupted) this.interrupted(a);
+    const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' };
 
     if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
     else if (a.task === 'qa') await this.onQaFinished(a, repo, result);
     else if (a.task === 'fix') await this.onFixFinished(a, repo, result);
     else await this.onIssueFinished(a, repo, result);
+    // The task's handler has run, so its outcome hint is in.
+    void this.spend.record({ ...a, issueNumber: a.issueNumber ?? ledger.issue, prNumber: a.prNumber ?? ledger.pr }, repo.id, run, this.taskKind(a), result, ledger);
 
     this.emitAgent(a);
     this.save();
@@ -3186,6 +3212,7 @@ export class Swarm {
     }
     this.issueFailures.delete(`${repo.id}#${a.issueNumber}`);
     a.status = 'done';
+    this.spend.outcome(a.id, a.prNumber ? 'pr' : 'no-pr');
     if (a.prNumber) this.ledger({ kind: 'opened', repoId: repo.id, pr: a.prNumber, title: a.issueTitle ?? '', author: a.id, at: Date.now() }, false);
     this.appendLog(a, [{ kind: 'done', text: `✔ Finished in ${this.minutes(a)}m · ${a.turns} turns${a.prNumber ? ` · PR #${a.prNumber}` : ' · no PR found'}` }]);
     const failedEarly = a.prNumber ? this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === a.prNumber && q.status === 'failed') : undefined;
@@ -3459,6 +3486,7 @@ export class Swarm {
 
     a.status = 'done';
     const pass = report.verdict === 'pass';
+    this.spend.outcome(a.id, pass ? 'qa-pass' : 'qa-fail');
     if (rec) this.ledger({ kind: 'qa', repoId: repo.id, pr: rec.prNumber, round: rec.round, pass, tester: a.id, author: rec.devAgentId, at: Date.now() });
     this.appendLog(a, [{ kind: pass ? 'done' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${a.prNumber} · ${report.checks.length} checks · ${rt.shots.length} screenshots` }]);
 
@@ -3669,6 +3697,7 @@ export class Swarm {
     }
     if (!rec || !this.state.qa.includes(rec)) {
       a.status = 'done';
+      this.spend.outcome(a.id, 'commit');
       this.appendLog(a, [{ kind: 'done', text: `✔ Fix pushed for PR #${a.prNumber} in ${this.minutes(a)}m. Back to QA.` }]);
       return;
     }
@@ -3682,6 +3711,7 @@ export class Swarm {
       if (next.do === 'retest') {
         this.fixNudged.delete(key);
         a.status = 'done';
+        this.spend.outcome(a.id, 'no-change');
         this.appendLog(a, [{ kind: 'done', text: `✔ No change needed for PR #${rec.prNumber}: ${noChange?.replace(/[.!\s]+$/, '')}. Back to QA for a re-test.` }]);
         this.setQa(rec, { ...next.set, devSessionId: a.sessionId ?? rec.devSessionId });
         this.toast('info', `${a.name} says PR #${rec.prNumber} needs no change; QA re-tests it`);
@@ -3690,6 +3720,7 @@ export class Swarm {
       if (next.do === 'nudge') {
         this.fixNudged.add(key);
         a.status = 'done';
+        this.spend.outcome(a.id, 'no-commit');
         this.appendLog(a, [{ kind: 'system', text: `No new commits were pushed for PR #${rec.prNumber}; asking ${a.name} once more.` }]);
         // message() starts the session before its first await, so the scheduler can't hand this developer other work first.
         void this.message(a.id, noPushNudge(rec.prNumber, repo.defaultBranch)).catch(() => {
@@ -3701,8 +3732,12 @@ export class Swarm {
         return;
       }
     }
-    if (!step.pushed) return this.unpushed(a, repo, rec, step);
+    if (!step.pushed) {
+      this.spend.outcome(a.id, 'no-commit');
+      return this.unpushed(a, repo, rec, step);
+    }
     a.status = 'done';
+    this.spend.outcome(a.id, 'commit');
     this.appendLog(a, [step.log]);
     this.setQa(rec, { ...step.set, devSessionId: a.sessionId ?? rec.devSessionId });
     this.toast(
@@ -3775,6 +3810,7 @@ export class Swarm {
     }
     if (patch.defaultModel !== undefined) s.defaultModel = String(patch.defaultModel).trim() || (s.defaultCli === 'claude' ? DEFAULT_MODEL : '');
     if (patch.defaultEffort !== undefined && EFFORTS.includes(patch.defaultEffort)) s.defaultEffort = patch.defaultEffort;
+    if (patch.taskEffort !== undefined) s.taskEffort = taskEfforts(s.taskEffort, patch.taskEffort, EFFORTS);
     if (patch.runtime === 'terminal' || patch.runtime === 'sdk') s.runtime = patch.runtime;
     if (patch.scaling === 'approve' || patch.scaling === 'auto') s.scaling = patch.scaling;
     if (patch.maxAgents !== undefined) s.maxAgents = clampMaxAgents(patch.maxAgents);
@@ -4054,6 +4090,7 @@ export class Swarm {
   private recordSync(repo: PersistedRepo, pulls: PullInfo[]) {
     const now = Date.now();
     if (recordMerges(this.state.ops, repo.id, pulls, now) + recordChecks(this.state.ops, repo.id, pulls, now) > 0) this.save();
+    void this.spend.ledger.merges(mergedPulls(repo.id, pulls, now));
   }
 
   /** Every floor as mission control sees it now. */
@@ -4420,6 +4457,7 @@ export class Swarm {
       this.state.ceo.lastFingerprint = this.fingerprint();
     }
     this.ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB);
+    this.spend.ceoActs = 0;
     this.ceoAsked = askedFor(job);
     this.emitAgent(a);
     this.emitCeo();
@@ -4435,13 +4473,15 @@ export class Swarm {
     }
     // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
     const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
+    const kind: TaskKind = `ceo-${job.kind}`;
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null });
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
         prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now())),
         systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
-        model: a.model || CEO_MODEL,
-        effort: a.effort || CEO_EFFORT,
+        model: run.model,
+        effort: run.effort,
         browserTesting: false,
         // The clones, and QA's screenshots for qa_report's paths.
         additionalDirectories: [...this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)), QA_SHOTS_DIR],
@@ -4495,6 +4535,8 @@ export class Swarm {
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
     if (result.interrupted) this.interrupted(a);
+    const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
+    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
     } else if (!result.ok) {
@@ -4933,6 +4975,7 @@ export class Swarm {
     }
     this.watch.remedied.set(p.key, now);
     if (remedy === 'requeue' && a) {
+      if (this.agentRt.get(a.id)?.session) this.spend.watchdogStopped(a.id);
       const repo = this.state.repos.find((r) => r.id === a.repoId);
       this.followup(followupEvents.stalled(a, what, mins, repo?.id, repo && this.floorName(repo)));
       this.requeue(a, `the watchdog put ${what} back in line after ${mins} ${p.kind === 'quiet' ? 'quiet minutes and a nudge' : 'minutes setting up a desk'}`);
@@ -5615,6 +5658,7 @@ export class Swarm {
             qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
             qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
           },
+          spend: floorSpend(this.spend.ledger.all(), r.id, Date.now()),
           capacity: {
             issuesReadyToStart: this.readyIssues(r).length,
             ...floorCapacity({
