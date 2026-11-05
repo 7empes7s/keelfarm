@@ -13,7 +13,6 @@ import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type Us
 import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
-import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory } from './metrics.ts';
 import { takeLastUpdate, underLauncher, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
@@ -24,6 +23,8 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { sampleOffice } from './costSample.ts';
+import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -599,41 +600,6 @@ export function demoUsage(kind: 'warning' | 'limit', now: number): UsageWarning 
   return { resetsAt: midnight.getTime(), rateLimitType: 'seven_day', utilization: 0.91 };
 }
 
-/**
- * A believable past week for mission control: each floor merged a few PRs every working day (the first floor more),
- * most QA rounds and check runs passed, and sessions cost around a dollar. `rand` is there for the tests.
- */
-export function demoPastWeek(repos: string[], now: number, rand: () => number = Math.random): OpsHistory {
-  const h = emptyHistory();
-  const min = 60_000;
-  let n = 0;
-  repos.forEach((repo, floor) => {
-    const pace = floor === 0 ? 1 : 0.6;
-    for (let day = 6; day >= 0; day--) {
-      const midnight = startOfDay(now) - day * DAY_MS;
-      const merges = Math.round((3 + rand() * 4) * pace);
-      for (let k = 0; k < merges; k++) {
-        const at = midnight + (9 + rand() * 9) * HOUR_MS; // working hours
-        const rounds = rand() < 0.3 ? 2 : 1; // now and then QA failed it once first
-        const pr = -++n; // made up, so never a real PR's number
-        h.merges.push([at, repo, pr, Math.round((25 + rand() * 200) * min)]);
-        for (let r = 0; r < rounds; r++) {
-          const before = (rounds - r) * 20 * min;
-          h.qa.push([at - before, repo, r === rounds - 1, Math.round((1 + rand() * 14) * min), pr, r + 1]);
-          h.checks.push([at - before - 6 * min, repo, `past${String(n++).padStart(4, '0')}`, rand() > 0.12, Math.round((2.5 + rand() * 5) * min)]);
-          h.cost.push([at - before, repo, Math.round((0.3 + rand()) * 100) / 100], [at - before - 40 * min, repo, Math.round((0.4 + rand() * 1.2) * 100) / 100]);
-        }
-      }
-      for (const hour of [10, 15]) h.cost.push([midnight + hour * HOUR_MS, '', Math.round((0.5 + rand() * 0.8) * 100) / 100]); // the CEO's reviews
-    }
-  });
-  for (const list of [h.merges, h.qa, h.checks, h.cost] as [number, ...unknown[]][][]) {
-    for (let i = list.length - 1; i >= 0; i--) if (list[i][0] > now) list.splice(i, 1); // nothing from later today
-  }
-  prune(h, now);
-  return h;
-}
-
 // Claude's usage warning, faked once so the office can be seen pacing new work: the 4th session gets it, and the
 // window "resets" 5 minutes later.
 const USAGE_WARNING_AT = 4;
@@ -941,6 +907,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
+    seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     simulateUsage: demoUsage,
     demoDoctor: {

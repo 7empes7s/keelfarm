@@ -4,17 +4,20 @@
 // window.__swarmA11y shows the settings and what they come to, and set() changes them, for QA and e2e.
 
 import { create } from 'zustand';
-import { DEFAULT_A11Y, normalizeA11yPrefs, parseA11yPrefs, reducesMotion, showsShapes, type A11yPrefs } from './a11yPrefs';
+import { defaultA11y, normalizeA11yPrefs, parseA11yPrefs, reducesMotion, showsShapes, type A11yPrefs } from './a11yPrefs';
 import { paletteVars, PALETTE_VAR_NAMES, type StatusLook } from './statusLook';
 
 const KEY = 'cubefarm:a11y';
 const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
 
+/** A touch screen starts with a bigger UI scale (a11yPrefs.ts defaultA11y). */
+const touch = typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
+
 function load(): A11yPrefs {
   try {
-    return parseA11yPrefs(localStorage.getItem(KEY));
+    return parseA11yPrefs(localStorage.getItem(KEY), touch);
   } catch {
-    return { ...DEFAULT_A11Y };
+    return defaultA11y(touch);
   }
 }
 
@@ -26,7 +29,7 @@ interface A11yState {
   systemReduced: boolean;
 }
 
-export const useA11y = create<A11yState>(() => ({ prefs: typeof window === 'undefined' ? { ...DEFAULT_A11Y } : load(), systemReduced: typeof window !== 'undefined' && systemReduced() }));
+export const useA11y = create<A11yState>(() => ({ prefs: typeof window === 'undefined' ? defaultA11y() : load(), systemReduced: typeof window !== 'undefined' && systemReduced() }));
 
 export const getA11y = () => useA11y.getState().prefs;
 
@@ -41,7 +44,7 @@ export const statusLook = (p: A11yPrefs = getA11y()): StatusLook => ({ palette: 
 
 /** Changes some settings and saves them in this browser. */
 export function setA11y(patch: Partial<A11yPrefs>) {
-  const prefs = normalizeA11yPrefs({ ...getA11y(), ...patch });
+  const prefs = normalizeA11yPrefs({ ...getA11y(), ...patch }, defaultA11y(touch));
   try {
     localStorage.setItem(KEY, JSON.stringify(prefs));
   } catch {
@@ -50,7 +53,7 @@ export function setA11y(patch: Partial<A11yPrefs>) {
   useA11y.setState({ prefs });
 }
 
-export const resetA11y = () => setA11y(DEFAULT_A11Y);
+export const resetA11y = () => setA11y(defaultA11y(touch));
 
 // ---------- the page ----------
 
@@ -84,7 +87,7 @@ if (typeof window !== 'undefined') {
   }
   // Another tab changed the settings.
   window.addEventListener('storage', (e) => {
-    if (e.key === KEY) useA11y.setState({ prefs: parseA11yPrefs(e.newValue) });
+    if (e.key === KEY) useA11y.setState({ prefs: parseA11yPrefs(e.newValue, touch) });
   });
   Object.defineProperty(window, '__swarmA11y', {
     configurable: true,

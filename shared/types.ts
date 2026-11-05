@@ -5,6 +5,7 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { TaskKind } from './costs.ts';
 import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
@@ -357,6 +358,7 @@ export interface SwarmSettings {
   memory: MemorySettings; // memory headroom, the per-session ceiling and learned estimates (shared/health.ts)
   defaultModel: string;
   defaultEffort: EffortLevel;
+  taskEffort: Partial<Record<TaskKind, EffortLevel>>; // effort per kind of task (#18); an agent's own wins, and a kind without one runs at the default
   runtime: AgentRuntime;
   defaultCli: AgentCli; // what agents run in their terminals unless they have their own
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once

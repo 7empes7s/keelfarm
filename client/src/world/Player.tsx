@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { loadView, pendingRequests, saveView, unreadMessages, useStore, type Focus } from '../store';
 import { api } from '../api';
 import { EYE_HEIGHT, ROOF, SPAWN, collide, surfaceAt, type Rect } from './layout';
-import { interactables } from './interact';
+import { pickFocus } from './interact';
+import { isTouch, TOUCH_LOOK, touchInput, useTouchLook } from './touch/touchState';
 import { shutDoorways } from './doors';
 import { LOOK_RADIANS_PER_PX, createLookFilter, filterLookDelta, resetLookFilter, useLookPrefs } from './look';
 import { confirmDialog, isConfirmOpen } from '../ui/Confirm';
@@ -57,7 +58,8 @@ const hushMouse = () => {
 /** Grab the mouse for looking around. Must be called from a click handler. */
 export function requestLook() {
   const s = useStore.getState();
-  if (!canvasEl || s.overlay || !s.started || isConfirmOpen() || !lookAllowed() || photoActive()) return;
+  // A touch screen has no mouse to grab: its fingers look around (touch/TouchControls.tsx).
+  if (isTouch || !canvasEl || s.overlay || !s.started || isConfirmOpen() || !lookAllowed() || photoActive()) return;
   const el = canvasEl;
   // Raw (unadjusted) input skips the OS mouse path that produces bogus spikes on Windows.
   // Browsers that can't do it reject with NotSupportedError (Firefox ignores the option).
@@ -474,16 +476,21 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     const k = keys.current;
     const b = bindings();
     const padOn = !s.overlay && !isConfirmOpen() && s.started;
-    const px = padOn ? pad.lx : 0;
-    const py = padOn ? pad.ly : 0;
+    // the touch joystick (touch/TouchControls.tsx) walks like the left stick
+    const px = padOn ? Math.max(-1, Math.min(1, pad.lx + touchInput.x)) : 0;
+    const py = padOn ? Math.max(-1, Math.min(1, pad.ly + touchInput.y)) : 0;
     if (!px && !py) padRun.current = false;
     const fwd = Math.max(-1, Math.min(1, (anyHeld(b, 'forward', k) ? 1 : 0) - (anyHeld(b, 'back', k) ? 1 : 0) - py));
     const strafe = Math.max(-1, Math.min(1, (anyHeld(b, 'right', k) ? 1 : 0) - (anyHeld(b, 'left', k) ? 1 : 0) + px));
-    const running = anyHeld(b, 'run', k) || padRun.current;
+    const running = anyHeld(b, 'run', k) || padRun.current || (padOn && touchInput.run);
     const speed = running ? 6.5 : 3.6;
     tickSip();
 
     // another view has the camera (camera/rig.ts): you stay where you were standing
+    if (rigOwnsCamera() || s.held?.kind === 'paddle') {
+      touchInput.lookX = 0; // a look drag here would turn you once you're back on foot
+      touchInput.lookY = 0;
+    }
     if (rigOwnsCamera()) {
       if (cameraMode() === 'follow' && (px || py)) exitView();
       rigInput.right = strafe;
@@ -533,6 +540,17 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     }
     if (p && takePerchTurn()) look.current = { yaw: p.yaw, pitch: p.pitch };
 
+    // a second finger looks around, like the mouse
+    if (touchInput.lookX || touchInput.lookY) {
+      if (padOn) {
+        const turn = TOUCH_LOOK * useTouchLook.getState().sensitivity * (p?.look ?? 1);
+        const flip = useLookPrefs.getState().invertY ? -1 : 1;
+        look.current.yaw -= touchInput.lookX * turn;
+        look.current.pitch = Math.max(p?.minPitch ?? -1.35, Math.min(p?.maxPitch ?? 1.35, look.current.pitch - touchInput.lookY * turn * flip));
+      }
+      touchInput.lookX = 0;
+      touchInput.lookY = 0;
+    }
     // the right stick looks around, no mouse grab needed
     if (padOn && (pad.rx || pad.ry)) {
       const turn = PAD_TURN * useControls.getState().padSensitivity * (p?.look ?? 1) * dt;
@@ -601,19 +619,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       return;
     }
     ray.setFromCamera(center, camera);
-    ray.far = 8;
-    const roots = [...interactables.keys()];
-    const hits = ray.intersectObjects(roots, true);
-    let found: Focus | null = null;
-    for (const h of hits) {
-      let o: THREE.Object3D | null = h.object;
-      while (o && !interactables.has(o)) o = o.parent;
-      if (!o) continue;
-      const info = interactables.get(o)!;
-      if (h.distance <= info.range) found = info.pick?.(h.point, o) ?? { id: info.id, label: info.label, action: info.action };
-      break;
-    }
-    s.setFocus(found);
+    s.setFocus(pickFocus(ray));
   });
 
   return null;

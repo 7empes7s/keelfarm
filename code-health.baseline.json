@@ -536,7 +536,6 @@
     "types:client/src/ui/mic.ts:MicRecord",
     "types:client/src/ui/mic.ts:MicState",
     "types:client/src/ui/notifySteps.ts:StepId",
-    "types:client/src/ui/notifySteps.ts:StepState",
     "types:client/src/ui/voiceMessages.ts:SpokenRecord",
     "types:client/src/world/CoffeeMachine.tsx:CoffeeSnapshot",
     "types:client/src/world/Jukebox.tsx:JukeboxSnapshot",
@@ -586,7 +585,7 @@
     "types:shared/types.ts:PushDeviceView"
   ],
   "sizes": {
-    "client/src/styles.css": 5606,
+    "client/src/styles.css": 6042,
     "client/src/ui/ManagerConsole.tsx": 869,
     "client/src/ui/Phone.tsx": 1119,
     "client/src/ui/sfx.ts": 838,
@@ -597,7 +596,7 @@
     "client/src/world/toys/dogBrain.ts": 1257,
     "server/cliRunner.ts": 986,
     "server/demo.ts": 1708,
-    "server/swarm.ts": 5611,
+    "server/swarm.ts": 5935,
     "server/workspace.ts": 909,
     "shared/types.ts": 815
   }
