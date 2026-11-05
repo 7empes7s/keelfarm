@@ -1,5 +1,13 @@
 // Handing out work: the scheduler, pacing on Claude's usage, mission control's numbers.
+import type { SessionHandle, SessionResult } from '../agentRunner.ts';
 import { stillOpen } from '../closeCleanup.ts';
+import { CeoHolds } from '../ceoHold.ts';
+import { CONSULT_DISALLOWED, consultAnswer, consultPrompt, nextConsult, type Consult } from '../consult.ts';
+import { clip } from '../notify.ts';
+import { ONE_TURN } from '../prompts.ts';
+import { resolveEffort } from '../../shared/costs.ts';
+import { redact as scrub } from '../../shared/journal.ts';
+import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
 import { fixGoesTo, pickTester, prepHeld } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
 import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
@@ -47,6 +55,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
     if (questionOf(this.state.questions, a.id)) return false; // waiting on an answer: it resumes their task
+    if (this.consulting(a)) return false;
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
   }
 
@@ -350,7 +359,8 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (repos.length === 0) return;
     this.scheduleOffset = (this.scheduleOffset + 1) % repos.length;
     const order = [...repos.slice(this.scheduleOffset), ...repos.slice(0, this.scheduleOffset)];
-    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
+    // Consults come after QA and fixes, before new issues (#28).
+    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startConsultWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
       let progress = true;
       while (progress) {
         progress = false;
@@ -360,5 +370,93 @@ export abstract class SwarmScheduling extends SwarmQa {
         }
       }
     }
+  }
+
+  // ---------- the CEO's waits, questions and consults (#28) ----------
+
+  protected holds = new CeoHolds(() => this.emitCeo());
+  protected ceoWaited = false; // the current CEO job waited (the ledger's ceo-wait)
+  protected consultAnswers = new Map<string, string | null>(); // consults the CEO waits on: their answer once in
+
+  /** End the CEO's waits and questions, and consults no session waits for any more. */
+  protected cancelHolds(why: string) {
+    if (!this.holds.waiting()) return;
+    this.holds.cancel(why);
+    this.consults = this.consults.filter((c) => c.runningOn);
+  }
+
+  /** A free agent on this floor takes the next consult (nextConsult). True: one started. */
+  protected startConsultWork(repo: PersistedRepo): boolean {
+    const free = this.available(repo).filter((a) => a.host !== 'box' && !this.agentRt.get(a.id)?.session);
+    const pick = nextConsult(this.consults, repo.id, free.map((a) => a.id), this.state.settings.ceoAwake.consultMax, () => this.health.admit('consult'));
+    const a = pick && this.state.agents.find((x) => x.id === pick.agentId);
+    if (!pick || !a) return false;
+    this.startConsult(a, pick.consult, repo);
+    return true;
+  }
+
+  /** A consult session: the agent's own worktree (or the floor's clone of main), read-only, under its time cap. */
+  protected startConsult(a: PersistedAgent, c: Consult, repo: PersistedRepo) {
+    const rt = this.agentRt.get(a.id)!;
+    c.runningOn = a.id;
+    const startedAt = Date.now();
+    const desk = a.machine ? this.deskOf(a, repo) : null;
+    const cwd = desk && this.backend.deskExists(desk) ? desk : this.backend.mainDir(repo.fullName);
+    Object.assign(c, { startedAt, dir: cwd });
+    this.appendLog(a, [{ kind: 'system', text: '' }, { kind: 'system', text: `━━━ 🔎 consult · ${this.ceo().name} asks: ${clip(c.question, 200)} ━━━` }]);
+    this.emitAgent(a);
+    const run = this.spend.start(a.id, { kind: 'consult', effort: resolveEffort(a.effort, 'consult', this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, 'claude') || a.model, startedAt, round: null });
+    const t = this.state.settings.tools;
+    const tools = sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
+    const inTerminal = this.state.settings.runtime === 'terminal' && this.backend.terminals;
+    let handle: SessionHandle | undefined;
+    let done = false;
+    const finished = (result: SessionResult) => {
+      done = true;
+      clearTimeout(cap);
+      if (rt.session === handle) {
+        // only its own handle: the office never lets other work start on a consulting agent, but stays safe if it did
+        rt.session = null;
+        rt.currentTool = null;
+      }
+      this.health.ended(a, 'consult', result.errors, false, false); // its peak teaches the consult estimate
+      this.consults = this.consults.filter((q) => q !== c);
+      const text = result.ok ? consultAnswer(a.name, repo.floor, result.text) : `${a.name} couldn't answer: ${result.errors.join('; ') || 'the consult session failed'}.`;
+      this.appendLog(a, [{ kind: result.ok ? 'done' : 'error', text: `🔎 consult · ${result.ok ? 'answered' : 'no answer'} in ${Math.max(1, Math.round((Date.now() - startedAt) / 60_000))}m` }]);
+      void this.spend.record({ ...a, startedAt, issueNumber: null, prNumber: null }, repo.id, run, 'consult', result, { stopped: false, ceoHint: 'done' });
+      if (this.consultAnswers.has(c.id)) this.consultAnswers.set(c.id, scrub(text, this.secrets())); // else nobody waits any more
+      this.holds.check();
+      this.emitAgent(a);
+      setTimeout(() => this.schedule(), 300);
+    };
+    handle = this.backend.startSession(
+      {
+        cwd,
+        prompt: consultPrompt(c, repo.fullName, this.ceo().name),
+        systemAppend: `You are ${a.name}, an agent on floor ${repo.floor}, answering a question from the CEO. ${ONE_TURN}`,
+        model: run.model,
+        effort: run.effort,
+        browserTesting: false,
+        additionalDirectories: [],
+        role: a.role,
+        tools: { ...tools, disallowed: [...tools.disallowed, ...CONSULT_DISALLOWED] },
+        readOnly: true,
+        agentId: a.id,
+        ...(inTerminal ? { terminal: this.terminalFor(a), cli: 'claude' as const, label: `${a.name} · consult` } : {}),
+      },
+      {
+        log: (entries) => this.appendLog(a, entries),
+        tool: (name) => {
+          rt.currentTool = name;
+          this.emitAgent(a);
+        },
+        sessionId: () => undefined, // their own task's session stays the one to resume
+        browserUrl: () => undefined,
+        screenshot: () => undefined,
+        finished,
+      },
+    );
+    if (!done) rt.session = handle;
+    const cap = setTimeout(() => handle?.stop(), this.state.settings.ceoAwake.consultMin * 60_000);
   }
 }

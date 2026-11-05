@@ -26,7 +26,7 @@ import { badgeStatus, StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
-import { CeoMandates, FollowupSettings } from './CeoFollowups';
+import { AwakeSettings, CeoMandates, CeoSession, FollowupSettings } from './CeoFollowups';
 import { ToolsTab } from './ToolsSettings';
 import { EveryProjectCard, FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
@@ -388,6 +388,7 @@ export function CeoTab() {
         </div>
       </div>
       <div>
+        <CeoSession />
         <CeoMandates />
         <h3 className="section">📄 Team changes {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
         {pending.length === 0 && <p className="muted small">None waiting. The CEO grows or shrinks a floor's team when its work calls for it (Settings → Team changes from the CEO).</p>}
@@ -773,6 +774,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
         </label>
         <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
         <FollowupSettings />
+        <AwakeSettings />
       </div>
       <EveryProjectCard />
       <div className="card">
