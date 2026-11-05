@@ -31,9 +31,10 @@ import { CEO_ID } from '../../shared/types.ts';
 import { forwardText, nextDelivery } from '../../shared/chat.ts';
 import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseCeoMessage } from '../../shared/chatParts.ts';
+import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
-import type { AgentStatus, CeoInfo, PhoneMessage, ServerDelivery } from '../../shared/types.ts';
+import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -350,7 +351,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const a = this.ceo();
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
-    const forward = [forwardText(t, quoted), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const forward = [forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const research = await researchJob({ text: t, quoted, forward, id: m.id, dir: path.join(CEO_DIR, 'research'), onlyRepo: this.state.repos.length === 1 ? this.state.repos[0].id : undefined });
     const rt = this.agentRt.get(a.id)!;
     if (rt.session && !research && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: this.state.ceo.job?.kind ?? null, session: true })) {
@@ -612,7 +613,10 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
     const id = this.messageSeq++;
     const artifacts = makeArtifacts(id, parts.artifacts);
-    const m: PhoneMessage = { id, from, text: parts.text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(artifacts && { artifacts }) };
+    const body = parts.text.trim().slice(0, 6000);
+    // The agents, floors, issues and files it names become chips (shared/chatRefs.ts).
+    const refs = from === 'office' ? [] : parseRefs(body, this.refContext());
+    const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(artifacts && { artifacts }), ...(refs.length && { refs }) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
@@ -631,6 +635,28 @@ export abstract class SwarmCeo extends SwarmUpdate {
       this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
     }
     return m;
+  }
+
+  private refContext(): RefContext {
+    return {
+      floors: this.state.repos.map((r) => ({ floor: r.floor, repoId: r.id })),
+      agents: this.state.agents.filter((a) => a.role !== 'ceo').map((a) => ({ id: a.id, name: a.name })),
+      hasFile: (repoId, rel) => {
+        const repo = this.state.repos.find((r) => r.id === repoId);
+        return !!repo && this.backend.hasRepoFile(repo.fullName, rel);
+      },
+    };
+  }
+
+  /** GET /api/messages/:id/refs/:index/file: a file ref's text on its floor's default branch, read when asked. */
+  async refFile(messageId: number, index: number): Promise<RefFileView> {
+    const ref = this.state.messages.find((m) => m.id === messageId)?.refs?.[index];
+    if (ref?.kind !== 'file') throw new HttpError(404, 'That file reference is no longer saved');
+    const repo = this.state.repos.find((r) => r.id === ref.repoId);
+    if (!repo) throw new HttpError(404, 'That floor is no longer in the office');
+    const url = fileUrl(repo.fullName, repo.defaultBranch, ref.path, ref.line);
+    const text = await this.backend.readRepoFile(repo.fullName, repo.defaultBranch, ref.path).catch((e: Error) => Promise.reject(new HttpError(404, e.message)));
+    return { path: ref.path, line: ref.line ?? null, text, url };
   }
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */

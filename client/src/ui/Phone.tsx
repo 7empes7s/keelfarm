@@ -1,9 +1,11 @@
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
 import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
+import { refParts, refsMarkdown } from '../../../shared/chatRefs';
+import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
 import { speechText } from '../../../shared/speech';
 import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
 import { retrySend, sendToCeo } from './chatSend';
@@ -394,6 +396,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
+  const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   if (m?.from === 'office') return <div className="bubble-office">{m.text}</div>;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
@@ -468,18 +471,26 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {quote}
         {mine ? (
           text && <div className="bubble-text">
-            {urlParts(text).map((p, i) =>
-              p.url ? (
-                <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
-                  {p.text}
-                </a>
+            {refParts(text, m?.refs).map((r, j) =>
+              r.ref !== undefined ? (
+                <RefChip key={j} messageId={m!.id} index={r.ref}>
+                  {r.text}
+                </RefChip>
               ) : (
-                p.text
+                urlParts(r.text).map((p, i) =>
+                  p.url ? (
+                    <a key={`${j}-${i}`} href={p.url} target="_blank" rel="noopener noreferrer">
+                      {p.text}
+                    </a>
+                  ) : (
+                    p.text
+                  ),
+                )
               ),
             )}
           </div>
         ) : (
-          text && <Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} />
+          text && <Markdown className="bubble-md" text={linked(refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} />
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
@@ -595,6 +606,14 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
   const linked = useMemo(() => (t: string) => linkCeoText(t, floors), [floors]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const openFloor = (n: number) => {
+    const repo = repos.find((r) => r.floor === n);
+    if (!repo) return;
+    if (onFloor) onFloor(repo.id);
+    else goToFloor(n);
+  };
+  const refNav = useRefNav(scroller, openFloor);
+  const mention = useMentions(text, setText, () => form.current?.querySelector('textarea')?.focus());
 
   // Reading the thread marks it read.
   useEffect(() => {
@@ -607,6 +626,14 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     if (!el) return;
     if (!opened.current) {
       opened.current = true;
+      // Back from a chip's jump: where the chat was.
+      const back = takeChatScroll();
+      if (back !== null) {
+        el.scrollTop = back;
+        stick.current = el.scrollHeight - back - el.clientHeight < 40;
+        setAtEnd(stick.current);
+        return;
+      }
       const divider = el.querySelector<HTMLElement>('.chat-unread');
       if (divider && el.scrollHeight - divider.offsetTop > el.clientHeight) {
         el.scrollTop = divider.offsetTop - 8;
@@ -624,12 +651,6 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   }, [flash]);
 
   if (!ceo) return <p className="muted phone-empty">The corner office is empty.</p>;
-  const openFloor = (n: number) => {
-    const repo = repos.find((r) => r.floor === n);
-    if (!repo) return;
-    if (onFloor) onFloor(repo.id);
-    else goToFloor(n);
-  };
   const toEnd = () => {
     const el = scroller.current;
     if (!el) return;
@@ -710,7 +731,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     );
   };
 
-  return (
+  return refNav.wrap(
     <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
         <Avatar name={ceo.name} color={ceo.color} />
@@ -788,6 +809,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
         )}
         {viewing && <FileViewer id={viewing} onClose={() => setViewing(null)} />}
+        {refNav.viewer}
         {filesOpen && (
           <FilesList
             onClose={() => setFilesOpen(false)}
@@ -842,6 +864,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         </div>
       )}
       <AttachTray pending={att.pending} onRemove={att.remove} />
+      {mention.picks}
       {slash.picks}
       <form
         ref={form}
@@ -865,7 +888,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           title="Enter sends · Shift+Enter adds a new line · Esc cancels a reply"
           autoFocus={autoFocus}
           onKeyDown={(e) => {
-            if (slash.onKeyDown(e)) return;
+            if (mention.onKeyDown(e) || slash.onKeyDown(e)) return;
             if (e.key !== 'Escape' || replyTo === null) return;
             e.preventDefault();
             e.stopPropagation();
@@ -881,7 +904,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           Send
         </button>
       </form>
-    </div>
+    </div>,
   );
 }
 

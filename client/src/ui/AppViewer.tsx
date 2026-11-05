@@ -536,14 +536,15 @@ let lastCompare = false;
 let lastQa = true;
 
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-export function AppViewer({ repoId, pr }: { repoId: string; pr?: number | null }) {
+/** `qa`: open with the QA panel showing (a chat chip's qa: ref). */
+export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | null; qa?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
   const qaRecords = useStore((s) => s.qa);
   const channel = useChannel(repoId);
   const [width, setWidth] = useState(lastWidth);
   const [compare, setCompare] = useState(lastCompare);
-  const [showQa, setShowQa] = useState(lastQa);
+  const [showQa, setShowQa] = useState(qa || lastQa);
   const [busy, setBusy] = useState(false);
   const [reloads, setReloads] = useState(0);
   const toolbar = useRef<HTMLDivElement>(null);
