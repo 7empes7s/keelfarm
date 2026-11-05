@@ -1,0 +1,147 @@
+/* Mission control → Experiments (ui/ExperimentsSection.tsx). The results are .ops-table ones; these rules win by
+   specificity, whatever order the stylesheets load in. */
+
+.lab-exp {
+  margin: 8px 0;
+  border-left: 5px solid #c9c6d6;
+}
+.lab-exp.lab-running {
+  border-left-color: #2a9d8f;
+}
+.lab-exp > summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.lab-pill-running {
+  background: #d8f3ee;
+  color: #12665c;
+}
+.lab-pill-draft {
+  background: #ecebf3;
+  color: #4a475c;
+}
+.lab-pill-stopped {
+  background: #f3ece0;
+  color: #74531c;
+}
+.lab-pill-promoted {
+  background: #fff1c2;
+  color: #6b4e00;
+}
+.lab-hypo {
+  margin: 6px 0 2px;
+  font-style: italic;
+}
+.lab-variants {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.lab-variants li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+.lab-verdict {
+  margin: 8px 0 4px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.ops-table.lab-table th,
+.ops-table.lab-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.ops-table.lab-table td:last-child,
+.ops-table.lab-table thead th:last-child {
+  font-weight: inherit;
+}
+.lab-range {
+  display: block;
+}
+.lab-ci-cell {
+  width: 30%;
+  min-width: 70px;
+}
+.lab-ci {
+  display: block;
+  width: 100%;
+  height: 24px;
+}
+.lab-actions {
+  margin-top: 8px;
+}
+.lab-promote select {
+  max-width: 13em;
+}
+.lab-new textarea,
+.lab-new input[type='text'],
+.lab-variant input,
+.lab-variant textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 3px 0;
+}
+.lab-checks,
+.lab-variant {
+  border: 1.5px solid #d9d6e4;
+  border-radius: 8px;
+  margin: 8px 0;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.lab-checks label {
+  display: inline-block;
+  margin: 2px 12px 2px 0;
+}
+.lab-variant legend {
+  font-weight: 700;
+}
+.lab-chip {
+  background: #d8f3ee;
+  color: #12665c;
+}
+
+/* A phone: each metric is a block, its variants side by side under it, the intervals below them. */
+@media (max-width: 600px) {
+  .ops-table.lab-table thead {
+    display: none;
+  }
+  .ops-table.lab-table,
+  .ops-table.lab-table tbody,
+  .ops-table.lab-table tr {
+    display: block;
+    width: 100%;
+  }
+  .ops-table.lab-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 6px 0;
+    border-bottom: 1px solid #e6e3ee;
+  }
+  .ops-table.lab-table th,
+  .ops-table.lab-table td {
+    display: block;
+    border: 0;
+    padding: 2px 4px;
+    text-align: left;
+    white-space: normal;
+  }
+  .ops-table.lab-table tr > th {
+    flex: 1 0 100%;
+  }
+  .ops-table.lab-table td[data-v] {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .ops-table.lab-table td[data-v]::before {
+    content: attr(data-v);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--v);
+  }
+  .ops-table.lab-table td.lab-ci-cell {
+    flex: 1 0 100%;
+    width: auto;
+  }
+}

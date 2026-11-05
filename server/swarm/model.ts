@@ -11,6 +11,7 @@ import type { RestartCounts } from '../reconcile.ts';
 import type { OpsHistory } from '../metrics.ts';
 import { cliLabel } from '../clis.ts';
 import type { LedgerState } from '../ledger.ts';
+import type { LabState } from '../experiments.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { FollowupState } from '../../shared/followups.ts';
@@ -162,6 +163,7 @@ export interface Persisted {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
+  experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
 }
 
 export interface Shot {

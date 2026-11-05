@@ -8,6 +8,7 @@ import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
+import { emptyLabView, type LabView } from '../../shared/experiments';
 import { messageSpeech } from '../../shared/speech';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import type { FileView } from '../../shared/files';
@@ -144,6 +145,7 @@ interface State {
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
+  experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
@@ -233,6 +235,7 @@ export const useStore = create<State>((set, get) => ({
     scaling: 'approve',
     maxAgents: DEFAULT_MAX_AGENTS,
     ceoHeartbeatMin: 60,
+    researchMin: 20,
     ceoFollowups: DEFAULT_FOLLOWUPS,
     ceoMandates: [],
     managerName: '',
@@ -288,6 +291,7 @@ export const useStore = create<State>((set, get) => ({
   },
   cloud: EMPTY_CLOUD,
   tooling: EMPTY_INVENTORY,
+  experiments: emptyLabView(),
   pong: {},
   restarting: false,
   visitors: [],
@@ -362,6 +366,7 @@ export const useStore = create<State>((set, get) => ({
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           cloud: d.cloud ?? EMPTY_CLOUD,
           tooling: d.tooling ?? EMPTY_INVENTORY,
+          experiments: d.experiments ?? emptyLabView(),
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
           pong: d.pong ?? {},
           restarting: false,
@@ -564,6 +569,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'tooling':
         set({ tooling: ev.tooling });
+        break;
+      case 'experiments':
+        set({ experiments: ev.experiments });
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.

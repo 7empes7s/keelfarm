@@ -261,6 +261,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       .filter(Boolean)
       .join('\n');
 
+    this.lab.assign(repo.id, issue);
     this.startAgentSession(a, repo, cwd, prompt, this.buildSystemAppend(a, repo, cwd, branch, undefined, desk.deps));
   }
 
@@ -324,7 +325,9 @@ export abstract class SwarmSessions extends SwarmAgents {
     this.activity.set(a.id, Date.now());
     const how = this.sessionRuntime(a, resumeSessionId);
     const kind = this.taskKind(a);
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, how.cli), startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null });
+    const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
+    const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
+    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag });
     this.emitAgent(a);
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
@@ -333,7 +336,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       {
         cwd,
         prompt,
-        systemAppend,
+        systemAppend: lab.prompt ? `${systemAppend}\n\n${lab.prompt}` : systemAppend,
         model: run.model,
         effort: run.effort,
         browserTesting: repo.browserTesting,
@@ -349,7 +352,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         typed: mode === 'typed',
         reattach: mode === 'reattach',
         agentId: a.id,
-        tools: this.sessionToolsFor(a, how.cli),
+        tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
         ...how,
       },
       {
