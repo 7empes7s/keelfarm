@@ -1,0 +1,157 @@
+/* The chat's ref chips, their preview card and the file viewer (RefChips.tsx). */
+
+.ref-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  margin: 1px 0;
+  padding: 1px 8px;
+  border: 1.5px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: #e7f0ff;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: var(--ds-weight-strong);
+  line-height: 1.5;
+  vertical-align: baseline;
+  cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+.ref-chip:hover,
+.ref-chip:focus-visible {
+  background: #ffe9a8;
+}
+.ref-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-chip-status {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--ds-radius-pill);
+  background: rgba(31, 29, 43, 0.08);
+  font-size: 0.85em;
+  font-weight: var(--ds-weight);
+}
+.ref-chip-good .ref-chip-status {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.ref-chip-warn .ref-chip-status {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.ref-chip-bad .ref-chip-status {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+
+.ref-peek {
+  position: fixed;
+  z-index: 1100;
+  width: min(300px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: hidden;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-float);
+  font-family: var(--font);
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+.ref-peek p {
+  margin: 4px 0 0;
+}
+.ref-peek-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.ref-peek-term {
+  margin: var(--ds-space-2) 0 0;
+  padding: 6px 8px;
+  border-radius: var(--ds-radius-sm);
+  background: #1f1d2b;
+  color: #e9e6f5;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ref-peek-clip {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ref-peek-shot {
+  display: block;
+  width: 100%;
+  margin-top: var(--ds-space-2);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+}
+.ref-peek-path {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.ref-code {
+  margin: var(--ds-space-2) 0 0;
+  padding: 6px 0;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+.ref-code-line {
+  width: max-content;
+  min-width: 100%;
+  padding: 0 8px 0 0;
+  white-space: pre;
+}
+.ref-code-mark {
+  background: #ffe9a8;
+}
+.ref-code-n {
+  display: inline-block;
+  min-width: 3.2em;
+  padding-right: 10px;
+  color: var(--ds-text-muted);
+  text-align: right;
+  user-select: none;
+}
+.ref-tok-kw {
+  color: #7c3aed;
+  font-weight: var(--ds-weight-strong);
+}
+.ref-tok-str {
+  color: #15803d;
+}
+.ref-tok-num {
+  color: #c2410c;
+}
+.ref-tok-com {
+  color: var(--ds-text-muted);
+  font-style: italic;
+}
+.ref-file-viewer .artifact-body {
+  overflow-x: auto;
+  padding: 0;
+}
+.ref-file-viewer .ref-code {
+  margin: 0;
+  min-height: 100%;
+  border-radius: 0;
+  font-size: 0.8rem;
+}

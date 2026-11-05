@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { FLOOR_HREF } from './chatLinks';
+import { REF_HREF } from '../../../shared/chatRefs';
 
 // Agent-written prose (the CEO's texts and reasons, issues, QA reports) rendered as Markdown.
 // Safe by default: raw HTML is shown as text, never parsed, and only http(s)/mailto links work.
@@ -23,7 +24,7 @@ function remarkHtmlAsText() {
 }
 
 const SAFE_LINK = /^(https?:|mailto:)/i;
-const safeUrl = (url: string) => (SAFE_LINK.test(url.trim()) || FLOOR_HREF.test(url) ? url : '');
+const safeUrl = (url: string) => (SAFE_LINK.test(url.trim()) || FLOOR_HREF.test(url) || REF_HREF.test(url) ? url : '');
 
 const Link = ({ href, children }: { href?: string; children?: ReactNode }) =>
   href ? (
@@ -57,12 +58,17 @@ const components: Components = {
 // remark-breaks keeps single line breaks, as the phone showed them before Markdown.
 const remarkPlugins = [remarkGfm, remarkHtmlAsText, remarkBreaks];
 
-/** `onFloor`: floor chips (ui/chatLinks.ts) are buttons that open the floor; without it they're plain text. */
-export function Markdown({ text, className, onFloor }: { text: string; className?: string; onFloor?: (floor: number) => void }) {
+/**
+ * `onFloor`: floor chips (ui/chatLinks.ts) are buttons that open the floor; `renderRef`: the chat's ref chips
+ * (shared/chatRefs.ts refsMarkdown), by index. Without them they're plain text.
+ */
+export function Markdown({ text, className, onFloor, renderRef }: { text: string; className?: string; onFloor?: (floor: number) => void; renderRef?: (index: number, children: ReactNode) => ReactNode }) {
   const withFloors = useMemo<Components>(
     () => ({
       ...components,
       a: (props) => {
+        const ref = props.href?.match(REF_HREF)?.[1];
+        if (ref) return renderRef ? renderRef(Number(ref), props.children) : <span>{props.children}</span>;
         const floor = props.href?.match(FLOOR_HREF)?.[1];
         if (!floor) return <Link href={props.href}>{props.children}</Link>;
         return onFloor ? (
@@ -74,7 +80,7 @@ export function Markdown({ text, className, onFloor }: { text: string; className
         );
       },
     }),
-    [onFloor],
+    [onFloor, renderRef],
   );
   return (
     <div className={className ? `md ${className}` : 'md'}>

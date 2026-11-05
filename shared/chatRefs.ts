@@ -5,7 +5,7 @@
 
 import type { ChatRef } from './types.ts';
 
-export const MAX_REFS = 40;
+const MAX_REFS = 40;
 
 export interface RefContext {
   floors: readonly { floor: number; repoId: string }[];
@@ -115,7 +115,7 @@ function validRefs(text: string, refs: readonly ChatRef[] | undefined): { ref: C
 }
 
 /** The href a ref's chip has in the rendered Markdown (ui/Markdown.tsx renders it as a chip, never as a link). */
-export const refHref = (index: number) => `cubefarm:ref/${index}`;
+const refHref = (index: number) => `cubefarm:ref/${index}`;
 export const REF_HREF = /^cubefarm:ref\/(\d+)$/;
 
 /** The CEO's Markdown with each ref as a link to its chip; the label is the text as written, without backticks. */
@@ -144,7 +144,7 @@ export function refParts(text: string, refs: readonly ChatRef[] | undefined): { 
 }
 
 /** What a ref means, for the CEO: "agent ada-1", "o/r#13", "o/r:src/app.ts:42", "QA of o/r#13", "preview of o/r". */
-export function describeRef(r: ChatRef): string {
+function describeRef(r: ChatRef): string {
   if (r.kind === 'agent') return `${r.terminal ? 'the terminal of ' : ''}agent ${r.agentId}`;
   if (r.kind === 'floor') return r.repoId;
   if (r.kind === 'issue') return `${r.repoId}#${r.number}`;
