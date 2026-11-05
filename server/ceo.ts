@@ -46,9 +46,9 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
 
 const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
 
-/** The CEO's next job: replies to the manager and triage first, among those `ready`. Research, the long one, waits out pacing too. */
-export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean, usage: 'normal' | 'pacing' | 'paused'): CeoJob | undefined {
-  return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find((j) => ready(j) && (j.kind !== 'research' || usage === 'normal'));
+/** The CEO's next job among those `ready`: replies to the manager and triage first, reviews and follow-ups last. */
+export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
+  return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find(ready);
 }
 
 /** What the CEO's tools do. Implemented by the swarm; errors are returned to the CEO as tool errors. */

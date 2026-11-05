@@ -69,18 +69,15 @@ describe('research queue', () => {
 });
 
 describe('the next CEO job', () => {
-  const q: CeoJob[] = [
-    { kind: 'review', at: 0 },
-    { kind: 'research', topic: 'A', at: 1 },
-  ];
-
-  it('starts research like a plan, before reviews', () => {
-    expect(nextCeoJob(q, () => true, 'normal')?.kind).toBe('research');
-  });
-
-  it('holds research while usage is paced, and other jobs go on', () => {
-    expect(nextCeoJob(q, () => true, 'pacing')?.kind).toBe('review');
-    expect(nextCeoJob([q[1]], () => true, 'paused')).toBeUndefined();
+  it('starts research like a plan: after replies and triage, before reviews', () => {
+    const q: CeoJob[] = [
+      { kind: 'review', at: 0 },
+      { kind: 'research', topic: 'A', at: 1 },
+      { kind: 'chat', text: 'hi', at: 2 },
+    ];
+    expect(nextCeoJob(q, () => true)?.kind).toBe('chat');
+    expect(nextCeoJob(q.slice(0, 2), () => true)?.kind).toBe('research');
+    expect(nextCeoJob(q.slice(0, 2), (j) => j.kind !== 'research')?.kind).toBe('review');
   });
 });
 

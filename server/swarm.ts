@@ -4423,7 +4423,7 @@ export class Swarm {
       const rt = j.repoId ? this.repoRt.get(j.repoId) : undefined;
       return !rt || rt.cloneStatus === 'error' || (rt.cloneStatus === 'ready' && rt.lastSync != null);
     };
-    const job = nextCeoJob(c.queue, ready, this.usageNow().state);
+    const job = nextCeoJob(c.queue, ready);
     if (!job) return;
     c.queue.splice(c.queue.indexOf(job), 1);
     const rt = job.repoId ? this.repoRt.get(job.repoId) : undefined;
