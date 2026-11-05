@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { AdaptiveResolution, currentDpr, FrameWhilePaused, HitchProbe, ScenePrecompile, StatsProbe, statsEnabled, usePageHidden, useRenderPaused } from '../perf';
 import { hitchPaused } from '../hitches';
 import { setOfficeCanvas, usePhotoGate } from '../photo/gate';
-import { coversView, repoOnFloor, useStore } from '../store';
+import { coversView, pausesView, repoOnFloor, useStore } from '../store';
 import { useA11y } from '../ui/a11y';
 import { ding, whoosh } from '../ui/sfx';
 import { Batches } from './Batched';
@@ -29,6 +29,7 @@ import { Soundscape } from './Soundscape';
 import { useTheme } from './themes/active';
 import { ThemeLayer } from './themes/ThemeLayer';
 import { TouchControls } from './touch/TouchControls';
+import { isTouch } from './touch/touchState';
 import { decorColliders } from './themes/themes';
 import { TypingSounds } from './TypingSounds';
 import { Weather } from './weather/Weather';
@@ -111,8 +112,10 @@ export function Game() {
   useEffect(() => {
     if (toRoof) void loadRoof();
   }, [toRoof]);
-  // Stop drawing while nobody can see the office; switching back to 'always' draws a fresh frame at once.
-  const paused = useRenderPaused();
+  // Stop drawing while nobody can see the office (on a touch screen, under any panel: store.ts pausesView); switching
+  // back to 'always' draws a fresh frame at once.
+  const touchPanel = useStore((s) => pausesView(s.overlay, isTouch));
+  const paused = useRenderPaused() || touchPanel;
   // Photo mode's freeze stops the frame loop too: nothing in the office moves (the server and its events carry on).
   const photo = usePhotoGate((s) => s.active);
   const frozen = usePhotoGate((s) => s.frozen);

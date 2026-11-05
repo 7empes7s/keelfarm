@@ -693,6 +693,13 @@ export const agentsOnRepo = (agents: Record<string, Agent>, repoId: string) =>
  */
 export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager';
 
+/**
+ * Whether the 3D view stops drawing under this panel: a full-screen one anywhere, and any panel on a touch screen
+ * (#83: a phone's panels fill the screen, and drawing every frame behind them left their buttons answering taps late
+ * or not at all).
+ */
+export const pausesView = (o: Overlay | null, touch: boolean) => coversView(o) || (touch && !!o);
+
 export const isBusy = (a: Agent) => a.status === 'preparing' || a.status === 'working';
 
 /** CEO messages the manager hasn't seen yet (proposals are counted by pendingRequests instead). */

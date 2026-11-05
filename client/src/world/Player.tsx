@@ -16,6 +16,7 @@ import { getA11y, reduceMotion } from '../ui/a11y';
 import { footstepsFollow } from '../ui/footsteps';
 import { dropHeld, startCharge, throwHeld, walk } from './toys/hands';
 import { watchLookLock } from './lookLock';
+import { hushes } from './lookLockRules';
 import { pokeToy } from './toys/poke';
 import { isBlasterId } from './toys/darts';
 import { reloadHeld, takeBlaster } from './toys/gun';
@@ -49,10 +50,11 @@ let canvasEl: HTMLCanvasElement | null = null;
 // After an action, mouse presses are swallowed for a moment, so the second half of a double click
 // (or a click right after E) can't land on the panel's backdrop and close it, or confirm a hire.
 const QUIET_MS = 400;
-let quietUntil = 0;
+const quiet = { at: 0, until: 0 };
 const QUIET_EVENTS = ['mousedown', 'mouseup', 'click', 'dblclick'] as const;
 const hushMouse = () => {
-  quietUntil = performance.now() + QUIET_MS;
+  quiet.at = performance.now();
+  quiet.until = quiet.at + QUIET_MS;
 };
 
 /** Grab the mouse for looking around. Must be called from a click handler. */
@@ -82,7 +84,7 @@ const lookDiag = { dropped: 0, skipped: 0 };
 
 export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
   const s = useStore.getState();
-  quietUntil = performance.now() + QUIET_MS;
+  hushMouse();
   if (placeSticky(focus, false)) return; // a sticky in hand goes onto a desk or back on the board
   if (focus.action.kind === 'pickup' && isBlasterId(focus.action.toyId)) {
     takeBlaster(focus.action.toyId, focus.id.startsWith('toy:rack:'));
@@ -297,8 +299,13 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       throwHeld();
       releaseBoard((f) => runFocusAction(f, 'click'));
     };
+    const press = { type: 'mouse', at: 0 }; // the last press: a tap is hushed only by what it set off itself
+    const onPointer = (e: PointerEvent) => {
+      press.type = e.pointerType;
+      press.at = performance.now();
+    };
     const onQuietMouse = (e: MouseEvent) => {
-      if (performance.now() >= quietUntil) return;
+      if (!hushes(performance.now(), quiet, press)) return;
       e.stopPropagation();
       e.preventDefault();
     };
@@ -400,6 +407,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     };
     gl.domElement.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('pointerdown', onPointer, true);
     for (const type of QUIET_EVENTS) window.addEventListener(type, onQuietMouse, true);
     document.addEventListener('pointerlockchange', onLockChange);
     document.addEventListener('mousemove', onMove);
@@ -416,6 +424,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       stopPads();
       gl.domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('pointerdown', onPointer, true);
       for (const type of QUIET_EVENTS) window.removeEventListener(type, onQuietMouse, true);
       document.removeEventListener('pointerlockchange', onLockChange);
       document.removeEventListener('mousemove', onMove);
