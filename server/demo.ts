@@ -6,6 +6,8 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
+import { buildInventory, memoryFs } from './tooling.ts';
+import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
@@ -300,6 +302,42 @@ export function fixPromptPull(prompt: string): { number: number; title?: string 
   return { number: Number(m?.[1] ?? 0), title: m?.[2]?.trim() };
 }
 
+// ---------- tools & skills ----------
+
+/** A made-up Claude Code setup, read by the real inventory parser from files in memory (never this computer's ~/.claude). */
+function demoTooling(projects: string[]): ToolInventory {
+  const home = path.join(HOME_DIR, 'demo-claude');
+  const plugin = (name: string, description: string, opts: { skills?: [string, string][]; commands?: string[]; mcp?: Record<string, unknown> }) => {
+    const dir = path.join(home, 'plugins', 'cache', 'claude-plugins-official', name, '1.0.0');
+    const files: Record<string, string> = { [path.join(dir, '.claude-plugin', 'plugin.json')]: JSON.stringify({ name, description }) };
+    for (const [s, d] of opts.skills ?? []) files[path.join(dir, 'skills', s, 'SKILL.md')] = `---\nname: ${s}\ndescription: ${d}\n---\n`;
+    for (const c of opts.commands ?? []) files[path.join(dir, 'commands', `${c}.md`)] = `# ${c}`;
+    if (opts.mcp) files[path.join(dir, '.mcp.json')] = JSON.stringify({ mcpServers: opts.mcp });
+    return { dir, files };
+  };
+  const plugins = {
+    canva: plugin('canva', 'Create and edit Canva designs from Claude Code.', { skills: [['brand-check', 'Checks a design against the brand kit.'], ['resize-for-social-media', 'Resizes a design for each social network.']], mcp: { canva: { type: 'http', url: 'https://mcp.canva.com/mcp' } } }),
+    superpowers: plugin('superpowers', 'Skills for planning, test-driven development and debugging.', { skills: [['brainstorming', 'Use before any creative work: explores intent before building.'], ['test-driven-development', 'Write the failing test first, then the code.'], ['systematic-debugging', 'Find the root cause before proposing fixes.']] }),
+    github: plugin('github', 'GitHub issues, pull requests and Actions through GitHub’s MCP server.', { mcp: { github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer demo-not-a-real-token' } } } }),
+    'commit-commands': plugin('commit-commands', 'Commit, push and open a PR in one command.', { commands: ['commit', 'commit-push-pr', 'clean_gone'] }),
+    figma: plugin('figma', 'Turn Figma designs into code.', { skills: [['figma-design-to-code', 'Implements a Figma frame as components.']], mcp: { figma: { type: 'http', url: 'https://mcp.figma.com/mcp' } } }),
+  };
+  const files: Record<string, string> = Object.assign({}, ...Object.values(plugins).map((p) => p.files));
+  files[path.join(home, 'skills', 'pdf', 'SKILL.md')] = '---\nname: pdf\ndescription: Reads, fills and merges PDF files.\n---\n';
+  files[path.join(home, 'skills', 'release-notes', 'SKILL.md')] = '---\nname: release-notes\ndescription: Writes release notes from merged pull requests.\n---\n';
+  const global = path.join(home, '.claude.json');
+  files[global] = JSON.stringify({
+    mcpServers: {
+      notion: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: 'demo-secret-never-shown' } },
+      linear: { type: 'http', url: 'https://mcp.linear.app/mcp?key=demo-secret-never-shown' },
+    },
+  });
+  if (projects[0]) files[path.join(projects[0], '.mcp.json')] = JSON.stringify({ mcpServers: { sentry: { type: 'http', url: 'https://mcp.sentry.dev/mcp' } } });
+  const pluginList = Object.entries(plugins).map(([name, p]) => ({ id: `${name}@claude-plugins-official`, enabled: name !== 'figma', installPath: p.dir, version: '1.0.0' }));
+  const items = buildInventory(memoryFs(files), { configDir: home, globalConfig: global, projects, pluginList });
+  return { items, scannedAt: Date.now(), scanning: false, error: null, via: 'the demo’s made-up setup' };
+}
+
 function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
   const timers: NodeJS.Timeout[] = [];
   let stopped = false;
@@ -331,9 +369,11 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
 
+  const tools = opts.tools ? toolArgsLine(opts.tools) : '';
   const header: Step = [
     { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
     { kind: 'system', text: `  cwd ${opts.cwd}` },
+    ...(tools ? [{ kind: 'system' as const, text: `  $ claude --session-id … ${tools}` }] : []),
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
@@ -879,6 +919,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     releaseClis: async () => undefined,
     detectClis: async () =>
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
+    toolInventory: async (projects) => demoTooling(projects),
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,

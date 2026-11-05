@@ -112,6 +112,10 @@ export const api = {
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
   updateSettings: (patch: Partial<SwarmSettings>) => call('PATCH', '/api/settings', patch),
+  /** Tools & skills: scan the manager's Claude Code setup again. */
+  refreshTools: () => call('POST', '/api/tools/refresh'),
+  /** One switch for 'everyone', 'ceo' or an agent's id; on null follows Everyone. */
+  switchTool: (scope: string, id: string, on: boolean | null) => call('POST', '/api/tools/switch', { scope, id, on }),
   updateOffice: async (action: 'now' | 'later') => {
     const u = await call<OfficeUpdateView>('POST', '/api/office/update', { action });
     useStore.getState().setOfficeUpdate(u);

@@ -6,10 +6,11 @@ import { CeoTab, FloorsTab, SettingsTab, TeamTab } from '../ui/ManagerConsole';
 import { OpsTab } from '../ui/MissionConsole';
 import { NotifySettings } from '../ui/NotifySettings';
 import { AccessibilitySettings } from '../ui/AccessibilitySettings';
+import { ToolsTab } from '../ui/ToolsSettings';
 import { pendingRequests, useStore } from '../store';
 import { setMode } from './mode';
 
-export type ConsoleSection = 'floors' | 'ceo' | 'team' | 'settings' | 'ops' | 'device';
+export type ConsoleSection = 'floors' | 'ceo' | 'team' | 'settings' | 'tools' | 'ops' | 'device';
 
 function openOffice() {
   useStore.getState().openOverlay(null);
@@ -29,6 +30,7 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
     ['ceo', `🧠 CEO${pending ? ` (${pending})` : ''}`],
     ['team', '👩‍💻 Team'],
     ['settings', '⚙️ Office'],
+    ['tools', '🧰 Tools & skills'],
     ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
     ['device', '📱 This device'],
   ];
@@ -46,6 +48,7 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
         {section === 'ceo' && <CeoTab />}
         {section === 'team' && <TeamTab />}
         {section === 'settings' && <SettingsTab pocket />}
+        {section === 'tools' && <ToolsTab />}
         {section === 'ops' && <OpsTab />}
         {section === 'device' && (
           <>

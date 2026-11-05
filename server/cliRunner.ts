@@ -847,6 +847,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         ? { type: 'command', command: `node ${BOX_BIN}/statusline.cjs ${events}`, padding: 0 }
         : { type: 'command', command: `${shellArg(process.execPath)} ${shellArg(path.join(BIN_DIR, 'statusline.cjs'))} ${shellArg(hookUrl)}`, padding: 0 },
       ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : {}),
+      // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
+      ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),
     };
     const servers: Record<string, unknown> = {};
     if (browser) servers.playwright = browser;
@@ -882,6 +884,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     codexHook: box ? `${BOX_BIN}/codex-hook.cjs` : path.join(BIN_DIR, 'codex-hook.cjs'),
     plugin: box ? '' : pathToFileURL(path.join(BIN_DIR, 'opencode-plugin.mjs')).href,
     browser,
+    ...(cli === 'claude' && opts.tools ? { tools: opts.tools } : {}),
     ...(box ? { node: 'node', posix: true } : {}),
   });
 

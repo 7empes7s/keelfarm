@@ -8,7 +8,7 @@ import type { OfficeTools } from './ceo.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { browserProblem, playwrightMcp } from './browser.ts';
-import { CROSS_TURN_TOOLS } from './clis.ts';
+import { CEO_DISALLOWED, OFFICE_DISALLOWED, type SessionTools } from '../shared/tooling.ts';
 import { VERSION } from './config.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
@@ -47,6 +47,8 @@ export interface SessionOptions {
   reattach?: boolean;
   /** A cloud agent's: the CLI runs in their Upstash Box (docs/cloud.md), always in the terminal runtime. */
   box?: BoxTarget;
+  /** The manager's Tools & skills switches (shared/tooling.ts): Claude Code sessions only. */
+  tools?: SessionTools;
 }
 
 export interface LogEntry {
@@ -247,7 +249,8 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
     case 'scale_team':
       return `📈 scale_team floor ${String(input.floor ?? '?')} → ${String(input.size ?? '?')}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
     case 'configure_agent': {
-      const set = [input.cli, input.model, input.effort].filter((x) => typeof x === 'string' && x !== '');
+      const list = (k: string, how: string) => (Array.isArray(input[k]) && input[k].length ? [`${how} ${input[k].join(', ')}`] : []);
+      const set = [...[input.cli, input.model, input.effort].filter((x) => typeof x === 'string' && x !== ''), ...list('tools_off', 'off:'), ...list('tools_on', 'on:'), ...list('tools_reset', 'reset:')];
       return `⚙️ configure_agent ${String(input.agent_id ?? '')}${set.length ? `: ${set.join(' · ')}` : ''}`;
     }
     case 'file_issue':
@@ -347,8 +350,8 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
   }
   if (opts.office) mcpServers.office = opts.office.server;
   // The CEO reads repositories and acts through the office tools; it never runs commands.
-  const disallowedTools = ['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS];
-  if (opts.role === 'ceo') disallowedTools.push('Bash', 'PowerShell', 'NotebookEdit');
+  const disallowedTools = [...OFFICE_DISALLOWED, ...(opts.role === 'ceo' ? CEO_DISALLOWED : []), ...(opts.tools?.disallowed ?? [])];
+  const plugins = opts.tools?.disabledPlugins ?? [];
 
   const options: Options = {
     cwd: opts.cwd,
@@ -359,6 +362,8 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
     effort: opts.effort,
     // The manager's own setup (settings, skills, plugins, MCP servers, connectors), plus the office's servers below.
     settingSources: ['user', 'project', 'local'],
+    // Plugins the manager switched off for this session: flag settings win over theirs, and their files stay as they are.
+    ...(plugins.length ? { settings: { enabledPlugins: Object.fromEntries(plugins.map((p) => [p, false])) } } : {}),
     systemPrompt: { type: 'preset', preset: 'claude_code', append: opts.systemAppend },
     mcpServers,
     disallowedTools,

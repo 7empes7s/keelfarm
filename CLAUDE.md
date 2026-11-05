@@ -112,6 +112,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   service worker keeping the apps' root paths under it.
 - `qaShots.ts`: QA's screenshots of each PR's latest round, kept for the app viewer's QA panel.
 - `previewRunner.ts`: checks out, installs and runs a floor's app in its preview worktree; kills the process tree.
+- `tooling.ts`: Settings → Tools & skills' inventory: what a Claude Code session here loads (`claude plugin list --json`,
+  plugin folders, skills, MCP configs), read only, secrets masked. The switches (Everyone, the CEO, each agent) and how
+  they become a session's `--disallowedTools` / `enabledPlugins` are pure, in `shared/tooling.ts`.
 - `httpError.ts`: `HttpError(status, message)`.
 - `officeUpdate.ts`: the office's self-update: the drain decision, the launcher contract (IPC, `last-update.json`).
 - `pacing.ts`: pacing new work after Claude's usage warnings: the start/skip decision and the usage state.
