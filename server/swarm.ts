@@ -59,6 +59,7 @@ import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
 import { cleanSwitches, DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, isToolId, mergeSwitches, officeItems, sessionTools, setSwitch, toolArgsLine, toolSettings, type SessionTools, type ToolInventory, type ToolSwitches } from '../shared/tooling.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
+import { blockedNotice } from './unblock.ts';
 import { WeatherService } from './weather.ts';
 import { blockers, holdUps, waitsMessage } from '../shared/issues.ts';
 import { dayKey, journalFrame, legacyAgent, legacyRequest } from '../shared/journal.ts';
@@ -253,6 +254,7 @@ interface AgentRuntime {
   shots: Shot[]; // every screenshot of the current session (QA evidence)
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
+  blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
 }
 
 interface RepoRuntime {
@@ -1127,6 +1129,7 @@ export class Swarm {
       hasScreenshot: !!rt.screenshot,
       screenshotAt: rt.screenshot?.at ?? null,
       lastError: a.lastError,
+      blocked: rt.blocked?.reason ?? null,
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
@@ -1138,7 +1141,9 @@ export class Swarm {
   private activityOf(a: PersistedAgent): AgentActivity | null {
     const chat = a.role === 'ceo' && this.state.ceo.job?.kind === 'chat';
     const { status, task, issueNumber, prNumber, startedAt } = a;
-    const currentTool = this.agentRt.get(a.id)?.currentTool ?? null;
+    const rt = this.agentRt.get(a.id);
+    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
+    const currentTool = rt?.currentTool ?? null;
     return agentActivity({ status, task, currentTool, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 
@@ -3132,6 +3137,10 @@ export class Swarm {
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
+        blocked: (reason) => {
+          rt.blocked = reason ? { reason, since: Date.now(), told: false } : null;
+          this.emitAgent(a);
+        },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -3170,6 +3179,7 @@ export class Swarm {
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
     rt.currentTool = null;
+    rt.blocked = null;
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
     a.turns += result.turns;
@@ -5254,6 +5264,14 @@ export class Swarm {
       const repo = this.state.repos.find((r) => r.id === a.repoId);
       const mins = Math.round((now - (a.endedAt ?? now)) / 60_000);
       this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
+    }
+    // Blocked on a prompt the watchdog couldn't answer (unblock.ts): told once, NOTIFY_BLOCKED_MS in.
+    for (const a of this.state.agents) {
+      const b = this.agentRt.get(a.id)?.blocked;
+      if (!b || !blockedNotice(b, now)) continue;
+      b.told = true;
+      const repo = this.state.repos.find((r) => r.id === a.repoId);
+      this.notifier.notify('agentError', `${a.name} is blocked`, `Waiting ${Math.round((now - b.since) / 60_000)} minutes on ${clip(b.reason.replace(/\.$/, ''), 200)}${repo ? ` on floor ${repo.floor}` : ''}. Open their terminal to answer it.`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
     }
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }

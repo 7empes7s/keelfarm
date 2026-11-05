@@ -8,7 +8,6 @@ import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
 import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord } from './boxCli.ts';
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
-import { BOX_ENV } from './cloud.ts';
 import { cliLabel, CLIS, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, signedOutScreen, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
@@ -31,6 +30,7 @@ import type { OfficeTools } from './ceo.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
+import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -121,7 +121,8 @@ const shellArg = (p: string) => `"${p.replaceAll('\\', '/')}"`;
 
 // ---------- plumbing ----------
 
-const HOOK_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'StopFailure', 'Notification'];
+// PermissionRequest and Elicitation answer the dialogs a PreToolUse approval doesn't skip (unblock.ts).
+const HOOK_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop', 'StopFailure', 'Notification', 'PermissionRequest', 'Elicitation'];
 
 /** What a tool call returned, as text, and any images in it (Playwright screenshots). */
 function toolOutput(response: unknown): { text: string; images: { data: string; mime: string }[] } {
@@ -177,6 +178,8 @@ interface LiveCli {
   idleTimer?: NodeJS.Timeout;
   /** The cloud agent's Box it runs in (absent: this computer). */
   box?: { api: BoxApi; boxId: string };
+  /** When its terminal last drew something (epoch ms). */
+  lastData?: number;
 }
 const lives = new Map<AgentTerminal, LiveCli>();
 /** How to trust Codex's hooks was said once this run (Codex asks at the start of every session until they are). */
@@ -237,6 +240,7 @@ function wire(l: LiveCli, office?: OfficeTools) {
   routes.set(l.token, { hook: (b) => (l.session ? l.session.hook(b) : idleHook(l, b)), office });
   l.term.bind({ write: (d) => quietly(() => p.write(d)), resize: (c, r) => quietly(() => p.resize(c, r)) });
   p.onData((data) => {
+    l.lastData = Date.now();
     if (lives.get(l.term) === l) l.term.write(data);
   });
   p.onExit((code) => {
@@ -513,6 +517,11 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const nudged = new Set<string>();
   let trustKeys = 0; // keys pressed on a folder-trust question (a few at most)
   let trustedAt = 0;
+  // The folders the session may write in (unblock.ts permissionAnswer): its worktree first.
+  const roots = [opts.cwd, ...opts.additionalDirectories, ...['TMPDIR', 'TEMP', 'TMP'].flatMap((k) => opts.env?.[k] ?? []), dir];
+  let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
+  let onScreen: Waiting | null = null; // a prompt on screen no hook answered
+  let promptTimer: NodeJS.Timeout | undefined;
 
   const cb: SessionCallbacks = { ...callbacks };
   const log = (entries: LogEntry[]) => entries.length && cb.log(entries);
@@ -560,6 +569,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     for (const t of [finishTimer, bootTimer]) clearTimeout(t);
     clearInterval(screenTimer);
     clearInterval(shotTimer);
+    clearInterval(promptTimer);
+    if (onScreen?.blocked) cb.blocked?.(null);
     collectShots(true);
     if (term.onInput === watchKeys) term.onInput = null;
     const l = live;
@@ -642,8 +653,46 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     return { statusLine };
   };
 
+  /** The session moved on: a prompt it showed is gone. */
+  const answered = () => {
+    if (onScreen?.blocked) cb.blocked?.(null);
+    onScreen = null;
+  };
+
+  /**
+   * The watchdog: a prompt no hook answered (a Notification said so, or the terminal has shown one for a minute with
+   * nothing else drawn) is answered in the terminal, or the session is reported blocked (unblock.ts watchdogStep).
+   */
+  const watchPrompts = () => {
+    const l = live;
+    if (done || !l?.proc) return;
+    const now = Date.now();
+    if (!onScreen && begun && cli === 'claude' && now - (l.lastData ?? now) >= STALL_MS && permissionScreen(term.screen())) {
+      onScreen = { kind: 'permission', since: now, ...lastCall, tries: 0, blocked: false };
+    }
+    if (!onScreen) return;
+    // A permission dialog that's gone was answered (by the manager, or by the keys sent), even before a hook says so.
+    if (onScreen.kind === 'permission' && now - onScreen.since >= ANSWER_AFTER_MS && !permissionScreen(term.screen())) return answered();
+    const step = watchdogStep(onScreen, now, roots);
+    if (step.do === 'keys') {
+      onScreen.tries += 1;
+      log([{ kind: 'system', text: step.note }]);
+      quietly(() => l.proc?.write(step.keys));
+    } else if (step.do === 'blocked') {
+      onScreen.blocked = true;
+      log([{ kind: 'error', text: `⛔ Blocked: ${step.reason.replace(/\.$/, '')}. Open the terminal to answer it.` }]);
+      cb.blocked?.(step.reason);
+    }
+  };
+
   const hook = (b: Record<string, unknown>): Record<string, unknown> => {
     const event = String(b.hook_event_name ?? '');
+    if (event !== 'Notification' && event !== 'StatusLine') answered();
+    const answer = inBox ? null : answerHook(b, roots); // a Box's hook script answers there
+    if (answer) {
+      log([{ kind: 'system', text: answer.note }]);
+      return answer.reply;
+    }
     const sub = typeof b.agent_id === 'string' && b.agent_id !== ''; // a subagent's call: kept off the log
     if (cli === 'claude' && !sub && b.session_id !== kept) {
       // In a Box, its hook script looked for the transcript there.
@@ -657,6 +706,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       case 'PreToolUse': {
         const name = String(b.tool_name ?? '');
         const input = toolInput(b);
+        if (!sub) lastCall = { tool: name, input };
         if (!sub) {
           busy();
           turns += 1;
@@ -714,7 +764,12 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         return {};
       }
       case 'Notification': {
-        if (b.notification_type === 'permission_prompt') log([{ kind: 'error', text: `⚠ ${label} is waiting for a permission answer: open the terminal to answer it.` }]);
+        // No hook answered it (unblock.ts): the watchdog answers it in the terminal.
+        const kind = b.notification_type === 'permission_prompt' ? 'permission' : b.notification_type === 'elicitation_dialog' ? 'elicitation' : null;
+        if (kind && !onScreen && !inBox) {
+          onScreen = { kind, since: Date.now(), ...lastCall, tries: 0, blocked: false };
+          log([{ kind: 'error', text: `⚠ ${label} is waiting on a ${kind === 'permission' ? 'permission prompt' : 'form'}: the office answers it.` }]);
+        }
         return {};
       }
       case 'StatusLine':
@@ -795,6 +850,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     if (opts.typed || opts.reattach) busy(); // typed at the prompt, or still at it after a restart: already running
     else handle.send(opts.prompt);
     shotTimer = setInterval(collectShots, 2000);
+    if (!live.box) promptTimer = setInterval(watchPrompts, 2000);
     return handle;
   }
   if (opts.reattach) {
@@ -847,6 +903,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         ? { type: 'command', command: `node ${BOX_BIN}/statusline.cjs ${events}`, padding: 0 }
         : { type: 'command', command: `${shellArg(process.execPath)} ${shellArg(path.join(BIN_DIR, 'statusline.cjs'))} ${shellArg(hookUrl)}`, padding: 0 },
       ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : {}),
+      permissions: worktreePermissions(opts.cwd),
       // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
       ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),
     };
@@ -888,21 +945,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     ...(box ? { node: 'node', posix: true } : {}),
   });
 
-  // Each agent must be a clean instance on the account its CLI is logged into: no API keys (they would switch Claude
-  // Code's billing to the API) and nothing inherited from a Claude Code session the office itself was started from.
-  // In a Box nothing of the office's own environment goes along (a Windows PATH, the manager's other secrets): only
-  // what a Box needs and the credentials this CLI signs in with.
-  const env: Record<string, string> = {};
-  if (box) Object.assign(env, BOX_ENV, box.env, launch.env, { CUBEFARM_STATUS: statusLine });
-  else {
-    for (const [k, v] of Object.entries(process.env)) {
-      if (v === undefined) continue;
-      if (/^(ANTHROPIC_|CLAUDE)/i.test(k) && k !== 'CLAUDE_CONFIG_DIR') continue;
-      if (/^(NO_COLOR|FORCE_COLOR|TERM_PROGRAM|TERM_PROGRAM_VERSION|CODEX_THREAD_ID|OPENCODE_CONFIG_CONTENT)$/i.test(k)) continue;
-      env[k] = v;
-    }
-    Object.assign(env, { TERM: 'xterm-256color', COLORTERM: 'truecolor' }, opts.env, launch.env);
-  }
+  const env = cliEnv(process.env, launch.env, box ? { box: { ...box.env, CUBEFARM_STATUS: statusLine } } : { machine: opts.env });
 
   if (cli === 'claude' && opts.resumeSessionId) cb.sessionId(sessionId);
   term.note(`── ${label}${opts.label ? ` · ${opts.label}` : ''}${box ? ' · ☁ cloud machine' : ''} ──`);
@@ -959,6 +1002,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     live = l;
     wire(l, opts.office);
     shotTimer = setInterval(collectShots, 2000);
+    promptTimer = setInterval(watchPrompts, 2000);
     watchBoot(pty);
   };
 
