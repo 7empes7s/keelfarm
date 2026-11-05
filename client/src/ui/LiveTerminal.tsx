@@ -6,6 +6,8 @@ import '@xterm/xterm/css/xterm.css';
 import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../shared/types';
 import { activeMods, consumeMods, keySequence, NO_MODS, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
+import { VIEWPORT_EVENT } from '../viewport';
+import { TERM_FONT } from './termLayout';
 
 // An agent's real terminal: their CLI's screen streamed from the office (/ws/term), and what you type sent back to it.
 // Opening it late shows everything so far: the office keeps a copy of each agent's screen and scrollback.
@@ -34,12 +36,35 @@ const THEME: ITheme = {
   brightWhite: '#ffffff',
 };
 
-export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: string; cli?: AgentCli; className?: string }) {
+/**
+ * `compact` is the phone window's terminal (#86): no footer (the window shows `onStatus`'s line and the ⌨ toggle, and
+ * passes `keys`), and the key bar stays in the window, which already sits above the keyboard.
+ */
+export function LiveTerminal({
+  agentId,
+  cli = 'claude',
+  className,
+  fontSize = TERM_FONT.desktop,
+  compact,
+  keys,
+  onStatus,
+}: {
+  agentId: string;
+  cli?: AgentCli;
+  className?: string;
+  fontSize?: number;
+  compact?: boolean;
+  keys?: boolean;
+  onStatus?: (line: string) => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState(false);
   const [connected, setConnected] = useState(true);
   const [focused, setFocused] = useState(false);
-  const [keysOn, setKeysOn] = useTermKeysPref();
+  const [keysPref, setKeysOn] = useTermKeysPref();
+  const keysOn = keys ?? keysPref;
+  const fontRef = useRef(fontSize);
+  const refit = useRef<() => void>(() => undefined);
   // The key bar's sticky modifiers, read by the terminal's input too, so they apply to the phone keyboard's next key.
   const [mods, setModsState] = useState<ModState>(NO_MODS);
   const modsRef = useRef(mods);
@@ -55,7 +80,7 @@ export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: 
     const el = host.current!;
     const term = new Terminal({
       fontFamily: "'JetBrains Mono', Consolas, monospace",
-      fontSize: 13,
+      fontSize: fontRef.current,
       cursorBlink: true,
       cursorInactiveStyle: 'none',
       scrollback: 5000,
@@ -136,11 +161,16 @@ export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: 
     const onBlur = () => setFocused(false);
     term.textarea?.addEventListener('focus', onFocus);
     term.textarea?.addEventListener('blur', onBlur);
-    const ro = new ResizeObserver(() => {
+    const later = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(fitAndTell);
-    });
+    };
+    refit.current = later;
+    const ro = new ResizeObserver(later);
     ro.observe(el);
+    // The keyboard and a turned phone change the visual viewport; the box follows it, and so do the rows.
+    window.addEventListener(VIEWPORT_EVENT, later);
+    window.addEventListener('orientationchange', later);
     void document.fonts?.ready.then(() => !closed && fitAndTell());
 
     return () => {
@@ -148,6 +178,9 @@ export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: 
       clearTimeout(retry);
       cancelAnimationFrame(frame);
       ro.disconnect();
+      window.removeEventListener(VIEWPORT_EVENT, later);
+      window.removeEventListener('orientationchange', later);
+      refit.current = () => undefined;
       input.dispose();
       el.removeEventListener('keydown', onKey);
       ws?.close();
@@ -156,6 +189,17 @@ export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: 
       term.dispose();
     };
   }, [agentId]);
+
+  useEffect(() => {
+    fontRef.current = fontSize;
+    const term = termRef.current;
+    if (!term || term.options.fontSize === fontSize) return;
+    term.options.fontSize = fontSize;
+    refit.current();
+  }, [fontSize]);
+
+  const status = !connected ? 'Reconnecting…' : live ? (focused ? 'Typing goes straight to the agent · Esc goes to them too; click outside to use the office keys' : 'Live · click the terminal to type into it') : 'Not running · a message below picks the session back up';
+  useEffect(() => onStatus?.(status), [onStatus, status]);
 
   const press = (k: BarKey) => {
     const term = termRef.current;
@@ -178,14 +222,16 @@ export function LiveTerminal({ agentId, cli = 'claude', className }: { agentId: 
   return (
     <div className={`live-term ${className ?? ''}`}>
       <div className="live-term-screen" ref={host} />
-      {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} />}
-      <div className="live-term-foot">
-        <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />
-        <span className="grow">{!connected ? 'Reconnecting…' : live ? (focused ? 'Typing goes straight to the agent · Esc goes to them too; click outside to use the office keys' : 'Live · click the terminal to type into it') : 'Not running · a message below picks the session back up'}</span>
-        <button type="button" className="live-term-keys-toggle" aria-pressed={keysOn} title={keysOn ? 'Hide the terminal key bar' : 'Show a bar of terminal keys: Esc, Tab, arrows, Ctrl…'} onClick={() => setKeysOn(!keysOn)}>
-          ⌨ Keys
-        </button>
-      </div>
+      {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} dock={!compact} />}
+      {!compact && (
+        <div className="live-term-foot">
+          <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />
+          <span className="grow">{status}</span>
+          <button type="button" className="live-term-keys-toggle" aria-pressed={keysOn} title={keysOn ? 'Hide the terminal key bar' : 'Show a bar of terminal keys: Esc, Tab, arrows, Ctrl…'} onClick={() => setKeysOn(!keysOn)}>
+            ⌨ Keys
+          </button>
+        </div>
+      )}
     </div>
   );
 }
