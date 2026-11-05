@@ -14,6 +14,7 @@ import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
 import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
+import type { HistoryFocus } from '../ui/HistoryTab';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -211,11 +212,11 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ section, pick, onClose }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void }) {
+function Settings({ section, pick, onClose, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus }) {
   return (
     <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings ds-console ds-auto-dark">
       <Suspense fallback={<p className="muted">Loading…</p>}>
-        <PocketConsole section={section} pick={pick} />
+        <PocketConsole section={section} pick={pick} history={history} />
       </Suspense>
     </Panel>
   );
@@ -263,6 +264,15 @@ export default function Pocket() {
     setSettings(null);
     go('kanban', kanban);
   }, [kanban]);
+  // The History asked for from an agent's desk or a PR card opens in the console here.
+  const [history, setHistory] = useState<HistoryFocus | undefined>();
+  const wantsHistory = useStore((s) => (s.overlay?.kind === 'manager' && s.overlay.tab === 'history' ? s.overlay : null));
+  useEffect(() => {
+    if (!wantsHistory) return;
+    useStore.getState().openOverlay(null);
+    setHistory(wantsHistory.history);
+    setSettings('history');
+  }, [wantsHistory]);
   // While the chat is on screen, new CEO messages don't toast (the store reads this as the phone's chat being open).
   useEffect(() => {
     const s = useStore.getState();
@@ -330,7 +340,7 @@ export default function Pocket() {
         ))}
       </nav>
       <Toasts />
-      {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} />}
+      {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} />}
       {/* after the console, so a terminal or app opened from it shows over it */}
       <Suspense fallback={null}>
         <PocketOverlay />

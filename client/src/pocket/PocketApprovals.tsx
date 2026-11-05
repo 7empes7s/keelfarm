@@ -111,7 +111,7 @@ export function Approvals() {
       {w.requests.map((r) => (
         <Resume key={r.id} req={r} />
       ))}
-      {charters.length > 0 && <h3 className="pk-h">📜 Charter changes (edit them in ⚙️ → Charter)</h3>}
+      {charters.length > 0 && <h3 className="pk-h">🎯 Charter changes (edit them in ⚙️ → Charter)</h3>}
       {charters.map((r) => (
         <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />
       ))}

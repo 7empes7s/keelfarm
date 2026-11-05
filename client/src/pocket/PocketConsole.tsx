@@ -8,17 +8,18 @@ import { CharterTab } from '../ui/CharterTab';
 import { NotifySettings } from '../ui/NotifySettings';
 import { AccessibilitySettings } from '../ui/AccessibilitySettings';
 import { ToolsTab } from '../ui/ToolsSettings';
+import { HistoryTab, type HistoryFocus } from '../ui/HistoryTab';
 import { pendingRequests, useStore } from '../store';
 import { setMode } from './mode';
 
-export type ConsoleSection = 'floors' | 'ceo' | 'charter' | 'team' | 'settings' | 'tools' | 'ops' | 'device';
+export type ConsoleSection = 'floors' | 'ceo' | 'charter' | 'team' | 'settings' | 'tools' | 'ops' | 'history' | 'device';
 
 function openOffice() {
   useStore.getState().openOverlay(null);
   setMode('office');
 }
 
-export function PocketConsole({ section, pick }: { section: ConsoleSection; pick: (s: ConsoleSection) => void }) {
+export function PocketConsole({ section, pick, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus }) {
   const pending = useStore((s) => pendingRequests(s.requests).length);
   const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
   const proposals = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
@@ -30,11 +31,12 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
   const sections: [ConsoleSection, string][] = [
     ['floors', '🏢 Floors'],
     ['ceo', `🧠 CEO${pending ? ` (${pending})` : ''}`],
-    ['charter', `📜 Charter${proposals ? ` (${proposals})` : ''}`],
+    ['charter', `🎯 Charter${proposals ? ` (${proposals})` : ''}`],
     ['team', '👩‍💻 Team'],
     ['settings', '⚙️ Office'],
     ['tools', '🧰 Tools & skills'],
     ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
+    ['history', '📜 History'],
     ['device', '📱 This device'],
   ];
   return (
@@ -54,6 +56,7 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
         {section === 'settings' && <SettingsTab pocket />}
         {section === 'tools' && <ToolsTab />}
         {section === 'ops' && <OpsTab />}
+        {section === 'history' && <HistoryTab key={JSON.stringify(history ?? {})} focus={history} />}
         {section === 'device' && (
           <>
             <NotifySettings />

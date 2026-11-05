@@ -151,6 +151,7 @@ describe('office tools', () => {
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
       defineExperiment: (a) => (calls.push(['define_experiment', a]), 'defined'),
+      sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -184,6 +185,7 @@ describe('office tools', () => {
       'scale_team',
       'send_back',
       'send_telegram',
+      'session_history',
       'set_dependencies',
       'set_floor_profile',
       'set_mandate',
@@ -208,6 +210,15 @@ describe('office tools', () => {
     expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
     expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
+  });
+
+  it('session_history takes its filters and refuses more than 90 days back', async () => {
+    const { client, calls } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'session_history', arguments: args })).isError;
+    expect(await ok({ agent: 'Grace', issue: 41, days: 2 })).toBe(true);
+    expect(await ok({ days: 91 })).toBe(false);
+    expect(await ok({ page: 0 })).toBe(false);
+    expect(calls).toEqual([['session_history', { agent: 'Grace', issue: 41, days: 2 }]]);
   });
 
   it('define_experiment takes 2 to 4 variants and the lab kinds only', async () => {
@@ -530,7 +541,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
-          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok, proposeCharter: ok,
+          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok, sessionHistory: ok, proposeCharter: ok,
         },
         () => researching,
       ),
@@ -540,6 +551,7 @@ describe('follow-ups (#27)', () => {
     expect(await office.call('send_telegram', { text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
     expect(await office.call('message_agent', { floor: 1, agent_id: 'a1', text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
     expect(await office.call('company_status', {})).toBe('ok');
+    expect(await office.call('session_history', { agent: 'Grace', issue: 41 })).toBe('ok'); // read-only
     researching = false;
     expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe('filed');
   });

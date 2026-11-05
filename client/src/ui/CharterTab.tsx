@@ -257,7 +257,7 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
         </select>
         {proposal && !fromProposal && <ProposalCard repo={repo} proposal={proposal} onEdit={() => setEditProposal(true)} />}
         <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
-          <h3>{fromProposal ? `📜 ${proposal.by}'s proposal, your edits` : '📜 Charter'}</h3>
+          <h3>{fromProposal ? `🎯 ${proposal.by}'s proposal, your edits` : '🎯 Charter'}</h3>
           <p className="muted small">Every build, fix and QA prompt on this floor starts with it, and QA fails a PR that breaks a standard.</p>
           <Editor key={`${repo.id}:${fromProposal}:${JSON.stringify(start)}`} repo={repo} start={start} fromProposal={fromProposal} onDone={() => setEditProposal(false)} />
           <div className="row wrap charter-export">

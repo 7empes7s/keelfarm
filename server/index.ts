@@ -21,6 +21,7 @@ import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
 import { PresenceHub } from './presence.ts';
 import { HttpError, Swarm } from './swarm.ts';
+import { historyFilter } from './history.ts';
 
 const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
@@ -192,6 +193,10 @@ app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.par
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
+// The session history (#49): a page of entries, Settings' disk-usage line, and one entry with its transcript.
+app.get('/api/history', route((req) => swarm.history.page(historyFilter(req.query))));
+app.get('/api/history/usage', route(() => swarm.history.usage()));
+app.get('/api/history/:id', route(async (req) => (await swarm.history.detail(String(req.params.id))) ?? Promise.reject(new HttpError(404, 'No such session in the history'))));
 // The lab (#23): the manager defines experiments, starts, stops and promotes them; the results come on /ws.
 app.post('/api/experiments', route((req) => swarm.lab.define(req.body, 'manager')));
 app.post('/api/experiments/:id', route((req) => swarm.lab.act(String(req.params.id), req.body?.action, req.body?.variant ?? null)));
