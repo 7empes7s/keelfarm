@@ -18,12 +18,12 @@ import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
-import { TelegramCallError, type TelegramApi } from './telegramBot.ts';
+import { demoTelegram } from './demoTelegram.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
-import { guardPath } from './worktreeRead.ts';
+import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -51,18 +51,6 @@ const stalls = new Map<string, () => void>(); // agent id -> silences their runn
 const signOuts = new Map<string, { boxId: string; end: () => void }>(); // agent id -> ends their cloud session as an expired sign-in would
 
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
-/** A small made-up diff for the CEO's pr_diff and worktree_file. */
-const demoDiff = (what: string) =>
-  [
-    'diff --git a/src/App.tsx b/src/App.tsx',
-    '--- a/src/App.tsx',
-    '+++ b/src/App.tsx',
-    '@@ -12,6 +12,14 @@ export function App() {',
-    `+  // ${what}`,
-    "+  const [ready, setReady] = useState(false);",
-    '+  useEffect(() => setReady(true), []);',
-    '   return (',
-  ].join('\n');
 
 // GitHub never gives two PRs the same number, and the office's ledger (coins, careers) counts each PR once by it, so
 // the fake's numbers carry on across restarts (the issues and PRs themselves start over).
@@ -867,16 +855,9 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     prDiff: async (fullName, number, patch) => {
       const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
       if (!pr) throw new Error(`Unknown PR #${number}`);
-      const files = [
-        { path: 'src/App.tsx', additions: Math.ceil(pr.additions * 0.6), deletions: Math.ceil(pr.deletions * 0.5) },
-        { path: 'src/App.test.tsx', additions: Math.floor(pr.additions * 0.4), deletions: Math.floor(pr.deletions * 0.5) },
-      ];
-      return { files, diff: patch ? demoDiff(pr.title) : null };
+      return demoPrDiff(pr, patch);
     },
-    readWorktree: async (r) => {
-      if (r.mode === 'file') return `// ${guardPath(r.path ?? '')} (demo: a made-up file)\nexport function feature() {\n  return 'works';\n}\n`;
-      return r.mode === 'diff_stat' ? ' src/App.tsx      | 24 +++++++++++++-----\n src/App.test.tsx | 12 ++++++++\n 2 files changed, 31 insertions(+), 5 deletions(-)' : demoDiff('the change');
-    },
+    readWorktree: async (r) => demoReadWorktree(r),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
@@ -1599,56 +1580,6 @@ const demoNotify: NotifyTransport = {
     return ok ? 200 : 404;
   },
 };
-
-/**
- * A fake Bot API with no network: any token in BotFather's shape is the bot @cubefarm_demo_bot (one with "bad" in it is
- * refused), sends are logged, and getUpdates hands out what the demo's fake manager does (TelegramBot.demo).
- */
-function demoTelegram(): TelegramApi {
-  let queue: Record<string, unknown>[] = [];
-  let nextUpdate = 1;
-  let nextMessage = 500;
-  let wake: (() => void) | null = null;
-  return {
-    async call(token, method, params, signal) {
-      if (/bad/i.test(token)) throw new TelegramCallError(401, 'Unauthorized');
-      switch (method) {
-        case 'getMe':
-          return { id: Number(token.split(':')[0]), is_bot: true, first_name: 'cubefarm demo', username: 'cubefarm_demo_bot' };
-        case 'getUpdates': {
-          if (!queue.length) {
-            await new Promise<void>((resolve) => {
-              const t = setTimeout(resolve, Number(params.timeout ?? 0) * 1000);
-              t.unref?.();
-              wake = () => (clearTimeout(t), resolve());
-              signal?.addEventListener('abort', wake, { once: true });
-            });
-            wake = null;
-          }
-          if (signal?.aborted) throw new TelegramCallError(0, 'stopped');
-          const out = queue.filter((u) => Number(u.update_id) >= Number(params.offset ?? 0));
-          queue = [];
-          return out;
-        }
-        case 'sendMessage': {
-          const buttons = (params.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)?.inline_keyboard ?? [];
-          const labels = buttons.flat().map((b) => `[${b.text}]`).join(' ');
-          console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
-          return { message_id: ++nextMessage };
-        }
-        case 'answerCallbackQuery':
-          console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
-          return true;
-        default:
-          return true;
-      }
-    },
-    inject(update) {
-      queue.push({ update_id: nextUpdate++, ...update });
-      wake?.();
-    },
-  };
-}
 
 // ---------- weather ----------
 

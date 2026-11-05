@@ -56,7 +56,7 @@ function ToolRow({ item, role, everyone, own, scope, pluginOff }: { item: ToolIt
 }
 
 /** The list for one scope: 'everyone', 'ceo' or an agent's id. */
-export function ToolsList({ scope }: { scope: string }) {
+function ToolsList({ scope }: { scope: string }) {
   const tooling = useStore((s) => s.tooling);
   const tools = useStore((s) => s.settings.tools);
   const agent = useStore((s) => (scope === 'everyone' || scope === 'ceo' ? null : s.agents[scope]));
