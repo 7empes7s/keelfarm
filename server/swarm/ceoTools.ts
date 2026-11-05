@@ -12,6 +12,7 @@ import {
   AGENT_LOG_MAX as AGENT_LOG_MAX_LINES,
   type OfficeTools,
 } from '../ceo.ts';
+import { researchReadOnly } from '../research.ts';
 import { nameList } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
@@ -36,7 +37,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
    */
   protected officeTools(): OfficeTools {
     const acts = this.spend.acts;
-    return createOfficeTools({
+    return createOfficeTools(researchReadOnly({
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
@@ -60,7 +61,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
-    });
+    }, () => this.state.ceo.job?.kind === 'research'));
   }
 
   // ---------- the CEO's office tools ----------

@@ -8,6 +8,7 @@ import { BoxMachines } from '../boxMachines.ts';
 import { Cloud, officeId } from '../cloud.ts';
 import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, STATE_FILE, VERSION } from '../config.ts';
 import { IssueCap } from '../ceo.ts';
+import { DEFAULT_RESEARCH_MIN, ResearchGuard } from '../research.ts';
 import type { PrepStrikes } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
 import { IssueAges } from '../issueAges.ts';
@@ -85,6 +86,7 @@ export abstract class SwarmCore extends SwarmContract {
       scaling: 'approve',
       maxAgents: DEFAULT_MAX_AGENTS,
       ceoHeartbeatMin: 60,
+      researchMin: DEFAULT_RESEARCH_MIN,
       ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
       ceoMandates: [],
       managerName: '',
@@ -126,6 +128,7 @@ export abstract class SwarmCore extends SwarmContract {
 
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
+  protected researchGuard = new ResearchGuard(); // the running research job's time budget
   protected messageSeq = 1;
   protected agentRt = new Map<string, AgentRuntime>();
   protected seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log

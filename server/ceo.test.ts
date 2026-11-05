@@ -32,6 +32,7 @@ import {
   type DependsRequest,
   type TeamNow,
 } from './ceo.ts';
+import { RESEARCH_NO_FILING, RESEARCH_READ_ONLY, researchReadOnly } from './research.ts';
 
 describe('seats', () => {
   it('match the desks the client draws', () => {
@@ -479,6 +480,35 @@ describe('follow-ups (#27)', () => {
     expect(refused).toMatch(/No standing mandate .* floor 2/);
     expect(refused).toMatch(/final message/);
     expect(refused).toMatch(/set_mandate/);
+  });
+
+  it('refuses file_issue during research, even after a message from the manager', () => {
+    for (const asked of [false, true]) expect(issueRefusal({ kind: 'research', asked, floor: 3, mandate })).toBe(RESEARCH_NO_FILING);
+    expect(RESEARCH_NO_FILING).toMatch(/suggestions/);
+    expect(RESEARCH_NO_FILING).toMatch(/plan job/);
+  });
+
+  it('refuses every tool that acts while research runs, and keeps the read-only ones', async () => {
+    let researching = true;
+    const ok = () => 'ok';
+    const office = createOfficeTools(
+      researchReadOnly(
+        {
+          companyStatus: ok, agentDetail: ok, setFloorProfile: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
+          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
+          restartAgent: ok, messageAgent: async () => 'ok',
+        },
+        () => researching,
+      ),
+    );
+    expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe(`Refused: ${RESEARCH_NO_FILING}`);
+    expect(await office.call('scale_team', { floor: 1, size: 3, reason: 'more' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('send_telegram', { text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('message_agent', { floor: 1, agent_id: 'a1', text: 'hi' })).toBe(`Refused: ${RESEARCH_READ_ONLY}`);
+    expect(await office.call('company_status', {})).toBe('ok');
+    researching = false;
+    expect(await office.call('file_issue', { floor: 1, title: 'A feature', body: 'Do it' })).toBe('filed');
   });
 
   it('keeps the old rule for every other job', () => {

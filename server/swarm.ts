@@ -27,6 +27,7 @@ import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/to
 import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
 import { cleanStyle } from '../shared/looks.ts';
+import { clampResearchMin } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../shared/types.ts';
@@ -453,6 +454,7 @@ export class Swarm extends SwarmCeoTools {
     if (patch.scaling === 'approve' || patch.scaling === 'auto') s.scaling = patch.scaling;
     if (patch.maxAgents !== undefined) s.maxAgents = clampMaxAgents(patch.maxAgents);
     if (patch.ceoHeartbeatMin !== undefined) s.ceoHeartbeatMin = Math.max(0, Math.min(1440, Math.round(Number(patch.ceoHeartbeatMin)) || 0));
+    if (patch.researchMin !== undefined) s.researchMin = clampResearchMin(patch.researchMin);
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
