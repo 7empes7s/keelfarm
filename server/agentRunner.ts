@@ -269,6 +269,16 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `🗂️ close_pull PR #${String(input.pr ?? '?')}${floor}`;
     case 'escalate':
       return `📣 escalate PR #${String(input.pr ?? '?')}${floor}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
+    case 'set_mandate':
+      return `📌 set_mandate: ${clip(String(input.text ?? ''), 90)}`;
+    case 'agent_log':
+      return `📜 agent_log ${String(input.agent_id ?? '')}`;
+    case 'qa_report':
+      return `🧪 qa_report PR #${String(input.pr ?? '?')}${floor}`;
+    case 'worktree_file':
+      return `📂 worktree_file ${String(input.agent_id ?? '')} · ${String(input.mode ?? '')}${input.path ? ` ${clip(String(input.path), 80)}` : ''}`;
+    case 'pr_diff':
+      return `🔀 pr_diff PR #${String(input.pr ?? '?')}${floor}`;
     case 'send_telegram':
       return `✈️ send_telegram: ${clip(String(input.text ?? ''), 90)}`;
   }
