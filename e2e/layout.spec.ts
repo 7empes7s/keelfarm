@@ -21,7 +21,7 @@ interface Screen {
 
 const AT_DESK: SavedView = { floor: 0, x: MANAGER_DESK.x, z: MANAGER_DESK.z + MANAGER_DESK.d / 2 + 0.8, yaw: 0, pitch: -0.6 };
 const ON_FLOOR_1: SavedView = { floor: 1, x: 0, z: 0, yaw: 0, pitch: 0 }; // the phone's Kanban shortcut is for this floor
-const AT_ELEVATOR: SavedView = { floor: 0, x: 0, z: HALF_D - 1.6, yaw: Math.PI, pitch: 0 };
+const AT_ELEVATOR: SavedView = { floor: 0, x: 0, z: HALF_D - 1.4, yaw: Math.PI, pitch: 0.6 }; // at the frame's lintel: the doors aren't the interactable
 const dialog = (page: Page, name: RegExp) => page.getByRole('dialog', { name });
 const PHONES = [360, 390, 430, 1280];
 // The 3D office boots WebGL: two widths are enough there; pocket mode is what phones get, and it's checked at all four.
@@ -158,6 +158,7 @@ const SCREENS: Screen[] = [
     widths: OFFICE,
     open: async (page) => {
       await office(page, AT_ELEVATOR);
+      await page.waitForTimeout(2000); // a few frames to aim at it on software WebGL
       await page.keyboard.press('e');
       return dialog(page, /Elevator/);
     },

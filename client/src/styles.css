@@ -990,7 +990,7 @@ input.inline:focus {
   bottom: 14px;
   left: 16px;
   font-size: 0.85rem;
-  background: rgba(255, 253, 246, 0.85);
+  background: color-mix(in srgb, var(--ds-surface) 85%, transparent);
   border-radius: 12px;
   padding: 6px 10px;
   pointer-events: none;
