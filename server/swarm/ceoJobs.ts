@@ -36,9 +36,10 @@ import { makeArtifacts, parseCeoMessage } from '../../shared/chatParts.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
-import type { AgentStatus, CeoChatView, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
+import { ceoSessionStep } from '../ceoWaits.ts';
+import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
-import { conversationsView, currentConversation, touchConversation } from '../../shared/conversations.ts';
+import { conversationsView, touchConversation } from '../../shared/conversations.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -134,13 +135,9 @@ export abstract class SwarmCeo extends SwarmUpdate {
       lastReviewAt: c.lastReviewAt,
       nextReviewAt: min > 0 && c.lastReviewAt ? c.lastReviewAt + min * 60_000 : null,
       followups: this.followupView(),
+      session: { turns: c.kept.turns, costUsd: Math.round(c.kept.costUsd * 100) / 100, startedAt: c.kept.startedAt, waiting: this.holds.waiting(), consults: this.consults.length },
       held: ceoHeld({ now: Date.now(), pausedUntil: this.pausedUntil, chatQueued: c.queue.some((j) => j.kind === 'chat') }),
     };
-  }
-
-  /** The chat's live reply, conversations and the manager's notes (#51). */
-  protected chatView(): CeoChatView {
-    return { live: this.ceoChat.live, current: this.state.ceo.chats.current, conversations: conversationsView(this.state.ceo.chats), memory: this.state.ceo.remember };
   }
 
   protected emitCeo() {
@@ -247,6 +244,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.spend.ceoActs = 0;
     this.ceoAsked = askedFor(job);
     this.ceoChat.startJob();
+    this.ceoWaited = false;
     this.emitAgent(a);
     this.emitCeo();
     this.save();
@@ -259,8 +257,14 @@ export abstract class SwarmCeo extends SwarmUpdate {
       this.emitCeo();
       return;
     }
-    // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
-    const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
+    // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer; with keep-alive on,
+    // every job does until its context fills up or it sat idle too long (#28).
+    const awake = this.state.settings.ceoAwake;
+    const step = ceoSessionStep(awake, { sessionId: a.sessionId, turns: this.state.ceo.kept.turns, lastEndedAt: this.state.ceo.kept.lastEndedAt }, Date.now());
+    const resume = step.resume || (job.kind === 'chat' && !step.why);
+    if (!resume || !this.state.ceo.kept.startedAt) this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: Date.now(), lastEndedAt: null };
+    if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
+    const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
     const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + memoryPrompt(this.state.ceo.remember);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
@@ -279,6 +283,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         office: this.officeTools(),
         tools: this.sessionToolsFor(a, 'claude'),
         stream: true,
+        keepAlive: awake.keepAlive,
         ...how,
       },
       {
@@ -329,6 +334,9 @@ export abstract class SwarmCeo extends SwarmUpdate {
     a.costUsd += result.costUsd;
     a.turns += result.turns;
     recordCost(this.state.ops, '', result.costUsd, a.endedAt);
+    this.cancelHolds('The job ended.');
+    const kept = this.state.ceo.kept;
+    Object.assign(kept, { turns: kept.turns + result.turns, costUsd: kept.costUsd + result.costUsd, lastEndedAt: a.endedAt });
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
     this.researchGuard.clear();
@@ -341,7 +349,9 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.ceoChat.endJob();
     if (result.interrupted) this.interrupted(a);
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
-    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped' || preempted, ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
+    const run = this.spend.take(a.id);
+    if (run && this.ceoWaited) run.kind = 'ceo-wait';
+    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, run, 'ceo-chat', result, { stopped: a.status === 'stopped' || preempted, ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
     } else if (preempted) {
@@ -373,6 +383,14 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
     const forward = [forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const asked = this.holds.answer(replyTo, [t, this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n')); // no quote: it answers the question asked
+    if (asked && !asked.resume) {
+      // ask_manager's answer: it goes to the waiting tool call, not into the session as a new message (#28).
+      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager answered: ${forward}` }]);
+      this.ceoAsked = true;
+      this.markDelivery([m.id], 'read');
+      return { id: m.id };
+    }
     const research = await researchJob({ text: t, quoted, forward, id: m.id, dir: path.join(CEO_DIR, 'research'), onlyRepo: this.state.repos.length === 1 ? this.state.repos[0].id : undefined });
     const rt = this.agentRt.get(a.id)!;
     if (rt.session && !research && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: this.state.ceo.job?.kind ?? null, session: true })) {
@@ -649,9 +667,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.state.messages.push(m);
     if (this.state.messages.length > KEEP_MESSAGES) this.state.messages.splice(0, this.state.messages.length - KEEP_MESSAGES);
     this.broadcast({ type: 'message', message: m });
-    const { title } = currentConversation(this.state.ceo.chats);
-    touchConversation(this.state.ceo.chats, m);
-    if (currentConversation(this.state.ceo.chats).title !== title) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
+    if (touchConversation(this.state.ceo.chats, m)) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
     this.save();
     // Proposals are notified as such (proposeHire, proposeLetGo).
     if (from === 'ceo' && !requestId) {

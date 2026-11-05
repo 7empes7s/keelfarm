@@ -228,11 +228,11 @@
   background: var(--ds-surface-sunken);
 }
 
-/* the chat's header: with Artifacts, Files, Conversations and Memory, its buttons wrap below the CEO's name */
-.chat-head {
-  flex-wrap: wrap;
-  row-gap: var(--ds-space-2);
-}
-.chat-head > .grow {
-  min-width: 7rem;
+/* the chat's header holds one row: the CEO's name and what they're doing truncate, never wrap into the buttons */
+.chat-head > .grow,
+.chat-head > .grow > div {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -86,6 +86,15 @@ describe('the conversation store', () => {
     expect(searchConversations(list, threads, '  ')).toEqual([]);
   });
 
+  it("starts a new office's first conversation on first use, and says when a message names it", () => {
+    const s = { current: '', list: [] };
+    expect(touchConversation(s, { from: 'office', text: 'Floor 1 opened', at: 1 })).toBe(false);
+    expect(s.list).toHaveLength(1);
+    expect(touchConversation(s, { from: 'manager', text: 'Plan the bakery', at: 2 })).toBe(true);
+    expect(touchConversation(s, { from: 'manager', text: 'And the cake shop', at: 3 })).toBe(false);
+    expect(currentConversation(s)).toMatchObject({ title: 'Plan the bakery', count: 3 });
+  });
+
   it('titles a conversation from its first line, shortened', () => {
     expect(titleFrom('\n  Hello there  \nmore')).toBe('Hello there');
     expect(titleFrom('x'.repeat(100))).toHaveLength(60);

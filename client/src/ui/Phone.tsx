@@ -18,6 +18,7 @@ import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
+import { Menu } from './Menu';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
 import { useAttachments } from './chatUpload';
@@ -734,12 +735,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             📎 Files ({fileCount})
           </button>
         )}
-        <button type="button" className="hands-free" onClick={() => setSheet('chats')} aria-haspopup="dialog" aria-label="Conversations" title="Conversations: a new one, or an earlier one">
-          💬
-        </button>
-        <button type="button" className="hands-free" onClick={() => setSheet('memory')} aria-haspopup="dialog" aria-label={`What ${ceo.name} remembers`} title={`What ${ceo.name} remembers`}>
-          🧠
-        </button>
+        <Menu label="Conversations and memory" title={`Chat with ${ceo.name}`} items={[{ label: '💬 Conversations', hint: 'A new one, or an earlier one', onSelect: () => setSheet('chats') }, { label: `🧠 What ${ceo.name} remembers`, onSelect: () => setSheet('memory') }]} />
         <HandsFreeToggle ceoName={ceo.name} />
       </div>
       <div className="chat-log-wrap">

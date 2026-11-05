@@ -12,6 +12,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { browserProblem, playwrightMcp } from './browser.ts';
 import { CEO_DISALLOWED, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 import { VERSION } from './config.ts';
+import { consultRefusal } from './consult.ts';
 import { nonInteractiveEnv } from './unblock.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
@@ -54,6 +55,8 @@ export interface SessionOptions {
   tools?: SessionTools;
   /** Report the session's text blocks as they are written (callbacks.text): the CEO's chat (#51). */
   stream?: boolean;
+  /** A CEO's consult (server/consult.ts): edits, commits, pushes and pull requests are refused before they run. */
+  readOnly?: boolean;
 }
 
 export interface LogEntry {
@@ -140,6 +143,10 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
 // Agents work like the manager's own CLI, but nobody may be watching to answer a permission question: every tool call
 // is approved. The office's rules (branches, pull requests, QA leaving GitHub alone) are in their instructions only.
 const allowAll: CanUseTool = async (_toolName, input) => ({ behavior: 'allow', updatedInput: input });
+const readOnly: CanUseTool = async (toolName, input) => {
+  const why = consultRefusal(toolName);
+  return why ? { behavior: 'deny', message: why } : { behavior: 'allow', updatedInput: input };
+};
 
 /**
  * A Playwright screenshot saved to a file (browser_take_screenshot with a filename) comes back as a link, not an
@@ -404,8 +411,8 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
       const line = data.trim();
       if (line && /error|fail/i.test(line)) cb.log([{ kind: 'error', text: clip(line, 200) }]);
     },
-    permissionMode: 'acceptEdits',
-    canUseTool: allowAll,
+    permissionMode: opts.readOnly ? 'default' : 'acceptEdits',
+    canUseTool: opts.readOnly ? readOnly : allowAll,
     ...(opts.outputSchema ? { outputFormat: { type: 'json_schema' as const, schema: opts.outputSchema } } : {}),
   };
 

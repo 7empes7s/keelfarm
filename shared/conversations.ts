@@ -53,7 +53,16 @@ export function loadChats(raw: unknown, messages: readonly PhoneMessage[], now: 
   return { current: c.id, list: [...list, c] };
 }
 
-export const currentConversation = (s: ChatsState) => s.list.find((c) => c.id === s.current)!;
+/** The conversation the phone shows; an office's first one starts here. */
+export function currentConversation(s: ChatsState) {
+  const c = s.list.find((x) => x.id === s.current);
+  if (c) return c;
+  const now = Date.now();
+  const first = { id: newId(now), title: UNTITLED, startedAt: now, updatedAt: now, pinned: false, count: 0, sessionId: null };
+  s.list.push(first);
+  s.current = first.id;
+  return first;
+}
 
 /**
  * Starts a new, empty conversation and makes it the current one. `sessionId`: the CEO session the one left behind
@@ -86,12 +95,14 @@ function prune(s: ChatsState): string[] {
   return drop;
 }
 
-/** A message joined the current conversation: its count and time, and its title from the manager's first message. */
-export function touchConversation(s: ChatsState, m: Pick<PhoneMessage, 'from' | 'text' | 'at'>) {
+/** A message joined the current conversation: its count and time, and its title from the manager's first message (true: it got one). */
+export function touchConversation(s: ChatsState, m: Pick<PhoneMessage, 'from' | 'text' | 'at'>): boolean {
   const c = currentConversation(s);
   c.count += 1;
   c.updatedAt = m.at;
-  if (c.title === UNTITLED && m.from === 'manager' && m.text.trim()) c.title = titleFrom(m.text);
+  if (c.title !== UNTITLED || m.from !== 'manager' || !m.text.trim()) return false;
+  c.title = titleFrom(m.text);
+  return true;
 }
 
 export function pinConversation(s: ChatsState, id: string, pinned: boolean) {

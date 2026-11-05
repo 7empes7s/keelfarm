@@ -149,6 +149,7 @@ interface CeoState {
   followups: FollowupState; // office events waiting for a follow-up job (shared/followups.ts)
   chats: ChatsState; // the chat's conversations; state.messages is the current one's thread (shared/conversations.ts)
   remember: MemoryNote[]; // the manager's pinned notes, in every CEO job's prompt (shared/ceoMemory.ts)
+  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null }; // its kept session (#28)
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

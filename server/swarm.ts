@@ -34,7 +34,9 @@ import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
 import { forwardText } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
+import { CeoChat } from './ceoChat.ts';
 import { snapshotMessages } from '../shared/chatParts.ts';
+import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
@@ -44,7 +46,7 @@ import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, 
 import { SWEEP_MS } from '../shared/files.ts';
 import { clampHistoryDays } from '../shared/history.ts';
 import { readingsLabel } from '../shared/usage.ts';
-import type { AgentLook, CloudSettings, HireRequestView, PhoneMessage, SwarmSettings } from '../shared/types.ts';
+import type { AgentLook, CloudSettings, CeoChatView, HireRequestView, PhoneMessage, SwarmSettings } from '../shared/types.ts';
 import {
   type PersistedAgent,
   type Persisted,
@@ -55,6 +57,8 @@ import {
   OPS_TICK_MS,
   WATCHDOG_MS,
   QA_SHOTS_DIR,
+  CEO_DIR,
+  CONVERSATIONS_DIR,
   TERMINAL_SAVE_MS,
   clampMaxAgents,
 } from './swarm/model.ts';
@@ -68,6 +72,8 @@ export { HttpError };
 const STOP_SETTLE_MS = 15_000;
 
 export class Swarm extends SwarmCeoTools {
+  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }));
+
   // ---------- lifecycle ----------
 
   async init() {
@@ -173,6 +179,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
+      this.state.settings.ceoAwake = ceoAwakeSettings(undefined, loaded.settings?.ceoAwake);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
       try {
         this.state.settings.everyProject = everyProjectSettings(undefined, loaded.settings?.everyProject);
@@ -478,6 +485,11 @@ export class Swarm extends SwarmCeoTools {
 
   // ---------- the CEO chat (#51) ----------
 
+  /** The chat's live reply, conversations and the manager's notes, for the snapshot. */
+  protected chatView(): CeoChatView {
+    return { live: this.ceoChat.live, current: this.state.ceo.chats.current, conversations: conversationsView(this.state.ceo.chats), memory: this.state.ceo.remember };
+  }
+
   private lastManagerMessage() {
     return [...this.state.messages].reverse().find((m) => m.from === 'manager');
   }
@@ -543,6 +555,7 @@ export class Swarm extends SwarmCeoTools {
   private switchThread(messages: PhoneMessage[], sessionId: string | null) {
     this.state.messages = messages;
     Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
+    this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
     this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
     this.save();
   }
@@ -635,6 +648,7 @@ export class Swarm extends SwarmCeoTools {
     if (patch.researchMin !== undefined) s.researchMin = clampResearchMin(patch.researchMin);
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
+    if (patch.ceoAwake !== undefined) s.ceoAwake = ceoAwakeSettings(s.ceoAwake, patch.ceoAwake);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
     if (typeof patch.companyName === 'string') s.companyName = patch.companyName.trim().slice(0, 60);
     if (typeof patch.dogName === 'string') s.dogName = patch.dogName.trim().slice(0, 24) || DEFAULT_DOG_NAME;
