@@ -620,8 +620,14 @@ export abstract class SwarmAgents extends SwarmMerge {
   protected sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined, off: string[] = []): SessionTools | undefined {
     if ((cli ?? 'claude') !== 'claude') return undefined;
     const t = this.state.settings.tools;
-    const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', { ...mergeSwitches(t.everyone, a.tools), ...Object.fromEntries(off.map((id) => [id, false])) });
-    if (tools.disallowed.length || tools.disabledPlugins.length) this.appendLog(a, [{ kind: 'system', text: `🧰 Tools & skills off this session: claude … ${toolArgsLine(tools)}` }]);
+    // Each kind of session follows its role's profile (#50): QA's, the builders' and fixers', or the CEO's.
+    const profile = a.role === 'ceo' ? 'ceo' : a.task === 'qa' ? 'qa' : 'build';
+    const lean = t.lean ? profile : null;
+    const tools =
+      profile === 'ceo'
+        ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo), lean)
+        : sessionTools(this.tooling.items, 'agent', { ...mergeSwitches(t.everyone, t[profile], a.tools), ...Object.fromEntries(off.map((id) => [id, false])) }, lean);
+    if (tools.disallowed.length || tools.disabledPlugins.length || tools.noConnectors) this.appendLog(a, [{ kind: 'system', text: `🧰 Tools & skills off this session: claude … ${toolArgsLine(tools)}` }]);
     return tools;
   }
 
@@ -642,12 +648,12 @@ export abstract class SwarmAgents extends SwarmMerge {
     return this.tooling;
   }
 
-  /** One Tools & skills switch: scope 'everyone', 'ceo' or an agent's id; on null follows the scope above. */
+  /** One Tools & skills switch: scope 'everyone', 'ceo', a role profile ('build', 'qa') or an agent's id; on null follows the scope above. */
   setToolSwitch(scope: string, id: unknown, on: unknown) {
     if (!isToolId(id)) throw new HttpError(400, 'Pick a tool, plugin, skill or MCP server from the list.');
     if (on !== true && on !== false && on !== null) throw new HttpError(400, 'on must be true, false or null.');
     const t = this.state.settings.tools;
-    if (scope === 'everyone' || scope === 'ceo') {
+    if (scope === 'everyone' || scope === 'ceo' || scope === 'build' || scope === 'qa') {
       this.state.settings.tools = { ...t, [scope]: setSwitch(t[scope], id, on) };
       this.save();
       this.broadcast({ type: 'settings', settings: this.state.settings });

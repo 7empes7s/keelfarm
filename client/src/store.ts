@@ -256,6 +256,7 @@ export const useStore = create<State>((set, get) => ({
     notify: DEFAULT_NOTIFY,
     cloud: DEFAULT_CLOUD,
     tools: DEFAULT_TOOL_SETTINGS,
+    officePlaybook: '',
   },
   clis: [],
   repos: [],

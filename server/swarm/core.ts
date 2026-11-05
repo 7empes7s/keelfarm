@@ -40,7 +40,7 @@ import { dayKey, journalFrame } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS } from '../../shared/types.ts';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { FileStore } from '../files.ts';
@@ -108,6 +108,7 @@ export abstract class SwarmCore extends SwarmContract {
       notify: notifySettings(DEFAULT_NOTIFY, {}),
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
+      officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
     agents: [],

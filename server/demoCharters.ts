@@ -68,3 +68,14 @@ export function demoCharter(fullName: string): DemoCharter {
     }
   );
 }
+
+/** The demo CEO's first charter for a floor it onboards (propose_charter's arguments): its mission and QA brief. */
+export const demoDraft = (mission: string, qaBrief: string) => ({
+  reason: 'A first charter from what I read, so every agent keeps the same goals in view.',
+  mission,
+  objectives: [
+    { outcome: 'The core features work end to end', measure: 'each one has a passing test' },
+    { outcome: 'Works on a phone', measure: 'every screen fits 375px' },
+  ],
+  standards: qaBrief.split('\n'),
+});

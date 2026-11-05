@@ -2,7 +2,19 @@
 // session) and the CEO's jobs, with the PRs that merged, so the usage view has something to show. Pure and seeded.
 import type { CostMerge, CostRecord, CostSession, SessionOutcome, TaskKind } from '../shared/costs.ts';
 import type { EffortLevel } from '../shared/types.ts';
+import { startupParts, type StartupContext } from '../shared/startup.ts';
 import { DAY_MS, HOUR_MS, startOfDay } from './metrics.ts';
+
+/** A lean session's startup (#50), as this machine measured them: Claude Code's ~23k, CLAUDE.md files, the office's texts. */
+function sampleStartup(kind: TaskKind, usd: number): StartupContext {
+  const ceo = kind.startsWith('ceo-');
+  const office = ceo ? 1_800 : kind === 'qa' ? 900 : 850;
+  return startupParts(32_000 + Math.round(usd * 300), [
+    { label: 'CLAUDE.md files', tokens: ceo ? 2_400 : 8_900 },
+    { label: 'Office instructions', tokens: office },
+    { label: 'Task prompt', tokens: ceo ? 250 : 120 },
+  ]);
+}
 
 export interface SampleFloor {
   repoId: string;
@@ -23,7 +35,7 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
   let issueNo = 300;
   let prNo = 600;
   const session = (s: Omit<CostSession, 'type' | 'tokens' | 'model' | 'round'> & { round?: number }) =>
-    out.push({ type: 'session', tokens: null, model: 'claude-opus-5-5', round: null, ...s, usd: Math.round(s.usd * 100) / 100 });
+    out.push({ type: 'session', tokens: null, model: 'claude-opus-5-5', round: null, ...s, usd: Math.round(s.usd * 100) / 100, startup: sampleStartup(s.kind, s.usd) });
   for (let d = days - 1; d >= 0; d--) {
     const start = today - d * DAY_MS + 8 * HOUR_MS; // the working day starts at 8
     const end = d === 0 ? Math.min(now, today + 20 * HOUR_MS) : start + 11 * HOUR_MS;

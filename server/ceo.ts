@@ -4,7 +4,7 @@ import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
 import { PROPOSE_CHARTER, PROPOSE_CHARTER_TEXT, type CharterProposalArgs } from './charterTool.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
 import { HttpError } from './httpError.ts';
@@ -148,6 +148,7 @@ export interface OfficeHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
@@ -266,6 +267,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.setFloorProfile(a)),
     ),
     tool(
+      'set_office_playbook',
+      "Replace the office-wide playbook: the rules every build, fix and QA prompt on every floor starts with, above the floor's own playbook. Only small, proven rules that hold on every project; floor specifics go in set_floor_profile. Paid for on every session: keep it short.",
+      { playbook: z.string().max(OFFICE_PLAYBOOK_MAX).describe(`Markdown bullets, at most ${OFFICE_PLAYBOOK_MAX} characters. Empty string clears it.`) },
+      (a) => run(() => h.setOfficePlaybook(a)),
+    ),
+    tool(
       'scale_team',
       "Set how many agents a floor has. Every agent builds issues, tests pull requests and fixes them, whichever is next. Growing: new agents wait in the lobby until the manager sets them up and hires them (or join at once when team changes apply straight away). Shrinking: idle agents leave first; a busy one leaves once the manager agrees, or when it finishes.",
       {
@@ -375,12 +382,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       },
       (a) => run(() => h.setMandate(a)),
     ),
-    tool(
-      'propose_charter',
-      PROPOSE_CHARTER_TEXT,
-      PROPOSE_CHARTER,
-      (a) => run(() => h.proposeCharter(a)),
-    ),
+    tool('propose_charter', PROPOSE_CHARTER_TEXT, PROPOSE_CHARTER, (a) => run(() => h.proposeCharter(a))),
     tool(
       'define_experiment',
       "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
