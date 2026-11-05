@@ -12,7 +12,7 @@ import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
-import type { EveryProject, Lease, LeaseHold, PracticeOverrides, Practices } from './practices.ts';
+import type { EveryProject, FloorPracticeView } from './practices.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -65,7 +65,7 @@ export interface PullInfo {
   checkRun?: { ms: number; doneAt: number } | null;
 }
 
-export interface RepoView {
+export interface RepoView extends FloorPracticeView {
   id: string; // "owner/name"
   fullName: string;
   description: string;
@@ -93,11 +93,6 @@ export interface RepoView {
   syncError?: string;
   previewConfig: PreviewConfig;
   preview: PreviewView;
-  practices?: Practices; // (absent in journals from before #24) the version-control practices it runs with: Every project's, with its own overrides (#24)
-  practiceOverrides?: PracticeOverrides; // the switches this floor sets itself
-  leases?: Lease[]; // files its work in flight is expected to touch (while leases are on)
-  leaseHolds?: LeaseHold[]; // ready issues held back because they overlap a lease
-  hotFiles?: { path: string; score: number; conflicts: number }[]; // most often conflicted files, from its history (while leases are on)
 }
 
 /**
@@ -166,6 +161,16 @@ export const FLOOR_SEATS = 15;
 
 /** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
 export const PLAYBOOK_MAX = 3000;
+
+/** The longest the office-wide playbook may be (#50): it is in every builder's, fixer's and QA's prompt, on every floor. */
+export const OFFICE_PLAYBOOK_MAX = 1200;
+
+/** The office-wide playbook a new office starts with: small rules the prompts don't already say. */
+export const DEFAULT_OFFICE_PLAYBOOK = [
+  '- A fix comes with a test that fails without it.',
+  "- Don't reformat, rename or move code you aren't changing.",
+  '- Never run, edit or restart anything outside your worktree and reserved port: no live services, no other desks.',
+].join('\n');
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -392,7 +397,8 @@ export interface SwarmSettings {
   notify: NotifySettings;
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
-  everyProject: EveryProject; // Settings → Every project: the practice switches and playbook snippet every floor inherits (#24)
+  everyProject: EveryProject; // Settings → Every project: the practice switches every floor inherits (#24)
+  officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
@@ -665,7 +671,26 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
+}
+
+/** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
+export type ChatRef = { start: number; end: number } & (
+  | { kind: 'agent'; agentId: string; terminal?: true }
+  | { kind: 'floor'; repoId: string }
+  | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
+  | { kind: 'file'; repoId: string; path: string; line?: number }
+  | { kind: 'qa'; repoId: string; number: number }
+  | { kind: 'preview'; repoId: string; number?: number } // a PR's in the PR theatre, else the floor's app
+);
+
+/** GET /api/messages/:id/refs/:index/file: a file ref's text from the floor's default branch, size-capped. */
+export interface RefFileView {
+  path: string;
+  line: number | null;
+  text: string;
+  url: string; // the file on GitHub, at the line
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -684,6 +709,13 @@ export interface CeoInfo {
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
+  held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
+}
+
+/** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */
+export interface CeoHeld {
+  reason: 'usage';
+  until: number;
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */

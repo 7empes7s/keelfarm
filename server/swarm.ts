@@ -32,7 +32,7 @@ import { cleanStyle } from '../shared/looks.ts';
 import { clampResearchMin } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../shared/types.ts';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
 import { SWEEP_MS } from '../shared/files.ts';
 import type { AgentLook, CloudSettings, HireRequestView, SwarmSettings } from '../shared/types.ts';
 import {
@@ -163,6 +163,7 @@ export class Swarm extends SwarmCeoTools {
       } catch {
         this.state.settings.everyProject = emptyEveryProject();
       }
+      this.state.settings.officePlaybook = typeof loaded.settings?.officePlaybook === 'string' ? loaded.settings.officePlaybook.slice(0, OFFICE_PLAYBOOK_MAX) : DEFAULT_OFFICE_PLAYBOOK;
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
         Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
@@ -507,6 +508,8 @@ export class Swarm extends SwarmCeoTools {
       }
       for (const r of this.state.repos) if (this.repoRt.has(r.id)) this.emitRepo(r); // what each floor runs with changed
     }
+    if (patch.tools !== undefined) s.tools = toolSettings(s.tools, patch.tools);
+    if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
       const next: CloudSettings = cloudSettings(s.cloud, patch.cloud);
       if (next.machineKind === 'box' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');

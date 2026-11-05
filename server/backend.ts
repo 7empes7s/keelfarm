@@ -21,6 +21,7 @@ import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
+import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
@@ -60,6 +61,10 @@ export interface Backend {
   prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
   /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
   readWorktree(r: WorktreeRead): Promise<string>;
+  /** Chat file refs (repoFile.ts): the floor's main checkout has this plain file. */
+  hasRepoFile(fullName: string, rel: string): boolean;
+  /** A chat file ref's text on the floor's default branch; throws with what the viewer says. */
+  readRepoFile(fullName: string, branch: string, rel: string): Promise<string>;
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
@@ -209,6 +214,8 @@ export const realBackend: Backend = {
   prDetails: github.prDetails,
   prDiff: github.prDiff,
   readWorktree,
+  hasRepoFile: (fullName, rel) => checkoutFile(workspace.mainDir(fullName), rel) !== null,
+  readRepoFile: (fullName, branch, rel) => readRepoFile(workspace.mainDir(fullName), `origin/${branch}`, rel),
   issueDetails: github.issueDetails,
   commentPull: github.commentPull,
   uploadEvidence: github.uploadEvidence,

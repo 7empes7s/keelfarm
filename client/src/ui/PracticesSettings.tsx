@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { EVERY_PLAYBOOK_MAX, PRACTICES_OFF, type PracticeOverrides, type Practices } from '../../../shared/practices';
+import { PRACTICES_OFF, type PracticeOverrides, type Practices } from '../../../shared/practices';
 import type { RepoView } from '../../../shared/types';
 
 // The version-control practices (#24): Settings → Every project's defaults, each floor's overrides (Floors tab), the
@@ -95,20 +95,9 @@ export function EveryProjectCard() {
       <h3>🏗️ Every project</h3>
       <p className="muted small">
         What every floor runs with unless it overrides it (Floors tab). Each practice is off until an experiment proves it: Mission control → Experiments has a starter for each, and a
-        proven variant becomes the default here with one tap. Skills for everyone are under Tools &amp; skills → Everyone.
+        proven variant becomes the default here with one tap. The playbook for every project is in the CEO tab's project briefs; skills for everyone are under Tools &amp; skills → Everyone.
       </p>
       <Fields value={every.practices} set={(p) => set({ practices: { ...every.practices, ...p } as Practices })} />
-      <label className="field">
-        <span>Playbook for every project (in every agent's prompt, before the floor's own)</span>
-        <textarea
-          key={every.playbook}
-          rows={3}
-          maxLength={EVERY_PLAYBOOK_MAX}
-          defaultValue={every.playbook}
-          placeholder="e.g. Keep PRs small. Merge origin/main before you push."
-          onBlur={(e) => e.target.value.trim() !== every.playbook && set({ playbook: e.target.value })}
-        />
-      </label>
     </div>
   );
 }

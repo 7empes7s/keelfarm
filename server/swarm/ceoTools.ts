@@ -26,7 +26,7 @@ import { resumesAfterRestart } from '../restartRecovery.ts';
 import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
-import { PLAYBOOK_MAX } from '../../shared/types.ts';
+import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
 import type { HireRequestView } from '../../shared/types.ts';
 import { type PersistedAgent, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { SwarmTeam } from './team.ts';
@@ -42,6 +42,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
+      setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
       scaleTeam: acts((a) => this.scaleTeam(a)),
       configureAgent: acts((a) => this.configureAgent(a)),
       fileIssue: (a) => this.fileIssue(a),
@@ -177,6 +178,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          officePlaybook: s.officePlaybook || null,
         },
         floors,
         pendingChanges: pending.map(req),
@@ -218,6 +220,16 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     this.emitRepo(r);
     this.save();
     return `Saved floor ${r.floor}'s profile.`;
+  }
+
+  /** The office-wide playbook (#50), from Settings or set_office_playbook; over its cap it's refused, not cut. */
+  setOfficePlaybook(text: unknown): string {
+    const t = typeof text === 'string' ? text.trim() : '';
+    if (t.length > OFFICE_PLAYBOOK_MAX) throw new HttpError(400, `The office playbook is ${t.length} characters: keep it to ${OFFICE_PLAYBOOK_MAX}, it is in every session's prompt.`);
+    this.state.settings.officePlaybook = t;
+    this.save();
+    this.broadcast({ type: 'settings', settings: this.state.settings });
+    return t;
   }
 
   /** configure_agent: an agent's coding agent, model or effort, from their next task. */
@@ -323,10 +335,18 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
   }
 
+  /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
+  protected refuseWhileUpdating() {
+    if (this.officeUpdate.drainingSince !== null || this.officeUpdate.sent) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+  }
+
   protected restartAgent(x: { agent_id: string }) {
     const a = checkRestart(this.agentByRef(x.agent_id));
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
-    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    if (resumes) {
+      this.refuseWhileUpdating();
+      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
   }
@@ -335,6 +355,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const a = this.agentByRef(x.agent_id);
     if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
     const running = !!this.agentRt.get(a.id)?.session;
+    if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }

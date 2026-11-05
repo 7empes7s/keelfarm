@@ -9,6 +9,7 @@ import { CLIS } from './clis.ts';
 import { DEMO_PICKS, demoMakeFiles, sentFiles, wantsFile } from './demoFiles.ts';
 import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
+import { charTokens } from '../shared/startup.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
 import { keyName } from '../shared/termKeys.ts';
@@ -28,7 +29,7 @@ import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { demoFileHistory, demoPrDiff, demoReadWorktree } from './demoReads.ts';
+import { DEMO_REF_FILES, demoFileHistory, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -332,6 +333,7 @@ function demoTooling(projects: string[]): ToolInventory {
     superpowers: plugin('superpowers', 'Skills for planning, test-driven development and debugging.', { skills: [['brainstorming', 'Use before any creative work: explores intent before building.'], ['test-driven-development', 'Write the failing test first, then the code.'], ['systematic-debugging', 'Find the root cause before proposing fixes.']] }),
     github: plugin('github', 'GitHub issues, pull requests and Actions through GitHub’s MCP server.', { mcp: { github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer demo-not-a-real-token' } } } }),
     'commit-commands': plugin('commit-commands', 'Commit, push and open a PR in one command.', { commands: ['commit', 'commit-push-pr', 'clean_gone'] }),
+    'code-review': plugin('code-review', 'Reviews a diff for bugs and project conventions.', { skills: [['code-review', 'Reviews the current diff at a chosen effort.']] }),
     figma: plugin('figma', 'Turn Figma designs into code.', { skills: [['figma-design-to-code', 'Implements a Figma frame as components.']], mcp: { figma: { type: 'http', url: 'https://mcp.figma.com/mcp' } } }),
   };
   const files: Record<string, string> = Object.assign({}, ...Object.values(plugins).map((p) => p.files));
@@ -343,6 +345,7 @@ function demoTooling(projects: string[]): ToolInventory {
       notion: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: 'demo-secret-never-shown' } },
       linear: { type: 'http', url: 'https://mcp.linear.app/mcp?key=demo-secret-never-shown' },
     },
+    claudeAiMcpEverConnected: ['claude.ai Gmail', 'claude.ai Google Drive', 'claude.ai Vercel'],
   });
   if (projects[0]) files[path.join(projects[0], '.mcp.json')] = JSON.stringify({ mcpServers: { sentry: { type: 'http', url: 'https://mcp.sentry.dev/mcp' } } });
   const pluginList = Object.entries(plugins).map(([name, p]) => ({ id: `${name}@claude-plugins-official`, enabled: name !== 'figma', installPath: p.dir, version: '1.0.0' }));
@@ -847,6 +850,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       return demoPrDiff(pr, patch);
     },
     readWorktree: async (r) => demoReadWorktree(r),
+    hasRepoFile: (fullName, rel) => demoRepoFile(fullName, rel) !== null,
+    readRepoFile: async (fullName, _branch, rel) => demoRepoFile(fullName, rel) ?? Promise.reject(new Error(`${rel} isn't on the default branch.`)),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
@@ -909,6 +914,9 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       // The big company is for measuring the office at full speed, so it never paces.
       if (++sessionsStarted === USAGE_WARNING_AT && !scale) fakeUsageWarning(cb);
       if (!scale) cb = withReadings(cb);
+      // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
+      // connectors and plugins unless the session is lean.
+      if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
       return inTerminal(opts, cb, (c) => (opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
     terminals: true,
@@ -1185,11 +1193,31 @@ export interface DemoFloor {
   team: { size: number; max: number; free: number; pendingHires: number; pendingLetGos: number };
   capacity: { issuesReadyToStart: number; prsAwaitingQa: number };
   backlog: { number: number; title: string; inProgress: boolean }[];
-  pullRequests: unknown[];
+  pullRequests: { number: number }[];
+  agents?: { name: string }[];
+}
+
+/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
+export function demoRefsLine(floors: readonly DemoFloor[]): string {
+  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
+  if (!f) return '';
+  const who = f.agents?.[0]?.name;
+  const pr = f.pullRequests[0]?.number;
+  const issue = f.backlog[0]?.number;
+  return [
+    `Around the office: floor ${f.floor}`,
+    who && `@${who} (watch @${who}/terminal)`,
+    issue && `#${issue} is next`,
+    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
+    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
+    `and main runs at preview: floor ${f.floor}.`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 interface DemoStatus {
-  company: { scaling: string }; // how team changes go, in words ("team changes apply straight away")
+  company: { scaling: string; officePlaybook: string | null }; // how team changes go, in words ("team changes apply straight away"); the office playbook
   floors: DemoFloor[];
   pendingChanges: unknown[];
 }
@@ -1392,6 +1420,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
         return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
       }
+      // "add to the office playbook: run the linter first": a bullet through the real tool, refused past its cap.
+      const rule = text.match(/\boffice playbook\b[^:]*:\s*(.+)/i)?.[1]?.trim();
+      if (rule) {
+        const out = await use('set_office_playbook', { playbook: [s.company.officePlaybook, `- ${rule}`].filter(Boolean).join('\n') });
+        return out.startsWith('Refused') ? `I couldn't add it: ${refused(out)}` : `Added to the office playbook: "${short(rule, 80)}". ${out}`;
+      }
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);
       const closeFloor = close && (s.floors.find((f) => f.backlog.some((i) => i.number === Number(close[1]))) ?? s.floors[0]);
@@ -1446,6 +1480,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
+        '',
+        demoRefsLine(s.floors),
         ...(next
           ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
           : []),

@@ -28,6 +28,7 @@ import { CloudSettings } from './CloudSettings';
 import { CeoMandates, FollowupSettings } from './CeoFollowups';
 import { ToolsTab } from './ToolsSettings';
 import { EveryProjectCard, FloorPractices } from './PracticesSettings';
+import { OfficePlaybook } from './OfficePlaybook';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
 import { useMode } from '../pocket/mode';
@@ -400,6 +401,7 @@ export function CeoTab() {
           </details>
         )}
         <h3 className="section">🗺️ Project briefs</h3>
+        <OfficePlaybook />
         {repos.length === 0 && <p className="muted small">Connect a repo first.</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
           <FloorBrief key={r.id} repo={r} />

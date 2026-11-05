@@ -18,16 +18,12 @@ export type PracticeOverrides = Partial<Practices>;
 
 /** Settings → Every project: what every floor inherits unless it overrides it. */
 export interface EveryProject {
-  practices: Practices;
-  playbook: string; // a playbook snippet in every floor's prompts, before the floor's own playbook
+  practices: Practices; // (its playbook is settings.officePlaybook, edited in the CEO tab's project briefs)
 }
 
 export const PRACTICES_OFF: Practices = { upToDate: false, leases: false, autoRebase: false, generated: [], appendOnly: [], diffBudget: 0 };
 
-export const emptyEveryProject = (): EveryProject => ({ practices: { ...PRACTICES_OFF }, playbook: '' });
-
-/** The longest Every project's playbook snippet may be: it is in every agent's prompt on every floor. */
-export const EVERY_PLAYBOOK_MAX = 1500;
+export const emptyEveryProject = (): EveryProject => ({ practices: { ...PRACTICES_OFF } });
 const MAX_FILES = 30;
 const MAX_BUDGET = 100_000;
 
@@ -74,10 +70,9 @@ export function cleanOverrides(raw: unknown): PracticeOverrides {
 /** Every project's settings after a patch from Settings. */
 export function everyProjectSettings(prev: EveryProject | undefined, patch: unknown): EveryProject {
   const base = prev ?? emptyEveryProject();
-  const p = (patch ?? {}) as { practices?: unknown; playbook?: unknown };
+  const p = (patch ?? {}) as { practices?: unknown };
   return {
     practices: { ...PRACTICES_OFF, ...base.practices, ...cleanOverrides(p.practices) },
-    playbook: typeof p.playbook === 'string' ? p.playbook.trim().slice(0, EVERY_PLAYBOOK_MAX) : base.playbook,
   };
 }
 
@@ -194,6 +189,15 @@ export function floorLeases(work: { agentId: string; issue: number; pr: number |
   for (const w of work) add({ issue: w.issue, pr: w.pr, agentId: w.agentId, files: w.declared ?? w.predicted, source: w.declared ? 'declared' : 'predicted' });
   for (const p of pulls) for (const issue of p.issues.length ? p.issues : [-p.number]) add({ issue, pr: p.number, agentId: null, files: p.files, source: 'pr' });
   return [...byIssue.values()].filter((l) => l.files.length);
+}
+
+/** A floor's practices as the tabs see them (part of RepoView); absent in journals from before #24. */
+export interface FloorPracticeView {
+  practices?: Practices; // what it runs with: Every project's, with its own overrides
+  practiceOverrides?: PracticeOverrides; // the switches this floor sets itself
+  leases?: Lease[]; // files its work in flight is expected to touch (while leases are on)
+  leaseHolds?: LeaseHold[]; // ready issues held back because they overlap a lease
+  hotFiles?: { path: string; score: number; conflicts: number }[]; // most often conflicted files, from its history (while leases are on)
 }
 
 /** Why an issue is held back: the issue (or PR) whose lease it overlaps, and on which files. */

@@ -42,7 +42,7 @@ import { dayKey, journalFrame } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS } from '../../shared/types.ts';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { FileStore } from '../files.ts';
@@ -110,6 +110,7 @@ export abstract class SwarmCore extends SwarmContract {
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
       everyProject: emptyEveryProject(),
+      officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
     agents: [],
@@ -655,10 +656,10 @@ export abstract class SwarmCore extends SwarmContract {
     return this.state.agents.filter((a) => a.host === 'box' && a.status === 'working' && !!a.boxCli);
   }
 
-  /** True when the manager has set a session limit and every slot is taken. */
+  /** True when the manager has set a session limit and every slot is taken. The CEO never takes a slot (#46). */
   protected slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    return limit > 0 && this.running() >= limit;
+    return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length >= limit;
   }
 
   protected agentSlug(a: PersistedAgent) {

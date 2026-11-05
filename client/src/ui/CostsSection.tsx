@@ -54,6 +54,39 @@ function KindSplit({ split }: { split: CostSplit }) {
   );
 }
 
+const kTokens = (n: number) => `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
+
+/** What each kind of session loads before its first step (#50): measured from its first turn, with its largest parts. */
+function StartupTable({ view }: { view: CostsView }) {
+  if (!view.startup.length) return null;
+  return (
+    <>
+      <h3 className="section">📦 What sessions load at startup</h3>
+      <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="Startup context per kind of task">
+        <table className="ops-table costs-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Tokens</th>
+              <th>Largest parts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {view.startup.map((r) => (
+              <tr key={r.kind}>
+                <th>{TASK_KIND_LABELS[r.kind]}</th>
+                <td title={`average of ${r.sessions} session${r.sessions === 1 ? '' : 's'}`}>{kTokens(r.avg)}</td>
+                <td className="small costs-parts">{r.top.map((p) => `${p.label} ${kTokens(p.tokens)}`).join(' · ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small">The first turn's input, before any work. Lean sessions and role profiles in Settings → Tools &amp; skills cut the plugins, MCP servers and connectors in it.</p>
+    </>
+  );
+}
+
 export function CostsSection() {
   const repos = useStore((s) => s.repos);
   const [days, setDays] = useState(7);
@@ -172,6 +205,7 @@ export function CostsSection() {
               </table>
             </div>
           )}
+          <StartupTable view={view} />
           <h3 className="section">🏷️ Most expensive issues</h3>
           <ol className="costs-list small">
             {view.top.map((t) => (

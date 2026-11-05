@@ -36,9 +36,9 @@ describe('defaults inheritance', () => {
     expect(cleanOverrides({ leases: true, nope: 1, generated: ['./docs/coverage.md', 'a\\b.md', '../etc/passwd'] })).toEqual({ leases: true, generated: ['docs/coverage.md', 'a/b.md'] });
     expect(() => cleanOverrides({ leases: 'yes' })).toThrow(/true or false/);
     expect(() => cleanOverrides({ diffBudget: -1 })).toThrow(/lines/);
-    const e = everyProjectSettings(undefined, { practices: { upToDate: true }, playbook: '  Keep PRs small.  ' });
-    expect(e).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true }, playbook: 'Keep PRs small.' });
-    expect(everyProjectSettings(e, { practices: { leases: true } })).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true, leases: true }, playbook: 'Keep PRs small.' });
+    const e = everyProjectSettings(undefined, { practices: { upToDate: true } });
+    expect(e).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true } });
+    expect(everyProjectSettings(e, { practices: { leases: true } })).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true, leases: true } });
   });
 });
 

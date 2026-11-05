@@ -140,6 +140,11 @@ describe('launchArgs', () => {
     for (const cli of ['codex', 'opencode'] as const) expect(launchArgs(cli, ctx({ tools })).args.join(' ')).not.toContain('mcp__notion');
   });
 
+  it('takes the claude.ai connectors out of a lean session through its environment (#50)', () => {
+    expect(launchArgs('claude', ctx({ tools: sessionTools([], 'agent', {}, 'build') })).env).toEqual({ DISABLE_AUTOUPDATER: '1', ENABLE_CLAUDEAI_MCP_SERVERS: 'false' });
+    expect(launchArgs('claude', ctx({ tools: sessionTools([], 'agent', {}, null) })).env).toEqual({ DISABLE_AUTOUPDATER: '1' });
+  });
+
   it("runs Codex without its sandbox or approvals, and resumes Codex's thread", () => {
     const fresh = launchArgs('codex', ctx()).args;
     expect(fresh).toContain('--dangerously-bypass-approvals-and-sandbox');

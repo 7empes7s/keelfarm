@@ -35,3 +35,34 @@ export function demoReadWorktree(r: WorktreeRead): string {
   if (r.mode === 'file') return `// ${guardPath(r.path ?? '')} (demo: a made-up file)\nexport function feature() {\n  return 'works';\n}\n`;
   return r.mode === 'diff_stat' ? ' src/App.tsx      | 24 +++++++++++++-----\n src/App.test.tsx | 12 ++++++++\n 2 files changed, 31 insertions(+), 5 deletions(-)' : demoDiff('the change');
 }
+
+/** The files every demo floor has, for the chat's file refs (shared/chatRefs.ts). */
+export const DEMO_REF_FILES = ['src/App.tsx', 'README.md'];
+
+/** A demo floor's file: made up from its path, or null for one it doesn't have. */
+export function demoRepoFile(fullName: string, rel: string): string | null {
+  const p = rel.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (p === 'README.md') return [`# ${fullName.split('/')[1]}`, '', 'A demo project: the office makes up its files.', '', '## Run it', '', '```bash', 'npm install', 'npm run dev', '```', ''].join('\n');
+  if (p !== 'src/App.tsx') return null;
+  return [
+    "import { useEffect, useState } from 'react';",
+    "import { Board } from './Board';",
+    '',
+    '// The app shell: loads the board, then shows it.',
+    'export function App() {',
+    '  const [ready, setReady] = useState(false);',
+    '  const [count, setCount] = useState(0);',
+    '  useEffect(() => setReady(true), []);',
+    '',
+    "  if (!ready) return <p className=\"muted\">Loading…</p>;",
+    '  return (',
+    '    <main>',
+    `      <h1>${fullName}</h1>`,
+    '      <Board onMove={() => setCount((n) => n + 1)} />',
+    '      <p>{count} moves</p>',
+    '    </main>',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
+}

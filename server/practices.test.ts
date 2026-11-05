@@ -18,7 +18,7 @@ describe('version-control practices in the office', () => {
   it('starts with every switch off, and a floor inherits Every project unless it overrides it', async () => {
     const { swarm, repo, floor } = await office();
     expect(floor().practices).toEqual(PRACTICES_OFF);
-    swarm.updateSettings({ everyProject: { practices: { ...PRACTICES_OFF, upToDate: true, diffBudget: 400 }, playbook: 'Keep PRs small.' } });
+    swarm.updateSettings({ everyProject: { practices: { ...PRACTICES_OFF, upToDate: true, diffBudget: 400 } } });
     expect(floor().practices).toMatchObject({ upToDate: true, diffBudget: 400 });
     swarm.updateRepo(repo.id, { practices: { upToDate: false } });
     expect(floor().practices).toMatchObject({ upToDate: false, diffBudget: 400 });
@@ -33,13 +33,12 @@ describe('version-control practices in the office', () => {
     const agent = swarm.snapshot().agents.find((a) => a.repoId === repo.id)!;
     const text = () => swarm.agentPrompt(agent.id).parts.map((p) => p.text).join('\n');
     const before = text();
-    expect(before).not.toMatch(/Diff budget|Generated files|Every project's playbook/);
-    swarm.updateSettings({ everyProject: { practices: { ...PRACTICES_OFF, diffBudget: 300, generated: ['docs/coverage.md'] }, playbook: 'Merge main before you push.' } });
-    expect(text()).toMatch(/Every project's playbook[\s\S]*Merge main before you push/);
+    expect(before).not.toMatch(/Diff budget|Generated files/);
+    swarm.updateSettings({ everyProject: { practices: { ...PRACTICES_OFF, diffBudget: 300, generated: ['docs/coverage.md'] } } });
     expect(text()).toMatch(/Diff budget: 300 lines/);
     expect(text()).toMatch(/diff budget is 300 lines/); // QA's line
     expect(text()).toMatch(/Generated files: docs\/coverage\.md/);
-    swarm.updateSettings({ everyProject: { practices: PRACTICES_OFF, playbook: '' } });
+    swarm.updateSettings({ everyProject: { practices: PRACTICES_OFF } });
     expect(text()).toBe(before);
   });
 
