@@ -127,6 +127,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   apps' webhooks (secrets in `secrets.json`, push keys and devices in `push.json`), behind `Backend.notify`; `notify.ts`
   is its pure part (formatting, the per-event rate limit, webhook checks), `webPush.ts` VAPID and RFC 8291 encryption,
   `shared/notify.ts` the settings. `pwa.ts`: the installable app's service worker, served at `/sw.js`.
+- `costLedger.ts`: the cost ledger (#18): a line per finished session (task kind, effort, cost, outcome) and merged PR in
+  `<SWARM_HOME>/costs.jsonl`, 30 days, never in the snapshot; it backs Mission control's "Where the plan goes"
+  (`GET /api/costs`) and company_status's spend. Kinds, waste rules and effort per kind: `shared/costs.ts`.
 - `journal.ts`: the time-lapse journal (`<SWARM_HOME>/journal/<day>/`): records what `Swarm.broadcast` sends, a file
   per 10-minute keyframe, pruning, and the reads behind `/api/journal/*`. The rules (what's kept, secrets, seeking,
   marks) are in `shared/journal.ts`; `journalSample.ts` is the demo's made-up day.

@@ -187,6 +187,7 @@ app.post('/api/agents/:id/stop', route((req) => swarm.stopAgent(String(req.param
 app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.params.id))));
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
+app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
   const shot = swarm.screenshot(String(req.params.id));

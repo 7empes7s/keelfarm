@@ -536,7 +536,6 @@
     "types:client/src/ui/mic.ts:MicRecord",
     "types:client/src/ui/mic.ts:MicState",
     "types:client/src/ui/notifySteps.ts:StepId",
-    "types:client/src/ui/notifySteps.ts:StepState",
     "types:client/src/ui/voiceMessages.ts:SpokenRecord",
     "types:client/src/world/CoffeeMachine.tsx:CoffeeSnapshot",
     "types:client/src/world/Jukebox.tsx:JukeboxSnapshot",
