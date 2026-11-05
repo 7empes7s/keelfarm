@@ -683,8 +683,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     if (!f) throw new Error(`${dir} is not a folder`);
     return f;
   };
+  let lowMemory = false; // the health strip's Simulate low memory: too little left for another session (a big company: a big server)
   return {
     demo: true,
+    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, simulate: (low) => void (lowMemory = low) },
     user: async () => 'demo-manager',
     listMyRepos: async (): Promise<GhRepoSummary[]> =>
       [...repos.values()].map((r) => ({ nameWithOwner: r.fullName, description: r.description, visibility: 'PUBLIC', updatedAt: now() })),
@@ -1349,7 +1351,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         else if (/failed QA/.test(e) && pr) await use('qa_report', { floor, pr });
         else if (agent && / error | stalled /.test(e)) {
           await use('agent_log', { agent_id: agent, lines: 50 });
-          if (/ error /.test(e)) needs.push(`${e.split(' (')[0]} is still in an error; reset them from their desk if it keeps happening.`);
+          if (/ error /.test(e) && (await use('restart_agent', { agent_id: agent })).startsWith('Refused')) needs.push(`${e.split(' (')[0]} is still in an error and I couldn't restart them; reset them from their desk.`);
         } else await think('Nothing there needs me.');
       }
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');

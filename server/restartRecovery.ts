@@ -32,8 +32,8 @@ export function resumesAfterRestart(a: RestartAgent, preparing: boolean, demo: b
   return !demo && !preparing && a.task !== 'qa' && !!a.sessionId && !!a.branch;
 }
 
-/** What a resumed agent is told: the job it was on, not just "carry on". */
-export function resumeNote(a: RestartAgent, fix?: { round: number; fixReason: 'qa' | 'checks' | 'conflict' | null } | null): string {
+/** What a resumed agent is told: the job it was on, not just "carry on"; `why` it stopped. */
+export function resumeNote(a: RestartAgent, fix?: { round: number; fixReason: 'qa' | 'checks' | 'conflict' | null } | null, why = 'The office server restarted'): string {
   const yours = 'Uncommitted changes in your worktree are yours to finish.';
   if (a.task === 'fix' && a.prNumber && a.branch) {
     const job =
@@ -42,13 +42,13 @@ export function resumeNote(a: RestartAgent, fix?: { round: number; fixReason: 'q
         : fix?.fixReason === 'checks'
           ? `fixing the failing checks on PR #${a.prNumber}`
           : `fixing PR #${a.prNumber}${fix ? ` after QA round ${fix.round}` : ''}`;
-    return `The office server restarted while you were ${job}. Finish the fix, commit, and push with: git push origin HEAD:${a.branch}. ${yours}`;
+    return `${why} while you were ${job}. Finish the fix, commit, and push with: git push origin HEAD:${a.branch}. ${yours}`;
   }
   if (a.task === 'issue' && a.issueNumber && a.branch) {
     const pr = a.prNumber
       ? `push with: git push origin ${a.branch} to update PR #${a.prNumber}`
       : `push with: git push -u origin ${a.branch}, and open the pull request with "Closes #${a.issueNumber}" (or push to it if it's already open)`;
-    return `The office server restarted while you were working on issue #${a.issueNumber}${a.issueTitle ? ` (${a.issueTitle})` : ''} on branch ${a.branch}. Finish it, commit, ${pr}. ${yours}`;
+    return `${why} while you were working on issue #${a.issueNumber}${a.issueTitle ? ` (${a.issueTitle})` : ''} on branch ${a.branch}. Finish it, commit, ${pr}. ${yours}`;
   }
-  return 'The office server restarted while you were working. Check the state of your worktree and continue where you left off.';
+  return `${why} while you were working. Check the state of your worktree and continue where you left off.`;
 }

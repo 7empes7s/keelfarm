@@ -235,7 +235,7 @@ export function spawnPty(file: string, args: string[], o: PtyOptions, meta: unkn
     kill: () => killTree(p),
     setMeta: () => undefined,
     onData: (cb) => void p.onData(cb),
-    onExit: (cb) => void p.onExit(({ exitCode }) => cb(exitCode)),
+    onExit: (cb) => void p.onExit(({ exitCode, signal }) => cb(signal ? 128 + signal : exitCode)),
   };
 }
 
