@@ -3,6 +3,7 @@
 // which events are kept and how they're slimmed and scrubbed of secrets, keyframes and seeking, retention, and the
 // marks on the replay's timeline. Terminal output, settings and anything secret are never kept.
 import type { CareerView } from './careers.ts';
+import { emptyCharterView } from './charter.ts';
 import { INSTALL_STEP, type AgentView, type CeoInfo, type HireRequestView, type IssueInfo, type OpsView, type PhoneMessage, type PreviewView, type PullInfo, type QaView, type RepoView, type ServerEvent, type TickerItem, type UsageView, type WorldSnapshot } from './types.ts';
 
 /** A keyframe (a full picture of the office) starts every journal file; a new file starts this often. */
@@ -209,6 +210,7 @@ export function compactRepo(r: RepoView, secrets: readonly string[] = []): RepoV
     lastSync: null,
     previewConfig: { command: null, env: {} },
     preview: compactPreview(r.preview),
+    charter: emptyCharterView(), // like the briefs: not kept
   };
 }
 

@@ -11,6 +11,8 @@ export interface QaReport {
   commands: { command: string; result: string }[];
   screenshots: string[];
   fixInstructions?: string;
+  /** The charter check (#48): "ok …" or "violation: …"; a violation fails the PR. */
+  charterCheck?: string;
 }
 
 export const QA_SCHEMA: Record<string, unknown> = {
@@ -50,8 +52,17 @@ export const QA_SCHEMA: Record<string, unknown> = {
       items: { type: 'string' },
     },
     fixInstructions: { type: 'string', description: 'When the verdict is fail: precise, actionable instructions for the developer.' },
+    charterCheck: { type: 'string', description: 'When the project has a charter: one line, "ok" or "violation: <the standard broken>", on its standards and the issue\'s objective.' },
   },
 };
+
+/** The charter check: the report's field, else a "Charter check: …" line in the agent's message. */
+function charterCheckOf(field: unknown, text: string | undefined): string | undefined {
+  const line = typeof field === 'string' && field.trim() ? field : text?.match(/^\W*charter check\W*:?\s*(.+)$/im)?.[1];
+  return line ? line.trim().slice(0, 300) : undefined;
+}
+
+const charterViolation = (check: string | undefined) => !!check && /^\W*violat/i.test(check);
 
 export function parseReport(result: SessionResult): QaReport | null {
   let raw: unknown = result.structured;
@@ -70,12 +81,19 @@ export function parseReport(result: SessionResult): QaReport | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Partial<QaReport>;
   if (r.verdict !== 'pass' && r.verdict !== 'fail') return null;
+  const charterCheck = charterCheckOf(r.charterCheck, result.text);
+  const broken = charterViolation(charterCheck);
+  const checks: QaCheck[] = Array.isArray(r.checks) ? r.checks.map((c) => ({ name: String(c.name ?? ''), result: c.result === 'fail' ? 'fail' : c.result === 'skip' ? 'skip' : 'pass', details: String(c.details ?? '') })) : [];
+  // On the PR comment and in the QA panel with the other checks; a broken standard fails the PR whatever the verdict said.
+  if (charterCheck) checks.push({ name: 'Charter check', result: broken ? 'fail' : 'pass', details: charterCheck });
+  const fixInstructions = r.fixInstructions ? String(r.fixInstructions) : broken ? `Keep the charter's standards: ${charterCheck}` : undefined;
   return {
-    verdict: r.verdict,
+    verdict: broken ? 'fail' : r.verdict,
     summary: String(r.summary ?? ''),
-    checks: Array.isArray(r.checks) ? r.checks.map((c) => ({ name: String(c.name ?? ''), result: c.result === 'fail' ? 'fail' : c.result === 'skip' ? 'skip' : 'pass', details: String(c.details ?? '') })) : [],
+    checks,
     commands: Array.isArray(r.commands) ? r.commands.map((c) => ({ command: String(c.command ?? ''), result: String(c.result ?? '') })) : [],
     screenshots: Array.isArray(r.screenshots) ? r.screenshots.map(String) : [],
-    fixInstructions: r.fixInstructions ? String(r.fixInstructions) : undefined,
+    fixInstructions,
+    charterCheck,
   };
 }

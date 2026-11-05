@@ -17,6 +17,7 @@ import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
+import type { CharterRecord } from '../../shared/charter.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -62,6 +63,8 @@ export interface PersistedRepo {
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   addedAt: number;
+  /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
+  charter: CharterRecord;
 }
 
 export interface PersistedAgent {

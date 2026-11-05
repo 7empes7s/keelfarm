@@ -128,6 +128,7 @@ describe('office tools', () => {
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
+      proposeCharter: () => 'proposed',
       setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
@@ -176,6 +177,7 @@ describe('office tools', () => {
       'keep_file',
       'message_agent',
       'pr_diff',
+      'propose_charter',
       'qa_report',
       'rerun_checks',
       'restart_agent',
@@ -257,6 +259,15 @@ describe('office tools', () => {
     const tooLong = await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, playbook: 'x'.repeat(PLAYBOOK_MAX + 1) } });
     expect(tooLong.isError).toBe(true);
     expect(floors).toHaveLength(1);
+  });
+  it("checks propose_charter's input with its schema (#48)", async () => {
+    const { client } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'propose_charter', arguments: { floor: 1, reason: 'Tighter', ...args } })).isError;
+    expect(await ok({ focus: 'O1', objectives: [{ id: 'O1', outcome: 'Fast' }], standards: ['Tests pass'], non_goals: ['Accounts'] })).toBe(true);
+    expect(await ok({ objectives: [{ id: 'goal-1', outcome: 'Fast' }] })).toBe(false);
+    expect(await ok({ standards: ['x'.repeat(201)] })).toBe(false);
+    expect(await ok({ objectives: Array.from({ length: 9 }, () => ({ outcome: 'Fast' })) })).toBe(false);
+    expect(await ok({ reason: '' })).toBe(false);
   });
 });
 
@@ -530,7 +541,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
-          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok, sessionHistory: ok,
+          restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok, sessionHistory: ok, proposeCharter: ok,
         },
         () => researching,
       ),

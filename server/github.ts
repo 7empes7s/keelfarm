@@ -373,3 +373,30 @@ export async function uploadEvidence(fullName: string, filePath: string, data: B
   });
   return `https://github.com/${fullName}/raw/${EVIDENCE_BRANCH}/${filePath}`;
 }
+
+// ---------- the charter's export (#48) ----------
+
+/** The office's branch for docs/CHARTER.md. Not swarm/…, so QA leaves its pull request to the manager. */
+const CHARTER_BRANCH = 'cubefarm/charter';
+const CHARTER_FILE = 'docs/CHARTER.md';
+
+/** Commit docs/CHARTER.md on CHARTER_BRANCH (made from `base` the first time) and open its pull request, or reuse it. */
+export async function exportCharter(fullName: string, base: string, markdown: string): Promise<string> {
+  try {
+    await gh(['api', `repos/${fullName}/git/ref/heads/${CHARTER_BRANCH}`]);
+  } catch {
+    const head = await ghJson<{ object: { sha: string } }>(['api', `repos/${fullName}/git/ref/heads/${base}`]);
+    await ghApiJson('POST', `repos/${fullName}/git/refs`, { ref: `refs/heads/${CHARTER_BRANCH}`, sha: head.object.sha });
+  }
+  const sha = await ghJson<{ sha: string }>(['api', `repos/${fullName}/contents/${CHARTER_FILE}?ref=${encodeURIComponent(CHARTER_BRANCH)}`]).then(
+    (f) => f.sha,
+    () => undefined, // not there yet
+  );
+  await ghApiJson('PUT', `repos/${fullName}/contents/${CHARTER_FILE}`, { message: 'Update the project charter (cubefarm)', content: Buffer.from(markdown).toString('base64'), branch: CHARTER_BRANCH, sha });
+  const open = await ghJson<{ url: string }[]>(['pr', 'list', '-R', fullName, '--head', CHARTER_BRANCH, '--state', 'open', '--json', 'url']);
+  if (open[0]) return open[0].url;
+  const out = await gh(['pr', 'create', '-R', fullName, '--base', base, '--head', CHARTER_BRANCH, '--title', 'Project charter (docs/CHARTER.md)', '--body-file', '-'], {
+    input: 'The project charter as the manager keeps it in the cubefarm office: mission, objectives, standards, non-goals and current focus.\n\nExported from the office; merge it to keep a copy in the repository.',
+  });
+  return out.match(/https:\/\/github\.com\/\S+/)?.[0] ?? `https://github.com/${fullName}/pulls`;
+}
