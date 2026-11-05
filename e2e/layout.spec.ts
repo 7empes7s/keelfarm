@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Locator, Page } from '@playwright/test';
+import { crc32, deflateSync } from 'node:zlib';
+import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
 
@@ -285,4 +286,125 @@ for (const screen of SCREENS) {
       });
     }
   }
+}
+
+// ---------- pocket mode's viewport on an iPhone (#73) ----------
+// The chat column: the message box sits on the tabs, the conversation fills the rest and shows the newest message, and
+// the header is padded for the notch once, in Safari's home-screen app and in Chrome iOS's tab, keyboard or not.
+
+const SAFARI = devices['iPhone 15'].userAgent;
+const CHROME_IOS = SAFARI.replace(/Version\/\S+/, 'CriOS/157.0.0.0');
+let seeded = false;
+
+/** A grey PNG, `width` x `height`: a phone screenshot's shape. */
+function png(width: number, height: number) {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const out = Buffer.alloc(body.length + 8);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc32(body), body.length + 4);
+    return out;
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(width, 0);
+  head.writeUInt32BE(height, 4);
+  head.set([8, 0, 0, 0, 0], 8); // 8-bit greyscale
+  const rows = Buffer.alloc((width + 1) * height, 0x99);
+  for (let y = 0; y < height; y++) rows[y * (width + 1)] = 0; // each row's filter byte
+  return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', head), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+/** 20 messages and a tall screenshot in the chat, once per run. */
+async function seedChat(page: Page) {
+  if (seeded) return;
+  seeded = true;
+  const file = await (await page.request.post('/api/files', { headers: { 'Content-Type': 'image/png', 'X-File-Name': 'tall.png' }, data: png(400, 1300) })).json();
+  for (let i = 1; i <= 20; i++) await page.request.post('/api/ceo/message', { data: { text: `Message ${i}: how is the busiest floor doing?` } });
+  await page.request.post('/api/ceo/message', { data: { text: 'This is what the chat looks like', files: [file.id] } });
+  await page.request.post('/api/phone/read', { data: { at: Date.now() + 60_000 } }); // opens at the end, not at a "New messages" divider
+}
+
+/** What's wrong with the chat column right now. */
+async function chatProblems(page: Page, when: string): Promise<string[]> {
+  await page.waitForTimeout(400); // the viewport's next frame, and the log following it
+  const out = await page.evaluate(() => {
+    const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+    const input = box('.chat-input');
+    const tabs = box('.pk-tabs');
+    const log = box('.chat-log');
+    const newest = document.querySelector('.chat-log')!.lastElementChild!.getBoundingClientRect();
+    const probe = Object.assign(document.createElement('div'), { style: 'position:fixed;padding-top:env(safe-area-inset-top)' });
+    document.body.append(probe);
+    const safeTop = parseFloat(getComputedStyle(probe).paddingTop);
+    probe.remove();
+    const headPad = parseFloat(getComputedStyle(document.querySelector('.pk-head')!).paddingTop);
+    const problems: string[] = [];
+    if (Math.abs(input.bottom - tabs.top) > 1) problems.push(`${Math.round(tabs.top - input.bottom)}px between the message box and the tabs`);
+    if (tabs.bottom > innerHeight + 1 || tabs.bottom < innerHeight - 1) problems.push(`the tabs end at ${Math.round(tabs.bottom)}, the screen at ${innerHeight}`);
+    if (log.height <= innerHeight / 2) problems.push(`the conversation is ${Math.round(log.height)}px of ${innerHeight}`);
+    if (newest.bottom > log.bottom + 1 || newest.bottom < log.top) problems.push('the newest message is out of view');
+    if (Math.abs(headPad - Math.max(8, safeTop)) > 0.5) problems.push(`the header's top padding is ${headPad}px for a ${safeTop}px safe area`);
+    if (visualViewport!.scale !== 1) problems.push(`zoomed to ${visualViewport!.scale}`);
+    return problems;
+  });
+  return out.map((p) => `${when}: ${p}`);
+}
+
+const IPHONES = [
+  { name: 'iPhone 15', width: 393, height: 852 },
+  { name: 'iPhone 16 Pro', width: 402, height: 874 },
+  { name: 'iPhone 16 Pro Max', width: 440, height: 956 },
+];
+const MODES = [
+  { name: 'home-screen app', userAgent: SAFARI, standalone: true },
+  { name: 'Chrome iOS', userAgent: CHROME_IOS, standalone: false },
+];
+
+for (const mode of MODES) {
+  test.describe(`pocket chat on an iPhone, ${mode.name}`, () => {
+    test.use({ isMobile: true, hasTouch: true, userAgent: mode.userAgent });
+    for (const phone of IPHONES) {
+      test(`${phone.name}: the message box sits on the tabs`, async ({ page }) => {
+        await page.setViewportSize({ width: phone.width, height: phone.height });
+        if (mode.standalone) await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
+        await seedChat(page);
+        await page.goto('/?pocket=1&tab=chat');
+        await expect(page.locator('.chat-input')).toBeVisible();
+        expect(await page.locator('meta[name="viewport"]').getAttribute('content')).toContain('maximum-scale=1');
+        const problems = await chatProblems(page, 'opened');
+
+        // The keyboard: the page shrinks while a field has focus, then grows back when it goes away.
+        const box = page.locator('.chat-input textarea');
+        await page.setViewportSize({ width: phone.width, height: Math.round(phone.height * 0.55) });
+        await box.focus();
+        problems.push(...(await chatProblems(page, 'keyboard open')).filter((p) => !p.includes('conversation is')));
+        await box.blur();
+        await page.setViewportSize({ width: phone.width, height: phone.height });
+        problems.push(...(await chatProblems(page, 'keyboard closed')));
+
+        await page.locator('.chat-input input[type="file"][capture]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: png(40, 80) });
+        problems.push(...(await chatProblems(page, 'a photo attached')).filter((p) => !p.includes('conversation is'))); // the tray takes its room
+        await page.getByRole('button', { name: /^(Remove|Cancel the upload)/ }).first().click();
+        await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+        problems.push(...(await chatProblems(page, 'back to the app')));
+        expect(problems).toEqual([]);
+      });
+    }
+  });
+}
+
+// The other full-screen views take the same height: from the top of the screen to its bottom, nothing left over.
+for (const width of [360, 390, 430]) {
+  test(`pocket full-screen views fill a ${width}px iPhone`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/?pocket=1');
+    await page.getByRole('button', { name: 'Settings and notifications' }).click();
+    const panel = dialog(page, /Settings/);
+    await expect(panel.getByRole('tab', { name: /Floors/ })).toBeVisible();
+    await expect.poll(async () => (await panel.boundingBox())?.y).toBe(0);
+    const box = (await panel.boundingBox())!;
+    expect(Math.abs(box.y + box.height - 844)).toBeLessThanOrEqual(1);
+  });
 }
