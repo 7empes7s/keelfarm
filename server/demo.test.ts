@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { answerReply, demoGrow, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { answerReply, demoGrow, demoRefsLine, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { demoRepoFile } from './demoReads.ts';
+import { parseRefs } from '../shared/chatRefs.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { forwardText, parseForwarded } from '../shared/chat.ts';
 import { parseCeoMessage } from '../shared/chatParts.ts';
@@ -120,5 +122,26 @@ describe("the demo CEO's answer to a reply", () => {
     const p = parseCeoMessage(answerReply({ quote: 'Shall I keep the team on it?', reply: 'Show me the plan' }));
     expect(p.artifacts?.map((a) => a.title)).toEqual(['The plan']);
     expect(p.text).toMatch(/^> Shall I keep the team on it\?\n\nHere it is\./);
+  });
+});
+
+describe("the demo CEO's office refs", () => {
+  it('names every kind of ref, all of which resolve', () => {
+    const f: DemoFloor = {
+      floor: 2,
+      repo: 'demo-co/weather-api',
+      brief: null,
+      team: { size: 1, max: 10, free: 0, pendingHires: 0, pendingLetGos: 0 },
+      capacity: { issuesReadyToStart: 1, prsAwaitingQa: 1 },
+      backlog: [{ number: 4, title: 'Cache', inProgress: false }],
+      pullRequests: [{ number: 7 }],
+      agents: [{ name: 'Ada' }],
+    };
+    const refs = parseRefs(demoRefsLine([f]), {
+      floors: [{ floor: 2, repoId: f.repo }],
+      agents: [{ id: 'a1', name: 'Ada' }],
+      hasFile: (repo, path) => demoRepoFile(repo, path) !== null,
+    });
+    expect(refs.map((r) => (r.kind === 'agent' && r.terminal ? 'terminal' : r.kind === 'preview' && r.number ? 'pr-preview' : r.kind))).toEqual(['floor', 'agent', 'terminal', 'issue', 'file', 'issue', 'qa', 'pr-preview', 'preview']);
   });
 });

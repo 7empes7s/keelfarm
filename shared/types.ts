@@ -653,6 +653,25 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
+}
+
+/** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
+export type ChatRef = { start: number; end: number } & (
+  | { kind: 'agent'; agentId: string; terminal?: true }
+  | { kind: 'floor'; repoId: string }
+  | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
+  | { kind: 'file'; repoId: string; path: string; line?: number }
+  | { kind: 'qa'; repoId: string; number: number }
+  | { kind: 'preview'; repoId: string; number?: number } // a PR's in the PR theatre, else the floor's app
+);
+
+/** GET /api/messages/:id/refs/:index/file: a file ref's text from the floor's default branch, size-capped. */
+export interface RefFileView {
+  path: string;
+  line: number | null;
+  text: string;
+  url: string; // the file on GitHub, at the line
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
