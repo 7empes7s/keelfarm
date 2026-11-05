@@ -140,7 +140,7 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
-  { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /Kanban|Floor \d/, ON_FLOOR_1), tabs: [] },
+  { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /GitHub/, ON_FLOOR_1), tabs: [] },
   { name: 'floor list', widths: OFFICE, open: (page) => fromPhone(page, /Floor list/, /Floor|Lobby/), tabs: [] },
   { name: 'help', widths: OFFICE, open: (page) => fromPhone(page, /Help/, /How the office works/), tabs: ['The office', 'Controls'] },
   {
