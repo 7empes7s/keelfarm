@@ -7,17 +7,18 @@ import { OpsTab } from '../ui/MissionConsole';
 import { NotifySettings } from '../ui/NotifySettings';
 import { AccessibilitySettings } from '../ui/AccessibilitySettings';
 import { ToolsTab } from '../ui/ToolsSettings';
+import { HistoryTab, type HistoryFocus } from '../ui/HistoryTab';
 import { pendingRequests, useStore } from '../store';
 import { setMode } from './mode';
 
-export type ConsoleSection = 'floors' | 'ceo' | 'team' | 'settings' | 'tools' | 'ops' | 'device';
+export type ConsoleSection = 'floors' | 'ceo' | 'team' | 'settings' | 'tools' | 'ops' | 'history' | 'device';
 
 function openOffice() {
   useStore.getState().openOverlay(null);
   setMode('office');
 }
 
-export function PocketConsole({ section, pick }: { section: ConsoleSection; pick: (s: ConsoleSection) => void }) {
+export function PocketConsole({ section, pick, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus }) {
   const pending = useStore((s) => pendingRequests(s.requests).length);
   const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
   // The sections scroll sideways on a phone: keep the open one in view.
@@ -32,6 +33,7 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
     ['settings', '⚙️ Office'],
     ['tools', '🧰 Tools & skills'],
     ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
+    ['history', '📜 History'],
     ['device', '📱 This device'],
   ];
   return (
@@ -50,6 +52,7 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
         {section === 'settings' && <SettingsTab pocket />}
         {section === 'tools' && <ToolsTab />}
         {section === 'ops' && <OpsTab />}
+        {section === 'history' && <HistoryTab key={JSON.stringify(history ?? {})} focus={history} />}
         {section === 'device' && (
           <>
             <NotifySettings />

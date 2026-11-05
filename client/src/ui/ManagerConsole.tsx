@@ -15,6 +15,7 @@ import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
 import { HealthStrip, MemoryFields } from './HealthStrip';
 import { EffortByKind } from './CostsSection';
+import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
 import { NotifySettings } from './NotifySettings';
 import { ProfileSettings } from './ProfileSettings';
 import { Menu } from './Menu';
@@ -837,6 +838,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
         </div>
       </div>
       <ProfileSettings />
+      <HistorySettings />
       <CloudSettings />
       <VoiceSettings />
       <OutsideSettings />
@@ -847,7 +849,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
 }
 
 /** card: open Mission control at this card (an alarm's id, or 'usage'). */
-export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?: ManagerTab; initialRepo?: string; card?: string }) {
+export function ManagerConsole({ initialTab, initialRepo, card, history }: { initialTab?: ManagerTab; initialRepo?: string; card?: string; history?: HistoryFocus }) {
   const [tab, setTab] = useState<ManagerTab>(initialTab ?? 'floors');
   const pending = useStore((s) => pendingRequests(s.requests).length);
   const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
@@ -859,6 +861,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
     ['issues', '📝 Issues'],
     ['settings', '⚙️ Settings'],
     ['tools', '🧰 Tools & skills'],
+    ['history', '📜 History'],
     ['timelapse', '📼 Time-lapse'],
     ['access', '♿ Accessibility'],
   ];
@@ -879,6 +882,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
         {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
         {tab === 'settings' && <SettingsTab />}
         {tab === 'tools' && <ToolsTab />}
+        {tab === 'history' && <HistoryTab key={JSON.stringify(history ?? {})} focus={history} />}
         {tab === 'timelapse' && (
           <Suspense fallback={<p className="muted">Loading…</p>}>
             <TimeLapseTab />

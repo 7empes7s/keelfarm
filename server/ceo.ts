@@ -168,6 +168,7 @@ export interface OfficeHandlers {
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+  sessionHistory(a: { floor?: number; agent?: string; kind?: string; outcome?: string; issue?: number; pr?: number; query?: string; days?: number; page?: number }): string;
 }
 
 export interface ExperimentToolInput {
@@ -438,6 +439,22 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       `A pull request's changed files with line counts (at most ${PR_FILES_MAX}), and its diff when patch is true (cut at ${PR_DIFF_MAX_CHARS} characters). Read-only.`,
       { floor: z.number().int(), pr: z.number().int().positive(), patch: z.boolean().optional().describe('Include the diff itself') },
       (a) => run(() => h.prDiff(a)),
+    ),
+    tool(
+      'session_history',
+      'Past sessions from the office\'s history, newest first, 20 a page: who worked on what, when (UTC), the outcome and why, time and cost. Every filter narrows. Read-only.',
+      {
+        floor: z.number().int().optional(),
+        agent: z.string().max(80).optional().describe('An id or name'),
+        kind: z.string().max(20).optional().describe('issue, qa, fix (any fix), fix-qa, fix-checks, fix-conflict, ceo (any CEO job) or merge'),
+        outcome: z.string().max(20).optional().describe('e.g. pr, qa-pass, qa-fail, commit, error, merged'),
+        issue: z.number().int().positive().optional(),
+        pr: z.number().int().positive().optional(),
+        query: z.string().max(200).optional().describe('Words in the title or outcome'),
+        days: z.number().int().min(1).max(90).optional().describe('How far back (default 7)'),
+        page: z.number().int().min(1).optional(),
+      },
+      (a) => run(() => h.sessionHistory(a)),
     ),
     tool(
       'send_telegram',

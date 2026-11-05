@@ -27,6 +27,8 @@ import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
 import type { UsageWarning } from './pacing.ts';
 import { realResources, type ResourceProbe } from './health.ts';
+import { claudeProjectsDir, findTranscript } from './history.ts';
+import type { HistoryEntry } from '../shared/history.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
@@ -90,6 +92,8 @@ export interface Backend {
   releaseDesk(fullName: string, agentSlug: string, port: number): Promise<void>;
   /** An agent session: the real CLI in the agent's terminal when opts.terminal is set, else an Agent SDK session. */
   startSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle;
+  /** A finished Claude Code session's transcript (#49): its file and session id; null when there's none on disk. */
+  sessionTranscript(cwd: string, sessionId: string | null, about: Pick<HistoryEntry, 'agent' | 'kind' | 'title' | 'at'>): Promise<{ file: string; sessionId: string } | null>;
   /** Terminals can run here (the native pseudo-terminal module loaded). */
   terminals: boolean;
   /** The office started: the CLIs its terminal keeper kept running through a restart, back in their agents' terminals. */
@@ -224,6 +228,10 @@ export const realBackend: Backend = {
   trimDesk: workspace.trimDesk,
   releaseDesk: (fullName, agentSlug, port) => workspace.releaseDesk(fullName, agentSlug, port, officeProcesses()),
   startSession: (opts, cb) => (opts.terminal ? startCliSession(opts, cb) : startSession(opts, cb)),
+  sessionTranscript: async (cwd, sessionId) => {
+    const file = sessionId ? await findTranscript(claudeProjectsDir(), cwd, sessionId) : null;
+    return file && sessionId ? { file, sessionId } : null;
+  },
   terminals: terminalsAvailable,
   reconnectClis: (terminalFor) => (terminalsAvailable ? reconnectClis(terminalFor) : Promise.resolve([])),
   hooksReady,

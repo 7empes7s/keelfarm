@@ -1,4 +1,5 @@
 // The office's state and its plumbing: the persisted state and runtimes, views and the snapshot, the tabs on /ws, the state file, lookups.
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
@@ -21,7 +22,10 @@ import { boxVersions } from '../clis.ts';
 import { machineName, type MachineProvider } from '../machines.ts';
 import { MACHINES_DIR } from '../workspace.ts';
 import { envSecrets, Journal } from '../journal.ts';
-import { CostLedger, SessionCosts } from '../costLedger.ts';
+import { CostLedger, SessionCosts, type CostRun } from '../costLedger.ts';
+import { dailyLogDir, MACHINE_DAILY_DIR, SessionHistory } from '../history.ts';
+import { DEFAULT_HISTORY_DAYS, historyId, type HistoryEntry } from '../../shared/history.ts';
+import type { CostSession } from '../../shared/costs.ts';
 import { Lab, loadLab } from '../experiments.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
@@ -36,7 +40,7 @@ import { DEFAULT_CLOUD } from '../../shared/cloud.ts';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, officeItems, type ToolInventory } from '../../shared/tooling.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../../shared/activity.ts';
 import { WeatherService } from '../weather.ts';
-import { dayKey, journalFrame } from '../../shared/journal.ts';
+import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
@@ -99,6 +103,8 @@ export abstract class SwarmCore extends SwarmContract {
       autoUpdate: true,
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
+      dailyLogDir: '',
+      historyDays: DEFAULT_HISTORY_DAYS,
       voice: { ...DEFAULT_VOICE },
       themes: DEFAULT_THEME_SETTINGS,
       weather: { ...DEFAULT_WEATHER },
@@ -202,6 +208,8 @@ export abstract class SwarmCore extends SwarmContract {
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
+  /** The daily work log and session history (#49): an entry per finished session and merge, transcripts kept. */
+  readonly history: SessionHistory;
   /** The experiments (#23): the variant each new issue in one gets, and what came of it. */
   readonly lab = new Lab(() => this.state.experiments, { save: () => this.save(), emit: (experiments) => this.broadcast({ type: 'experiments', experiments }), floorOk: (id) => this.state.repos.some((r) => r.id === id) });
 
@@ -226,7 +234,17 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line) => this.lab.session(line));
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => {
+      this.lab.session(line);
+      this.logSession(line, run);
+    });
+    // The machine's daily log folder only for the real office: never from the demo or the tests.
+    const machineDir = !backend.demo && !process.env.VITEST && existsSync(MACHINE_DAILY_DIR) ? MACHINE_DAILY_DIR : null;
+    this.history = new SessionHistory({
+      dir: path.join(HOME_DIR, backend.demo ? 'demo-history' : 'history'),
+      dailyDir: () => dailyLogDir(this.state.settings.dailyLogDir, { demo: backend.demo, home: HOME_DIR, machineDir }),
+      secrets: () => this.secrets(),
+    });
     this.journal = new Journal({
       dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
       frame: () => journalFrame(this.snapshot(), this.secrets()),
@@ -482,6 +500,53 @@ export abstract class SwarmCore extends SwarmContract {
     for (const item of this.ticker.observe(ev)) this.broadcast({ type: 'ticker', item });
     if (OPS_EVENTS.has(ev.type)) this.opsSoon();
     this.journal.record(ev);
+  }
+
+  // ---------- the daily log and session history (#49) ----------
+
+  /** A finished session's ledger line into the history and the daily log, with its transcript kept. */
+  protected logSession(line: CostSession, run: CostRun | null) {
+    const repo = this.state.repos.find((r) => r.id === line.repoId);
+    const agent = this.state.agents.find((a) => a.id === line.agentId);
+    const qa = line.outcome === 'qa-pass' || line.outcome === 'qa-fail' ? this.state.qa.find((q) => q.repoId === line.repoId && q.prNumber === line.pr) : undefined;
+    const note = qa?.summary ?? (line.outcome === 'error' ? (agent?.lastError ?? '') : '');
+    const secrets = this.secrets();
+    const entry: HistoryEntry = {
+      id: historyId(line.at, line.agentId, line.kind),
+      at: line.at,
+      startedAt: line.at - line.ms,
+      repoId: line.repoId,
+      repo: repo?.fullName ?? '',
+      floor: repo?.floor ?? null,
+      agentId: line.agentId,
+      agent: line.agent,
+      kind: line.kind,
+      issue: line.issue,
+      pr: line.pr,
+      title: redact(run?.title ?? '', secrets).slice(0, 200),
+      outcome: line.outcome,
+      note: redact(note.replace(/\s+/g, ' '), secrets).slice(0, 300),
+      usd: line.usd,
+      tokens: line.tokens,
+      model: line.model,
+      effort: line.effort,
+      sessionId: run?.sessionId ?? null,
+      transcript: null,
+    };
+    // Only Claude Code's transcripts on this computer: a cloud agent's stays in their Box.
+    const local = agent?.host !== 'box' && (agent?.sessionCli ?? 'claude') === 'claude';
+    void (async () => {
+      const found = local && run?.cwd ? await this.backend.sessionTranscript(run.cwd, entry.sessionId, entry).catch(() => null) : null;
+      const kept = await this.history.record({ ...entry, sessionId: found?.sessionId ?? entry.sessionId }, found?.file ?? null);
+      this.broadcast({ type: 'history', entry: kept });
+    })();
+  }
+
+  /** A PR the office merged, into the history and the daily log. */
+  protected logMerge(repo: PersistedRepo, pr: number, title: string) {
+    const at = Date.now();
+    const entry: HistoryEntry = { id: historyId(at, '', 'merge'), at, startedAt: at, repoId: repo.id, repo: repo.fullName, floor: repo.floor, agentId: '', agent: 'The office', kind: 'merge', issue: null, pr, title: redact(title, this.secrets()).slice(0, 200), outcome: 'merged', note: '', usd: 0, tokens: null, model: '', effort: '', sessionId: null, transcript: null };
+    void this.history.record(entry, null).then((kept) => this.broadcast({ type: 'history', entry: kept }));
   }
 
   /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */

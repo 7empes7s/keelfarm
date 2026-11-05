@@ -327,7 +327,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag });
+    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
@@ -369,6 +369,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? (how.cli ?? 'claude') : null;
+          if (id) run.sessionId = id;
         },
         browserUrl: (url) => {
           rt.browserUrl = url;

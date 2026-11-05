@@ -212,7 +212,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer.
     const how = this.sessionRuntime(a, job.kind === 'chat' ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null });
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
@@ -241,6 +241,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? 'claude' : null;
+          if (id) run.sessionId = id;
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,

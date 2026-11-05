@@ -38,7 +38,7 @@ export type Overlay =
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
   | { kind: 'app'; repoId: string; pr?: number | null } // pr: open the viewer on that channel (null: main)
   | { kind: 'elevator' }
-  | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string } // card: an OpsAlarm id, or 'usage', to open at
+  | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string }
   /** A team change face to face: a new agent waiting in the lobby, or the CEO's let-go note on a desk. */
   | { kind: 'interview'; requestId: string }
@@ -51,7 +51,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'tools' | 'timelapse' | 'access';
+export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'tools' | 'history' | 'timelapse' | 'access';
 
 export interface Focus {
   id: string;
@@ -146,6 +146,7 @@ interface State {
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
+  historySeq: number; // bumped by each new history entry (#49): an open History tab reloads its page
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
@@ -246,6 +247,8 @@ export const useStore = create<State>((set, get) => ({
     tutorialStep: -1,
     pacingSessions: 3,
     trimIdleDesksMin: 120,
+    dailyLogDir: '',
+    historyDays: 90,
     voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },
     themes: { mode: 'auto', disabled: [], birthday: null },
     weather: DEFAULT_WEATHER,
@@ -292,6 +295,7 @@ export const useStore = create<State>((set, get) => ({
   cloud: EMPTY_CLOUD,
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
+  historySeq: 0,
   pong: {},
   restarting: false,
   visitors: [],
@@ -572,6 +576,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'experiments':
         set({ experiments: ev.experiments });
+        break;
+      case 'history':
+        set({ historySeq: get().historySeq + 1 });
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.

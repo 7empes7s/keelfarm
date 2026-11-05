@@ -242,6 +242,10 @@ export interface CostRun {
   startedAt: number;
   round: number | null;
   exp?: string | null; // the experiment variant it runs (shared/experiments.ts)
+  /** For the session history (#49), never the ledger: where it ran, its Claude Code session, what it was about. */
+  cwd?: string;
+  sessionId?: string | null;
+  title?: string;
 }
 
 /** The agent fields a session's line is made from. */
@@ -269,7 +273,7 @@ export class SessionCosts {
   constructor(
     readonly ledger: CostLedger,
     private limited: () => boolean,
-    private onSession: (s: CostSession) => void = () => undefined,
+    private onSession: (s: CostSession, run: CostRun | null) => void = () => undefined,
   ) {}
 
   start(agentId: string, run: CostRun) {
@@ -328,7 +332,7 @@ export class SessionCosts {
       outcome: sessionOutcome({ interrupted: !!result.interrupted, watchdog, stopped: how.stopped, limited: this.limited(), ok: result.ok, hint }),
       ...(run?.exp ? { exp: run.exp } : {}),
     };
-    this.onSession({ type: 'session', ...line });
+    this.onSession({ type: 'session', ...line }, run);
     return this.ledger.session(line);
   }
 }
