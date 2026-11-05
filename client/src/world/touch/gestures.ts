@@ -116,6 +116,3 @@ export function tickGestures(g: Gestures, t: number): GestureEvent[] {
   f.role = 'armed';
   return [{ type: 'armed', x: f.x0, y: f.y0 }];
 }
-
-/** Whether a finger is holding the menu armed (for the ring's cue). */
-export const isArmed = (g: Gestures) => [...g.fingers.values()].some((f) => f.role === 'armed');

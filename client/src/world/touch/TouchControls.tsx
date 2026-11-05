@@ -70,7 +70,10 @@ export function TouchControls() {
     };
     return (evs: GestureEvent[]) => {
       for (const e of evs) {
-        if (e.type !== 'stick' && e.type !== 'look') recent.push(e.type) > 20 && recent.shift();
+        if (e.type !== 'stick' && e.type !== 'look') {
+          recent.push(e.type);
+          if (recent.length > 20) recent.shift();
+        }
         if (e.type === 'stick') {
           const v = stickVector(e.x - e.cx, e.y - e.cy);
           const k = knobOffset(e.x - e.cx, e.y - e.cy);
