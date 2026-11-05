@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 import { Panel } from './Panel';
 
 /** Who has the card; "QA" while they're testing it. */
@@ -156,10 +157,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     });
     if (ok) void act(c.key, () => api.closePull(repo.id, c.number));
   };
+  // Closing a PR is hard to undo: it sits in the card's ⋯ (docs/design.md).
   const closeButton = (c: KanbanCard) => (
-    <button className="btn btn-small btn-ghost" disabled={pending === c.key} onClick={() => void closePr(c)}>
-      Close
-    </button>
+    <Menu label={`More for PR #${c.number}`} title={`PR #${c.number} ${c.title}`} items={[{ label: 'Close PR…', hint: 'Closed without merging; the branch stays', danger: true, disabled: pending === c.key, onSelect: () => void closePr(c) }]} />
   );
   const previewButton = (c: KanbanCard) => (
     <button className="btn btn-small" title={`Run PR #${c.number} beside ${repo.defaultBranch} and open it in the app viewer`} onClick={() => openOverlay({ kind: 'app', repoId: repo.id, pr: c.number })}>
