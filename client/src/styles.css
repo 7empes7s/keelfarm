@@ -8,7 +8,7 @@
   --accent: #ff8a5b;
   --font: Fredoka, 'Segoe UI', system-ui, sans-serif;
   --mono: 'JetBrains Mono', Consolas, monospace;
-  color-scheme: light;
+  color-scheme: light only; /* no dark mode, and no browser darkening fields or pages on its own (#80) */
 }
 
 * {

@@ -1,6 +1,6 @@
 /* The design system (docs/design.md): tokens, and the shared components every 2D screen is built from.
-   Light values match the office's cartoon look; a screen rebuilt on the system adds .ds-auto-dark to follow the
-   device's dark mode. Old rules still carry one-off values: move them onto tokens as their screen is rebuilt. */
+   Light only, whatever the device's setting (#80): the values match the office's cartoon look. Old rules still
+   carry one-off values: move them onto tokens as their screen is rebuilt. */
 
 /* ---------- tokens ---------- */
 
@@ -52,7 +52,7 @@
   --ds-link: #3a56d4;
   --ds-focus: #3a56d4;
   --ds-accent: var(--accent);
-  --ds-on-color: #1f1d2b; /* text on the coloured fills below, in both schemes */
+  --ds-on-color: #1f1d2b; /* text on the coloured fills below */
   --ds-good-fill: #80ed99;
   --ds-bad-fill: #ff8fa3;
   --ds-warn-fill: #ffd166;
@@ -108,32 +108,6 @@ html[data-reduce-motion] {
   --ds-dur-fast: 0ms;
   --ds-dur: 0ms;
   --ds-dur-slow: 0ms;
-}
-
-/* dark: only on screens rebuilt on the system (.ds-auto-dark), and never over the high contrast setting */
-@media (prefers-color-scheme: dark) {
-  html:not([data-high-contrast]) .ds-auto-dark {
-    color-scheme: dark;
-    --paper: #1c1a27;
-    --ink: #f3f0e7;
-    --muted: #b4b6c9;
-    --ds-surface: #1c1a27;
-    --ds-surface-raised: #272536;
-    --ds-surface-sunken: #22202f;
-    --ds-surface-hover: #322f45;
-    --ds-text: #f3f0e7;
-    --ds-text-muted: #b4b6c9;
-    --ds-outline: #5f5b7d;
-    --ds-shadow-color: #07060c;
-    --ds-line: rgba(255, 255, 255, 0.12);
-    --ds-line-strong: rgba(255, 255, 255, 0.3);
-    --ds-link: #a9b8ff;
-    --ds-focus: #a9b8ff;
-    --ds-danger-text: #ff9db0;
-    --ds-warn-text: #ffb38a;
-    --ds-scrim: rgba(5, 5, 10, 0.6);
-    color: var(--ds-text);
-  }
 }
 
 /* ---------- buttons ---------- */
@@ -738,37 +712,6 @@ html[data-reduce-motion] {
   max-width: 180px;
 }
 
-/* the console in dark mode: what the old rules still paint in light colours */
-@media (prefers-color-scheme: dark) {
-  html:not([data-high-contrast]) .ds-auto-dark :is(code, kbd, .office-badge, .tl-since) {
-    background: var(--ds-surface-hover);
-    color: var(--ds-text);
-  }
-  html:not([data-high-contrast]) .ds-auto-dark :is(.repo-row:hover, .ds-row:hover) {
-    background: var(--ds-surface-hover);
-  }
-  html:not([data-high-contrast]) .ds-auto-dark :is(.term-error, .office-state-bad) {
-    color: var(--ds-danger-text);
-  }
-  html:not([data-high-contrast]) .ds-auto-dark .term-error {
-    background: var(--ds-surface-sunken);
-  }
-  /* coloured fills (state chips, badges, the accent) stay light in the dark, so what's on them keeps the light text */
-  html:not([data-high-contrast]) .ds-auto-dark :is(.tab-on, .btn-on, .seg-on, .channel-on, .picker-tab-on, .pk-head, .pk-chip-on, .kcol-head, .chip-good, .chip-warn, .pill-ok, .pill-bad, .pill-demo, .hud-banner, .office-chip, .qa-badge-passed, .qa-badge-failed, .qa-badge-needs-human, .qa-badge-testing, .qa-badge-fixing, .cardview-warn, .cardview-bad, .cardview-good, .bubble-me, .bubble-failed, .floor-chip, .suggestion-chip, .quick-answer, .hands-free-on, .mic-on, .report-good, .report-warn, .phone-nudge, .usage-chip-pacing, .usage-chip-paused, .doctor-chip, .usage-pill-good, .usage-pill-warn, .usage-pill-bad, .pk-banner, .pk-callout, .pk-stage-hot, .pk-agent-bad, .coin-pill, .game-chip, .pill-replay, .tour-cheer, .office-badge, .resume-letgo, .doc, .key-btn-wait, .key-btn-clash, .app-frame-hint, .emote-on, .chip[style*='background'], .badge) {
-    --ink: var(--ds-on-color);
-    --muted: #4f5368;
-    --ds-text: var(--ds-on-color);
-    --ds-text-muted: #4f5368;
-    --ds-link: #2a44b8;
-    color: var(--ds-on-color);
-  }
-  html:not([data-high-contrast]) .ds-auto-dark :is(.office-state-ok, .notify-ok) {
-    color: #7fe39a;
-  }
-  html:not([data-high-contrast]) .ds-auto-dark .office-state-busy {
-    color: #ffc970;
-  }
-}
 .ds-console .ceo-name input {
   flex: 1;
   min-width: 0;

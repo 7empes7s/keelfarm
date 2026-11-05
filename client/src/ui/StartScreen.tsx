@@ -36,7 +36,7 @@ export function StartScreen() {
 
   return (
     <div className="start">
-      <div className="start-card ds-screen ds-auto-dark">
+      <div className="start-card ds-screen">
         <div className="start-logo">✻</div>
         <h1>{settings.companyName || 'cubefarm'}</h1>
         <p className="start-tag">{settings.managerName ? `Welcome back, ${settings.managerName}.` : 'A cartoon office where a team of AI coding agents works through your GitHub issues.'}</p>

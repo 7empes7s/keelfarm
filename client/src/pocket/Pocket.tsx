@@ -297,7 +297,7 @@ export default function Pocket() {
     ['approvals', '✋', 'Approvals', waiting],
   ];
   return (
-    <div className="pocket ds-screen ds-auto-dark">
+    <div className="pocket ds-screen">
       <header className="pk-head">
         <span className="pk-logo" aria-hidden>
           ✻
