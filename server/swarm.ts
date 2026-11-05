@@ -5920,7 +5920,7 @@ export class Swarm {
 
   /** A session that ended asking something: the agent waits, and a follow-up wakes the CEO (else the manager is asked). */
   private ask(a: PersistedAgent, repo: PersistedRepo, text: string): boolean {
-    const asked = questionFromTurn(text);
+    const asked = questionFromTurn(scrub(text, this.secrets())); // it goes to the CEO, the chat and notifications
     if (!asked) return false;
     const q = newQuestion(`q${Date.now().toString(36)}`, asked, { agentId: a.id, agentName: a.name, repoId: repo.id, floor: repo.floor, issue: a.issueNumber, pr: a.prNumber }, Date.now());
     this.setQuestions([...this.state.questions.filter((x) => x.agentId !== a.id), q]);
@@ -5931,7 +5931,8 @@ export class Swarm {
 
   /** The question goes to the manager: a chat message with one-tap options, and a notification. */
   private askManager(q: AgentQuestion, x: { question: string; options: string[]; recommendation: string }, from: 'ceo' | 'office') {
-    const e = escalated(q, x, Date.now());
+    const mask = (t: string) => scrub(t, this.secrets());
+    const e = escalated(q, { question: mask(x.question), options: x.options.map(mask), recommendation: mask(x.recommendation) }, Date.now());
     const work = e.issue ? `, #${e.issue}` : e.pr ? `, PR #${e.pr}` : '';
     const m = this.postMessage(from, `❓ ${e.agentName} asks (floor ${e.floor}${work}): ${e.text}${e.recommendation ? `\nMy pick: ${e.recommendation}` : ''}`, undefined, { question: e.id });
     this.setQuestions(this.state.questions.map((y) => (y.id === q.id ? { ...e, messageId: m.id } : y)));
