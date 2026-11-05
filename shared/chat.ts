@@ -1,7 +1,7 @@
 // The phone chat with the CEO, its pure rules: what a reply forwards to the CEO, how a manager's message moves
 // through its delivery states, and which CEO messages offer quick Yes / No replies.
 
-import type { Delivery, PhoneMessage } from './types.ts';
+import type { CeoHeld, Delivery, PhoneMessage } from './types.ts';
 import type { FileRef } from './files.ts';
 
 /** How much of a quoted message is forwarded to the CEO (and shown in the reply's quote). */
@@ -68,11 +68,17 @@ export function nextDelivery(d: Delivery, ev: DeliveryEvent): Delivery {
 /** The words a screen reader and the bubble's tick say for a delivery state. */
 export const DELIVERY_LABEL: Record<Delivery, string> = {
   sending: 'Sending…',
-  sent: 'Sent',
+  sent: 'Queued',
   read: 'Read',
   replied: 'Replied',
   failed: 'Failed, tap to retry',
 };
+
+/** The banner above the composer while the CEO can't take the manager's message (#46): why, and when it can. */
+export function heldBanner(held: CeoHeld): string {
+  const at = new Date(held.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `Usage limit: resumes ${at}. Your message waits until then.`;
+}
 
 /** True when a CEO message ends with a question, so the phone offers Yes / No. Trailing emphasis and quotes are ignored. */
 export function isQuestion(text: string): boolean {

@@ -13,6 +13,7 @@ import { Cloud, officeId, redact } from './cloud.ts';
 import type { PrDetails } from './github.ts';
 import { defaultProjectsDir, DESK_SWEEP_INTERVAL_MS, HOME_DIR, LOG_BUFFER, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
 import { askedFor, ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, issueRefusal, jobLabel, MANDATE_NOT_ASKED, planDependencies, prDiffText, agentLogText, qaReportText, AGENT_LOG_MAX as AGENT_LOG_MAX_LINES, plannedSize, scalePlan, type CeoJob, type OfficeTools, type TeamNow } from './ceo.ts';
+import { ceoHeld, ceoStep, messageGoesIn, type CeoLaneInput } from './ceoLane.ts';
 import { afterClose, ASK_AGAIN_MS, closedWhy, closuresHeld, forgettable, issueOpen, nameList, pullNow, stillOpen, stoppedMessage, toAsk, toHold, type Closure, type FloorState, type KnownPull, type LearnedPull } from './closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from './deps.ts';
 import { setUpDesk } from './deskSetup.ts';
@@ -510,6 +511,7 @@ export class Swarm {
 
   private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   private ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
+  private ceoPreempted: CeoJob | null = null; // the background job stopped for the manager's message: it goes back to the queue
   private messageSeq = 1;
   private agentRt = new Map<string, AgentRuntime>();
   private seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
@@ -1341,10 +1343,10 @@ export class Swarm {
     return this.state.agents.filter((a) => a.host === 'box' && a.status === 'working' && !!a.boxCli);
   }
 
-  /** True when the manager has set a session limit and every slot is taken. */
+  /** True when the manager has set a session limit and every slot is taken. The CEO never takes a slot (#46). */
   private slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    return limit > 0 && this.running() >= limit;
+    return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length >= limit;
   }
 
   private agentSlug(a: PersistedAgent) {
@@ -4075,6 +4077,7 @@ export class Swarm {
     this.lastUsage = key;
     this.broadcast({ type: 'usage', usage });
     if (usage.state !== was) {
+      this.emitCeo(); // the CEO's chat is held under the limit, or free again
       const text = usage.state === 'normal' ? "Claude's usage is back to normal after pacing or a pause" : `Claude's usage is ${usageLabel(usage, Date.now())}`;
       this.followup({ kind: 'usage', key: 'usage', label: `usage ${usage.state}`, text: `${text}. Check whether team sizes and what is queued still fit.` });
     }
@@ -4175,13 +4178,15 @@ export class Swarm {
   private schedule() {
     this.tickUsage();
     this.progressTick();
-    if (this.officeUpdateTick()) return; // draining for the office's own update
-    this.applyTeamChanges(); // before handing out work, so agents on their way out get none
-    if (this.limited()) return;
-    // Management first: the CEO's jobs are short and shape everyone else's work.
-    this.maybeHeartbeat();
-    this.maybeFollowup();
-    this.startCeoWork();
+    const draining = this.officeUpdateTick(); // draining for the office's own update: only the CEO's chat starts
+    if (!draining) this.applyTeamChanges(); // before handing out work, so agents on their way out get none
+    if (!draining && !this.limited()) {
+      this.maybeHeartbeat();
+      this.maybeFollowup();
+    }
+    // Management first: the CEO's jobs are short and shape everyone else's work, and the manager's chat never waits.
+    this.startCeoWork(draining);
+    if (draining || this.limited()) return;
     const repos = this.state.repos.filter((r) => {
       const rt = this.repoRt.get(r.id);
       return rt && rt.lastSync != null && rt.cloneStatus !== 'error';
@@ -4260,7 +4265,7 @@ export class Swarm {
       const running = this.running();
       this.postMessage(
         'office',
-        `⬆️ Updating the office (${u.behind} new commit${u.behind === 1 ? '' : 's'}). Nothing new starts${running ? ` while ${running} running session${running === 1 ? '' : 's'} finish` : ''}; then it installs and restarts.`,
+        `⬆️ Updating the office (${u.behind} new commit${u.behind === 1 ? '' : 's'}). Nothing new starts, though the CEO still answers you${running ? ` while ${running} running session${running === 1 ? '' : 's'} finish` : ''}; then it installs and restarts.`,
       );
     }
     u.drainingSince = d.drainingSince;
@@ -4408,6 +4413,7 @@ export class Swarm {
       lastReviewAt: c.lastReviewAt,
       nextReviewAt: min > 0 && c.lastReviewAt ? c.lastReviewAt + min * 60_000 : null,
       followups: this.followupView(),
+      held: ceoHeld({ now: Date.now(), pausedUntil: this.pausedUntil, chatQueued: c.queue.some((j) => j.kind === 'chat') }),
     };
   }
 
@@ -4427,8 +4433,27 @@ export class Swarm {
     setTimeout(() => this.schedule(), 150);
   }
 
-  /** Start the CEO's next job when they're free and a session slot is open. Replies to the manager go first. */
-  private startCeoWork(): void {
+  /** What ceoStep (server/ceoLane.ts) sees now. */
+  private ceoLane(draining: boolean): CeoLaneInput {
+    const a = this.state.agents.find((x) => x.id === CEO_ID);
+    const c = this.state.ceo;
+    return {
+      now: Date.now(),
+      pausedUntil: this.pausedUntil,
+      draining,
+      handingOver: this.officeUpdate.sent,
+      busy: !!a && BUSY.includes(a.status),
+      job: c.job?.kind ?? null,
+      session: !!this.agentRt.get(CEO_ID)?.session,
+      chatQueued: c.queue.some((j) => j.kind === 'chat'),
+    };
+  }
+
+  /**
+   * Start the CEO's next job when they're free; they never wait for a session slot. Replies to the manager go first, and
+   * preempt a background job (it goes back to the queue). While the office drains for its update, only chat starts.
+   */
+  private startCeoWork(draining = false): void {
     const a = this.state.agents.find((x) => x.id === CEO_ID);
     const c = this.state.ceo;
     // A triage whose PR is no longer stuck (the manager stepped in, or it closed) has nothing left to do.
@@ -4438,11 +4463,18 @@ export class Swarm {
       this.emitCeo();
       this.save();
     }
-    if (!a || BUSY.includes(a.status) || c.job || c.queue.length === 0) return;
-    if (this.slotsFull()) return;
-    const rank: Record<CeoJob['kind'], number> = { chat: 0, triage: 0, onboard: 1, plan: 1, followup: 2, review: 2 };
+    if (!a || c.queue.length === 0) return;
+    const step = ceoStep(this.ceoLane(draining));
+    if (step.do === 'preempt') {
+      this.preemptCeo(a);
+      if (!c.job) this.startCeoWork(draining); // the session stopped at once: the reply starts now
+      return;
+    }
+    if (step.do === 'wait') return;
+    const rank: Record<CeoJob['kind'], number> = { chat: 0, triage: 1, onboard: 2, plan: 2, followup: 3, review: 3 };
     // A floor's jobs wait for its clone and first sync, so the CEO has something to read.
     const ready = (j: CeoJob) => {
+      if (step.only === 'chat' && j.kind !== 'chat') return false;
       const rt = j.repoId ? this.repoRt.get(j.repoId) : undefined;
       return !rt || rt.cloneStatus === 'error' || (rt.cloneStatus === 'ready' && rt.lastSync != null);
     };
@@ -4455,9 +4487,18 @@ export class Swarm {
       if (repo) this.postMessage('office', `⚠️ ${a.name} couldn't study floor ${repo.floor}: the repository clone failed (${rt?.cloneError ?? 'unknown error'}).`);
       this.emitCeo();
       this.save();
-      return this.startCeoWork();
+      return this.startCeoWork(draining);
     }
     void this.runCeoJob(a, job);
+  }
+
+  /** The manager wrote while the CEO works on a background job: stop it and put it back in the queue, so the reply comes now. */
+  private preemptCeo(a: PersistedAgent) {
+    const job = this.state.ceo.job;
+    if (!job || this.ceoPreempted) return;
+    this.ceoPreempted = job;
+    this.appendLog(a, [{ kind: 'system', text: `⏸ The manager wrote: ${jobLabel(job, this.ceoFloor(job.repoId)).toLowerCase()} goes back to the queue until the reply is out.` }]);
+    this.agentRt.get(a.id)?.session?.stop();
   }
 
   private ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
@@ -4559,14 +4600,19 @@ export class Swarm {
     recordCost(this.state.ops, '', result.costUsd, a.endedAt);
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
-    if (job?.kind === 'triage') this.endTriage(job);
+    const preempted = !!job && job === this.ceoPreempted;
+    this.ceoPreempted = null;
+    if (preempted) this.state.ceo.queue.push(job);
+    else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
     if (result.interrupted) this.interrupted(a);
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
-    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
+    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped' || preempted, ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
+    } else if (preempted) {
+      a.status = 'idle'; // the manager's chat starts next
     } else if (!result.ok) {
       a.status = 'error';
       a.lastError = result.errors.join('; ') || 'Session failed';
@@ -4595,7 +4641,7 @@ export class Swarm {
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
     const forward = [forwardText(t, quoted), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const rt = this.agentRt.get(a.id)!;
-    if (rt.session) {
+    if (rt.session && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: this.state.ceo.job?.kind ?? null, session: true })) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
@@ -5879,10 +5925,18 @@ export class Swarm {
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
   }
 
+  /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
+  private refuseWhileUpdating() {
+    if (this.officeUpdate.drainingSince !== null || this.officeUpdate.sent) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+  }
+
   private restartAgent(x: { agent_id: string }) {
     const a = checkRestart(this.agentByRef(x.agent_id));
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
-    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    if (resumes) {
+      this.refuseWhileUpdating();
+      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
   }
@@ -5891,6 +5945,7 @@ export class Swarm {
     const a = this.agentByRef(x.agent_id);
     if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
     const running = !!this.agentRt.get(a.id)?.session;
+    if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }

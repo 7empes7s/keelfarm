@@ -3710,6 +3710,13 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   padding: 6px 10px 0;
   background: #fff;
 }
+.chat-held {
+  margin: 6px 10px 0;
+  padding: 6px 10px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
 .chat-reply-body {
   min-width: 0;
   padding: 3px 8px;
