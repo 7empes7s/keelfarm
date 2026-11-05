@@ -35,7 +35,7 @@
       "typescript(no-misused-promises)": 2
     },
     "client/src/ui/TerminalView.tsx": {
-      "typescript(no-misused-promises)": 4
+      "typescript(no-misused-promises)": 3
     },
     "client/src/ui/acoustics.test.ts": {
       "eslint(no-unused-expressions)": 4
@@ -267,6 +267,9 @@
     },
     "shared/speech.ts": {
       "eslint(no-misleading-character-class)": 2
+    },
+    "shared/tooling.ts": {
+      "unicorn(no-useless-fallback-in-spread)": 1
     }
   },
   "knip": [
@@ -296,6 +299,7 @@
     "exports:client/src/ui/Overlays.tsx:closeOverlay",
     "exports:client/src/ui/Phone.tsx:setupLine",
     "exports:client/src/ui/PongHud.tsx:pongStatus",
+    "exports:client/src/ui/ToolsSettings.tsx:ToolsList",
     "exports:client/src/ui/a11yPrefs.ts:REDUCE_MOTION",
     "exports:client/src/ui/babble.ts:BABBLE_PEAK",
     "exports:client/src/ui/babbleRules.ts:FORMANTS",
@@ -483,6 +487,10 @@
     "exports:server/previewRunner.ts:previewEnv",
     "exports:server/terminal.ts:TERM_COLS",
     "exports:server/terminal.ts:TERM_ROWS",
+    "exports:server/tooling.ts:diskFs",
+    "exports:server/tooling.ts:mcpServersOf",
+    "exports:server/tooling.ts:pluginItems",
+    "exports:server/tooling.ts:skillsIn",
     "exports:server/voice.ts:CACHE_MAX_AGE_MS",
     "exports:server/voice.ts:CACHE_MAX_FILES",
     "exports:server/voice.ts:DEFAULT_VOICE_MODEL",
@@ -523,6 +531,10 @@
     "exports:shared/presence.ts:isFloor",
     "exports:shared/themes.ts:GREETINGS",
     "exports:shared/themes.ts:isThemeId",
+    "exports:shared/tooling.ts:NO_SESSION_TOOLS",
+    "exports:shared/tooling.ts:OFFICE_SERVERS",
+    "exports:shared/tooling.ts:TOOL_GROUPS",
+    "exports:shared/tooling.ts:mcpPattern",
     "exports:shared/usage.ts:STALE_MS",
     "exports:shared/usage.ts:barName",
     "exports:shared/usage.ts:pctTone",
@@ -536,7 +548,7 @@
     "types:client/src/ui/mic.ts:MicRecord",
     "types:client/src/ui/mic.ts:MicState",
     "types:client/src/ui/notifySteps.ts:StepId",
-    "types:client/src/ui/notifySteps.ts:StepState",
+    "types:client/src/ui/telegramSteps.ts:TelegramStepId",
     "types:client/src/ui/voiceMessages.ts:SpokenRecord",
     "types:client/src/world/CoffeeMachine.tsx:CoffeeSnapshot",
     "types:client/src/world/Jukebox.tsx:JukeboxSnapshot",
@@ -575,30 +587,32 @@
     "types:server/mergeGate.ts:MergeBookkeeping",
     "types:server/metrics.ts:CheckEntry",
     "types:server/metrics.ts:CostEntry",
+    "types:server/notifier.ts:TelegramChannel",
     "types:server/officeUpdate.ts:UpdateStage",
     "types:server/voice.ts:ClipEntry",
     "types:server/watchdog.ts:ProblemKind",
     "types:shared/journal.ts:AgentPatch",
     "types:shared/journal.ts:MarkKind",
+    "types:shared/tooling.ts:ToolLock",
     "types:shared/types.ts:AgentRuntime",
     "types:shared/types.ts:CloudCredentialSource",
     "types:shared/types.ts:PromptPart",
     "types:shared/types.ts:PushDeviceView"
   ],
   "sizes": {
-    "client/src/styles.css": 5606,
-    "client/src/ui/ManagerConsole.tsx": 869,
-    "client/src/ui/Phone.tsx": 1119,
+    "client/src/styles.css": 5676,
+    "client/src/ui/ManagerConsole.tsx": 877,
+    "client/src/ui/Phone.tsx": 1120,
     "client/src/ui/sfx.ts": 838,
     "client/src/world/ErrandDirector.tsx": 851,
     "client/src/world/draw.ts": 911,
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
-    "server/cliRunner.ts": 986,
-    "server/demo.ts": 1708,
-    "server/swarm.ts": 5611,
+    "server/cliRunner.ts": 989,
+    "server/demo.ts": 1807,
+    "server/swarm.ts": 5746,
     "server/workspace.ts": 909,
-    "shared/types.ts": 815
+    "shared/types.ts": 835
   }
 }
