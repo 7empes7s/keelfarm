@@ -31,8 +31,13 @@ describe('consultRefusal (read-only)', () => {
     }
   });
 
+  it('refuses anything not on the read-only allowlist', () => {
+    for (const command of ['gh issue view 3', 'git log && git push', 'cat a > b', 'git diff | sh', 'echo $(git push)', 'npm test', 'rm -rf src', 'sed -i s/a/b/ x']) expect(consultRefusal('Bash', { command })).toMatch(/read-only/);
+    for (const tool of ['Agent', 'WebFetch', 'mcp__github__create_pull_request', 'mcp__playwright__browser_navigate']) expect(consultRefusal(tool, {})).toMatch(/read-only/);
+  });
+
   it('lets it read', () => {
-    for (const command of ['git log --oneline -5', 'git diff origin/main', 'grep -rn approve src', 'gh issue view 3']) expect(consultRefusal('Bash', { command })).toBeNull();
+    for (const command of ['git log --oneline -5', 'git diff origin/main', 'grep -rn approve src', 'rg approve', 'ls src']) expect(consultRefusal('Bash', { command })).toBeNull();
     expect(consultRefusal('Read', { file_path: 'a.ts' })).toBeNull();
     expect(consultRefusal('Grep', { pattern: 'x' })).toBeNull();
   });

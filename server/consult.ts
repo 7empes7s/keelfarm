@@ -32,18 +32,18 @@ export function nextConsult(queue: readonly Consult[], repoId: string, free: rea
 /** Built-in tools a consult session doesn't get (--disallowedTools), on top of the office's. */
 export const CONSULT_DISALLOWED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash(git push:*)', 'Bash(git commit:*)', 'Bash(gh pr:*)'];
 
-const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
-const GIT_WRITES = /\bgit\s+(?:-C\s+\S+\s+)?(push|commit|merge|rebase|reset|tag|cherry-pick|revert|am|stash)\b/;
-const GH_WRITES = /\bgh\s+(pr|release)\b|\bgh\s+(issue|repo|api)\s+(create|close|edit|comment|delete|reopen|-X|--method)\b/;
+// An allowlist: tools that only read, and shell commands that only read, with nothing chained, piped or redirected.
+const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'Skill', 'ToolSearch']);
+const READ_COMMANDS = /^(git\s+(log|show|diff|status|blame|grep|ls-files|rev-parse|branch\s+--list)|ls|cat|head|tail|wc|grep|rg|tree|pwd)(\s|$)/;
+const SHELL_TRICKS = /[;&|<>`$(){}\n\\]/;
 
 /** Why a consult session's tool call is refused (the pre-tool check behind CONSULT_DISALLOWED), or null to allow it. */
 export function consultRefusal(tool: string, input: Record<string, unknown>): string | null {
-  if (EDITS.has(tool)) return 'This is a read-only consult: no file edits. Answer the question instead.';
-  if (tool !== 'Bash' && tool !== 'PowerShell') return null;
-  const cmd = String(input.command ?? '');
-  if (GIT_WRITES.test(cmd)) return 'This is a read-only consult: no commits, pushes or other git writes.';
-  if (GH_WRITES.test(cmd)) return 'This is a read-only consult: no pull requests or GitHub changes.';
-  return null;
+  if (READ_TOOLS.has(tool)) return null;
+  if (tool !== 'Bash' && tool !== 'PowerShell') return `This is a read-only consult: ${tool} isn't available. Read the code with Read, Glob and Grep.`;
+  const cmd = String(input.command ?? '').trim();
+  if (READ_COMMANDS.test(cmd) && !SHELL_TRICKS.test(cmd)) return null;
+  return 'This is a read-only consult: only simple read commands (git log/show/diff/blame, ls, cat, grep, rg) run, with no pipes, chaining or redirects. No edits, commits, pushes or pull requests.';
 }
 
 /** The consult session's prompt: the CEO's question, any role or skill hint, and the rules. Kept short: it's paid for. */

@@ -6097,7 +6097,7 @@ export class Swarm {
       const text = result.ok ? consultAnswer(a.name, repo.floor, result.text) : `${a.name} couldn't answer: ${result.errors.join('; ') || 'the consult session failed'}.`;
       this.appendLog(a, [{ kind: result.ok ? 'done' : 'error', text: `🔎 consult · ${result.ok ? 'answered' : 'no answer'} in ${Math.max(1, Math.round((Date.now() - startedAt) / 60_000))}m` }]);
       void this.spend.record({ ...a, startedAt, issueNumber: null, prNumber: null }, repo.id, run, 'consult', result, { stopped: false, ceoHint: 'done' });
-      this.consultAnswers.set(c.id, text);
+      this.consultAnswers.set(c.id, scrub(text, this.secrets()));
       this.holds.check();
       this.emitAgent(a);
       setTimeout(() => this.schedule(), 300);
