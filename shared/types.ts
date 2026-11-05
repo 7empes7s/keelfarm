@@ -12,6 +12,7 @@ import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
+import type { EveryProject, Lease, LeaseHold, PracticeOverrides, Practices } from './practices.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -92,6 +93,11 @@ export interface RepoView {
   syncError?: string;
   previewConfig: PreviewConfig;
   preview: PreviewView;
+  practices?: Practices; // (absent in journals from before #24) the version-control practices it runs with: Every project's, with its own overrides (#24)
+  practiceOverrides?: PracticeOverrides; // the switches this floor sets itself
+  leases?: Lease[]; // files its work in flight is expected to touch (while leases are on)
+  leaseHolds?: LeaseHold[]; // ready issues held back because they overlap a lease
+  hotFiles?: { path: string; score: number; conflicts: number }[]; // most often conflicted files, from its history (while leases are on)
 }
 
 /**
@@ -386,6 +392,7 @@ export interface SwarmSettings {
   notify: NotifySettings;
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
+  everyProject: EveryProject; // Settings → Every project: the practice switches and playbook snippet every floor inherits (#24)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */

@@ -6,6 +6,7 @@ import { DEFAULT_PREVIEW, parsePreviewPatch } from '../previews.ts';
 import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
+import { floorOverrides } from '../../shared/practices.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import type { PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { type PersistedRepo, type FloorOptions, QA_SHOTS_DIR } from './model.ts';
@@ -147,9 +148,17 @@ export abstract class SwarmRepos extends SwarmCore {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown },
   ) {
     const repo = this.repo(id);
+    if (patch.practices !== undefined) {
+      try {
+        repo.practices = floorOverrides(repo.practices, patch.practices); // null for a switch: inherit Every project's again
+      } catch (err) {
+        throw new HttpError(400, (err as Error).message);
+      }
+      void this.syncRepo(repo.id); // leases and auto-rebase act on what the next sync sees
+    }
     const preview = parsePreviewPatch(patch.previewCommand, patch.previewEnv);
     repo.preview = { ...repo.preview, ...preview };
     if (preview.command === null) void this.previews.refreshDefault(repo);
@@ -279,6 +288,8 @@ export abstract class SwarmRepos extends SwarmCore {
       this.cleanUpClosed(repo);
       this.recordSync(repo, rt.pulls);
       this.reconcilePulls(repo, rt.pulls);
+      this.rebaseConflicting(repo);
+      void this.refreshPractices(repo);
       // Something was merged since the last look (by the office or anyone else): bring the folder up to date.
       const newest = pulls.reduce<string | null>((m, p) => (p.mergedAt && (!m || p.mergedAt > m) ? p.mergedAt : m), null);
       if (newest !== rt.lastMergedAt) {

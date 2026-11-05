@@ -27,6 +27,7 @@ import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
 import { CeoMandates, FollowupSettings } from './CeoFollowups';
 import { ToolsTab } from './ToolsSettings';
+import { EveryProjectCard, FloorPractices } from './PracticesSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { OutsideSettings } from './OutsideSettings';
 import { useMode } from '../pocket/mode';
@@ -198,6 +199,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           Open the app viewer
         </button>
       </details>
+      <FloorPractices repo={repo} />
     </div>
   );
 }
@@ -768,6 +770,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
         <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
         <FollowupSettings />
       </div>
+      <EveryProjectCard />
       <div className="card">
         <h3>⌨️ How agents run</h3>
         <label className="toggle block">

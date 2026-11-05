@@ -5,6 +5,7 @@ import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, Do
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
+import type { PracticeOverrides } from '../../shared/practices';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { HealthView } from '../../shared/health';
@@ -82,6 +83,7 @@ export const api = {
       playbook?: string;
       previewCommand?: string | null;
       previewEnv?: Record<string, string>;
+      practices?: { [K in keyof PracticeOverrides]?: PracticeOverrides[K] | null }; // null: inherit Every project's again
     },
   ) => call('PATCH', r(repoId), patch),
   startPreview: (repoId: string, pr?: number) => call<PreviewView>('POST', `${r(repoId)}/preview`, pr ? { pr } : {}),
@@ -161,6 +163,8 @@ export const api = {
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   costs: (days: number, repo?: string) => call<CostsView>('GET', `/api/costs?days=${days}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`),
   defineExperiment: (input: ExperimentInput) => call<Experiment>('POST', '/api/experiments', input),
+  /** A stopped experiment's variant's practice switches become every project's default (#24). */
+  everyProject: (id: string, variant: string) => call<SwarmSettings>('POST', `/api/experiments/${encodeURIComponent(id)}/every-project`, { variant }),
   experimentAction: (id: string, action: 'start' | 'stop' | 'promote' | 'delete', variant?: string | null) => call<Experiment | null>('POST', `/api/experiments/${encodeURIComponent(id)}`, { action, variant }),
   journalEvents: (from: number, to: number, seek: boolean) => call<JournalChunk>('GET', `/api/journal/events?from=${Math.floor(from)}&to=${Math.ceil(to)}${seek ? '&seek=1' : ''}`),
   journalSample: () => call<{ day: string }>('POST', '/api/journal/sample'),

@@ -28,7 +28,7 @@ import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
+import { demoFileHistory, demoPrDiff, demoReadWorktree } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -53,6 +53,7 @@ const repos = new Map<string, FakeRepo>();
 const bareRepos = new Set<string>();
 const mergedSinceSync = new Map<string, number>(); // merges the fake project folder hasn't pulled yet
 const closedIssues = new Set<string>(); // `${fullName}#${n}`: issues closed by a merge
+const behindMain = new Map<string, number>(); // `${fullName}#${n}`: merges into main since the PR's branch last had main
 const stalls = new Map<string, () => void>(); // agent id -> silences their running fake session (the office doctor's demo)
 const signOuts = new Map<string, { boxId: string; end: () => void }>(); // agent id -> ends their cloud session as an expired sign-in would
 
@@ -117,8 +118,8 @@ function seed(fullName: string, description: string, titles: [string, string][])
 }
 
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage.'],
-  ['Todos should support due dates', 'Add an optional due date and highlight overdue items.'],
+  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.'],
+  ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.'],
@@ -441,6 +442,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     if (kind === 'fix') {
       const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
       if (pr && pushes) {
+        behindMain.delete(`${fullName}#${number}`); // a fix merges main in
         pr.headSha = fakeSha();
         pr.mergeState = 'CLEAN';
         pr.mergeable = 'MERGEABLE';
@@ -749,6 +751,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       if (headSha && pr.headSha !== headSha) throw new Error('Head branch was modified. Review and try the merge again.');
       mergedSinceSync.set(fullName, (mergedSinceSync.get(fullName) ?? 0) + 1);
       pr.state = 'MERGED';
+      for (const other of r.pulls) if (other.state === 'OPEN') behindMain.set(`${fullName}#${other.number}`, (behindMain.get(`${fullName}#${other.number}`) ?? 0) + 1);
       // Now and then a merge leaves another open PR conflicting, so conflict fixes (before QA and after it) can be seen.
       for (const other of r.pulls) if (other.state === 'OPEN' && Math.random() < 0.25) Object.assign(other, { mergeable: 'CONFLICTING', mergeState: 'DIRTY' });
       pr.mergedAt = now();
@@ -767,9 +770,16 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     updateBranch: async (fullName, number) => {
       const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
       if (!pr) throw new Error('Unknown PR');
+      if (pr.mergeable === 'CONFLICTING') throw new Error('merge conflict between base and head');
+      behindMain.delete(`${fullName}#${number}`);
       Object.assign(pr, { headSha: fakeSha(), mergeState: 'CLEAN' });
       runChecks(pr, false);
     },
+    behindBy: async (fullName, _base, headSha) => {
+      const pr = repos.get(fullName)?.pulls.find((p) => p.headSha === headSha);
+      return pr ? (behindMain.get(`${fullName}#${pr.number}`) ?? 0) : 0;
+    },
+    fileHistory: async () => demoFileHistory(),
     failedRunLog: async (_fullName, runId) =>
       [
         `build\tRun npm test\t2025-01-01T00:00:00Z > vitest run (run ${runId})`,

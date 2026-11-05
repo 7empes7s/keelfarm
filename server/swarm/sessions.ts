@@ -16,6 +16,8 @@ import { sessionStart } from '../reconcile.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
 import { sessionKind } from '../health.ts';
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from '../prompts.ts';
+import { leaseTools } from '../leaseTool.ts';
+import { normPath, overlap, practiceLines, qaPracticeLines } from '../../shared/practices.ts';
 import { recordCost } from '../metrics.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
@@ -85,7 +87,36 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   protected buildSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, fixing?: { pr: number; headRef: string }, deps?: DepsOutcome) {
-    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps) });
+    return devSystemPrompt({ agent: a, repo: this.promptFloor(repo), port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps) });
+  }
+
+  /** A floor as prompts read it: with Every project's playbook snippet (#24). */
+  protected promptFloor(repo: PersistedRepo) {
+    return { ...repo, everyPlaybook: this.state.settings.everyProject.playbook };
+  }
+
+  /**
+   * What a session's practice switches add to its instructions (#24): the file rules and diff budget, and for a
+   * builder or fixer with leases on who can call it (Claude Code on this computer), the declare_files step. '' with
+   * every switch off.
+   */
+  protected practicePrompt(a: PersistedAgent, repo: PersistedRepo, cli: AgentCli | undefined, issue = a.issueNumber ?? this.prRecord(a)?.issueNumber) {
+    const p = this.practicesOf(repo, issue, a.prNumber);
+    const declares = p.leases && a.task !== 'qa' && (cli ?? 'claude') === 'claude' && a.host !== 'box' && issue != null;
+    const lines = a.task === 'qa' ? qaPracticeLines(p) : practiceLines(p, { base: repo.defaultBranch, declareTool: declares });
+    return { text: lines.join('\n'), office: declares ? leaseTools((files) => this.declareFiles(a, repo, files)) : undefined };
+  }
+
+  /** declare_files: the agent's lease for their current task, and who else is on those files already. */
+  protected declareFiles(a: PersistedAgent, repo: PersistedRepo, files: string[]) {
+    if (a.issueNumber == null || !this.state.agents.includes(a)) throw new Error('You have no issue to declare files for.');
+    a.declared = [...new Set(files.map(normPath).filter((f) => f && !f.split('/').includes('..')))].slice(0, 30);
+    this.save();
+    this.emitRepo(repo);
+    const others = this.leasesOf(repo).filter((l) => l.issue !== a.issueNumber);
+    const clash = others.map((l) => ({ l, files: overlap(a.declared!, l.files) })).filter((x) => x.files.length);
+    const note = clash.map((x) => `#${x.l.issue}${x.l.pr ? ` (PR #${x.l.pr})` : ''} also touches ${x.files.slice(0, 5).join(', ')}`).join('; ');
+    return `Declared ${a.declared.length} path${a.declared.length === 1 ? '' : 's'}.${note ? ` Heads-up: ${note}. Keep your changes there small, and merge origin/${repo.defaultBranch} before you push.` : ''}`;
   }
 
   /** The floor's linked repos where the agent reads them: the floor checkouts here, or their copies in a cloud agent's Box. */
@@ -98,7 +129,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     const a = this.agent(id);
     if (a.role === 'ceo') return ceoPromptPreview(ceoSystemPrompt(this.ceoPromptInput(a)));
     const repo = this.repo(a.repoId);
-    return agentPromptPreview({ agent: a, repo, port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a) });
+    const view = agentPromptPreview({ agent: a, repo: this.promptFloor(repo), port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a) });
+    // The floor's practice switches (#24), as a session on it gets them (an experiment's variant can change them per issue).
+    const p = this.practicesOf(repo);
+    const dev = practiceLines(p, { base: repo.defaultBranch, declareTool: true }).join('\n');
+    const qa = qaPracticeLines(p).join('\n');
+    return { ...view, parts: view.parts.map((x, i) => ((i === 1 ? qa : dev) ? { ...x, text: `${x.text}\n\n${i === 1 ? qa : dev}` } : x)) };
   }
 
   protected beginTask(a: PersistedAgent, patch: Partial<PersistedAgent>, banner: string, preparing: string) {
@@ -110,6 +146,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       endedAt: null,
       costUsd: 0,
       turns: 0,
+      declared: null, // a lease is per task
       lastError: null,
       ...patch,
     });
@@ -326,6 +363,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     const how = this.sessionRuntime(a, resumeSessionId);
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
+    const practice = this.practicePrompt(a, repo, how.cli);
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
     const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag });
     this.emitAgent(a);
@@ -336,7 +374,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       {
         cwd,
         prompt,
-        systemAppend: lab.prompt ? `${systemAppend}\n\n${lab.prompt}` : systemAppend,
+        systemAppend: [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n'),
         model: run.model,
         effort: run.effort,
         browserTesting: repo.browserTesting,
@@ -352,6 +390,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         typed: mode === 'typed',
         reattach: mode === 'reattach',
         agentId: a.id,
+        ...(practice.office ? { office: practice.office } : {}),
         tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
         ...how,
       },

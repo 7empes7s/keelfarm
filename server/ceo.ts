@@ -6,6 +6,7 @@ import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
 import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
+import type { PracticeOverrides } from '../shared/practices.ts';
 import { HttpError } from './httpError.ts';
 import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
@@ -175,7 +176,7 @@ export interface ExperimentToolInput {
   hypothesis: string;
   floors?: number[];
   kinds?: TaskKind[];
-  variants: { name: string; prompt?: string; qa_lens?: string; effort?: EffortLevel; model?: string; qa_cli?: AgentCli; tools_off?: string[] }[];
+  variants: { name: string; prompt?: string; qa_lens?: string; effort?: EffortLevel; model?: string; qa_cli?: AgentCli; tools_off?: string[]; practices?: PracticeOverrides }[];
   min_sample?: number;
 }
 
@@ -194,7 +195,7 @@ export function experimentInput(a: ExperimentToolInput, floorId: (floor: number)
     floors,
     kinds: a.kinds ?? [],
     minSample: a.min_sample,
-    variants: a.variants.map((v) => ({ name: v.name, settings: { prompt: v.prompt, qaLens: v.qa_lens, effort: each(v.effort), model: each(v.model), qaCli: v.qa_cli, toolsOff: v.tools_off } })),
+    variants: a.variants.map((v) => ({ name: v.name, settings: { prompt: v.prompt, qaLens: v.qa_lens, effort: each(v.effort), model: each(v.model), qaCli: v.qa_cli, toolsOff: v.tools_off, practices: v.practices } })),
   };
 }
 
@@ -391,6 +392,17 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
               model: z.string().max(80).optional().describe('Model for the Claude Code sessions it changes'),
               qa_cli: CLI.optional().describe('QA by a free agent on this coding agent when there is one (cross-model QA)'),
               tools_off: TOOL_REFS.describe('Tools & skills switched off'),
+              practices: z
+                .object({
+                  upToDate: z.boolean().optional().describe('Bring PRs up to date with the base and wait for CI on that before merging'),
+                  leases: z.boolean().optional().describe('Hold back issues whose files overlap work in flight'),
+                  autoRebase: z.boolean().optional().describe('Send conflicting PRs to a developer to update before QA'),
+                  generated: z.array(z.string().max(200)).max(30).optional().describe('Files to regenerate instead of hand-merging'),
+                  appendOnly: z.array(z.string().max(200)).max(30).optional().describe('Append-only logs: keep both sides on a conflict'),
+                  diffBudget: z.number().int().min(0).max(100_000).optional().describe('Soft PR size budget in lines; 0 for none'),
+                })
+                .optional()
+                .describe('Version-control practice switches for its issues and their PRs'),
             }),
           )
           .min(2)

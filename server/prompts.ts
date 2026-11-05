@@ -19,6 +19,8 @@ export interface PromptFloor {
   qaBrief: string;
   /** The floor's architecture map, conventions, skills and traps (markdown); '' adds nothing. */
   playbook: string;
+  /** Settings → Every project's playbook snippet (#24), before the floor's own; '' or absent adds nothing. */
+  everyPlaybook?: string;
 }
 
 interface PromptBase {
@@ -62,7 +64,10 @@ const BLOCKED_LINE = 'If truly stuck (e.g. no credentials), end with "BLOCKED: <
 export const ONE_TURN = "Your session ends when your turn ends: background tasks and notifications won't wake you. Never end a turn to wait. Wait in the foreground with a timeout, then finish.";
 
 /** The floor's playbook as a prompt section, after the QA brief; nothing when it's empty. */
-const playbookLines = (repo: PromptFloor) => (repo.playbook ? [`This floor's playbook (follow it):\n${repo.playbook}`] : []);
+const playbookLines = (repo: PromptFloor) => [
+  ...(repo.everyPlaybook ? [`Every project's playbook (follow it):\n${repo.everyPlaybook}`] : []),
+  ...(repo.playbook ? [`This floor's playbook (follow it):\n${repo.playbook}`] : []),
+];
 
 /** What a builder or fixer reviews their diff against: the floor's guidance that's set. */
 const reviewAgainst = (repo: PromptFloor) => ['the issue', repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
