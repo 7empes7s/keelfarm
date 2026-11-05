@@ -4,8 +4,10 @@
 // demand. The aggregation below is pure.
 import fs from 'node:fs/promises';
 import { dayKey } from '../shared/journal.ts';
+import type { EffortLevel, PullInfo } from '../shared/types.ts';
 import {
   isTaskKind,
+  sessionOutcome,
   wasteReason,
   type CostDayRow,
   type CostFloorRow,
@@ -17,8 +19,11 @@ import {
   type CostsView,
   type CostSplit,
   type CostWaste,
+  type SessionOutcome,
+  type TaskKind,
 } from '../shared/costs.ts';
 import { DAY_MS, startOfDay } from './metrics.ts';
+import { HttpError } from './httpError.ts';
 
 const KEEP_DAYS = 30;
 const TOP = 10;
@@ -134,6 +139,14 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
   return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds };
 }
 
+/** GET /api/costs' query: `days` from 1 to 30 (7 when unset), `repoId` a floor (`isFloor`) or unset for all of them. */
+export function costsRequest(records: CostRecord[], days: unknown, repoId: unknown, isFloor: (id: string) => boolean): CostsView {
+  const n = Math.max(1, Math.min(30, Math.round(Number(days)) || 7));
+  const floor = typeof repoId === 'string' && repoId ? repoId : undefined;
+  if ((floor === undefined && repoId !== undefined && repoId !== '') || (floor !== undefined && !isFloor(floor))) throw new HttpError(404, 'No such floor');
+  return costsView(records, { now: Date.now(), days: n, repoId: floor });
+}
+
 /** company_status's spend numbers for one floor: today's cost and waste, and cost per merged PR over 7 days. */
 export function floorSpend(records: CostRecord[], repoId: string, now: number) {
   const today = costsView(records, { now, days: 1, repoId }).total;
@@ -217,4 +230,124 @@ export class CostLedger {
     this.writing = this.writing.then(write).catch((err) => console.warn('could not write the cost ledger', err));
     return this.writing;
   }
+}
+
+// ---------- the office's side ----------
+
+/** A session as the ledger records it: what it was for and how it ran. */
+export interface CostRun {
+  kind: TaskKind;
+  effort: EffortLevel;
+  model: string;
+  startedAt: number;
+  round: number | null;
+}
+
+/** The agent fields a session's line is made from. */
+interface RunAgent {
+  id: string;
+  name: string;
+  model: string;
+  effort: EffortLevel | '';
+  issueNumber: number | null;
+  prNumber: number | null;
+  startedAt: number | null;
+}
+
+/**
+ * Swarm's bookkeeping for the ledger: the session each agent runs now, what its task's handler made of the one that
+ * just ended, the sessions the watchdog stopped, and the changes the CEO made in its current job.
+ */
+export class SessionCosts {
+  private runs = new Map<string, CostRun>();
+  private outcomes = new Map<string, SessionOutcome>();
+  private watchdogStops = new Set<string>();
+  /** Changes the CEO made in the current job (team changes, triage actions…); issues filed are counted apart. */
+  ceoActs = 0;
+
+  constructor(
+    readonly ledger: CostLedger,
+    private limited: () => boolean,
+  ) {}
+
+  start(agentId: string, run: CostRun) {
+    this.runs.set(agentId, run);
+    return run;
+  }
+
+  /** The agent's running session, forgotten: read before its task's handler can start the next one. Clears any
+   *  outcome left from an earlier session, so only what the handler sets now counts. */
+  take(agentId: string): CostRun | null {
+    const run = this.runs.get(agentId) ?? null;
+    this.runs.delete(agentId);
+    this.outcomes.delete(agentId);
+    return run;
+  }
+
+  /** What the task's handler made of the session that just ended. */
+  outcome(agentId: string, o: SessionOutcome) {
+    this.outcomes.set(agentId, o);
+  }
+
+  watchdogStopped(agentId: string) {
+    this.watchdogStops.add(agentId);
+  }
+
+  /** A CEO tool that changes something: a review that used none changed nothing (the waste list). */
+  acts =
+    <A, R>(fn: (a: A) => R) =>
+    (a: A): R => {
+      const r = fn(a);
+      if (r instanceof Promise) void r.then(() => this.ceoActs++, () => undefined);
+      else this.ceoActs++;
+      return r;
+    };
+
+  /** A finished session into the ledger, its outcome from the handler's hint (or the CEO's), the watchdog and the result. */
+  record(a: RunAgent, repoId: string, run: CostRun | null, fallbackKind: TaskKind, result: { costUsd: number; ok: boolean; interrupted?: boolean }, how: { stopped: boolean; ceoHint?: SessionOutcome }) {
+    const hint = how.ceoHint ?? this.outcomes.get(a.id) ?? null;
+    this.outcomes.delete(a.id);
+    const watchdog = this.watchdogStops.delete(a.id);
+    const now = Date.now();
+    return this.ledger.session({
+      at: now,
+      ms: Math.max(0, now - (run?.startedAt ?? a.startedAt ?? now)),
+      repoId,
+      agentId: a.id,
+      agent: a.name,
+      kind: run?.kind ?? fallbackKind,
+      issue: a.issueNumber,
+      pr: a.prNumber,
+      round: run?.round ?? null,
+      model: run?.model ?? a.model,
+      effort: run?.effort ?? a.effort,
+      usd: result.costUsd,
+      tokens: null,
+      outcome: sessionOutcome({ interrupted: !!result.interrupted, watchdog, stopped: how.stopped, limited: this.limited(), ok: result.ok, hint }),
+    });
+  }
+}
+
+/** What an agent's task is, for the ledger and the effort defaults per kind; a fix by why its PR went back. */
+export const taskKindOf = (task: 'issue' | 'qa' | 'fix' | null, fixReason: 'qa' | 'checks' | 'conflict' | null | undefined): TaskKind =>
+  task === 'qa' ? 'qa' : task === 'fix' ? `fix-${fixReason ?? 'qa'}` : 'issue';
+
+/** The merged PRs in a floor's sync, for the ledger. */
+export const mergedPulls = (repoId: string, pulls: PullInfo[], now: number): Omit<CostMerge, 'type'>[] =>
+  pulls.flatMap((p) => {
+    const at = p.state === 'MERGED' && p.mergedAt ? Date.parse(p.mergedAt) : NaN;
+    return Number.isFinite(at) ? [{ at: Math.min(at, now), repoId, pr: p.number, issues: p.closesIssues }] : [];
+  });
+
+/** Settings → effort per kind of task: a patch of kind → effort, '' (or null) putting a kind back on the default. */
+export function taskEfforts(now: Partial<Record<TaskKind, EffortLevel>>, patch: unknown, efforts: EffortLevel[]): Partial<Record<TaskKind, EffortLevel>> {
+  if (!patch || typeof patch !== 'object') throw new HttpError(400, 'taskEffort must be an object of task kind → effort');
+  const out = { ...now };
+  for (const [k, v] of Object.entries(patch)) {
+    if (!isTaskKind(k)) throw new HttpError(400, `Unknown task kind "${k}"`);
+    if (v === '' || v === null) delete out[k];
+    else if (efforts.includes(v as EffortLevel)) out[k] = v as EffortLevel;
+    else throw new HttpError(400, `"${String(v)}" is not an effort: use ${efforts.join(', ')} or "" for the default`);
+  }
+  return out;
 }

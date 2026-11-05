@@ -7,6 +7,8 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { readPicks } from './picks.ts';
+import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
@@ -18,8 +20,8 @@ import { telegramHttp, type TelegramApi } from './telegramBot.ts';
 import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
 import type { OpsHistory } from './metrics.ts';
-import type { SampleFloor } from './costSample.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -47,6 +49,10 @@ export interface Backend {
   closePull(fullName: string, number: number): Promise<void>;
   prForBranch(fullName: string, branch: string): Promise<{ number: number; url: string } | null>;
   prDetails(fullName: string, number: number): Promise<github.PrDetails>;
+  /** The CEO's pr_diff: changed files, and the diff itself when `patch`. */
+  prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
+  /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
+  readWorktree(r: WorktreeRead): Promise<string>;
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
@@ -91,6 +97,8 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
+  quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
@@ -110,7 +118,7 @@ export interface Backend {
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
-  seedCosts?(floors: SampleFloor[], ceo: { id: string; name: string }, now: number): CostRecord[];
+  seedCosts?(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */
@@ -183,6 +191,8 @@ export const realBackend: Backend = {
   closePull: github.closePull,
   prForBranch: github.prForBranch,
   prDetails: github.prDetails,
+  prDiff: github.prDiff,
+  readWorktree,
   issueDetails: github.issueDetails,
   commentPull: github.commentPull,
   uploadEvidence: github.uploadEvidence,
@@ -209,6 +219,7 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
   previews: realPreviews,
   office: realOffice,

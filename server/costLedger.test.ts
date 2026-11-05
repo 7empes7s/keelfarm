@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { effortHint, resolveEffort, sessionOutcome, wasteReason, type CostMerge, type CostRecord, type CostSession } from '../shared/costs.ts';
-import { CostLedger, costsView, floorSpend, parseLedger, pruneLedger } from './costLedger.ts';
+import { CostLedger, costsRequest, costsView, floorSpend, parseLedger, pruneLedger, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
 import { sampleCosts } from './costSample.ts';
 import { DAY_MS, HOUR_MS, startOfDay } from './metrics.ts';
 import { seeded } from './journalSample.ts';
@@ -223,5 +223,60 @@ describe('effortHint', () => {
     const row = { kind: 'qa' as const, sessions: 4, avg: 1, byEffort: [{ effort: 'low' as const, sessions: 1, avg: 0.4 }, { effort: '' as const, sessions: 3, avg: 0.84 }] };
     expect(effortHint('qa', row, 'medium')).toBe('QA averaged $0.84 at medium (3), $0.40 at low (1) over the last 30 days.');
     expect(effortHint('qa', undefined, 'medium')).toBeNull();
+  });
+});
+
+describe('SessionCosts', () => {
+  const agent = { id: 'a1', name: 'Ada', model: '', effort: '' as const, issueNumber: 7, prNumber: 42, startedAt: 0 };
+  const ok = { costUsd: 1, ok: true };
+  const recorder = () => {
+    const lines: Omit<CostSession, 'type'>[] = [];
+    const spend = new SessionCosts({ session: (s: Omit<CostSession, 'type'>) => void lines.push(s) } as unknown as CostLedger, () => false);
+    return { spend, lines };
+  };
+
+  it('records the handler’s outcome for the run taken before it ran, never a stale one', () => {
+    const { spend, lines } = recorder();
+    spend.start('a1', { kind: 'fix-checks', effort: 'high', model: 'm', startedAt: Date.now(), round: null });
+    spend.outcome('a1', 'no-commit'); // left over from an earlier session
+    const run = spend.take('a1');
+    spend.outcome('a1', 'commit');
+    void spend.record(agent, 'acme/shop', run, 'issue', ok, { stopped: false });
+    void spend.record(agent, 'acme/shop', spend.take('a1'), 'issue', ok, { stopped: false });
+    expect(lines.map((l) => [l.kind, l.effort, l.outcome])).toEqual([
+      ['fix-checks', 'high', 'commit'],
+      ['issue', '', 'done'],
+    ]);
+  });
+
+  it('marks the session the watchdog stopped, and counts the CEO’s acts once a promise settles', async () => {
+    const { spend, lines } = recorder();
+    spend.watchdogStopped('a1');
+    void spend.record(agent, 'acme/shop', null, 'issue', { costUsd: 1, ok: false }, { stopped: false });
+    expect(lines[0].outcome).toBe('watchdog');
+    const sync = spend.acts((n: number) => n + 1);
+    const later = spend.acts(async () => 'ok');
+    expect(sync(1)).toBe(2);
+    await later(undefined);
+    expect(spend.ceoActs).toBe(2);
+  });
+});
+
+describe('the office’s cost helpers', () => {
+  it('names a task’s kind, a fix by why its PR went back', () => {
+    expect([taskKindOf('qa', 'checks'), taskKindOf('fix', 'conflict'), taskKindOf('fix', null), taskKindOf('issue', null)]).toEqual(['qa', 'fix-conflict', 'fix-qa', 'issue']);
+  });
+
+  it('patches effort per kind, and refuses unknown kinds and efforts', () => {
+    const efforts = ['low', 'high'] as const;
+    expect(taskEfforts({ qa: 'low' }, { qa: '', issue: 'high' }, [...efforts])).toEqual({ issue: 'high' });
+    expect(() => taskEfforts({}, { nope: 'low' }, [...efforts])).toThrow('Unknown task kind');
+    expect(() => taskEfforts({}, { qa: 'max' }, [...efforts])).toThrow('is not an effort');
+  });
+
+  it('reads /api/costs’ query: days clamped, unknown floors refused', () => {
+    expect(costsRequest([], '90', undefined, () => true).days).toBe(30);
+    expect(costsRequest([], 'x', '', () => true).days).toBe(7);
+    expect(() => costsRequest([], 7, 'acme/nope', () => false)).toThrow('No such floor');
   });
 });

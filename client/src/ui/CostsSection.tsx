@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { effortHint, isCeoKind, TASK_KIND_LABELS, TASK_KINDS, type CostsView, type CostSplit, type TaskKind } from '../../../shared/costs';
 import type { EffortLevel, RepoView } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
+import './costs.css';
 
 // Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). Cost per
 // merged PR per floor and per day, split by task kind; the most expensive issues; and the waste list, each row linking

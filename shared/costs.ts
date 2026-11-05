@@ -3,9 +3,9 @@
 import type { EffortLevel } from './types.ts';
 
 /** What a session was for. Fixes are split by why the PR went back; the CEO's by its job. */
-export type TaskKind = 'issue' | 'qa' | 'fix-qa' | 'fix-checks' | 'fix-conflict' | 'ceo-chat' | 'ceo-review' | 'ceo-plan' | 'ceo-onboard' | 'ceo-triage';
+export type TaskKind = 'issue' | 'qa' | 'fix-qa' | 'fix-checks' | 'fix-conflict' | 'ceo-chat' | 'ceo-review' | 'ceo-plan' | 'ceo-onboard' | 'ceo-triage' | 'ceo-followup';
 
-export const TASK_KINDS: TaskKind[] = ['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict', 'ceo-chat', 'ceo-review', 'ceo-plan', 'ceo-onboard', 'ceo-triage'];
+export const TASK_KINDS: TaskKind[] = ['issue', 'qa', 'fix-qa', 'fix-checks', 'fix-conflict', 'ceo-chat', 'ceo-review', 'ceo-plan', 'ceo-onboard', 'ceo-triage', 'ceo-followup'];
 
 export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   issue: 'Building an issue',
@@ -18,6 +18,7 @@ export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   'ceo-plan': 'CEO planning',
   'ceo-onboard': 'CEO onboarding',
   'ceo-triage': 'CEO triage',
+  'ceo-followup': 'CEO follow-up',
 };
 
 export const isTaskKind = (x: unknown): x is TaskKind => TASK_KINDS.includes(x as TaskKind);

@@ -6,7 +6,10 @@ import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
 import type { TaskKind } from './costs.ts';
+import type { FileRef, FileView } from './files.ts';
+import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
+import type { CeoMandate, FollowupSettings } from './followups.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -359,6 +362,8 @@ export interface SwarmSettings {
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once
   maxAgents: number; // most agents on a floor: 1 to FLOOR_SEATS (DEFAULT_MAX_AGENTS)
   ceoHeartbeatMin: number; // minutes between the CEO's periodic reviews; 0 = off
+  ceoFollowups: FollowupSettings; // Settings → The CEO: which office events wake the CEO for a follow-up (shared/followups.ts)
+  ceoMandates: CeoMandate[]; // the manager's standing mandates: follow-ups may file issues on the floors they cover
   managerName: string; // what the office calls you
   companyName: string;
   dogName: string; // the office dog's name, on its tag and in the hint when you aim at it
@@ -646,6 +651,8 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+  attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
+  used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -656,13 +663,14 @@ export interface ChatArtifact {
   markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
-export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
+export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup';
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO
   job: { kind: CeoJobKind; label: string } | null; // what the CEO is doing now
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
+  followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */
@@ -708,6 +716,7 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
 }
 
@@ -741,6 +750,8 @@ export type ServerEvent =
   | { type: 'message'; message: PhoneMessage }
   /** The manager's messages moved on: the CEO read them, or replied. */
   | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
+  /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
+  | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }

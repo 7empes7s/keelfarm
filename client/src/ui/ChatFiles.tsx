@@ -1,0 +1,350 @@
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { api } from '../api';
+import { useStore } from '../store';
+import { ACCEPT, daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
+import { matchPicks, pickText, usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
+import { Sheet } from './ChatArtifacts';
+import type { Pending } from './chatUpload';
+
+// Files in the CEO chat (shared/files.ts): cards in the bubbles (a thumbnail for images, a chip for the rest), the
+// full-size viewer, the tray of files being attached, the Files list, "Used" under a CEO reply and the "/" picks.
+
+const ICONS: Record<FileKind, string> = { image: '🖼', video: '🎬', pdf: '📕', document: '📝', slides: '📊', sheet: '📈', text: '📄', archive: '🗜' };
+const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => ICONS[fileKind(f.name, f.type) ?? 'text'];
+const url = (id: string, download = false) => `/api/files/${id}${download ? '?download' : ''}`;
+/** Images the browser can draw (HEIC is kept as it is and shown as a chip). */
+const drawable = (type: string) => type.startsWith('image/') && inlineType(type) && !/hei[cf]/.test(type);
+
+async function share(f: FileRef) {
+  try {
+    const blob = await (await fetch(url(f.id))).blob();
+    const file = new File([blob], f.name, { type: f.type });
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ title: f.name, files: [file] });
+    else await navigator.share({ title: f.name, url: new URL(url(f.id), location.href).href });
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') useStore.getState().pushToast('error', "Couldn't share that file");
+  }
+}
+const canShare = () => typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+function KeepButton({ f }: { f: FileView }) {
+  return (
+    <button
+      type="button"
+      className={`btn btn-small ${f.keep ? 'btn-good' : ''}`}
+      aria-pressed={f.keep}
+      title={f.keep ? 'Kept: never deleted. Tap to let it go after its 30 days.' : `Deleted in ${daysLeft(f, Date.now())} days unless kept`}
+      onClick={() => void api.keepFile(f.id, !f.keep)}
+    >
+      📌 {f.keep ? 'Kept' : 'Keep'}
+    </button>
+  );
+}
+
+/** A file in a bubble; "expired" once the store no longer has it. */
+export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string) => void }) {
+  const f = useStore((s) => s.files.find((x) => x.id === file.id));
+  if (!f)
+    return (
+      <div className="file-card file-gone" aria-label={`${file.name}: expired`}>
+        <span aria-hidden>{fileIcon(file)}</span> <span className="grow file-name">{file.name}</span> <span className="small">expired</span>
+      </div>
+    );
+  if (drawable(f.type))
+    return (
+      <button type="button" className="file-thumb" onClick={() => onOpen(f.id)} aria-label={`${f.name}, ${formatSize(f.size)}: show full size`}>
+        <img src={url(f.id)} alt={f.name} loading="lazy" />
+      </button>
+    );
+  const k = fileKind(f.name, f.type);
+  const preview = k === 'pdf' || k === 'video' || drawable(f.type);
+  return (
+    <div className="file-card">
+      <span className="file-icon" aria-hidden>
+        {fileIcon(f)}
+      </span>
+      <span className="grow file-body">
+        <b className="file-name">{f.name}</b>
+        <span className="small muted">
+          {formatSize(f.size)}
+          {f.keep ? ' · 📌 kept' : ''}
+        </span>
+      </span>
+      {preview && (
+        <button type="button" className="btn btn-small" onClick={() => onOpen(f.id)} aria-label={`Preview ${f.name}`}>
+          👁
+        </button>
+      )}
+      <a className="btn btn-small" href={url(f.id, true)} download={f.name} aria-label={`Download ${f.name}`}>
+        ⬇
+      </a>
+      {!preview && (
+        <button type="button" className="btn btn-small" onClick={() => onOpen(f.id)} aria-label={`More about ${f.name}`}>
+          ⋯
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One file full size (images, PDFs, video) or its details, with Download, Share and Keep. */
+export function FileViewer({ id, onClose }: { id: string; onClose: () => void }) {
+  const f = useStore((s) => s.files.find((x) => x.id === id));
+  useEffect(() => {
+    if (!f) onClose();
+  }, [f, onClose]);
+  if (!f) return null;
+  const k = fileKind(f.name, f.type);
+  const left = daysLeft(f, Date.now());
+  return (
+    <Sheet label={`${fileIcon(f)} ${f.name}`} onClose={onClose} className="file-viewer">
+      <div className="artifact-body file-view-body">
+        {drawable(f.type) ? (
+          <img src={url(f.id)} alt={f.name} className="file-full" />
+        ) : k === 'pdf' ? (
+          <iframe src={url(f.id)} title={f.name} className="file-full file-pdf" />
+        ) : k === 'video' ? (
+          <video src={url(f.id)} controls playsInline className="file-full" />
+        ) : (
+          <p className="muted">No preview for this kind of file: download it to open it.</p>
+        )}
+        <p className="small muted">
+          {formatSize(f.size)} · from {f.from === 'manager' ? 'you' : f.from === 'ceo' ? 'the CEO' : 'an agent'} · {f.keep ? `kept${f.keepReason ? ` (${f.keepReason})` : ''}` : left ? `deletes in ${left} day${left === 1 ? '' : 's'}` : 'deletes today'}
+        </p>
+      </div>
+      <div className="artifact-actions">
+        <a className="btn btn-small btn-good" href={url(f.id, true)} download={f.name}>
+          ⬇ Download
+        </a>
+        {canShare() && (
+          <button type="button" className="btn btn-small" onClick={() => void share(f)}>
+            📤 Share
+          </button>
+        )}
+        <KeepButton f={f} />
+      </div>
+    </Sheet>
+  );
+}
+
+const ago = (at: number, now: number) => {
+  const d = Math.floor((now - at) / (24 * 3600_000));
+  if (d >= 1) return `${d} day${d === 1 ? '' : 's'} ago`;
+  const h = Math.floor((now - at) / 3600_000);
+  return h >= 1 ? `${h} h ago` : 'just now';
+};
+
+/** Every file in the store: size, age, kept or "deletes in N days", Keep and Delete now, and the total used. */
+export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; onClose: () => void }) {
+  const files = useStore((s) => s.files);
+  const [sure, setSure] = useState<string | null>(null);
+  const now = Date.now();
+  const total = files.reduce((n, f) => n + f.size, 0);
+  return (
+    <Sheet label={`Files (${files.length})`} onClose={onClose} className="files-list">
+      <div className="artifact-body">
+        <p className="small muted">
+          {formatSize(total)} on the office server. Files are deleted 30 days after upload unless kept (📌).
+        </p>
+        {files.length === 0 ? (
+          <p className="muted">No files yet. Attach one with 📎, or ask the CEO for a document.</p>
+        ) : (
+          <ul className="files-items">
+            {files.map((f) => {
+              const left = daysLeft(f, now);
+              return (
+                <li key={f.id} className="files-item">
+                  <button type="button" className="files-open" onClick={() => onOpen(f.id)}>
+                    <span aria-hidden>{fileIcon(f)}</span> <b className="file-name">{f.name}</b>
+                  </button>
+                  <span className="small muted">
+                    {formatSize(f.size)} · {ago(f.at, now)} · {f.keep ? '📌 kept' : left ? `deletes in ${left} day${left === 1 ? '' : 's'}` : 'deletes today'}
+                  </span>
+                  <span className="files-actions">
+                    <KeepButton f={f} />
+                    {sure === f.id ? (
+                      <button type="button" className="btn btn-small btn-bad" onClick={() => void api.deleteFile(f.id).finally(() => setSure(null))}>
+                        Delete for good?
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-small" onClick={() => setSure(f.id)}>
+                        🗑 Delete now
+                      </button>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** The files waiting to go with the message: thumbnails or chips, progress, ✕ to cancel or remove. */
+export function AttachTray({ pending, onRemove }: { pending: readonly Pending[]; onRemove: (key: number) => void }) {
+  if (!pending.length) return null;
+  return (
+    <ul className="attach-tray" aria-label="Files to send">
+      {pending.map((p) => (
+        <li key={p.key} className={`attach-item ${p.error ? 'attach-failed' : ''}`} title={p.error ?? p.name}>
+          {p.preview ? <img src={p.preview} alt="" className="attach-thumb" /> : <span aria-hidden>{fileIcon(p)}</span>}
+          <span className="attach-name">{p.name}</span>
+          {p.error ? (
+            <span className="small attach-error">⚠ {p.error}</span>
+          ) : !p.ref ? (
+            <progress className="attach-progress" max={1} value={p.progress} aria-label={`Uploading ${p.name}`} />
+          ) : (
+            <span className="small muted">{formatSize(p.size)}</span>
+          )}
+          <button type="button" className="chat-reply-x" aria-label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)}>
+            ✕
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** "Used: 2 skills · Gmail · 5 tools" under a CEO reply, opening to the list. */
+export function UsedLine({ used }: { used: UsedView }) {
+  return (
+    <details className="used">
+      <summary>{usedLine(used)}</summary>
+      <ul>
+        {used.skills.map((s) => (
+          <li key={`s-${s}`}>✨ {s} skill</li>
+        ))}
+        {used.connectors.map((c) => (
+          <li key={`c-${c.name}`}>
+            🔌 {c.name} · {c.tools} call{c.tools === 1 ? '' : 's'}
+          </li>
+        ))}
+        {used.tools.map((t) => (
+          <li key={`t-${t.name}`}>
+            🛠 {t.name} × {t.count}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** 📎 (the file picker; on a phone, also the photo library) and, on touch screens, 📷 (the camera). */
+export function AttachButtons({ onFiles }: { onFiles: (files: File[]) => void }) {
+  const picker = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const [touch] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+  const take = (el: HTMLInputElement) => {
+    if (el.files?.length) onFiles([...el.files]);
+    el.value = '';
+  };
+  return (
+    <>
+      <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => take(e.currentTarget)} />
+      <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => take(e.currentTarget)} />
+      <button type="button" className="chat-attach" aria-label="Attach files" title="Attach files (or paste, or drop them here)" onClick={() => picker.current?.click()}>
+        📎
+      </button>
+      {touch && (
+        <button type="button" className="chat-attach" aria-label="Take a photo or video" title="Camera" onClick={() => camera.current?.click()}>
+          📷
+        </button>
+      )}
+    </>
+  );
+}
+
+/** Files dropped anywhere on the chat; `dragging` while some are held over it. */
+export function useDropZone(onFiles: (files: File[]) => void) {
+  const [dragging, setDragging] = useState(false);
+  const props = {
+    onDragOver: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: (e: DragEvent) => e.currentTarget === e.target && setDragging(false),
+    onDrop: (e: DragEvent) => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault();
+      setDragging(false);
+      onFiles([...e.dataTransfer.files]);
+    },
+  };
+  return { dragging, props };
+}
+
+/** The "/" picks for the message box: the list to show (or null) and its keys (arrows move, Enter or Tab pick). */
+export function useSlash(text: string, setText: (t: string) => void, focus: () => void) {
+  const [at, setAt] = useState(0);
+  const m = /^\/(\S*)$/.exec(text);
+  const pick = (t: string | null) => {
+    if (t) setText(t);
+    setAt(0);
+  };
+  const picks: ReactNode = m ? (
+    <SlashPicks
+      query={m[1]}
+      active={at}
+      onPick={(t) => {
+        pick(t);
+        focus();
+      }}
+    />
+  ) : null;
+  /** True when the key was the list's. */
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!m) return false;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setAt((n) => Math.max(0, n + (e.key === 'ArrowDown' ? 1 : -1)));
+      return true;
+    }
+    if (e.key !== 'Tab' && (e.key !== 'Enter' || e.shiftKey)) return false;
+    e.preventDefault();
+    void slashPick(m[1], at).then(pick);
+    return true;
+  };
+  return { picks, onKeyDown };
+}
+
+let picks: Promise<QuickPicks> | null = null;
+
+/** The "/" list above the message box: the manager's skills and apps; picking one starts the message with it. */
+function SlashPicks({ query, active, onPick }: { query: string; active: number; onPick: (text: string) => void }) {
+  const [p, setP] = useState<QuickPicks | null>(null);
+  useEffect(() => {
+    picks ??= api.ceoPicks().catch(() => {
+      picks = null;
+      return { skills: [], apps: [] };
+    });
+    let live = true;
+    void picks.then((x) => live && setP(x));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const list = p ? matchPicks(p, query) : [];
+  return (
+    <ul className="slash-picks" role="listbox" aria-label="Skills and apps">
+      {!p && <li className="muted small">Loading…</li>}
+      {p && !list.length && <li className="muted small">No skill or app matches “{query}”.</li>}
+      {list.map((x, i) => (
+        <li key={`${x.kind}-${x.name}`} role="option" aria-selected={i === active % list.length}>
+          <button type="button" className={`slash-pick ${i === active % list.length ? 'slash-pick-on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(pickText(x.kind, x.name))}>
+            {x.kind === 'skill' ? '✨' : '🔌'} {x.name} <span className="muted small">{x.kind === 'skill' ? 'skill' : 'app'}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** What Enter or Tab picks in the "/" list, or null when it's empty or still loading. */
+async function slashPick(query: string, active: number): Promise<string | null> {
+  const p = await (picks ?? Promise.resolve(null));
+  const list = p ? matchPicks(p, query) : [];
+  return list.length ? pickText(list[active % list.length].kind, list[active % list.length].name) : null;
+}
