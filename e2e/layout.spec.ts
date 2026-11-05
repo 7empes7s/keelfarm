@@ -29,7 +29,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'This device'],
+    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device'],
   },
   {
     // The 3D office boots WebGL: two widths are enough here, the pocket console covers the phones.
@@ -44,7 +44,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'Time-lapse', 'Accessibility'],
+    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
   },
 ];
 

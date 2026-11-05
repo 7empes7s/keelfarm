@@ -246,6 +246,10 @@ export interface CostRun {
   /** The office's texts the session starts with, sized (shared/startup.ts); the measured startup once it's known. */
   known?: StartupPart[];
   startup?: StartupContext;
+  /** For the session history (#49), never the ledger: where it ran, its Claude Code session, what it was about. */
+  cwd?: string;
+  sessionId?: string | null;
+  title?: string;
 }
 
 /** The agent fields a session's line is made from. */
@@ -273,7 +277,7 @@ export class SessionCosts {
   constructor(
     readonly ledger: CostLedger,
     private limited: () => boolean,
-    private onSession: (s: CostSession) => void = () => undefined,
+    private onSession: (s: CostSession, run: CostRun | null) => void = () => undefined,
   ) {}
 
   start(agentId: string, run: CostRun) {
@@ -339,7 +343,7 @@ export class SessionCosts {
       ...(run?.exp ? { exp: run.exp } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
     };
-    this.onSession({ type: 'session', ...line });
+    this.onSession({ type: 'session', ...line }, run);
     return this.ledger.session(line);
   }
 }
