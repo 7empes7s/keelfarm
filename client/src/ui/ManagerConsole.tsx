@@ -8,6 +8,7 @@ import { CLAUDE_MODELS, modelSuggestions } from '../../../shared/models';
 import { CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
+import { letGo } from './dangerActions';
 import { IssueForm } from './KanbanView';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
@@ -16,6 +17,7 @@ import { HealthStrip, MemoryFields } from './HealthStrip';
 import { EffortByKind } from './CostsSection';
 import { NotifySettings } from './NotifySettings';
 import { ProfileSettings } from './ProfileSettings';
+import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
@@ -109,37 +111,51 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
   const team = agentsOnRepo(agents, repo.id);
   const others = all.filter((r) => r.id !== repo.id);
   const patch = (p: Parameters<typeof api.updateRepo>[1]) => void attempt(() => api.updateRepo(repo.id, p));
+  const disconnect = () =>
+    void confirmDialog({
+      tone: 'danger',
+      title: `Disconnect ${repo.fullName}?`,
+      body: `Everyone on this floor is let go. Nothing is deleted on GitHub, and ${repo.localPath ? 'your folder stays exactly as it is' : 'the local clone stays on disk'}.`,
+      confirm: 'Disconnect',
+    }).then((ok) => ok && attempt(() => api.disconnectRepo(repo.id)));
   return (
     <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
-      <div className="row">
+      <div className="ds-card-head">
         <span className="floor-badge">{repo.floor}</span>
-        <div className="grow">
-          <a href={repo.url} target="_blank" rel="noreferrer">
-            <b>{repo.fullName}</b>
+        <div className="ds-row-main">
+          <a className="ds-row-title floor-name" href={repo.url} target="_blank" rel="noreferrer" title={repo.fullName}>
+            {repo.fullName}
           </a>
-          {repo.summary && <div className="small">🧠 {repo.summary}</div>}
-          <div className="muted small">
-            {team.length} agents · {repo.issues.length} open issues · {repo.pulls.filter((p) => p.state === 'OPEN').length} open PRs · default branch <code>{repo.defaultBranch}</code>
-            {repo.cloneStatus !== 'ready' && ` · checkout: ${repo.cloneStatus}`}
-          </div>
-          <div className="muted small" title={repo.localPath ? 'Your own project folder' : 'A clone the office manages'}>
-            📁 <code>{repo.checkoutPath}</code>
-            {officeFolder ? " · the office's own folder, updated from the Office row" : repo.folderSync && <span title={repo.folderSync}> · {repo.folderSync}</span>}{' '}
-            <button className="btn btn-small btn-ghost" title="Fast-forward it to GitHub's default branch, when that's safe" onClick={() => void attempt(() => api.syncFolder(repo.id))}>
-              ⟳ Sync now
-            </button>
-          </div>
-          {repo.cloneError && <div className="term-error small">clone failed: {repo.cloneError}</div>}
-          {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
+          {repo.summary && <div className="ds-row-meta">🧠 {repo.summary}</div>}
         </div>
-        <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} title="Floor colour" aria-label={`Floor ${repo.floor} colour`} />
         {!pocket && (
           <button className="btn btn-small" onClick={() => goToFloor(repo.floor)}>
             Visit
           </button>
         )}
+        <Menu
+          label={`Manage floor ${repo.floor}`}
+          title={repo.fullName}
+          items={[
+            { label: '⟳ Sync the folder now', hint: "Fast-forward it to GitHub's default branch, when that's safe", onSelect: () => void attempt(() => api.syncFolder(repo.id)) },
+            { label: 'Disconnect…', hint: 'Everyone on this floor is let go', danger: true, onSelect: disconnect },
+          ]}
+        />
       </div>
-      <div className="row wrap">
+      <div className="ds-row-meta">
+        {team.length} agents · {repo.issues.length} open issues · {repo.pulls.filter((p) => p.state === 'OPEN').length} open PRs · default branch <code>{repo.defaultBranch}</code>
+        {repo.cloneStatus !== 'ready' && ` · checkout: ${repo.cloneStatus}`}
+      </div>
+      <div className="ds-row-meta" title={repo.localPath ? 'Your own project folder' : 'A clone the office manages'}>
+        📁 <code>{repo.checkoutPath}</code>
+        {officeFolder ? " · the office's own folder, updated from the Office row" : repo.folderSync && <span title={repo.folderSync}> · {repo.folderSync}</span>}
+      </div>
+      {repo.cloneError && <div className="term-error small">clone failed: {repo.cloneError}</div>}
+      {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
+      <div className="ds-switches">
+        <label className="toggle floor-colour">
+          <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} aria-label={`Floor ${repo.floor} colour`} /> 🎨 Floor colour
+        </label>
         <label className="toggle">
           <input type="checkbox" checked={repo.autoAssign} onChange={(e) => patch({ autoAssign: e.target.checked })} /> ⚡ Auto-assign issues
         </label>
@@ -149,24 +165,10 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
         <label className="toggle">
           <input type="checkbox" checked={repo.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> 🌐 Browser testing (Playwright MCP)
         </label>
-        <span className="spacer" />
-        <button
-          className="btn btn-small btn-ghost"
-          onClick={() => {
-            void confirmDialog({
-              tone: 'danger',
-              title: `Disconnect ${repo.fullName}?`,
-              body: `Everyone on this floor is let go. Nothing is deleted on GitHub, and ${repo.localPath ? 'your folder stays exactly as it is' : 'the local clone stays on disk'}.`,
-              confirm: 'Disconnect',
-            }).then((ok) => ok && attempt(() => api.disconnectRepo(repo.id)));
-          }}
-        >
-          Disconnect
-        </button>
       </div>
       {others.length > 0 && (
-        <div className="row wrap links">
-          <span className="muted small">🔗 Agents here may read:</span>
+        <div className="ds-switches links">
+          <span className="ds-row-meta">🔗 Agents here may read:</span>
           {others.map((o) => (
             <label key={o.id} className="toggle small">
               <input
@@ -229,18 +231,20 @@ function FloorBrief({ repo }: { repo: RepoView }) {
   useEffect(() => setMission(repo.mission), [repo.mission]);
   return (
     <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
-      <div className="row">
+      <div className="ds-card-head">
         <span className="floor-badge">{repo.floor}</span>
-        <div className="grow">
-          <b>{repo.fullName}</b>
-          <div className="muted small">{repo.summary ? `🧠 ${repo.summary}` : 'The CEO has not studied this floor yet.'}</div>
+        <div className="ds-row-main">
+          <b className="ds-row-title" title={repo.fullName}>
+            {repo.fullName}
+          </b>
+          <div className="ds-row-meta">{repo.summary ? `🧠 ${repo.summary}` : 'The CEO has not studied this floor yet.'}</div>
         </div>
         <button className="btn btn-small btn-ghost" onClick={() => void attempt(() => api.onboardFloor(repo.id))} title="Study the repo again and rethink the plan and the team's size">
           Re-study
         </button>
       </div>
       <textarea value={mission} onChange={(e) => setMission(e.target.value)} rows={2} placeholder="Brief: what should this floor build next? The CEO turns it into issues and a team size." />
-      <div className="row">
+      <div className="row wrap">
         <button className="btn btn-small" disabled={mission === repo.mission} onClick={() => void attempt(() => api.updateRepo(repo.id, { mission }))}>
           Save brief
         </button>
@@ -300,16 +304,25 @@ export function CeoTab() {
     <div className="tab-grid">
       <div>
         <div className="card">
-          <div className="row">
+          <div className="ds-card-head">
             <span className="avatar" style={{ background: ceo.color }}>
               {ceo.name[0]}
             </span>
-            <NameInput agent={ceo} style={{ maxWidth: 140, fontWeight: 700 }} />
-            <span className="muted small">CEO</span>
+            <div className="ds-row-main ceo-name">
+              <NameInput agent={ceo} style={{ fontWeight: 700 }} />
+              <span className="muted small">CEO</span>
+            </div>
             <StatusPill status={ceo.status} />
-            <span className="spacer" />
-            <ModelInput agent={ceo} style={{ maxWidth: 150 }} />
-            <EffortSelect agent={ceo} style={{ width: 'auto' }} />
+          </div>
+          <div className="ds-fields">
+            <label className="field">
+              <span>Model</span>
+              <ModelInput agent={ceo} className="" />
+            </label>
+            <label className="field">
+              <span>Effort</span>
+              <EffortSelect agent={ceo} />
+            </label>
           </div>
           <div className="small">
             <b>Now:</b> {working ? info.job?.label : 'free'}
@@ -337,19 +350,19 @@ export function CeoTab() {
             </div>
           )}
           <form
-            className="row"
+            className="ds-compose"
             onSubmit={(e) => {
               e.preventDefault();
               send(text);
             }}
           >
-            <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${ceo.name} (or press P anywhere for your phone)…`} />
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${ceo.name}…`} aria-label={`Message ${ceo.name}`} />
             <MicButton kind="console" value={text} onChange={setText} onSend={send} />
             <button className="btn" disabled={!text.trim()}>
               Send
             </button>
           </form>
-          <div className="row">
+          <div className="row wrap">
             {working && (
               <button className="btn btn-small btn-bad" onClick={() => void attempt(() => api.stop(ceo.id))}>
                 ■ Stop
@@ -418,21 +431,21 @@ function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
       .finally(() => setBusy(false));
   };
   return (
-    <div className="row wrap">
-      <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name (optional)" maxLength={24} aria-label={`New agent's name on floor ${repo.floor}`} style={{ maxWidth: 150 }} />
+    <div className="ds-fields add-agent">
+      <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name (optional)" maxLength={24} aria-label={`New agent's name on floor ${repo.floor}`} />
       {terminal && (
-        <select value={draft.cli} onChange={(e) => edit({ cli: e.target.value as AgentCli | '' })} aria-label="New agent's coding agent" style={{ width: 'auto' }}>
+        <select value={draft.cli} onChange={(e) => edit({ cli: e.target.value as AgentCli | '' })} aria-label="New agent's coding agent">
           <option value="">{cliName(clis, settings.defaultCli)} (default)</option>
           <CliOptions clis={clis} />
         </select>
       )}
-      <input value={draft.model} onChange={(e) => edit({ model: e.target.value })} list={`new-agent-models-${repo.floor}`} placeholder="default model" aria-label="New agent's model" style={{ maxWidth: 150 }} />
+      <input value={draft.model} onChange={(e) => edit({ model: e.target.value })} list={`new-agent-models-${repo.floor}`} placeholder="default model" aria-label="New agent's model" />
       <datalist id={`new-agent-models-${repo.floor}`}>
         {modelSuggestions(cli).map((m) => (
           <option key={m} value={m} />
         ))}
       </datalist>
-      <select value={draft.effort} onChange={(e) => edit({ effort: e.target.value as EffortLevel | '' })} aria-label="New agent's effort" style={{ width: 'auto' }}>
+      <select value={draft.effort} onChange={(e) => edit({ effort: e.target.value as EffortLevel | '' })} aria-label="New agent's effort">
         <option value="">default effort ({settings.defaultEffort})</option>
         {EFFORTS.map((x) => (
           <option key={x} value={x}>
@@ -440,7 +453,7 @@ function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
           </option>
         ))}
       </select>
-      <span title={full ? `Floor ${repo.floor} has its most agents (${settings.maxAgents}): change it in Settings → Most agents per floor` : undefined}>
+      <span className="add-agent-go" title={full ? `Floor ${repo.floor} has its most agents (${settings.maxAgents}): change it in Settings → Most agents per floor` : undefined}>
         <button className="btn btn-small btn-good" disabled={busy || full} onClick={add}>
           + Agent
         </button>
@@ -459,91 +472,78 @@ export function TeamTab() {
   if (repos.length === 0) return <p className="muted">Connect a repo first; agents need a floor to sit on.</p>;
   return (
     <div>
-      <TeamStats />
       {[...repos].sort((a, b) => a.floor - b.floor).map((repo) => {
         const team = agentsOnRepo(agents, repo.id).filter((a) => a.role !== 'ceo');
         return (
           <div key={repo.id} className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
-            <div className="row wrap">
+            <div className="ds-card-head">
               <span className="floor-badge">{repo.floor}</span>
-              <b className="grow">{repo.fullName}</b>
-              <span className="muted small">
+              <b className="ds-row-main ds-row-title" title={repo.fullName}>
+                {repo.fullName}
+              </b>
+              <span className="muted small nowrap">
                 {team.length} of {settings.maxAgents} agents
               </span>
             </div>
             <AddAgent repo={repo} size={team.length} />
             {team.length === 0 && <div className="muted small">No one works here yet.</div>}
-            <table className="team">
+            <table className="team ds-table roster">
               <tbody>
                 {team.map((a) => (
                   <Fragment key={a.id}>
-                  <tr>
-                    <td>
-                      <span className="dot" style={{ background: a.color }} />
-                    </td>
-                    <td>
-                      <NameInput agent={a} />
-                      {a.host === 'box' && (
-                        <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
-                          ☁
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <button className="btn btn-small btn-ghost" aria-expanded={openLook === a.id} title={`${a.name}'s look`} onClick={() => setOpenLook(openLook === a.id ? null : a.id)}>
-                        🎨
-                      </button>
-                    </td>
-                    <td>
-                      <StatusPill status={a.status} />
-                    </td>
-                    <td className="small">{a.status === 'idle' ? <span className="muted">—</span> : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`.slice(0, 40)}</td>
-                    {terminal && (
-                      <td>
-                        <CliSelect agent={a} style={{ width: 112 }} />
-                      </td>
-                    )}
-                    <td>
-                      <ModelInput agent={a} style={{ minWidth: 110 }} />
-                    </td>
-                    <td>
-                      <EffortSelect agent={a} style={{ width: 124 }} />
-                    </td>
-                    <td className="nowrap">
-                      {a.host === 'box' && a.needsSignIn && (
-                        <>
-                          <button className="btn btn-small btn-good" title={`${a.name}'s cloud machine needs you to sign their coding agent in`} onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
-                            🔑 Sign in
-                          </button>{' '}
-                        </>
-                      )}
-                      <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
-                        Terminal
-                      </button>{' '}
-                      <button
-                        className="btn btn-small btn-ghost"
-                        onClick={() =>
-                          void confirmDialog({ tone: 'danger', icon: '👋', title: `Let ${a.name} go?`, body: 'Their worktree is removed. Branches they pushed stay on GitHub.', confirm: `Let ${a.name} go` }).then(
-                            (ok) => ok && attempt(() => api.fireAgent(a.id)),
-                          )
-                        }
-                      >
-                        Let go
-                      </button>
-                    </td>
-                  </tr>
-                  {openLook === a.id && (
                     <tr>
-                      <td />
-                      <td colSpan={terminal ? 8 : 7}>
-                        <label className="row small">
-                          <span>Drawn as</span>
-                          <LookSelect agent={a} />
-                        </label>
-                        <LookEditor agent={a} />
+                      <td className="ds-cell-head">
+                        <span className="dot" style={{ background: a.color }} />
+                        <NameInput agent={a} />
+                        {a.host === 'box' && (
+                          <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
+                            ☁
+                          </span>
+                        )}
+                        <StatusPill status={a.status} />
+                      </td>
+                      <td className="small ds-cell-full roster-doing">
+                        {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
+                      </td>
+                      {terminal && (
+                        <td data-label="Coding agent">
+                          <CliSelect agent={a} />
+                        </td>
+                      )}
+                      <td data-label="Model">
+                        <ModelInput agent={a} className="" />
+                      </td>
+                      <td data-label="Effort">
+                        <EffortSelect agent={a} />
+                      </td>
+                      <td className="ds-cell-full">
+                        <div className="ds-row-actions">
+                          {a.host === 'box' && a.needsSignIn && (
+                            <button className="btn btn-small btn-good" title={`${a.name}'s cloud machine needs you to sign their coding agent in`} onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
+                              🔑 Sign in
+                            </button>
+                          )}
+                          <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
+                            Terminal
+                          </button>
+                          <button className="btn btn-small btn-ghost" aria-expanded={openLook === a.id} title={`${a.name}'s look`} onClick={() => setOpenLook(openLook === a.id ? null : a.id)}>
+                            🎨 Look
+                          </button>
+                          <Menu label={`More for ${a.name}`} title={a.name} items={[{ label: `Let ${a.name} go…`, hint: 'Their worktree is removed', danger: true, onSelect: () => void letGo(a) }]} />
+                        </div>
                       </td>
                     </tr>
-                  )}
+                    {openLook === a.id && (
+                      <tr className="roster-look">
+                        <td className="ds-cell-full" colSpan={terminal ? 6 : 5}>
+                          <label className="row small">
+                            <span>Drawn as</span>
+                            <LookSelect agent={a} />
+                          </label>
+                          <LookEditor agent={a} />
+                        </td>
+                      </tr>
+                    )}
                   </Fragment>
                 ))}
               </tbody>
@@ -551,6 +551,7 @@ export function TeamTab() {
           </div>
         );
       })}
+      <TeamStats />
     </div>
   );
 }
@@ -579,20 +580,20 @@ function IssuesTab({ initialRepo }: { initialRepo?: string }) {
       </div>
       <div className="card">
         <h3>Open issues on {repo?.fullName}</h3>
-        <div className="repo-list tall">
+        <div className="repo-list tall issue-list">
           {repo?.issues.length === 0 && <div className="muted small">None. Nice.</div>}
           {repo?.issues.map((i) => {
             const holder = agents.find((a) => a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber === i.number && a.status !== 'idle');
             return (
-              <div key={i.number} className="repo-row">
-                <div>
+              <div key={i.number} className="ds-row issue-row">
+                <div className="ds-row-main">
                   <a href={i.url} target="_blank" rel="noreferrer">
                     #{i.number}
                   </a>{' '}
                   {i.title}
-                  {i.labels.length > 0 && <div className="muted small">{i.labels.join(', ')}</div>}
+                  {i.labels.length > 0 && <div className="ds-row-meta">{i.labels.join(', ')}</div>}
                 </div>
-                <span className="repo-row-actions">
+                <span className="ds-row-actions">
                   {holder ? (
                     <span className="agent-chip">
                       <span className="dot" style={{ background: holder.color }} />
@@ -610,20 +611,24 @@ function IssuesTab({ initialRepo }: { initialRepo?: string }) {
                         ))}
                     </select>
                   )}
-                  <button
-                    className="btn btn-small btn-ghost"
-                    title="Close it on GitHub as not planned"
-                    onClick={() =>
-                      void confirmDialog({
-                        tone: 'danger',
-                        title: `Close #${i.number}?`,
-                        body: `“${i.title}” will be closed on GitHub as not planned${holder ? `, and ${holder.name} stops working on it` : ''}.`,
-                        confirm: 'Close issue',
-                      }).then((ok) => ok && attempt(() => api.closeIssue(repo.id, i.number)))
-                    }
-                  >
-                    Close
-                  </button>
+                  <Menu
+                    label={`More for issue #${i.number}`}
+                    title={`#${i.number} ${i.title}`}
+                    items={[
+                      {
+                        label: 'Close as not planned…',
+                        hint: 'Closes it on GitHub',
+                        danger: true,
+                        onSelect: () =>
+                          void confirmDialog({
+                            tone: 'danger',
+                            title: `Close #${i.number}?`,
+                            body: `“${i.title}” will be closed on GitHub as not planned${holder ? `, and ${holder.name} stops working on it` : ''}.`,
+                            confirm: 'Close issue',
+                          }).then((ok) => ok && attempt(() => api.closeIssue(repo.id, i.number))),
+                      },
+                    ]}
+                  />
                 </span>
               </div>
             );
@@ -848,7 +853,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
     ['access', '♿ Accessibility'],
   ];
   return (
-    <Panel wide title="🧑‍💼 Manager's console">
+    <Panel wide title="🧑‍💼 Manager's console" className="ds-console ds-auto-dark">
       <div className="tabs" role="tablist" aria-label="Console">
         {tabs.map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? 'tab-on' : ''}`} onClick={() => setTab(k)}>
@@ -856,7 +861,7 @@ export function ManagerConsole({ initialTab, initialRepo, card }: { initialTab?:
           </button>
         ))}
       </div>
-      <div className="tab-body" role="tabpanel" aria-label={tabs.find(([k]) => k === tab)?.[1]}>
+      <div className="tab-body ds-stack-scope" role="tabpanel" aria-label={tabs.find(([k]) => k === tab)?.[1]}>
         {tab === 'floors' && <FloorsTab />}
         {tab === 'ops' && <OpsTab card={card} />}
         {tab === 'ceo' && <CeoTab />}
