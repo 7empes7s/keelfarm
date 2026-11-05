@@ -5613,7 +5613,7 @@ summary:focus-visible,
   border: 2px solid var(--ds-outline);
   border-radius: 999px;
   background: var(--ds-surface-raised);
-  color: var(--ds-on-color);
+  color: var(--ds-text);
   font-size: 0.82rem;
   font-weight: 600;
   white-space: nowrap;

@@ -20,6 +20,7 @@ interface Screen {
 }
 
 const AT_DESK: SavedView = { floor: 0, x: MANAGER_DESK.x, z: MANAGER_DESK.z + MANAGER_DESK.d / 2 + 0.8, yaw: 0, pitch: -0.6 };
+const ON_FLOOR_1: SavedView = { floor: 1, x: 0, z: 0, yaw: 0, pitch: 0 }; // the phone's Kanban shortcut is for this floor
 const AT_ELEVATOR: SavedView = { floor: 0, x: 0, z: HALF_D - 1.6, yaw: Math.PI, pitch: 0 };
 const dialog = (page: Page, name: RegExp) => page.getByRole('dialog', { name });
 const PHONES = [360, 390, 430, 1280];
@@ -44,8 +45,8 @@ async function office(page: Page, spot: SavedView = AT_DESK) {
 }
 
 /** The phone's Company tab, then one of its panel shortcuts. */
-async function fromPhone(page: Page, button: RegExp, name: RegExp) {
-  await office(page);
+async function fromPhone(page: Page, button: RegExp, name: RegExp, spot?: SavedView) {
+  await office(page, spot);
   await page.keyboard.press('p');
   const phone = dialog(page, /Your phone/);
   await phone.getByRole('tab', { name: 'Company' }).click();
@@ -139,7 +140,7 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
-  { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /Kanban|Floor \d/), tabs: [] },
+  { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /Kanban|Floor \d/, ON_FLOOR_1), tabs: [] },
   { name: 'floor list', widths: OFFICE, open: (page) => fromPhone(page, /Floor list/, /Floor|Lobby/), tabs: [] },
   { name: 'help', widths: OFFICE, open: (page) => fromPhone(page, /Help/, /How the office works/), tabs: ['The office', 'Controls'] },
   {
