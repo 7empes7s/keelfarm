@@ -2775,6 +2775,13 @@ input.inline:focus {
   padding: 10px 14px 10px;
   animation: pop 0.25s ease-out;
 }
+/* On a phone: clear of the phone button, and under the panels, which fill the screen there (#83). */
+@media (max-width: 760px) {
+  .tour {
+    z-index: 20;
+    bottom: calc(96px + var(--ds-safe-bottom));
+  }
+}
 .tour-cheer {
   border-left-color: var(--good);
   background: #eafbee;
@@ -3129,6 +3136,9 @@ input.inline:focus {
     transform: translateY(40px);
     opacity: 0;
   }
+}
+.phone-x {
+  display: none;
 }
 .phone-status {
   display: flex;
@@ -4999,15 +5009,17 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .pocket .resume {
   margin: 0;
 }
+/* Panels on a phone, in pocket mode and the 3D office alike (#83): the whole visible screen, the header (with its 44px
+   ✕) fixed above a scrolling body, clear of the notch and the home bar. :root outranks the UI scale's sizes below. */
 @media (max-width: 760px) {
-  .pocket .overlay {
+  .overlay {
     top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
     bottom: auto;
     height: calc(100vh / var(--ui-scale, 1));
     height: calc(var(--app-height, 100dvh) / var(--ui-scale, 1));
     padding: 0;
   }
-  .pocket .panel {
+  :root .overlay .panel {
     width: 100%;
     height: 100%;
     max-height: 100%;
@@ -5015,11 +5027,41 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
     border-radius: 0;
     box-shadow: none;
   }
-  .pocket .panel-head {
-    padding-top: max(12px, var(--ds-safe-top));
+  .overlay .panel-head {
+    flex: none;
+    padding: max(12px, var(--ds-safe-top)) max(16px, var(--ds-safe-right)) 12px max(16px, var(--ds-safe-left));
   }
-  .pocket .panel-body {
-    padding: 12px;
+  .overlay .panel-body {
+    padding: 12px max(12px, var(--ds-safe-right)) max(12px, var(--ds-safe-bottom)) max(12px, var(--ds-safe-left));
+    overscroll-behavior: contain;
+  }
+  .phone-overlay {
+    place-items: stretch;
+  }
+  :root .phone {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: max(10px, var(--ds-safe-top)) max(10px, var(--ds-safe-right)) max(8px, var(--ds-safe-bottom)) max(10px, var(--ds-safe-left));
+  }
+  .phone-status {
+    display: none;
+  }
+  .phone-x {
+    display: block;
+    flex: none;
+    align-self: flex-end;
+    width: var(--ds-target);
+    height: var(--ds-target);
+    margin-bottom: 6px;
+    border-radius: 12px;
+    border: 3px solid var(--ds-outline);
+    background: #fff;
+    color: var(--ds-on-color);
+    font-weight: 700;
+    cursor: pointer;
   }
 }
 

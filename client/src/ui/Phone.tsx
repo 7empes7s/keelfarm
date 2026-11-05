@@ -1169,6 +1169,10 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   return (
     <div className="overlay phone-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeOverlay()}>
       <div className="phone ds-screen" ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
+        {/* on a phone's screen (styles.css), where there's no backdrop around it to tap */}
+        <button className="phone-x" onClick={closeOverlay} aria-label="Close">
+          ✕
+        </button>
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />

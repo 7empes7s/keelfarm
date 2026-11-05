@@ -57,9 +57,9 @@ async function inside(page: Page) {
   return { cdp: await page.context().newCDPSession(page), from: (await savedView(page))! };
 }
 
-// The middle column, clear of the HUD's corners, the tour card and the phone button.
-const LOOK = { from: { x: 195, y: 260 }, to: { x: 285, y: 260 } };
-const WALK = { from: { x: 195, y: 520 }, to: { x: 195, y: 440 } };
+// Clear of the HUD's chips, the tour card (over the bottom half, above the phone button) and the phone button.
+const LOOK = { from: { x: 60, y: 340 }, to: { x: 160, y: 340 } };
+const WALK = { from: { x: 140, y: 800 }, to: { x: 140, y: 720 } };
 
 test('a drag in the bottom half walks without turning', async ({ page }) => {
   const { cdp, from } = await inside(page);
@@ -145,10 +145,9 @@ test('windows fit a 390px phone: no sideways scroll, a 44px ✕', async ({ page 
   await page.getByRole('button', { name: '❓ Help' }).tap();
   const panel = page.locator('.panel');
   await expect(panel).toBeVisible();
-  const box = (await panel.boundingBox())!;
-  expect(box.x).toBe(0);
-  expect(box.width).toBe(390);
+  await expect.poll(async () => JSON.stringify(await panel.boundingBox()), { message: 'the panel, once it has popped in' }).toBe(JSON.stringify({ x: 0, y: 0, width: 390, height: 844 }));
   const x = (await page.locator('.panel-x').boundingBox())!;
   expect(Math.min(x.width, x.height)).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
