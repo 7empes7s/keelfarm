@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useR
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
+import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
 import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
@@ -13,8 +13,14 @@ import { reduceMotion } from './a11y';
 import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { Markdown } from './Markdown';
 import { QuestionChips } from './QuestionChips';
-import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
+import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
+import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
+import { LiveBubble, LongText, StepsList } from './ChatLive';
+import { Conversations } from './ChatHistory';
+import { CeoMemory } from './CeoMemory';
+import { Menu } from './Menu';
+import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
 import { useAttachments } from './chatUpload';
 import type { FileRef } from '../../../shared/files';
@@ -348,8 +354,6 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
 const SWIPE_PX = 60;
 const LONG_PRESS_MS = 500;
 
-/** A message the chat can act on: from the office (`m`), or still in this tab's outbox (`out`). */
-type Item = { m: PhoneMessage; out?: undefined } | { m?: undefined; out: OutgoingMessage };
 
 interface BubbleProps {
   item: Item;
@@ -365,7 +369,6 @@ interface BubbleProps {
   onFile: (id: string) => void;
 }
 
-const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
 
 function DeliveryTick({ d }: { d: Delivery }) {
   const icon = { sending: '🕓', sent: '✓', read: '✓✓', replied: '↩', failed: '⚠' }[d];
@@ -492,18 +495,20 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
             )}
           </div>
         ) : (
-          text && <Markdown className="bubble-md" text={linked(refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} />
+          text && <LongText text={text}><Markdown className="bubble-md" text={linked(refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
         ))}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {m?.used && <UsedLine used={m.used} />}
+        {!!m?.steps?.length && <StepsList steps={m.steps} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
           {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
           {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
+          {m?.edited && <span className="bubble-via">edited · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>
@@ -514,64 +519,6 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         )}
       </div>
       {!mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
-    </div>
-  );
-}
-
-/** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, and Retry for a failed send. */
-function MessageActions({ item, ceoName, onReply, onClose }: { item: Item; ceoName: string; onReply: (id: number) => void; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useDialogFocus(ref);
-  useEffect(() => ref.current?.querySelector<HTMLButtonElement>('button')?.focus(), []);
-  const text = item.m ? item.m.text : item.out.text;
-  const from = item.m ? who(item.m, ceoName) : 'you';
-  const act = (fn: () => void) => () => {
-    onClose();
-    fn();
-  };
-  const copy = () => void copyText(text).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied' : "Couldn't reach the clipboard"));
-  // A long-press's lifted finger sends a mouse press and a click onto the backdrop that just opened: not a dismissal.
-  const [openedAt] = useState(() => Date.now());
-  return (
-    <div className="chat-menu-back" onClick={(e) => e.target === e.currentTarget && Date.now() - openedAt > 500 && onClose()}>
-      <div
-        ref={ref}
-        className="chat-menu"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key !== 'Escape') return;
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }}
-      >
-        <div id={titleId} className="chat-menu-title">
-          Message actions · from {from}
-        </div>
-        <div className="chat-menu-quote">{excerpt(text, 120)}</div>
-        <div className="chat-menu-actions">
-          {item.m && (
-            <button type="button" className="btn btn-small" onClick={act(() => onReply(item.m!.id))}>
-              ↩ Reply
-            </button>
-          )}
-          <button type="button" className="btn btn-small" onClick={act(copy)}>
-            📋 Copy text
-          </button>
-          {item.out?.delivery === 'failed' && (
-            <button type="button" className="btn btn-small btn-good" onClick={act(() => retrySend(item.out!.key))}>
-              ⟳ Retry
-            </button>
-          )}
-          <button type="button" className="btn btn-small" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -587,6 +534,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const goToFloor = useStore((s) => s.goToFloor);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [editing, setEditing] = useState<number | null>(null); // the manager's last message, being edited to send again
+  const endEdit = () => (setEditing(null), setText(''));
+  const [sheet, setSheet] = useState<'chats' | 'memory' | null>(null);
+  const chat = useStore((s) => s.chat);
   const [menu, setMenu] = useState<Item | null>(null);
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
   const [artifactList, setArtifactList] = useState(false);
@@ -645,7 +596,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
       }
     }
     if (stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length, outbox.length, info.job?.kind]);
+  }, [messages.length, outbox.length, info.job?.kind, chat.live]);
   // At the end, the newest message stays in view while the log resizes (the keyboard), a picture loads, or the page is put back.
   const hasCeo = ceo !== undefined;
   useEffect(() => {
@@ -688,6 +639,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   };
   // The message box's own send carries the tray's files; quick chips and suggestions send text only.
   const sendTyped = () => {
+    if (editing !== null) {
+      if (text.trim()) void attempt(() => api.editMessage(editing, text));
+      return endEdit();
+    }
     if (att.busy) return;
     if (!text.trim() && !att.ready.length) return;
     send(text, replyTo, att.ready);
@@ -710,6 +665,17 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     setFlash(id);
   };
   const replying = ceo.status === 'working' && info.job?.kind === 'chat';
+  const stop = () => void attempt(api.ceoStop);
+  const last = (from: PhoneMessage['from']) => [...messages].reverse().find((x) => x.from === from)?.id;
+  const actionsFor = (item: Item) => {
+    const m = item.m;
+    if (!m || m.from === 'office') return [];
+    return [
+      ...(m.id === last('manager') ? [{ label: '✏️ Edit and resend', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
+      ...(m.id === last('ceo') ? [{ label: '⟳ Retry', run: () => void attempt(api.ceoRetry) }] : []),
+      { label: '📌 Remember this', run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (🧠 to see or edit)`)) },
+    ];
+  };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
   const presence =
     ceo.status === 'working'
@@ -770,6 +736,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             📎 Files ({fileCount})
           </button>
         )}
+        <Menu label="Conversations and memory" title={`Chat with ${ceo.name}`} items={[{ label: '💬 Conversations', hint: 'A new one, or an earlier one', onSelect: () => setSheet('chats') }, { label: `🧠 What ${ceo.name} remembers`, onSelect: () => setSheet('memory') }]} />
         <HandsFreeToggle ceoName={ceo.name} />
       </div>
       <div className="chat-log-wrap">
@@ -810,22 +777,16 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {replying && (
-            <div className="bubble-row">
-              <div className="bubble bubble-them bubble-typing">
-                <span />
-                <span />
-                <span />
-              </div>
-            </div>
-          )}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} />}
         </div>
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label="Jump to the latest message">
             ↓ Latest
           </button>
         )}
-        {menu && <MessageActions item={menu} ceoName={ceo.name} onReply={reply} onClose={() => setMenu(null)} />}
+        {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
+        {sheet === 'chats' && <Conversations onClose={() => setSheet(null)} />}
+        {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
         )}
@@ -862,12 +823,23 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             </button>
           </>
         )}
+        {(ceo.status === 'error' || ceo.status === 'stopped') && last('manager') !== undefined && (
+          <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
+        )}
         {QUICK.map((q) => (
           <button key={q} className="quick-chip" onClick={() => send(q, null)}>
             {q}
           </button>
         ))}
       </div>
+      {editing !== null && (
+        <div className="chat-reply">
+          <b className="grow small">✏️ Editing your message: Send replaces it, and {ceo.name} answers the new version</b>
+          <button type="button" className="chat-reply-x" aria-label="Cancel the edit" onClick={endEdit}>
+            ✕
+          </button>
+        </div>
+      )}
       {replyTo !== null && (
         <div className="chat-reply">
           <div className="grow chat-reply-body">
@@ -926,9 +898,15 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         <button type="button" className="btn btn-small" disabled={!text.trim() || researchTopic(text) !== null} onClick={() => send(`${RESEARCH_PREFIX}${text.trim()}`, null)} aria-label={`Ask ${ceo.name} to research this`} title="Research it: options with sources, from the web and your apps">
           🔎
         </button>
-        <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
-          Send
-        </button>
+        {ceo.status === 'working' && editing === null && !text.trim() && !att.ready.length ? (
+          <button type="button" className="btn btn-small btn-bad" onClick={stop} aria-label={`Stop ${ceo.name}`} title="Stop: what's done stays done, and the reply says what that was">
+            ■
+          </button>
+        ) : (
+          <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
+            {editing !== null ? 'Resend' : 'Send'}
+          </button>
+        )}
       </form>
     </div>,
   );

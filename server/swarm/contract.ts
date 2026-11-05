@@ -1,8 +1,10 @@
 // The methods the Swarm's lower layers call on higher ones, declared once at the bottom of the chain.
 // The layers (server/swarm/*.ts) each extend the one before; `Swarm` (swarm.ts) is the top, and the façade.
 import type { Swarm } from '../swarm.ts';
+import type { CeoChat } from '../ceoChat.ts';
 
 export abstract class SwarmContract {
+  protected abstract ceoChat: CeoChat; // the CEO chat's live reply, office calls and threads (swarm.ts)
   // merge.ts
   protected abstract advanceMerges(...a: Parameters<Swarm['advanceMerges']>): ReturnType<Swarm['advanceMerges']>;
   protected abstract askGitHub(...a: Parameters<Swarm['askGitHub']>): ReturnType<Swarm['askGitHub']>;
@@ -55,6 +57,7 @@ export abstract class SwarmContract {
   // ceoJobs.ts
   protected abstract ceo(...a: Parameters<Swarm['ceo']>): ReturnType<Swarm['ceo']>;
   protected abstract ceoInfo(...a: Parameters<Swarm['ceoInfo']>): ReturnType<Swarm['ceoInfo']>;
+  protected abstract chatView(...a: Parameters<Swarm['chatView']>): ReturnType<Swarm['chatView']>;
   protected abstract ceoPromptInput(...a: Parameters<Swarm['ceoPromptInput']>): ReturnType<Swarm['ceoPromptInput']>;
   protected abstract decideFromTelegram(...a: Parameters<Swarm['decideFromTelegram']>): ReturnType<Swarm['decideFromTelegram']>;
   protected abstract emitCeo(...a: Parameters<Swarm['emitCeo']>): ReturnType<Swarm['emitCeo']>;

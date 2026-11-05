@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { lostConversation, resumableSession } from './cliRunner.ts';
+import { lostConversation } from './cliRunner.ts';
+import { resumableSession } from './transcriptTail.ts';
 
 describe('resumableSession', () => {
   const onDisk = (files: string[]) => (file: string) => files.includes(file);

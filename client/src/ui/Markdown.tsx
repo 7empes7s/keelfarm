@@ -1,8 +1,10 @@
-import { useMemo, useRef, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { FLOOR_HREF } from './chatLinks';
+import { copyText } from './clipboard';
+import './chat.css';
 import { REF_HREF } from '../../../shared/chatRefs';
 
 // Agent-written prose (the CEO's texts and reasons, issues, QA reports) rendered as Markdown.
@@ -35,6 +37,27 @@ const Link = ({ href, children }: { href?: string; children?: ReactNode }) =>
     <span className="md-deadlink">{children}</span>
   );
 
+/** A code block with a Copy button. */
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState<boolean | null>(null);
+  const copy = () =>
+    void copyText(ref.current?.innerText ?? '').then((ok) => {
+      setCopied(ok);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  return (
+    <div className="md-code">
+      <pre ref={ref} tabIndex={0}>
+        {children}
+      </pre>
+      <button type="button" className="md-copy" onClick={copy} aria-label="Copy the code">
+        {copied === null ? '📋 Copy' : copied ? '✓ Copied' : "Couldn't copy"}
+      </button>
+    </div>
+  );
+}
+
 const components: Components = {
   a: Link,
   // Images would load arbitrary URLs and blow up the layout; show them as links instead.
@@ -52,7 +75,7 @@ const components: Components = {
     </div>
   ),
   // Code blocks (and tables, above) scroll sideways: focusable, so the keyboard can scroll them too.
-  pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
 };
 
 // remark-breaks keeps single line breaks, as the phone showed them before Markdown.

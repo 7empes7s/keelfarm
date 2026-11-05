@@ -17,6 +17,10 @@ import type { CeoAwakeSettings, CeoSessionView } from './ceoAwake.ts';
 import type { LabView } from './experiments.ts';
 import type { HistoryEntry } from './history.ts';
 import type { HealthView, MemorySettings } from './health.ts';
+import type { OpsView } from './ops.ts';
+import type { CeoLive } from './ceoStream.ts';
+import type { Conversation } from './conversations.ts';
+import type { MemoryNote } from './ceoMemory.ts';
 import type { TestLabSettings, TestLabView } from './testLab.ts';
 import type { EveryProject, FloorPracticeView } from './practices.ts';
 
@@ -548,62 +552,8 @@ export interface UsageReading {
   at: number; // when it was read
 }
 
-/** One floor's numbers on mission control (or the whole office's), computed by the server from its state and history. */
-export interface OpsNumbers {
-  // the pipeline, right now
-  ready: number; // backlog issues that can start
-  building: number; // issues a developer is working on
-  inQa: number; // open PRs waiting for QA or being tested (or not tested yet)
-  fixing: number; // open PRs back with a developer: QA failed, checks or a conflict
-  toMerge: number; // open PRs that passed QA
-  needsYou: number; // open PRs waiting on the manager (needsManager)
-  triage: number; // stuck PRs the CEO is looking at before they reach the manager
-  // throughput
-  mergedToday: number; // since midnight
-  mergedHour: number; // in the last 60 minutes
-  spark: number[]; // merges per clock hour over the last 24 hours, oldest first (the current hour last)
-  // flow, over the last 24 hours
-  leadMs: number | null; // median issue → merge
-  qaWaitMs: number | null; // median wait for an agent to start testing a PR
-  qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
-  qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
-  qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
-  // GitHub's checks, over 7 days
-  ciPass: number | null; // share of check runs that passed, 0-1
-  ciRuns: number;
-  ciMs: number | null; // median duration
-  // the team, right now
-  busy: number;
-  idle: number;
-  errors: number;
-  costToday: number; // dollars since midnight from finished sessions' reported cost: an estimate
-}
-
-export interface OpsFloor extends OpsNumbers {
-  repoId: string;
-  floor: number;
-  alarms: number;
-}
-
-/** Something that needs the manager: a PR the office can't move (needsManager), or an agent in error for over 10 minutes. */
-export interface OpsAlarm {
-  id: string; // "pr:<repo>#<n>" or "agent:<id>": the manager's console opens at this card
-  kind: 'pr' | 'agent';
-  repoId: string;
-  floor: number;
-  prNumber: number | null;
-  agentId: string | null;
-  text: string;
-  since: number;
-}
-
-/** Mission control: every floor's numbers, the office's total, and what needs the manager (oldest first). */
-export interface OpsView {
-  floors: OpsFloor[];
-  total: OpsNumbers;
-  ceoCostToday: number;
-  alarms: OpsAlarm[];
-}
+// Mission control's numbers live in ./ops.ts.
+export type { OpsAlarm, OpsFloor, OpsNumbers, OpsView } from './ops.ts';
 
 /** What the office doctor's one-click fixes do (#262): the console's own actions, nothing new. */
 export type DoctorFix = 'clear' | 'stop' | 'requeue' | 'retry-qa' | 'send-back' | 'close-issue';
@@ -689,6 +639,16 @@ export interface PhoneMessage {
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
+  steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
+  edited?: number; // the manager's: when they last edited it
+}
+
+/** The CEO chat beyond its messages (#51): the reply being written, the conversations and the manager's pinned notes. */
+export interface CeoChatView {
+  live: CeoLive | null;
+  current: string; // the conversation the phone shows
+  conversations: Conversation[];
+  memory: MemoryNote[];
 }
 
 /** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
@@ -783,6 +743,7 @@ export interface WorldSnapshot {
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
   experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
+  chat?: CeoChatView; // absent in a replay
   testLab?: TestLabView; // the test lab desk (#56): its queue, running jobs and recent results; absent in a replay
 }
 
@@ -819,6 +780,8 @@ export type ServerEvent =
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
+  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
+  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }

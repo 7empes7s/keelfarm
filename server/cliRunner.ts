@@ -33,6 +33,7 @@ import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
 import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -464,17 +465,6 @@ function idleHook(live: LiveCli, b: Record<string, unknown>): Record<string, unk
 
 // ---------- the session ----------
 
-/**
- * The Claude Code session a hook reports, once its conversation is on disk: only then can --resume pick it up. Claude
- * writes the file during the first turn, after SessionStart and UserPromptSubmit, so a session the office keeps any
- * earlier could be one that never existed.
- */
-export function resumableSession(b: Record<string, unknown>, exists: (file: string) => boolean): string | null {
-  const id = typeof b.session_id === 'string' ? b.session_id : '';
-  const file = typeof b.transcript_path === 'string' ? b.transcript_path : '';
-  return id && file && exists(file) ? id : null;
-}
-
 /** Claude Code was told to resume a conversation that isn't on disk (it says so and exits 1). */
 export const lostConversation = (screen: string) => /No conversation found with session ID/i.test(screen);
 
@@ -524,6 +514,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
   let promptTimer: NodeJS.Timeout | undefined;
+  const tail = opts.stream && cli === 'claude' && !inBox ? new TranscriptTail(started, (t) => callbacks.text?.(t, true)) : null; // the CEO's text as it writes it
 
   const cb: SessionCallbacks = { ...callbacks };
   const log = (entries: LogEntry[]) => entries.length && cb.log(entries);
@@ -572,6 +563,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     clearInterval(screenTimer);
     clearInterval(shotTimer);
     clearInterval(promptTimer);
+    tail?.stop();
     if (onScreen?.blocked) cb.blocked?.(null);
     collectShots(true);
     if (term.onInput === watchKeys) term.onInput = null;
@@ -689,6 +681,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
 
   const hook = (b: Record<string, unknown>): Record<string, unknown> => {
     const event = String(b.hook_event_name ?? '');
+    if (tail && typeof b.transcript_path === 'string' && b.agent_id === undefined) tail.watch(b.transcript_path);
     if (event !== 'Notification' && event !== 'StatusLine') answered();
     const answer = inBox ? null : answerHook(b, roots); // a Box's hook script answers there
     if (answer) {

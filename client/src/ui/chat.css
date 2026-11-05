@@ -1,0 +1,238 @@
+/* The CEO chat closer to Claude's (#51): the live reply, its steps, long messages, code blocks' Copy,
+   the conversations and memory sheets. */
+
+/* the reply being written */
+.bubble-live {
+  min-width: 9rem;
+}
+.bubble-live .bubble-typing {
+  padding: var(--ds-space-1) 0;
+}
+.live-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-1);
+  padding-top: var(--ds-space-1);
+  border-top: 1px dashed var(--ds-line);
+  font-size: var(--ds-text-xs);
+  min-width: 0;
+}
+.live-step {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-step-running {
+  font-weight: var(--ds-weight-strong);
+}
+.live-step-failed {
+  color: var(--ds-danger-text);
+}
+
+/* a finished reply's steps */
+.chat-steps {
+  margin-top: var(--ds-space-1);
+  font-size: var(--ds-text-xs);
+}
+.chat-steps summary {
+  cursor: pointer;
+  color: var(--ds-text-muted);
+  padding: var(--ds-space-1) 0;
+}
+.chat-steps ol {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.chat-step-failed {
+  color: var(--ds-danger-text);
+}
+
+/* long messages: their start, then Show more */
+.long-folded {
+  max-height: 16rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+.long-toggle {
+  display: block;
+  min-height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-link);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+
+/* a code block's Copy, in its corner; its hit area reaches 44 px */
+.md-code {
+  position: relative;
+  min-width: 0;
+}
+.md-code > pre {
+  padding-right: 4.5rem;
+}
+.md-copy {
+  position: absolute;
+  top: var(--ds-space-1);
+  right: var(--ds-space-1);
+  padding: 2px var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  cursor: pointer;
+}
+.md-copy::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+/* conversations */
+.conv-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.conv-new {
+  min-height: var(--ds-target);
+}
+.conv-search {
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 16px; /* iOS doesn't zoom */
+  box-sizing: border-box;
+}
+.conv-list,
+.memory-notes,
+.memory-found {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.conv-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.conv-row-current {
+  border-left: 6px solid var(--accent, #ff7a1a);
+}
+.conv-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.conv-title,
+.conv-snippet {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conv-pin {
+  flex: none;
+  width: var(--ds-target);
+  border: 0;
+  background: none;
+  font-size: var(--ds-text-lg);
+  opacity: 0.35;
+  cursor: pointer;
+}
+.conv-pin-on {
+  opacity: 1;
+}
+
+/* what the CEO remembers */
+.memory-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.memory-h {
+  margin: var(--ds-space-3) 0 0;
+  font-size: var(--ds-text-md);
+}
+.memory-note {
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  overflow-wrap: anywhere;
+}
+.memory-note .btn,
+.memory-add .btn {
+  min-height: var(--ds-target);
+}
+.memory-add,
+.memory-actions {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: flex-end;
+}
+.memory-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.5rem;
+  padding: var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  font: inherit;
+  font-size: 16px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.memory-found li {
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
+}
+.memory-file {
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+}
+
+/* the chat's header holds one row: the CEO's name and what they're doing truncate, never wrap into the buttons */
+.chat-head > .grow,
+.chat-head > .grow > div {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

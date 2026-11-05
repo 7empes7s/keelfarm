@@ -16,6 +16,8 @@ import type { AgentTerminal } from '../terminal.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
+import type { ChatsState } from '../../shared/conversations.ts';
+import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
@@ -147,6 +149,8 @@ interface CeoState {
   lastReviewAt: number | null;
   lastFingerprint: string | null; // company state at the last review; unchanged means the next review is skipped
   followups: FollowupState; // office events waiting for a follow-up job (shared/followups.ts)
+  chats: ChatsState; // the chat's conversations; state.messages is the current one's thread (shared/conversations.ts)
+  remember: MemoryNote[]; // the manager's pinned notes, in every CEO job's prompt (shared/ceoMemory.ts)
   kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null }; // its kept session (#28)
 }
 
@@ -232,6 +236,8 @@ export const CEO_NAME = 'Morgan';
 export const CEO_DIR = path.join(HOME_DIR, 'ceo');
 // The chat's files (server/files.ts): outside every worktree, so agents only ever read them.
 export const FILES_DIR = path.join(HOME_DIR, 'files');
+// The other conversations' threads (server/ceoChat.ts).
+export const CONVERSATIONS_DIR = path.join(HOME_DIR, 'conversations');
 export const MAX_ISSUES_PER_JOB = 12;
 export const KEEP_MESSAGES = 200;
 export const KEEP_DECIDED_REQUESTS = 40;

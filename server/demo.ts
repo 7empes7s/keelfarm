@@ -33,6 +33,7 @@ import { demoPastWeek } from './opsSample.ts';
 import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { researchBrief } from './demoResearch.ts';
+import { logStreamed, writeReply } from './demoChat.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
@@ -1272,7 +1273,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const step = async (entries: LogEntry[], ms = 900 + Math.random() * 1500) => {
     if (stopped) throw new Error('Stopped by manager');
     cb.tool(entries.find((e) => e.tool)?.tool ?? null);
-    cb.log(entries);
+    logStreamed(entries, opts, cb);
     await wait(ms);
   };
   const status = async () => {
@@ -1510,7 +1511,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt.split('\n\nSince you last looked:')[0]; // the manager's answers to agents (ceo.ts toldCeo)
+  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
@@ -1541,8 +1542,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       try {
         cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · CEO` }]);
         const reply = await run();
-        cb.log([{ kind: 'text', text: `● ${reply}` }]);
-        cb.turn?.(reply);
+        await writeReply(reply, opts, cb, () => stopped);
         finish(true, reply);
       } catch (err) {
         finish(false, '', stopped ? 'Stopped by manager' : (err as Error).message);

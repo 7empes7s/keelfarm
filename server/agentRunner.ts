@@ -53,6 +53,8 @@ export interface SessionOptions {
   box?: BoxTarget;
   /** The manager's Tools & skills switches (shared/tooling.ts): Claude Code sessions only. */
   tools?: SessionTools;
+  /** Report the session's text blocks as they are written (callbacks.text): the CEO's chat (#51). */
+  stream?: boolean;
   /** A CEO's consult (server/consult.ts): edits, commits, pushes and pull requests are refused before they run. */
   readOnly?: boolean;
 }
@@ -85,6 +87,8 @@ export interface SessionCallbacks {
   screenshot(data: Buffer, mime: string): void;
   /** The final text of each turn: the reply to the prompt and to every message sent while it ran. */
   turn?(text: string): void;
+  /** A text block of the reply being written (opts.stream); done: it won't grow any more. */
+  text?(text: string, done: boolean): void;
   /** Claude turned the session away for the subscription's usage limit (epoch ms when it resets, if known). */
   limited?(resetsAt: number | null): void;
   /** Claude warned that the subscription's usage is getting high (not while on overage). */
@@ -485,6 +489,7 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
         const out: LogEntry[] = [];
         for (const block of msg.message.content) {
           if (block.type === 'text' && block.text.trim()) {
+            if (opts.stream) cb.text?.(block.text, true);
             const lines = block.text.trim().split('\n');
             lines.slice(0, 30).forEach((l, i) => out.push({ kind: 'text', text: `${i === 0 ? '● ' : '  '}${l}` }));
             if (lines.length > 30) out.push({ kind: 'text', text: `  … (${lines.length - 30} more lines)` });
