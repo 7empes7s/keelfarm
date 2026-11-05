@@ -3,7 +3,8 @@
 // task decides which one (build an issue, test a pull request, fix one), and they carry the office's workflow and
 // safety rules.
 
-import type { AgentPromptView } from '../shared/types.ts';
+import { charterOf, emptyCharter, renderCharter } from '../shared/charter.ts';
+import type { AgentPromptView, CharterParts } from '../shared/types.ts';
 
 export interface PromptAgent {
   name: string;
@@ -19,6 +20,8 @@ export interface PromptFloor {
   qaBrief: string;
   /** The floor's architecture map, conventions, skills and traps (markdown); '' adds nothing. */
   playbook: string;
+  /** The rest of the floor's charter (#48); with `mission`, the block every prompt starts with. */
+  charter?: CharterParts;
 }
 
 interface PromptBase {
@@ -61,11 +64,18 @@ const BLOCKED_LINE = 'If truly stuck (e.g. no credentials), end with "BLOCKED: <
 
 export const ONE_TURN = "Your session ends when your turn ends: background tasks and notifications won't wake you. Never end a turn to wait. Wait in the foreground with a timeout, then finish.";
 
+/** The floor's charter, before anything else: the same bytes on every session there, so prompt caching keeps it cheap. */
+const charterBlock = (repo: PromptFloor) => renderCharter(charterOf(repo.mission, repo.charter ?? emptyCharter()));
+const charterLines = (repo: PromptFloor) => (charterBlock(repo) ? [charterBlock(repo), ''] : []);
+/** Standards or objectives to check a diff against (a mission alone has none). */
+const charterRules = (repo: PromptFloor) => !!(repo.charter?.standards.length || repo.charter?.objectives.length);
+
 /** The floor's playbook as a prompt section, after the QA brief; nothing when it's empty. */
 const playbookLines = (repo: PromptFloor) => (repo.playbook ? [`This floor's playbook (follow it):\n${repo.playbook}`] : []);
 
 /** What a builder or fixer reviews their diff against: the floor's guidance that's set. */
-const reviewAgainst = (repo: PromptFloor) => ['the issue', repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
+const reviewAgainst = (repo: PromptFloor) =>
+  ['the issue', charterRules(repo) && "the charter's standards and the issue's objective", repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
 
 /** Builders and fixers check their own diff before QA does: a QA round costs a whole session. */
 const selfReviewStep = (n: number, repo: PromptFloor) =>
@@ -78,12 +88,12 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
   const push = fixing ? `git push origin HEAD:${fixing.headRef}` : `git push -u origin ${branch}`;
   const links = linked.map((r) => `- ${r.fullName}: read-only reference clone at ${r.dir}`);
   return [
+    ...charterLines(repo),
     `You are ${a.name}, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". ${BLOCKED_LINE} The manager may occasionally send you messages; follow their instructions.`,
     `Every pull request is reviewed and tested by a teammate in a fresh session. ${repo.autoMerge ? "Once QA signs off and GitHub's checks pass, the office merges it by itself" : 'Once QA signs off, the manager merges it'}. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.`,
     '',
     `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
     repo.summary ? `Project: ${repo.summary}` : '',
-    repo.mission ? `What the team is building (the manager's brief): ${repo.mission}` : '',
     repo.qaBrief ? `What QA checks on this project (from the CEO):\n${repo.qaBrief}` : '',
     ...playbookLines(repo),
     `Your worktree: ${cwd}`,
@@ -116,13 +126,13 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
 
 export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep }: QaPromptInput) {
   return [
+    ...charterLines(repo),
     `You are ${a.name}, a software engineer on an autonomous agent team ("cubefarm"). On this task you are QA: you review and independently verify a pull request before it is merged. Nobody answers prompts; if truly stuck, end with "BLOCKED: <what is needed>". Your sign-off is the review: ${repo.autoMerge ? "on this floor a PR you pass merges by itself as soon as GitHub's checks are green, so nobody else reads the code after you. " : ''}Be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, the issue's requirements not met, obvious regressions), not for style preferences.`,
     '',
     "Another session wrote this pull request, possibly yours from an earlier task: you don't remember it, so test it as an independent reviewer would, without assuming it works.",
     '',
     `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
     ...(repo.summary ? [`Project: ${repo.summary}`] : []),
-    ...(repo.mission ? [`What the team is building (the manager's brief): ${repo.mission}`] : []),
     ...(repo.qaBrief ? [`What to check on this project (from the CEO):\n${repo.qaBrief}`] : []),
     ...playbookLines(repo),
     `Pull request #${pr.number} "${pr.title}" from branch ${pr.headRefName}: ${pr.url}`,
@@ -131,7 +141,7 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     '',
     'How to test:',
     '1. Read the PR description and the linked issue, and work out the acceptance criteria.',
-    `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.`,
+    `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.${charterRules(repo) ? ` Check it against the charter's standards and the issue's objective too: breaking a standard fails the PR. Report it as charterCheck, one line starting "ok" or "violation:".` : ''}`,
     testStep ?? "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).",
     repo.browserTesting
       ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change in a real browser with the Playwright tools: navigate, click, type, resize to a phone size, try edge cases, and check the console for errors. Take a screenshot with browser_take_screenshot (no filename) of every important state: the screenshots are attached to the PR as evidence. Stop the server afterwards.`

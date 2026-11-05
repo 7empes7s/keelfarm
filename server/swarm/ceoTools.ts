@@ -10,6 +10,7 @@ import {
   agentLogText,
   qaReportText,
   AGENT_LOG_MAX as AGENT_LOG_MAX_LINES,
+  type CharterProposalArgs,
   type OfficeTools,
 } from '../ceo.ts';
 import { nameList } from '../closeCleanup.ts';
@@ -24,6 +25,7 @@ import { resumesAfterRestart } from '../restartRecovery.ts';
 import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
+import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import type { HireRequestView } from '../../shared/types.ts';
 import { type PersistedAgent, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
@@ -53,6 +55,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       attachFile: (a) => this.ceoFiles.attach(a),
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
+      proposeCharter: acts((a) => this.proposeCharter(a)),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
@@ -109,7 +112,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           repo: r.fullName,
           description: r.description,
           clone: rt.cloneStatus === 'ready' ? this.backend.mainDir(r.fullName) : `(not available: clone ${rt.cloneStatus})`,
-          brief: r.mission || null,
+          charter: renderCharter(charterOf(r.mission, r.charter)) || null,
+          charterProposalWaiting: !!r.charter.proposal,
           profile: r.summary || null,
           qaBrief: r.qaBrief || null,
           playbook: r.playbook || null,
@@ -247,6 +251,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     this.ceoIssues.check();
     const title = String(x.title ?? '').trim().slice(0, 120);
     if (!title) throw new Error('An issue needs a title.');
+    const untagged = objectiveRefusal(String(x.body ?? ''), repo.charter);
+    if (untagged) throw new Error(untagged);
     const body = `${String(x.body ?? '').trim()}\n\n---\n_Filed by ${this.ceo().name}, the cubefarm CEO._`;
     const n = await this.backend.createIssue(repo.fullName, title, body);
     this.ceoIssues.record(repo.id);
@@ -307,6 +313,29 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const saved = this.state.settings.ceoMandates.find((m) => m.id === mandate.id)!;
     const dropped = kept.length + 1 > MAX_MANDATES ? ` The oldest went: at most ${MAX_MANDATES} are kept.` : '';
     return `Recorded: "${saved.text}" for ${saved.floors.length ? `floor${saved.floors.length === 1 ? '' : 's'} ${saved.floors.join(', ')}` : 'every floor'}${saved.expiresAt ? ` until ${new Date(saved.expiresAt).toISOString().slice(0, 16)} UTC` : ''}. Follow-ups may file issues there.${dropped}`;
+  }
+
+  /** propose_charter: a charter for the manager to approve or edit, never applied here (decideCharter applies it). */
+  protected proposeCharter(x: CharterProposalArgs) {
+    const repo = this.floorRepo(x.floor);
+    const now = charterOf(repo.mission, repo.charter);
+    const charter = cleanCharter({
+      mission: x.mission ?? now.mission,
+      focus: x.focus ?? now.focus,
+      objectives: x.objectives ?? now.objectives,
+      standards: x.standards ?? now.standards,
+      nonGoals: x.non_goals ?? now.nonGoals,
+    });
+    if (JSON.stringify(charter) === JSON.stringify(now)) throw new Error(`That is floor ${repo.floor}'s charter already: nothing to propose.`);
+    const replaced = repo.charter.proposal ? ' It replaces your earlier proposal.' : '';
+    const ceo = this.ceo().name;
+    repo.charter.proposal = { at: Date.now(), by: ceo, reason: String(x.reason ?? '').trim().slice(0, 600), charter };
+    this.save();
+    this.emitRepo(repo);
+    this.toast('info', `${ceo} proposed a charter for floor ${repo.floor}: approve or edit it in the console's Charter tab.`);
+    const size = charterText(charter).length;
+    const long = size > CHARTER_PROMPT_MAX ? ` It is ${size} characters: agents get only the first ${CHARTER_PROMPT_MAX}, so tighten it.` : '';
+    return `Proposed for floor ${repo.floor}. Nothing changes until the manager approves or edits it.${replaced}${long}`;
   }
 
   /** agent_log: an agent's last terminal lines and their session, secrets masked as for the journal. */

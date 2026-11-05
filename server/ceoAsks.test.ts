@@ -59,3 +59,21 @@ describe("the CEO's file_issue", () => {
     expect((await office()).internals.state.ceo.queue.map((j) => j.kind)).toEqual(['onboard']);
   });
 });
+
+describe("the CEO's plan and the charter (#48)", () => {
+  const floor = { floor: 2, fullName: 'acme/app', clone: '/clones/app', mission: 'Add voice messages', backlog: 0, charter: 'Project charter (keep every change inside it):\nObjectives:\n- O1: Talk to friends' };
+
+  it('puts the charter in the plan and asks for an objective on every issue, and to ask about non-goals first', () => {
+    const plan = ceoJobPrompt({ kind: 'plan', repoId: 'r1', at: 0 }, floor);
+    expect(plan).toContain(floor.charter);
+    expect(plan).toContain('end each issue with a line "Objective: O<n>"');
+    expect(plan).toMatch(/non-goal or serves no objective: file nothing for it; ask the manager/);
+    const system = ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: 'notes.md', sessionLimit: 0, maxAgents: 10, scaling: 'approve' });
+    expect(system).toContain('A request that is a non-goal or serves no objective: ask the manager before filing it.');
+  });
+
+  it('asks onboarding to draft a charter only when the floor has none', () => {
+    expect(ceoJobPrompt({ kind: 'onboard', repoId: 'r1', at: 0 }, { ...floor, charter: '' })).toContain('propose_charter');
+    expect(ceoJobPrompt({ kind: 'onboard', repoId: 'r1', at: 0 }, floor)).not.toContain('propose_charter');
+  });
+});

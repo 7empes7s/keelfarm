@@ -6,8 +6,9 @@ import { DEFAULT_PREVIEW, parsePreviewPatch } from '../previews.ts';
 import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
+import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, MISSION_MAX, newRecord, noteObjectives, withChange } from '../../shared/charter.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
-import type { PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
+import type { Charter, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { type PersistedRepo, type FloorOptions, QA_SHOTS_DIR } from './model.ts';
 import { FLOOR_COLORS } from './flavour.ts';
 import { SwarmCore } from './core.ts';
@@ -42,12 +43,13 @@ export abstract class SwarmRepos extends SwarmCore {
       browserTesting: true,
       links: [],
       localPath: folder,
-      mission: (opts.mission ?? '').trim().slice(0, 4000),
+      mission: (opts.mission ?? '').trim().slice(0, MISSION_MAX),
       summary: '',
       qaBrief: '',
       playbook: '',
       preview: { ...DEFAULT_PREVIEW, env: {} },
       addedAt: Date.now(),
+      charter: newRecord(),
     };
     this.backend.setLocalPath(repo.fullName, folder);
     this.state.repos.push(repo);
@@ -161,7 +163,7 @@ export abstract class SwarmRepos extends SwarmCore {
     if (patch.browserTesting !== undefined) repo.browserTesting = !!patch.browserTesting;
     if (patch.color && /^#[0-9a-f]{6}$/i.test(patch.color)) repo.color = patch.color;
     if (Array.isArray(patch.links)) repo.links = patch.links.filter((l) => l !== id && this.state.repos.some((r) => r.id === l));
-    if (typeof patch.mission === 'string') repo.mission = patch.mission.trim().slice(0, 4000);
+    if (typeof patch.mission === 'string') this.applyCharter(repo, { ...charterOf(repo.mission, repo.charter), mission: patch.mission.trim().slice(0, MISSION_MAX) }, this.managerLabel(), 'brief edited');
     if (typeof patch.summary === 'string') repo.summary = patch.summary.trim().slice(0, 140);
     if (typeof patch.qaBrief === 'string') repo.qaBrief = patch.qaBrief.trim().slice(0, 2500);
     if (typeof patch.playbook === 'string') repo.playbook = patch.playbook.trim().slice(0, PLAYBOOK_MAX);
@@ -169,6 +171,54 @@ export abstract class SwarmRepos extends SwarmCore {
     this.emitRepo(repo);
     setTimeout(() => this.schedule(), 200);
     return this.repoView(repo);
+  }
+
+  // ---------- the charter (#48) ----------
+
+  protected managerLabel() {
+    return this.state.settings.managerName || 'The manager';
+  }
+
+  /** Make `next` the floor's charter, with a line in its history when a part changed. */
+  protected applyCharter(repo: PersistedRepo, next: Charter, by: string, note: string) {
+    repo.charter.history = withChange(repo.charter.history, charterOf(repo.mission, repo.charter), next, by, clip(note, 240), Date.now());
+    repo.mission = next.mission;
+    Object.assign(repo.charter, { objectives: next.objectives, standards: next.standards, nonGoals: next.nonGoals, focus: next.focus });
+  }
+
+  /** The manager's edit in the Charter screen. */
+  setCharter(id: string, raw: unknown): RepoView {
+    const repo = this.repo(id);
+    this.applyCharter(repo, cleanCharter(raw), this.managerLabel(), 'edited');
+    this.save();
+    this.emitRepo(repo);
+    return this.repoView(repo);
+  }
+
+  /** The manager approves the CEO's proposal (as it is, or as they edited it: `edited`), or dismisses it. */
+  decideCharter(id: string, approve: boolean, edited?: unknown): RepoView {
+    const repo = this.repo(id);
+    const p = repo.charter.proposal;
+    if (!p) throw new HttpError(409, 'There is no charter proposal on this floor any more.');
+    repo.charter.proposal = null;
+    if (approve) {
+      const next = edited === undefined ? p.charter : cleanCharter(edited);
+      const changed = JSON.stringify(next) !== JSON.stringify(p.charter);
+      this.applyCharter(repo, next, `${p.by}, approved by ${this.managerLabel()}`, changed ? `edited, then approved: ${p.reason}` : p.reason);
+    }
+    this.save();
+    this.emitRepo(repo);
+    return this.repoView(repo);
+  }
+
+  /** Export: the full charter as docs/CHARTER.md, on a pull request the manager merges. */
+  async exportCharter(id: string): Promise<{ url: string }> {
+    const repo = this.repo(id);
+    const c = charterOf(repo.mission, repo.charter);
+    if (isEmptyCharter(c)) throw new HttpError(400, 'The charter is empty: write it first.');
+    const url = await this.backend.exportCharter(repo.fullName, repo.defaultBranch, charterMarkdown(c, repo.fullName));
+    this.toast('success', `docs/CHARTER.md is ready to merge on ${repo.fullName}`);
+    return { url };
   }
 
   // ---------- the floor's app (preview monitor) ----------
@@ -266,6 +316,7 @@ export abstract class SwarmRepos extends SwarmCore {
         this.followup({ kind: 'unblocked', key: `unblocked:${repo.id}#${i.number}`, label: `#${i.number} unblocked`, text: `#${i.number} "${clip(i.title, 100)}" on ${this.floorName(repo)} can start: what it waited for has closed.`, repoId: repo.id });
       }
       rt.pulls = pulls;
+      if (noteObjectives(repo.charter.log, issues, pulls, Date.now())) this.save();
       this.issueAges.learn(repo.id, issues);
       this.issueAges.stamp(repo.id, pulls);
       void this.lookUpIssueAges(repo);

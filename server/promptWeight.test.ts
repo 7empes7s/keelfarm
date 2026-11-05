@@ -20,7 +20,7 @@ const PROMPTS: [string, string, number][] = [
   ['ceo (system)', ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: '/notes.md', sessionLimit: 4, maxAgents: 10, scaling: 'approve' }), 7450],
   ['ceo-review (job)', ceoJobPrompt(job('review'), null), 900],
   ['ceo-chat (job)', ceoJobPrompt(job('chat', { text: 'How is floor 2 doing?' }), null), 150],
-  ['ceo-plan (job)', ceoJobPrompt(job('plan', { repoId: 'acme/shop' }), floor), 800],
+  ['ceo-plan (job)', ceoJobPrompt(job('plan', { repoId: 'acme/shop' }), floor), 1000], // +200 for objective tags (#48)
   ['ceo-onboard (job)', ceoJobPrompt(job('onboard', { repoId: 'acme/shop' }), floor), 900],
 ];
 

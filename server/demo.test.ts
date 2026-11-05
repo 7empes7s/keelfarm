@@ -79,7 +79,8 @@ describe("the demo CEO's team sizes", () => {
   const floor = (team: Partial<DemoFloor['team']> = {}, capacity: Partial<DemoFloor['capacity']> = {}): DemoFloor => ({
     floor: 2,
     repo: 'demo-co/weather-api',
-    brief: null,
+    description: '',
+    charter: null,
     team: { size: 2, max: 10, free: 0, pendingHires: 0, pendingLetGos: 0, ...team },
     capacity: { issuesReadyToStart: 0, prsAwaitingQa: 0, ...capacity },
     backlog: [],

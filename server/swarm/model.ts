@@ -15,6 +15,7 @@ import type { AgentTerminal } from '../terminal.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
+import type { CharterRecord } from '../../shared/charter.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -59,6 +60,8 @@ export interface PersistedRepo {
   playbook: string;
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   addedAt: number;
+  /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
+  charter: CharterRecord;
 }
 
 export interface PersistedAgent {

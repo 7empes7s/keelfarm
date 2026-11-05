@@ -21,11 +21,12 @@ const qa = { port: 5839, cwd: '/desk/q', branch: qaBranch(42, 'margaret'), pr };
 
 // The prompts real sessions get, word for word.
 const BEFORE = {
-  devFull: `You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
+  devFull: `Project charter (keep every change inside it):
+Mission: Sell socks
+You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off and GitHub's checks pass, the office merges it by itself. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
 Repository: acme/shop (default branch: main)
 Project: A shop
-What the team is building (the manager's brief): Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
 Your worktree: /desk/m
@@ -57,11 +58,12 @@ Workflow:
 7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".
 8. End your final message with the pull request URL on its own line.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
-  devFixing: `You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
+  devFixing: `Project charter (keep every change inside it):
+Mission: Sell socks
+You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off and GitHub's checks pass, the office merges it by itself. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
 Repository: acme/shop (default branch: main)
 Project: A shop
-What the team is building (the manager's brief): Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
 Your worktree: /desk/m
@@ -77,13 +79,15 @@ Workflow:
 6. Push: git push origin HEAD:swarm/issue-7-margaret
 7. Reply with a short summary of what you fixed and a Self-review line: what it found and you fixed.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
-  qaFull: `You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). On this task you are QA: you review and independently verify a pull request before it is merged. Nobody answers prompts; if truly stuck, end with "BLOCKED: <what is needed>". Your sign-off is the review: on this floor a PR you pass merges by itself as soon as GitHub's checks are green, so nobody else reads the code after you. Be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, the issue's requirements not met, obvious regressions), not for style preferences.
+  qaFull: `Project charter (keep every change inside it):
+Mission: Sell socks
+
+You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). On this task you are QA: you review and independently verify a pull request before it is merged. Nobody answers prompts; if truly stuck, end with "BLOCKED: <what is needed>". Your sign-off is the review: on this floor a PR you pass merges by itself as soon as GitHub's checks are green, so nobody else reads the code after you. Be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, the issue's requirements not met, obvious regressions), not for style preferences.
 
 Another session wrote this pull request, possibly yours from an earlier task: you don't remember it, so test it as an independent reviewer would, without assuming it works.
 
 Repository: acme/shop (default branch: main)
 Project: A shop
-What the team is building (the manager's brief): Sell socks
 What to check on this project (from the CEO):
 Check the cart
 Pull request #42 "Add socks" from branch swarm/issue-7-margaret: https://github.com/acme/shop/pull/42
@@ -242,5 +246,29 @@ describe('fix prompts', () => {
   it('show the tail of a failed run, or nothing without one', () => {
     expect(failedLogLines('123', 'Error: boom')).toEqual(['Last lines of gh run view 123 --log-failed:', '```', 'Error: boom', '```']);
     expect(failedLogLines('123', '')).toEqual([]);
+  });
+});
+
+describe('the charter (#48)', () => {
+  const charter = { objectives: [{ id: 'O1', outcome: 'Checkout in 3 taps', measure: 'tested on a phone' }], standards: ['Prices are never rounded'], nonGoals: ['Shipping'], focus: 'O1' };
+  const block = 'Project charter (keep every change inside it):\nMission: Sell socks\nCurrent focus: O1\nStandards (must always hold; breaking one fails QA):\n- Prices are never rounded\nObjectives:\n- O1: Checkout in 3 taps (met when: tested on a phone)\nNon-goals (out of scope): Shipping';
+  const all = (name: string) => [
+    devSystemPrompt({ ...dev, agent: agent({ name }), repo: repo({ charter }) }),
+    devSystemPrompt({ ...dev, agent: agent({ name }), repo: repo({ charter }), fixing: { pr: 42, headRef: 'swarm/issue-7-margaret' } }),
+    qaSystemPrompt({ ...qa, agent: agent({ name }), repo: repo({ charter }) }),
+  ];
+
+  it('opens every build, fix and QA prompt, the same bytes for every agent so it stays a cached prefix', () => {
+    for (const [a, b] of all('Margaret').map((p, i) => [p, all('Ada')[i]])) {
+      expect(a.startsWith(`${block}\n`)).toBe(true);
+      expect(b.startsWith(`${block}\n`)).toBe(true);
+    }
+  });
+
+  it("has builders, fixers and QA check the diff against its standards and the issue's objective", () => {
+    const [build, fix, test] = all('Margaret');
+    for (const p of [build, fix]) expect(p).toContain("against the issue, the charter's standards and the issue's objective and the QA brief.");
+    expect(test).toContain("Check it against the charter's standards and the issue's objective too: breaking a standard fails the PR. Report it as charterCheck");
+    expect(qaSystemPrompt({ ...qa, agent: agent(), repo: repo() })).not.toContain('charterCheck');
   });
 });

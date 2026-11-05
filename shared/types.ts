@@ -91,7 +91,29 @@ export interface RepoView {
   syncError?: string;
   previewConfig: PreviewConfig;
   preview: PreviewView;
+  /** The rest of the floor's charter (#48, shared/charter.ts); `mission` above is its mission. */
+  charter: CharterView;
 }
+
+/** One objective in a floor's charter (#48): issues name it by id ("Objective: O2"); measure: how we know it's met. */
+export interface CharterObjective { id: string; outcome: string; measure: string }
+
+/** A floor's charter besides its mission. standards: must-always rules (quality bars, safety, style, "never" lists); focus: the milestone or 1-3 objectives worked on now. */
+export interface CharterParts { objectives: CharterObjective[]; standards: string[]; nonGoals: string[]; focus: string }
+
+export interface Charter extends CharterParts { mission: string }
+
+/** A charter the CEO drafted (propose_charter; by: the CEO's name): nothing changes until the manager approves it. */
+export interface CharterProposal { at: number; by: string; reason: string; charter: Charter }
+
+/** One change in a charter's history: who changed which parts (e.g. ['mission', 'standards']). */
+export interface CharterChange { at: number; by: string; parts: string[]; note: string }
+
+/** The drift view: merged PRs of the last 7 days under the objective their issue named; objective null: none. */
+export interface DriftGroup { objective: string | null; outcome: string; prs: { number: number; title: string }[] }
+
+/** history: newest first. */
+export interface CharterView extends CharterParts { proposal: CharterProposal | null; history: CharterChange[]; drift: DriftGroup[] }
 
 /**
  * How a floor's app is run for the preview monitor. {port} and {tmp} are replaced in the command and env values;

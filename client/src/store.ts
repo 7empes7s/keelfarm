@@ -50,7 +50,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'tools' | 'timelapse' | 'access';
+export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'charter' | 'team' | 'issues' | 'settings' | 'tools' | 'timelapse' | 'access';
 
 export interface Focus {
   id: string;

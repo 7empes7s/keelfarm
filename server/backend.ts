@@ -23,6 +23,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
+import type { DemoCharter } from './demoCharters.ts';
 import type { UsageWarning } from './pacing.ts';
 import { realResources, type ResourceProbe } from './health.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -57,6 +58,8 @@ export interface Backend {
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
+  /** The charter's Export (#48): docs/CHARTER.md on the office's charter branch, with a pull request; returns its URL. */
+  exportCharter(fullName: string, base: string, markdown: string): Promise<string>;
   uploadEvidence(fullName: string, filePath: string, data: Buffer): Promise<string>;
   ensureClone(fullName: string): Promise<void>;
   /** Fast-forward the floor's main checkout to GitHub when that is safe; returns how it stands. */
@@ -122,6 +125,8 @@ export interface Backend {
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
   seedCosts?(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
+  /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
+  demoCharter?(fullName: string): DemoCharter;
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */
@@ -185,6 +190,7 @@ export const realBackend: Backend = {
   listIssues: github.listIssues,
   listPulls: github.listPulls,
   createIssue: github.createIssue,
+  exportCharter: github.exportCharter,
   issueState: github.issueState,
   editIssue: github.editIssue,
   closeIssue: github.closeIssue,
