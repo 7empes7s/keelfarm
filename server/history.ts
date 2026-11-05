@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
+import { z } from 'zod';
 import {
   dayHeading,
   daysToTotal,
@@ -29,6 +30,20 @@ import {
   type HistoryPage,
   type HistoryUsage,
 } from '../shared/history.ts';
+
+/** The CEO's session_history (server/ceo.ts): what it does, and its filters. */
+export const SESSION_HISTORY_TOOL = "Past sessions from the office's history, newest first, 20 a page: who worked on what, when (UTC), the outcome and why, time and cost. Every filter narrows. Read-only.";
+export const SESSION_HISTORY_INPUT = {
+  floor: z.number().int().optional(),
+  agent: z.string().max(80).optional().describe('An id or name'),
+  kind: z.string().max(20).optional().describe('issue, qa, fix (any fix), fix-qa, fix-checks, fix-conflict, ceo (any CEO job) or merge'),
+  outcome: z.string().max(20).optional().describe('e.g. pr, qa-pass, qa-fail, commit, error, merged'),
+  issue: z.number().int().positive().optional(),
+  pr: z.number().int().positive().optional(),
+  query: z.string().max(200).optional().describe('Words in the title or outcome'),
+  days: z.number().int().min(1).max(90).optional().describe('How far back (default 7)'),
+  page: z.number().int().min(1).optional(),
+};
 
 /** The machine's daily log folder (/root/CLAUDE.md's rule): the default when it exists, outside the demo and tests. */
 export const MACHINE_DAILY_DIR = '/opt/ai-vault/daily';

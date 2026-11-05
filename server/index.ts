@@ -321,6 +321,7 @@ app.post(
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
+app.get('/api/messages/:id/refs/:index/file', route((req) => swarm.refFile(Number(req.params.id), Number(req.params.index))));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
 app.post(
   '/api/requests/:id/approve',

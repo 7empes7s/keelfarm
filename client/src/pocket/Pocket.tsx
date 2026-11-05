@@ -20,6 +20,7 @@ import './pocket.css';
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
 const AppViewer = lazy(() => import('../ui/AppViewer').then((m) => ({ default: m.AppViewer })));
+const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.CardView })));
 // The console's tabs, loaded when ⚙️ is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
@@ -202,11 +203,12 @@ function Toasts() {
   );
 }
 
-/** Panels the tabs open over the page: an agent's terminal and a floor's app. */
+/** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} />;
-  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} />;
+  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
+  if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   return null;
 }
 

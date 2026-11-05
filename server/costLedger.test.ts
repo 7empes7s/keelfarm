@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { effortHint, resolveEffort, sessionOutcome, wasteReason, type CostMerge, type CostRecord, type CostSession } from '../shared/costs.ts';
+import { REST_LABEL } from '../shared/startup.ts';
 import { CostLedger, costsRequest, costsView, floorSpend, parseLedger, pruneLedger, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
 import { sampleCosts } from './costSample.ts';
 import { DAY_MS, HOUR_MS, startOfDay } from './metrics.ts';
@@ -247,6 +248,17 @@ describe('SessionCosts', () => {
       ['fix-checks', 'high', 'commit'],
       ['issue', '', 'done'],
     ]);
+  });
+
+  it("keeps a session's measured startup, split into the office's texts and CLAUDE.md, in its line and the view (#50)", () => {
+    const { spend, lines } = recorder();
+    spend.start('a1', { kind: 'qa', effort: 'low', model: 'm', startedAt: Date.now(), round: 1, known: [{ label: 'Office instructions', tokens: 900 }] });
+    spend.startup('a1', 33_000, 36_000);
+    spend.startup('a1', 99_000, 0); // only the first turn counts
+    void spend.record(agent, 'acme/shop', spend.take('a1'), 'qa', ok, { stopped: false });
+    expect(lines[0].startup).toEqual({ tokens: 33_000, parts: [{ label: REST_LABEL, tokens: 23_100 }, { label: 'CLAUDE.md files', tokens: 9_000 }, { label: 'Office instructions', tokens: 900 }] });
+    const view = costsView([{ type: 'session', ...lines[0] }], { now: Date.now(), days: 1 });
+    expect(view.startup).toEqual([{ kind: 'qa', sessions: 1, avg: 33_000, top: lines[0].startup!.parts }]);
   });
 
   it('marks the session the watchdog stopped, and counts the CEO’s acts once a promise settles', async () => {

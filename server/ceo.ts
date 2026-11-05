@@ -1,9 +1,10 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { SESSION_HISTORY_INPUT, SESSION_HISTORY_TOOL } from './history.ts';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
 import { HttpError } from './httpError.ts';
@@ -46,9 +47,9 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
 }
 
-const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
 
-/** The CEO's next job among those `ready`: replies to the manager and triage first, reviews and follow-ups last. */
+/** The CEO's next job among those `ready`: replies to the manager first (#46: a preempted job never comes before the reply), then triage, reviews and follow-ups last. */
 export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
   return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find(ready);
 }
@@ -147,6 +148,7 @@ export interface OfficeHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
@@ -168,7 +170,7 @@ export interface OfficeHandlers {
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
-  sessionHistory(a: { floor?: number; agent?: string; kind?: string; outcome?: string; issue?: number; pr?: number; query?: string; days?: number; page?: number }): string;
+  sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
 
 export interface ExperimentToolInput {
@@ -263,6 +265,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
           ),
       },
       (a) => run(() => h.setFloorProfile(a)),
+    ),
+    tool(
+      'set_office_playbook',
+      "Replace the office-wide playbook: the rules every build, fix and QA prompt on every floor starts with, above the floor's own playbook. Only small, proven rules that hold on every project; floor specifics go in set_floor_profile. Paid for on every session: keep it short.",
+      { playbook: z.string().max(OFFICE_PLAYBOOK_MAX).describe(`Markdown bullets, at most ${OFFICE_PLAYBOOK_MAX} characters. Empty string clears it.`) },
+      (a) => run(() => h.setOfficePlaybook(a)),
     ),
     tool(
       'scale_team',
@@ -440,22 +448,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), pr: z.number().int().positive(), patch: z.boolean().optional().describe('Include the diff itself') },
       (a) => run(() => h.prDiff(a)),
     ),
-    tool(
-      'session_history',
-      'Past sessions from the office\'s history, newest first, 20 a page: who worked on what, when (UTC), the outcome and why, time and cost. Every filter narrows. Read-only.',
-      {
-        floor: z.number().int().optional(),
-        agent: z.string().max(80).optional().describe('An id or name'),
-        kind: z.string().max(20).optional().describe('issue, qa, fix (any fix), fix-qa, fix-checks, fix-conflict, ceo (any CEO job) or merge'),
-        outcome: z.string().max(20).optional().describe('e.g. pr, qa-pass, qa-fail, commit, error, merged'),
-        issue: z.number().int().positive().optional(),
-        pr: z.number().int().positive().optional(),
-        query: z.string().max(200).optional().describe('Words in the title or outcome'),
-        days: z.number().int().min(1).max(90).optional().describe('How far back (default 7)'),
-        page: z.number().int().min(1).optional(),
-      },
-      (a) => run(() => h.sessionHistory(a)),
-    ),
+    tool('session_history', SESSION_HISTORY_TOOL, SESSION_HISTORY_INPUT, (a) => run(() => h.sessionHistory(a))),
     tool(
       'send_telegram',
       "Send the manager a message on their linked Telegram chat, only when they ask for something there (\"send me the plan on Telegram\"). Refused when Telegram isn't set up. It never reaches anyone else.",
@@ -568,6 +561,7 @@ export function ceoSystemPrompt(o: {
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
   ].join('\n');
 }
 

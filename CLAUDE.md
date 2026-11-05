@@ -158,6 +158,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `costLedger.ts`: the cost ledger (#18): a line per finished session (task kind, effort, cost, outcome) and merged PR in
   `<SWARM_HOME>/costs.jsonl`, 30 days, never in the snapshot; it backs Mission control's "Where the plan goes"
   (`GET /api/costs`) and company_status's spend. Kinds, waste rules and effort per kind: `shared/costs.ts`.
+  Each new session's startup context (#50: its first turn's input tokens, split into the office's texts, CLAUDE.md
+  files and the rest) is on its line: `shared/startup.ts`. Lean role profiles (builders and fixers, QA, the CEO) are in
+  `shared/tooling.ts`; the office-wide playbook is `settings.officePlaybook`, in `prompts.ts`'s stable `floorContext`.
 - `history.ts`: the daily work log and session history (#49): an entry per finished session and office merge in
   `<daily dir>/YYYY-MM-DD.md` (Settings; `/opt/ai-vault/daily` when it exists, never from the demo or tests), each
   Claude Code transcript gzipped to `<SWARM_HOME>/history/YYYY/MM/DD/`, an index for the History tab and the CEO's

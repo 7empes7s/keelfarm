@@ -30,6 +30,8 @@ interface PromptBase {
   branch: string;
   /** What the office did about the desk's dependencies (deps.ts depsPromptLine); empty or absent says nothing. */
   depsLine?: string;
+  /** The office-wide playbook (Settings, set_office_playbook): above every floor's; '' or absent adds nothing. */
+  officePlaybook?: string;
 }
 
 export interface DevPromptInput extends PromptBase {
@@ -61,8 +63,23 @@ const BLOCKED_LINE = 'If truly stuck (e.g. no credentials), end with "BLOCKED: <
 
 export const ONE_TURN = "Your session ends when your turn ends: background tasks and notifications won't wake you. Never end a turn to wait. Wait in the foreground with a timeout, then finish.";
 
-/** The floor's playbook as a prompt section, after the QA brief; nothing when it's empty. */
-const playbookLines = (repo: PromptFloor) => (repo.playbook ? [`This floor's playbook (follow it):\n${repo.playbook}`] : []);
+/**
+ * What every builder, fixer and QA session on a floor starts with, byte for byte the same whoever runs it and on
+ * whichever task (#50): the playbooks and the floor's brief before anything task-specific, so prompt caching reuses
+ * the prefix. Agent names, ports, branches and PRs come after it.
+ */
+export function floorContext(repo: PromptFloor, officePlaybook = ''): string {
+  return [
+    officePlaybook ? `Every project's playbook (follow it):\n${officePlaybook}` : '',
+    `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
+    repo.summary ? `Project: ${repo.summary}` : '',
+    repo.mission ? `What the team is building (the manager's brief): ${repo.mission}` : '',
+    repo.qaBrief ? `What QA checks on this project (from the CEO):\n${repo.qaBrief}` : '',
+    repo.playbook ? `This floor's playbook (follow it):\n${repo.playbook}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
 /** What a builder or fixer reviews their diff against: the floor's guidance that's set. */
 const reviewAgainst = (repo: PromptFloor) => ['the issue', repo.playbook && 'the playbook', repo.qaBrief && 'the QA brief'].filter(Boolean).join(', ').replace(/, (?!.*, )/, ' and ');
@@ -74,18 +91,15 @@ const selfReviewStep = (n: number, repo: PromptFloor) =>
 export const devBranch = (issue: number | string, slug: string) => `swarm/issue-${issue}-${slug}`;
 export const qaBranch = (pr: number | string, slug: string) => `qa/pr-${pr}-${slug}`;
 
-export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fixing, depsLine }: DevPromptInput) {
+export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fixing, depsLine, officePlaybook }: DevPromptInput) {
   const push = fixing ? `git push origin HEAD:${fixing.headRef}` : `git push -u origin ${branch}`;
   const links = linked.map((r) => `- ${r.fullName}: read-only reference clone at ${r.dir}`);
   return [
+    floorContext(repo, officePlaybook),
+    '',
     `You are ${a.name}, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". ${BLOCKED_LINE} The manager may occasionally send you messages; follow their instructions.`,
     `Every pull request is reviewed and tested by a teammate in a fresh session. ${repo.autoMerge ? "Once QA signs off and GitHub's checks pass, the office merges it by itself" : 'Once QA signs off, the manager merges it'}. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.`,
     '',
-    `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
-    repo.summary ? `Project: ${repo.summary}` : '',
-    repo.mission ? `What the team is building (the manager's brief): ${repo.mission}` : '',
-    repo.qaBrief ? `What QA checks on this project (from the CEO):\n${repo.qaBrief}` : '',
-    ...playbookLines(repo),
     `Your worktree: ${cwd}`,
     depsLine ?? '',
     fixing
@@ -114,17 +128,14 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     .join('\n');
 }
 
-export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep }: QaPromptInput) {
+export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep, officePlaybook }: QaPromptInput) {
   return [
+    floorContext(repo, officePlaybook),
+    '',
     `You are ${a.name}, a software engineer on an autonomous agent team ("cubefarm"). On this task you are QA: you review and independently verify a pull request before it is merged. Nobody answers prompts; if truly stuck, end with "BLOCKED: <what is needed>". Your sign-off is the review: ${repo.autoMerge ? "on this floor a PR you pass merges by itself as soon as GitHub's checks are green, so nobody else reads the code after you. " : ''}Be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, the issue's requirements not met, obvious regressions), not for style preferences.`,
     '',
     "Another session wrote this pull request, possibly yours from an earlier task: you don't remember it, so test it as an independent reviewer would, without assuming it works.",
     '',
-    `Repository: ${repo.fullName} (default branch: ${repo.defaultBranch})`,
-    ...(repo.summary ? [`Project: ${repo.summary}`] : []),
-    ...(repo.mission ? [`What the team is building (the manager's brief): ${repo.mission}`] : []),
-    ...(repo.qaBrief ? [`What to check on this project (from the CEO):\n${repo.qaBrief}`] : []),
-    ...playbookLines(repo),
     `Pull request #${pr.number} "${pr.title}" from branch ${pr.headRefName}: ${pr.url}`,
     `Your worktree: ${cwd}. It has the pull request's code checked out on local branch ${branch}.`,
     ...(depsLine ? [depsLine] : []),

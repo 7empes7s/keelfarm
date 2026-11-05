@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
 import { MANDATE_MAX_CHARS } from '../shared/followups.ts';
 import {
@@ -128,6 +128,7 @@ describe('office tools', () => {
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
+      setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
@@ -186,6 +187,7 @@ describe('office tools', () => {
       'set_dependencies',
       'set_floor_profile',
       'set_mandate',
+      'set_office_playbook',
       'worktree_file',
     ]);
   });
@@ -238,6 +240,13 @@ describe('office tools', () => {
     const { client, floors } = await connect();
     await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } } });
     expect(floors).toEqual([{ floor: 1, preview_env: { VITE_API: 'http://localhost:{port}' } }]);
+  });
+
+  it('takes the office playbook up to its length cap (#50)', async () => {
+    const { client, calls } = await connect();
+    expect((await client.callTool({ name: 'set_office_playbook', arguments: { playbook: '- Minimal diff.' } })).isError).toBeFalsy();
+    expect((await client.callTool({ name: 'set_office_playbook', arguments: { playbook: 'x'.repeat(OFFICE_PLAYBOOK_MAX + 1) } })).isError).toBe(true);
+    expect(calls).toEqual([['set_office_playbook', { playbook: '- Minimal diff.' }]]);
   });
 
   it("takes a floor's playbook up to its length cap", async () => {
@@ -518,7 +527,7 @@ describe('follow-ups (#27)', () => {
     const office = createOfficeTools(
       researchReadOnly(
         {
-          companyStatus: ok, agentDetail: ok, setFloorProfile: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
           restartAgent: ok, messageAgent: async () => 'ok', defineExperiment: ok, sessionHistory: ok,
