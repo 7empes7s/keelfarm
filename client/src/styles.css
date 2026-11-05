@@ -1636,11 +1636,11 @@ input.inline:focus {
 }
 .term-key-once {
   background: var(--term-key-on);
-  color: #1b1b29;
+  color: var(--ds-on-color);
 }
 .term-key-locked {
   background: var(--term-key-on);
-  color: #1b1b29;
+  color: var(--ds-on-color);
   box-shadow: inset 0 0 0 2px var(--term-key-ink);
   text-decoration: underline;
 }
