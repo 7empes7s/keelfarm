@@ -69,6 +69,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
       );
     }
     u.drainingSince = d.drainingSince;
+    if (d.state === 'draining') this.cancelHolds('Cancelled: the office is restarting for an update. End this job now; pick it up again after the update.');
     if (d.send) void this.handOver(d.timedOut);
     this.emitOfficeUpdate();
     return d.state === 'draining' || d.state === 'updating';

@@ -14,6 +14,7 @@ import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
 import { DEFAULT_RESEARCH_MIN, RESEARCH_NO_FILING, researchPrompt, short } from './research.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
+import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -146,7 +147,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers {
+export interface OfficeHandlers extends WaitHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
@@ -460,6 +461,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
       (a) => run(() => h.sendTelegram(a)),
     ),
+    ...waitTools(h, run),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -550,6 +552,7 @@ export function ceoSystemPrompt(o: {
     '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
+    "- wait_for a PR, issue, agent or preview instead of ending the job; ask_manager for answers you need; consult a floor's agent about its code.",
     `- ${ONE_TURN}`,
     '',
     'Rules:',

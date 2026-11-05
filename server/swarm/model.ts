@@ -146,6 +146,7 @@ interface CeoState {
   lastReviewAt: number | null;
   lastFingerprint: string | null; // company state at the last review; unchanged means the next review is skipped
   followups: FollowupState; // office events waiting for a follow-up job (shared/followups.ts)
+  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null }; // its kept session (#28)
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

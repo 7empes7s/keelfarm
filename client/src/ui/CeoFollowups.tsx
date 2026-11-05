@@ -1,5 +1,6 @@
 // The CEO's follow-ups (#27): which office events wake the CEO (Settings → The CEO), and on the CEO tab the events
-// waiting for a follow-up and the manager's standing mandates, each with a ⋯ menu to remove it.
+// waiting for a follow-up and the manager's standing mandates, each with a ⋯ menu to remove it. Also its kept session,
+// waits and consults (#28): their settings, and on the CEO tab what its session holds and waits on.
 import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -7,6 +8,7 @@ import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { DEFAULT_FOLLOWUPS, FOLLOWUP_KINDS, MANDATE_MAX_CHARS, mandateWhere } from '../../../shared/followups';
 import type { CeoMandate, FollowupSettings as Followups } from '../../../shared/followups';
+import { DEFAULT_CEO_AWAKE, type CeoAwakeSettings } from '../../../shared/ceoAwake';
 
 const save = (patch: Parameters<typeof api.updateSettings>[0]) => void api.updateSettings(patch).catch(() => undefined);
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -116,5 +118,53 @@ export function CeoMandates() {
         </p>
       )}
     </>
+  );
+}
+
+type AwakeNumber = Exclude<keyof CeoAwakeSettings, 'keepAlive'>;
+const AWAKE_FIELDS: [AwakeNumber, string, number, number][] = [
+  ['restartTurns', 'Fresh session after (turns)', 20, 5000],
+  ['idleHours', '… or after idle for (hours)', 1, 168],
+  ['maxWaitMin', 'Longest wait for a PR, issue or agent (minutes)', 1, 30],
+  ['consultMin', "A consult's time cap (minutes)", 2, 30],
+  ['consultMax', 'Consults at once', 1, 10],
+];
+
+export function AwakeSettings() {
+  const w = useStore((s) => s.settings.ceoAwake) ?? DEFAULT_CEO_AWAKE;
+  const set = (patch: Partial<CeoAwakeSettings>) => save({ ceoAwake: { ...w, ...patch } });
+  return (
+    <>
+      <div className="small" style={{ marginTop: 8 }}>
+        <b>Staying awake, waits and consults</b>
+      </div>
+      <label className="toggle block">
+        <input type="checkbox" checked={w.keepAlive} onChange={(e) => set({ keepAlive: e.target.checked })} />
+        <span>Keep the CEO's session between jobs, so follow-ups and chat reuse its context</span>
+      </label>
+      {AWAKE_FIELDS.map(([k, label, min, max]) => (
+        <label key={k} className="field">
+          <span>{label}</span>
+          <input key={`${k}${w[k]}`} type="number" min={min} max={max} defaultValue={w[k]} onBlur={(e) => Number(e.target.value) !== w[k] && set({ [k]: Number(e.target.value) })} />
+        </label>
+      ))}
+      <p className="muted small">
+        The CEO can wait for a PR's QA or merge, an issue, an agent or a preview, ask you a question and wait up to 2 hours for your reply, and consult an agent on a floor in a short
+        read-only session (no edits, commits or PRs). A waiting CEO holds no session slot, and every wait ends when the office updates itself.
+      </p>
+    </>
+  );
+}
+
+/** The CEO tab's line on its session: turns and cost since it started, and what it waits on. */
+export function CeoSession() {
+  const s = useStore((x) => x.ceo.session);
+  if (!s?.startedAt) return null;
+  return (
+    <p className="small">
+      <b>Session:</b> {s.turns} turns · ${s.costUsd.toFixed(2)} since {time(s.startedAt)}
+      {s.consults > 0 && ` · ${s.consults} consult${s.consults === 1 ? '' : 's'}`}
+      {s.waiting && <span className="muted"> · waiting for {s.waiting}</span>}
+    </p>
   );
 }

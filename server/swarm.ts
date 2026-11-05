@@ -29,6 +29,7 @@ import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/to
 import { describePractices, emptyEveryProject, everyProjectSettings } from '../shared/practices.ts';
 import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
+import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
@@ -165,6 +166,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
+      this.state.settings.ceoAwake = ceoAwakeSettings(undefined, loaded.settings?.ceoAwake);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
       try {
         this.state.settings.everyProject = everyProjectSettings(undefined, loaded.settings?.everyProject);
@@ -488,6 +490,7 @@ export class Swarm extends SwarmCeoTools {
     if (patch.researchMin !== undefined) s.researchMin = clampResearchMin(patch.researchMin);
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
+    if (patch.ceoAwake !== undefined) s.ceoAwake = ceoAwakeSettings(s.ceoAwake, patch.ceoAwake);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
     if (typeof patch.companyName === 'string') s.companyName = patch.companyName.trim().slice(0, 60);
     if (typeof patch.dogName === 'string') s.dogName = patch.dogName.trim().slice(0, 24) || DEFAULT_DOG_NAME;
