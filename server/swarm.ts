@@ -12,7 +12,7 @@ import { CloudError } from './box.ts';
 import { Cloud, officeId, redact } from './cloud.ts';
 import type { PrDetails } from './github.ts';
 import { defaultProjectsDir, DESK_SWEEP_INTERVAL_MS, HOME_DIR, LOG_BUFFER, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
-import { askedFor, ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, issueRefusal, jobLabel, MANDATE_NOT_ASKED, planDependencies, prDiffText, QA_TEXT_MAX, tailLines, AGENT_LOG_MAX as AGENT_LOG_MAX_LINES, plannedSize, scalePlan, type CeoJob, type OfficeTools, type TeamNow } from './ceo.ts';
+import { askedFor, ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, issueRefusal, jobLabel, MANDATE_NOT_ASKED, planDependencies, prDiffText, agentLogText, qaReportText, AGENT_LOG_MAX as AGENT_LOG_MAX_LINES, plannedSize, scalePlan, type CeoJob, type OfficeTools, type TeamNow } from './ceo.ts';
 import { afterClose, ASK_AGAIN_MS, closedWhy, closuresHeld, forgettable, issueOpen, nameList, pullNow, stillOpen, stoppedMessage, toAsk, toHold, type Closure, type FloorState, type KnownPull, type LearnedPull } from './closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from './deps.ts';
 import { setUpDesk } from './deskSetup.ts';
@@ -62,7 +62,7 @@ import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '..
 import { WeatherService } from './weather.ts';
 import { blockers, holdUps, waitsMessage } from '../shared/issues.ts';
 import { dayKey, journalFrame, legacyAgent, legacyRequest, redact as scrub } from '../shared/journal.ts';
-import { addFollowup, DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings, followupStep, liveMandates, loadFollowups, mandateFor, mandateList, MAX_MANDATES, quietReply, takeFollowups, unblockedIssues, type FollowupEvent, type FollowupState } from '../shared/followups.ts';
+import { addFollowup, DEFAULT_FOLLOWUPS, emptyFollowups, followupEvents, followupSettings, followupStep, followupWaiting, liveMandates, loadFollowups, mandateFor, mandateList, MAX_MANDATES, quietReply, takeFollowups, unblockedIssues, type FollowupEvent, type FollowupState } from '../shared/followups.ts';
 import { cleanStyle, HAIR_COLORS, SKIN_TONES, type AgentStyle } from '../shared/looks.ts';
 import { achievementDef, type ProgressView } from '../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
@@ -3577,13 +3577,7 @@ export class Swarm {
       const stillConflicts = pull && (pull.mergeable === 'CONFLICTING' || pull.mergeState === 'DIRTY') ? `, and it still conflicts with ${repo.defaultBranch} with its ${MAX_MERGE_FIXES} merge fixes used up` : '';
       const triaged = nextStatus === 'needs-human' && this.stuck(rec, {}, `it failed QA ${qaRounds} times, the most QA rounds a PR gets (${MAX_QA_ROUNDS})${stillConflicts}`);
       if (!pass && qaRounds >= 2) {
-        this.followup({
-          kind: 'qaFailed',
-          key: `qa:${repo.id}#${rec.prNumber}`,
-          label: `#${rec.prNumber} failed QA ${qaRounds}×`,
-          text: `PR #${rec.prNumber} on ${this.floorName(repo)} failed QA ${qaRounds} times (round ${rec.round}): ${clip(report.summary, 200)} qa_report has the report and screenshots.`,
-          repoId: repo.id,
-        });
+        this.followup(followupEvents.qaFailed(repo.id, this.floorName(repo), rec.prNumber, qaRounds, rec.round, clip(report.summary, 200)));
       }
       this.toast(
         pass ? 'success' : 'error',
@@ -4691,14 +4685,7 @@ export class Swarm {
   }
 
   private followupView(): CeoInfo['followups'] {
-    const f = this.state.ceo.followups;
-    if (!f.pending.length) return { pending: [], startsAt: null, held: null };
-    const step = followupStep({ ...f, pending: [...f.pending], started: [...f.started] }, { now: Date.now(), settings: this.state.settings.ceoFollowups, usage: this.usageNow().state });
-    return {
-      pending: f.pending.map((e) => e.label),
-      startsAt: step.do === 'wait' ? step.until : Date.now(),
-      held: step.do === 'wait' && step.why !== 'window' ? step.why : null,
-    };
+    return followupWaiting(this.state.ceo.followups, { now: Date.now(), settings: this.state.settings.ceoFollowups, usage: this.usageNow().state });
   }
 
   private floorName(repo: PersistedRepo) {
@@ -5006,13 +4993,7 @@ export class Swarm {
     this.watch.remedied.set(p.key, now);
     if (remedy === 'requeue' && a) {
       const repo = this.state.repos.find((r) => r.id === a.repoId);
-      this.followup({
-        kind: 'stalled',
-        key: `stalled:${a.id}:${what}`,
-        label: `${a.name} stalled`,
-        text: `${a.name} (${a.id}) stalled on ${what}${repo ? ` on ${this.floorName(repo)}` : ''}: the watchdog put it back in line after ${mins} minutes. agent_log and worktree_file show how far they got.`,
-        repoId: repo?.id,
-      });
+      this.followup(followupEvents.stalled(a, what, mins, repo?.id, repo && this.floorName(repo)));
       this.requeue(a, `the watchdog put ${what} back in line after ${mins} ${p.kind === 'quiet' ? 'quiet minutes and a nudge' : 'minutes setting up a desk'}`);
       return `put ${a.name}'s ${what} back in line (${p.kind === 'quiet' ? `quiet for ${mins} minutes, even after a nudge` : `stuck setting up a desk for ${mins} minutes`})`;
     }
@@ -5340,13 +5321,7 @@ export class Swarm {
     const name = repo.fullName.split('/')[1];
     this.notifier.notify('merge', `Merged PR #${n}`, `${name}${title ? `: ${title}` : ''}`, `${name} #${n}${title ? ` ${title}` : ''}`);
     const closes = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === n)?.closesIssues ?? [];
-    this.followup({
-      kind: 'merged',
-      key: `merged:${repo.id}#${n}`,
-      label: `#${n} merged`,
-      text: `PR #${n} "${clip(title, 100)}" merged on ${this.floorName(repo)}${closes.length ? `, closing ${closes.map((i) => `#${i}`).join(', ')}` : ''}. Check it against its issue's acceptance criteria.`,
-      repoId: repo.id,
-    });
+    this.followup(followupEvents.merged(repo.id, this.floorName(repo), n, clip(title, 100), closes));
   }
 
   /** Agents stuck in an error for STUCK_ERROR_MS: the manager hears once per error (checked every minute). */
@@ -5357,13 +5332,7 @@ export class Swarm {
       const repo = this.state.repos.find((r) => r.id === a.repoId);
       const mins = Math.round((now - (a.endedAt ?? now)) / 60_000);
       this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
-      if (a.role !== 'ceo') this.followup({
-        kind: 'agentError',
-        key: `error:${key}`,
-        label: `${a.name}'s error`,
-        text: `${a.name} (${a.id})${repo ? ` on ${this.floorName(repo)}` : ''} has been in an error for ${mins} minutes: ${clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200)}. agent_log shows what happened.`,
-        repoId: repo?.id,
-      });
+      if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
     }
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }
@@ -5878,26 +5847,9 @@ export class Swarm {
     const a = this.agentByRef(x.agent_id);
     const rt = this.agentRt.get(a.id);
     const secrets = this.secrets();
-    const raw = rt?.terminal ? rt.terminal.tail(AGENT_LOG_MAX_LINES) : (rt?.log ?? a.logTail).map((l) => l.text);
-    const { lines, cut } = tailLines(raw.map((l) => scrub(l, secrets)), x.lines);
-    const repo = this.state.repos.find((r) => r.id === a.repoId);
-    const at = (t: number | null) => (t ? new Date(t).toISOString().slice(0, 19) : null);
-    const session = {
-      name: a.name,
-      floor: repo?.floor ?? null,
-      status: a.status,
-      doing: this.agentDoing(a),
-      task: a.task,
-      issue: a.issueNumber ? { number: a.issueNumber, title: a.issueTitle } : null,
-      pullRequest: a.prNumber ?? null,
-      branch: a.branch,
-      startedAt: at(a.startedAt),
-      endedAt: at(a.endedAt),
-      turns: a.turns,
-      costUsd: Math.round(a.costUsd * 100) / 100,
-      lastError: a.lastError ? clip(scrub(a.lastError, secrets), 400) : null,
-    };
-    return `${JSON.stringify(session)}\n--- the last ${lines.length} line${lines.length === 1 ? '' : 's'}${cut ? ' (earlier ones left out)' : ''} ---\n${lines.join('\n') || '(nothing yet)'}`;
+    const lines = rt?.terminal ? rt.terminal.tail(AGENT_LOG_MAX_LINES) : (rt?.log ?? a.logTail).map((l) => l.text);
+    const floor = this.state.repos.find((r) => r.id === a.repoId)?.floor ?? null;
+    return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
   }
 
   /** qa_report: a PR's latest QA verdict, report and screenshots (as files the CEO can Read). */
@@ -5906,27 +5858,9 @@ export class Swarm {
     const pr = Number(x.pr);
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === pr);
     if (!rec) throw new Error(`PR #${pr} on floor ${repo.floor} has no QA record: it hasn't been tested yet, or it has closed.`);
-    const verdict = rec.status === 'passed' ? 'pass' : rec.status === 'failed' || rec.status === 'fixing' ? 'fail' : rec.status;
     const secrets = this.secrets();
-    const text = (t: string | null) => (t ? clip(scrub(t, secrets), QA_TEXT_MAX) : null);
     const dir = qaShotsDir(QA_SHOTS_DIR, repo.id, pr);
-    return JSON.stringify(
-      {
-        pr,
-        floor: repo.floor,
-        verdict,
-        status: rec.status,
-        round: rec.round,
-        summary: text(rec.summary),
-        checks: rec.checks.slice(0, 40).map((c) => ({ name: clip(c.name, 120), result: c.result, details: clip(scrub(c.details, secrets), 300) })),
-        fixInstructions: text(rec.fixInstructions),
-        stuckWhy: rec.stuckWhy,
-        comment: rec.commentUrl,
-        screenshots: (rec.shots ?? []).map((sh, i) => ({ caption: sh.caption, page: sh.page, file: qaShotFile(dir, i, sh.mime) })),
-      },
-      null,
-      1,
-    );
+    return qaReportText(rec, repo.floor, (t) => scrub(t, secrets), (i, mime) => qaShotFile(dir, i, mime));
   }
 
   /** worktree_file: a file or diff from an agent's worktree, or their branch in the floor's clone once it's gone. */

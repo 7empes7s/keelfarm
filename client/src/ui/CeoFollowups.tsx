@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { DEFAULT_FOLLOWUPS, FOLLOWUP_KINDS, MANDATE_MAX_CHARS, mandateWhere } from '../../../shared/followups';
-import type { CeoMandate, FollowupSettings as Followups } from '../../../shared/types';
+import type { CeoMandate, FollowupSettings as Followups } from '../../../shared/followups';
 
 const save = (patch: Parameters<typeof api.updateSettings>[0]) => void api.updateSettings(patch).catch(() => undefined);
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

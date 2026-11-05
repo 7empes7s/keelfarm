@@ -1472,7 +1472,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
-    : /^Follow-up:/.test(prompt)
+    : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)
       ? async () => 'Nothing to do.'

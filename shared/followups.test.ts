@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { addFollowup, DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings, followupStep, loadFollowups, mandateFor, mandateList, MAX_FOLLOWUP_EVENTS, MAX_MANDATES, quietReply, takeFollowups, unblockedIssues, type FollowupEvent } from './followups.ts';
-import type { FollowupSettings } from './types.ts';
+import { addFollowup, DEFAULT_FOLLOWUPS, emptyFollowups, followupEvents, followupSettings, followupStep, followupWaiting, loadFollowups, mandateFor, mandateList, MAX_FOLLOWUP_EVENTS, MAX_MANDATES, quietReply, takeFollowups, unblockedIssues, type FollowupEvent } from './followups.ts';
+import type { FollowupSettings } from './followups.ts';
 
 const MIN = 60_000;
 const settings = (over: Partial<FollowupSettings> = {}): FollowupSettings => ({ ...DEFAULT_FOLLOWUPS, ...over, kinds: { ...DEFAULT_FOLLOWUPS.kinds, ...over.kinds } });
@@ -149,5 +149,26 @@ describe('what a follow-up reports', () => {
     const after = before.filter((i) => i.number !== 1);
     expect(unblockedIssues(before, after).map((i) => i.number)).toEqual([2]);
     expect(unblockedIssues(after, after)).toEqual([]);
+  });
+});
+
+describe("the events' wording and the CEO tab's view", () => {
+  it('builds each event with a key that merges repeats', () => {
+    const m = followupEvents.merged('r1', 'floor 1 (o/r)', 13, 'Add login', [4, 5]);
+    expect(m).toMatchObject({ kind: 'merged', key: 'merged:r1#13', label: '#13 merged', repoId: 'r1' });
+    expect(m.text).toContain('closing #4, #5');
+    expect(followupEvents.stalled({ id: 'a1', name: 'Ada' }, 'QA', 30).text).not.toContain(' on undefined');
+    expect(followupEvents.agentError({ id: 'a1', name: 'Ada' }, 'k', 12, 'boom', 'r1', 'floor 1 (o/r)').key).toBe('error:k');
+    expect(followupEvents.qaFailed('r1', 'floor 1 (o/r)', 7, 2, 3, 'broken.').label).toBe('#7 failed QA 2×');
+  });
+
+  it('says when the waiting job starts, without changing the state', () => {
+    const s = emptyFollowups();
+    expect(followupWaiting(s, { now: 0, settings: DEFAULT_FOLLOWUPS, usage: 'normal' })).toEqual({ pending: [], startsAt: null, held: null });
+    addFollowup(s, { ...followupEvents.merged('r1', 'f', 1, 't', []), at: 1000 }, DEFAULT_FOLLOWUPS);
+    const before = JSON.stringify(s);
+    const held = followupWaiting(s, { now: 2000, settings: DEFAULT_FOLLOWUPS, usage: 'paused' });
+    expect(held).toMatchObject({ pending: ['#1 merged'], held: 'usage' });
+    expect(JSON.stringify(s)).toBe(before);
   });
 });

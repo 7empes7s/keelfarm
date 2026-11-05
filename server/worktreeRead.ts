@@ -9,7 +9,7 @@ export const WORKTREE_MAX_CHARS = 20_000;
 /** Files bigger than this aren't read at all. */
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
-export type WorktreeMode = 'file' | 'diff_stat' | 'diff';
+type WorktreeMode = 'file' | 'diff_stat' | 'diff';
 
 export interface WorktreeRead {
   dir: string; // the agent's worktree, or the floor's clone when reading `ref`

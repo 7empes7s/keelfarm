@@ -9,6 +9,7 @@ import {
   AGENT_LOG_DEFAULT,
   AGENT_LOG_MAX,
   AGENT_LOG_MAX_CHARS,
+  agentLogText,
   ceoJobPrompt,
   ceoSystemPrompt,
   checkCloseIssue,
@@ -24,6 +25,7 @@ import {
   PR_DIFF_MAX_CHARS,
   PR_FILES_MAX,
   prDiffText,
+  qaReportText,
   scalePlan,
   tailLines,
   type CeoJob,
@@ -520,5 +522,18 @@ describe('read-only tools: output caps', () => {
     expect(text).toContain('… and 50 more');
     expect(text.length).toBeLessThan(PR_DIFF_MAX_CHARS + 8000);
     expect(prDiffText({ files: files.slice(0, 1), diff: null })).toBe('1 file changed, +2 −1\n  src/f0.ts +2 −1');
+  });
+
+  it('agent_log and qa_report mask every text they return', () => {
+    const mask = (t: string) => t.replaceAll('sk-secret', '***');
+    const agent = { name: 'Ada', status: 'error', task: 'build', issueNumber: 3, issueTitle: 'Fix', prNumber: null, branch: 'b', startedAt: 0, endedAt: null, turns: 4, costUsd: 1.234, lastError: 'bad key sk-secret' };
+    const log = agentLogText(agent, { floor: 2, doing: null, lines: ['one', 'uses sk-secret'], mask });
+    expect(log).not.toContain('sk-secret');
+    expect(JSON.parse(log.split('\n')[0])).toMatchObject({ name: 'Ada', floor: 2, issue: { number: 3 }, costUsd: 1.23, endedAt: null });
+    expect(log.endsWith('--- the last 2 lines ---\none\nuses ***')).toBe(true);
+    const rec = { prNumber: 7, status: 'fixing' as QaStatus, round: 2, summary: 'leaked sk-secret', checks: [{ name: 'build', result: 'fail', details: 'sk-secret' }], fixInstructions: null, stuckWhy: null, commentUrl: null, shots: [{ caption: 'home', page: '/', mime: 'image/png' }] };
+    const qa = qaReportText(rec, 2, mask, (i) => `shot-${i}.png`);
+    expect(qa).not.toContain('sk-secret');
+    expect(JSON.parse(qa)).toMatchObject({ pr: 7, floor: 2, verdict: 'fail', screenshots: [{ caption: 'home', file: 'shot-0.png' }] });
   });
 });

@@ -6,6 +6,7 @@ import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
+import type { CeoMandate, FollowupSettings } from './followups.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -657,24 +658,6 @@ export interface ChatArtifact {
 }
 
 export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup';
-
-/** Office events that wake the CEO for a follow-up job (shared/followups.ts). */
-export type FollowupKind = 'merged' | 'qaFailed' | 'agentError' | 'stalled' | 'unblocked' | 'audit' | 'usage';
-
-export interface FollowupSettings {
-  kinds: Record<FollowupKind, boolean>;
-  windowMin: number; // events this close together go into one job
-  perHour: number; // most follow-up jobs started in an hour; 0 = follow-ups off
-}
-
-/** "Keep working on X until it's perfected": recorded by the CEO's set_mandate, removable in the CEO tab. */
-export interface CeoMandate {
-  id: string;
-  text: string;
-  floors: number[]; // [] = every floor
-  expiresAt: number | null;
-  at: number;
-}
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO

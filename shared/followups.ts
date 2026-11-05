@@ -1,10 +1,27 @@
 import { blockers } from './issues.ts';
-import type { CeoMandate, FollowupKind, FollowupSettings } from './types.ts';
 
 // The CEO's follow-ups (#27): office events (a merge, a second QA fail, an agent stuck…) wake the CEO for a short job.
 // Events close together are batched into one job, at most `perHour` jobs start in an hour, and none while Claude's
 // usage is pacing or paused (they wait and merge). The manager's standing mandates say on which floors a follow-up may
 // file issues. Pure: the swarm keeps the state, the client shows the settings.
+
+/** Office events that wake the CEO for a follow-up job */
+export type FollowupKind = 'merged' | 'qaFailed' | 'agentError' | 'stalled' | 'unblocked' | 'audit' | 'usage';
+
+export interface FollowupSettings {
+  kinds: Record<FollowupKind, boolean>;
+  windowMin: number; // events this close together go into one job
+  perHour: number; // most follow-up jobs started in an hour; 0 = follow-ups off
+}
+
+/** "Keep working on X until it's perfected": recorded by the CEO's set_mandate, removable in the CEO tab. */
+export interface CeoMandate {
+  id: string;
+  text: string;
+  floors: number[]; // [] = every floor
+  expiresAt: number | null;
+  at: number;
+}
 
 export const FOLLOWUP_KINDS: { id: FollowupKind; label: string }[] = [
   { id: 'merged', label: 'A pull request merged (checked against its issue)' },
@@ -167,4 +184,34 @@ export function unblockedIssues<T extends { number: number; body: string }>(befo
   const openAfter = new Set(after.map((i) => i.number));
   const waited = new Set(before.filter((i) => blockers(i.body, openBefore).length > 0).map((i) => i.number));
   return after.filter((i) => waited.has(i.number) && blockers(i.body, openAfter).length === 0);
+}
+
+type NewEvent = Omit<FollowupEvent, 'id' | 'at'>;
+type Who = { id: string; name: string };
+
+/** The office events' wording, for the job prompt. `where` is "floor N (owner/repo)"; texts come already clipped. */
+export const followupEvents = {
+  merged: (repoId: string, where: string, n: number, title: string, closes: number[]): NewEvent => ({
+    kind: 'merged', key: `merged:${repoId}#${n}`, label: `#${n} merged`, repoId,
+    text: `PR #${n} "${title}" merged on ${where}${closes.length ? `, closing ${closes.map((i) => `#${i}`).join(', ')}` : ''}. Check it against its issue's acceptance criteria.`,
+  }),
+  qaFailed: (repoId: string, where: string, pr: number, rounds: number, round: number, summary: string): NewEvent => ({
+    kind: 'qaFailed', key: `qa:${repoId}#${pr}`, label: `#${pr} failed QA ${rounds}×`, repoId,
+    text: `PR #${pr} on ${where} failed QA ${rounds} times (round ${round}): ${summary} qa_report has the report and screenshots.`,
+  }),
+  stalled: (a: Who, what: string, mins: number, repoId?: string, where?: string): NewEvent => ({
+    kind: 'stalled', key: `stalled:${a.id}:${what}`, label: `${a.name} stalled`, repoId,
+    text: `${a.name} (${a.id}) stalled on ${what}${where ? ` on ${where}` : ''}: the watchdog put it back in line after ${mins} minutes. agent_log and worktree_file show how far they got.`,
+  }),
+  agentError: (a: Who, key: string, mins: number, error: string, repoId?: string, where?: string): NewEvent => ({
+    kind: 'agentError', key: `error:${key}`, label: `${a.name}'s error`, repoId,
+    text: `${a.name} (${a.id})${where ? ` on ${where}` : ''} has been in an error for ${mins} minutes: ${error}. agent_log shows what happened.`,
+  }),
+};
+
+/** What the CEO tab shows of the waiting events: when the job starts, and what holds it. Doesn't change `s`. */
+export function followupWaiting(s: FollowupState, o: Parameters<typeof followupStep>[1]): { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null } {
+  if (!s.pending.length) return { pending: [], startsAt: null, held: null };
+  const step = followupStep({ ...s, pending: [...s.pending], started: [...s.started] }, o);
+  return { pending: s.pending.map((e) => e.label), startsAt: step.do === 'wait' ? step.until : o.now, held: step.do === 'wait' && step.why !== 'window' ? step.why : null };
 }

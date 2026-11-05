@@ -1,10 +1,11 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
-import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type FollowupEvent } from '../shared/followups.ts';
+import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type CeoMandate, type QaStatus } from '../shared/types.ts';
+import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type QaStatus } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
+import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
 
@@ -31,7 +32,7 @@ export interface CeoJob {
 export const askedFor = (job: Pick<CeoJob, 'kind'>) => job.kind === 'plan' || job.kind === 'chat';
 
 /** Refused file_issue in a follow-up: no standing mandate covers the floor. */
-export const noMandate = (floor: number) =>
+const noMandate = (floor: number) =>
   `No standing mandate from the manager covers floor ${floor}, so a follow-up can't file issues there. Suggest the issue in your final message instead; the manager can ask for it, or tell you to keep working on that floor (then record it with set_mandate).`;
 
 /**
@@ -54,7 +55,7 @@ export const AGENT_LOG_MAX_CHARS = 60_000;
 export const LOG_LINE_MAX = 400;
 export const PR_FILES_MAX = 100;
 export const PR_DIFF_MAX_CHARS = 30_000;
-export const QA_TEXT_MAX = 4000;
+const QA_TEXT_MAX = 4000;
 
 /** The last `n` lines (default AGENT_LOG_DEFAULT, at most AGENT_LOG_MAX), each and all of them cut to the caps, oldest first. */
 export function tailLines(lines: string[], n?: number): { lines: string[]; cut: boolean } {
@@ -78,6 +79,41 @@ export function prDiffText(d: { files: { path: string; additions: number; deleti
   if (d.files.length > PR_FILES_MAX) lines.push(`  … and ${d.files.length - PR_FILES_MAX} more`);
   if (d.diff !== null) lines.push('', d.diff.length > PR_DIFF_MAX_CHARS ? `${d.diff.slice(0, PR_DIFF_MAX_CHARS)}\n… (cut at ${PR_DIFF_MAX_CHARS} characters of ${d.diff.length}: read single files with worktree_file)` : d.diff);
   return lines.join('\n');
+}
+
+const isoAt = (t: number | null) => (t ? new Date(t).toISOString().slice(0, 19) : null);
+
+/** agent_log's output: the agent's session as JSON, then their last lines, everything masked by `mask`. */
+export function agentLogText(
+  a: { name: string; status: string; task: unknown; issueNumber: number | null; issueTitle: string | null; prNumber: number | null; branch: string | null; startedAt: number | null; endedAt: number | null; turns: number; costUsd: number; lastError: string | null },
+  more: { floor: number | null; doing: unknown; lines: string[]; wanted?: number; mask: (s: string) => string },
+): string {
+  const { lines, cut } = tailLines(more.lines.map(more.mask), more.wanted);
+  const session = {
+    name: a.name, floor: more.floor, status: a.status, doing: more.doing, task: a.task,
+    issue: a.issueNumber ? { number: a.issueNumber, title: a.issueTitle } : null,
+    pullRequest: a.prNumber ?? null, branch: a.branch, startedAt: isoAt(a.startedAt), endedAt: isoAt(a.endedAt),
+    turns: a.turns, costUsd: Math.round(a.costUsd * 100) / 100, lastError: a.lastError ? clip(more.mask(a.lastError), 400) : null,
+  };
+  return `${JSON.stringify(session)}\n--- the last ${lines.length} line${lines.length === 1 ? '' : 's'}${cut ? ' (earlier ones left out)' : ''} ---\n${lines.join('\n') || '(nothing yet)'}`;
+}
+
+/** qa_report's output: a PR's latest QA round, texts masked and capped; `shotFile` names each screenshot's file. */
+export function qaReportText(
+  rec: { prNumber: number; status: QaStatus; round: number; summary: string | null; checks: { name: string; result: string; details: string }[]; fixInstructions: string | null; stuckWhy: string | null; commentUrl: string | null; shots?: { caption: string; page: string | null; mime: string }[] },
+  floor: number,
+  mask: (s: string) => string,
+  shotFile: (i: number, mime: string) => string,
+): string {
+  const text = (t: string | null) => (t ? clip(mask(t), QA_TEXT_MAX) : null);
+  const verdict = rec.status === 'passed' ? 'pass' : rec.status === 'failed' || rec.status === 'fixing' ? 'fail' : rec.status;
+  const report = {
+    pr: rec.prNumber, floor, verdict, status: rec.status, round: rec.round, summary: text(rec.summary),
+    checks: rec.checks.slice(0, 40).map((c) => ({ name: clip(c.name, 120), result: c.result, details: clip(mask(c.details), 300) })),
+    fixInstructions: text(rec.fixInstructions), stuckWhy: rec.stuckWhy, comment: rec.commentUrl,
+    screenshots: (rec.shots ?? []).map((sh, i) => ({ caption: sh.caption, page: sh.page, file: shotFile(i, sh.mime) })),
+  };
+  return JSON.stringify(report, null, 1);
 }
 
 export interface OfficeHandlers {
@@ -406,7 +442,7 @@ export function ceoSystemPrompt(o: {
 }
 
 /** The follow-up's prompt: the events with their ids, the mandates in force, and what the CEO may do. */
-export function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string {
+function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string {
   const until = (m: CeoMandate) => (m.expiresAt ? `, until ${new Date(m.expiresAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` : '');
   return [
     'Follow-up: the office woke you because of these events since you last looked:',
