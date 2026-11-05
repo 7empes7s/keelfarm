@@ -3,6 +3,7 @@
 // definitions and their checks, seeded stratified assignment, what a variant changes in a session, outcomes per PR,
 // survival, and the statistics behind the verdicts.
 import type { TaskKind } from './costs.ts';
+import { cleanOverrides, type PracticeOverrides } from './practices.ts';
 import type { AgentCli, EffortLevel } from './types.ts';
 
 // ---------- definitions ----------
@@ -15,6 +16,7 @@ export interface PracticeSettings {
   model?: Partial<Record<TaskKind, string>>; // Claude Code sessions only
   qaCli?: AgentCli; // QA by a free agent on this coding agent when there is one (cross-model QA); never hires one
   toolsOff?: string[]; // Tools & skills switched off (Claude Code sessions)
+  practices?: PracticeOverrides; // version-control practice switches for its issues and their PRs (#24)
 }
 
 interface Variant {
@@ -99,6 +101,8 @@ function cleanSettings(raw: unknown): PracticeSettings {
     const ids = r.toolsOff.filter((t): t is string => typeof t === 'string' && /^[\w.:@/-]{1,200}$/.test(t)).slice(0, 30);
     if (ids.length) out.toolsOff = ids;
   }
+  const practices = cleanOverrides(r.practices);
+  if (Object.keys(practices).length) out.practices = practices;
   return out;
 }
 
@@ -157,6 +161,20 @@ export function starterExperiments(now: number): Experiment[] {
       { name: 'High', settings: { effort: { 'fix-qa': 'high', 'fix-checks': 'high', 'fix-conflict': 'high' } } },
       { name: 'Medium', settings: { effort: { 'fix-qa': 'medium', 'fix-checks': 'medium', 'fix-conflict': 'medium' } } },
     ),
+    ...practiceStarters(now),
+  ];
+}
+
+/** The version-control practices' starter experiments (#24): each switch on against the office as it is. */
+export function practiceStarters(now: number): Experiment[] {
+  const def = (id: string, name: string, hypothesis: string, practices: PracticeOverrides, label: string): Experiment => ({
+    id, name, hypothesis, variants: [{ id: 'a', name: 'Current', settings: {} }, { id: 'b', name: label, settings: { practices } }], floors: [], kinds: [], status: 'draft', createdAt: now, startedAt: null, stoppedAt: null, seed: 24, minSample: MIN_SAMPLE, by: 'manager', promoted: null,
+  });
+  return [
+    def('up-to-date', 'Up to date before merge vs current', 'Merging only PRs brought up to date with main and green on that result means fewer red mains and fewer follow-up fixes.', { upToDate: true }, 'Up to date'),
+    def('file-leases', 'File leases vs current', 'Holding back issues whose files overlap work in flight means fewer conflict fixes and fewer QA rounds.', { leases: true }, 'Leases'),
+    def('auto-rebase', 'Auto-rebase vs current', 'Updating conflicting PRs as soon as main moves, before QA, gets them merged sooner with fewer QA rounds.', { autoRebase: true }, 'Auto-rebase'),
+    def('small-prs', 'Small-PR budget vs none', 'A 400-line soft budget gives smaller diffs, a higher first-round QA pass and better survival.', { diffBudget: 400 }, '400-line budget'),
   ];
 }
 
@@ -288,6 +306,20 @@ export function sessionPractice(experiments: Experiment[], a: Pick<Assignment, '
     out.qaCli = p.qaCli ?? out.qaCli;
   }
   return out;
+}
+
+/**
+ * The practice switches an issue's work runs with from the lab: its variant's while that experiment runs (whatever
+ * kinds it covers: the switches act on the issue and its PR, not on one kind of session), else the promoted variants'
+ * covering its floor (the last promoted wins a clash), else none.
+ */
+export function variantPractices(experiments: Experiment[], a: Pick<Assignment, 'experimentId' | 'variantId'> | null | undefined, repoId: string): PracticeOverrides {
+  const exp = a ? experiments.find((e) => e.id === a.experimentId && e.status === 'running') : undefined;
+  if (exp && a) return exp.variants.find((v) => v.id === a.variantId)?.settings.practices ?? {};
+  return experiments
+    .filter((e) => e.status !== 'running' && e.promoted && coversFloor(e, repoId))
+    .sort((x, y) => (x.stoppedAt ?? 0) - (y.stoppedAt ?? 0))
+    .reduce<PracticeOverrides>((out, e) => ({ ...out, ...e.variants.find((v) => v.id === e.promoted)?.settings.practices }), {});
 }
 
 /** Free agents for a PR's QA: only the ones on `cli` other than its author when there are any (cross-model QA), else all of them. */

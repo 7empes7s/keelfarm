@@ -10,6 +10,8 @@ export abstract class SwarmContract {
   protected abstract closeResolvedIssues(...a: Parameters<Swarm['closeResolvedIssues']>): ReturnType<Swarm['closeResolvedIssues']>;
   protected abstract learnIssueClosed(...a: Parameters<Swarm['learnIssueClosed']>): ReturnType<Swarm['learnIssueClosed']>;
   protected abstract learnPull(...a: Parameters<Swarm['learnPull']>): ReturnType<Swarm['learnPull']>;
+  protected abstract rebaseConflicting(...a: Parameters<Swarm['rebaseConflicting']>): ReturnType<Swarm['rebaseConflicting']>;
+  protected abstract refreshPractices(...a: Parameters<Swarm['refreshPractices']>): ReturnType<Swarm['refreshPractices']>;
   protected abstract settleLearned(...a: Parameters<Swarm['settleLearned']>): ReturnType<Swarm['settleLearned']>;
   protected abstract sweepFloor(...a: Parameters<Swarm['sweepFloor']>): ReturnType<Swarm['sweepFloor']>;
   protected abstract syncFolder(...a: Parameters<Swarm['syncFolder']>): ReturnType<Swarm['syncFolder']>;

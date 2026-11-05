@@ -25,6 +25,7 @@ import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, voiceSettings } from './
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
 import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/tooling.ts';
+import { describePractices, emptyEveryProject, everyProjectSettings } from '../shared/practices.ts';
 import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
 import { cleanStyle } from '../shared/looks.ts';
@@ -163,6 +164,11 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
+      try {
+        this.state.settings.everyProject = everyProjectSettings(undefined, loaded.settings?.everyProject);
+      } catch {
+        this.state.settings.everyProject = emptyEveryProject();
+      }
       this.state.settings.officePlaybook = typeof loaded.settings?.officePlaybook === 'string' ? loaded.settings.officePlaybook.slice(0, OFFICE_PLAYBOOK_MAX) : DEFAULT_OFFICE_PLAYBOOK;
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
@@ -516,6 +522,14 @@ export class Swarm extends SwarmCeoTools {
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
     }
+    if (patch.everyProject !== undefined) {
+      try {
+        s.everyProject = everyProjectSettings(s.everyProject, patch.everyProject);
+      } catch (err) {
+        throw new HttpError(400, (err as Error).message);
+      }
+      for (const r of this.state.repos) if (this.repoRt.has(r.id)) this.emitRepo(r); // what each floor runs with changed
+    }
     if (patch.tools !== undefined) s.tools = toolSettings(s.tools, patch.tools);
     if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
@@ -528,6 +542,17 @@ export class Swarm extends SwarmCeoTools {
     this.emitCeo();
     setTimeout(() => this.schedule(), 200);
     return s;
+  }
+
+  /**
+   * The manager's one tap in an experiment's results (#24): a variant's practice switches become every project's
+   * default (Settings → Every project). Only the manager does this; the CEO can suggest it.
+   */
+  adoptPractices(id: unknown, variant: unknown) {
+    const { experiment, variant: v, summary } = this.lab.variant(id, variant);
+    this.updateSettings({ everyProject: { ...this.state.settings.everyProject, practices: { ...this.state.settings.everyProject.practices, ...v.settings.practices } } });
+    this.postMessage('office', `📌 Every project now runs with ${describePractices(v.settings.practices!)}, from "${experiment.name}" (${v.name}). The evidence: ${summary}.`);
+    return this.state.settings;
   }
 
   /** The history's sweep (#49): past the retention goes, and finished days get their totals in the daily log. */

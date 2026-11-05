@@ -22,7 +22,7 @@ const pull = (over: Partial<PullInfo>): PullInfo =>
 describe('the lab', () => {
   it('starts with the starter experiments as drafts, and gives no issue a variant until one runs', () => {
     const { l, st } = lab();
-    expect(st.experiments).toHaveLength(5);
+    expect(st.experiments).toHaveLength(9);
     expect(l.assign('o/one', { number: 5, body: '', labels: [] })).toBeNull();
     expect(l.practice('o/one', 5, null, 'issue').tag).toBeNull();
   });
@@ -52,6 +52,25 @@ describe('the lab', () => {
     expect(l.assign('o/one', { number: 7, body: '', labels: [] })).toBeNull();
     expect(st.assignments).toHaveLength(1);
     expect(l.view().tags).toEqual([]);
+  });
+
+  it('gives an issue not started yet the practices of the variant it would get, and adds the practice starters once (#24)', () => {
+    const { l, st } = lab();
+    l.act('up-to-date', 'start');
+    const peek = { number: 8, body: '', labels: [] };
+    const would = l.practices('o/one', 8, null, peek);
+    expect(st.assignments).toHaveLength(0); // peeking assigns nothing
+    const a = l.assign('o/one', peek)!;
+    expect(l.practices('o/one', 8, null)).toEqual(would);
+    expect(would).toEqual(a.variantId === 'b' ? { upToDate: true } : {});
+    expect(() => l.variant('up-to-date', 'b')).toThrow(/Stop it/);
+    l.act('up-to-date', 'stop');
+    expect(l.variant('up-to-date', 'b').variant.settings.practices).toEqual({ upToDate: true });
+    expect(() => l.variant('up-to-date', 'a')).toThrow(/no practice switches/);
+
+    const old = loadLab({ experiments: [{ id: 'mine', variants: [] }], assignments: [] }, 0);
+    expect(old.experiments.map((e) => e.id)).toEqual(['mine', 'up-to-date', 'file-leases', 'auto-rebase', 'small-prs']);
+    expect(loadLab({ ...old, experiments: [old.experiments[0]] }, 0).experiments).toHaveLength(1); // deleted stays deleted
   });
 
   it("sends the tabs the manager's changes at once, and a burst of sessions at most once in 30 s", () => {

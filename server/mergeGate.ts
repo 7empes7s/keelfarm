@@ -1,3 +1,4 @@
+import { upToDateStep } from '../shared/practices.ts';
 import type { PullInfo } from '../shared/types.ts';
 
 // Auto-merge: fixes for failing checks or conflicts before a PR needs the manager, how long checks may run before
@@ -18,6 +19,7 @@ export interface MergeRecord {
   alerted: boolean;
   rerunSha: string | null; // the head commit whose failed checks the office re-ran
   rerunAt: number | null; // when it did
+  updatedSha?: string | null; // the head the office made by bringing the PR up to date with its base (#24)
 }
 
 /** Bookkeeping the caller writes onto the record as it is (it doesn't count as a change to the record). */
@@ -32,7 +34,8 @@ export type MergeStep = { set: MergeBookkeeping } & (
   | { do: 'requeue' } // commits arrived after QA's sign-off: QA tests them too
   | { do: 'rerun'; runIds: number[]; reason: 'checks'; instructions: string; needsHuman: boolean } // re-run these Actions runs' failed jobs; the rest is the send-back if that can't be done
   | { do: 'send-back'; reason: 'checks' | 'conflict'; instructions: string; needsHuman: boolean } // needsHuman: the fix budget ran out
-  | { do: 'update-branch' } // the repo only merges up-to-date branches
+  | { do: 'update-branch' } // the repo only merges up-to-date branches, or the floor wants every PR up to date (#24)
+  | { do: 'behind' } // up to date before merge: ask how far behind its base it is, then decide again with `behind`
   | { do: 'merge' }
 );
 
@@ -40,7 +43,7 @@ export type MergeStep = { set: MergeBookkeeping } & (
  * Decide the next step toward merging a PR QA has passed. Pure: advanceMerge (swarm.ts) does the talking to GitHub
  * and the office. `detailed` means the PR's mergeability has already been asked for, so UNKNOWN is waited out.
  */
-export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { base: string; detailed?: boolean }): MergeStep {
+export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { base: string; detailed?: boolean; upToDate?: boolean; behind?: number | null }): MergeStep {
   if (pr.isDraft) return { do: 'wait', note: 'a draft: waiting', set: {} };
   if (!opts.detailed && (pr.mergeable === 'UNKNOWN' || pr.mergeState === 'UNKNOWN')) return { do: 'details', set: {} };
   const set: MergeBookkeeping = {};
@@ -56,6 +59,8 @@ export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { 
     const runIds = failedRunIds(pr.failedChecks);
     if (!rerun && runIds.length) return { do: 'rerun', runIds, reason: 'checks', instructions, needsHuman, set };
     if (rerun && rec.rerunAt != null && now - rec.rerunAt < RERUN_GRACE_MS) return { do: 'wait', note: 're-running a failed check', set };
+    // It only fails on the office's merge of the base: the change conflicts with newer work there, not QA's verdict.
+    if (opts.upToDate && rec.updatedSha === pr.headSha) return { do: 'send-back', reason: 'conflict', instructions: `It conflicts with ${opts.base}: after merging ${opts.base} into it, these checks fail:\n${instructions}`, needsHuman, set };
     return { do: 'send-back', reason: 'checks', instructions, needsHuman, set };
   }
   if (pr.checks === 'pending') {
@@ -69,6 +74,11 @@ export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { 
   set.pendingSince = null;
   if (pr.mergeable === 'UNKNOWN') return { do: 'wait', note: 'GitHub is checking it can merge', set };
   if (pr.mergeState === 'BEHIND') return { do: 'update-branch', set };
+  if (opts.upToDate) {
+    const up = upToDateStep(pr, opts.behind ?? null);
+    if (up === 'unknown') return { do: 'behind', set };
+    if (up === 'update') return { do: 'update-branch', set };
+  }
   if (rec.mergeRetryAt && now < rec.mergeRetryAt) return { do: 'wait', set };
   return { do: 'merge', set };
 }
