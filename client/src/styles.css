@@ -138,7 +138,9 @@ a.btn {
   text-decoration: none;
 }
 
-button,
+button {
+  font-family: var(--font);
+}
 input,
 textarea,
 select {
@@ -378,17 +380,18 @@ input.inline:focus {
   justify-content: flex-end;
   max-width: 50vw;
 }
-/* a narrow window: the status pills, the chips and the workers list stack under the floor's card instead of over it */
+/* a narrow window: the status pills (right) and the chips (left) go under the floor's card, the workers list under them */
 @media (max-width: 600px) {
-  .hud-status {
-    top: calc(2 * var(--ds-space-10) + var(--ds-space-4));
-    max-width: calc(100vw - 2 * var(--ds-space-4));
-  }
+  .hud-status,
   .hud-chips {
-    top: calc(4 * var(--ds-space-10) + var(--ds-space-4));
+    top: calc(2 * var(--ds-space-10) + var(--ds-space-4));
+    max-width: calc(50vw - var(--ds-space-6));
+  }
+  .hud-chips .usage-chip {
+    max-width: 100%;
   }
   .workers {
-    top: calc(5 * var(--ds-space-10) + var(--ds-space-4));
+    top: calc(6 * var(--ds-space-10) + var(--ds-space-4));
   }
 }
 .hud-banner {
@@ -3299,7 +3302,7 @@ input.inline:focus {
   gap: 8px;
   font-size: 0.7rem;
   font-weight: 700;
-  color: #c2410c;
+  color: var(--ds-warn-text);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
