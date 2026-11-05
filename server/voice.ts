@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { SAMPLE_LINE, speechText, standupLine, type DayPart } from '../shared/speech.ts';
+import { SAMPLE_LINE, messageSpeech, standupLine, type DayPart } from '../shared/speech.ts';
 import { clampKeepDays, KEEP_DAYS_DEFAULT } from '../shared/voiceClips.ts';
 import { clipProblem, clipType } from '../shared/clipLimits.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
@@ -291,7 +291,7 @@ export class Voice {
     const saved = clipsFor(this.clips, m);
     const first = saved && (await fs.readFile(path.join(this.deps.cacheDir, saved[0])).catch(() => null));
     if (first) return first; // made before, perhaps in another voice: a message keeps the clip it was first read with
-    const text = speechText(m.text);
+    const text = messageSpeech(m);
     if (!text) throw new HttpError(404, `Message ${id} has nothing to say aloud`);
     return this.audio(String(m.id), s.voiceId, s.model, text, m);
   }

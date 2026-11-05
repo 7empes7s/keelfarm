@@ -5,6 +5,7 @@ import { run } from './exec.ts';
 import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel } from '../shared/types.ts';
 import type { BoxVersions } from './boxScripts.ts';
+import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, type SessionTools } from '../shared/tooling.ts';
 
 // The coding-agent CLIs an agent can run in its terminal, how to find them on this machine, and how to start one on
 // a task. Claude Code is fully wired in: its hooks report every tool call to the office.
@@ -151,6 +152,8 @@ export interface LaunchContext {
   plugin: string; // file URL of the OpenCode plugin
   /** The Playwright MCP server, when the floor tests in a browser. Claude Code gets it through its MCP config file. */
   browser: { command: string; args: string[] } | null;
+  /** The manager's Tools & skills switches for this session (Claude Code only): more disallowed tools. */
+  tools?: SessionTools;
   /** The node that runs the office's helper scripts where the CLI runs (default: the office's own). */
   node?: string;
   /** The CLI runs on Linux (a cloud agent's Box), whatever this computer is. */
@@ -235,15 +238,15 @@ export function codexHookCommand(node: string, script: string, win = WIN): strin
 }
 
 /**
- * Claude Code tools whose result arrives in a later turn. An office session ends with its turn, so nothing would wake
- * the agent. Background shells (run_in_background) stay: agents start dev servers with them.
+ * Claude Code tools whose result arrives in a later turn (shared/tooling.ts). An office session ends with its turn, so
+ * nothing would wake the agent. Background shells (run_in_background) stay: agents start dev servers with them.
  */
-export const CROSS_TURN_TOOLS = ['Monitor', 'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'RemoteTrigger'];
+export { CROSS_TURN_TOOLS };
 
 export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
   switch (id) {
     case 'claude': {
-      const disallowed = ['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS, ...(ctx.role === 'ceo' ? ['Bash', 'PowerShell', 'NotebookEdit'] : [])];
+      const disallowed = [...OFFICE_DISALLOWED, ...(ctx.role === 'ceo' ? CEO_DISALLOWED : []), ...(ctx.tools?.disallowed ?? [])];
       const args = [
         ...(ctx.resumeId ? ['--resume', ctx.resumeId] : ['--session-id', ctx.sessionId]),
         ...(ctx.model ? ['--model', ctx.model] : []),

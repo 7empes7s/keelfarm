@@ -67,6 +67,9 @@ jobs:
       - run: npm run build
       # The npm package as users get it: packed, installed into an empty folder and booted in demo mode.
       - run: node scripts/smoke-package.mjs
+      # The code-health ratchet, last so a finding never hides the tests: fails only on what
+      # code-health.baseline.json doesn't have (docs/code-health.md).
+      - run: npm run lint
 
   check-windows:
     name: check (windows-latest)

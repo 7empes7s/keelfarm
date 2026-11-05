@@ -6,6 +6,8 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
+import { buildInventory, memoryFs } from './tooling.ts';
+import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
@@ -16,6 +18,7 @@ import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
+import { TelegramCallError, type TelegramApi } from './telegramBot.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
@@ -300,6 +303,42 @@ export function fixPromptPull(prompt: string): { number: number; title?: string 
   return { number: Number(m?.[1] ?? 0), title: m?.[2]?.trim() };
 }
 
+// ---------- tools & skills ----------
+
+/** A made-up Claude Code setup, read by the real inventory parser from files in memory (never this computer's ~/.claude). */
+function demoTooling(projects: string[]): ToolInventory {
+  const home = path.join(HOME_DIR, 'demo-claude');
+  const plugin = (name: string, description: string, opts: { skills?: [string, string][]; commands?: string[]; mcp?: Record<string, unknown> }) => {
+    const dir = path.join(home, 'plugins', 'cache', 'claude-plugins-official', name, '1.0.0');
+    const files: Record<string, string> = { [path.join(dir, '.claude-plugin', 'plugin.json')]: JSON.stringify({ name, description }) };
+    for (const [s, d] of opts.skills ?? []) files[path.join(dir, 'skills', s, 'SKILL.md')] = `---\nname: ${s}\ndescription: ${d}\n---\n`;
+    for (const c of opts.commands ?? []) files[path.join(dir, 'commands', `${c}.md`)] = `# ${c}`;
+    if (opts.mcp) files[path.join(dir, '.mcp.json')] = JSON.stringify({ mcpServers: opts.mcp });
+    return { dir, files };
+  };
+  const plugins = {
+    canva: plugin('canva', 'Create and edit Canva designs from Claude Code.', { skills: [['brand-check', 'Checks a design against the brand kit.'], ['resize-for-social-media', 'Resizes a design for each social network.']], mcp: { canva: { type: 'http', url: 'https://mcp.canva.com/mcp' } } }),
+    superpowers: plugin('superpowers', 'Skills for planning, test-driven development and debugging.', { skills: [['brainstorming', 'Use before any creative work: explores intent before building.'], ['test-driven-development', 'Write the failing test first, then the code.'], ['systematic-debugging', 'Find the root cause before proposing fixes.']] }),
+    github: plugin('github', 'GitHub issues, pull requests and Actions through GitHub’s MCP server.', { mcp: { github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer demo-not-a-real-token' } } } }),
+    'commit-commands': plugin('commit-commands', 'Commit, push and open a PR in one command.', { commands: ['commit', 'commit-push-pr', 'clean_gone'] }),
+    figma: plugin('figma', 'Turn Figma designs into code.', { skills: [['figma-design-to-code', 'Implements a Figma frame as components.']], mcp: { figma: { type: 'http', url: 'https://mcp.figma.com/mcp' } } }),
+  };
+  const files: Record<string, string> = Object.assign({}, ...Object.values(plugins).map((p) => p.files));
+  files[path.join(home, 'skills', 'pdf', 'SKILL.md')] = '---\nname: pdf\ndescription: Reads, fills and merges PDF files.\n---\n';
+  files[path.join(home, 'skills', 'release-notes', 'SKILL.md')] = '---\nname: release-notes\ndescription: Writes release notes from merged pull requests.\n---\n';
+  const global = path.join(home, '.claude.json');
+  files[global] = JSON.stringify({
+    mcpServers: {
+      notion: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: 'demo-secret-never-shown' } },
+      linear: { type: 'http', url: 'https://mcp.linear.app/mcp?key=demo-secret-never-shown' },
+    },
+  });
+  if (projects[0]) files[path.join(projects[0], '.mcp.json')] = JSON.stringify({ mcpServers: { sentry: { type: 'http', url: 'https://mcp.sentry.dev/mcp' } } });
+  const pluginList = Object.entries(plugins).map(([name, p]) => ({ id: `${name}@claude-plugins-official`, enabled: name !== 'figma', installPath: p.dir, version: '1.0.0' }));
+  const items = buildInventory(memoryFs(files), { configDir: home, globalConfig: global, projects, pluginList });
+  return { items, scannedAt: Date.now(), scanning: false, error: null, via: 'the demo’s made-up setup' };
+}
+
 function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
   const timers: NodeJS.Timeout[] = [];
   let stopped = false;
@@ -331,9 +370,11 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
 
+  const tools = opts.tools ? toolArgsLine(opts.tools) : '';
   const header: Step = [
     { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
     { kind: 'system', text: `  cwd ${opts.cwd}` },
+    ...(tools ? [{ kind: 'system' as const, text: `  $ claude --session-id … ${tools}` }] : []),
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
@@ -879,11 +920,13 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     releaseClis: async () => undefined,
     detectClis: async () =>
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
+    toolInventory: async (projects) => demoTooling(projects),
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,
     weather: demoWeather,
     notify: demoNotify,
+    telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
     demoTeam: (floor) => demoTeam(scale, floor),
@@ -1127,6 +1170,8 @@ const GENERIC: Profile = {
 export function answerReply({ quote, reply }: { quote: string; reply: string }): string {
   const q = quote.length > 140 ? `${quote.slice(0, 139).trim()}…` : quote;
   const said = reply.length > 90 ? `${reply.slice(0, 89).trim()}…` : reply;
+  if (/\bplan\b/i.test(said))
+    return `> ${q}\n\nHere it is.\n\n\`\`\`artifact title="The plan"\n## Next milestone\n\n1. Finish the issues in progress\n2. Merge what passed QA\n3. Plan the next features with you\n\n| Step | Who | When |\n| --- | --- | --- |\n| Build | the team | today |\n| QA | the team | as PRs land |\n| Merge | the office | once checks pass |\n\`\`\`\n\n(I'm the demo CEO, so nothing changes.)`;
   const answer = /^(yes|yep|sure|ok(ay)?|go)\b/i.test(said) ? "Great, I'll go ahead with that." : /^(no|nope|don't|stop)\b/i.test(said) ? "Understood, I'll leave it as it is." : `Noted: "${said}".`;
   return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
 }
@@ -1311,6 +1356,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
+      // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
+      if (/\btelegram\b/i.test(text)) {
+        const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+        const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
+        return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);
       const closeFloor = close && (s.floors.find((f) => f.backlog.some((i) => i.number === Number(close[1]))) ?? s.floors[0]);
@@ -1336,20 +1387,24 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const nextFloor = s.floors.find((f) => f.backlog.length);
       const next = nextFloor && { floor: nextFloor.floor, issue: nextFloor.backlog[0] };
       const pending = s.pendingChanges.length;
-      // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders.
-      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} |`);
+      // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders, the longer part as an
+      // artifact card and the question with suggestion boxes (shared/chatParts.ts).
+      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} | ${f.capacity.issuesReadyToStart} | ${f.capacity.prsAwaitingQa} | ${f.team.free} |`);
       return [
-        `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues.`,
+        `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues. The floor-by-floor report is attached.`,
         '',
         '- The team is *heads down* on the backlog',
         `- ${pending ? `**${pending}** team change${pending === 1 ? ' is' : 's are'} waiting for your decision` : 'No team changes waiting on you'}`,
         '  - QA re-tests every PR after a fix',
         '',
-        '| Floor | Repo | Agents | Issues | PRs |',
-        '| ---: | --- | ---: | ---: | ---: |',
-        ...(rows.length ? rows : ['| – | no projects yet | 0 | 0 | 0 |']),
+        '```artifact title="Floor report"',
+        '## Every floor',
         '',
-        'What I would do next:',
+        '| Floor | Repo | Agents | Issues | PRs | Ready to start | Waiting for QA | Free agents |',
+        '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+        ...(rows.length ? rows : ['| – | no projects yet | 0 | 0 | 0 | 0 | 0 | 0 |']),
+        '',
+        '## What I would do next',
         '',
         '1. Merge anything that passed QA',
         '2. Run `npm run build` on each floor before the next milestone',
@@ -1358,9 +1413,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```bash',
         'SWARM_HOME=/tmp/cubefarm-demo SWARM_PORT=5260 node --import tsx server/index.ts --demo',
         '```',
+        '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
-        ...(next ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`] : []),
+        ...(next
+          ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
+          : []),
       ].join('\n');
     },
   };
@@ -1495,6 +1553,56 @@ const demoNotify: NotifyTransport = {
     return ok ? 200 : 404;
   },
 };
+
+/**
+ * A fake Bot API with no network: any token in BotFather's shape is the bot @cubefarm_demo_bot (one with "bad" in it is
+ * refused), sends are logged, and getUpdates hands out what the demo's fake manager does (TelegramBot.demo).
+ */
+function demoTelegram(): TelegramApi {
+  let queue: Record<string, unknown>[] = [];
+  let nextUpdate = 1;
+  let nextMessage = 500;
+  let wake: (() => void) | null = null;
+  return {
+    async call(token, method, params, signal) {
+      if (/bad/i.test(token)) throw new TelegramCallError(401, 'Unauthorized');
+      switch (method) {
+        case 'getMe':
+          return { id: Number(token.split(':')[0]), is_bot: true, first_name: 'cubefarm demo', username: 'cubefarm_demo_bot' };
+        case 'getUpdates': {
+          if (!queue.length) {
+            await new Promise<void>((resolve) => {
+              const t = setTimeout(resolve, Number(params.timeout ?? 0) * 1000);
+              t.unref?.();
+              wake = () => (clearTimeout(t), resolve());
+              signal?.addEventListener('abort', wake, { once: true });
+            });
+            wake = null;
+          }
+          if (signal?.aborted) throw new TelegramCallError(0, 'stopped');
+          const out = queue.filter((u) => Number(u.update_id) >= Number(params.offset ?? 0));
+          queue = [];
+          return out;
+        }
+        case 'sendMessage': {
+          const buttons = (params.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)?.inline_keyboard ?? [];
+          const labels = buttons.flat().map((b) => `[${b.text}]`).join(' ');
+          console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
+          return { message_id: ++nextMessage };
+        }
+        case 'answerCallbackQuery':
+          console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
+          return true;
+        default:
+          return true;
+      }
+    },
+    inject(update) {
+      queue.push({ update_id: nextUpdate++, ...update });
+      wake?.();
+    },
+  };
+}
 
 // ---------- weather ----------
 

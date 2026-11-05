@@ -194,6 +194,8 @@ app.get('/api/agents/:id/screen', (req, res) => {
 });
 
 app.patch('/api/settings', route((req) => swarm.updateSettings(req.body ?? {})));
+app.post('/api/tools/refresh', route(() => swarm.refreshTooling()));
+app.post('/api/tools/switch', route((req) => swarm.setToolSwitch(str(req.body?.scope), req.body?.id, req.body?.on)));
 
 // Phone messages read aloud (docs/voice.md). The key goes in and never comes back out.
 const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
@@ -268,6 +270,10 @@ app.delete('/api/notify/push/devices/:id', route((req) => swarm.notifier.removeD
 app.post('/api/notify/push/devices/:id/test', route((req) => swarm.notifier.testDevice(String(req.params.id))));
 app.post('/api/notify/push/report', route((req) => swarm.notifier.report(req.body?.step, req.body?.error)));
 app.post('/api/notify/ntfy/quick', route(() => swarm.notifier.quickNtfy()));
+app.put('/api/notify/telegram', route((req) => swarm.telegram.setToken(req.body?.token)));
+app.post('/api/notify/telegram/link', route(() => swarm.telegram.link()));
+app.delete('/api/notify/telegram', route(() => swarm.telegram.remove()));
+app.post('/api/notify/telegram/demo', route((req) => swarm.telegramDemo(req.body ?? {})));
 // The office's own update: Update now / Later
 app.post('/api/office/update', route((req) => swarm.updateOffice(req.body?.action)));
 // Claude's usage: resume full speed after a usage warning; in the demo, a warning or the limit on demand
@@ -292,6 +298,7 @@ app.post('/api/journal/sample', route(() => swarm.journalSample()));
 // The CEO and the manager's phone
 app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined)));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
+app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
 app.post(
   '/api/requests/:id/approve',

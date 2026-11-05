@@ -7,11 +7,14 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { scanTooling } from './tooling.ts';
+import type { ToolInventory } from '../shared/tooling.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type OfficeHost } from './officeUpdate.ts';
 import { elevenLabs } from './elevenlabs.ts';
 import { httpTransport, type NotifyTransport } from './notifier.ts';
+import { telegramHttp, type TelegramApi } from './telegramBot.ts';
 import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
@@ -86,6 +89,8 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
+  toolInventory(projects: string[]): Promise<ToolInventory>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
   previews: PreviewBackend;
   /** The running office's own folder and its launcher, for the office's self-update. */
@@ -96,6 +101,8 @@ export interface Backend {
   weather: WeatherApi;
   /** Notifications to the chat apps and push services (docs/pocket.md). */
   notify: NotifyTransport;
+  /** The manager's Telegram bot (docs/pocket.md): the Bot API; the demo's is a fake that logs what it would send. */
+  telegram: TelegramApi;
   /** Cloud agents (docs/cloud.md): Upstash's Box API (the demo's is fake), and picking their CLIs up after a restart. */
   cloud: CloudBackend;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
@@ -198,10 +205,12 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  toolInventory: (projects) => scanTooling(projects),
   previews: realPreviews,
   office: realOffice,
   voice: elevenLabs,
   weather: openMeteo,
   notify: httpTransport,
+  telegram: telegramHttp,
   cloud: realCloud,
 };
