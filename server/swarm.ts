@@ -73,7 +73,7 @@ import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSetti
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
 import { forwardText, nextDelivery } from '../shared/chat.ts';
-import { clampResearchMin, DEFAULT_RESEARCH_MIN, ResearchGuard, researchJob, researchRef } from './research.ts';
+import { clampResearchMin, DEFAULT_RESEARCH_MIN, ResearchGuard, researchJob, researchReadOnly, researchRef } from './research.ts';
 import { makeArtifacts, parseCeoMessage, snapshotMessages } from '../shared/chatParts.ts';
 import { SWEEP_MS } from '../shared/files.ts';
 import type { QuickPicks } from '../shared/used.ts';
@@ -486,7 +486,7 @@ export class Swarm {
    */
   private officeTools(): OfficeTools {
     const acts = this.spend.acts;
-    return createOfficeTools({
+    return createOfficeTools(researchReadOnly({
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
@@ -508,7 +508,7 @@ export class Swarm {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
-    });
+    }, () => this.state.ceo.job?.kind === 'research'));
   }
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
   readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));

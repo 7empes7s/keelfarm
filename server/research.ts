@@ -6,7 +6,7 @@ import path from 'node:path';
 import { researchTopic } from '../shared/chat.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import type { SessionHandle } from './agentRunner.ts';
-import type { CeoJob } from './ceo.ts';
+import type { CeoJob, OfficeHandlers } from './ceo.ts';
 
 export const DEFAULT_RESEARCH_MIN = 20;
 /** Minutes past the budget before the office stops a research session that didn't wrap up. */
@@ -14,6 +14,25 @@ const RESEARCH_GRACE_MIN = 5;
 
 /** Refused file_issue during research: it ends with a question, and the manager's pick is planned as a job of its own. */
 export const RESEARCH_NO_FILING = 'Research files nothing. Put the options in your final message with suggestions; the option the manager picks comes back to you as a plan job, which files the issues.';
+
+/** Refused office tools during research, which reads untrusted pages and so acts on nothing. */
+export const RESEARCH_READ_ONLY = 'Research only reads: it changes nothing in the office and sends nothing. Put what you would change in your final message; the manager decides.';
+/** The office tools research may use: the read-only ones, and attach_file to hand the manager a file. */
+const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'attachFile']);
+
+/** `h` with every tool but RESEARCH_TOOLS refused while `researching()` (file_issue with RESEARCH_NO_FILING). */
+export function researchReadOnly(h: OfficeHandlers, researching: () => boolean): OfficeHandlers {
+  const out: Record<string, unknown> = { ...h };
+  for (const k of Object.keys(h) as (keyof OfficeHandlers)[]) {
+    if (RESEARCH_TOOLS.has(k)) continue;
+    const act = h[k] as (a: never) => unknown;
+    out[k] = (a: never) => {
+      if (researching()) throw new Error(k === 'fileIssue' ? RESEARCH_NO_FILING : RESEARCH_READ_ONLY);
+      return act(a);
+    };
+  }
+  return out as unknown as OfficeHandlers;
+}
 
 export const clampResearchMin = (n: unknown) => Math.max(5, Math.min(120, Math.round(Number(n)) || DEFAULT_RESEARCH_MIN));
 
