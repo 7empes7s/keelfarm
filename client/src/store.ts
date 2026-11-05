@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
@@ -226,6 +227,8 @@ export const useStore = create<State>((set, get) => ({
     scaling: 'approve',
     maxAgents: DEFAULT_MAX_AGENTS,
     ceoHeartbeatMin: 60,
+    ceoFollowups: DEFAULT_FOLLOWUPS,
+    ceoMandates: [],
     managerName: '',
     companyName: '',
     dogName: DEFAULT_DOG_NAME,
@@ -253,7 +256,7 @@ export const useStore = create<State>((set, get) => ({
   qa: {},
   prPreviews: {},
   requests: [],
-  ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null },
+  ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
   chatOutbox: [],
   phoneReadAt: 0,

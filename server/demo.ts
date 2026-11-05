@@ -18,11 +18,12 @@ import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
-import { TelegramCallError, type TelegramApi } from './telegramBot.ts';
+import { demoTelegram } from './demoTelegram.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -850,6 +851,13 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
         pendingChecks: pr.pendingChecks,
       };
     },
+    // The CEO's pr_diff and worktree_file read made-up changes: the demo has no code on disk.
+    prDiff: async (fullName, number, patch) => {
+      const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
+      if (!pr) throw new Error(`Unknown PR #${number}`);
+      return demoPrDiff(pr, patch);
+    },
+    readWorktree: async (r) => demoReadWorktree(r),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
@@ -1350,6 +1358,23 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       await use('escalate', { floor, pr, reason: `I tried ${tool}, but the office refused: ${refused(out)}` });
       return `PR #${pr} on floor ${floor} is stuck and I couldn't move it, so it's with you now.`;
     },
+    // Woken by office events: look through the real read-only tools, and stay quiet unless something needs the manager.
+    async followup(events: string[]) {
+      const needs: string[] = [];
+      for (const e of events.slice(0, 4)) {
+        const floor = Number(e.match(/floor (\d+)/)?.[1] ?? 0);
+        const pr = Number(e.match(/PR #(\d+)/)?.[1] ?? 0);
+        const agent = e.match(/\(([\w-]+)\)/)?.[1];
+        if (/ merged /.test(e) && pr) await use('pr_diff', { floor, pr });
+        else if (/failed QA/.test(e) && pr) await use('qa_report', { floor, pr });
+        else if (agent && / error | stalled /.test(e)) {
+          await use('agent_log', { agent_id: agent, lines: 50 });
+          if (/ error /.test(e)) needs.push(`${e.split(' (')[0]} is still in an error; reset them from their desk if it keeps happening.`);
+        } else await think('Nothing there needs me.');
+      }
+      if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
+      return needs.length ? needs.join(' ') : 'Nothing to do.';
+    },
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
@@ -1428,6 +1453,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
+    : prompt.startsWith('Follow-up:')
+      ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)
       ? async () => 'Nothing to do.'
       : /just joined the company/.test(prompt)
@@ -1553,56 +1580,6 @@ const demoNotify: NotifyTransport = {
     return ok ? 200 : 404;
   },
 };
-
-/**
- * A fake Bot API with no network: any token in BotFather's shape is the bot @cubefarm_demo_bot (one with "bad" in it is
- * refused), sends are logged, and getUpdates hands out what the demo's fake manager does (TelegramBot.demo).
- */
-function demoTelegram(): TelegramApi {
-  let queue: Record<string, unknown>[] = [];
-  let nextUpdate = 1;
-  let nextMessage = 500;
-  let wake: (() => void) | null = null;
-  return {
-    async call(token, method, params, signal) {
-      if (/bad/i.test(token)) throw new TelegramCallError(401, 'Unauthorized');
-      switch (method) {
-        case 'getMe':
-          return { id: Number(token.split(':')[0]), is_bot: true, first_name: 'cubefarm demo', username: 'cubefarm_demo_bot' };
-        case 'getUpdates': {
-          if (!queue.length) {
-            await new Promise<void>((resolve) => {
-              const t = setTimeout(resolve, Number(params.timeout ?? 0) * 1000);
-              t.unref?.();
-              wake = () => (clearTimeout(t), resolve());
-              signal?.addEventListener('abort', wake, { once: true });
-            });
-            wake = null;
-          }
-          if (signal?.aborted) throw new TelegramCallError(0, 'stopped');
-          const out = queue.filter((u) => Number(u.update_id) >= Number(params.offset ?? 0));
-          queue = [];
-          return out;
-        }
-        case 'sendMessage': {
-          const buttons = (params.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)?.inline_keyboard ?? [];
-          const labels = buttons.flat().map((b) => `[${b.text}]`).join(' ');
-          console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
-          return { message_id: ++nextMessage };
-        }
-        case 'answerCallbackQuery':
-          console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
-          return true;
-        default:
-          return true;
-      }
-    },
-    inject(update) {
-      queue.push({ update_id: nextUpdate++, ...update });
-      wake?.();
-    },
-  };
-}
 
 // ---------- weather ----------
 

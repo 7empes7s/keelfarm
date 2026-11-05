@@ -1,9 +1,11 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
+import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
 import { FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type QaStatus } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
+import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
 
@@ -20,6 +22,7 @@ export interface CeoJob {
   repoId?: string; // onboard / plan / triage
   prNumber?: number; // triage: the stuck pull request
   text?: string; // chat: the manager's message(s)
+  events?: FollowupEvent[]; // followup: what happened
   messageIds?: number[]; // chat: those messages' ids, marked read when the job starts
   at: number;
 }
@@ -27,6 +30,91 @@ export interface CeoJob {
 /** What the CEO's tools do. Implemented by the swarm; errors are returned to the CEO as tool errors. */
 /** Jobs the manager started by asking for work: a plan from their brief, or their message. Only these may file issues. */
 export const askedFor = (job: Pick<CeoJob, 'kind'>) => job.kind === 'plan' || job.kind === 'chat';
+
+/** Refused file_issue in a follow-up: no standing mandate covers the floor. */
+const noMandate = (floor: number) =>
+  `No standing mandate from the manager covers floor ${floor}, so a follow-up can't file issues there. Suggest the issue in your final message instead; the manager can ask for it, or tell you to keep working on that floor (then record it with set_mandate).`;
+
+/**
+ * Why file_issue is refused, or null when it may file: always when the manager asked in this job (a plan, or their
+ * message); in a follow-up only on a floor a mandate covers; never otherwise.
+ */
+export function issueRefusal(o: { kind: CeoJobKind | null; asked: boolean; floor: number; mandate: CeoMandate | null }): string | null {
+  if (o.asked) return null;
+  if (o.kind === 'followup') return o.mandate ? null : noMandate(o.floor);
+  return NOT_ASKED;
+}
+
+/** Refused set_mandate: only the manager gives mandates. */
+export const MANDATE_NOT_ASKED = "Only the manager gives standing mandates: record one only when they asked you to keep working on something, in this job's message.";
+
+// Caps of the read-only tools' outputs: the CEO pays for every character.
+export const AGENT_LOG_DEFAULT = 200;
+export const AGENT_LOG_MAX = 1000;
+export const AGENT_LOG_MAX_CHARS = 60_000;
+export const LOG_LINE_MAX = 400;
+export const PR_FILES_MAX = 100;
+export const PR_DIFF_MAX_CHARS = 30_000;
+const QA_TEXT_MAX = 4000;
+
+/** The last `n` lines (default AGENT_LOG_DEFAULT, at most AGENT_LOG_MAX), each and all of them cut to the caps, oldest first. */
+export function tailLines(lines: string[], n?: number): { lines: string[]; cut: boolean } {
+  const want = Math.max(1, Math.min(AGENT_LOG_MAX, Math.round(Number(n ?? AGENT_LOG_DEFAULT)) || AGENT_LOG_DEFAULT));
+  const out: string[] = [];
+  let chars = 0;
+  for (let i = lines.length - 1; i >= 0 && out.length < want; i--) {
+    const l = lines[i].length > LOG_LINE_MAX ? `${lines[i].slice(0, LOG_LINE_MAX - 1)}…` : lines[i];
+    if (chars + l.length + 1 > AGENT_LOG_MAX_CHARS) return { lines: out.reverse(), cut: true };
+    chars += l.length + 1;
+    out.push(l);
+  }
+  return { lines: out.reverse(), cut: out.length < lines.length };
+}
+
+/** pr_diff's output: the changed files (at most PR_FILES_MAX) and, when asked, the diff cut to PR_DIFF_MAX_CHARS. */
+export function prDiffText(d: { files: { path: string; additions: number; deletions: number }[]; diff: string | null }): string {
+  const add = d.files.reduce((n, f) => n + f.additions, 0);
+  const del = d.files.reduce((n, f) => n + f.deletions, 0);
+  const lines = [`${d.files.length} file${d.files.length === 1 ? '' : 's'} changed, +${add} −${del}`, ...d.files.slice(0, PR_FILES_MAX).map((f) => `  ${f.path} +${f.additions} −${f.deletions}`)];
+  if (d.files.length > PR_FILES_MAX) lines.push(`  … and ${d.files.length - PR_FILES_MAX} more`);
+  if (d.diff !== null) lines.push('', d.diff.length > PR_DIFF_MAX_CHARS ? `${d.diff.slice(0, PR_DIFF_MAX_CHARS)}\n… (cut at ${PR_DIFF_MAX_CHARS} characters of ${d.diff.length}: read single files with worktree_file)` : d.diff);
+  return lines.join('\n');
+}
+
+const isoAt = (t: number | null) => (t ? new Date(t).toISOString().slice(0, 19) : null);
+
+/** agent_log's output: the agent's session as JSON, then their last lines, everything masked by `mask`. */
+export function agentLogText(
+  a: { name: string; status: string; task: unknown; issueNumber: number | null; issueTitle: string | null; prNumber: number | null; branch: string | null; startedAt: number | null; endedAt: number | null; turns: number; costUsd: number; lastError: string | null },
+  more: { floor: number | null; doing: unknown; lines: string[]; wanted?: number; mask: (s: string) => string },
+): string {
+  const { lines, cut } = tailLines(more.lines.map(more.mask), more.wanted);
+  const session = {
+    name: a.name, floor: more.floor, status: a.status, doing: more.doing, task: a.task,
+    issue: a.issueNumber ? { number: a.issueNumber, title: a.issueTitle } : null,
+    pullRequest: a.prNumber ?? null, branch: a.branch, startedAt: isoAt(a.startedAt), endedAt: isoAt(a.endedAt),
+    turns: a.turns, costUsd: Math.round(a.costUsd * 100) / 100, lastError: a.lastError ? clip(more.mask(a.lastError), 400) : null,
+  };
+  return `${JSON.stringify(session)}\n--- the last ${lines.length} line${lines.length === 1 ? '' : 's'}${cut ? ' (earlier ones left out)' : ''} ---\n${lines.join('\n') || '(nothing yet)'}`;
+}
+
+/** qa_report's output: a PR's latest QA round, texts masked and capped; `shotFile` names each screenshot's file. */
+export function qaReportText(
+  rec: { prNumber: number; status: QaStatus; round: number; summary: string | null; checks: { name: string; result: string; details: string }[]; fixInstructions: string | null; stuckWhy: string | null; commentUrl: string | null; shots?: { caption: string; page: string | null; mime: string }[] },
+  floor: number,
+  mask: (s: string) => string,
+  shotFile: (i: number, mime: string) => string,
+): string {
+  const text = (t: string | null) => (t ? clip(mask(t), QA_TEXT_MAX) : null);
+  const verdict = rec.status === 'passed' ? 'pass' : rec.status === 'failed' || rec.status === 'fixing' ? 'fail' : rec.status;
+  const report = {
+    pr: rec.prNumber, floor, verdict, status: rec.status, round: rec.round, summary: text(rec.summary),
+    checks: rec.checks.slice(0, 40).map((c) => ({ name: clip(c.name, 120), result: c.result, details: clip(mask(c.details), 300) })),
+    fixInstructions: text(rec.fixInstructions), stuckWhy: rec.stuckWhy, comment: rec.commentUrl,
+    screenshots: (rec.shots ?? []).map((sh, i) => ({ caption: sh.caption, page: sh.page, file: shotFile(i, sh.mime) })),
+  };
+  return JSON.stringify(report, null, 1);
+}
 
 export interface OfficeHandlers {
   companyStatus(): string;
@@ -42,6 +130,11 @@ export interface OfficeHandlers {
   rerunChecks(a: { floor: number; pr: number }): Promise<string>;
   closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
+  setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
+  agentLog(a: { agent_id: string; lines?: number }): string;
+  qaReport(a: { floor: number; pr: number }): string;
+  worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
+  prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
 }
 
@@ -140,7 +233,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'file_issue',
-      'File a GitHub issue on a floor, only for work the manager asked for in this job (a plan, or their message); anything else is refused. The next free agent takes the next issue that can start. Write "Depends on #N" in the body only when it cannot start until #N is merged: the office will not start it until #N is closed.',
+      'File a GitHub issue on a floor, only for work the manager asked for in this job (a plan, or their message), or in a follow-up on a floor a standing mandate covers; anything else is refused. The next free agent takes the next issue that can start. Write "Depends on #N" in the body only when it cannot start until #N is merged: the office will not start it until #N is closed.',
       {
         floor: z.number().int(),
         title: z.string().max(120),
@@ -197,6 +290,44 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       'Triage only: hand a stuck pull request to the manager with your one-line diagnosis, when it needs a decision only they can make.',
       { floor: z.number().int(), pr: z.number().int().positive(), reason: z.string().min(1).max(300).describe('One line: what is wrong and what the manager has to decide') },
       (a) => run(() => h.escalate(a)),
+    ),
+    tool(
+      'set_mandate',
+      'Record a standing mandate when the manager asks you to keep working on something ("keep improving floor 3 until it\'s perfected"). Follow-up jobs may file issues only on floors a mandate covers. The same text again replaces it; the manager removes mandates in the CEO tab.',
+      {
+        text: z.string().min(1).max(MANDATE_MAX_CHARS).describe("What the manager wants, in their words"),
+        floors: z.array(z.number().int().positive()).max(20).optional().describe('Floors it covers; leave out for every floor'),
+        expires_in_hours: z.number().positive().max(24 * 90).optional().describe('When it ends, if the manager said; leave out for no end'),
+      },
+      (a) => run(() => h.setMandate(a)),
+    ),
+    tool(
+      'agent_log',
+      `An agent's last terminal lines (default ${AGENT_LOG_DEFAULT}, at most ${AGENT_LOG_MAX}) and a summary of their current or last session, secrets masked. Read-only.`,
+      { agent_id: z.string().describe('An id (or name) from company_status'), lines: z.number().int().min(1).max(AGENT_LOG_MAX).optional() },
+      (a) => run(() => h.agentLog(a)),
+    ),
+    tool(
+      'qa_report',
+      "A pull request's latest QA verdict, report (summary, checks, fix instructions) and screenshots. Screenshots are file paths you can Read to see them. Read-only.",
+      { floor: z.number().int(), pr: z.number().int().positive() },
+      (a) => run(() => h.qaReport(a)),
+    ),
+    tool(
+      'worktree_file',
+      "Read from an agent's worktree (or their branch, once the worktree is gone): a file (mode file, path inside the worktree), or what changed against the default branch (diff_stat, or diff; path narrows it). Read-only, size-capped; .git and .env files are off limits.",
+      {
+        agent_id: z.string(),
+        mode: z.enum(['file', 'diff_stat', 'diff']),
+        path: z.string().max(500).optional().describe('Relative to the worktree, e.g. "src/app.ts"'),
+      },
+      (a) => run(() => h.worktreeFile(a)),
+    ),
+    tool(
+      'pr_diff',
+      `A pull request's changed files with line counts (at most ${PR_FILES_MAX}), and its diff when patch is true (cut at ${PR_DIFF_MAX_CHARS} characters). Read-only.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), patch: z.boolean().optional().describe('Include the diff itself') },
+      (a) => run(() => h.prDiff(a)),
     ),
     tool(
       'send_telegram',
@@ -296,12 +427,13 @@ export function ceoSystemPrompt(o: {
     `- ${ONE_TURN}`,
     '',
     'Rules:',
-    '- Never decide on new work yourself. Only the manager asks for changes to their projects: file issues only when they asked in this job. In reviews, onboarding and triage, suggest work in your final message instead, and they decide.',
+    '- Never decide on new work yourself. Only the manager asks for changes to their projects: file issues only when they asked in this job, or in a follow-up on a floor their standing mandate covers. Otherwise suggest work in your final message instead, and they decide.',
     '- Every floor keeps at least one agent.',
     `- Change a floor's size with one scale_team call, with a reason the manager can decide on in a sentence or two. ${o.scaling === 'auto' ? "Team changes apply straight away, within the floor's max, so be deliberate." : 'The manager approves every change, and sets up each new agent before hiring them.'} If the manager declined a similar change (recentDecisions), do not ask again unless something has changed, and say what.`,
     "- Agents run the office's default coding agent, model and effort. Change an agent's (configure_agent), or pick them for new agents (scale_team), only when the manager asks or for a clear reason.",
     '- Issues: the same agents build and test, so PRs queued for QA (capacity.prsAwaitingQa) mean fewer, bigger issues, not more. Most briefs need 1 to 4 issues. Write "Depends on #N" only when an issue truly cannot start until #N\'s code is merged, because it waits until #N is closed. Keep dependency chains to two steps at most. The office starts the issues that hold up others first. Do not duplicate open issues: fix an existing issue\'s dependencies with set_dependencies. File at most 12 issues per job, or per message from the manager.',
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
+    '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
@@ -309,8 +441,29 @@ export function ceoSystemPrompt(o: {
   ].join('\n');
 }
 
-export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null): string {
+/** The follow-up's prompt: the events with their ids, the mandates in force, and what the CEO may do. */
+function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string {
+  const until = (m: CeoMandate) => (m.expiresAt ? `, until ${new Date(m.expiresAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` : '');
+  return [
+    'Follow-up: the office woke you because of these events since you last looked:',
+    ...events.map((e) => `- [${e.id}] ${e.text}`),
+    '',
+    mandates.length
+      ? `Standing mandates from the manager:\n${mandates.map((m) => `- "${m.text}" (${mandateWhere(m)}${until(m)})`).join('\n')}`
+      : 'There are no standing mandates: file no issues.',
+    '',
+    'Check each event, e.g. a merged PR against its issue\'s acceptance criteria (pr_diff, qa_report), a stuck agent through agent_log and worktree_file. Then, only where it helps:',
+    '- file follow-up issues (file_issue) for gaps, only on floors a mandate covers, at most 12;',
+    '- scale_team when work keeps waiting for free agents;',
+    '- the triage tools, if a pull request is stuck (needs-human).',
+    `Your final message reaches the manager only when it says what you did or what they need to decide. If nothing needs doing, reply exactly "Nothing to do."`,
+  ].join('\n');
+}
+
+export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: string; clone: string; mission: string; backlog: number } | null, pr?: TriagePr | null, mandates: CeoMandate[] = []): string {
   switch (job.kind) {
+    case 'followup':
+      return followupPrompt(job.events ?? [], mandates);
     case 'triage':
       if (!floor || !pr) return `Pull request #${job.prNumber ?? '?'} no longer needs triage. Reply "Nothing to do."`;
       return [
@@ -382,6 +535,8 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
       return 'Replying to you';
     case 'triage':
       return `Triaging PR #${job.prNumber ?? '?'} · ${where}`;
+    case 'followup':
+      return `Following up on ${followupLabel(job.events ?? [])}`;
   }
 }
 

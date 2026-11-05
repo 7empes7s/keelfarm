@@ -236,6 +236,18 @@ export async function prForBranch(fullName: string, branch: string): Promise<{ n
   return list[0] ?? null;
 }
 
+/** A pull request's changed files and, when asked, its diff (the CEO's pr_diff). */
+export interface PrDiff {
+  files: { path: string; additions: number; deletions: number }[];
+  diff: string | null;
+}
+
+export async function prDiff(fullName: string, number: number, patch: boolean): Promise<PrDiff> {
+  const raw = await ghJson<{ files: { path: string; additions: number; deletions: number }[] | null }>(['pr', 'view', String(number), '-R', fullName, '--json', 'files']);
+  const diff = patch ? await gh(['pr', 'diff', String(number), '-R', fullName], { timeoutMs: 60_000 }) : null;
+  return { files: (raw.files ?? []).map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })), diff };
+}
+
 // ---------- QA support ----------
 
 export interface PrDetails {
