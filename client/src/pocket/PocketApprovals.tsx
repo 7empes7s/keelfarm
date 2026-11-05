@@ -1,6 +1,6 @@
 // Pocket mode's Approvals tab: everything waiting on the manager's decision. Team changes (new agents and let-gos, the
 // phone's cards), stuck PRs with the Kanban's Retry QA / Send back / Merge / Close, and passed PRs on floors that don't
-// merge on their own.
+// merge on their own, and charter changes the CEO proposed (#48).
 import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -9,6 +9,7 @@ import { qaCardNote } from '../qaCard';
 import { confirmDialog } from '../ui/Confirm';
 import { Menu } from '../ui/Menu';
 import { Resume } from '../ui/Phone';
+import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
@@ -101,13 +102,18 @@ export function Approvals() {
   const qa = useStore((s) => s.qa);
   const requests = useStore((s) => s.requests);
   const w = waitingOnYou(repos, qa, requests);
-  const nothing = w.requests.length + w.stuck.length + w.ready.length === 0;
+  const charters = repos.filter((r) => r.charter.proposal);
+  const nothing = w.requests.length + w.stuck.length + w.ready.length + charters.length === 0;
   return (
     <div className="pk-page">
       {nothing && <p className="pk-empty">Nothing waits on you. The team carries on, and your phone hears when that changes.</p>}
       {w.requests.length > 0 && <h3 className="pk-h">👥 Team changes</h3>}
       {w.requests.map((r) => (
         <Resume key={r.id} req={r} />
+      ))}
+      {charters.length > 0 && <h3 className="pk-h">🎯 Charter changes (edit them in ⚙️ → Charter)</h3>}
+      {charters.map((r) => (
+        <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />
       ))}
       {w.stuck.length > 0 && <h3 className="pk-h">⚠️ Pull requests that need you</h3>}
       {w.stuck.map((s) => (

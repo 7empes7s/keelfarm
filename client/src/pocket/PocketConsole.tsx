@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { CeoTab, FloorsTab, SettingsTab, TeamTab } from '../ui/ManagerConsole';
 import { OpsTab } from '../ui/MissionConsole';
+import { CharterTab } from '../ui/CharterTab';
 import { NotifySettings } from '../ui/NotifySettings';
 import { AccessibilitySettings } from '../ui/AccessibilitySettings';
 import { ToolsTab } from '../ui/ToolsSettings';
@@ -11,7 +12,7 @@ import { HistoryTab, type HistoryFocus } from '../ui/HistoryTab';
 import { pendingRequests, useStore } from '../store';
 import { setMode } from './mode';
 
-export type ConsoleSection = 'floors' | 'ceo' | 'team' | 'settings' | 'tools' | 'ops' | 'history' | 'device';
+export type ConsoleSection = 'floors' | 'ceo' | 'charter' | 'team' | 'settings' | 'tools' | 'ops' | 'history' | 'device';
 
 function openOffice() {
   useStore.getState().openOverlay(null);
@@ -21,6 +22,7 @@ function openOffice() {
 export function PocketConsole({ section, pick, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus }) {
   const pending = useStore((s) => pendingRequests(s.requests).length);
   const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
+  const proposals = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
   // The sections scroll sideways on a phone: keep the open one in view.
   const chips = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -29,6 +31,7 @@ export function PocketConsole({ section, pick, history }: { section: ConsoleSect
   const sections: [ConsoleSection, string][] = [
     ['floors', '🏢 Floors'],
     ['ceo', `🧠 CEO${pending ? ` (${pending})` : ''}`],
+    ['charter', `🎯 Charter${proposals ? ` (${proposals})` : ''}`],
     ['team', '👩‍💻 Team'],
     ['settings', '⚙️ Office'],
     ['tools', '🧰 Tools & skills'],
@@ -48,6 +51,7 @@ export function PocketConsole({ section, pick, history }: { section: ConsoleSect
       <div className="ds-stack-scope" role="tabpanel" aria-label={sections.find(([k]) => k === section)?.[1]}>
         {section === 'floors' && <FloorsTab />}
         {section === 'ceo' && <CeoTab />}
+        {section === 'charter' && <CharterTab />}
         {section === 'team' && <TeamTab />}
         {section === 'settings' && <SettingsTab pocket />}
         {section === 'tools' && <ToolsTab />}

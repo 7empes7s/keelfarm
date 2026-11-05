@@ -35,6 +35,7 @@ import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { snapshotMessages } from '../shared/chatParts.ts';
 import { cleanStyle } from '../shared/looks.ts';
+import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
@@ -86,6 +87,7 @@ export class Swarm extends SwarmCeoTools {
           playbook: r.playbook ?? '',
           localPath: r.localPath ?? null,
           preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } },
+          charter: loadRecord(r.charter), // before #48 there's none: the brief above stays the mission, as it was
         })),
         // Developers and QA testers became agents (docs/agents.md): testers keep their seats, now the east-wall desks.
         agents: (loaded.agents ?? []).map((raw) => legacyAgent<PersistedAgent>(raw)).map((a) => ({
@@ -239,7 +241,8 @@ export class Swarm extends SwarmCeoTools {
       console.warn(this.ghError);
     }
 
-    if (this.backend.demo && this.state.repos.length === 0) {
+    const seeded = this.backend.demo && this.state.repos.length === 0;
+    if (seeded) {
       // The demo opens on a busy office; the tutorial still runs so it can be tried.
       Object.assign(this.state.settings, { setupDone: true, managerName: 'Demo Manager', companyName: 'Demo Co.' });
       for (const r of await this.backend.listMyRepos()) {
@@ -248,12 +251,19 @@ export class Swarm extends SwarmCeoTools {
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
         for (let i = 1; i < size; i++) this.hireAgent(repo.id, {}); // connecting hired the first
         this.updateRepo(repo.id, { autoAssign: true });
+        const charter = this.backend.demoCharter?.(repo.fullName).charter;
+        if (charter) this.setCharter(repo.id, charter);
       }
       // Mission control opens on a week that already happened.
       this.state.ops = this.backend.seedOps?.(this.state.repos.map((r) => r.id), Date.now()) ?? this.state.ops;
     }
     for (const r of this.state.repos) this.ensureAgent(r);
     this.ensureCeo(interrupted);
+    // A fresh demo office has a charter change from the CEO waiting, through the real tool.
+    for (const r of seeded ? this.state.repos : []) {
+      const p = this.backend.demoCharter?.(r.fullName).proposal;
+      if (p) void this.officeTools().call('propose_charter', { floor: r.floor, ...p });
+    }
     // Agents from before the ledger start their careers now.
     for (const a of this.state.agents) if (a.role !== 'ceo') applyLedger(this.state.progress, { kind: 'hired', agentId: a.id, at: Date.now() });
 
