@@ -3,7 +3,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { Markdown } from './Markdown';
-import { closeOverlay } from './Panel';
+import { backdropClose, closeOverlay } from './Panel';
 import { HireSetupFields, cliLabel, hireCli, hireOverrides, setupOf, type HireSetup } from './Phone';
 import { CLAUDE_MODELS, effectiveModel } from '../../../shared/models';
 
@@ -35,7 +35,7 @@ export function Interview({ requestId }: { requestId: string }) {
   const company = settings.companyName || 'cubefarm';
   if (!req) {
     return (
-      <div className="overlay interview-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeOverlay()}>
+      <div className="overlay interview-overlay" {...backdropClose(closeOverlay)}>
         <div className="doc" role="dialog" aria-label="Team change">
           <div className="doc-head">
             <span>✻ {company} · personnel</span>
@@ -72,7 +72,7 @@ export function Interview({ requestId }: { requestId: string }) {
   };
 
   return (
-    <div className="overlay interview-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeOverlay()}>
+    <div className="overlay interview-overlay" {...backdropClose(closeOverlay)}>
       <div className={`doc ${hire ? '' : 'doc-letgo'}`} role="dialog" aria-label={hire ? `Setting up ${name}` : `Letting ${req.name} go`}>
         <div className="doc-head">
           <span>✻ {company} · personnel</span>

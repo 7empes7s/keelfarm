@@ -1,7 +1,7 @@
 // The office's panel (a titled card over a dimmed backdrop) and closing it. Kept apart from Overlays.tsx, which pulls
 // in the 3D world, so pocket mode can open panels without loading it. A panel is a modal dialog for the keyboard and
 // screen readers (dialogFocus.ts): focus moves in, stays in, and goes back when it closes.
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { useDialogFocus } from './dialogFocus';
 
@@ -11,6 +11,17 @@ import { useDialogFocus } from './dialogFocus';
 export function closeOverlay() {
   useStore.getState().openOverlay(null);
 }
+
+let pressedBackdrop: EventTarget | null = null;
+
+/**
+ * A window's backdrop: a tap or click that starts and ends on it, outside the window, closes it like ✕. Pointer down
+ * and click, not mousedown: iOS sends a tap's mouse events only to what it thinks is clickable (#83).
+ */
+export const backdropClose = (close: () => void) => ({
+  onPointerDown: (e: PointerEvent<HTMLElement>) => void (pressedBackdrop = e.target === e.currentTarget ? e.currentTarget : null),
+  onClick: (e: MouseEvent<HTMLElement>) => void (e.target === e.currentTarget && pressedBackdrop === e.currentTarget && close()),
+});
 
 export function Panel({
   title,
@@ -41,7 +52,7 @@ export function Panel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && (onClose ? onClose() : closeOverlay())}>
+    <div className="overlay" {...backdropClose(onClose ?? closeOverlay)}>
       <div
         ref={box}
         className={`panel ds-screen ${wide ? 'panel-wide' : ''} ${className ?? ''}`}

@@ -731,6 +731,27 @@ input.inline:focus {
   text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
   pointer-events: none;
 }
+/* The split screen's first-time hints on touch screens (#83): the top half looks, the bottom half walks. */
+.touch-zone-hint {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 6px 14px;
+  border: 2px dashed currentColor;
+  border-radius: 999px;
+  color: var(--ds-surface-raised);
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.touch-zone-look {
+  top: 25%;
+}
+.touch-zone-move {
+  top: 75%;
+}
 /* The camera's HUD (CameraHud.tsx): the overview button on the floor card, the views' toolbars and the follow banner. */
 .cam-btn {
   flex: none;
@@ -2754,6 +2775,13 @@ input.inline:focus {
   padding: 10px 14px 10px;
   animation: pop 0.25s ease-out;
 }
+/* On a phone: clear of the phone button, and under the panels, which fill the screen there (#83). */
+@media (max-width: 760px) {
+  .tour {
+    z-index: 20;
+    bottom: calc(96px + var(--ds-safe-bottom));
+  }
+}
 .tour-cheer {
   border-left-color: var(--good);
   background: #eafbee;
@@ -3108,6 +3136,9 @@ input.inline:focus {
     transform: translateY(40px);
     opacity: 0;
   }
+}
+.phone-x {
+  display: none;
 }
 .phone-status {
   display: flex;
@@ -5062,15 +5093,17 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .pocket .resume {
   margin: 0;
 }
+/* Panels on a phone, in pocket mode and the 3D office alike (#83): the whole visible screen, the header (with its 44px
+   ✕) fixed above a scrolling body, clear of the notch and the home bar. :root outranks the UI scale's sizes below. */
 @media (max-width: 760px) {
-  .pocket .overlay {
+  .overlay {
     top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
     bottom: auto;
     height: calc(100vh / var(--ui-scale, 1));
     height: calc(var(--app-height, 100dvh) / var(--ui-scale, 1));
     padding: 0;
   }
-  .pocket .panel {
+  :root .overlay .panel {
     width: 100%;
     height: 100%;
     max-height: 100%;
@@ -5078,11 +5111,59 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
     border-radius: 0;
     box-shadow: none;
   }
-  .pocket .panel-head {
-    padding-top: max(12px, var(--ds-safe-top));
+  .overlay .panel-head {
+    flex: none;
+    padding: max(12px, var(--ds-safe-top)) max(16px, var(--ds-safe-right)) 12px max(16px, var(--ds-safe-left));
   }
-  .pocket .panel-body {
-    padding: 12px;
+  .overlay .panel-body {
+    padding: 12px max(12px, var(--ds-safe-right)) max(12px, var(--ds-safe-bottom)) max(12px, var(--ds-safe-left));
+    overscroll-behavior: contain;
+  }
+  .phone-overlay {
+    place-items: stretch;
+  }
+  :root .phone {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-width: 0; /* a grid item: its widest row mustn't widen the screen */
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: max(10px, var(--ds-safe-top)) max(10px, var(--ds-safe-right)) max(8px, var(--ds-safe-bottom)) max(10px, var(--ds-safe-left));
+  }
+  /* the 3D office on a touch screen: a band of the dimmed view above the window, to tap it closed */
+  html[data-touch] .overlay {
+    padding-top: calc(48px + var(--ds-safe-top));
+  }
+  html[data-touch] .overlay .panel,
+  html[data-touch] .phone {
+    border-top: 4px solid var(--ds-outline);
+    border-radius: 20px 20px 0 0;
+  }
+  html[data-touch] .overlay .panel-head {
+    padding-top: 12px;
+  }
+  html[data-touch] .phone {
+    padding-top: 10px;
+  }
+  .phone-status {
+    display: none;
+  }
+  .phone-x {
+    display: block;
+    flex: none;
+    align-self: flex-end;
+    width: var(--ds-target);
+    height: var(--ds-target);
+    margin-bottom: 6px;
+    border-radius: 12px;
+    border: 3px solid var(--ds-outline);
+    background: var(--ds-surface-raised);
+    color: var(--ds-on-color);
+    font-weight: 700;
+    cursor: pointer;
   }
 }
 

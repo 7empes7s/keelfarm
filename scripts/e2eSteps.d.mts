@@ -4,6 +4,7 @@ type Env = Record<string, string | undefined>;
 export interface InstalledBrowsers {
   chrome: boolean;
   chromium: boolean;
+  webkit?: boolean;
 }
 export function pickBrowser(env: Env, installed: InstalledBrowsers): { browser: 'chrome' | 'chromium'; ok: boolean; message: string | null };
 export function browsersPathWarning(env: Env, cwd: string): string | null;

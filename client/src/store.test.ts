@@ -5,7 +5,7 @@ import type { AgentView, IssueInfo, LogLine, OpsAlarm, PullInfo, QaStatus, QaVie
 vi.mock('./ui/sfx', () => ({ alarm: vi.fn(), audioUnlocked: () => false, chirp: vi.fn(), cue: vi.fn() }));
 vi.mock('./world/gongRunner', () => ({ gongForMerge: vi.fn(() => 'solo') }));
 
-const { floorPrCounts, kanbanFor, qaKey, useStore } = await import('./store');
+const { floorPrCounts, kanbanFor, pausesView, qaKey, useStore } = await import('./store');
 const { alarm, cue } = await import('./ui/sfx');
 const { EMPTY_OPS } = await import('./ops');
 const { gongForMerge } = await import('./world/gongRunner');
@@ -220,5 +220,18 @@ describe('batched agents and watched terminal lines (#228)', () => {
     expect(useStore.getState().latest).toMatchObject({ ken: { id: 3 }, grace: { id: 9 } });
     apply({ type: 'logs', catchUp: true, tails: { ken: [line(7)] } });
     expect(useStore.getState().logs.ken.map((l) => l.id)).toEqual([7]);
+  });
+});
+
+describe('pausesView (#83)', () => {
+  it('stops the 3D view under every panel on a touch screen', () => {
+    for (const o of [{ kind: 'help' }, { kind: 'phone' }, { kind: 'elevator' }, { kind: 'floorList' }, { kind: 'catalogue' }] as const) expect(pausesView(o, true)).toBe(true);
+    expect(pausesView(null, true)).toBe(false);
+  });
+
+  it('with a mouse, only under the full-screen panels', () => {
+    expect(pausesView({ kind: 'help' }, false)).toBe(false);
+    expect(pausesView({ kind: 'terminal', agentId: 'ken' }, false)).toBe(true);
+    expect(pausesView(null, false)).toBe(false);
   });
 });

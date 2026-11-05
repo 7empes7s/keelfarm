@@ -148,6 +148,7 @@ export function HUD() {
   const dismiss = useStore((s) => s.dismissToast);
   const centerDot = useA11y((s) => s.prefs.centerDot);
   const walked = useTouchStick((s) => s.walked);
+  const looked = useTouchStick((s) => s.looked);
   // In the overview, the building view and the follow cam there's no crosshair to aim (camera/rig.ts).
   const onFoot = useCameraView((s) => s.mode) === 'first';
 
@@ -229,9 +230,10 @@ export function HUD() {
       )}
       {started && !overlay && !travel && onFoot && <HeldHint />}
       {started && !overlay && !locked && !travel && onFoot && !isTouch && <div className="hud-resume">Click to look around</div>}
-      {started && !overlay && !travel && onFoot && isTouch && !walked && <div className="hud-resume">Drag anywhere to walk · a second finger looks · tap to use · hold for more</div>}
+      {started && !overlay && !travel && onFoot && isTouch && !looked && <div className="touch-zone-hint touch-zone-look">Drag here to look</div>}
+      {started && !overlay && !travel && onFoot && isTouch && !walked && <div className="touch-zone-hint touch-zone-move">Drag here to move</div>}
       {started && !(settings.setupDone && settings.tutorialStep >= 0) && isTouch && (
-        <div className="hud-help">Drag anywhere to walk (far to run) · a second finger looks · tap to use · hold, then let go, for more · 📱 for the phone</div>
+        <div className="hud-help">Drag low to walk (far to run) · drag high to look · tap to use · hold, then let go, for more · 📱 for the phone</div>
       )}
       {started && !(settings.setupDone && settings.tutorialStep >= 0) && !isTouch && (
         <div className="hud-help">

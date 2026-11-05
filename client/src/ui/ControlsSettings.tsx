@@ -76,7 +76,7 @@ function TouchSettings() {
         <b>{sens.toFixed(2)}×</b>
       </label>
       <p className="muted small pad-map">
-        Drag anywhere to walk (push far to run) · a second finger looks around · tap something to use it · hold it, then let go, for more options.
+        Drag in the bottom half to walk (push far to run) · drag in the top half to look around · tap something to use it · hold it, then let go, for more options.
       </p>
     </div>
   );

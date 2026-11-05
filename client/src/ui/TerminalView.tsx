@@ -266,7 +266,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
   const browser = agent.hasScreenshot && (
     <div className="browser">
       <div className="browser-bar">🔒 {agent.browserUrl ?? 'about:blank'}</div>
-      <div className="browser-view" ref={shotView} />
+      <div className="browser-view" ref={shotView} tabIndex={0} role="region" aria-label="Their browser" />
       <div className="muted small">Latest Playwright screenshot{agent.screenshotAt ? ` · ${new Date(agent.screenshotAt).toLocaleTimeString()}` : ''}</div>
     </div>
   );

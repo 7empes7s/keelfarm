@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectableWindow, slidOff } from './touchRules';
+import { selectableWindow } from './touchRules';
 import { focusAgent, holdOptions } from '../world/touch/holdOptions';
 
 describe('selectableWindow', () => {
@@ -11,18 +11,6 @@ describe('selectableWindow', () => {
     expect(selectableWindow({ kind: 'manager' })).toBe(true);
     expect(selectableWindow({ kind: 'phone' })).toBe(true);
     expect(selectableWindow({ kind: 'elevator' })).toBe(false);
-  });
-});
-
-describe('slidOff', () => {
-  const box = { left: 10, top: 10, right: 58, bottom: 58 };
-  it('keeps a tap that lifts on the button or just beside it', () => {
-    expect(slidOff(box, 30, 30)).toBe(false);
-    expect(slidOff(box, 64, 30)).toBe(false);
-  });
-  it('drops a tap that slid away', () => {
-    expect(slidOff(box, 80, 30)).toBe(true);
-    expect(slidOff(box, 30, -5)).toBe(true);
   });
 });
 

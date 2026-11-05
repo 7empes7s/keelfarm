@@ -11,12 +11,13 @@ import { runFocusAction } from '../Player';
 import { startCharge, throwHeld } from '../toys/hands';
 import { eAction } from '../toys/sip';
 import { sipCoffee } from '../toys/sipping';
-import { cancelAll, createGestures, fingerCancel, fingerDown, fingerMove, fingerUp, tickGestures, type GestureEvent } from './gestures';
+import { appViewport } from '../../viewport';
+import { cancelAll, createGestures, fingerCancel, fingerDown, fingerMove, fingerUp, tickGestures, zoneAt, type GestureEvent } from './gestures';
 import { knobOffset, stickVector } from './joystick';
-import { isTouch, openHoldMenu, touchInput, useHoldMenu, useTouchStick } from './touchState';
+import { isTouch, markUsed, openHoldMenu, touchInput, useHoldMenu, useTouchStick } from './touchState';
 
 // Inside the Canvas, on touch screens only: the canvas's touch pointers through the gesture grammar (gestures.ts).
-// A drag anywhere walks (the floating joystick), a second finger looks, a tap acts on what's under the finger (like
+// A drag in the bottom half walks (the floating joystick), in the top half looks, a tap acts on what's under the finger (like
 // E or a click, but aimed there), and a hold opens that thing's menu. In the overview and the other views a tap is
 // left to the browser's own click (CameraRig.tsx picks it up) and the joystick pans, as WASD does there.
 
@@ -80,9 +81,11 @@ export function TouchControls() {
           touchInput.x = v.x;
           touchInput.y = v.y;
           touchInput.run = v.run;
-          useTouchStick.setState({ ring: { cx: e.cx, cy: e.cy, kx: k.x, ky: k.y, run: v.run }, armed: null, walked: true });
+          useTouchStick.setState({ ring: { cx: e.cx, cy: e.cy, kx: k.x, ky: k.y, run: v.run }, armed: null });
+          if (!useTouchStick.getState().walked) markUsed('walked');
         } else if (e.type === 'stickEnd') stopStick();
         else if (e.type === 'look') {
+          if (!useTouchStick.getState().looked) markUsed('looked');
           touchInput.lookX += e.dx;
           touchInput.lookY += e.dy;
         } else if (e.type === 'armed') {
@@ -110,7 +113,8 @@ export function TouchControls() {
       } catch {
         // already gone
       }
-      handle(fingerDown(g, e.pointerId, e.clientX, e.clientY, e.timeStamp)); // when it happened, not when a slow frame let us see it
+      const zone = onFoot() ? zoneAt(e.clientY, appViewport(window.innerHeight, window.visualViewport)) : 'stick'; // a view's drag pans
+      handle(fingerDown(g, e.pointerId, e.clientX, e.clientY, e.timeStamp, zone)); // when it happened, not when a slow frame let us see it
     };
     const onMove = (e: PointerEvent) => {
       if (touch(e)) handle(fingerMove(g, e.pointerId, e.clientX, e.clientY));

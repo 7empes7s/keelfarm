@@ -1,6 +1,6 @@
 // Run with `npm test` (Vitest).
 import { describe, expect, it } from 'vitest';
-import { shouldGrabLook, viewUncovered, type Covering } from './lookLockRules';
+import { hushes, shouldGrabLook, viewUncovered, type Covering } from './lookLockRules';
 
 const c = (overlay: boolean, confirm = false): Covering => ({ overlay, confirm });
 const on = { started: true, enabled: true };
@@ -50,5 +50,22 @@ describe('shouldGrabLook', () => {
   it('never grabs when nothing closed', () => {
     expect(shouldGrabLook(c(false), c(true), on)).toBe(false);
     expect(shouldGrabLook(c(true, true), c(true), on)).toBe(false);
+  });
+});
+
+describe('hushes (#83)', () => {
+  const quiet = { at: 0, until: 400 };
+
+  it("swallows a mouse's second click in the quiet moment, and nothing after it", () => {
+    expect(hushes(100, quiet, { type: 'mouse', at: 90 })).toBe(true);
+    expect(hushes(400, quiet, { type: 'mouse', at: 390 })).toBe(false);
+  });
+
+  it('swallows the click of the tap that started the quiet (it would land on the panel it opened)', () => {
+    expect(hushes(60, { at: 50, until: 450 }, { type: 'touch', at: 0 })).toBe(true);
+  });
+
+  it('never swallows the next tap', () => {
+    expect(hushes(100, quiet, { type: 'touch', at: 90 })).toBe(false);
   });
 });

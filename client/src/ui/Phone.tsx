@@ -25,7 +25,7 @@ import { useAttachments } from './chatUpload';
 import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
-import { closeOverlay } from './Panel';
+import { backdropClose, closeOverlay } from './Panel';
 import { useDialogFocus } from './dialogFocus';
 import { isKey } from './controls';
 import { Key } from './Key';
@@ -1110,8 +1110,9 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
     ['games', '🎮', 'Games', 0],
   ];
   return (
-    <div className="overlay phone-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeOverlay()}>
+    <div className="overlay phone-overlay" {...backdropClose(closeOverlay)}>
       <div className="phone ds-screen" ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
+        <button className="phone-x" onClick={closeOverlay} aria-label="Close">✕</button>
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />
