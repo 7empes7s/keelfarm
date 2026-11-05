@@ -97,7 +97,7 @@ export function attachmentProblem(files: readonly { name: string; type?: string;
   if (files.length + already > MAX_FILES_PER_MESSAGE) return `At most ${MAX_FILES_PER_MESSAGE} files per message.`;
   for (const f of files) {
     if (!fileKind(f.name, f.type)) return `${sanitizeName(f.name)}: that kind of file can't be attached. Images, videos, PDFs, office documents, text, CSV, JSON and zip files can.`;
-    if (f.size > MAX_FILE_BYTES) return `${sanitizeName(f.name)} is ${formatSize(f.size)}: files can be at most ${formatSize(MAX_FILE_BYTES)}.`;
+    if (f.size > MAX_FILE_BYTES) return `${sanitizeName(f.name)} is too big (${formatSize(f.size)}): files can be at most ${formatSize(MAX_FILE_BYTES)}.`;
     if (f.size <= 0) return `${sanitizeName(f.name)} is empty.`;
   }
   return null;
