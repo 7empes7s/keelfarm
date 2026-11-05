@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Lab, loadLab, type LabState } from './experiments.ts';
 import { experimentInput } from './ceo.ts';
 import { sampleLab } from './experimentSample.ts';
@@ -52,6 +52,35 @@ describe('the lab', () => {
     expect(l.assign('o/one', { number: 7, body: '', labels: [] })).toBeNull();
     expect(st.assignments).toHaveLength(1);
     expect(l.view().tags).toEqual([]);
+  });
+
+  it("sends the tabs the manager's changes at once, and a burst of sessions at most once in 30 s", () => {
+    vi.useFakeTimers();
+    try {
+      const st: LabState = loadLab(undefined, Date.now());
+      let emits = 0;
+      const l = new Lab(() => st, { save: () => undefined, emit: () => emits++, floorOk: () => true });
+      l.act('test-first', 'start');
+      vi.advanceTimersByTime(500);
+      expect(emits).toBe(1);
+      l.assign('o/one', { number: 5, body: '', labels: [] });
+      const tag = l.practice('o/one', 5, null, 'issue').tag!;
+      for (let i = 0; i < 100; i++) {
+        l.session(line({ exp: tag }));
+        vi.advanceTimersByTime(250);
+      }
+      expect(emits).toBe(1); // 25 s of sessions: not yet
+      vi.advanceTimersByTime(5000);
+      expect(emits).toBe(2);
+      l.session(line({ exp: tag }));
+      l.act('test-first', 'stop'); // the manager's change doesn't wait for the sessions' turn
+      vi.advanceTimersByTime(500);
+      expect(emits).toBe(3);
+      vi.advanceTimersByTime(60_000);
+      expect(emits).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('promotes only a stopped experiment, and only to one of its variants', () => {

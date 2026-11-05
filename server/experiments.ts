@@ -39,21 +39,31 @@ export function loadLab(raw: unknown, now: number): LabState {
   return { experiments, assignments };
 }
 
-/** The experiments' bookkeeping. `save` writes the state; `emit` sends the tabs the view (debounced). */
+/** The manager's and CEO's changes reach the tabs at once; assignments and outcomes, which grow with the company's
+ *  activity, at most this often (server/scale.test.ts's traffic budget). */
+const EMIT_SOON_MS = 500;
+const EMIT_QUIET_MS = 30_000;
+
+/** The experiments' bookkeeping. `save` writes the state; `emit` sends the tabs the view (throttled). */
 export class Lab {
   private emitTimer: NodeJS.Timeout | null = null;
+  private emitAt = 0;
 
   constructor(
     private st: () => LabState,
     private o: { save: () => void; emit: (view: LabView) => void; floorOk: (repoId: string) => boolean },
   ) {}
 
-  private changed() {
+  private changed(soon = false) {
     this.o.save();
-    this.emitTimer ??= setTimeout(() => {
+    const at = Date.now() + (soon ? EMIT_SOON_MS : EMIT_QUIET_MS);
+    if (this.emitTimer && this.emitAt <= at) return;
+    if (this.emitTimer) clearTimeout(this.emitTimer);
+    this.emitAt = at;
+    this.emitTimer = setTimeout(() => {
       this.emitTimer = null;
       this.o.emit(this.view());
-    }, 500);
+    }, at - Date.now());
   }
 
   private get experiments() {
@@ -89,7 +99,7 @@ export class Lab {
     }
     if (this.experiments.some((x) => x.name.toLowerCase() === e.name.toLowerCase())) throw new HttpError(409, `There is already an experiment called "${e.name}"`);
     this.experiments.push(e);
-    this.changed();
+    this.changed(true);
     return e;
   }
 
@@ -119,10 +129,10 @@ export class Lab {
       const s = this.st();
       s.experiments = s.experiments.filter((x) => x !== e);
       s.assignments = s.assignments.filter((a) => a.experimentId !== e.id);
-      this.changed();
+      this.changed(true);
       return null;
     } else throw new HttpError(400, 'action must be start, stop, promote or delete');
-    this.changed();
+    this.changed(true);
     return e;
   }
 
