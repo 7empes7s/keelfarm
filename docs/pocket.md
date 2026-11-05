@@ -63,37 +63,52 @@ about:
 You get at most one notification of each kind a minute. Whatever else of that kind happens in the minute arrives
 together as one summary ("🔀 9 more merges"), so a burst of merges is two notifications, not ten.
 
-**Office address for links:** set it to the address your phone opens the office at (for example your Tailscale
-Serve URL) and every chat message ends with it, so a tap takes you there.
+**Office address for links:** the address your phone opens the office at (for example your Tailscale Serve URL).
+Every ntfy message ends with it, so a tap takes you there. Opening the settings over HTTPS fills it in when it's empty.
 
-Every channel has an **On** switch and a **Test** button. A demo office (`--demo`) sends nothing: it starts with
-every chat app set up with fake addresses and prints what each would get in the server's log.
+A demo office (`--demo`) sends nothing: it starts with ntfy set up with a fake topic and prints what each channel
+would get in the server's log.
 
-### Desktop notifications
+### Get notified on this phone
 
-Any browser with the office open in a background tab shows notifications, once you click **Allow in this
-browser**. A tab you're looking at doesn't: the office chimes and shows the toast there anyway.
+Open **⚙️ → 📱 This device → Notifications** (or **⚙️ Settings → 🔔 Notifications** in the 3D office) on the phone
+itself. **Get notified on this device** is a checklist of live checks, each with a tick or what to do, and one big
+button that does the next step:
 
-### Push to your phone (Web Push)
+1. **Opened over HTTPS** (or `localhost` on the office's PC); otherwise it links to the office's HTTPS address.
+2. **iPhone only: running as the home-screen app** (Share → Add to Home Screen, then open it from there). Safari
+   only allows Web Push in the installed app (iOS 16.4 or later).
+3. **Notifications allowed**, or how to unblock them in this browser.
+4. **Background helper running**: the office's service worker.
+5. **This device is signed up**, and saved on the office.
+6. **Send a test**: what the push service answered (accepted, expired, or an error with its HTTP status), then
+   *Did it arrive?*
 
-Push reaches a device even when the office isn't open on it. On each phone or PC, open the office over HTTPS (or as
-`localhost` on the office's own PC), go to **⚙️ → Notifications** and tap **Push to this device**, then **Send test**.
-On an iPhone (iOS 16.4 or later), add the office to the home screen first and turn push on from the installed app:
-Safari only allows Web Push there.
+Allowing notifications and signing up are separate taps on purpose: Safari only lets a page subscribe within the tap
+that asked, and the permission prompt uses that tap up. A step that fails says why on screen and in the office's log
+(`notify: push sign-up stopped at …`).
 
-The office signs its pushes with its own VAPID key pair, made the first time a device signs up and kept in
-`<SWARM_HOME>/push.json` with the devices' subscriptions (owner-only file permissions). Messages are encrypted for
-each device (RFC 8291) and go through the browser maker's push service (Google, Mozilla, Apple), which can't read
-them. A device that unsubscribes, or whose browser data is cleared, is dropped the next time a push to it fails.
+Push reaches a device even when the office isn't open on it. The office signs its pushes with its own VAPID key pair,
+kept in `<SWARM_HOME>/push.json` with the devices' subscriptions (owner-only file permissions). Messages are
+encrypted for each device (RFC 8291) and go through the browser maker's push service (Google, Mozilla, Apple), which
+can't read them.
 
-### ntfy
+### The ntfy app instead
 
-[ntfy](https://ntfy.sh) pushes to its own phone app with no account. Anyone who knows a topic's name can read it, so
-pick a long random one.
+[ntfy](https://ntfy.sh) pushes to its own phone app, with no account and nothing to set up in the browser. Tap
+**Set up ntfy**: the office makes a long random topic on ntfy.sh, saves it and sends it a test. It then shows, once,
+a **Subscribe in the ntfy app** link and a QR code for another phone's camera, with the App Store and Google Play
+links. Anyone who knows the topic can read it, so it's never shown again; **Make a new ntfy topic** replaces it.
+**Use my own ntfy server or topic** takes a topic URL and an access token (`tk_…`) instead.
 
-1. In the ntfy app, subscribe to a topic such as `cubefarm-7f3k9q2m`.
-2. Enter `https://ntfy.sh/cubefarm-7f3k9q2m` (or your own ntfy server's topic URL) under **ntfy**. For a topic with
-   access control, add its access token (`tk_…`). **Save** and **Test**.
+### Channels
+
+Each channel shows when it last sent and whether that worked, with the error if it didn't: desktop (the office's
+open tabs), each push device and ntfy. Devices can be tested, renamed and removed there. A device whose push service
+says it's gone (it unsubscribed, or its browser data was cleared) is dropped.
+
+Desktop notifications: any browser with the office open in a background tab shows them once you click **Allow in
+this browser**. A tab you're looking at doesn't: the office chimes and shows the toast there anyway.
 
 ### Where the secrets live
 

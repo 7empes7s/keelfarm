@@ -8,9 +8,10 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 
 ## SAFETY (read first)
 
-- The live office runs from `C:\Projects\office-swarm` on this machine, on ports 4317 (server) and 5317 (Vite),
-  with its state in `~/.cubefarm`. Never edit or run anything there, never read or write `~/.cubefarm` directly, and
-  never use ports 4317 or 5317.
+- The live office runs from `/root/keelfarm` on this Linux machine (`node scripts/office.mjs --no-open` under the
+  systemd unit `cubefarm.service`), on port 4317 (5317 is its Vite's), with its state in `/root/.cubefarm`. Never edit
+  or run anything in `/root/keelfarm`, never read or write the office's own state in `/root/.cubefarm` (your machine's
+  folder under it is yours), and never use ports 4317 or 5317.
 - Test only in demo mode (fake GitHub, fake agents, no Claude usage), with an isolated `SWARM_HOME` and your reserved
   `SWARM_PORT` (from your job instructions):
 
@@ -141,6 +142,7 @@ Shared (`shared/`, imported by both sides):
 - `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings).
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
+- `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
 - `looks.ts`: the look editor's options and `cleanStyle` (an agent's `style`, checked on the server).
 
@@ -169,7 +171,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   the camera or anything non-essential), UI scale, readable font, high contrast. Dialogs use `dialogFocus.ts`
   (focus in, trapped, returned); `announce()` speaks to screen readers; `FloorList.tsx` is the list view.
 - `src/pocket/`: pocket mode (docs/pocket.md), the 2D office for phones (`mode.ts` picks it; `App.tsx` loads it or the
-  3D `Office.tsx` lazily, so a phone never downloads three.js). `src/pwa.ts` registers the service worker and Web Push;
+  3D `Office.tsx` lazily, so a phone never downloads three.js). `src/pwa.ts` registers the service worker and Web Push
+  (one sign-up step per tap in `pushSteps.ts`; the setup checklist in `ui/notifySteps.ts`, drawn by `NotifyGuide.tsx`);
   `src/notifications.ts` shows desktop notifications. `ui/Panel.tsx` is the panel, apart from `Overlays.tsx` (3D).
 - `src/photo/`: photo mode and clips, lazy-loaded except `gate.ts` (on/frozen, the K and I keys, `__swarmPhoto`):
   `PhotoScene.tsx` (its own camera; frozen, the frame loop stops and it draws on change), `post.ts` (filters and depth

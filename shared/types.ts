@@ -74,6 +74,7 @@ export interface RepoView {
   mission: string; // the manager's brief: what this floor is building
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
+  playbook: string; // the floor's architecture map, conventions, skills to use and traps, for every agent's prompt (up to PLAYBOOK_MAX)
   localPath: string | null; // the manager's own project folder, when the floor lives in one
   checkoutPath: string; // where the floor's main checkout is on disk (localPath, or a clone the office manages)
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
@@ -150,6 +151,9 @@ export type AgentRole = 'agent' | 'ceo';
 
 /** Desks in a floor's room: 12 in the open-plan grid and 3 along the east wall. A team is at most this big. */
 export const FLOOR_SEATS = 15;
+
+/** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
+export const PLAYBOOK_MAX = 3000;
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -386,10 +390,34 @@ export interface NotifySettings {
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
 }
 
-/** Which chat apps have a webhook saved (only a hint of it: the secret never leaves the server) and how many devices get push. */
+/** A channel's last send since the office started: when, and whether it arrived (else why not). */
+export interface NotifyHealth {
+  at: number;
+  ok: boolean;
+  error: string;
+}
+
+/** A device that gets Web Push. `id` is derived from its subscription, which never leaves the server. */
+export interface PushDeviceView {
+  id: string;
+  name: string;
+  addedAt: number;
+  last: NotifyHealth | null;
+}
+
+/** Which chat apps have a webhook saved (only a hint of it: the secret never leaves the server), the push devices and each channel's last send. */
 export interface NotifyChannelsView {
-  webhooks: Record<NotifyWebhook, { set: boolean; hint: string }>;
+  webhooks: Record<NotifyWebhook, { set: boolean; hint: string; last: NotifyHealth | null }>;
   pushDevices: number;
+  devices: PushDeviceView[];
+  desktop: NotifyHealth | null;
+}
+
+/** A test push to one device: the push service took it, the device is gone (and dropped), or another error. */
+export interface PushTestView {
+  outcome: 'delivered' | 'expired' | 'error';
+  status: number;
+  message: string;
 }
 
 /** A notification the office sent: a browser with the office open but hidden shows it as a desktop notification. */
@@ -456,6 +484,17 @@ export interface UsageView {
   warning: UsageWarningView | null; // the latest since the office started, for the usage meter
 }
 
+/**
+ * Claude's latest reading of one usage limit, from any session's status line or rate-limit event. These are the whole
+ * subscription's numbers, so they include usage outside the office (claude.ai, other Claude Code sessions).
+ */
+export interface UsageReading {
+  type: string; // Claude's rate limit type: five_hour, seven_day, seven_day_opus, …
+  pct: number; // how full, 0-100
+  resetsAt: number | null; // epoch ms
+  at: number; // when it was read
+}
+
 /** One floor's numbers on mission control (or the whole office's), computed by the server from its state and history. */
 export interface OpsNumbers {
   // the pipeline, right now
@@ -474,6 +513,8 @@ export interface OpsNumbers {
   leadMs: number | null; // median issue → merge
   qaWaitMs: number | null; // median wait for an agent to start testing a PR
   qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
+  qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
+  qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
   // GitHub's checks, over 7 days
   ciPass: number | null; // share of check runs that passed, 0-1
   ciRuns: number;
@@ -568,6 +609,13 @@ export interface HireRequestView {
   decidedBy: 'manager' | 'auto' | null;
 }
 
+/**
+ * Where a manager's message to the CEO is (shared/chat.ts nextDelivery): sending and failed live only in the phone
+ * that sent it; the office records sent, read (the CEO's session took it, or their reply job started) and replied.
+ */
+export type Delivery = 'sending' | 'sent' | 'read' | 'replied' | 'failed';
+export type ServerDelivery = Extract<Delivery, 'sent' | 'read' | 'replied'>;
+
 /** One message in the phone thread between the manager and the CEO. */
 export interface PhoneMessage {
   id: number;
@@ -576,6 +624,18 @@ export interface PhoneMessage {
   at: number;
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
+  replyTo?: number; // the manager's message replies to this one (its id)
+  delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
+  suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
+  artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+}
+
+/** A CEO message's artifact: a titled markdown document shown as a card. */
+export interface ChatArtifact {
+  id: string; // `<message id>-<n>`
+  title: string;
+  lead: string; // its first line, plain words, for the card
+  markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
 export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage';
@@ -617,6 +677,7 @@ export interface WorldSnapshot {
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
   usage: UsageView;
+  claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
@@ -659,9 +720,12 @@ export type ServerEvent =
   | { type: 'request'; request: HireRequestView }
   | { type: 'ceo'; ceo: CeoInfo }
   | { type: 'message'; message: PhoneMessage }
+  /** The manager's messages moved on: the CEO read them, or replied. */
+  | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
+  | { type: 'claudeUsage'; readings: UsageReading[] }
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }
