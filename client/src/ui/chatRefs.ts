@@ -63,7 +63,7 @@ export function chipInfo(ref: ChatRef, w: RefWorld): { icon: string; status?: st
     if (!a) return null;
     const on = a.prNumber ?? a.issueNumber;
     const tone = a.status === 'error' ? 'bad' : a.status === 'working' || a.status === 'preparing' ? 'good' : undefined;
-    return { icon: ref.terminal ? '🖥️' : '🧑‍💻', status: `${a.status}${on && a.status !== 'idle' ? ` · #${on}` : ''}`, ...(tone && { tone }) };
+    return { icon: ref.terminal ? '🖥️' : '👤', status: `${a.status}${on && a.status !== 'idle' ? ` · #${on}` : ''}`, ...(tone && { tone }) };
   }
   const repo = w.repos.find((r) => r.id === ref.repoId);
   if (!repo) return null;

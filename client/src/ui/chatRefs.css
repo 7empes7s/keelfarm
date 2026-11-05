@@ -56,7 +56,7 @@
   position: fixed;
   z-index: 1100;
   width: min(300px, calc(100vw - 32px));
-  max-height: 60vh;
+  max-height: 45vh;
   overflow: hidden;
   padding: var(--ds-space-2) var(--ds-space-3);
   border: var(--ds-border) solid var(--ds-outline);

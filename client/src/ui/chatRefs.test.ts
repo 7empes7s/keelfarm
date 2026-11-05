@@ -55,7 +55,7 @@ describe('jumpFor', () => {
 
 describe('chipInfo', () => {
   it('shows status from the office', () => {
-    expect(chipInfo(ref({ kind: 'agent', agentId: 'ada' }), world)).toEqual({ icon: '🧑‍💻', status: 'working · #3', tone: 'good' });
+    expect(chipInfo(ref({ kind: 'agent', agentId: 'ada' }), world)).toEqual({ icon: '👤', status: 'working · #3', tone: 'good' });
     expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 13 }), world)).toEqual({ icon: '🔀', status: 'QA passed', tone: 'good' });
     expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 16 }), world)).toEqual({ icon: '🔀', status: 'checks failing', tone: 'bad' });
     expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 3 }), world)).toEqual({ icon: '📋', status: 'open' });

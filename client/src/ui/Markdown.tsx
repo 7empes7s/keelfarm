@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -63,16 +63,21 @@ const remarkPlugins = [remarkGfm, remarkHtmlAsText, remarkBreaks];
  * (shared/chatRefs.ts refsMarkdown), by index. Without them they're plain text.
  */
 export function Markdown({ text, className, onFloor, renderRef }: { text: string; className?: string; onFloor?: (floor: number) => void; renderRef?: (index: number, children: ReactNode) => ReactNode }) {
+  // The latest handlers, read when used: new ones each render mustn't remount the chips (and close their previews).
+  const handlers = useRef({ onFloor, renderRef });
+  handlers.current = { onFloor, renderRef };
+  const hasFloor = !!onFloor;
+  const hasRef = !!renderRef;
   const withFloors = useMemo<Components>(
     () => ({
       ...components,
       a: (props) => {
         const ref = props.href?.match(REF_HREF)?.[1];
-        if (ref) return renderRef ? renderRef(Number(ref), props.children) : <span>{props.children}</span>;
+        if (ref) return hasRef ? handlers.current.renderRef?.(Number(ref), props.children) : <span>{props.children}</span>;
         const floor = props.href?.match(FLOOR_HREF)?.[1];
         if (!floor) return <Link href={props.href}>{props.children}</Link>;
-        return onFloor ? (
-          <button type="button" className="floor-chip" onClick={() => onFloor(Number(floor))} title={`Open floor ${floor}`}>
+        return hasFloor ? (
+          <button type="button" className="floor-chip" onClick={() => handlers.current.onFloor?.(Number(floor))} title={`Open floor ${floor}`}>
             {props.children}
           </button>
         ) : (
@@ -80,7 +85,7 @@ export function Markdown({ text, className, onFloor, renderRef }: { text: string
         );
       },
     }),
-    [onFloor, renderRef],
+    [hasFloor, hasRef],
   );
   return (
     <div className={className ? `md ${className}` : 'md'}>

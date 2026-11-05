@@ -134,7 +134,20 @@ export function RefChip({ messageId, index, children }: { messageId: number; ind
         <span className="ref-chip-label">{label}</span>
         {info.status && <span className="ref-chip-status">{info.status}</span>}
       </button>
-      {peek && <RefPeek anchor={btn} chip={ref} messageId={messageId} index={index} onOpen={jump} onClose={() => setPeek(false)} />}
+      {peek && (
+        <RefPeek
+          anchor={btn}
+          chip={ref}
+          messageId={messageId}
+          index={index}
+          onOpen={() => {
+            // The finger lifted off a hold can land on the card: that isn't a tap on it.
+            if (held.current) held.current = false;
+            else jump();
+          }}
+          onClose={() => setPeek(false)}
+        />
+      )}
     </>
   );
 }
@@ -145,14 +158,14 @@ const PEEK_W = 300;
 
 function RefPeek({ anchor, chip, messageId, index, onOpen, onClose }: { anchor: RefObject<HTMLElement | null>; chip: ChatRef; messageId: number; index: number; onOpen: () => void; onClose: () => void }) {
   const card = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
   useLayoutEffect(() => {
     const a = anchor.current?.getBoundingClientRect();
-    const h = card.current?.offsetHeight ?? 160;
     if (!a) return;
     const w = Math.min(PEEK_W, window.innerWidth - 32);
     const left = Math.max(16, Math.min(a.left, window.innerWidth - 16 - w));
-    setPos({ left, top: a.top - h - 8 > 8 ? a.top - h - 8 : Math.min(a.bottom + 8, window.innerHeight - h - 8) });
+    // Above the chip when there's room (growing upwards as lines arrive), else below it: never over it.
+    setPos(a.top > window.innerHeight / 2 ? { left, bottom: window.innerHeight - a.top + 8 } : { left, top: a.bottom + 8 });
   }, [anchor]);
   // A touch preview stays until the next tap anywhere else.
   useEffect(() => {
@@ -163,7 +176,7 @@ function RefPeek({ anchor, chip, messageId, index, onOpen, onClose }: { anchor: 
     return () => document.removeEventListener('pointerdown', away, true);
   }, [anchor, onClose]);
   return createPortal(
-    <div ref={card} className="ref-peek" role="tooltip" style={pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }} onClick={onOpen}>
+    <div ref={card} className="ref-peek" role="tooltip" style={pos ?? { visibility: 'hidden' }} onClick={onOpen}>
       <PeekBody chip={chip} messageId={messageId} index={index} />
     </div>,
     document.body,
