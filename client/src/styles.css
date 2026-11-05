@@ -31,7 +31,7 @@ canvas {
 }
 
 a {
-  color: #3a56d4;
+  color: var(--ds-link);
 }
 
 kbd {
@@ -82,44 +82,46 @@ code {
   font-weight: 600;
   font-size: 0.95rem;
   padding: 8px 14px;
-  border: 2.5px solid var(--ink);
+  border: 2.5px solid var(--ds-outline);
   border-radius: 12px;
-  background: #fff;
-  color: var(--ink);
-  box-shadow: 0 3px 0 var(--ink);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
   cursor: pointer;
   transition: transform 0.06s, box-shadow 0.06s;
   white-space: nowrap;
 }
 .btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 0 var(--ink);
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
 }
 .btn:active:not(:disabled) {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--ink);
+  box-shadow: 0 1px 0 var(--ds-shadow-color);
 }
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 .btn-good {
-  background: #80ed99;
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
 }
 .btn-bad {
-  background: #ff8fa3;
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
 }
 .btn-ghost {
   background: transparent;
   box-shadow: none;
-  border-color: rgba(31, 29, 43, 0.35);
+  border-color: var(--ds-line-strong);
 }
 .btn-small {
   padding: 4px 10px;
   font-size: 0.82rem;
   border-radius: 9px;
   border-width: 2px;
-  box-shadow: 0 2px 0 var(--ink);
+  box-shadow: 0 2px 0 var(--ds-shadow-color);
 }
 .btn-ghost.btn-small {
   box-shadow: none;
@@ -144,10 +146,10 @@ select {
   font-family: var(--font);
   font-size: 0.95rem;
   padding: 8px 10px;
-  border: 2px solid rgba(31, 29, 43, 0.25);
+  border: 2px solid var(--ds-line-strong);
   border-radius: 10px;
-  background: #fff;
-  color: var(--ink);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
   outline: none;
   width: 100%;
 }
@@ -219,8 +221,9 @@ input.inline:focus {
   gap: 4px;
   padding: 3px 10px;
   border-radius: 999px;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ds-outline);
   background: #fff;
+  color: var(--ds-on-color);
   font-weight: 600;
   font-size: 0.8rem;
 }
@@ -229,7 +232,7 @@ input.inline:focus {
   border-width: 1.5px;
   font-size: 0.72rem;
   text-decoration: none;
-  color: var(--ink);
+  color: var(--ds-on-color);
 }
 .chip-good {
   background: #b9fbc0;
@@ -281,7 +284,8 @@ input.inline:focus {
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ds-outline);
+  color: var(--ds-on-color);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1133,9 +1137,10 @@ input.inline:focus {
   display: flex;
   flex-direction: column;
   background: var(--paper);
-  border: 4px solid var(--ink);
+  color: var(--ds-text);
+  border: 4px solid var(--ds-outline);
   border-radius: 24px;
-  box-shadow: 0 8px 0 var(--ink);
+  box-shadow: 0 8px 0 var(--ds-shadow-color);
   overflow: hidden;
   animation: pop 0.2s ease-out;
 }
@@ -1149,7 +1154,8 @@ input.inline:focus {
   gap: 10px;
   padding: 12px 16px;
   background: var(--accent);
-  border-bottom: 4px solid var(--ink);
+  color: var(--ds-on-color);
+  border-bottom: 4px solid var(--ds-outline);
 }
 .panel-title {
   margin: 0;
@@ -1162,14 +1168,15 @@ input.inline:focus {
   white-space: nowrap;
 }
 .panel-title a {
-  color: var(--ink);
+  color: var(--ds-on-color);
 }
 .panel-x {
-  width: 36px;
-  height: 36px;
+  width: var(--ds-target);
+  height: var(--ds-target);
   border-radius: 12px;
-  border: 3px solid var(--ink);
+  border: 3px solid var(--ds-on-color);
   background: #fff;
+  color: var(--ds-on-color);
   font-weight: 700;
   cursor: pointer;
   flex: none;
@@ -2332,8 +2339,8 @@ input.inline:focus {
   margin: 0 0 10px;
 }
 .card {
-  background: #fff;
-  border: 3px solid var(--ink);
+  background: var(--ds-surface-raised);
+  border: 3px solid var(--ds-outline);
   border-radius: 18px;
   padding: 12px 14px;
   margin-bottom: 12px;
@@ -2832,7 +2839,8 @@ input.inline:focus {
   margin-top: 10px;
 }
 .btn-warn {
-  background: #ffd166;
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
 }
 
 /* ---------- the phone ---------- */
@@ -3697,7 +3705,8 @@ input.inline:focus {
 }
 .doc-actions {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: var(--ds-space-6); /* a decision's two answers stay well apart (docs/design.md) */
   align-items: center;
   margin-top: 14px;
 }
@@ -4237,24 +4246,6 @@ input.inline:focus {
 .pk-console textarea {
   max-width: 100%;
 }
-/* the Team tab's roster (not the careers table, which scrolls): each agent's cells wrap onto lines of their own instead of scrolling sideways */
-.pk-console .team:not(.stats-table),
-.pk-console .team:not(.stats-table) tbody {
-  display: block;
-}
-.pk-console .team:not(.stats-table) tr {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  padding: 6px 0;
-  border-top: 1.5px solid rgba(31, 29, 43, 0.08);
-}
-.pk-console .team:not(.stats-table) td {
-  padding: 0;
-  border: none;
-}
-
 /* the Kanban in pocket mode: one column under the other, so nothing scrolls sideways */
 .kanban-embedded {
   min-width: 0;
@@ -4339,7 +4330,7 @@ input.inline:focus {
   background: #e0662f;
 }
 .guide-waiting {
-  opacity: 0.55;
+  color: var(--ds-text-muted); /* not opacity: faded text fails contrast */
 }
 .guide-title {
   font-weight: 600;
@@ -4948,9 +4939,10 @@ summary:focus-visible,
   align-items: center;
   gap: 5px;
   padding: 2px 10px 2px 6px;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ds-outline);
   border-radius: 999px;
   background: #fff;
+  color: var(--ds-on-color);
   font-size: 0.82rem;
   font-weight: 600;
   white-space: nowrap;

@@ -41,7 +41,7 @@ export function PocketConsole({ section, pick }: { section: ConsoleSection; pick
           </button>
         ))}
       </div>
-      <div role="tabpanel" aria-label={sections.find(([k]) => k === section)?.[1]}>
+      <div className="ds-stack-scope" role="tabpanel" aria-label={sections.find(([k]) => k === section)?.[1]}>
         {section === 'floors' && <FloorsTab />}
         {section === 'ceo' && <CeoTab />}
         {section === 'team' && <TeamTab />}

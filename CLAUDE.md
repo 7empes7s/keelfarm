@@ -207,6 +207,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   - kill process trees, not just the child (`taskkill /T /F` on Windows, process groups elsewhere);
   - `windowsHide: true` on spawns; npm on Windows goes through `cmd.exe`.
 - Agent prompts are paid for on every session: keep prompt text short and specific.
+- 2D UI follows docs/design.md: tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
+  `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to `e2e/layout.spec.ts`.
 
 ## Tests
 

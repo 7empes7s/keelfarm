@@ -206,7 +206,7 @@ function PocketOverlay() {
 
 function Settings({ section, pick, onClose }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void }) {
   return (
-    <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings">
+    <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings ds-console ds-auto-dark">
       <Suspense fallback={<p className="muted">Loading…</p>}>
         <PocketConsole section={section} pick={pick} />
       </Suspense>

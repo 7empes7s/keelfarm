@@ -7,6 +7,7 @@ import { useStore } from '../store';
 import type { QaView, RepoView } from '../../../shared/types';
 import { qaCardNote } from '../qaCard';
 import { confirmDialog } from '../ui/Confirm';
+import { Menu } from '../ui/Menu';
 import { Resume } from '../ui/Phone';
 import { waitingOnYou } from './pocketData';
 
@@ -88,9 +89,8 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
         <button className={`btn btn-small ${ready ? 'btn-good' : ''}`} disabled={busy || pr.isDraft} onClick={() => void merge()}>
           {ready ? 'Merge' : 'Merge anyway'}
         </button>
-        <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => void close()}>
-          Close
-        </button>
+        <span className="spacer" />
+        <Menu label={`More for PR #${pr.number}`} title={`PR #${pr.number} ${pr.title}`} items={[{ label: 'Close PR…', hint: 'Closed without merging; the branch stays', danger: true, disabled: busy, onSelect: () => void close() }]} />
       </div>
     </div>
   );

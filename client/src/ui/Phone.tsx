@@ -203,12 +203,11 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
       {hire && pending && editing && <HireSetupFields value={setup} onChange={setSetup} disabled={busy} />}
       {!pending && req.note && <div className="muted small">Your note: “{req.note}”</div>}
       {pending && !declining && (
-        <div className="row">
-          <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => setDeclining(true)}>
+        <div className="ds-decision">
+          <button className="btn btn-small btn-ghost" data-decision disabled={busy} onClick={() => setDeclining(true)}>
             {hire ? 'Decline' : 'Keep them'}
           </button>
-          <span className="spacer" />
-          <button className="btn btn-small btn-good" disabled={busy} onClick={() => act(() => api.approveRequest(req.id, hire ? hireOverrides(req, setup) : {}))}>
+          <button className="btn btn-small btn-good" data-decision disabled={busy} onClick={() => act(() => api.approveRequest(req.id, hire ? hireOverrides(req, setup) : {}))}>
             {hire ? `Hire ${name}` : `Let ${req.name} go`}
           </button>
         </div>
@@ -222,7 +221,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
           }}
         >
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why not? (optional, the CEO reads it)" autoFocus />
-          <button className="btn btn-small btn-bad" disabled={busy}>
+          <button className="btn btn-small btn-bad" data-decision disabled={busy}>
             {hire ? 'Decline' : 'Keep'}
           </button>
         </form>
