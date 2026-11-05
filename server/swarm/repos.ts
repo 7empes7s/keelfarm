@@ -176,6 +176,7 @@ export abstract class SwarmRepos extends SwarmCore {
   /** Run the floor's app from its preview worktree: the default branch, or an open PR. Replaces what it is running now. */
   async startPreview(id: string, pr?: number | null): Promise<PreviewView> {
     const repo = this.repo(id);
+    this.health.ensure('preview');
     return this.previews.start(repo, `${repo.fullName.split('/')[1]} app`, pr);
   }
 

@@ -22,7 +22,6 @@ import type {
   AgentRole,
   AgentStatus,
   AgentTask,
-  ClientEvent,
   EffortLevel,
   HireRequestView,
   IssueInfo,
@@ -181,6 +180,7 @@ export interface AgentRuntime {
   shots: Shot[]; // every screenshot of the current session (QA evidence)
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
+  blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
 }
 
 export interface RepoRuntime {
@@ -276,15 +276,6 @@ export const terminalFile = (agentId: string) => path.join(TERMINALS_DIR, `${age
 export const TERMINAL_SAVE_MS = 20_000;
 
 export const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
-
-/** A tab's message on /ws asking for the live office again (ClientEvent 'resync'). */
-export function isResync(raw: unknown): boolean {
-  try {
-    return (JSON.parse(String(raw)) as Partial<ClientEvent> | null)?.type === 'resync';
-  } catch {
-    return false;
-  }
-}
 
 export const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 

@@ -19,6 +19,8 @@ import { qaShotFile, qaShotsDir } from '../qaShots.ts';
 import { readingsLabel } from '../../shared/usage.ts';
 import { usageLabel } from '../pacing.ts';
 import { floorSpend } from '../costLedger.ts';
+import { checkRestart, sessionKind } from '../health.ts';
+import { resumesAfterRestart } from '../restartRecovery.ts';
 import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
@@ -52,6 +54,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
       agentLog: (a) => this.agentLog(a),
+      restartAgent: acts((a) => this.restartAgent(a)),
+      messageAgent: acts((a) => this.messageAgent(a)),
       qaReport: (a) => this.qaReport(a),
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
@@ -313,6 +317,22 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const lines = rt?.terminal ? rt.terminal.tail(AGENT_LOG_MAX_LINES) : (rt?.log ?? a.logTail).map((l) => l.text);
     const floor = this.state.repos.find((r) => r.id === a.repoId)?.floor ?? null;
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
+  }
+
+  protected restartAgent(x: { agent_id: string }) {
+    const a = checkRestart(this.agentByRef(x.agent_id));
+    const resumes = resumesAfterRestart(a, false, this.backend.demo);
+    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
+    return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
+  }
+
+  protected async messageAgent(x: { floor: number; agent_id: string; text: string }) {
+    const a = this.agentByRef(x.agent_id);
+    if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
+    const running = !!this.agentRt.get(a.id)?.session;
+    await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
+    return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }
 
   /** qa_report: a PR's latest QA verdict, report and screenshots (as files the CEO can Read). */

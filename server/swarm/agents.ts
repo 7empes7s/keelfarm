@@ -7,6 +7,7 @@ import { HttpError } from '../httpError.ts';
 import { issueTaken } from '../issueClaims.ts';
 import { cliLabel, isCli } from '../clis.ts';
 import { machineName } from '../machines.ts';
+import type { SessionKind } from '../health.ts';
 import { apply as applyLedger } from '../ledger.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import {
@@ -557,7 +558,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     );
   }
 
-  protected ensureSlot() {
+  protected ensureSlot(kind: SessionKind = 'build') {
+    this.health.ensure(kind);
     if (this.slotsFull()) {
       throw new HttpError(429, `All ${this.state.settings.sessionLimit} session slots are busy. Raise or clear the session limit in the manager's console, or wait.`);
     }

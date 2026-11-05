@@ -13,6 +13,8 @@ import { setUpDesk } from '../deskSetup.ts';
 import { MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { PREP_HOLD_MS, prepFailure } from '../handOut.ts';
 import { sessionStart } from '../reconcile.ts';
+import { resumesAfterRestart } from '../restartRecovery.ts';
+import { sessionKind } from '../health.ts';
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from '../prompts.ts';
 import { recordCost } from '../metrics.ts';
 import { cliLabel } from '../clis.ts';
@@ -383,6 +385,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
+        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -429,7 +432,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     if (this.officeUpdate.handedOver && a.host !== 'box') return; // stopped for the office's update: recovered like after a restart
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
-    rt.currentTool = null;
+    rt.currentTool = rt.blocked = null;
     const run = this.spend.take(a.id);
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
@@ -439,9 +442,11 @@ export abstract class SwarmSessions extends SwarmAgents {
     // Dev servers the agent forgot to stop would otherwise keep its port and lock its desk folder.
     void this.releaseDesk(a, repo).catch(() => undefined);
     if (result.interrupted) this.interrupted(a);
-    const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' };
+    const killed = this.health.ended(a, sessionKind(a), result.errors, !this.dropping.has(a.id) && a.status !== 'stopped', resumesAfterRestart(a, false, this.backend.demo));
+    const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' || !!killed };
 
-    if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
+    if (killed) Object.assign(a, { status: 'stopped', lastError: killed });
+    else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
     else if (a.task === 'qa') await this.onQaFinished(a, repo, result);
     else if (a.task === 'fix') await this.onFixFinished(a, repo, result);
     else await this.onIssueFinished(a, repo, result);

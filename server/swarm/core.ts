@@ -23,8 +23,9 @@ import { envSecrets, Journal } from '../journal.ts';
 import { CostLedger, SessionCosts } from '../costLedger.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
+import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { Ticker } from '../ticker.ts';
-import { Outbox } from '../outbox.ts';
+import { isResync, Outbox } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
 import { Notifier } from '../notifier.ts';
 import { TelegramBot } from '../telegramBot.ts';
@@ -67,7 +68,6 @@ import {
   OPS_EVENTS,
   oneLine,
   type SignIn,
-  isResync,
 } from './model.ts';
 import { slugify } from './flavour.ts';
 import { SwarmContract } from './contract.ts';
@@ -76,6 +76,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected state: Persisted = {
     settings: {
       sessionLimit: 0,
+      memory: memorySettings(DEFAULT_MEMORY, {}),
       defaultModel: DEFAULT_MODEL,
       defaultEffort: 'medium',
       taskEffort: {},
@@ -183,6 +184,17 @@ export abstract class SwarmCore extends SwarmContract {
   /** Cloud agents waiting for a sign-in in their terminal (holdForSignIn), by agent id. */
   protected signIns = new Map<string, SignIn>();
   protected toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
+  readonly health = new OfficeHealth({
+    probe: () => this.backend.resources,
+    settings: () => this.state.settings.memory,
+    sessions: () => this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
+    log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
+    alert: (title, body) => this.notifier.notify('memory', title, body),
+    emit: (health) => this.broadcast({ type: 'health', health }),
+    save: () => this.save(),
+    retry: (id, why, requeue) => this.state.agents.filter((a) => a.id === id && a.status === 'stopped' && a.task).forEach((a) => this.recover([a], new Set(), new Set(requeue ? [a] : []), undefined, why)),
+    schedule: () => this.schedule(),
+  });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
 
@@ -341,6 +353,7 @@ export abstract class SwarmCore extends SwarmContract {
       hasScreenshot: !!rt.screenshot,
       screenshotAt: rt.screenshot?.at ?? null,
       lastError: a.lastError,
+      blocked: rt.blocked?.reason ?? null,
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
@@ -352,8 +365,9 @@ export abstract class SwarmCore extends SwarmContract {
   protected activityOf(a: PersistedAgent): AgentActivity | null {
     const chat = a.role === 'ceo' && this.state.ceo.job?.kind === 'chat';
     const { status, task, issueNumber, prNumber, startedAt } = a;
-    const currentTool = this.agentRt.get(a.id)?.currentTool ?? null;
-    return agentActivity({ status, task, currentTool, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
+    const rt = this.agentRt.get(a.id);
+    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
+    return agentActivity({ status, task, currentTool: rt?.currentTool ?? null, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 
   protected qaView(q: QaRecord): QaView {
@@ -392,6 +406,7 @@ export abstract class SwarmCore extends SwarmContract {
       messages: snapshotMessages(this.state.messages.slice(-100)),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
+      health: this.health.view(),
       claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),

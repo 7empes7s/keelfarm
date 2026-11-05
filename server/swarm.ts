@@ -9,6 +9,7 @@ import { HttpError } from './httpError.ts';
 import { orphanedQa } from './qaOrphans.ts';
 import { catchUp, PR_LIMITS_VERSION } from './prOwnership.ts';
 import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecovery.ts';
+import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { pruneQaShots } from './qaShots.ts';
 import { mergeReadings } from '../shared/usage.ts';
@@ -148,6 +149,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.worldEvents = worldEventSettings(DEFAULT_WORLD_EVENTS, loaded.settings?.worldEvents);
       this.state.settings.listen = listenSettings(DEFAULT_LISTEN, loaded.settings?.listen);
       this.state.settings.notify = notifySettings(DEFAULT_NOTIFY, loaded.settings?.notify);
+      this.state.settings.memory = memorySettings(DEFAULT_MEMORY, loaded.settings?.memory);
       this.state.settings.cloud = cloudSettings(DEFAULT_CLOUD, loaded.settings?.cloud);
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
@@ -251,6 +253,7 @@ export class Swarm extends SwarmCeoTools {
     ]);
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
+    await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
     // A PR the restart left in "testing" with nobody on it: test it again (the result, if any, was lost).
     for (const rec of orphanedQa(this.state.qa, this.state.agents, BUSY)) this.setQa(rec, { status: 'queued', qaAgentId: null });
@@ -280,6 +283,7 @@ export class Swarm extends SwarmCeoTools {
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
     setInterval(() => this.watchdogTick(), WATCHDOG_MS);
+    setInterval(() => void this.health.tick(), 10_000);
     void this.backend
       .detectClis()
       .then((clis) => {
@@ -375,12 +379,12 @@ export class Swarm extends SwarmCeoTools {
    * Agents cut off by a server restart pick their session back up, told what they were doing. QA, demo agents, tasks
    * still being prepared and work whose desk is gone (requeue) start over from the queue, without a strike.
    */
-  protected recover(agents: PersistedAgent[], preparing: Set<PersistedAgent>, requeue = new Set<PersistedAgent>(), counts: RestartCounts = { cleared: 0, reattached: 0, resumed: 0, requeued: 0 }) {
+  protected recover(agents: PersistedAgent[], preparing: Set<PersistedAgent>, requeue = new Set<PersistedAgent>(), counts: RestartCounts = { cleared: 0, reattached: 0, resumed: 0, requeued: 0 }, why = 'The office server restarted') {
     for (const a of agents) {
       if (!a.task) continue; // its issue or PR closed while the office was down: the startup sync cleared the desk
       const fix = a.task === 'fix' ? this.state.qa.find((q) => q.devAgentId === a.id && q.status === 'fixing') : undefined;
       if (requeue.has(a) || !resumesAfterRestart(a, preparing.has(a), this.backend.demo)) {
-        this.appendLog(a, [{ kind: 'system', text: '↺ The office server restarted. Starting over from the queue.' }]);
+        this.appendLog(a, [{ kind: 'system', text: `↺ ${why}. Starting over from the queue.` }]);
         const rec = a.task === 'qa' ? this.state.qa.find((q) => q.qaAgentId === a.id && q.status === 'testing') : undefined;
         if (rec) this.setQa(rec, { status: 'queued' });
         if (fix) this.setQa(fix, { status: 'failed' });
@@ -389,8 +393,9 @@ export class Swarm extends SwarmCeoTools {
         continue;
       }
       if (this.slotsFull()) continue; // stays 'stopped'; the manager can resume it later
+      if (this.health.later(a.id, sessionKind(a), why)) continue; // stays 'stopped' until memory is back
       counts.resumed++;
-      void this.message(a.id, resumeNote(a, fix)).catch((err) => console.warn(`could not resume ${a.name}`, err));
+      void this.message(a.id, resumeNote(a, fix, why)).catch((err) => console.warn(`could not resume ${a.name}`, err));
     }
   }
 
@@ -409,21 +414,21 @@ export class Swarm extends SwarmCeoTools {
   }
 
   /** A message for an agent: sent into their running session, or a follow-up that resumes it. typed: the manager typed it at their CLI's prompt, where it's already running. */
-  async message(id: string, text: string, typed = false) {
+  async message(id: string, text: string, typed = false, who = 'Manager') {
     const a = this.agent(id);
     if (a.role === 'ceo') return this.messageCeo(text);
     const repo = this.repo(a.repoId);
     if (!text.trim()) throw new HttpError(400, 'Empty message');
     const rt = this.agentRt.get(id)!;
     if (rt.session) {
-      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${text}` }]);
+      this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
       if (!typed) rt.session.send(text);
       return;
     }
     if (a.status === 'preparing') throw new HttpError(409, `${a.name} is still setting up; try again in a moment`);
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
-    this.ensureSlot();
-    this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${text}` }]);
+    this.ensureSlot(sessionKind(a));
+    this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
     const cwd = this.deskOf(a, repo);
     a.lastError = null;
     a.startedAt = Date.now();
@@ -435,6 +440,7 @@ export class Swarm extends SwarmCeoTools {
   updateSettings(patch: Partial<SwarmSettings>) {
     const s = this.state.settings;
     if (patch.sessionLimit !== undefined) s.sessionLimit = Math.max(0, Math.round(Number(patch.sessionLimit)) || 0);
+    if (patch.memory !== undefined) s.memory = memorySettings(s.memory, patch.memory);
     // The default model belongs to the default coding agent: a new agent starts on its own default.
     if (isCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) {
       s.defaultCli = patch.defaultCli;

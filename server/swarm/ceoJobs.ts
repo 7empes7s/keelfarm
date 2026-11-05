@@ -12,6 +12,7 @@ import { recordCost } from '../metrics.ts';
 import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
 import { speaks } from '../voice.ts';
 import { teamKeyboard, telegramChat } from '../telegram.ts';
+import { blockedNotice } from '../unblock.ts';
 import { clip, plainText, stuckAgents, type TeamChange } from '../notify.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import {
@@ -266,6 +267,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || this.officeUpdate.handedOver) return;
+    this.health.ended(a, 'ceo', result.errors, false, false); // its peak teaches the CEO's estimate
     rt.session = null;
     rt.currentTool = null;
     a.endedAt = Date.now();
@@ -669,6 +671,10 @@ export abstract class SwarmCeo extends SwarmUpdate {
       const mins = Math.round((now - (a.endedAt ?? now)) / 60_000);
       this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
       if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
+    }
+    for (const a of this.state.agents) { // blocked on a prompt the watchdog couldn't answer: told once (unblock.ts)
+      const b = this.agentRt.get(a.id)?.blocked, n = blockedNotice(a.name, b, now, this.state.repos.find((r) => r.id === a.repoId)?.floor);
+      if (n && b) { b.told = true; this.notifier.notify('agentError', n.title, n.body, n.who); }
     }
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }

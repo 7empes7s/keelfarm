@@ -2,7 +2,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROJECTS_DIR } from '../config.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
-import { cell, clampMaxAgents, isResync, oneLine, prepKey } from './model.ts';
+import { cell, clampMaxAgents, oneLine, prepKey } from './model.ts';
 
 describe('clampMaxAgents', () => {
   it('rounds to a seat count between 1 and a full floor', () => {
@@ -16,19 +16,6 @@ describe('clampMaxAgents', () => {
     expect(clampMaxAgents('lots')).toBe(DEFAULT_MAX_AGENTS);
     expect(clampMaxAgents(undefined)).toBe(DEFAULT_MAX_AGENTS);
     expect(clampMaxAgents(0)).toBe(DEFAULT_MAX_AGENTS);
-  });
-});
-
-describe('isResync', () => {
-  it('is a tab asking for the live office again', () => {
-    expect(isResync(JSON.stringify({ type: 'resync' }))).toBe(true);
-    expect(isResync(Buffer.from('{"type":"resync"}'))).toBe(true);
-  });
-
-  it('is nothing else, nor anything that is not JSON', () => {
-    expect(isResync(JSON.stringify({ type: 'watch' }))).toBe(false);
-    expect(isResync('null')).toBe(false);
-    expect(isResync('{not json')).toBe(false);
   });
 });
 

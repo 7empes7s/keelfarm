@@ -106,6 +106,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
       const tester = pickTester(free, rec.devAgentId, owed, othersCan, now - rec.updatedAt);
       if (!tester) continue;
+      if (!this.health.admit('qa')) return false;
       void this.runQa(tester, repo, rec);
       return true;
     }
@@ -114,6 +115,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
       const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
       if (to === 'wait') continue; // the author gets it when their session ends
+      if (!this.health.admit('fix')) return false;
       void this.runFix(to === 'author' ? author! : (free.find((a) => !owed.has(a.id)) ?? free[0]), repo, rec);
       return true;
     }
@@ -128,7 +130,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (!repo.autoAssign || !this.mayStart('issue')) return false;
     const agent = this.available(repo)[0];
     const next = agent ? this.readyIssues(repo)[0] : undefined;
-    if (!agent || !next) return false;
+    if (!agent || !next || !this.health.admit('build')) return false;
     // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
     void this.assign(agent.id, next.issue.number).catch((err) => console.warn('auto-assign failed', err));
     return agent.status === 'preparing';
