@@ -20,6 +20,7 @@ import { recordCost } from '../metrics.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
+import { officeParts } from '../../shared/startup.ts';
 import { AgentTerminal } from '../terminal.ts';
 import { INSTALL_STEP } from '../../shared/types.ts';
 import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo } from '../../shared/types.ts';
@@ -85,7 +86,7 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   protected buildSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, fixing?: { pr: number; headRef: string }, deps?: DepsOutcome) {
-    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps) });
+    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook });
   }
 
   /** The floor's linked repos where the agent reads them: the floor checkouts here, or their copies in a cloud agent's Box. */
@@ -98,7 +99,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     const a = this.agent(id);
     if (a.role === 'ceo') return ceoPromptPreview(ceoSystemPrompt(this.ceoPromptInput(a)));
     const repo = this.repo(a.repoId);
-    return agentPromptPreview({ agent: a, repo, port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a) });
+    return agentPromptPreview({ agent: a, repo, port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a), officePlaybook: this.state.settings.officePlaybook });
   }
 
   protected beginTask(a: PersistedAgent, patch: Partial<PersistedAgent>, banner: string, preparing: string) {
@@ -327,7 +328,9 @@ export abstract class SwarmSessions extends SwarmAgents {
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag });
+    const system = lab.prompt ? `${systemAppend}\n\n${lab.prompt}` : systemAppend;
+    const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
+    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag, known });
     this.emitAgent(a);
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
@@ -336,7 +339,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       {
         cwd,
         prompt,
-        systemAppend: lab.prompt ? `${systemAppend}\n\n${lab.prompt}` : systemAppend,
+        systemAppend: system,
         model: run.model,
         effort: run.effort,
         browserTesting: repo.browserTesting,
@@ -388,6 +391,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         limited: (at) => this.pauseForLimit(at),
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
+        startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
         blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.

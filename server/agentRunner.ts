@@ -3,12 +3,14 @@ import path from 'node:path';
 import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentCli, AgentRole, AgentTask, EffortLevel, LogKind, UsageReading } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
+import { usageTokens } from '../shared/startup.ts';
+import { memoryChars } from './tooling.ts';
 import type { BoxTarget } from './boxCli.ts';
 import type { OfficeTools } from './ceo.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { browserProblem, playwrightMcp } from './browser.ts';
-import { CEO_DISALLOWED, OFFICE_DISALLOWED, type SessionTools } from '../shared/tooling.ts';
+import { CEO_DISALLOWED, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 import { VERSION } from './config.ts';
 import { nonInteractiveEnv } from './unblock.ts';
 
@@ -86,6 +88,8 @@ export interface SessionCallbacks {
   usageWarning?(info: UsageWarning): void;
   /** Claude's latest reading of each usage limit (status lines, rate-limit events), warning or not. */
   usage?(readings: UsageReading[]): void;
+  /** A new session's first turn: the input tokens it sent before any work, and the CLAUDE.md files it loaded (#50). */
+  startup?(s: { tokens: number; memoryChars: number }): void;
   /** The session waits on a prompt the office couldn't answer (the reason), or no longer does (null). */
   blocked?(reason: string | null): void;
   finished(result: SessionResult): void;
@@ -345,6 +349,7 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
   const abort = new AbortController();
   let pendingTurns = 1;
   let stopped = false;
+  let measureStartup = !opts.resumeSessionId; // a new session's first turn is its startup context (#50)
   let lastCost = 0;
   let lastTurns = 0;
   const toolNames = new Map<string, string>();
@@ -359,7 +364,7 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
     if (/^(ANTHROPIC_|CLAUDE)/i.test(k) && k !== 'CLAUDE_CONFIG_DIR') continue;
     env[k] = v;
   }
-  Object.assign(env, nonInteractiveEnv(env), opts.env);
+  Object.assign(env, nonInteractiveEnv(env), opts.env, toolsEnv(opts.tools));
   env.CLAUDE_AGENT_SDK_CLIENT_APP = `cubefarm/${VERSION}`;
 
   const mcpServers: Options['mcpServers'] = {};
@@ -457,6 +462,11 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
       }
       case 'assistant': {
         if (msg.parent_tool_use_id) break; // subagent chatter stays off the main screen
+        const tokens = measureStartup ? usageTokens(msg.message.usage) : null;
+        if (tokens) {
+          measureStartup = false;
+          cb.startup?.({ tokens, memoryChars: memoryChars(opts.cwd) });
+        }
         const out: LogEntry[] = [];
         for (const block of msg.message.content) {
           if (block.type === 'text' && block.text.trim()) {

@@ -5,7 +5,7 @@ import { run } from './exec.ts';
 import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel } from '../shared/types.ts';
 import type { BoxVersions } from './boxScripts.ts';
-import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, type SessionTools } from '../shared/tooling.ts';
+import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 
 // The coding-agent CLIs an agent can run in its terminal, how to find them on this machine, and how to start one on
 // a task. Claude Code is fully wired in: its hooks report every tool call to the office.
@@ -268,7 +268,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         '--',
         ctx.prompt,
       ];
-      return { args, env: { DISABLE_AUTOUPDATER: '1' } }; // the office's own copy: agents mustn't each try to update it
+      return { args, env: { DISABLE_AUTOUPDATER: '1', ...toolsEnv(ctx.tools) } }; // the office's own copy: agents mustn't each try to update it
     }
     case 'codex': {
       const toml = (s: string) => JSON.stringify(s); // a JSON string is a valid TOML basic string
