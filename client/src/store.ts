@@ -10,6 +10,7 @@ import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
 import { emptyLabView, type LabView } from '../../shared/experiments';
+import { emptyEveryProject } from '../../shared/practices';
 import { messageSpeech } from '../../shared/speech';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import type { FileView } from '../../shared/files';
@@ -261,6 +262,7 @@ export const useStore = create<State>((set, get) => ({
     notify: DEFAULT_NOTIFY,
     cloud: DEFAULT_CLOUD,
     tools: DEFAULT_TOOL_SETTINGS,
+    everyProject: emptyEveryProject(),
     officePlaybook: '',
   },
   clis: [],

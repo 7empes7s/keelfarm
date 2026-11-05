@@ -27,6 +27,8 @@ import { dailyLogDir, MACHINE_DAILY_DIR, SessionHistory } from '../history.ts';
 import { DEFAULT_HISTORY_DAYS, historyId, type HistoryEntry } from '../../shared/history.ts';
 import type { CostSession } from '../../shared/costs.ts';
 import { Lab, loadLab } from '../experiments.ts';
+import { FloorPractice } from '../practiceState.ts';
+import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
@@ -47,7 +49,6 @@ import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { CeoFiles } from '../ceoFiles.ts';
-import { CeoHolds } from '../ceoHold.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
 import { FileStore } from '../files.ts';
@@ -118,6 +119,7 @@ export abstract class SwarmCore extends SwarmContract {
       notify: notifySettings(DEFAULT_NOTIFY, {}),
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
+      everyProject: emptyEveryProject(),
       officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
@@ -143,10 +145,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
   protected researchGuard = new ResearchGuard(); // the running research job's time budget
-  protected holds = new CeoHolds(() => this.emitCeo()); // the CEO's waits, questions and consults (#28)
-  protected ceoWaited = false; // the current CEO job waited (the ledger's ceo-wait)
-  protected consults: Consult[] = []; // queued and running, oldest first
-  protected consultAnswers = new Map<string, string | null>(); // consults the CEO waits on: their answer once in
+  protected consults: Consult[] = []; // the CEO's consults (#28), queued and running, oldest first
   protected messageSeq = 1;
   protected agentRt = new Map<string, AgentRuntime>();
   protected seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
@@ -351,7 +350,54 @@ export abstract class SwarmCore extends SwarmContract {
       previewConfig: r.preview,
       preview: this.previews.view(r),
       charter: charterView(r.charter, Date.now()),
+      ...this.practiceView(r),
     };
+  }
+
+  // ---------- version-control practices (#24) ----------
+
+  protected practiceRt = new Map<string, FloorPractice>();
+
+  protected floorPractice(repoId: string): FloorPractice {
+    let p = this.practiceRt.get(repoId);
+    if (!p) this.practiceRt.set(repoId, (p = new FloorPractice()));
+    return p;
+  }
+
+  /**
+   * The practice switches a floor's work runs with: Every project's, the floor's overrides, then (for an issue or PR)
+   * its experiment variant's. `peek`: an issue not started yet, for the variant it would get.
+   */
+  protected practicesOf(r: PersistedRepo, issue?: number | null, pr?: number | null, peek?: { number: number; body: string; labels: string[] }) {
+    const variant = issue != null || pr != null ? this.lab.practices(r.id, issue, pr, peek) : undefined;
+    return effectivePractices(this.state.settings.everyProject.practices, r.practices, variant);
+  }
+
+  /** Whether any of the floor's work may run with leases: the floor's switch, or a running experiment's variant. */
+  protected leasesWanted(r: PersistedRepo) {
+    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases');
+  }
+
+  /** The floor's leases now: each agent building or fixing an issue, and each open swarm PR (shared/practices.ts). */
+  protected leasesOf(r: PersistedRepo): Lease[] {
+    const rt = this.repoRt.get(r.id);
+    if (!rt) return [];
+    const fp = this.floorPractice(r.id);
+    const known = fp.known();
+    const work = this.state.agents
+      .filter((a) => a.repoId === r.id && a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber != null && BUSY.includes(a.status))
+      .map((a) => {
+        const issue = rt.issues.find((i) => i.number === a.issueNumber);
+        return { agentId: a.id, issue: a.issueNumber!, pr: a.prNumber, declared: a.declared ?? null, predicted: issue ? predictFiles(`${issue.title}\n${issue.body}`, known) : [] };
+      });
+    const pulls = rt.pulls.filter((p) => p.state === 'OPEN' && p.headRefName.startsWith('swarm/')).map((p) => ({ number: p.number, issues: p.closesIssues, files: fp.prFiles.get(p.number)?.files ?? [] }));
+    return floorLeases(work, pulls);
+  }
+
+  protected practiceView(r: PersistedRepo): Pick<RepoView, 'practices' | 'practiceOverrides' | 'leases' | 'leaseHolds' | 'hotFiles'> {
+    const leases = this.leasesWanted(r);
+    const fp = this.practiceRt.get(r.id);
+    return { practices: this.practicesOf(r), practiceOverrides: r.practices ?? {}, leases: leases ? this.leasesOf(r) : [], leaseHolds: (leases && fp?.holds) || [], hotFiles: (leases && fp?.hot) || [] };
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
@@ -374,9 +420,9 @@ export abstract class SwarmCore extends SwarmContract {
       host: a.host === 'box' ? 'box' : 'local',
       ...(a.host === 'box' ? { cloud: this.boxMachines.stateOf(a.machine ?? machineName(a.id)), needsSignIn: !!a.needsSignIn } : {}),
       terminal: !!rt.terminal,
-      status: this.consulting(a) ? 'working' : a.status,
+      status: a.status,
       issueNumber: a.issueNumber,
-      issueTitle: this.consulting(a) ? `Consult for ${this.ceo().name}` : a.issueTitle,
+      issueTitle: a.issueTitle,
       branch: a.branch,
       prNumber: a.prNumber,
       prUrl: a.prUrl,
@@ -676,17 +722,6 @@ export abstract class SwarmCore extends SwarmContract {
     return this.state.agents.filter((a) => BUSY.includes(a.status)).length + this.consults.filter((c) => c.runningOn).length;
   }
 
-  protected consulting(a: PersistedAgent) {
-    return this.consults.some((c) => c.runningOn === a.id);
-  }
-
-  /** End the CEO's waits and questions, and consults no session waits for any more. */
-  protected cancelHolds(why: string) {
-    if (!this.holds.waiting()) return;
-    this.holds.cancel(why);
-    this.consults = this.consults.filter((c) => c.runningOn);
-  }
-
   /** Cloud agents working on a task in their Box, which an office restart doesn't stop. */
   protected inBoxes() {
     return this.state.agents.filter((a) => a.host === 'box' && a.status === 'working' && !!a.boxCli);
@@ -695,7 +730,6 @@ export abstract class SwarmCore extends SwarmContract {
   /** True when the manager has set a session limit and every slot is taken. The CEO never takes a slot (#46). */
   protected slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    // Consults take slots too (#28).
     return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length + this.consults.filter((c) => c.runningOn).length >= limit;
   }
 
@@ -759,7 +793,7 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected clearTask(a: PersistedAgent) {
-    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null });
+    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null, declared: null });
     this.emitAgent(a);
   }
 }

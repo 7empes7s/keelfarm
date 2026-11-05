@@ -8,21 +8,25 @@ import {
   assignIssue,
   experimentResult,
   makeExperiment,
+  practiceStarters,
   sessionPractice,
   starterExperiments,
   survivalOf,
+  variantPractices,
   type Assignment,
   type Experiment,
   type LabView,
   type SessionPractice,
   type SurvivalSignals,
 } from '../shared/experiments.ts';
+import type { PracticeOverrides } from '../shared/practices.ts';
 import type { PullInfo } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 
 export interface LabState {
   experiments: Experiment[];
   assignments: Assignment[];
+  practiceStarters?: boolean; // the practices' starter experiments (#24) were added to an office that had experiments
 }
 
 const KEEP_ASSIGNMENTS = 3000;
@@ -36,7 +40,9 @@ export function loadLab(raw: unknown, now: number): LabState {
   const r = (raw ?? {}) as Partial<LabState>;
   const experiments = Array.isArray(r.experiments) ? r.experiments.filter((e) => e && typeof e.id === 'string' && Array.isArray(e.variants)) : starterExperiments(now);
   const assignments = Array.isArray(r.assignments) ? r.assignments.filter((a) => a && typeof a.experimentId === 'string' && typeof a.issue === 'number' && a.outcome) : [];
-  return { experiments, assignments };
+  // Offices from before #24 get its starters once; one the manager deleted since stays deleted.
+  if (Array.isArray(r.experiments) && !r.practiceStarters) experiments.push(...practiceStarters(now).filter((s) => !experiments.some((e) => e.id === s.id)));
+  return { experiments, assignments, practiceStarters: true };
 }
 
 /** The manager's and CEO's changes reach the tabs at once; assignments and outcomes, which grow with the company's
@@ -156,6 +162,31 @@ export class Lab {
   /** What a session on this issue or PR runs with (nothing for work no experiment covers). */
   practice(repoId: string, issue: number | null | undefined, pr: number | null | undefined, kind: TaskKind): SessionPractice {
     return sessionPractice(this.experiments, this.find(repoId, issue, pr), repoId, kind);
+  }
+
+  /**
+   * The practice switches an issue's work runs with from the lab. An issue not started yet (`peek`) gets the variant it
+   * would get if it started now, so the scheduler can hold it back by its leases before it has one.
+   */
+  practices(repoId: string, issue: number | null | undefined, pr: number | null | undefined, peek?: { number: number; body: string; labels: string[] }): PracticeOverrides {
+    const s = this.st();
+    const a = this.find(repoId, issue, pr) ?? (peek ? assignIssue(s.experiments, s.assignments, repoId, peek, Date.now()) : null);
+    return variantPractices(s.experiments, a, repoId);
+  }
+
+  /** Whether a running experiment covering the floor has a variant that turns this practice on. */
+  tries(repoId: string, key: 'leases' | 'upToDate' | 'autoRebase'): boolean {
+    return this.experiments.some((e) => e.status === 'running' && (!e.floors.length || e.floors.includes(repoId)) && e.variants.some((v) => v.settings.practices?.[key] === true));
+  }
+
+  /** A variant's settings and the experiment's verdict, for making its practices every project's default. */
+  variant(id: unknown, variantId: unknown) {
+    const e = this.exp(id);
+    if (e.status === 'running') throw new HttpError(409, 'Stop it before making a variant every project\'s default');
+    const v = e.variants.find((x) => x.id === variantId);
+    if (!v) throw new HttpError(400, 'Pick one of its variants');
+    if (!v.settings.practices || !Object.keys(v.settings.practices).length) throw new HttpError(400, `${v.name} has no practice switches to make the default`);
+    return { experiment: e, variant: v, summary: experimentResult(e, this.st().assignments, Date.now()).summary };
   }
 
   /** A finished session's ledger line, onto its PR's outcome. */

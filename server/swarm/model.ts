@@ -14,6 +14,7 @@ import type { LedgerState } from '../ledger.ts';
 import type { LabState } from '../experiments.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
+import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
@@ -60,6 +61,7 @@ export interface PersistedRepo {
   qaBrief: string;
   playbook: string;
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
+  practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
@@ -85,6 +87,7 @@ export interface PersistedAgent {
   boxCli?: BoxCliRecord | null; // a cloud agent's live CLI in their Box, to pick up again after a restart
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
+  declared?: string[] | null; // the files they declared for their current task (file leases, #24); cleared with the task
   status: AgentStatus;
   issueNumber: number | null;
   issueTitle: string | null;
@@ -123,6 +126,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
+  updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */

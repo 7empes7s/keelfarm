@@ -1,6 +1,7 @@
 // Handing out work: the scheduler, pacing on Claude's usage, mission control's numbers.
 import type { SessionHandle, SessionResult } from '../agentRunner.ts';
 import { stillOpen } from '../closeCleanup.ts';
+import { CeoHolds } from '../ceoHold.ts';
 import { CONSULT_DISALLOWED, consultAnswer, consultPrompt, nextConsult, type Consult } from '../consult.ts';
 import { clip } from '../notify.ts';
 import { ONE_TURN } from '../prompts.ts';
@@ -27,6 +28,7 @@ import { opsView, recordChecks, recordMerges, type OpsFloorState } from '../metr
 import { mergedPulls } from '../costLedger.ts';
 import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
+import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import type { OpsView, PullInfo, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
 import {
   type PersistedRepo,
@@ -137,13 +139,33 @@ export abstract class SwarmScheduling extends SwarmQa {
    * "Depends on #N" wait until #N is closed; the rest go in readyIssues() order.
    */
   protected startIssueWork(repo: PersistedRepo): boolean {
-    if (!repo.autoAssign || !this.mayStart('issue')) return false;
+    if (!repo.autoAssign) return false;
+    if (!this.mayStart('issue')) {
+      this.nextIssue(repo, false); // paced: the floor still shows what leases hold back
+      return false;
+    }
     const agent = this.available(repo)[0];
-    const next = agent ? this.readyIssues(repo)[0] : undefined;
+    const next = this.nextIssue(repo, !!agent);
     if (!agent || !next || !this.health.admit('build')) return false;
     // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
-    void this.assign(agent.id, next.issue.number).catch((err) => console.warn('auto-assign failed', err));
+    void this.assign(agent.id, next.number).catch((err) => console.warn('auto-assign failed', err));
     return agent.status === 'preparing';
+  }
+
+  /**
+   * The ready issue to start next: the first in readyIssues() order, unless file leases (#24) are on for the floor or
+   * an experiment's variant, when one whose predicted files overlap work in flight waits (chooseIssue). The holds are
+   * worked out on every pass, so the floor shows them even while nobody is free.
+   */
+  protected nextIssue(repo: PersistedRepo, someoneFree: boolean) {
+    if (!this.leasesWanted(repo)) return someoneFree ? this.readyIssues(repo)[0]?.issue : undefined;
+    const ready = this.readyIssues(repo).map((r) => r.issue);
+    const fp = this.floorPractice(repo.id);
+    const known = fp.known();
+    const items = ready.map((i) => ({ number: i.number, files: predictFiles(`${i.title}\n${i.body}`, known), on: this.practicesOf(repo, i.number, null, i).leases }));
+    const { pick, held } = chooseIssue(items, this.leasesOf(repo), { now: Date.now(), heldSince: fp.since() });
+    if (fp.setHolds(held)) this.emitRepo(repo);
+    return someoneFree ? ready.find((i) => i.number === pick) : undefined;
   }
 
   protected limited() {
@@ -348,7 +370,18 @@ export abstract class SwarmScheduling extends SwarmQa {
     }
   }
 
-  // ---------- consults for the CEO (#28) ----------
+  // ---------- the CEO's waits, questions and consults (#28) ----------
+
+  protected holds = new CeoHolds(() => this.emitCeo());
+  protected ceoWaited = false; // the current CEO job waited (the ledger's ceo-wait)
+  protected consultAnswers = new Map<string, string | null>(); // consults the CEO waits on: their answer once in
+
+  /** End the CEO's waits and questions, and consults no session waits for any more. */
+  protected cancelHolds(why: string) {
+    if (!this.holds.waiting()) return;
+    this.holds.cancel(why);
+    this.consults = this.consults.filter((c) => c.runningOn);
+  }
 
   /** A free agent on this floor takes the next consult (nextConsult). True: one started. */
   protected startConsultWork(repo: PersistedRepo): boolean {

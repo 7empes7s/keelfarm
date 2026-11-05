@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { LabChip } from './ExperimentsSection';
+import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { confirmDialog } from './Confirm';
@@ -193,6 +194,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 <b>#{c.number}</b>
               )}{' '}
               {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
+              {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
             </div>
             {render(c)}
           </div>

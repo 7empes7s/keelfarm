@@ -225,4 +225,32 @@ describe('mergeStep', () => {
       expect(mergeStep(pull({ mergeState: 'BEHIND' }), record({ mergeRetryAt: NOW + 60_000 }), NOW, base).do).toBe('update-branch');
     });
   });
+
+  describe('up to date before merge (#24)', () => {
+    const on = { base: 'main', upToDate: true };
+    it('asks how far behind a green PR is, then updates it or merges it', () => {
+      expect(mergeStep(pull(), record(), NOW, on).do).toBe('behind');
+      expect(mergeStep(pull(), record(), NOW, { ...on, behind: 2 }).do).toBe('update-branch');
+      expect(mergeStep(pull(), record(), NOW, { ...on, behind: 0 }).do).toBe('merge');
+    });
+
+    it('waits for CI on the updated result before anything else', () => {
+      expect(mergeStep(pull({ checks: 'pending', pendingChecks: ['CI'] }), record(), NOW, on).do).toBe('wait');
+    });
+
+    it('a PR that fails only after the update goes back as a conflict with main, with the failing check', () => {
+      const failed = pull({ headSha: 'merged1', checks: 'failing', failedChecks: [{ name: 'CI / test', url: null }] });
+      const step = mergeStep(failed, record({ passedSha: 'merged1', updatedSha: 'merged1' }), NOW, on);
+      expect(step).toMatchObject({ do: 'send-back', reason: 'conflict' });
+      expect(step.do === 'send-back' && step.instructions).toMatch(/conflicts with main[\s\S]*CI \/ test/);
+      // Its own commit failing is still a checks fix.
+      expect(mergeStep(failed, record({ passedSha: 'merged1', updatedSha: 'other' }), NOW, on)).toMatchObject({ do: 'send-back', reason: 'checks' });
+    });
+
+    it('with the switch off, merges as today', () => {
+      expect(mergeStep(pull(), record(), NOW, { base: 'main', behind: 5 }).do).toBe('merge');
+      const failed = pull({ checks: 'failing', failedChecks: [{ name: 'CI', url: null }] });
+      expect(mergeStep(failed, record({ updatedSha: 'abc123' }), NOW, base)).toMatchObject({ do: 'send-back', reason: 'checks' });
+    });
+  });
 });

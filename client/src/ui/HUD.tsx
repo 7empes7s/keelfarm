@@ -160,7 +160,7 @@ export function HUD() {
   const prs = useMemo(() => (repo ? floorPrCounts(repo, qa) : null), [repo, qa]);
 
   return (
-    <div className="hud">
+    <div className="hud ds-screen ds-auto-dark">
       <div className="hud-floor" style={{ ['--accent' as string]: roof ? '#7cc6fe' : (repo?.color ?? '#ff8a5b') }}>
         <div className="floor-num">{roof ? 'R' : repo ? repo.floor : 'G'}</div>
         <div>

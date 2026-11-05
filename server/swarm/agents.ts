@@ -22,7 +22,7 @@ import { blockers, waitsMessage } from '../../shared/issues.ts';
 import { cleanStyle } from '../../shared/looks.ts';
 import { effectiveModel } from '../../shared/models.ts';
 import { FLOOR_SEATS } from '../../shared/types.ts';
-import type { AgentCli, AgentLook, EffortLevel, MachineHost } from '../../shared/types.ts';
+import type { AgentCli, AgentLook, AgentView, EffortLevel, MachineHost } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -43,6 +43,16 @@ import { SwarmMerge } from './merge.ts';
 
 export abstract class SwarmAgents extends SwarmMerge {
   // ---------- agents ----------
+
+  /** Answering one of the CEO's consults (#28): working to everyone, though their saved status stays as it was. */
+  protected consulting(a: PersistedAgent) {
+    return this.consults.some((c) => c.runningOn === a.id);
+  }
+
+  protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
+    const v = super.agentView(a, withLog);
+    return this.consulting(a) ? { ...v, status: 'working', issueTitle: `Consult for ${this.ceo().name}` } : v;
+  }
 
   hireAgent(
     repoId: string,

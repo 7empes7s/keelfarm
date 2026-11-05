@@ -103,7 +103,6 @@ export function RefChip({ messageId, index, children }: { messageId: number; ind
         ref={btn}
         type="button"
         className={`ref-chip ${info.tone ? `ref-chip-${info.tone}` : ''}`}
-        aria-label={`${label}${info.status ? `, ${info.status}` : ''}. Open it`}
         onPointerEnter={(e) => e.pointerType === 'mouse' && later(HOVER_MS, () => setPeek(true))}
         onPointerLeave={(e) => {
           if (e.pointerType !== 'mouse') return;
@@ -132,7 +131,7 @@ export function RefChip({ messageId, index, children }: { messageId: number; ind
       >
         <span aria-hidden>{info.icon}</span>
         <span className="ref-chip-label">{label}</span>
-        {info.status && <span className="ref-chip-status">{info.status}</span>}
+        {info.status && <span className="ref-chip-status">{` ${info.status}`}</span>}
       </button>
       {peek && (
         <RefPeek
