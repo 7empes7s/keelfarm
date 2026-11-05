@@ -48,9 +48,9 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
 }
 
-const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
 
-/** The CEO's next job among those `ready`: replies to the manager and triage first, reviews and follow-ups last. */
+/** The CEO's next job among those `ready`: replies to the manager first (#46: a preempted job never comes before the reply), then triage, reviews and follow-ups last. */
 export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
   return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find(ready);
 }
@@ -541,7 +541,7 @@ export function ceoSystemPrompt(o: {
     '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
-    '- To see something through, wait_for it (a PR\'s QA or merge, an issue, an agent, a preview) instead of ending the job; ask_manager when you need their answer to go on; consult an agent who knows a floor\'s code. Put long consult answers in an artifact, with their file:line references and who said it ("Ada on floor 1 says: …").',
+    "- wait_for a PR, issue, agent or preview instead of ending the job; ask_manager for answers you need; consult a floor's agent about its code.",
     `- ${ONE_TURN}`,
     '',
     'Rules:',
@@ -558,6 +558,7 @@ export function ceoSystemPrompt(o: {
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
   ].join('\n');
 }
 

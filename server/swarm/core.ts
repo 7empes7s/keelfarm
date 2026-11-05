@@ -624,11 +624,11 @@ export abstract class SwarmCore extends SwarmContract {
     return this.state.agents.filter((a) => a.host === 'box' && a.status === 'working' && !!a.boxCli);
   }
 
-  /** True when the manager has set a session limit and every slot is taken. */
+  /** True when the manager has set a session limit and every slot is taken. The CEO never takes a slot (#46). */
   protected slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    // A CEO waiting on something holds no slot (#28).
-    return limit > 0 && this.running() - (this.holds.waiting() ? 1 : 0) >= limit;
+    // Consults take slots too (#28).
+    return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length + this.consults.filter((c) => c.runningOn).length >= limit;
   }
 
   protected agentSlug(a: PersistedAgent) {

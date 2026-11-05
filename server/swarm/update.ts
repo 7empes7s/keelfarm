@@ -65,7 +65,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
       const running = this.running();
       this.postMessage(
         'office',
-        `⬆️ Updating the office (${u.behind} new commit${u.behind === 1 ? '' : 's'}). Nothing new starts${running ? ` while ${running} running session${running === 1 ? '' : 's'} finish` : ''}; then it installs and restarts.`,
+        `⬆️ Updating the office (${u.behind} new commit${u.behind === 1 ? '' : 's'}). Nothing new starts, though the CEO still answers you${running ? ` while ${running} running session${running === 1 ? '' : 's'} finish` : ''}; then it installs and restarts.`,
       );
     }
     u.drainingSince = d.drainingSince;

@@ -28,7 +28,7 @@ import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
+import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { researchBrief } from './demoResearch.ts';
 
@@ -838,6 +838,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       return demoPrDiff(pr, patch);
     },
     readWorktree: async (r) => demoReadWorktree(r),
+    hasRepoFile: (fullName, rel) => demoRepoFile(fullName, rel) !== null,
+    readRepoFile: async (fullName, _branch, rel) => demoRepoFile(fullName, rel) ?? Promise.reject(new Error(`${rel} isn't on the default branch.`)),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
@@ -1176,7 +1178,27 @@ export interface DemoFloor {
   team: { size: number; max: number; free: number; pendingHires: number; pendingLetGos: number };
   capacity: { issuesReadyToStart: number; prsAwaitingQa: number };
   backlog: { number: number; title: string; inProgress: boolean }[];
-  pullRequests: unknown[];
+  pullRequests: { number: number }[];
+  agents?: { name: string }[];
+}
+
+/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
+export function demoRefsLine(floors: readonly DemoFloor[]): string {
+  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
+  if (!f) return '';
+  const who = f.agents?.[0]?.name;
+  const pr = f.pullRequests[0]?.number;
+  const issue = f.backlog[0]?.number;
+  return [
+    `Around the office: floor ${f.floor}`,
+    who && `@${who} (watch @${who}/terminal)`,
+    issue && `#${issue} is next`,
+    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
+    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
+    `and main runs at preview: floor ${f.floor}.`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 interface DemoStatus {
@@ -1440,6 +1462,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
+        '',
+        demoRefsLine(s.floors),
         ...(next
           ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
           : []),
