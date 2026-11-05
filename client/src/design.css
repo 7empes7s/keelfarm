@@ -726,7 +726,7 @@ html[data-reduce-motion] {
 
 /* the console in dark mode: what the old rules still paint in light colours */
 @media (prefers-color-scheme: dark) {
-  html:not([data-high-contrast]) .ds-auto-dark :is(code, .office-badge) {
+  html:not([data-high-contrast]) .ds-auto-dark :is(code, kbd, .office-badge, .tl-since) {
     background: var(--ds-surface-hover);
     color: var(--ds-text);
   }

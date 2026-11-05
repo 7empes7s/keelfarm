@@ -24,11 +24,12 @@ const SCREENS: Screen[] = [
     name: 'pocket console',
     widths: [360, 390, 430, 1280],
     open: async (page) => {
+      await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
       await page.goto('/?pocket=1');
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Mission control', 'This device'],
+    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'This device'],
   },
   {
     // The 3D office boots WebGL: two widths are enough here, the pocket console covers the phones.
@@ -39,16 +40,16 @@ const SCREENS: Screen[] = [
       await page.goto('/?pocket=0');
       await enterOffice(page, { loaded: true });
       const skipTour = page.getByRole('button', { name: 'Skip tour' }); // a fresh office starts the tour
-      if (await skipTour.isVisible()) await skipTour.click();
+      if (await skipTour.isVisible()) await skipTour.dispatchEvent('click'); // the canvas would take a real click
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Time-lapse', 'Accessibility'],
+    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'Time-lapse', 'Accessibility'],
   },
 ];
 
-/** Words of actions that are hard to undo: outside a ⋯ menu they mean one tap does it. */
-const DANGER = /^\W*(let .+ go|disconnect|close|close (issue|pr)|clear desk|clear saved clips|remove|delete\b.*)\W*$/i;
+/** Labels starting with an action that's hard to undo ("Remove Telegram"): outside a ⋯ menu they mean one tap does it. */
+const DANGER = /^\W*(let .+ go|disconnect|close\b|clear desk|clear saved clips|remove\b|delete\b).*$/i;
 
 /** Problems in what the dialog shows now; empty when it follows the rules. */
 async function layoutProblems(root: Locator): Promise<string[]> {
