@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { SESSION_HISTORY_INPUT, SESSION_HISTORY_TOOL } from './history.ts';
 import { blockers, holdUps, setDependsOn } from '../shared/issues.ts';
 import { followupLabel, MANDATE_MAX_CHARS, mandateWhere, type CeoMandate, type FollowupEvent } from '../shared/followups.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
@@ -169,6 +170,7 @@ export interface OfficeHandlers {
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+  sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
 
 export interface ExperimentToolInput {
@@ -446,6 +448,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), pr: z.number().int().positive(), patch: z.boolean().optional().describe('Include the diff itself') },
       (a) => run(() => h.prDiff(a)),
     ),
+    tool('session_history', SESSION_HISTORY_TOOL, SESSION_HISTORY_INPUT, (a) => run(() => h.sessionHistory(a))),
     tool(
       'send_telegram',
       "Send the manager a message on their linked Telegram chat, only when they ask for something there (\"send me the plan on Telegram\"). Refused when Telegram isn't set up. It never reaches anyone else.",
