@@ -1,5 +1,6 @@
 // Types shared between the swarm server and the 3D client.
 import type { CareerView } from './careers.ts';
+import type { CharterView } from './charter.ts';
 import type { ProgressView, RewardView } from './progress.ts';
 
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
@@ -10,6 +11,7 @@ import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
+import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
 
 export type AgentStatus =
@@ -94,26 +96,6 @@ export interface RepoView {
   /** The rest of the floor's charter (#48, shared/charter.ts); `mission` above is its mission. */
   charter: CharterView;
 }
-
-/** One objective in a floor's charter (#48): issues name it by id ("Objective: O2"); measure: how we know it's met. */
-export interface CharterObjective { id: string; outcome: string; measure: string }
-
-/** A floor's charter besides its mission. standards: must-always rules (quality bars, safety, style, "never" lists); focus: the milestone or 1-3 objectives worked on now. */
-export interface CharterParts { objectives: CharterObjective[]; standards: string[]; nonGoals: string[]; focus: string }
-
-export interface Charter extends CharterParts { mission: string }
-
-/** A charter the CEO drafted (propose_charter; by: the CEO's name): nothing changes until the manager approves it. */
-export interface CharterProposal { at: number; by: string; reason: string; charter: Charter }
-
-/** One change in a charter's history: who changed which parts (e.g. ['mission', 'standards']). */
-export interface CharterChange { at: number; by: string; parts: string[]; note: string }
-
-/** The drift view: merged PRs of the last 7 days under the objective their issue named; objective null: none. */
-export interface DriftGroup { objective: string | null; outcome: string; prs: { number: number; title: string }[] }
-
-/** history: newest first. */
-export interface CharterView extends CharterParts { proposal: CharterProposal | null; history: CharterChange[]; drift: DriftGroup[] }
 
 /**
  * How a floor's app is run for the preview monitor. {port} and {tmp} are replaced in the command and env values;
@@ -387,6 +369,7 @@ export interface SwarmSettings {
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once
   maxAgents: number; // most agents on a floor: 1 to FLOOR_SEATS (DEFAULT_MAX_AGENTS)
   ceoHeartbeatMin: number; // minutes between the CEO's periodic reviews; 0 = off
+  researchMin: number; // a research job's time budget in minutes, after which the CEO wraps up with what it has
   ceoFollowups: FollowupSettings; // Settings → The CEO: which office events wake the CEO for a follow-up (shared/followups.ts)
   ceoMandates: CeoMandate[]; // the manager's standing mandates: follow-ups may file issues on the floors they cover
   managerName: string; // what the office calls you
@@ -678,6 +661,26 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
+  research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
+}
+
+/** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
+export type ChatRef = { start: number; end: number } & (
+  | { kind: 'agent'; agentId: string; terminal?: true }
+  | { kind: 'floor'; repoId: string }
+  | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
+  | { kind: 'file'; repoId: string; path: string; line?: number }
+  | { kind: 'qa'; repoId: string; number: number }
+  | { kind: 'preview'; repoId: string; number?: number } // a PR's in the PR theatre, else the floor's app
+);
+
+/** GET /api/messages/:id/refs/:index/file: a file ref's text from the floor's default branch, size-capped. */
+export interface RefFileView {
+  path: string;
+  line: number | null;
+  text: string;
+  url: string; // the file on GitHub, at the line
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -688,7 +691,7 @@ export interface ChatArtifact {
   markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
-export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup';
+export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup' | 'research';
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO
@@ -696,6 +699,13 @@ export interface CeoInfo {
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
+  held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
+}
+
+/** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */
+export interface CeoHeld {
+  reason: 'usage';
+  until: number;
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */
@@ -744,6 +754,7 @@ export interface WorldSnapshot {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
+  experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -793,6 +804,7 @@ export type ServerEvent =
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
   | { type: 'tooling'; tooling: ToolInventory }
+  | { type: 'experiments'; experiments: LabView }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }

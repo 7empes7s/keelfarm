@@ -16,7 +16,7 @@ import {
   renderCharter,
   withChange,
 } from './charter.ts';
-import type { Charter } from './types.ts';
+import type { Charter } from './charter.ts';
 
 const charter = (o: Partial<Charter> = {}): Charter =>
   cleanCharter({

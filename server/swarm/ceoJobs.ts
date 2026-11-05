@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { SessionResult } from '../agentRunner.ts';
-import { askedFor, ceoJobPrompt, ceoSystemPrompt, IssueCap, jobLabel, type CeoJob } from '../ceo.ts';
+import { askedFor, ceoJobPrompt, ceoSystemPrompt, IssueCap, jobLabel, nextCeoJob, queueCeoJob, type CeoJob } from '../ceo.ts';
+import { ceoHeld, ceoStep, messageGoesIn, type CeoLaneInput } from '../ceoLane.ts';
 import { HttpError } from '../httpError.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
 import { failedRunIds } from '../mergeGate.ts';
@@ -29,10 +30,12 @@ import { dueGreeting } from '../../shared/themes.ts';
 import { charterOf, MISSION_MAX, renderCharter } from '../../shared/charter.ts';
 import { CEO_ID } from '../../shared/types.ts';
 import { forwardText, nextDelivery } from '../../shared/chat.ts';
+import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseCeoMessage } from '../../shared/chatParts.ts';
+import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
-import type { AgentStatus, CeoInfo, PhoneMessage, ServerDelivery } from '../../shared/types.ts';
+import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -52,6 +55,8 @@ import { SwarmUpdate } from './update.ts';
 
 export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- the CEO ----------
+
+  protected ceoPreempted: CeoJob | null = null; // the background job stopped for the manager's message: it goes back to the queue
 
   protected ceo() {
     return this.state.agents.find((a) => a.id === CEO_ID)!;
@@ -126,6 +131,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
       lastReviewAt: c.lastReviewAt,
       nextReviewAt: min > 0 && c.lastReviewAt ? c.lastReviewAt + min * 60_000 : null,
       followups: this.followupView(),
+      held: ceoHeld({ now: Date.now(), pausedUntil: this.pausedUntil, chatQueued: c.queue.some((j) => j.kind === 'chat') }),
     };
   }
 
@@ -133,20 +139,35 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.broadcast({ type: 'ceo', ceo: this.ceoInfo() });
   }
 
-  /** Queue a job for the CEO: one onboarding and one plan per floor, one review, and chat messages merge into one reply. */
+  /** Queue a job for the CEO (ceo.ts queueCeoJob). */
   protected enqueueCeo(job: CeoJob) {
-    const q = this.state.ceo.queue;
-    const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber)));
-    if (same >= 0 && job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
-    else if (same >= 0) q[same] = job.kind === 'chat' ? { ...q[same], text: `${q[same].text}\n${job.text}`, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
-    else q.push(job);
+    queueCeoJob(this.state.ceo.queue, job);
     this.emitCeo();
     this.save();
     setTimeout(() => this.schedule(), 150);
   }
 
-  /** Start the CEO's next job when they're free and a session slot is open. Replies to the manager go first. */
-  protected startCeoWork(): void {
+  /** What ceoStep (server/ceoLane.ts) sees now. */
+  protected ceoLane(draining: boolean): CeoLaneInput {
+    const a = this.state.agents.find((x) => x.id === CEO_ID);
+    const c = this.state.ceo;
+    return {
+      now: Date.now(),
+      pausedUntil: this.pausedUntil,
+      draining,
+      handingOver: this.officeUpdate.sent,
+      busy: !!a && BUSY.includes(a.status),
+      job: c.job?.kind ?? null,
+      session: !!this.agentRt.get(CEO_ID)?.session,
+      chatQueued: c.queue.some((j) => j.kind === 'chat'),
+    };
+  }
+
+  /**
+   * Start the CEO's next job when they're free; they never wait for a session slot. Replies to the manager go first, and
+   * preempt a background job (it goes back to the queue). While the office drains for its update, only chat starts.
+   */
+  protected startCeoWork(draining = false): void {
     const a = this.state.agents.find((x) => x.id === CEO_ID);
     const c = this.state.ceo;
     // A triage whose PR is no longer stuck (the manager stepped in, or it closed) has nothing left to do.
@@ -156,15 +177,21 @@ export abstract class SwarmCeo extends SwarmUpdate {
       this.emitCeo();
       this.save();
     }
-    if (!a || BUSY.includes(a.status) || c.job || c.queue.length === 0) return;
-    if (this.slotsFull()) return;
-    const rank: Record<CeoJob['kind'], number> = { chat: 0, triage: 0, onboard: 1, plan: 1, followup: 2, review: 2 };
+    if (!a || c.queue.length === 0) return;
+    const step = ceoStep(this.ceoLane(draining));
+    if (step.do === 'preempt') {
+      this.preemptCeo(a);
+      if (!c.job) this.startCeoWork(draining); // the session stopped at once: the reply starts now
+      return;
+    }
+    if (step.do === 'wait') return;
     // A floor's jobs wait for its clone and first sync, so the CEO has something to read.
     const ready = (j: CeoJob) => {
+      if (step.only === 'chat' && j.kind !== 'chat') return false;
       const rt = j.repoId ? this.repoRt.get(j.repoId) : undefined;
       return !rt || rt.cloneStatus === 'error' || (rt.cloneStatus === 'ready' && rt.lastSync != null);
     };
-    const job = [...c.queue].sort((x, y) => rank[x.kind] - rank[y.kind]).find(ready);
+    const job = nextCeoJob(c.queue, ready);
     if (!job) return;
     c.queue.splice(c.queue.indexOf(job), 1);
     const rt = job.repoId ? this.repoRt.get(job.repoId) : undefined;
@@ -173,9 +200,18 @@ export abstract class SwarmCeo extends SwarmUpdate {
       if (repo) this.postMessage('office', `⚠️ ${a.name} couldn't study floor ${repo.floor}: the repository clone failed (${rt?.cloneError ?? 'unknown error'}).`);
       this.emitCeo();
       this.save();
-      return this.startCeoWork();
+      return this.startCeoWork(draining);
     }
     void this.runCeoJob(a, job);
+  }
+
+  /** The manager wrote while the CEO works on a background job: stop it and put it back in the queue, so the reply comes now. */
+  protected preemptCeo(a: PersistedAgent) {
+    const job = this.state.ceo.job;
+    if (!job || this.ceoPreempted) return;
+    this.ceoPreempted = job;
+    this.appendLog(a, [{ kind: 'system', text: `⏸ The manager wrote: ${jobLabel(job, this.ceoFloor(job.repoId)).toLowerCase()} goes back to the queue until the reply is out.` }]);
+    this.agentRt.get(a.id)?.session?.stop();
   }
 
   protected ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
@@ -193,10 +229,8 @@ export abstract class SwarmCeo extends SwarmUpdate {
       { kind: 'system', text: '' },
       { kind: 'system', text: `━━━ ${label} ━━━` },
     ]);
-    if (job.kind === 'chat') {
-      this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
-      if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
-    }
+    if (job.kind === 'chat') this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
+    if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
     if (job.kind === 'review') {
       this.state.ceo.lastReviewAt = Date.now();
       this.state.ceo.lastFingerprint = this.fingerprint();
@@ -223,7 +257,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
-        prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now())),
+        prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin),
         systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
         model: run.model,
         effort: run.effort,
@@ -263,6 +297,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         finished: (result) => this.onCeoFinished(a, result),
       },
     );
+    if (job.kind === 'research') this.researchGuard.start(this.state.settings.researchMin, job.topic ?? '', () => rt.session, (note) => { Object.assign(a, { status: 'stopped' as AgentStatus, lastError: note }); this.postMessage('office', `⏱ ${a.name}: ${note}`); });
   }
 
   protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
@@ -277,14 +312,20 @@ export abstract class SwarmCeo extends SwarmUpdate {
     recordCost(this.state.ops, '', result.costUsd, a.endedAt);
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
-    if (job?.kind === 'triage') this.endTriage(job);
+    this.researchGuard.clear();
+    const preempted = !!job && job === this.ceoPreempted;
+    this.ceoPreempted = null;
+    if (preempted) this.state.ceo.queue.push(job);
+    else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
     if (result.interrupted) this.interrupted(a);
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
-    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
+    void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped' || preempted, ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
+    } else if (preempted) {
+      a.status = 'idle'; // the manager's chat starts next
     } else if (!result.ok) {
       a.status = 'error';
       a.lastError = result.errors.join('; ') || 'Session failed';
@@ -303,7 +344,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     setTimeout(() => this.schedule(), 300);
   }
 
-  /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to and any files. Injected into a running session, otherwise the CEO picks it up next. */
+  /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to and any files. Injected into a running session, otherwise the CEO picks it up next; "Research: <topic>" and replies to research are jobs of their own. */
   async messageCeo(text: string, replyTo?: number, via?: 'telegram', fileIds: readonly string[] = []) {
     const t = text.trim().slice(0, 4000);
     const attachments = this.ceoFiles.managerFiles(fileIds);
@@ -311,9 +352,10 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const a = this.ceo();
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
-    const forward = [forwardText(t, quoted), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const forward = [forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const research = await researchJob({ text: t, quoted, forward, id: m.id, dir: path.join(CEO_DIR, 'research'), onlyRepo: this.state.repos.length === 1 ? this.state.repos[0].id : undefined });
     const rt = this.agentRt.get(a.id)!;
-    if (rt.session) {
+    if (rt.session && !research && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: this.state.ceo.job?.kind ?? null, session: true })) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
@@ -321,7 +363,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
       this.markDelivery([m.id], 'read');
       return { id: m.id };
     }
-    this.enqueueCeo({ kind: 'chat', text: forward, messageIds: [m.id], at: Date.now() });
+    this.enqueueCeo(research ?? { kind: 'chat', text: forward, messageIds: [m.id], at: Date.now() });
     return { id: m.id };
   }
 
@@ -352,15 +394,15 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.enqueueCeo({ kind: 'onboard', repoId: repo.id, at: Date.now() });
   }
 
-  /** The manager hands the CEO a brief for a floor; the CEO turns it into issues and a team. */
-  planFloor(repoId: string, mission?: string) {
+  /** The manager hands the CEO a brief for a floor; the CEO turns it into issues and a team, or researches it first. */
+  planFloor(repoId: string, mission?: string, research = false) {
     const repo = this.repo(repoId);
     if (typeof mission === 'string') {
       this.applyCharter(repo, { ...charterOf(repo.mission, repo.charter), mission: mission.trim().slice(0, MISSION_MAX) }, this.managerLabel(), 'brief edited');
       this.emitRepo(repo);
     }
     if (!repo.mission) throw new HttpError(400, 'Write a brief first: what should this floor build?');
-    this.enqueueCeo({ kind: 'plan', repoId: repo.id, at: Date.now() });
+    this.enqueueCeo(research ? { kind: 'research', repoId: repo.id, topic: repo.mission.slice(0, 1000), at: Date.now() } : { kind: 'plan', repoId: repo.id, at: Date.now() });
   }
 
   /** Everything the heartbeat cares about. When it hasn't changed since the last review, the review is skipped. */
@@ -566,13 +608,16 @@ export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used'> & { changes?: TeamChange[] } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
     const id = this.messageSeq++;
     const artifacts = makeArtifacts(id, parts.artifacts);
-    const m: PhoneMessage = { id, from, text: parts.text.trim().slice(0, 6000), at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(artifacts && { artifacts }) };
+    const body = parts.text.trim().slice(0, 6000);
+    // The agents, floors, issues and files it names become chips (shared/chatRefs.ts).
+    const refs = from === 'office' ? [] : parseRefs(body, this.refContext());
+    const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(artifacts && { artifacts }), ...(refs.length && { refs }) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
@@ -593,9 +638,31 @@ export abstract class SwarmCeo extends SwarmUpdate {
     return m;
   }
 
+  private refContext(): RefContext {
+    return {
+      floors: this.state.repos.map((r) => ({ floor: r.floor, repoId: r.id })),
+      agents: this.state.agents.filter((a) => a.role !== 'ceo').map((a) => ({ id: a.id, name: a.name })),
+      hasFile: (repoId, rel) => {
+        const repo = this.state.repos.find((r) => r.id === repoId);
+        return !!repo && this.backend.hasRepoFile(repo.fullName, rel);
+      },
+    };
+  }
+
+  /** GET /api/messages/:id/refs/:index/file: a file ref's text on its floor's default branch, read when asked. */
+  async refFile(messageId: number, index: number): Promise<RefFileView> {
+    const ref = this.state.messages.find((m) => m.id === messageId)?.refs?.[index];
+    if (ref?.kind !== 'file') throw new HttpError(404, 'That file reference is no longer saved');
+    const repo = this.state.repos.find((r) => r.id === ref.repoId);
+    if (!repo) throw new HttpError(404, 'That floor is no longer in the office');
+    const url = fileUrl(repo.fullName, repo.defaultBranch, ref.path, ref.line);
+    const text = await this.backend.readRepoFile(repo.fullName, repo.defaultBranch, ref.path).catch((e: Error) => Promise.reject(new HttpError(404, e.message)));
+    return { path: ref.path, line: ref.line ?? null, text, url };
+  }
+
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
   protected postCeoReply(text: string) {
-    this.postMessage('ceo', text, undefined, this.ceoFiles.takeReply());
+    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job) });
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */

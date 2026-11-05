@@ -2,6 +2,7 @@
 import {
   checkCloseIssue,
   createOfficeTools,
+  experimentInput,
   floorCapacity,
   issueRefusal,
   MANDATE_NOT_ASKED,
@@ -10,10 +11,11 @@ import {
   agentLogText,
   qaReportText,
   AGENT_LOG_MAX as AGENT_LOG_MAX_LINES,
-  type CharterProposalArgs,
   type OfficeTools,
 } from '../ceo.ts';
+import { researchReadOnly } from '../research.ts';
 import { nameList } from '../closeCleanup.ts';
+import type { CharterProposalArgs } from '../charterTool.ts';
 import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
@@ -38,7 +40,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
    */
   protected officeTools(): OfficeTools {
     const acts = this.spend.acts;
-    return createOfficeTools({
+    return createOfficeTools(researchReadOnly({
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
@@ -56,6 +58,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
       proposeCharter: acts((a) => this.proposeCharter(a)),
+      defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
@@ -63,7 +66,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
-    });
+    }, () => this.state.ceo.job?.kind === 'research'));
   }
 
   // ---------- the CEO's office tools ----------
@@ -177,6 +180,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
+          experiments: this.lab.summary(), // only the manager starts, stops and promotes them
         },
         floors,
         pendingChanges: pending.map(req),
@@ -348,10 +352,18 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
   }
 
+  /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
+  protected refuseWhileUpdating() {
+    if (this.officeUpdate.drainingSince !== null || this.officeUpdate.sent) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+  }
+
   protected restartAgent(x: { agent_id: string }) {
     const a = checkRestart(this.agentByRef(x.agent_id));
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
-    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    if (resumes) {
+      this.refuseWhileUpdating();
+      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
   }
@@ -360,6 +372,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const a = this.agentByRef(x.agent_id);
     if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
     const running = !!this.agentRt.get(a.id)?.session;
+    if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }

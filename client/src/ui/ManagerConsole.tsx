@@ -229,6 +229,7 @@ export function FloorsTab() {
 
 function FloorBrief({ repo }: { repo: RepoView }) {
   const [mission, setMission] = useState(repo.mission);
+  const [research, setResearch] = useState(false);
   useEffect(() => setMission(repo.mission), [repo.mission]);
   return (
     <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
@@ -250,8 +251,12 @@ function FloorBrief({ repo }: { repo: RepoView }) {
           Save brief
         </button>
         <span className="spacer" />
-        <button className="btn btn-small btn-good" disabled={!mission.trim()} onClick={() => void attempt(() => api.planFloor(repo.id, mission))}>
-          🧠 Ask the CEO to plan it
+        <label className="toggle small" title="The CEO looks at current docs, how others do it and your connected apps first, and brings you options with sources. Your pick becomes the plan.">
+          <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} />
+          <span>🔎 Research first</span>
+        </label>
+        <button className="btn btn-small btn-good" disabled={!mission.trim()} onClick={() => void attempt(() => api.planFloor(repo.id, mission, research))}>
+          {research ? '🔎 Ask the CEO to research it' : '🧠 Ask the CEO to plan it'}
         </button>
       </div>
       <details className="small">
@@ -757,6 +762,11 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           <input type="number" min={0} max={1440} defaultValue={settings.ceoHeartbeatMin} onBlur={(e) => set({ ceoHeartbeatMin: Number(e.target.value) })} />
         </label>
         <p className="muted small">A review checks team sizes, stuck PRs and floor profiles, and is skipped when nothing changed since the last one. It never files issues: new work only comes from you. The CEO's own model and effort are on the CEO tab.</p>
+        <label className="field">
+          <span>Research time budget (minutes)</span>
+          <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />
+        </label>
+        <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
         <FollowupSettings />
       </div>
       <div className="card">

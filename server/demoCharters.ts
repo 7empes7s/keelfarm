@@ -1,7 +1,7 @@
 // The demo's charters (#48): every demo floor opens with one, and the todo app with a change from the CEO waiting
 // for the manager (proposed through the real propose_charter tool, so approving it works as in the real office).
 
-import type { Charter } from '../shared/types.ts';
+import type { Charter } from '../shared/charter.ts';
 
 export interface DemoCharter {
   charter: Charter;

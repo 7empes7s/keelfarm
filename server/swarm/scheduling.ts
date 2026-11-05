@@ -18,6 +18,7 @@ import {
 } from '../pacing.ts';
 import { opsView, recordChecks, recordMerges, type OpsFloorState } from '../metrics.ts';
 import { mergedPulls } from '../costLedger.ts';
+import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
 import type { OpsView, PullInfo, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
 import {
@@ -104,7 +105,8 @@ export abstract class SwarmScheduling extends SwarmQa {
     const owed = new Set(fixes.map((q) => q.devAgentId).filter((id): id is string => !!id));
     for (const rec of waiting('queued', 'qa')) {
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
-      const tester = pickTester(free, rec.devAgentId, owed, othersCan, now - rec.updatedAt);
+      const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
+      const tester = pickTester(preferCli(free, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
       if (!tester) continue;
       if (!this.health.admit('qa')) return false;
       void this.runQa(tester, repo, rec);
@@ -208,6 +210,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     this.lastUsage = key;
     this.broadcast({ type: 'usage', usage });
     if (usage.state !== was) {
+      this.emitCeo(); // the CEO's chat is held under the limit, or free again
       const text = usage.state === 'normal' ? "Claude's usage is back to normal after pacing or a pause" : `Claude's usage is ${usageLabel(usage, Date.now())}`;
       this.followup({ kind: 'usage', key: 'usage', label: `usage ${usage.state}`, text: `${text}. Check whether team sizes and what is queued still fit.` });
     }
@@ -250,6 +253,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const now = Date.now();
     if (recordMerges(this.state.ops, repo.id, pulls, now) + recordChecks(this.state.ops, repo.id, pulls, now) > 0) this.save();
     void this.spend.ledger.merges(mergedPulls(repo.id, pulls, now));
+    this.lab.pulls(repo.id, pulls);
   }
 
   /** Every floor as mission control sees it now. */
@@ -307,13 +311,15 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected schedule() {
     this.tickUsage();
     this.progressTick();
-    if (this.officeUpdateTick()) return; // draining for the office's own update
-    this.applyTeamChanges(); // before handing out work, so agents on their way out get none
-    if (this.limited()) return;
-    // Management first: the CEO's jobs are short and shape everyone else's work.
-    this.maybeHeartbeat();
-    this.maybeFollowup();
-    this.startCeoWork();
+    const draining = this.officeUpdateTick(); // draining for the office's own update: only the CEO's chat starts
+    if (!draining) this.applyTeamChanges(); // before handing out work, so agents on their way out get none
+    if (!draining && !this.limited()) {
+      this.maybeHeartbeat();
+      this.maybeFollowup();
+    }
+    // Management first: the CEO's jobs are short and shape everyone else's work, and the manager's chat never waits.
+    this.startCeoWork(draining);
+    if (draining || this.limited()) return;
     const repos = this.state.repos.filter((r) => {
       const rt = this.repoRt.get(r.id);
       return rt && rt.lastSync != null && rt.cloneStatus !== 'error';

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { changedParts, charterOf, charterText, CHARTER_PROMPT_MAX, cleanCharter, OBJECTIVES_MAX, OUTCOME_MAX, FOCUS_MAX } from '../../../shared/charter';
-import type { Charter, CharterProposal, RepoView } from '../../../shared/types';
+import type { Charter, CharterProposal } from '../../../shared/charter';
+import type { RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import './charter.css';
 

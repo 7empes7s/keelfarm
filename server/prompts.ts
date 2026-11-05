@@ -3,8 +3,8 @@
 // task decides which one (build an issue, test a pull request, fix one), and they carry the office's workflow and
 // safety rules.
 
-import { charterOf, emptyCharter, renderCharter } from '../shared/charter.ts';
-import type { AgentPromptView, CharterParts } from '../shared/types.ts';
+import { charterOf, emptyCharter, renderCharter, type CharterParts } from '../shared/charter.ts';
+import type { AgentPromptView } from '../shared/types.ts';
 
 export interface PromptAgent {
   name: string;

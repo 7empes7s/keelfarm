@@ -1,9 +1,11 @@
 import { useStore } from './store';
 import type { PongResult } from '../../shared/pong';
+import type { Charter } from '../../shared/charter';
 import type { AgentStyle } from '../../shared/looks';
-import type { AgentCli, AgentPromptView, Charter, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
+import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { HealthView } from '../../shared/health';
@@ -95,7 +97,7 @@ export const api = {
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
   closeIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/close`),
-  planFloor: (repoId: string, mission?: string) => call('POST', `${r(repoId)}/plan`, { mission }),
+  planFloor: (repoId: string, mission?: string, research = false) => call('POST', `${r(repoId)}/plan`, { mission, research }),
   onboardFloor: (repoId: string) => call('POST', `${r(repoId)}/onboard`),
   setCharter: (repoId: string, charter: Charter) => call<RepoView>('PUT', `${r(repoId)}/charter`, { charter }),
   /** Approve the CEO's proposal (edited: as the manager changed it) or dismiss it. */
@@ -149,6 +151,8 @@ export const api = {
   ceoReview: () => call('POST', '/api/ceo/review'),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   artifact: (messageId: number, artifactId: string) => call<{ markdown: string }>('GET', `/api/messages/${messageId}/artifacts/${encodeURIComponent(artifactId)}`),
+  /** A chat file ref's text (the viewer shows its own error, so no toast). */
+  refFile: (messageId: number, index: number) => call<RefFileView>('GET', `/api/messages/${messageId}/refs/${index}/file`, undefined, false),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */
   pongResult: (repoId: string, result: PongResult) => call('POST', `${r(repoId)}/pong`, result),
   /** Decides a team change: a hire with the manager's changes to the new agent, if any. */
@@ -163,6 +167,8 @@ export const api = {
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   costs: (days: number, repo?: string) => call<CostsView>('GET', `/api/costs?days=${days}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`),
+  defineExperiment: (input: ExperimentInput) => call<Experiment>('POST', '/api/experiments', input),
+  experimentAction: (id: string, action: 'start' | 'stop' | 'promote' | 'delete', variant?: string | null) => call<Experiment | null>('POST', `/api/experiments/${encodeURIComponent(id)}`, { action, variant }),
   journalEvents: (from: number, to: number, seek: boolean) => call<JournalChunk>('GET', `/api/journal/events?from=${Math.floor(from)}&to=${Math.ceil(to)}${seek ? '&seek=1' : ''}`),
   journalSample: () => call<{ day: string }>('POST', '/api/journal/sample'),
   /** Saves (or with empty fields removes) a chat app's webhook. No toast: the settings show why it was refused. */

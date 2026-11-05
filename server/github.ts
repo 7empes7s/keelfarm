@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CommandError, gh, ghJson } from './exec.ts';
 import type { GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
+import type { SurvivalSignals } from '../shared/experiments.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
 
@@ -64,6 +65,22 @@ export async function listIssues(fullName: string): Promise<IssueInfo[]> {
   return raw
     .map((i) => ({ number: i.number, title: i.title, body: i.body ?? '', url: i.url, labels: i.labels.map((l) => l.name), createdAt: i.createdAt }))
     .sort((a, b) => a.number - b.number);
+}
+
+/** The default branch's commits (up to 100) and the issues filed (up to 200) since `since`, for the lab's survival check. */
+export async function survivalSignals(fullName: string, since: number): Promise<SurvivalSignals> {
+  const iso = new Date(since).toISOString();
+  const [commits, issues] = await Promise.all([
+    ghJson<{ commit: { message: string; committer: { date: string } | null } }[]>(['api', `repos/${fullName}/commits?since=${iso}&per_page=100`], SYNC_READ),
+    ghJson<{ number: number; title: string; body: string; labels: { name: string }[]; createdAt: string }[]>(
+      ['issue', 'list', '-R', fullName, '--state', 'all', '--search', `created:>=${iso.slice(0, 10)}`, '--limit', '200', '--json', 'number,title,body,labels,createdAt'],
+      SYNC_READ,
+    ),
+  ]);
+  return {
+    commits: commits.map((c) => ({ at: Date.parse(c.commit.committer?.date ?? '') || 0, message: c.commit.message ?? '' })),
+    issues: issues.map((i) => ({ number: i.number, at: Date.parse(i.createdAt) || 0, title: i.title, body: i.body ?? '', labels: i.labels.map((l) => l.name) })),
+  };
 }
 
 interface RawPull {

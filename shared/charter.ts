@@ -3,7 +3,27 @@
 // CEO wrote, the compact rendering every build, fix and QA prompt starts with (capped, and byte-identical between
 // calls so prompt caching keeps it cheap), the Markdown export, objective tags on issues and the drift view.
 
-import type { Charter, CharterChange, CharterObjective, CharterParts, CharterProposal, CharterView, DriftGroup, IssueInfo, PullInfo } from './types.ts';
+import type { IssueInfo, PullInfo } from './types.ts';
+
+/** One objective in a floor's charter (#48): issues name it by id ("Objective: O2"); measure: how we know it's met. */
+interface CharterObjective { id: string; outcome: string; measure: string }
+
+/** A floor's charter besides its mission. standards: must-always rules (quality bars, safety, style, "never" lists); focus: the milestone or 1-3 objectives worked on now. */
+export interface CharterParts { objectives: CharterObjective[]; standards: string[]; nonGoals: string[]; focus: string }
+
+export interface Charter extends CharterParts { mission: string }
+
+/** A charter the CEO drafted (propose_charter; by: the CEO's name): nothing changes until the manager approves it. */
+export interface CharterProposal { at: number; by: string; reason: string; charter: Charter }
+
+/** One change in a charter's history: who changed which parts (e.g. ['mission', 'standards']). */
+export interface CharterChange { at: number; by: string; parts: string[]; note: string }
+
+/** The drift view: merged PRs of the last 7 days under the objective their issue named; objective null: none. */
+export interface DriftGroup { objective: string | null; outcome: string; prs: { number: number; title: string }[] }
+
+/** history: newest first. */
+export interface CharterView extends CharterParts { proposal: CharterProposal | null; history: CharterChange[]; drift: DriftGroup[] }
 
 /** The most characters of charter in a prompt: the rendering is cut there, and the editor warns above it. */
 export const CHARTER_PROMPT_MAX = 1500;

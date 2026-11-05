@@ -24,10 +24,12 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
+import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
+import { researchBrief } from './demoResearch.ts';
 import { demoCharter } from './demoCharters.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -840,6 +842,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       return demoPrDiff(pr, patch);
     },
     readWorktree: async (r) => demoReadWorktree(r),
+    hasRepoFile: (fullName, rel) => demoRepoFile(fullName, rel) !== null,
+    readRepoFile: async (fullName, _branch, rel) => demoRepoFile(fullName, rel) ?? Promise.reject(new Error(`${rel} isn't on the default branch.`)),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
@@ -912,6 +916,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
     quickPicks: async () => DEMO_PICKS,
     toolInventory: async (projects) => demoTooling(projects),
+    survivalSignals: demoSurvival,
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,
@@ -922,6 +927,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
+    seedLab: sampleLab,
     demoCharter,
     simulateUsage: demoUsage,
     demoDoctor: {
@@ -1178,7 +1184,27 @@ export interface DemoFloor {
   team: { size: number; max: number; free: number; pendingHires: number; pendingLetGos: number };
   capacity: { issuesReadyToStart: number; prsAwaitingQa: number };
   backlog: { number: number; title: string; inProgress: boolean }[];
-  pullRequests: unknown[];
+  pullRequests: { number: number }[];
+  agents?: { name: string }[];
+}
+
+/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
+export function demoRefsLine(floors: readonly DemoFloor[]): string {
+  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
+  if (!f) return '';
+  const who = f.agents?.[0]?.name;
+  const pr = f.pullRequests[0]?.number;
+  const issue = f.backlog[0]?.number;
+  return [
+    `Around the office: floor ${f.floor}`,
+    who && `@${who} (watch @${who}/terminal)`,
+    issue && `#${issue} is next`,
+    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
+    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
+    `and main runs at preview: floor ${f.floor}.`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 interface DemoStatus {
@@ -1331,6 +1357,16 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const team = grow ? ` ${await scale(s, f, grow)}` : '';
       return `I turned the brief into three issues on floor ${floor}. #${n} sets up the skeleton; the other two say "Depends on #${n}", so nobody starts them early.${team}`;
     },
+    // Research: look outward and inward, then bring options with sources, filing nothing (server/research.ts).
+    async research(topic: string, floor: number | null) {
+      const s = await status();
+      const f = s.floors.find((x) => x.floor === floor) ?? s.floors[0];
+      await step([{ kind: 'tool', tool: 'WebSearch', text: `⏺ Web Search("${short(topic, 60)} best practices")` }, { kind: 'result', text: '  ⎿ Did 1 search' }]);
+      await step([{ kind: 'tool', tool: 'WebFetch', text: '⏺ Fetch(https://developer.mozilla.org/en-US/docs/Web)' }, { kind: 'result', text: '  ⎿ Received 48.2KB' }]);
+      if (f) await read(`${f.repo}/README.md`, 40);
+      await think('Three distinct ways to do it. Facts and guesses kept apart.');
+      return researchBrief(topic, f ? `floor ${f.floor} (\`${f.repo.split('/').pop()}\`)` : 'your floors');
+    },
     async review() {
       const s = await status();
       await think('Checking each floor for work waiting on free agents, and agents waiting on work.');
@@ -1454,6 +1490,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         '```',
         '',
         `> I'm the demo CEO, so I can't act on "${short(text)}", but the real one would. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview).`,
+        '',
+        demoRefsLine(s.floors),
         ...(next
           ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
           : []),
@@ -1466,6 +1504,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
+    : prompt.startsWith('Research for the manager:')
+      ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
     : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)

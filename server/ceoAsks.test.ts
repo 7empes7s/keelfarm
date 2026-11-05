@@ -69,7 +69,7 @@ describe("the CEO's plan and the charter (#48)", () => {
     expect(plan).toContain('end each issue with a line "Objective: O<n>"');
     expect(plan).toMatch(/non-goal or serves no objective: file nothing for it; ask the manager/);
     const system = ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: 'notes.md', sessionLimit: 0, maxAgents: 10, scaling: 'approve' });
-    expect(system).toContain('A request that is a non-goal or serves no objective: ask the manager before filing it.');
+    expect(system).toContain('ask the manager before filing a non-goal. Change charters only with propose_charter.');
   });
 
   it('asks onboarding to draft a charter only when the floor has none', () => {
