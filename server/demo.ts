@@ -877,10 +877,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     },
     // Each agent's machine has a clone of its own, so no other desk ever holds its branch.
     machines: {
-      deskDir: (machine, fullName) => `/demo/machines/${machine}/work/${fullName}`,
+      deskDir: (machine, fullName) => path.join(HOME_DIR, 'machines', machine, 'work', fullName),
       prepareDesk: async (machine, fullName) => {
         await new Promise((r) => setTimeout(r, 900));
-        const dir = `/demo/machines/${machine}/work/${fullName}`;
+        const dir = path.join(HOME_DIR, 'machines', machine, 'work', fullName);
         deskRepo.set(dir, fullName);
         return dir;
       },

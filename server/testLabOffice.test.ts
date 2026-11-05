@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { SessionOptions } from './agentRunner.ts';
+import { HOME_DIR } from './config.ts';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
 
@@ -31,6 +32,7 @@ describe('a demo office with the test lab', () => {
   it("gives builders the lab's tools and no browser of their own, and the fake lab answers", async () => {
     const { swarm, opts } = await firstSession(true);
     expect(opts.browserTesting).toBe(false);
+    expect(opts.cwd.startsWith(HOME_DIR)).toBe(true); // the demo writes only inside SWARM_HOME
     expect(opts.systemAppend).toMatch(/lab_screenshot and lab_browser_check/);
     const report = await opts.office!.call('lab_screenshot', { url: 'http://localhost:5678/', viewports: [390, 1280] });
     expect(report).toMatch(/^2 screenshots/);
