@@ -731,6 +731,27 @@ input.inline:focus {
   text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
   pointer-events: none;
 }
+/* The split screen's first-time hints on touch screens (#83): the top half looks, the bottom half walks. */
+.touch-zone-hint {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 6px 14px;
+  border: 2px dashed rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.touch-zone-look {
+  top: 25%;
+}
+.touch-zone-move {
+  top: 75%;
+}
 /* The camera's HUD (CameraHud.tsx): the overview button on the floor card, the views' toolbars and the follow banner. */
 .cam-btn {
   flex: none;
