@@ -29,6 +29,8 @@ import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
 import type { UsageWarning } from './pacing.ts';
 import { realResources, type ResourceProbe } from './health.ts';
+import type { LabRunner } from './testLab.ts';
+import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -126,6 +128,8 @@ export interface Backend {
   previews: PreviewBackend;
   /** Memory, swap and load, and what agents' processes use (server/health.ts). */
   resources: ResourceProbe;
+  /** The test lab's shared browser and heavy commands (#56). */
+  testLab: LabRunner;
   /** The running office's own folder and its launcher, for the office's self-update. */
   office: OfficeHost;
   /** Text to speech for the manager's phone (ElevenLabs). */
@@ -203,6 +207,7 @@ export interface DemoDoctor {
 export const realBackend: Backend = {
   demo: false,
   resources: realResources,
+  testLab: createLabRunner(),
   user: github.currentUser,
   listMyRepos: github.listMyRepos,
   repoMeta: github.repoMeta,

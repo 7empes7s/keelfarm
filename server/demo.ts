@@ -34,6 +34,7 @@ import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
+import { demoLabRunner, withLab } from './demoTestLab.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -877,10 +878,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     },
     // Each agent's machine has a clone of its own, so no other desk ever holds its branch.
     machines: {
-      deskDir: (machine, fullName) => `/demo/machines/${machine}/work/${fullName}`,
+      deskDir: (machine, fullName) => path.join(HOME_DIR, 'machines', machine, 'work', fullName),
       prepareDesk: async (machine, fullName) => {
         await new Promise((r) => setTimeout(r, 900));
-        const dir = `/demo/machines/${machine}/work/${fullName}`;
+        const dir = path.join(HOME_DIR, 'machines', machine, 'work', fullName);
         deskRepo.set(dir, fullName);
         return dir;
       },
@@ -916,7 +917,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
       // connectors and plugins unless the session is lean.
       if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
-      return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
+      return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withLab(opts, c), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
     sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
     terminals: true,
@@ -929,6 +930,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     toolInventory: async (projects) => demoTooling(projects),
     survivalSignals: demoSurvival,
     previews: demoPreviews,
+    testLab: demoLabRunner(),
     office: demoOffice,
     voice: demoVoice,
     weather: demoWeather,

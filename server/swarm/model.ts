@@ -60,6 +60,7 @@ export interface PersistedRepo {
   summary: string;
   qaBrief: string;
   playbook: string;
+  labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   addedAt: number;

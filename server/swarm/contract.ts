@@ -92,6 +92,11 @@ export abstract class SwarmContract {
   protected abstract floorRepo(...a: Parameters<Swarm['floorRepo']>): ReturnType<Swarm['floorRepo']>;
   protected abstract officeTools(...a: Parameters<Swarm['officeTools']>): ReturnType<Swarm['officeTools']>;
 
+  // sessions.ts
+  protected abstract closeTestLab(...a: Parameters<Swarm['closeTestLab']>): ReturnType<Swarm['closeTestLab']>;
+  protected abstract labSessions(...a: Parameters<Swarm['labSessions']>): ReturnType<Swarm['labSessions']>;
+  protected abstract labView(...a: Parameters<Swarm['labView']>): ReturnType<Swarm['labView']>;
+
   // swarm.ts
   protected abstract finishRestart(...a: Parameters<Swarm['finishRestart']>): ReturnType<Swarm['finishRestart']>;
   protected abstract message(...a: Parameters<Swarm['message']>): ReturnType<Swarm['message']>;

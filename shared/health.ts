@@ -2,8 +2,8 @@
 // health strip in the manager's console and pocket mode. The server's side (readings, admission, stops and retries) is
 // server/health.ts.
 
-/** What a session is for: each kind has its own memory estimate. */
-export type SessionKind = 'build' | 'fix' | 'qa' | 'preview' | 'ceo' | 'consult';
+/** What a session is for: each kind has its own memory estimate. The test lab's (#56): a browser job, a heavy command. */
+export type SessionKind = 'build' | 'fix' | 'qa' | 'preview' | 'ceo' | 'consult' | 'labBrowser' | 'labRun';
 
 export interface MemorySettings {
   headroomMb: number; // kept free for the system: new work waits rather than eat into it
@@ -12,7 +12,7 @@ export interface MemorySettings {
 }
 
 /** Before any session has been measured. */
-export const DEFAULT_ESTIMATES: Record<SessionKind, number> = { build: 1536, fix: 1536, qa: 1536, preview: 512, ceo: 512, consult: 1024 };
+export const DEFAULT_ESTIMATES: Record<SessionKind, number> = { build: 1536, fix: 1536, qa: 1536, preview: 512, ceo: 512, consult: 1024, labBrowser: 512, labRun: 1536 };
 export const DEFAULT_MEMORY: MemorySettings = { headroomMb: 1536, sessionMaxMb: 4096, estimates: {} };
 
 const KINDS = Object.keys(DEFAULT_ESTIMATES) as SessionKind[];

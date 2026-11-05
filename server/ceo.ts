@@ -150,7 +150,7 @@ export function qaReportText(
 export interface OfficeHandlers extends WaitHandlers {
   companyStatus(): string;
   agentDetail(a: { agent_id: string }): string;
-  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }): string;
+  setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
   configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
@@ -267,6 +267,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
           .describe(
             `Extra environment variables for the preview; {port} and {tmp} are replaced in the values. Replaces the whole set. At most ${PREVIEW_ENV_MAX_CHARS} characters in all, each variable counted as KEY=value plus 2: only what the app needs to run.`,
           ),
+        lab_commands: z.array(z.string().min(1).max(200)).max(20).optional().describe('lab_run commands beyond the defaults (npm test/build/typecheck/lint, playwright and vitest specs), e.g. "tools/check.sh" or "npm run e2e <args>". Replaces the set; [] clears it.'),
       },
       (a) => run(() => h.setFloorProfile(a)),
     ),
