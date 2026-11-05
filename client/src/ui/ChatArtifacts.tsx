@@ -72,7 +72,7 @@ async function share(title: string, markdown: string) {
   }
 }
 
-function Sheet({ label, onClose, className, children }: { label: string; onClose: () => void; className?: string; children: ReactNode }) {
+export function Sheet({ label, onClose, className, children }: { label: string; onClose: () => void; className?: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useDialogFocus(ref);

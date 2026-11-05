@@ -4,6 +4,7 @@
 import { api } from '../api';
 import { useStore } from '../store';
 import { nextDelivery, type OutgoingMessage } from '../../../shared/chat';
+import type { FileRef } from '../../../shared/files';
 
 let seq = 0;
 
@@ -12,7 +13,7 @@ const update = (key: number, ev: 'failed' | 'retry') =>
 
 async function post(o: OutgoingMessage) {
   try {
-    await api.messageCeo(o.text, o.replyTo);
+    await api.messageCeo(o.text, o.replyTo, o.files?.map((f) => f.id));
     // Usually the office's copy came first over the websocket and settled it; if not, it's in the office now.
     useStore.setState((s) => ({ chatOutbox: s.chatOutbox.filter((x) => x.key !== o.key) }));
   } catch {
@@ -20,11 +21,11 @@ async function post(o: OutgoingMessage) {
   }
 }
 
-/** Sends a message to the CEO, as a reply to message `replyTo` if given. */
-export function sendToCeo(text: string, replyTo?: number) {
+/** Sends a message to the CEO, as a reply to message `replyTo` if given, with files already uploaded. */
+export function sendToCeo(text: string, replyTo?: number, files: FileRef[] = []) {
   const body = text.trim();
-  if (!body) return;
-  const o: OutgoingMessage = { key: ++seq, text: body, ...(replyTo !== undefined && { replyTo }), at: Date.now(), delivery: 'sending' };
+  if (!body && !files.length) return;
+  const o: OutgoingMessage = { key: ++seq, text: body, ...(replyTo !== undefined && { replyTo }), ...(files.length && { files }), at: Date.now(), delivery: 'sending' };
   useStore.setState((s) => ({ chatOutbox: [...s.chatOutbox, o] }));
   void post(o);
 }

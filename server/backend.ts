@@ -7,6 +7,8 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { readPicks } from './picks.ts';
+import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
@@ -94,6 +96,8 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
+  quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
@@ -212,6 +216,7 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
   previews: realPreviews,
   office: realOffice,

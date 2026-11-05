@@ -73,6 +73,11 @@ import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/th
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
 import { forwardText, nextDelivery } from '../shared/chat.ts';
 import { makeArtifacts, parseCeoMessage, snapshotMessages } from '../shared/chatParts.ts';
+import { SWEEP_MS } from '../shared/files.ts';
+import type { QuickPicks } from '../shared/used.ts';
+import { CeoFiles, quickPicks } from './ceoFiles.ts';
+import { parseReport, QA_SCHEMA, type QaReport } from './qaReport.ts';
+import { FileStore } from './files.ts';
 import type {
   AgentActivity,
   AgentCli,
@@ -101,7 +106,6 @@ import type {
   PrPreviewView,
   ProjectFolderView,
   PullInfo,
-  QaCheck,
   QaView,
   RepoView,
   ServerDelivery,
@@ -284,15 +288,6 @@ interface Restart {
   counts: RestartCounts;
 }
 
-interface QaReport {
-  verdict: 'pass' | 'fail';
-  summary: string;
-  checks: QaCheck[];
-  commands: { command: string; result: string }[];
-  screenshots: string[];
-  fixInstructions?: string;
-}
-
 // ---------- flavour ----------
 
 const FLOOR_COLORS = ['#ff8a5b', '#4fb3e8', '#8fd14f', '#c77dff', '#ffc93c', '#ff6fb5', '#2ec4b6', '#f25f5c'];
@@ -329,6 +324,8 @@ const CEO_EFFORT: EffortLevel = 'xhigh';
 const CEO_NAME = 'Morgan';
 // The CEO's own folder: its notes about the company live here. Repos are read through their clones.
 const CEO_DIR = path.join(HOME_DIR, 'ceo');
+// The chat's files (server/files.ts): outside every worktree, so agents only ever read them.
+const FILES_DIR = path.join(HOME_DIR, 'files');
 const DEFAULT_PROJECTS_DIR = defaultProjectsDir(path.resolve(import.meta.dirname, '..'));
 const MAX_ISSUES_PER_JOB = 12;
 const KEEP_MESSAGES = 200;
@@ -416,75 +413,6 @@ const TERMINALS_DIR = path.join(HOME_DIR, 'terminals');
 const terminalFile = (agentId: string) => path.join(TERMINALS_DIR, `${agentId}.ansi`);
 const TERMINAL_SAVE_MS = 20_000;
 
-// ---------- QA report ----------
-
-const QA_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['verdict', 'summary', 'checks', 'commands', 'screenshots'],
-  properties: {
-    verdict: { type: 'string', enum: ['pass', 'fail'], description: 'pass only if the change works and meets the issue requirements' },
-    summary: { type: 'string', description: 'Two to four sentences for the pull request comment.' },
-    checks: {
-      type: 'array',
-      description: 'Each acceptance criterion, test run or scenario you verified.',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name', 'result', 'details'],
-        properties: {
-          name: { type: 'string' },
-          result: { type: 'string', enum: ['pass', 'fail', 'skip'] },
-          details: { type: 'string', description: 'What you did and what you observed.' },
-        },
-      },
-    },
-    commands: {
-      type: 'array',
-      description: 'Test suites, linters, builds and other commands you ran.',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['command', 'result'],
-        properties: { command: { type: 'string' }, result: { type: 'string', description: 'e.g. "42 passed, 0 failed"' } },
-      },
-    },
-    screenshots: {
-      type: 'array',
-      description: 'One short caption per screenshot you took with browser_take_screenshot, in the order you took them.',
-      items: { type: 'string' },
-    },
-    fixInstructions: { type: 'string', description: 'When the verdict is fail: precise, actionable instructions for the developer.' },
-  },
-};
-
-function parseReport(result: SessionResult): QaReport | null {
-  let raw: unknown = result.structured;
-  if (!raw && result.text) {
-    // Terminal agents end their last message with the report, usually in a ```json block.
-    const fenced = [...result.text.matchAll(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/g)].map((m) => m[1]).reverse();
-    for (const json of [...fenced, result.text.match(/\{[\s\S]*\}/)?.[0]].filter((j): j is string => !!j)) {
-      try {
-        raw = JSON.parse(json);
-        break;
-      } catch {
-        raw = null;
-      }
-    }
-  }
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Partial<QaReport>;
-  if (r.verdict !== 'pass' && r.verdict !== 'fail') return null;
-  return {
-    verdict: r.verdict,
-    summary: String(r.summary ?? ''),
-    checks: Array.isArray(r.checks) ? r.checks.map((c) => ({ name: String(c.name ?? ''), result: c.result === 'fail' ? 'fail' : c.result === 'skip' ? 'skip' : 'pass', details: String(c.details ?? '') })) : [],
-    commands: Array.isArray(r.commands) ? r.commands.map((c) => ({ command: String(c.command ?? ''), result: String(c.result ?? '') })) : [],
-    screenshots: Array.isArray(r.screenshots) ? r.screenshots.map(String) : [],
-    fixInstructions: r.fixInstructions ? String(r.fixInstructions) : undefined,
-  };
-}
-
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
@@ -558,6 +486,8 @@ export class Swarm {
       rerunChecks: (a) => this.triageRerunChecks(a),
       closePull: (a) => this.triageClosePull(a),
       escalate: (a) => this.triageEscalate(a),
+      attachFile: (a) => this.ceoFiles.attach(a),
+      keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: (a) => this.setMandate(a),
       agentLog: (a) => this.agentLog(a),
       qaReport: (a) => this.qaReport(a),
@@ -566,6 +496,10 @@ export class Swarm {
       sendTelegram: (a) => this.sendTelegram(a),
     });
   }
+  /** The chat's files store; every change goes out to the tabs as a `files` event. */
+  readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));
+  private ceoFiles = new CeoFiles(this.files, CEO_DIR);
+
   private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   private ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
   private messageSeq = 1;
@@ -713,6 +647,8 @@ export class Swarm {
   // ---------- lifecycle ----------
 
   async init() {
+    await this.files.load().catch((err) => console.warn('files: could not load the store', err));
+    void this.files.sweep();
     try {
       const raw = await fs.readFile(STATE_FILE, 'utf8');
       const loaded = JSON.parse(raw) as Partial<Persisted>;
@@ -932,6 +868,7 @@ export class Swarm {
     void this.sweepMachines();
     setInterval(() => this.greet(), 60_000);
     setTimeout(() => this.greet(), 5000);
+    setInterval(() => void this.files.sweep(), SWEEP_MS).unref();
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
     setInterval(() => this.watchdogTick(), WATCHDOG_MS);
@@ -1198,6 +1135,7 @@ export class Swarm {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
+      files: this.files.list(),
       tooling: this.tooling,
     };
   }
@@ -3028,6 +2966,7 @@ export class Swarm {
       issue.labels.length ? `Labels: ${issue.labels.join(', ')}` : '',
       '',
       issue.body?.trim() || '(The issue has no description.)',
+      this.ceoFiles.issueLines(issue.body),
       note ? `\nNote from the manager: ${note}` : '',
     ]
       .filter(Boolean)
@@ -3479,6 +3418,7 @@ export class Swarm {
       'PR description:',
       pr.body.trim() || '(empty)',
       issue ? `\nLinked issue: ${issue.title}\n${issue.body.trim() || '(no description)'}` : '',
+      this.ceoFiles.issueLines(`${pr.body}\n${issue?.body ?? ''}`),
     ]
       .filter((l) => l !== '')
       .join('\n');
@@ -4511,7 +4451,10 @@ export class Swarm {
         ...how,
       },
       {
-        log: (entries) => this.appendLog(a, entries),
+        log: (entries) => {
+          this.appendLog(a, entries);
+          this.ceoFiles.record(entries);
+        },
         tool: (name) => {
           if (rt.currentTool === name) return;
           rt.currentTool = name;
@@ -4526,7 +4469,7 @@ export class Swarm {
         // A follow-up that found nothing to do stays off the manager's phone.
         turn: (text) => {
           if (job.kind === 'followup' && quietReply(text)) return;
-          this.postMessage('ceo', text);
+          this.postCeoReply(text);
           this.markDelivery('all', 'replied');
         },
         limited: (at) => this.pauseForLimit(at),
@@ -4549,6 +4492,8 @@ export class Swarm {
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
     if (job?.kind === 'triage') this.endTriage(job);
+    if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
+    this.ceoFiles.endJob();
     if (result.interrupted) this.interrupted(a);
     if (a.status === 'stopped') {
       // the manager already logged the stop
@@ -4570,14 +4515,15 @@ export class Swarm {
     setTimeout(() => this.schedule(), 300);
   }
 
-  /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to. Injected into a running session, otherwise the CEO picks it up next. */
-  async messageCeo(text: string, replyTo?: number, via?: 'telegram') {
+  /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to and any files. Injected into a running session, otherwise the CEO picks it up next. */
+  async messageCeo(text: string, replyTo?: number, via?: 'telegram', fileIds: readonly string[] = []) {
     const t = text.trim().slice(0, 4000);
-    if (!t) throw new HttpError(400, 'Empty message');
+    const attachments = this.ceoFiles.managerFiles(fileIds);
+    if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
     const a = this.ceo();
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
-    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }) });
-    const forward = forwardText(t, quoted);
+    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
+    const forward = [forwardText(t, quoted), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const rt = this.agentRt.get(a.id)!;
     if (rt.session) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
@@ -5232,7 +5178,7 @@ export class Swarm {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram'> & { changes?: TeamChange[] } = {}) {
+  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
@@ -5253,10 +5199,20 @@ export class Swarm {
     this.save();
     // Proposals are notified as such (proposeHire, proposeLetGo).
     if (from === 'ceo' && !requestId) {
-      const said = m.text || `📎 ${m.artifacts?.map((a) => a.title).join(', ') ?? ''}`;
+      const said = m.text || `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`;
       this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
     }
     return m;
+  }
+
+  /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
+  private postCeoReply(text: string) {
+    this.postMessage('ceo', text, undefined, this.ceoFiles.takeReply());
+  }
+
+  /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */
+  async ceoPicks(): Promise<QuickPicks> {
+    return quickPicks(await this.backend.quickPicks().catch(() => ({ skills: [], apps: [] })), this.state.messages);
   }
 
   /** CEO messages go to Telegram too: the manager's last message came from there, or Settings mirrors the whole chat. */

@@ -6,6 +6,7 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
+import { DEMO_PICKS, demoMakeFiles, sentFiles, wantsFile } from './demoFiles.ts';
 import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
@@ -934,6 +935,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     releaseClis: async () => undefined,
     detectClis: async () =>
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
+    quickPicks: async () => DEMO_PICKS,
     toolInventory: async (projects) => demoTooling(projects),
     previews: demoPreviews,
     office: demoOffice,
@@ -1384,6 +1386,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
+      if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
