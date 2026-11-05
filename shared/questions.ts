@@ -1,9 +1,27 @@
-import type { AgentQuestion } from './types.ts';
 import type { FollowupEvent } from './followups.ts';
 
 // Agents' questions (#36): a session that stopped to ask something (AskUserQuestion, or a turn that ends with a
 // question or "BLOCKED: …") waits while the CEO answers it in a follow-up, or asks the manager when only they can
 // decide. Pure: the swarm keeps the list, the phone shows the manager's one-tap options.
+
+/** An agent waiting on an answer (#36, shared/questions.ts): the CEO answers it, or asks the manager. */
+export interface AgentQuestion {
+  id: string;
+  agentId: string;
+  agentName: string;
+  repoId: string;
+  floor: number;
+  issue: number | null;
+  pr: number | null;
+  text: string;
+  options: string[]; // at most 4 one-tap answers
+  at: number;
+  to: 'ceo' | 'manager'; // who answers it now
+  recommendation: string | null; // the CEO's pick, once it asked the manager
+  messageId: number | null; // the chat message that asks the manager
+  notifiedAt: number | null; // when the manager was notified
+  renotified: boolean;
+}
 
 /** What an agent asked, before the office files it. */
 export interface Asked {

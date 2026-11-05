@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentQuestion, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
@@ -36,7 +36,7 @@ export type Overlay =
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
-  | { kind: 'app'; repoId: string; pr?: number | null } // pr: open the viewer on that channel (null: main)
+  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean } // pr: open the viewer on that channel (null: main); qa: with its QA panel
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string } // card: an OpsAlarm id, or 'usage', to open at
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string }
@@ -118,6 +118,7 @@ interface State {
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
   latest: Record<string, LogLine>; // everyone's latest line worth listing, for the workers list
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
+  peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
   qa: Record<string, QaView>; // `${repoId}#${prNumber}`
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
@@ -125,7 +126,6 @@ interface State {
   ceo: CeoInfo;
   messages: PhoneMessage[];
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
-  questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   version?: string; // the cubefarm version the server runs
@@ -155,6 +155,7 @@ interface State {
   floor: number; // 0 = lobby
   travel: { to: number; phase: 'closing' | 'opening' } | null;
   overlay: Overlay | null;
+  back: Overlay | null; // what closing the overlay goes back to: the phone's chat after a chip's jump (ui/RefChips.tsx)
   focus: Focus | null;
   locked: boolean;
   started: boolean;
@@ -262,6 +263,7 @@ export const useStore = create<State>((set, get) => ({
   logs: {},
   latest: {},
   workersOpen: false,
+  peek: null,
   screens: {},
   qa: {},
   prPreviews: {},
@@ -269,7 +271,6 @@ export const useStore = create<State>((set, get) => ({
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
   files: [],
-  questions: [],
   chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
@@ -302,6 +303,7 @@ export const useStore = create<State>((set, get) => ({
   floor: loadView()?.floor ?? 0,
   travel: null,
   overlay: null,
+  back: null,
   focus: null,
   locked: false,
   started: false,
@@ -350,7 +352,6 @@ export const useStore = create<State>((set, get) => ({
           ceo: d.ceo,
           messages: d.messages,
           files: d.files ?? [],
-          questions: d.questions ?? [],
           phoneReadAt: d.phoneReadAt,
           version: d.version,
           officeCommit: d.officeCommit,
@@ -523,9 +524,6 @@ export const useStore = create<State>((set, get) => ({
       case 'files':
         set({ files: ev.files });
         break;
-      case 'questions':
-        set({ questions: ev.questions });
-        break;
       case 'delivery':
         set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
         break;
@@ -619,8 +617,11 @@ export const useStore = create<State>((set, get) => ({
       get().pushToast('info', '▶ That shows the live office: press Esc to leave the replay first.');
       return;
     }
+    // Closing a panel a chat chip opened goes back to the chat.
+    const back = get().back;
+    if (!overlay && back) overlay = back;
     // Opening any panel drops whatever you're carrying, so nothing is left floating behind it.
-    set(overlay ? { overlay, focus: null, held: null, chargeAt: null } : { overlay });
+    set(overlay ? { overlay, back: null, focus: null, held: null, chargeAt: null } : { overlay });
     if (overlay && document.pointerLockElement) document.exitPointerLock();
   },
   setFocus: (focus) => {
@@ -635,10 +636,10 @@ export const useStore = create<State>((set, get) => ({
   start: () => set({ started: true }),
   goToFloor(n) {
     if (n === get().floor || get().travel) {
-      set({ overlay: null });
+      set({ overlay: null, back: null });
       return;
     }
-    set({ overlay: null, held: null, chargeAt: null, travel: { to: n, phase: 'closing' } });
+    set({ overlay: null, back: null, held: null, chargeAt: null, travel: { to: n, phase: 'closing' } });
   },
   finishTravel(phase) {
     const t = get().travel;

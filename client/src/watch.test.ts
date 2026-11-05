@@ -9,4 +9,10 @@ describe('currentWatch', () => {
     expect(currentWatch({ floor: 2, overlay: { kind: 'manager', tab: 'ceo' }, workersOpen: false }).agents).toEqual([CEO_ID]);
     expect(currentWatch({ floor: 2, overlay: { kind: 'kanban', repoId: 'r' }, workersOpen: false }).agents).toEqual([]);
   });
+
+  it("adds the agent a chat chip's preview shows", () => {
+    expect(currentWatch({ floor: 0, overlay: { kind: 'phone' }, workersOpen: false, peek: 'ada' }).agents).toEqual(['ada']);
+    expect(currentWatch({ floor: 0, overlay: { kind: 'terminal', agentId: 'ken' }, workersOpen: false, peek: 'ada' }).agents).toEqual(['ken', 'ada']);
+    expect(currentWatch({ floor: 0, overlay: { kind: 'terminal', agentId: 'ada' }, workersOpen: false, peek: 'ada' }).agents).toEqual(['ada']);
+  });
 });

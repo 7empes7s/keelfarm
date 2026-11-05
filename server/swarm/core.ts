@@ -437,7 +437,6 @@ export abstract class SwarmCore extends SwarmContract {
       progress: this.progressView(),
       pong: this.state.pong,
       files: this.files.list(),
-      questions: this.state.questions,
       tooling: this.tooling,
       experiments: this.lab.view(),
     };
@@ -613,10 +612,10 @@ export abstract class SwarmCore extends SwarmContract {
     return this.state.agents.filter((a) => a.host === 'box' && a.status === 'working' && !!a.boxCli);
   }
 
-  /** True when the manager has set a session limit and every slot is taken. */
+  /** True when the manager has set a session limit and every slot is taken. The CEO never takes a slot (#46). */
   protected slotsFull() {
     const limit = this.state.settings.sessionLimit;
-    return limit > 0 && this.running() >= limit;
+    return limit > 0 && this.state.agents.filter((a) => a.role !== 'ceo' && BUSY.includes(a.status)).length >= limit;
   }
 
   protected agentSlug(a: PersistedAgent) {
@@ -683,7 +682,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected setQuestions(list: AgentQuestion[]) {
     const touched = new Set([...this.state.questions, ...list].map((q) => q.agentId));
     this.state.questions = list.filter((q) => this.state.agents.some((a) => a.id === q.agentId));
-    this.broadcast({ type: 'questions', questions: this.state.questions });
+    this.emitCeo();
     for (const a of this.state.agents) if (touched.has(a.id)) this.emitAgent(a);
     this.save();
   }

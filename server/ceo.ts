@@ -46,9 +46,9 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
 }
 
-const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 0, onboard: 1, plan: 1, research: 1, followup: 2, review: 2 };
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
 
-/** The CEO's next job among those `ready`: replies to the manager and triage first, reviews and follow-ups last. */
+/** The CEO's next job among those `ready`: replies to the manager first (#46: a preempted job never comes before the reply), then triage, reviews and follow-ups last. */
 export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
   return [...q].sort((x, y) => JOB_RANK[x.kind] - JOB_RANK[y.kind]).find(ready);
 }
@@ -560,12 +560,13 @@ export function ceoSystemPrompt(o: {
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
-    "- Agents' questions: answer with answer_agent what the repo, the issue, the floor's brief and playbook and your notes settle; ask_manager_choice only for choices that aren't clear (product calls, credentials, what only the manager knows), always with a recommendation.",
+    "- Agents' questions: answer_agent what the issue, repo and notes settle; ask_manager_choice, with your pick, only for unclear choices.",
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
   ].join('\n');
 }
 

@@ -10,6 +10,8 @@ import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
+import type { AgentQuestion } from './questions.ts';
+export type { AgentQuestion }; // its home is shared/questions.ts
 import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
 
@@ -659,27 +661,27 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
 }
 
-/** An agent waiting on an answer (#36, shared/questions.ts): the CEO answers it, or asks the manager. */
-export interface AgentQuestion {
-  id: string;
-  agentId: string;
-  agentName: string;
-  repoId: string;
-  floor: number;
-  issue: number | null;
-  pr: number | null;
+/** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
+export type ChatRef = { start: number; end: number } & (
+  | { kind: 'agent'; agentId: string; terminal?: true }
+  | { kind: 'floor'; repoId: string }
+  | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
+  | { kind: 'file'; repoId: string; path: string; line?: number }
+  | { kind: 'qa'; repoId: string; number: number }
+  | { kind: 'preview'; repoId: string; number?: number } // a PR's in the PR theatre, else the floor's app
+);
+
+/** GET /api/messages/:id/refs/:index/file: a file ref's text from the floor's default branch, size-capped. */
+export interface RefFileView {
+  path: string;
+  line: number | null;
   text: string;
-  options: string[]; // at most 4 one-tap answers
-  at: number;
-  to: 'ceo' | 'manager'; // who answers it now
-  recommendation: string | null; // the CEO's pick, once it asked the manager
-  messageId: number | null; // the chat message that asks the manager
-  notifiedAt: number | null; // when the manager was notified
-  renotified: boolean;
+  url: string; // the file on GitHub, at the line
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -698,6 +700,14 @@ export interface CeoInfo {
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
+  held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
+  questions?: AgentQuestion[]; // agents waiting on an answer, oldest first (shared/questions.ts; absent in old journals)
+}
+
+/** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */
+export interface CeoHeld {
+  reason: 'usage';
+  until: number;
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */
@@ -745,7 +755,6 @@ export interface WorldSnapshot {
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
-  questions: AgentQuestion[]; // agents waiting on an answer, oldest first
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
   experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
 }
@@ -782,7 +791,6 @@ export type ServerEvent =
   | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
-  | { type: 'questions'; questions: AgentQuestion[] } // agents' open questions, all of them
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
@@ -819,7 +827,6 @@ export interface Watch {
   /** The workers list is showing: the latest line of every agent. */
   workers: boolean;
 }
-
 
 // ---------- presence: everyone viewing the office appears in it as a visitor ----------
 

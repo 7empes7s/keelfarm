@@ -212,6 +212,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     this.lastUsage = key;
     this.broadcast({ type: 'usage', usage });
     if (usage.state !== was) {
+      this.emitCeo(); // the CEO's chat is held under the limit, or free again
       const text = usage.state === 'normal' ? "Claude's usage is back to normal after pacing or a pause" : `Claude's usage is ${usageLabel(usage, Date.now())}`;
       this.followup({ kind: 'usage', key: 'usage', label: `usage ${usage.state}`, text: `${text}. Check whether team sizes and what is queued still fit.` });
     }
@@ -312,13 +313,15 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected schedule() {
     this.tickUsage();
     this.progressTick();
-    if (this.officeUpdateTick()) return; // draining for the office's own update
-    this.applyTeamChanges(); // before handing out work, so agents on their way out get none
-    if (this.limited()) return;
-    // Management first: the CEO's jobs are short and shape everyone else's work.
-    this.maybeHeartbeat();
-    this.maybeFollowup();
-    this.startCeoWork();
+    const draining = this.officeUpdateTick(); // draining for the office's own update: only the CEO's chat starts
+    if (!draining) this.applyTeamChanges(); // before handing out work, so agents on their way out get none
+    if (!draining && !this.limited()) {
+      this.maybeHeartbeat();
+      this.maybeFollowup();
+    }
+    // Management first: the CEO's jobs are short and shape everyone else's work, and the manager's chat never waits.
+    this.startCeoWork(draining);
+    if (draining || this.limited()) return;
     const repos = this.state.repos.filter((r) => {
       const rt = this.repoRt.get(r.id);
       return rt && rt.lastSync != null && rt.cloneStatus !== 'error';

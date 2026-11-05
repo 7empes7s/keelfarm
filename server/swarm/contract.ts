@@ -66,7 +66,6 @@ export abstract class SwarmContract {
   protected abstract mirrorsToTelegram(...a: Parameters<Swarm['mirrorsToTelegram']>): ReturnType<Swarm['mirrorsToTelegram']>;
   protected abstract notifyMerge(...a: Parameters<Swarm['notifyMerge']>): ReturnType<Swarm['notifyMerge']>;
   protected abstract notifyNeedsHuman(...a: Parameters<Swarm['notifyNeedsHuman']>): ReturnType<Swarm['notifyNeedsHuman']>;
-  protected abstract ask(...a: Parameters<Swarm['ask']>): ReturnType<Swarm['ask']>;
   protected abstract postMessage(...a: Parameters<Swarm['postMessage']>): ReturnType<Swarm['postMessage']>;
   protected abstract startCeoWork(...a: Parameters<Swarm['startCeoWork']>): ReturnType<Swarm['startCeoWork']>;
   protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
@@ -88,7 +87,10 @@ export abstract class SwarmContract {
 
   // ceoTools.ts
   protected abstract agentDoing(...a: Parameters<Swarm['agentDoing']>): ReturnType<Swarm['agentDoing']>;
+  protected abstract ask(...a: Parameters<Swarm['ask']>): ReturnType<Swarm['ask']>;
   protected abstract floorRepo(...a: Parameters<Swarm['floorRepo']>): ReturnType<Swarm['floorRepo']>;
+  protected abstract managerAnswer(...a: Parameters<Swarm['managerAnswer']>): ReturnType<Swarm['managerAnswer']>;
+  protected abstract notifyQuestion(...a: Parameters<Swarm['notifyQuestion']>): ReturnType<Swarm['notifyQuestion']>;
   protected abstract officeTools(...a: Parameters<Swarm['officeTools']>): ReturnType<Swarm['officeTools']>;
 
   // swarm.ts

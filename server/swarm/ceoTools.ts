@@ -1,4 +1,5 @@
 // The CEO's office tools (ceo.ts createOfficeTools): what each one reads and does.
+import crypto from 'node:crypto';
 import {
   checkCloseIssue,
   createOfficeTools,
@@ -18,7 +19,7 @@ import { nameList } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
-import { questionOf } from '../../shared/questions.ts';
+import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, type AgentQuestion } from '../../shared/questions.ts';
 import { readingsLabel } from '../../shared/usage.ts';
 import { usageLabel } from '../pacing.ts';
 import { floorSpend } from '../costLedger.ts';
@@ -29,7 +30,8 @@ import { redact as scrub } from '../../shared/journal.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import type { HireRequestView } from '../../shared/types.ts';
-import { type PersistedAgent, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
+import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
+import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
 
 export abstract class SwarmCeoTools extends SwarmTeam {
@@ -327,12 +329,72 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
   }
 
+  /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */
+  protected refuseWhileUpdating() {
+    if (this.officeUpdate.drainingSince !== null || this.officeUpdate.sent) throw new Error('The office is updating itself: no agent session starts until it restarts. Tell the manager, and try again after the update.');
+  }
+
   protected restartAgent(x: { agent_id: string }) {
     const a = checkRestart(this.agentByRef(x.agent_id));
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
-    if (resumes) this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    if (resumes) {
+      this.refuseWhileUpdating();
+      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+    }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
+  }
+
+  // ---------- agents' questions (#36, shared/questions.ts) ----------
+
+  /** A session that ended asking something: the agent waits, and a follow-up wakes the CEO (else the manager is asked). */
+  protected ask(a: PersistedAgent, repo: PersistedRepo, text: string): boolean {
+    const asked = questionFromTurn(scrub(text, this.secrets())); // it goes to the CEO, the chat and notifications
+    if (!asked) return false;
+    const q = newQuestion(`q-${crypto.randomUUID().slice(0, 8)}`, asked, { agentId: a.id, agentName: a.name, repoId: repo.id, floor: repo.floor, issue: a.issueNumber, pr: a.prNumber }, Date.now());
+    this.setQuestions([...this.state.questions.filter((x) => x.agentId !== a.id), q]);
+    this.appendLog(a, [{ kind: 'system', text: `❓ Waiting for an answer: ${clip(q.text, 160)}` }]);
+    if (!this.followup(questionEvent(q, this.floorName(repo)))) this.askManager(q, { question: q.text, options: q.options, recommendation: '' }, 'office');
+    return true;
+  }
+
+  /** The question goes to the manager: a chat message with one-tap options, and a notification. */
+  protected askManager(q: AgentQuestion, x: { question: string; options: string[]; recommendation: string }, from: 'ceo' | 'office') {
+    const mask = (t: string) => scrub(t, this.secrets());
+    const e = escalated(q, { question: mask(x.question), options: x.options.map(mask), recommendation: mask(x.recommendation) }, Date.now());
+    const work = e.issue ? `, #${e.issue}` : e.pr ? `, PR #${e.pr}` : '';
+    const m = this.postMessage(from, `❓ ${e.agentName} asks (floor ${e.floor}${work}): ${e.text}${e.recommendation ? `\nMy pick: ${e.recommendation}` : ''}`, undefined, { question: e.id });
+    this.setQuestions(this.state.questions.map((y) => (y.id === q.id ? { ...e, messageId: m.id } : y)));
+    this.notifyQuestion(e, false);
+  }
+
+  protected notifyQuestion(q: AgentQuestion, again: boolean) {
+    const title = `${q.agentName} ${again ? 'still waits for your answer' : 'asks you'}`;
+    this.notifier.notify('question', title, `${q.text}${q.recommendation ? ` (CEO's pick: ${q.recommendation})` : ''}`, `${q.agentName} (floor ${q.floor}): ${clip(q.text, 120)}`);
+  }
+
+  /** An answer typed into the agent's session as their next message; the question closes first. */
+  protected async answerQuestion(q: AgentQuestion, text: string, who: string) {
+    this.setQuestions(this.state.questions.filter((x) => x.id !== q.id));
+    try {
+      await this.message(q.agentId, answerPrompt(q, text, who), false, who);
+    } catch (err) {
+      if (this.state.agents.some((a) => a.id === q.agentId)) this.setQuestions([...this.state.questions, q]);
+      throw err;
+    }
+  }
+
+  /** The manager answered a question (tapped an option, or replied to its message): to the agent, and the CEO hears. */
+  protected async managerAnswer(q: AgentQuestion, text: string, replyTo: number, via?: 'telegram') {
+    const m = this.postMessage('manager', text, undefined, { replyTo, delivery: 'read', ...(via && { telegram: 'in' as const }) });
+    try {
+      await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager');
+      this.ceoTold.push(`The manager answered ${q.agentName}'s question "${clip(q.text, 120)}": ${clip(text, 200)}`);
+      this.postMessage('office', `↪ Sent to ${q.agentName}: they carry on with your answer.`);
+    } catch (err) {
+      this.postMessage('office', `That answer didn't reach ${q.agentName}: ${(err as Error).message}`);
+    }
+    return { id: m.id };
   }
 
   protected async answerAgent(x: { agent_id: string; text: string }) {
@@ -357,6 +419,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const a = this.agentByRef(x.agent_id);
     if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
     const running = !!this.agentRt.get(a.id)?.session;
+    if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }
