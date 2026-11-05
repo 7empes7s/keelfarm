@@ -585,7 +585,7 @@
     "types:shared/types.ts:PushDeviceView"
   ],
   "sizes": {
-    "client/src/styles.css": 6034,
+    "client/src/styles.css": 6018,
     "client/src/ui/ManagerConsole.tsx": 882,
     "client/src/ui/Phone.tsx": 1167,
     "client/src/ui/sfx.ts": 838,
