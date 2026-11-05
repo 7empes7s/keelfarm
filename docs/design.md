@@ -22,7 +22,7 @@ that voice but behaves like a good phone app, because the manager mostly uses th
    the panel itself). Colour is for state and the floor's accent, not decoration.
 
 How it fits the 3D office: the same ink, paper, accent orange and Fredoka; the floor's colour as the left edge of its
-card; the same chunky buttons. Dark mode keeps the orange header and turns the body into dusk (`.ds-auto-dark`).
+card; the same chunky buttons. Light only: every screen keeps the light tokens whatever the device's setting.
 
 Rejected:
 - **A component library (Radix, MUI, shadcn).** Its look fights the cartoon and adds weight to pocket mode's bundle;
@@ -32,8 +32,10 @@ Rejected:
 - **Swipe-to-delete rows.** Hidden, easy to trigger by accident while scrolling, and not keyboard friendly.
 - **Undo toasts instead of confirmations.** Most of our dangerous actions (letting an agent go, closing on GitHub)
   can't be undone by the office, so a toast would promise what it can't keep.
-- **Dark pastels for every state colour.** A dark tint per chip, badge and banner is a token pair each; instead the
-  coloured fills stay light in the dark and keep light-mode text on them (design.css's fill list).
+- **A dark mode that follows the device.** We had one (#30 / #67): the manager never asked for it,
+  and screens built for the light look lost contrast in it (light chips, old one-off colours). Removed in #80:
+  `color-scheme: light only` on the root and in index.html, so iOS and Chrome don't darken fields, scrollbars or pages
+  either. High contrast is the one other palette.
 
 ## Tokens (`client/src/design.css`, on `:root`)
 
@@ -49,17 +51,16 @@ Rejected:
 | Layers | `--ds-z-hud` 10 · `-panel` 30 · `-menu` 50 · `-confirm` 60 · `-toast` 70 |
 | Safe areas | `--ds-safe-top/right/bottom/left` |
 
-Light values equal the office's old colours, so moving a rule onto tokens changes nothing in light mode. Dark values
-apply inside `.ds-auto-dark` when the device prefers dark (never over High contrast). Per-floor colour stays
-`var(--accent)` set on the element. A light or coloured fill (the accent, a state chip, a badge) keeps its colour in the
-dark: add its class to design.css's fill list so what's on it keeps light-mode text, or use `--ds-on-color`.
+The values equal the office's old colours, so moving a rule onto tokens changes nothing. There is no dark palette: don't
+add `prefers-color-scheme: dark` rules. Per-floor colour stays `var(--accent)` set on the element; text on a coloured
+fill uses `--ds-on-color`.
 
 `client/src/designTokens.test.ts` is the ratchet: colour literals in the old stylesheets may only go down.
 
 ## Components
 
-- **Screens**: every Panel, the phone, pocket mode, the start screen and the HUD carry `.ds-screen .ds-auto-dark`:
-  every button, field, switch and disclosure row inside is at least 44 px, and dark mode follows the device.
+- **Screens**: every Panel, the phone, pocket mode, the start screen and the HUD carry `.ds-screen`:
+  every button, field, switch and disclosure row inside is at least 44 px.
 - **Panel / sheet** (`ui/Panel.tsx`): title (truncates), ✕ 44 px, body scrolls. Full-screen sheet ≤ 600 px.
   `className="ds-console"` adds the console's tabs, cards and headings.
 - **Buttons**: `.btn` (primary actions: `.btn-good`; destructive confirm: `.btn-bad`; quiet: `.btn-ghost`) and
@@ -91,7 +92,7 @@ Don't:
 - Put a destructive button next to a safe one, or anywhere one tap does it.
 - Use `width`/`max-width` inline styles for layout; let grids and flex wrap.
 - Nest a fixed-height scroller inside a scrolling panel (except a data matrix that needs both axes).
-- Hard-code colours (`#fff`, `rgba(31, 29, 43, …)`) in new rules; they break dark mode.
+- Hard-code colours (`#fff`, `rgba(31, 29, 43, …)`) in new rules; they break High contrast.
 - Animate without the motion tokens.
 
 ## Checking a screen

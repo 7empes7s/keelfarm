@@ -247,6 +247,23 @@ async function menuProblems(page: Page, root: Locator): Promise<string[]> {
   return out;
 }
 
+/** The light palette with the device in dark mode (#80): the screen's tokens and its own background stay light. */
+async function lightProblems(root: Locator): Promise<string[]> {
+  return root.evaluate((el) => {
+    const out: string[] = [];
+    const screen = el.closest('.ds-screen') ?? el.querySelector('.ds-screen') ?? el;
+    const css = getComputedStyle(screen);
+    const want: Record<string, string> = { '--ds-surface': '#fffdf6', '--ds-surface-sunken': '#f6f3ea', '--ds-text': '#1f1d2b' };
+    for (const [token, value] of Object.entries(want)) if (css.getPropertyValue(token).trim().toLowerCase() !== value) out.push(`${token} is ${css.getPropertyValue(token).trim()}, not the light ${value}`);
+    if (css.colorScheme.includes('dark')) out.push(`color-scheme is ${css.colorScheme}`);
+    // .pocket is the sunken surface, a panel and the start card the paper; the phone's frame is dark plastic, its screen paper
+    const surface = el.matches('.pocket') ? 'rgb(246, 243, 234)' : 'rgb(255, 253, 246)';
+    const card = el.matches('.pocket, .panel') ? el : el.querySelector('.panel, .start-card, .phone-screen');
+    if (card && getComputedStyle(card).backgroundColor !== surface) out.push(`.${card.className.split(' ')[0]}'s background is ${getComputedStyle(card).backgroundColor}, not the light ${surface}`);
+    return out;
+  });
+}
+
 async function axeProblems(page: Page, root: Locator): Promise<string[]> {
   await root.evaluate((el) => el.setAttribute('data-layout-under-test', ''));
   const { violations } = await new AxeBuilder({ page }).include('[data-layout-under-test]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
@@ -257,34 +274,32 @@ async function axeProblems(page: Page, root: Locator): Promise<string[]> {
 
 for (const screen of SCREENS) {
   for (const width of screen.widths) {
-    for (const scheme of ['light', 'dark'] as const) {
-      test(`${screen.name} at ${width}px, ${scheme}`, async ({ page }) => {
-        test.setTimeout(300_000); // every tab of a screen, on software rendering
-        await page.setViewportSize({ width, height: width < 800 ? 844 : 800 });
-        await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-        // Toasts come and go on their own (the demo's agents keep finishing work): they aren't part of the layout.
-        await page.addInitScript(() =>
-          document.addEventListener('DOMContentLoaded', () => document.head.append(Object.assign(document.createElement('style'), { textContent: '.toasts { display: none !important; }' }))),
-        );
-        const root = await screen.open(page);
-        await expect(root).toBeVisible();
-        const problems: string[] = [];
-        for (const tab of screen.tabs.length ? screen.tabs : ['']) {
-          if (typeof tab !== 'string') await tab.go(root);
-          else if (tab) {
-            const t = root.getByRole('tab', { name: new RegExp(tab) });
-            await t.scrollIntoViewIfNeeded();
-            await t.click();
-            await expect(t).toHaveAttribute('aria-selected', 'true');
-          }
-          if (tab) await page.waitForTimeout(300); // lazy tabs and settled layout
-          const name = typeof tab === 'string' ? tab : tab.name;
-          const at = name ? `${name}: ` : '';
-          for (const p of [...(await layoutProblems(root)), ...(await menuProblems(page, root)), ...(await axeProblems(page, root))]) problems.push(at + p);
+    test(`${screen.name} at ${width}px`, async ({ page }) => {
+      test.setTimeout(300_000); // every tab of a screen, on software rendering
+      await page.setViewportSize({ width, height: width < 800 ? 844 : 800 });
+      await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' }); // the device's dark mode changes nothing (#80)
+      // Toasts come and go on their own (the demo's agents keep finishing work): they aren't part of the layout.
+      await page.addInitScript(() =>
+        document.addEventListener('DOMContentLoaded', () => document.head.append(Object.assign(document.createElement('style'), { textContent: '.toasts { display: none !important; }' }))),
+      );
+      const root = await screen.open(page);
+      await expect(root).toBeVisible();
+      const problems: string[] = [];
+      for (const tab of screen.tabs.length ? screen.tabs : ['']) {
+        if (typeof tab !== 'string') await tab.go(root);
+        else if (tab) {
+          const t = root.getByRole('tab', { name: new RegExp(tab) });
+          await t.scrollIntoViewIfNeeded();
+          await t.click();
+          await expect(t).toHaveAttribute('aria-selected', 'true');
         }
-        expect(problems).toEqual([]);
-      });
-    }
+        if (tab) await page.waitForTimeout(300); // lazy tabs and settled layout
+        const name = typeof tab === 'string' ? tab : tab.name;
+        const at = name ? `${name}: ` : '';
+        for (const p of [...(await lightProblems(root)), ...(await layoutProblems(root)), ...(await menuProblems(page, root)), ...(await axeProblems(page, root))]) problems.push(at + p);
+      }
+      expect(problems).toEqual([]);
+    });
   }
 }
 
