@@ -6,6 +6,7 @@ import { useStore } from '../store';
 import { NOTIFY_EVENTS } from '../../../shared/notify';
 import type { NotifyChannel, NotifySettings as Notify, NotifyWebhook } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 import { showTestNote } from '../notifications';
 import { currentPush, disablePush, pushSupport } from '../pwa';
 import { ChannelHealth, NotifyGuide, NtfyQuick } from './NotifyGuide';
@@ -97,17 +98,21 @@ function WebhookRow({ hook, notify, save }: { hook: (typeof WEBHOOKS)[number]; n
           <button className="btn btn-small btn-ghost" onClick={() => setEditing(true)}>
             Replace
           </button>
-          <button
-            className="btn btn-small btn-ghost"
-            disabled={busy}
-            onClick={() =>
-              void confirmDialog({ tone: 'danger', title: `Remove the ${hook.label} settings?`, body: 'They are deleted from the office. Nothing more is sent there until you add them again.', confirm: 'Remove' }).then((ok) => {
-                if (ok) void store({});
-              })
-            }
-          >
-            Remove
-          </button>
+          <Menu
+            label={`More for ${hook.label}`}
+            title={hook.label}
+            items={[
+              {
+                label: 'Remove these settings…',
+                danger: true,
+                disabled: busy,
+                onSelect: () =>
+                  void confirmDialog({ tone: 'danger', title: `Remove the ${hook.label} settings?`, body: 'They are deleted from the office. Nothing more is sent there until you add them again.', confirm: 'Remove' }).then((ok) => {
+                    if (ok) void store({});
+                  }),
+              },
+            ]}
+          />
           <TestResult result={test.result} ok={test.ok} />
         </div>
       ) : (

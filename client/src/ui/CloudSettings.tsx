@@ -7,6 +7,7 @@ import { useStore } from '../store';
 import { BOX_SIZE_INFO, BOX_SIZES, MAX_BOX_LIMIT } from '../../../shared/cloud';
 import type { CloudCredentialView, CloudSettings as Cloud, CloudView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/cloud.md';
 
@@ -61,17 +62,21 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
         <button className="btn btn-small btn-ghost" onClick={() => setEditing(true)}>
           Replace
         </button>
-        <button
-          className="btn btn-small btn-ghost"
-          disabled={busy}
-          onClick={() =>
-            void confirmDialog({ tone: 'danger', title: `Remove the ${label}?`, body: "It's deleted from the office. Cloud agents that need it can't sign in until you add it again.", confirm: 'Remove' }).then((ok) => {
-              if (ok) void store('');
-            })
-          }
-        >
-          Remove
-        </button>
+        <Menu
+          label={`More for the ${label}`}
+          title={label}
+          items={[
+            {
+              label: 'Remove…',
+              danger: true,
+              disabled: busy,
+              onSelect: () =>
+                void confirmDialog({ tone: 'danger', title: `Remove the ${label}?`, body: "It's deleted from the office. Cloud agents that need it can't sign in until you add it again.", confirm: 'Remove' }).then((ok) => {
+                  if (ok) void store('');
+                }),
+            },
+          ]}
+        />
       </div>
     );
   }
@@ -155,19 +160,24 @@ function Boxes({ cloud }: { cloud: CloudView }) {
         {busy ? 'Checking…' : 'Test'}
       </button>
       {!!b?.orphans && (
-        <button
-          className="btn btn-small btn-ghost"
-          onClick={() =>
-            void confirmDialog({
-              tone: 'danger',
-              title: `Delete ${b.orphans} orphaned Box${b.orphans === 1 ? '' : 'es'}?`,
-              body: "Boxes of this office whose agent is gone. They're deleted for good in your Upstash account.",
-              confirm: 'Delete',
-            }).then((ok) => ok && void api.deleteCloudOrphans())
-          }
-        >
-          Delete {b.orphans} orphan{b.orphans === 1 ? '' : 's'}
-        </button>
+        <Menu
+          label="More for Boxes"
+          title="Upstash Boxes"
+          items={[
+            {
+              label: `Delete ${b.orphans} orphan${b.orphans === 1 ? '' : 's'}…`,
+              hint: 'Boxes whose agent is gone',
+              danger: true,
+              onSelect: () =>
+                void confirmDialog({
+                  tone: 'danger',
+                  title: `Delete ${b.orphans} orphaned Box${b.orphans === 1 ? '' : 'es'}?`,
+                  body: "Boxes of this office whose agent is gone. They're deleted for good in your Upstash account.",
+                  confirm: 'Delete',
+                }).then((ok) => ok && void api.deleteCloudOrphans()),
+            },
+          ]}
+        />
       )}
       {note && (
         <span className={`small ${note.startsWith('✓') ? 'notify-ok' : 'term-error'}`} role="status">

@@ -8,6 +8,7 @@ import { SAMPLE_LINE } from '../../../shared/speech';
 import { cacheLabel, clampKeepDays, KEEP_DAYS_MAX, KEEP_DAYS_MIN } from '../../../shared/voiceClips';
 import { CEO_ID, type ListenProvider, type ListenSettings, type VoiceOption, type VoiceProvider, type VoiceSettings as Voice } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 import { micCaps, setHandsFree } from './mic';
 import { cantListen } from './micText';
 import { getAudioPrefs } from './sfx';
@@ -83,19 +84,21 @@ function ElevenLabsKey() {
         <button className="btn btn-small" onClick={() => setEditing(true)}>
           Replace
         </button>
-        <button
-          className="btn btn-small btn-ghost"
-          disabled={busy}
-          onClick={() =>
-            void confirmDialog({ tone: 'danger', title: 'Remove the ElevenLabs key?', body: 'It is deleted from this PC. Messages are not read aloud by ElevenLabs until you add a key again.', confirm: 'Remove' }).then(
-              (ok) => {
-                if (ok) void save('');
-              },
-            )
-          }
-        >
-          Remove
-        </button>
+        <Menu
+          label="More for the ElevenLabs key"
+          title="ElevenLabs key"
+          items={[
+            {
+              label: 'Remove the key…',
+              danger: true,
+              disabled: busy,
+              onSelect: () =>
+                void confirmDialog({ tone: 'danger', title: 'Remove the ElevenLabs key?', body: 'It is deleted from this PC. Messages are not read aloud by ElevenLabs until you add a key again.', confirm: 'Remove' }).then((ok) => {
+                  if (ok) void save('');
+                }),
+            },
+          ]}
+        />
       </div>
     );
   return (
@@ -301,9 +304,7 @@ function SavedClips({ voice, save }: { voice: Voice; save: Save }) {
           💾 {cacheLabel(cache.clips, cache.bytes)}
           <span className="muted"> · the newest 20 CEO messages always keep theirs, so ▶ on the phone replays them for free</span>
         </span>
-        <button className="btn btn-small btn-ghost" disabled={busy || cache.clips === 0} onClick={() => void clear()}>
-          Clear saved clips
-        </button>
+        <Menu label="More for saved clips" title="Saved voice clips" items={[{ label: 'Clear saved clips…', danger: true, disabled: busy || cache.clips === 0, onSelect: () => void clear() }]} />
       </div>
     </div>
   );

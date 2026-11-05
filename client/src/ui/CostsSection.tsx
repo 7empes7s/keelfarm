@@ -120,7 +120,7 @@ export function CostsSection() {
             </div>
             <KindSplit split={view.total} />
           </div>
-          <div className="ops-table-wrap">
+          <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="Cost per floor">
             <table className="ops-table costs-table">
               <thead>
                 <tr>
@@ -147,7 +147,7 @@ export function CostsSection() {
             </table>
           </div>
           {view.byDay.length > 1 && (
-            <div className="ops-table-wrap">
+            <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="Cost per day">
               <table className="ops-table costs-table">
                 <thead>
                   <tr>

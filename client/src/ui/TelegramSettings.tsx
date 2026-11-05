@@ -5,6 +5,7 @@ import { useEffect, useId, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { confirmDialog } from './Confirm';
+import { Menu } from './Menu';
 import { BOTFATHER, telegramSteps } from './telegramSteps';
 
 const MARK = { done: '✓', todo: '!', waiting: '·' } as const;
@@ -179,11 +180,7 @@ export function TelegramSettings() {
           )}
         </>
       )}
-      {view.set && (
-        <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => void remove()}>
-          Remove Telegram
-        </button>
-      )}
+      {view.set && <Menu label="More for Telegram" title="Telegram" items={[{ label: 'Remove Telegram…', danger: true, disabled: busy, onSelect: () => void remove() }]} />}
       {error && (
         <div id={errorId} className="term-error small" role="alert">
           {error}
