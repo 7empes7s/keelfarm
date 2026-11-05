@@ -4,7 +4,34 @@ import { describe, expect, it } from 'vitest';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
 import { FLOOR_SEATS, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
-import { ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, jobLabel, planDependencies, plannedSize, scalePlan, type CeoJob, type DependsRequest, type TeamNow } from './ceo.ts';
+import { MANDATE_MAX_CHARS } from '../shared/followups.ts';
+import {
+  AGENT_LOG_DEFAULT,
+  AGENT_LOG_MAX,
+  AGENT_LOG_MAX_CHARS,
+  agentLogText,
+  ceoJobPrompt,
+  ceoSystemPrompt,
+  checkCloseIssue,
+  createOfficeTools,
+  floorCapacity,
+  IssueCap,
+  issueRefusal,
+  jobLabel,
+  LOG_LINE_MAX,
+  NOT_ASKED,
+  planDependencies,
+  plannedSize,
+  PR_DIFF_MAX_CHARS,
+  PR_FILES_MAX,
+  prDiffText,
+  qaReportText,
+  scalePlan,
+  tailLines,
+  type CeoJob,
+  type DependsRequest,
+  type TeamNow,
+} from './ceo.ts';
 
 describe('seats', () => {
   it('match the desks the client draws', () => {
@@ -94,6 +121,7 @@ describe('jobLabel', () => {
 describe('office tools', () => {
   const connect = async () => {
     const floors: unknown[] = [];
+    const calls: [string, unknown][] = [];
     const configured: unknown[] = [];
     const office = createOfficeTools({
       companyStatus: () => '{}',
@@ -109,13 +137,18 @@ describe('office tools', () => {
       rerunChecks: async () => '',
       closePull: async () => '',
       escalate: async () => '',
+      setMandate: (a) => (calls.push(['set_mandate', a]), 'recorded'),
+      agentLog: (a) => (calls.push(['agent_log', a]), 'log'),
+      qaReport: (a) => (calls.push(['qa_report', a]), 'report'),
+      worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
+      prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
     const client = new Client({ name: 'test', version: '1.0.0' });
     await client.connect(clientSide);
-    return { client, floors, configured };
+    return { client, floors, calls, configured };
   };
 
   it('lists every tool the CEO relies on', async () => {
@@ -123,12 +156,15 @@ describe('office tools', () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       'agent_detail',
+      'agent_log',
       'close_issue',
       'close_pull',
       'company_status',
       'configure_agent',
       'escalate',
       'file_issue',
+      'pr_diff',
+      'qa_report',
       'rerun_checks',
       'retry_qa',
       'scale_team',
@@ -136,7 +172,27 @@ describe('office tools', () => {
       'send_telegram',
       'set_dependencies',
       'set_floor_profile',
+      'set_mandate',
+      'worktree_file',
     ]);
+  });
+
+  it("checks the new tools' inputs before the office sees them", async () => {
+    const { client, calls } = await connect();
+    const ok = async (name: string, args: Record<string, unknown>) => !(await client.callTool({ name, arguments: args })).isError;
+    expect(await ok('agent_log', { agent_id: 'ada', lines: 1000 })).toBe(true);
+    expect(await ok('agent_log', { agent_id: 'ada', lines: 1001 })).toBe(false);
+    expect(await ok('agent_log', { agent_id: 'ada', lines: 0 })).toBe(false);
+    expect(await ok('worktree_file', { agent_id: 'ada', mode: 'diff_stat' })).toBe(true);
+    expect(await ok('worktree_file', { agent_id: 'ada', mode: 'rm' })).toBe(false);
+    expect(await ok('worktree_file', { agent_id: 'ada', mode: 'file', path: 'x'.repeat(501) })).toBe(false);
+    expect(await ok('qa_report', { floor: 1, pr: 0 })).toBe(false);
+    expect(await ok('pr_diff', { floor: 1, pr: 7, patch: true })).toBe(true);
+    expect(await ok('set_mandate', { text: 'Keep polishing floor 3', floors: [3], expires_in_hours: 48 })).toBe(true);
+    expect(await ok('set_mandate', { text: '' })).toBe(false);
+    expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
+    expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
   });
 
   it("takes an agent's Tools & skills switches as lists of names", async () => {
@@ -399,5 +455,85 @@ describe('IssueCap', () => {
     cap.record('a/b');
     expect(cap.total).toBe(3);
     expect([...cap.repos]).toEqual(['a/b', 'c/d']);
+  });
+});
+
+describe('follow-ups (#27)', () => {
+  const mandate = { id: 'm1', text: 'Keep polishing floor 3 until it is perfected', floors: [3], expiresAt: null, at: 0 };
+  const events = [
+    { id: 'e1', kind: 'merged' as const, key: 'merged:a#13', label: '#13 merged', text: 'PR #13 "Jukebox" merged on floor 3 (o/office).', at: 0 },
+    { id: 'e2', kind: 'merged' as const, key: 'merged:a#14', label: '#14 merged', text: 'PR #14 "Lift" merged on floor 3 (o/office).', at: 1 },
+  ];
+
+  it('file_issue in a follow-up needs a mandate for the floor, and says how to get one', () => {
+    expect(issueRefusal({ kind: 'followup', asked: false, floor: 3, mandate })).toBeNull();
+    const refused = issueRefusal({ kind: 'followup', asked: false, floor: 2, mandate: null });
+    expect(refused).toMatch(/No standing mandate .* floor 2/);
+    expect(refused).toMatch(/final message/);
+    expect(refused).toMatch(/set_mandate/);
+  });
+
+  it('keeps the old rule for every other job', () => {
+    expect(issueRefusal({ kind: 'review', asked: false, floor: 3, mandate })).toBe(NOT_ASKED);
+    expect(issueRefusal({ kind: 'chat', asked: true, floor: 3, mandate: null })).toBeNull();
+    expect(issueRefusal({ kind: 'followup', asked: true, floor: 2, mandate: null })).toBeNull(); // the manager messaged mid-job
+  });
+
+  it("lists the events with their ids and the mandates in the job's prompt", () => {
+    const job: CeoJob = { kind: 'followup', events, at: 0 };
+    const p = ceoJobPrompt(job, null, null, [mandate]);
+    expect(p).toContain('[e1] PR #13');
+    expect(p).toContain('[e2] PR #14');
+    expect(p).toContain('"Keep polishing floor 3 until it is perfected" (floor 3)');
+    expect(p).toContain('"Nothing to do."');
+    expect(ceoJobPrompt(job, null, null, [])).toContain('There are no standing mandates: file no issues.');
+  });
+
+  it("names the latest event in the CEO's presence line", () => {
+    expect(jobLabel({ kind: 'followup', events: events.slice(0, 1), at: 0 }, null)).toBe('Following up on #13 merged');
+    expect(jobLabel({ kind: 'followup', events, at: 0 }, null)).toBe('Following up on #14 merged and 1 more');
+  });
+});
+
+describe('read-only tools: output caps', () => {
+  it('agent_log keeps the last lines, 200 by default and 1000 at most', () => {
+    const lines = Array.from({ length: 1500 }, (_, i) => `line ${i}`);
+    expect(tailLines(lines).lines).toHaveLength(AGENT_LOG_DEFAULT);
+    expect(tailLines(lines).lines.at(-1)).toBe('line 1499');
+    expect(tailLines(lines, 5000).lines).toHaveLength(AGENT_LOG_MAX);
+    expect(tailLines(lines, 3)).toEqual({ lines: ['line 1497', 'line 1498', 'line 1499'], cut: true });
+    expect(tailLines(['a', 'b'], 10)).toEqual({ lines: ['a', 'b'], cut: false });
+  });
+
+  it('agent_log cuts long lines and the whole output', () => {
+    const long = Array.from({ length: 1000 }, () => 'x'.repeat(5000));
+    const out = tailLines(long, 1000);
+    expect(out.lines.every((l) => l.length <= LOG_LINE_MAX)).toBe(true);
+    expect(out.lines.join('\n').length).toBeLessThanOrEqual(AGENT_LOG_MAX_CHARS);
+    expect(out.cut).toBe(true);
+  });
+
+  it('pr_diff lists at most 100 files and cuts the diff', () => {
+    const files = Array.from({ length: 150 }, (_, i) => ({ path: `src/f${i}.ts`, additions: 2, deletions: 1 }));
+    const text = prDiffText({ files, diff: 'd'.repeat(PR_DIFF_MAX_CHARS * 2) });
+    expect(text.split('\n')[0]).toBe('150 files changed, +300 −150');
+    expect(text).toContain(`src/f${PR_FILES_MAX - 1}.ts`);
+    expect(text).not.toContain(`src/f${PR_FILES_MAX}.ts`);
+    expect(text).toContain('… and 50 more');
+    expect(text.length).toBeLessThan(PR_DIFF_MAX_CHARS + 8000);
+    expect(prDiffText({ files: files.slice(0, 1), diff: null })).toBe('1 file changed, +2 −1\n  src/f0.ts +2 −1');
+  });
+
+  it('agent_log and qa_report mask every text they return', () => {
+    const mask = (t: string) => t.replaceAll('sk-secret', '***');
+    const agent = { name: 'Ada', status: 'error', task: 'build', issueNumber: 3, issueTitle: 'Fix', prNumber: null, branch: 'b', startedAt: 0, endedAt: null, turns: 4, costUsd: 1.234, lastError: 'bad key sk-secret' };
+    const log = agentLogText(agent, { floor: 2, doing: null, lines: ['one', 'uses sk-secret'], mask });
+    expect(log).not.toContain('sk-secret');
+    expect(JSON.parse(log.split('\n')[0])).toMatchObject({ name: 'Ada', floor: 2, issue: { number: 3 }, costUsd: 1.23, endedAt: null });
+    expect(log.endsWith('--- the last 2 lines ---\none\nuses ***')).toBe(true);
+    const rec = { prNumber: 7, status: 'fixing' as QaStatus, round: 2, summary: 'leaked sk-secret', checks: [{ name: 'build', result: 'fail', details: 'sk-secret' }], fixInstructions: null, stuckWhy: null, commentUrl: null, shots: [{ caption: 'home', page: '/', mime: 'image/png' }] };
+    const qa = qaReportText(rec, 2, mask, (i) => `shot-${i}.png`);
+    expect(qa).not.toContain('sk-secret');
+    expect(JSON.parse(qa)).toMatchObject({ pr: 7, floor: 2, verdict: 'fail', screenshots: [{ caption: 'home', file: 'shot-0.png' }] });
   });
 });
