@@ -28,6 +28,7 @@ import { SoundListener } from './SoundListener';
 import { Soundscape } from './Soundscape';
 import { useTheme } from './themes/active';
 import { ThemeLayer } from './themes/ThemeLayer';
+import { TouchControls } from './touch/TouchControls';
 import { decorColliders } from './themes/themes';
 import { TypingSounds } from './TypingSounds';
 import { Weather } from './weather/Weather';
@@ -148,6 +149,7 @@ export function Game() {
       <Presence />
       <FieldOfView />
       <CameraRig />
+      <TouchControls />
       <Travel />
       <SoundListener />
       <Soundscape kind={onRoof ? 'roof' : isOffice ? 'office' : 'lobby'} repoId={repoId} />
