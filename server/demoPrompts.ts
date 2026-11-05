@@ -20,3 +20,21 @@ export function demoPrompts(cwd: string): LogEntry[] {
     return a ? [{ kind: 'system' as const, text: a.note }] : [];
   });
 }
+
+/** Now and then a fake builder stops to ask something (#36): a product call for the manager, or one the repo settles. */
+export function demoQuestion(issueNumber: number): string | null {
+  if (issueNumber % 6 === 2) return 'Before I go on: should the new badge be red or blue?\n1. Red\n2. Blue';
+  if (issueNumber % 6 === 4) return 'Should the new tests go next to the code or in a __tests__ folder?\n- Next to the code\n- In a __tests__ folder';
+  return null;
+}
+
+/** The issue an answer resuming a session is about ("Answer from … to your question about #12: …"), or 0. */
+export const demoAnswered = (prompt: string) => Number(prompt.match(/^Answer from .+? to your question about #(\d+): /)?.[1] ?? 0);
+
+/** The demo CEO's call on a question event: the badge colour goes to the manager with a pick; the rest it answers. */
+export function demoCeoAnswer(event: string): { tool: 'ask_manager_choice' | 'answer_agent'; args: Record<string, unknown> } | null {
+  const agent = event.match(/\(([\w-]+)\) on /)?.[1];
+  if (!agent || !/ asks about /.test(event)) return null;
+  if (/red or blue/i.test(event)) return { tool: 'ask_manager_choice', args: { agent_id: agent, question: 'Should the new badge be red or blue?', options: ['Red', 'Blue'], recommendation: 'Blue: it matches the rest of the app.' } };
+  return { tool: 'answer_agent', args: { agent_id: agent, text: 'Next to the code, like the rest of the repo.' } };
+}

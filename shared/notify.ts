@@ -5,6 +5,7 @@ import type { NotifyChannel, NotifyEvent, NotifySettings, NotifyWebhook } from '
 /** In the order the settings list them. */
 export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
   { id: 'needsHuman', label: 'A pull request needs me' },
+  { id: 'question', label: "An agent's question only I can answer" },
   { id: 'ceoMessage', label: 'A message from the CEO' },
   { id: 'hire', label: 'A team change waits for my decision' },
   { id: 'agentError', label: 'Someone is stuck in an error for over 10 minutes' },
@@ -18,7 +19,7 @@ export const NOTIFY_CHANNELS: NotifyChannel[] = ['desktop', 'push', ...NOTIFY_WE
 
 /** Merges are optional: on a busy office they're the noisiest event. */
 export const DEFAULT_NOTIFY: NotifySettings = {
-  events: { needsHuman: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, merge: false },
+  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, merge: false },
   channels: { desktop: true, push: true, ntfy: true, telegram: true },
   officeUrl: '',
   telegramMirror: false,
@@ -61,7 +62,7 @@ export function notifySettings(base: NotifySettings, patch: unknown): NotifySett
 /** The pocket tab a notification about `event` opens. */
 export function noteTab(event: NotifyEvent | 'test'): string {
   if (event === 'needsHuman' || event === 'hire') return 'approvals';
-  if (event === 'ceoMessage') return 'chat';
+  if (event === 'ceoMessage' || event === 'question') return 'chat';
   if (event === 'agentError') return 'team';
   return 'company';
 }

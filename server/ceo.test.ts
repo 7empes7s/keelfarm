@@ -135,6 +135,8 @@ describe('office tools', () => {
       retryQa: async () => '',
       restartAgent: () => '',
       messageAgent: async () => '',
+      answerAgent: async (a) => (calls.push(['answer_agent', a]), 'sent'),
+      askManagerChoice: (a) => (calls.push(['ask_manager_choice', a]), 'asked'),
       sendBack: async () => '',
       rerunChecks: async () => '',
       closePull: async () => '',
@@ -161,6 +163,8 @@ describe('office tools', () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       'agent_detail',
       'agent_log',
+      'answer_agent',
+      'ask_manager_choice',
       'attach_file',
       'close_issue',
       'close_pull',
@@ -201,6 +205,20 @@ describe('office tools', () => {
     expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
     expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
+  });
+
+  it("checks answer_agent and ask_manager_choice: a short answer, 2 to 4 options and a recommendation", async () => {
+    const { client, calls } = await connect();
+    const ok = async (name: string, args: Record<string, unknown>) => !(await client.callTool({ name, arguments: args })).isError;
+    expect(await ok('answer_agent', { agent_id: 'ada', text: 'Next to the code, like the rest of the repo.' })).toBe(true);
+    expect(await ok('answer_agent', { agent_id: 'ada', text: '' })).toBe(false);
+    expect(await ok('answer_agent', { agent_id: 'ada', text: 'x'.repeat(2001) })).toBe(false);
+    const ask = { agent_id: 'ada', question: 'Red or blue badge?', options: ['Red', 'Blue'], recommendation: 'Blue: the brand colour.' };
+    expect(await ok('ask_manager_choice', ask)).toBe(true);
+    expect(await ok('ask_manager_choice', { ...ask, options: ['Red'] })).toBe(false);
+    expect(await ok('ask_manager_choice', { ...ask, options: ['a', 'b', 'c', 'd', 'e'] })).toBe(false);
+    expect(await ok('ask_manager_choice', { ...ask, recommendation: undefined })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['answer_agent', 'ask_manager_choice']);
   });
 
   it("takes an agent's Tools & skills switches as lists of names", async () => {

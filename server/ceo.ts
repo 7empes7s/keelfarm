@@ -136,6 +136,8 @@ export interface OfficeHandlers {
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
+  answerAgent(a: { agent_id: string; text: string }): Promise<string>;
+  askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
   qaReport(a: { floor: number; pr: number }): string;
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
@@ -336,6 +338,23 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.messageAgent(a)),
     ),
     tool(
+      'answer_agent',
+      "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.",
+      { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') },
+      (a) => run(() => h.answerAgent(a)),
+    ),
+    tool(
+      'ask_manager_choice',
+      "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.",
+      {
+        agent_id: z.string(),
+        question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'),
+        options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'),
+        recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence'),
+      },
+      (a) => run(() => h.askManagerChoice(a)),
+    ),
+    tool(
       'qa_report',
       "A pull request's latest QA verdict, report (summary, checks, fix instructions) and screenshots. Screenshots are file paths you can Read to see them. Read-only.",
       { floor: z.number().int(), pr: z.number().int().positive() },
@@ -463,6 +482,7 @@ export function ceoSystemPrompt(o: {
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
+    "- Agents' questions: answer with answer_agent what the repo, the issue, the floor's brief and playbook and your notes settle; ask_manager_choice only for choices that aren't clear (product calls, credentials, what only the manager knows), always with a recommendation.",
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
@@ -470,6 +490,9 @@ export function ceoSystemPrompt(o: {
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
   ].join('\n');
 }
+
+/** What the manager did since the CEO last looked (their answers to agents' questions), after the job's prompt. */
+export const toldCeo = (lines: string[]) => (lines.length ? `\n\nSince you last looked:\n${lines.map((l) => `- ${l}`).join('\n')}` : '');
 
 /** The follow-up's prompt: the events with their ids, the mandates in force, and what the CEO may do. */
 function followupPrompt(events: FollowupEvent[], mandates: CeoMandate[]): string {

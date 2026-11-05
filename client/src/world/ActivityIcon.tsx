@@ -84,7 +84,7 @@ export const ActivityIcon = memo(function ActivityIcon({ agent }: { agent: Agent
   useEffect(() => () => material.dispose(), [material]);
   // What the server says now; the frame loop picks it up at its next check.
   const wanted = useRef<AgentActivity | null>(null);
-  wanted.current = isBusy(agent) ? (agent.activity ?? null) : null;
+  wanted.current = isBusy(agent) || agent.waiting ? (agent.activity ?? null) : null; // a waiting agent's ❓ too
   const name = useRef(agent.name);
   name.current = agent.name;
   const st = useMemo(() => ({ shown: '', next: null as AgentActivity | null, nextKey: '', checked: -1e9, fade: 0, y: 0 }), []);

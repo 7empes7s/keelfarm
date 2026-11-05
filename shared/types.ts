@@ -279,6 +279,7 @@ export interface AgentView {
   screenshotAt: number | null;
   lastError: string | null;
   blocked?: string | null; // waiting on a prompt the office couldn't answer (server/unblock.ts): why
+  waiting?: AgentQuestion['to'] | null; // waiting on an answer to their question (shared/questions.ts): from whom
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
@@ -286,7 +287,7 @@ export interface AgentView {
 }
 
 /** The kinds of work the icon over a busy agent shows (shared/activity.ts maps tools and status to them). */
-export type ActivityKind = 'read' | 'edit' | 'test' | 'build' | 'browse' | 'git' | 'ci' | 'qa' | 'fix' | 'talk' | 'run' | 'blocked';
+export type ActivityKind = 'read' | 'edit' | 'test' | 'build' | 'browse' | 'git' | 'ci' | 'qa' | 'fix' | 'talk' | 'run' | 'blocked' | 'waiting';
 
 /** An agent's current activity: a kind and a short, redacted detail ("store.ts", "npm test"; '' for none). */
 export interface AgentActivity {
@@ -387,7 +388,7 @@ export interface SwarmSettings {
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
-export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
+export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
 
 /** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
 export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
@@ -656,6 +657,26 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
+}
+
+/** An agent waiting on an answer (#36, shared/questions.ts): the CEO answers it, or asks the manager. */
+export interface AgentQuestion {
+  id: string;
+  agentId: string;
+  agentName: string;
+  repoId: string;
+  floor: number;
+  issue: number | null;
+  pr: number | null;
+  text: string;
+  options: string[]; // at most 4 one-tap answers
+  at: number;
+  to: 'ceo' | 'manager'; // who answers it now
+  recommendation: string | null; // the CEO's pick, once it asked the manager
+  messageId: number | null; // the chat message that asks the manager
+  notifiedAt: number | null; // when the manager was notified
+  renotified: boolean;
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -721,6 +742,7 @@ export interface WorldSnapshot {
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
+  questions: AgentQuestion[]; // agents waiting on an answer, oldest first
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
 }
 
@@ -756,6 +778,7 @@ export type ServerEvent =
   | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
+  | { type: 'questions'; questions: AgentQuestion[] } // agents' open questions, all of them
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }

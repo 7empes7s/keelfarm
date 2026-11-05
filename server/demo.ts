@@ -23,7 +23,7 @@ import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
-import { BLOCKED_DEMO, demoPrompts } from './demoPrompts.ts';
+import { BLOCKED_DEMO, demoAnswered, demoCeoAnswer, demoPrompts, demoQuestion } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
@@ -372,7 +372,9 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   const pull = fixPromptPull(opts.prompt);
   const issueMatch = opts.prompt.match(/#(\d+):\s*(.+)/);
   const number = kind === 'issue' ? Number(issueMatch?.[1] ?? 0) : pull.number;
-  const title = (kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up';
+  const answered = kind === 'issue' && demoAnswered(opts.prompt) === number; // an answer to its question: on to the PR
+  const title = (answered ? repos.get(fullName)?.issues.find((x) => x.number === number)?.title : kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up';
+  const question = kind === 'issue' && !answered && !opts.resumeSessionId ? demoQuestion(number) : null; // stops halfway to ask
   const round = Number(opts.prompt.match(/QA round (\d+)/)?.[1] ?? 1);
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
@@ -385,7 +387,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
-  const script = [header, ...body];
+  const script = [header, ...(question ? body.slice(0, 7) : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
 
   const expired = () => {
     if (stopped) return;
@@ -451,6 +453,11 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
       cb.log([{ kind: 'text', text }]);
       cb.finished({ ok: true, text, costUsd, turns, errors: [] });
       return;
+    }
+    if (question) {
+      cb.sessionId(`demo-issue-${crypto.randomUUID()}`); // resumed by the answer
+      cb.log([{ kind: 'text', text: `● ${question}` }]);
+      return cb.finished({ ok: true, text: question, costUsd, turns, errors: [] });
     }
     const repo = repos.get(fullName);
     let url = '';
@@ -1337,6 +1344,12 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async followup(events: string[]) {
       const needs: string[] = [];
       for (const e of events.slice(0, 4)) {
+        const ask = demoCeoAnswer(e);
+        if (ask) {
+          await think(ask.tool === 'answer_agent' ? 'The repo settles this one: tests sit next to the code.' : "A product call: that's the manager's.");
+          await use(ask.tool, ask.args); // an escalated question reaches the manager's phone by itself
+          continue;
+        }
         const floor = Number(e.match(/floor (\d+)/)?.[1] ?? 0);
         const pr = Number(e.match(/PR #(\d+)/)?.[1] ?? 0);
         const agent = e.match(/\(([\w-]+)\)/)?.[1];
@@ -1425,7 +1438,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt;
+  const prompt = opts.prompt.split('\n\nSince you last looked:')[0]; // the manager's answers to agents (ceo.ts toldCeo)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage

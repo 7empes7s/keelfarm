@@ -69,6 +69,7 @@ function frameSnapshot(f: JournalFrame): WorldSnapshot {
     messages: f.messages,
     phoneReadAt: Number.MAX_SAFE_INTEGER, // nothing replayed counts as unread
     files: s.files,
+    questions: [], // agents' questions are live-only
     version: s.version,
     officeCommit: s.officeCommit,
     officeUpdate: s.officeUpdate,

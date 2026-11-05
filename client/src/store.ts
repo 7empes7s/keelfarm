@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentQuestion, type AgentView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
@@ -124,6 +124,7 @@ interface State {
   ceo: CeoInfo;
   messages: PhoneMessage[];
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
+  questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   version?: string; // the cubefarm version the server runs
@@ -265,6 +266,7 @@ export const useStore = create<State>((set, get) => ({
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
   files: [],
+  questions: [],
   chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
@@ -344,6 +346,7 @@ export const useStore = create<State>((set, get) => ({
           ceo: d.ceo,
           messages: d.messages,
           files: d.files ?? [],
+          questions: d.questions ?? [],
           phoneReadAt: d.phoneReadAt,
           version: d.version,
           officeCommit: d.officeCommit,
@@ -514,6 +517,9 @@ export const useStore = create<State>((set, get) => ({
       }
       case 'files':
         set({ files: ev.files });
+        break;
+      case 'questions':
+        set({ questions: ev.questions });
         break;
       case 'delivery':
         set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });

@@ -18,6 +18,7 @@ export const ACTIVITY_ICONS: Record<ActivityKind, string> = {
   talk: '💬',
   run: '⚙️',
   blocked: '⛔',
+  waiting: '❓',
 };
 
 /** What each kind is called on the hover card ("editing · store.ts"). */
@@ -34,6 +35,7 @@ export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   talk: 'talking to you',
   run: 'running',
   blocked: 'blocked on',
+  waiting: 'waiting for',
 };
 
 /** The longest detail shown over a head. */
@@ -182,7 +184,7 @@ function commandKind(words: string[]): ActivityKind | null {
 }
 
 // When a line runs several commands, the sign shows the one that says most about the work.
-const RANK: Record<ActivityKind, number> = { ci: 9, test: 8, build: 7, git: 6, edit: 5, browse: 4, read: 3, run: 2, qa: 1, fix: 1, talk: 1, blocked: 0 };
+const RANK: Record<ActivityKind, number> = { ci: 9, test: 8, build: 7, git: 6, edit: 5, browse: 4, read: 3, run: 2, qa: 1, fix: 1, talk: 1, blocked: 0, waiting: 0 };
 
 // A word worth showing after the program: a subcommand or a short name. Long mixes of letters and digits could be a
 // key passed on the command line, so the sign stops before them.
@@ -232,6 +234,8 @@ const OFFICE_KINDS: Record<string, ActivityKind> = {
   close_pull: 'git',
   escalate: 'talk',
   send_telegram: 'talk',
+  answer_agent: 'talk',
+  ask_manager_choice: 'talk',
 };
 
 /**
