@@ -23,10 +23,12 @@ import type { CharterProposalArgs } from '../charterTool.ts';
 import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
+import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
 import { readingsLabel } from '../../shared/usage.ts';
 import { usageLabel } from '../pacing.ts';
 import { floorSpend } from '../costLedger.ts';
 import { checkRestart, sessionKind } from '../health.ts';
+import { labPattern } from '../testLab.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
 import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
@@ -34,8 +36,9 @@ import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
-import type { HireRequestView } from '../../shared/types.ts';
-import { type PersistedAgent, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
+import type { AgentView, HireRequestView } from '../../shared/types.ts';
+import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
+import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
 
 export abstract class SwarmCeoTools extends SwarmTeam {
@@ -68,6 +71,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
+      answerAgent: acts((a) => this.answerAgent(a)),
+      askManagerChoice: acts((a) => this.askManagerChoice(a)),
       qaReport: (a) => this.qaReport(a),
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
@@ -170,6 +175,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
               return { number: p.number, title: p.title, qa: q ? `${q.status}${q.round > 1 ? ` (round ${q.round})` : ''}` : 'not tested', merge: q?.mergeNote ?? null, checks: p.checks };
             }),
           mergedRecently: rt.pulls.filter((p) => p.state === 'MERGED').map((p) => `#${p.number} ${p.title}`),
+          questions: this.state.questions.filter((q) => q.repoId === r.id).map((q) => ({ agent: q.agentId, name: q.agentName, issue: q.issue, pr: q.pr, question: q.text, options: q.options, waitingFor: q.to === 'ceo' ? 'you' : 'the manager' })),
         };
       });
     const req = (r: HireRequestView) => ({
@@ -222,12 +228,14 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     );
   }
 
-  protected setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }) {
+  protected setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }) {
     const r = this.floorRepo(x.floor);
     const preview = parsePreviewPatch(x.preview_command, x.preview_env);
+    const lab = x.lab_commands?.map(labPattern);
     if (x.summary !== undefined) r.summary = String(x.summary).trim().slice(0, 140);
     if (x.qa_brief !== undefined) r.qaBrief = String(x.qa_brief).trim().slice(0, 2500);
     if (x.playbook !== undefined) r.playbook = String(x.playbook).trim().slice(0, PLAYBOOK_MAX);
+    if (lab) r.labCommands = lab;
     r.preview = { ...r.preview, ...preview };
     if (preview.command === null) void this.previews.refreshDefault(r);
     this.emitRepo(r);
@@ -396,6 +404,101 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
+  }
+
+  // ---------- agents' questions (#36, shared/questions.ts) ----------
+
+  /** An agent waiting on an answer shows who they wait for (their card, badge and ❓ sign). */
+  protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
+    const v = super.agentView(a, withLog);
+    const waiting = waitingOn(this.state.questions, a.id);
+    return { ...v, waiting, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
+  }
+
+  protected clearTask(a: PersistedAgent) {
+    this.dropQuestion(a.id); // their task is gone: so is what they asked about it
+    super.clearTask(a);
+  }
+
+  protected setQuestions(list: AgentQuestion[]) {
+    const touched = new Set([...this.state.questions, ...list].map((q) => q.agentId));
+    this.state.questions = list.filter((q) => this.state.agents.some((a) => a.id === q.agentId));
+    this.emitCeo();
+    for (const a of this.state.agents) if (touched.has(a.id)) this.emitAgent(a);
+    this.save();
+  }
+
+  /** The agent moved on (a new session, or their task cleared): their open question closes. */
+  protected dropQuestion(agentId: string) {
+    if (questionOf(this.state.questions, agentId)) this.setQuestions(this.state.questions.filter((q) => q.agentId !== agentId));
+  }
+
+  /** A session that ended asking something: the agent waits, and a follow-up wakes the CEO (else the manager is asked). */
+  protected ask(a: PersistedAgent, repo: PersistedRepo, text: string): boolean {
+    const asked = questionFromTurn(scrub(text, this.secrets())); // it goes to the CEO, the chat and notifications
+    if (!asked) return false;
+    const q = newQuestion(`q-${crypto.randomUUID().slice(0, 8)}`, asked, { agentId: a.id, agentName: a.name, repoId: repo.id, floor: repo.floor, issue: a.issueNumber, pr: a.prNumber }, Date.now());
+    this.setQuestions([...this.state.questions.filter((x) => x.agentId !== a.id), q]);
+    this.appendLog(a, [{ kind: 'system', text: `❓ Waiting for an answer: ${clip(q.text, 160)}` }]);
+    if (!this.followup(questionEvent(q, this.floorName(repo)))) this.escalateQuestion(q, { question: q.text, options: q.options, recommendation: '' }, 'office');
+    return true;
+  }
+
+  /** The question goes to the manager: a chat message with one-tap options, and a notification. */
+  protected escalateQuestion(q: AgentQuestion, x: { question: string; options: string[]; recommendation: string }, from: 'ceo' | 'office') {
+    const mask = (t: string) => scrub(t, this.secrets());
+    const e = escalated(q, { question: mask(x.question), options: x.options.map(mask), recommendation: mask(x.recommendation) }, Date.now());
+    const work = e.issue ? `, #${e.issue}` : e.pr ? `, PR #${e.pr}` : '';
+    const m = this.postMessage(from, `❓ ${e.agentName} asks (floor ${e.floor}${work}): ${e.text}${e.recommendation ? `\nMy pick: ${e.recommendation}` : ''}`, undefined, { question: e.id });
+    this.setQuestions(this.state.questions.map((y) => (y.id === q.id ? { ...e, messageId: m.id } : y)));
+    this.notifyQuestion(e, false);
+  }
+
+  protected notifyQuestion(q: AgentQuestion, again: boolean) {
+    const title = `${q.agentName} ${again ? 'still waits for your answer' : 'asks you'}`;
+    this.notifier.notify('question', title, `${q.text}${q.recommendation ? ` (CEO's pick: ${q.recommendation})` : ''}`, `${q.agentName} (floor ${q.floor}): ${clip(q.text, 120)}`);
+  }
+
+  /** An answer typed into the agent's session as their next message; the question closes first. */
+  protected async answerQuestion(q: AgentQuestion, text: string, who: string) {
+    this.setQuestions(this.state.questions.filter((x) => x.id !== q.id));
+    try {
+      await this.message(q.agentId, answerPrompt(q, text, who), false, who);
+    } catch (err) {
+      if (this.state.agents.some((a) => a.id === q.agentId)) this.setQuestions([...this.state.questions, q]);
+      throw err;
+    }
+  }
+
+  /** The manager answered a question (tapped an option, or replied to its message): to the agent, and the CEO hears. */
+  protected async managerAnswer(q: AgentQuestion, text: string, replyTo: number, via?: 'telegram') {
+    const m = this.postMessage('manager', text, undefined, { replyTo, delivery: 'read', ...(via && { telegram: 'in' as const }) });
+    try {
+      await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager');
+      this.ceoTold.push(`The manager answered ${q.agentName}'s question "${clip(q.text, 120)}": ${clip(text, 200)}`);
+      this.postMessage('office', `↪ Sent to ${q.agentName}: they carry on with your answer.`);
+    } catch (err) {
+      this.postMessage('office', `That answer didn't reach ${q.agentName}: ${(err as Error).message}`);
+    }
+    return { id: m.id };
+  }
+
+  protected async answerAgent(x: { agent_id: string; text: string }) {
+    const a = this.agentByRef(x.agent_id);
+    const q = questionOf(this.state.questions, a.id);
+    if (!q) throw new Error(`${a.name} has no open question. Use message_agent to guide them.`);
+    if (q.to === 'manager') throw new Error(`${a.name}'s question is with the manager already; their answer goes straight to ${a.name}.`);
+    await this.answerQuestion(q, x.text, `${this.ceo().name} (CEO)`);
+    return `Sent: ${a.name} carries on with your answer.`;
+  }
+
+  protected askManagerChoice(x: { agent_id: string; question: string; options: string[]; recommendation: string }) {
+    const a = this.agentByRef(x.agent_id);
+    const q = questionOf(this.state.questions, a.id);
+    if (!q) throw new Error(`${a.name} has no open question to bring to the manager.`);
+    if (q.to === 'manager') throw new Error(`${a.name}'s question is with the manager already.`);
+    this.escalateQuestion(q, x, 'ceo');
+    return `Asked the manager with your recommendation; their answer goes straight to ${a.name}.`;
   }
 
   protected async messageAgent(x: { floor: number; agent_id: string; text: string }) {

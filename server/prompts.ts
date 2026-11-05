@@ -35,6 +35,8 @@ interface PromptBase {
   depsLine?: string;
   /** The office-wide playbook (Settings, set_office_playbook): above every floor's; '' or absent adds nothing. */
   officePlaybook?: string;
+  /** Browser checks and heavy runs go to the office's test lab (#56): its lab_* tools instead of a browser of their own. */
+  lab?: boolean;
 }
 
 export interface DevPromptInput extends PromptBase {
@@ -97,10 +99,13 @@ const reviewAgainst = (repo: PromptFloor) =>
 const selfReviewStep = (n: number, repo: PromptFloor) =>
   `${n}. Self-review before pushing: read your diff (git diff origin/${repo.defaultBranch}...HEAD) against ${reviewAgainst(repo)}. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.`;
 
+/** Sessions that use the test lab (#56): it runs the browser and the heavy suites for everyone. */
+const LAB_RULE = "For full test suites, builds or e2e runs that need a lot of memory, use lab_run. Don't start a browser or a full e2e run of your own.";
+
 export const devBranch = (issue: number | string, slug: string) => `swarm/issue-${issue}-${slug}`;
 export const qaBranch = (pr: number | string, slug: string) => `qa/pr-${pr}-${slug}`;
 
-export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fixing, depsLine, officePlaybook }: DevPromptInput) {
+export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fixing, depsLine, officePlaybook, lab }: DevPromptInput) {
   const push = fixing ? `git push origin HEAD:${fixing.headRef}` : `git push -u origin ${branch}`;
   const links = linked.map((r) => `- ${r.fullName}: read-only reference clone at ${r.dir}`);
   return [
@@ -120,7 +125,9 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     '1. Read the issue and explore the relevant code before changing anything.',
     '2. Implement the change with focused commits and clear messages.',
     "3. Run the project's existing tests, linters and build (if any) and fix what you broke. Install dependencies first if needed (e.g. npm install when node_modules is missing).",
-    repo.browserTesting
+    repo.browserTesting && lab
+      ? `4. If the project has a web UI, start its dev server in the background on port ${port} (reserved for you), then check your change with the office's test lab: lab_screenshot and lab_browser_check (one shared browser; files land in .lab/, never committed). ${LAB_RULE} Stop the dev server when you're done.`
+      : repo.browserTesting
       ? `4. If the project has a web UI, start its dev server in the background on port ${port} (reserved for you, so you don't collide with teammates), then check your change with the Playwright browser tools (mcp__playwright__browser_navigate, browser_snapshot, browser_click, browser_take_screenshot). Stop the dev server when you're done.`
       : '4. Verify the behaviour you changed as directly as you can.',
     selfReviewStep(5, repo),
@@ -137,7 +144,7 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     .join('\n');
 }
 
-export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep, officePlaybook }: QaPromptInput) {
+export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep, officePlaybook, lab }: QaPromptInput) {
   return [
     floorContext(repo, officePlaybook),
     '',
@@ -153,7 +160,9 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     '1. Read the PR description and the linked issue, and work out the acceptance criteria.',
     `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.${charterRules(repo) ? ` Check it against the charter's standards and the issue's objective too: breaking a standard fails the PR. Report it as charterCheck, one line starting "ok" or "violation:".` : ''}`,
     testStep ?? "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).",
-    repo.browserTesting
+    repo.browserTesting && lab
+      ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change with the office's test lab: lab_browser_check (clicks, typing, a phone width, edge cases, no console errors, no sideways scroll) and lab_screenshot of every important state: those screenshots are attached to the PR as evidence. ${LAB_RULE} Stop the server afterwards.`
+      : repo.browserTesting
       ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change in a real browser with the Playwright tools: navigate, click, type, resize to a phone size, try edge cases, and check the console for errors. Take a screenshot with browser_take_screenshot (no filename) of every important state: the screenshots are attached to the PR as evidence. Stop the server afterwards.`
       : '4. Exercise the changed behaviour directly (run the program, call the API, write a quick script).',
     '5. You may write throwaway scripts to probe behaviour, but do not commit them.',

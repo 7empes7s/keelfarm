@@ -31,6 +31,7 @@ export interface TeamChange {
 
 const PLURAL: Record<NotifyEvent, string> = {
   needsHuman: 'PRs need you',
+  question: 'questions wait for you',
   ceoMessage: 'messages from the CEO',
   hire: 'team changes wait for you',
   agentError: 'agents need help',
@@ -38,7 +39,7 @@ const PLURAL: Record<NotifyEvent, string> = {
   memory: 'memory alerts',
   merge: 'merges',
 };
-const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', merge: '🔀', test: '🔔' };
+const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', merge: '🔀', test: '🔔' };
 
 export const clip = (s: string, max = BODY_MAX) => {
   const t = s.replace(/\s+/g, ' ').trim();

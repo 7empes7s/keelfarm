@@ -181,7 +181,7 @@ export interface OfficeHost {
   update(from: string): Promise<LastUpdate | null>;
 }
 
-const OFFICE_DIR = path.resolve(import.meta.dirname, '..');
+export const OFFICE_DIR = path.resolve(import.meta.dirname, '..');
 const isSamePath = (a: string, b: string) => (process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
 
 export const realOffice: OfficeHost = {

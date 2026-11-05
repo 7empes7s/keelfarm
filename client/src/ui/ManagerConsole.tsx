@@ -14,6 +14,7 @@ import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { OpsTab } from './MissionConsole';
 import { HealthStrip, MemoryFields } from './HealthStrip';
+import { TestLabCard, TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
 import { NotifySettings } from './NotifySettings';
@@ -22,7 +23,7 @@ import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
-import { StatusPill } from './StatusPill';
+import { badgeStatus, StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
@@ -215,6 +216,7 @@ export function FloorsTab() {
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
         <HealthStrip />
+        <TestLabCard />
         <h3 className="section">🏢 Floors</h3>
         {repos.length === 0 && <p className="muted">No floors yet. Add a project →</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
@@ -512,7 +514,7 @@ export function TeamTab() {
                             ☁
                           </span>
                         )}
-                        <StatusPill status={a.status} />
+                        <StatusPill status={badgeStatus(a)} />
                       </td>
                       <td className="small ds-cell-full roster-doing">
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
@@ -717,6 +719,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           you hit either.
         </p>
         <MemoryFields memory={settings.memory} set={set} />
+        <TestLabFields testLab={settings.testLab} set={set} />
         <label className="field">
           <span>Sessions while pacing</span>
           <input
@@ -828,14 +831,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
           <>
             <label className="field">
               <span>Update the office after merges settle (minutes)</span>
-              <input
-                key={settings.updateSettleMin ?? 3}
-                type="number"
-                min={0}
-                max={60}
-                defaultValue={settings.updateSettleMin ?? 3}
-                onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.updateSettleMin && set({ updateSettleMin: Number(e.target.value) })}
-              />
+              <input key={settings.updateSettleMin ?? 3} type="number" min={0} max={60} defaultValue={settings.updateSettleMin ?? 3} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.updateSettleMin && set({ updateSettleMin: Number(e.target.value) })} />
             </label>
             <p className="muted small">An automatic update waits this long after the latest merge (at most 15 minutes after the first), so a run of merges restarts the office once. Agents keep working meanwhile.</p>
           </>

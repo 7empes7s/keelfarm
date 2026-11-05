@@ -81,7 +81,7 @@ export function AgentCard() {
           </span>
           <span className="ac-title">{agentLabel(agent, settings, clis)}</span>
         </span>
-        <span className="ac-time">{busy && agent.startedAt ? `⏱ ${elapsed(now - agent.startedAt)}` : STATUS[agent.status]}</span>
+        <span className="ac-time">{busy && agent.startedAt ? `⏱ ${elapsed(now - agent.startedAt)}` : agent.waiting && !busy ? `waiting for ${agent.waiting === 'ceo' ? 'CEO' : 'you'}` : STATUS[agent.status]}</span>
         {isTouch && (
           <button className="ac-more" onClick={() => openHoldMenu({ id: `agent-${agent.id}`, label: `Watch ${agent.name}`, action: { kind: 'terminal', agentId: agent.id } })} aria-label={`More for ${agent.name}`} title="More options">
             ⋯

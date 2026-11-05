@@ -32,6 +32,7 @@ import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type 
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
+import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
 import { isResync, Outbox } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
@@ -88,6 +89,7 @@ export abstract class SwarmCore extends SwarmContract {
     settings: {
       sessionLimit: 0,
       memory: memorySettings(DEFAULT_MEMORY, {}),
+      testLab: testLabSettings(DEFAULT_TEST_LAB, {}),
       defaultModel: DEFAULT_MODEL,
       defaultEffort: 'medium',
       taskEffort: {},
@@ -136,6 +138,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
+    questions: [],
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -207,7 +210,7 @@ export abstract class SwarmCore extends SwarmContract {
   readonly health = new OfficeHealth({
     probe: () => this.backend.resources,
     settings: () => this.state.settings.memory,
-    sessions: () => [...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })), ...consultSessions(this.consults)],
+    sessions: () => [...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })), ...consultSessions(this.consults), ...this.labSessions()],
     log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
     alert: (title, body) => this.notifier.notify('memory', title, body),
     emit: (health) => this.broadcast({ type: 'health', health }),
@@ -489,6 +492,7 @@ export abstract class SwarmCore extends SwarmContract {
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),
       health: this.health.view(),
+      testLab: this.labView(),
       claudeUsage: this.state.claudeUsage,
       ops: this.opsNow(),
       doctor: this.doctorView(),
