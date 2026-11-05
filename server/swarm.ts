@@ -19,6 +19,7 @@ import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
+import { loadLab } from './experiments.ts';
 import { apply as applyLedger, loadLedger } from './ledger.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, voiceSettings } from './voice.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
@@ -118,6 +119,7 @@ export class Swarm extends SwarmCeoTools {
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
+        experiments: loadLab(loaded.experiments, Date.now()),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
@@ -272,6 +274,7 @@ export class Swarm extends SwarmCeoTools {
       void this.voice.prune();
       void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
       void this.spend.ledger.prune();
+      void this.lab.checkSurvival((id) => this.state.repos.find((r) => r.id === id)?.fullName ?? null, (name, since) => this.backend.survivalSignals(name, since));
     }, this.backend.demo ? 60_000 : TRIM_SWEEP_MS);
     setInterval(() => {
       this.state.repos.forEach((r, i) => setTimeout(() => void this.sweepFloor(r.id), i * 1500));
@@ -297,6 +300,7 @@ export class Swarm extends SwarmCeoTools {
     await this.spend.ledger.load();
     // A fresh demo office has a week of spending to look at.
     if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
+    if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();

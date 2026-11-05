@@ -18,6 +18,7 @@ import {
 } from '../pacing.ts';
 import { opsView, recordChecks, recordMerges, type OpsFloorState } from '../metrics.ts';
 import { mergedPulls } from '../costLedger.ts';
+import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
 import type { OpsView, PullInfo, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
 import {
@@ -104,7 +105,8 @@ export abstract class SwarmScheduling extends SwarmQa {
     const owed = new Set(fixes.map((q) => q.devAgentId).filter((id): id is string => !!id));
     for (const rec of waiting('queued', 'qa')) {
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
-      const tester = pickTester(free, rec.devAgentId, owed, othersCan, now - rec.updatedAt);
+      const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
+      const tester = pickTester(preferCli(free, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
       if (!tester) continue;
       if (!this.health.admit('qa')) return false;
       void this.runQa(tester, repo, rec);
@@ -250,6 +252,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const now = Date.now();
     if (recordMerges(this.state.ops, repo.id, pulls, now) + recordChecks(this.state.ops, repo.id, pulls, now) > 0) this.save();
     void this.spend.ledger.merges(mergedPulls(repo.id, pulls, now));
+    this.lab.pulls(repo.id, pulls);
   }
 
   /** Every floor as mission control sees it now. */

@@ -22,6 +22,7 @@ import { machineName, type MachineProvider } from '../machines.ts';
 import { MACHINES_DIR } from '../workspace.ts';
 import { envSecrets, Journal } from '../journal.ts';
 import { CostLedger, SessionCosts } from '../costLedger.ts';
+import { Lab, loadLab } from '../experiments.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
@@ -121,6 +122,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
+    experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
   readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));
@@ -200,6 +202,8 @@ export abstract class SwarmCore extends SwarmContract {
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
+  /** The experiments (#23): the variant each new issue in one gets, and what came of it. */
+  readonly lab = new Lab(() => this.state.experiments, { save: () => this.save(), emit: (experiments) => this.broadcast({ type: 'experiments', experiments }), floorOk: (id) => this.state.repos.some((r) => r.id === id) });
 
   constructor(protected backend: Backend) {
     super();
@@ -222,7 +226,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited());
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line) => this.lab.session(line));
     this.journal = new Journal({
       dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
       frame: () => journalFrame(this.snapshot(), this.secrets()),
@@ -427,6 +431,7 @@ export abstract class SwarmCore extends SwarmContract {
       pong: this.state.pong,
       files: this.files.list(),
       tooling: this.tooling,
+      experiments: this.lab.view(),
     };
   }
 

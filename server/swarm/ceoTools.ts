@@ -2,6 +2,7 @@
 import {
   checkCloseIssue,
   createOfficeTools,
+  experimentInput,
   floorCapacity,
   issueRefusal,
   MANDATE_NOT_ASKED,
@@ -54,6 +55,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       attachFile: (a) => this.ceoFiles.attach(a),
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
+      defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
@@ -174,6 +176,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
+          experiments: this.lab.summary(), // only the manager starts, stops and promotes them
         },
         floors,
         pendingChanges: pending.map(req),

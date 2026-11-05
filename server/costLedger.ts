@@ -241,6 +241,7 @@ export interface CostRun {
   model: string;
   startedAt: number;
   round: number | null;
+  exp?: string | null; // the experiment variant it runs (shared/experiments.ts)
 }
 
 /** The agent fields a session's line is made from. */
@@ -268,6 +269,7 @@ export class SessionCosts {
   constructor(
     readonly ledger: CostLedger,
     private limited: () => boolean,
+    private onSession: (s: CostSession) => void = () => undefined,
   ) {}
 
   start(agentId: string, run: CostRun) {
@@ -309,7 +311,7 @@ export class SessionCosts {
     this.outcomes.delete(a.id);
     const watchdog = this.watchdogStops.delete(a.id);
     const now = Date.now();
-    return this.ledger.session({
+    const line: Omit<CostSession, 'type'> = {
       at: now,
       ms: Math.max(0, now - (run?.startedAt ?? a.startedAt ?? now)),
       repoId,
@@ -324,7 +326,10 @@ export class SessionCosts {
       usd: result.costUsd,
       tokens: null,
       outcome: sessionOutcome({ interrupted: !!result.interrupted, watchdog, stopped: how.stopped, limited: this.limited(), ok: result.ok, hint }),
-    });
+      ...(run?.exp ? { exp: run.exp } : {}),
+    };
+    this.onSession({ type: 'session', ...line });
+    return this.ledger.session(line);
   }
 }
 

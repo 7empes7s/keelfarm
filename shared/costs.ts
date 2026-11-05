@@ -68,6 +68,7 @@ export interface CostSession {
   usd: number;
   tokens: number | null; // when the CLI reports them
   outcome: SessionOutcome;
+  exp?: string; // `${experiment}/${variant}` while its issue is in a running experiment (shared/experiments.ts)
 }
 
 /** A merged PR, one line of the cost ledger: what the sessions' cost is divided by. */
