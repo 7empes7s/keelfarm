@@ -1110,7 +1110,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   ];
   return (
     <div className="overlay phone-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeOverlay()}>
-      <div className="phone" ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
+      <div className="phone ds-screen ds-auto-dark" ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />

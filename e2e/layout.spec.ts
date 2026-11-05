@@ -1,23 +1,66 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
-import { MANAGER_DESK } from '../client/src/world/layout';
+import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
 // viewport, every button on screen, unobstructed and at least 44px, no destructive action one tap away, and axe clean.
-// Part 2 of the redesign adds its screens to SCREENS; each opens its dialog and names the tabs to walk through.
+// Each screen in SCREENS opens its dialog (or page) and names the views to walk through.
+
+/** A tab, by its accessible name (a regex source; '' is the screen as it opened), or a named step that gets there. */
+type View = string | { name: string; go: (root: Locator) => Promise<void> };
 
 interface Screen {
   name: string;
   widths: number[];
   /** Opens the screen; returns its dialog. */
   open: (page: Page) => Promise<Locator>;
-  /** The tabs to visit, as their accessible names (a regex source), or [] for a screen without tabs. */
-  tabs: string[];
+  /** The views to visit, or [] for a screen with one. */
+  tabs: View[];
 }
 
 const AT_DESK: SavedView = { floor: 0, x: MANAGER_DESK.x, z: MANAGER_DESK.z + MANAGER_DESK.d / 2 + 0.8, yaw: 0, pitch: -0.6 };
+const AT_ELEVATOR: SavedView = { floor: 0, x: 0, z: HALF_D - 1.6, yaw: Math.PI, pitch: 0 };
 const dialog = (page: Page, name: RegExp) => page.getByRole('dialog', { name });
+const PHONES = [360, 390, 430, 1280];
+// The 3D office boots WebGL: two widths are enough there; pocket mode is what phones get, and it's checked at all four.
+const OFFICE = [390, 1280];
+
+/** Pocket mode on one of its tabs; the page is the screen. */
+async function pocket(page: Page, tab: string) {
+  await page.goto(`/?pocket=1&tab=${tab}`);
+  const root = page.locator('.pocket');
+  await expect(root.locator('.pk-tab-on')).toBeVisible();
+  return root;
+}
+
+/** Inside the 3D office, past the tour, standing at `spot`. */
+async function office(page: Page, spot: SavedView = AT_DESK) {
+  await startAt(page, spot);
+  await page.goto('/?pocket=0');
+  await enterOffice(page, { loaded: true });
+  const skipTour = page.getByRole('button', { name: 'Skip tour' }); // a fresh office starts the tour
+  if (await skipTour.isVisible()) await skipTour.dispatchEvent('click'); // the canvas would take a real click
+}
+
+/** The phone's Company tab, then one of its panel shortcuts. */
+async function fromPhone(page: Page, button: RegExp, name: RegExp) {
+  await office(page);
+  await page.keyboard.press('p');
+  const phone = dialog(page, /Your phone/);
+  await phone.getByRole('tab', { name: 'Company' }).click();
+  await phone.getByRole('button', { name: button }).click();
+  return dialog(page, name);
+}
+
+/** A game from the phone's Games tab (tapping Games again goes back to the list). */
+const game = (name: string): View => ({
+  name,
+  go: async (root) => {
+    await root.getByRole('tab', { name: 'Games' }).click();
+    await root.getByRole('button', { name: new RegExp(name) }).click();
+  },
+});
 
 const SCREENS: Screen[] = [
   {
@@ -32,19 +75,92 @@ const SCREENS: Screen[] = [
     tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'This device'],
   },
   {
-    // The 3D office boots WebGL: two widths are enough here, the pocket console covers the phones.
     name: "manager's console",
-    widths: [390, 1280],
+    widths: OFFICE,
     open: async (page) => {
-      await startAt(page, AT_DESK);
-      await page.goto('/?pocket=0');
-      await enterOffice(page, { loaded: true });
-      const skipTour = page.getByRole('button', { name: 'Skip tour' }); // a fresh office starts the tour
-      if (await skipTour.isVisible()) await skipTour.dispatchEvent('click'); // the canvas would take a real click
+      await office(page);
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
     tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'Time-lapse', 'Accessibility'],
+  },
+  { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
+  { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },
+  { name: 'pocket kanban', widths: PHONES, open: (page) => pocket(page, 'kanban'), tabs: [] },
+  { name: 'pocket team', widths: PHONES, open: (page) => pocket(page, 'team'), tabs: [] },
+  { name: 'pocket approvals', widths: PHONES, open: (page) => pocket(page, 'approvals'), tabs: [] },
+  {
+    name: 'terminal view',
+    widths: PHONES,
+    open: async (page) => {
+      const root = await pocket(page, 'team');
+      await root.getByRole('button', { name: 'Terminal', exact: true }).first().click();
+      return page.getByRole('dialog');
+    },
+    tabs: [],
+  },
+  {
+    name: 'app viewer',
+    widths: PHONES,
+    open: async (page) => {
+      const root = await pocket(page, 'kanban');
+      await root.getByTitle("Open this floor's running app").click();
+      return page.getByRole('dialog');
+    },
+    tabs: [],
+  },
+  {
+    name: 'start screen',
+    widths: OFFICE,
+    open: async (page) => {
+      await page.goto('/?pocket=0');
+      const root = page.locator('.start');
+      await expect(root.getByRole('button', { name: 'Enter the office' })).toBeEnabled();
+      return root;
+    },
+    tabs: [],
+  },
+  {
+    name: 'phone',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page);
+      await page.keyboard.press('p');
+      return dialog(page, /Your phone/);
+    },
+    tabs: ['', 'Team', 'Company', 'Games', game('Cubetris'), game('Cable Snake'), game('Desk Pet')],
+  },
+  {
+    name: 'HUD',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page);
+      return page.locator('.hud');
+    },
+    tabs: [],
+  },
+  { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /Kanban|Floor \d/), tabs: [] },
+  { name: 'floor list', widths: OFFICE, open: (page) => fromPhone(page, /Floor list/, /Floor|Lobby/), tabs: [] },
+  { name: 'help', widths: OFFICE, open: (page) => fromPhone(page, /Help/, /How the office works/), tabs: ['The office', 'Controls'] },
+  {
+    name: 'catalogue',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page);
+      await page.getByTitle(/^Coins:/).click();
+      return dialog(page, /catalogue/i);
+    },
+    tabs: [],
+  },
+  {
+    name: 'elevator',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page, AT_ELEVATOR);
+      await page.keyboard.press('e');
+      return dialog(page, /Elevator/);
+    },
+    tabs: [],
   },
 ];
 
@@ -131,6 +247,7 @@ async function menuProblems(page: Page, root: Locator): Promise<string[]> {
 async function axeProblems(page: Page, root: Locator): Promise<string[]> {
   await root.evaluate((el) => el.setAttribute('data-layout-under-test', ''));
   const { violations } = await new AxeBuilder({ page }).include('[data-layout-under-test]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  if (process.env.LAYOUT_DEBUG) return violations.flatMap((v) => v.nodes.map((n) => `axe ${v.id}: ${n.target.join(' ')} ${n.any[0]?.message ?? ''}`)); // DEBUG
   return violations.map((v) => `axe ${v.id}: ${v.help} (${v.nodes.length}× e.g. ${v.nodes[0]?.target.join(' ')})`);
 }
 
@@ -149,14 +266,16 @@ for (const screen of SCREENS) {
         await expect(root).toBeVisible();
         const problems: string[] = [];
         for (const tab of screen.tabs.length ? screen.tabs : ['']) {
-          if (tab) {
+          if (typeof tab !== 'string') await tab.go(root);
+          else if (tab) {
             const t = root.getByRole('tab', { name: new RegExp(tab) });
             await t.scrollIntoViewIfNeeded();
             await t.click();
             await expect(t).toHaveAttribute('aria-selected', 'true');
-            await page.waitForTimeout(300); // lazy tabs and settled layout
           }
-          const at = tab ? `${tab}: ` : '';
+          if (tab) await page.waitForTimeout(300); // lazy tabs and settled layout
+          const name = typeof tab === 'string' ? tab : tab.name;
+          const at = name ? `${name}: ` : '';
           for (const p of [...(await layoutProblems(root)), ...(await menuProblems(page, root)), ...(await axeProblems(page, root))]) problems.push(at + p);
         }
         expect(problems).toEqual([]);

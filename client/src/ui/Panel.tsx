@@ -44,7 +44,7 @@ export function Panel({
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && (onClose ? onClose() : closeOverlay())}>
       <div
         ref={box}
-        className={`panel ${wide ? 'panel-wide' : ''} ${className ?? ''}`}
+        className={`panel ds-screen ds-auto-dark ${wide ? 'panel-wide' : ''} ${className ?? ''}`}
         style={{ ['--accent' as string]: accent ?? '#ff8a5b' }}
         role="dialog"
         aria-modal="true"

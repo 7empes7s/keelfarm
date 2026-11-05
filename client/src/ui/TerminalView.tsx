@@ -121,7 +121,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
               🔑 needs sign-in
             </span>
           )}
-          {working && agent.currentTool && <span className="muted small">{toolVerb(agent.currentTool)}…</span>}
+          {working && agent.currentTool && <span className="chip">{toolVerb(agent.currentTool)}…</span>}
           <span className="spacer" />
           <button className="btn btn-small" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
             🎥 Follow

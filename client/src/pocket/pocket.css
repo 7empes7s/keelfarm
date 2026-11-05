@@ -87,7 +87,7 @@ html.pocket-mode[data-readable-font] {
   height: 18px;
   border: 2px solid var(--ds-outline);
   border-radius: 50%;
-  background: #fff;
+  background: var(--ds-surface-raised);
   box-sizing: border-box;
   transition: transform 0.15s;
 }

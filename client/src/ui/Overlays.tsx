@@ -181,12 +181,12 @@ function ReplaySetting() {
 function Help({ tab: initial }: { tab?: HelpTab }) {
   const [tab, setTab] = useState<HelpTab>(initial ?? 'office');
   return (
-    <Panel title="How the office works">
-      <div className="tabs">
-        <button className={`tab ${tab === 'office' ? 'tab-on' : ''}`} onClick={() => setTab('office')}>
+    <Panel title="How the office works" className="ds-console">
+      <div className="tabs" role="tablist" aria-label="Help">
+        <button role="tab" aria-selected={tab === 'office'} className={`tab ${tab === 'office' ? 'tab-on' : ''}`} onClick={() => setTab('office')}>
           📖 The office
         </button>
-        <button className={`tab ${tab === 'controls' ? 'tab-on' : ''}`} onClick={() => setTab('controls')}>
+        <button role="tab" aria-selected={tab === 'controls'} className={`tab ${tab === 'controls' ? 'tab-on' : ''}`} onClick={() => setTab('controls')}>
           🎮 Controls
         </button>
       </div>

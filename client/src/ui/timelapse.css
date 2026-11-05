@@ -26,8 +26,8 @@
   position: relative;
   height: 12px;
   border-radius: 999px;
-  background: #ece7dc;
-  border: 2px solid var(--ink);
+  background: var(--ds-surface-sunken);
+  border: 2px solid var(--ds-outline);
 }
 .tl-track-mini {
   height: 10px;
@@ -77,7 +77,7 @@
   margin-left: -3px;
   border-radius: 3px;
   background: #ef476f;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ds-outline);
   pointer-events: none;
 }
 .tl-tip {
@@ -120,9 +120,9 @@
   align-items: baseline;
   gap: 10px;
   padding: 6px 16px;
-  border: 3px solid var(--ink);
+  border: 3px solid var(--ds-outline);
   border-radius: 14px;
-  box-shadow: 0 4px 0 var(--ink);
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
   background: #ef476f;
   color: #fff;
   font-weight: 700;
@@ -149,9 +149,9 @@
   gap: 8px;
   padding: 10px 14px;
   background: var(--paper);
-  border: 3px solid var(--ink);
+  border: 3px solid var(--ds-outline);
   border-radius: 18px;
-  box-shadow: 0 4px 0 var(--ink);
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
 }
 .replay-play {
   min-width: 38px;
