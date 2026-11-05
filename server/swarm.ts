@@ -1,96 +1,223 @@
+// `Swarm`, the orchestrator: the façade index.ts, ceo.ts and the tests use. Its parts are layers under server/swarm/,
+// each extending the one before (CLAUDE.md, "Where things live"); this file is the top one.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { Backend } from './backend.ts';
-import type { LogEntry, SessionHandle, SessionResult } from './agentRunner.ts';
-import { BoxMachines } from './boxMachines.ts';
+import type { LogEntry, SessionResult } from './agentRunner.ts';
 import type { BoxCliRecord, BoxTarget } from './boxCli.ts';
-import type { BoxSignIn, ReconnectedCli } from './cliRunner.ts';
+import type { ReconnectedCli } from './cliRunner.ts';
 import { boxLinkedDir } from './boxScripts.ts';
 import { CloudError } from './box.ts';
-import { Cloud, officeId, redact } from './cloud.ts';
+import { redact } from './cloud.ts';
 import type { PrDetails } from './github.ts';
-import { defaultProjectsDir, DESK_SWEEP_INTERVAL_MS, HOME_DIR, LOG_BUFFER, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
-import { askedFor, ceoJobPrompt, ceoSystemPrompt, checkCloseIssue, createOfficeTools, floorCapacity, IssueCap, issueRefusal, jobLabel, MANDATE_NOT_ASKED, planDependencies, prDiffText, agentLogText, qaReportText, AGENT_LOG_MAX as AGENT_LOG_MAX_LINES, plannedSize, scalePlan, type CeoJob, type OfficeTools, type TeamNow } from './ceo.ts';
-import { afterClose, ASK_AGAIN_MS, closedWhy, closuresHeld, forgettable, issueOpen, nameList, pullNow, stillOpen, stoppedMessage, toAsk, toHold, type Closure, type FloorState, type KnownPull, type LearnedPull } from './closeCleanup.ts';
+import { DESK_SWEEP_INTERVAL_MS, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS } from './config.ts';
+import {
+  askedFor,
+  ceoJobPrompt,
+  ceoSystemPrompt,
+  checkCloseIssue,
+  createOfficeTools,
+  floorCapacity,
+  IssueCap,
+  issueRefusal,
+  jobLabel,
+  MANDATE_NOT_ASKED,
+  planDependencies,
+  prDiffText,
+  agentLogText,
+  qaReportText,
+  AGENT_LOG_MAX as AGENT_LOG_MAX_LINES,
+  plannedSize,
+  scalePlan,
+  type CeoJob,
+  type OfficeTools,
+  type TeamNow,
+} from './ceo.ts';
+import {
+  afterClose,
+  ASK_AGAIN_MS,
+  closedWhy,
+  closuresHeld,
+  forgettable,
+  issueOpen,
+  nameList,
+  pullNow,
+  stillOpen,
+  stoppedMessage,
+  toAsk,
+  toHold,
+  type Closure,
+  type FloorState,
+  type KnownPull,
+  type LearnedPull,
+} from './closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from './deps.ts';
 import { setUpDesk } from './deskSetup.ts';
 import { fixOutcome, MAX_FIX_FAILURES } from './fixOutcome.ts';
-import { fixGoesTo, pickTester, PREP_HOLD_MS, prepFailure, prepHeld, type PrepStrikes } from './handOut.ts';
+import { fixGoesTo, pickTester, PREP_HOLD_MS, prepFailure, prepHeld } from './handOut.ts';
 import { HttpError } from './httpError.ts';
-import { IssueAges } from './issueAges.ts';
 import { issuesResolvedBy, issueTaken } from './issueClaims.ts';
 import { CHECKS_ALERT_MS, failedRunIds, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeStep } from './mergeGate.ts';
 import { orphanedQa } from './qaOrphans.ts';
-import { catchUp, failedRunId, logTail, noChangeReason, PR_LIMITS_VERSION, QA_STOPPED, unpushedFix } from './prOwnership.ts';
-import { conflictFixInstructions, MAX_QA_ROUNDS, qaGate, qaOutcome, type PreQa, type QaNext } from './qaOutcome.ts';
+import {
+  catchUp,
+  failedRunId,
+  logTail,
+  noChangeReason,
+  PR_LIMITS_VERSION,
+  QA_STOPPED,
+  unpushedFix,
+} from './prOwnership.ts';
+import { conflictFixInstructions, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from './qaOutcome.ts';
 import { qaInstructions } from './qaPrompt.ts';
 import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecovery.ts';
-import { reconcileStep, restartMessage, sessionStart, workState, type ReconcileStep, type RestartCounts, type WorkState } from './reconcile.ts';
-import { diagnose, finding, forget, NUDGE_WAIT_MS, nudgeText, QUIET_MS, triage, unclosedIssues, type Problem, type Remedy, type WatchAgent, type WatchMemory } from './watchdog.ts';
+import {
+  reconcileStep,
+  restartMessage,
+  sessionStart,
+  workState,
+  type ReconcileStep,
+  type RestartCounts,
+  type WorkState,
+} from './reconcile.ts';
+import {
+  diagnose,
+  finding,
+  forget,
+  NUDGE_WAIT_MS,
+  nudgeText,
+  QUIET_MS,
+  triage,
+  unclosedIssues,
+  type Problem,
+  type Remedy,
+  type WatchAgent,
+  type WatchMemory,
+} from './watchdog.ts';
 import { sendBackPatch } from './sendBack.ts';
 import { checkTriageTarget, triageStep, type TriagePr } from './triage.ts';
-import { DEFAULT_PREVIEW, Previews, parsePreviewPatch } from './previews.ts';
+import { DEFAULT_PREVIEW, parsePreviewPatch } from './previews.ts';
 import { PREVIEW_SLUG } from './previewRunner.ts';
 import { pruneQaShots, qaShotFile, qaShotsDir, readQaShot, removeQaShots, saveQaShots } from './qaShots.ts';
-import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt, failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from './prompts.ts';
+import {
+  agentPromptPreview,
+  ceoPromptPreview,
+  devBranch,
+  devSystemPrompt,
+  failedLogLines,
+  noPushNudge,
+  ownPrLine,
+  qaBranch,
+  qaSystemPrompt,
+} from './prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from './qaRetry.ts';
 import { drainDecision, lastUpdateMessage, POSTPONE_MS, type DrainInput, type LastUpdate } from './officeUpdate.ts';
 import { mergeReadings, readingsChanged, readingsLabel } from '../shared/usage.ts';
-import { clampPacingSessions, DEFAULT_PACING_SESSIONS, mayStart, PACING_MS, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningView, type UsageWarning, type Waiver, type WorkKind } from './pacing.ts';
-import { emptyHistory, loadHistory, opsView, recordChecks, recordCost, recordMerges, recordQa, type OpsFloorState, type OpsHistory } from './metrics.ts';
-import { clampTrimIdleMin, DEFAULT_TRIM_IDLE_MIN, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
-import { boxVersions, cliLabel, isCli } from './clis.ts';
-import { machineName, type MachineProvider } from './machines.ts';
-import { MACHINES_DIR, type DeskTrim } from './workspace.ts';
-import { envSecrets, Journal } from './journal.ts';
-import { CostLedger, costsRequest, floorSpend, mergedPulls, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
+import {
+  clampPacingSessions,
+  mayStart,
+  PACING_MS,
+  pacingMessage,
+  resumeRefusal,
+  usageLabel,
+  usageView,
+  waived,
+  warningView,
+  type UsageWarning,
+  type Waiver,
+  type WorkKind,
+} from './pacing.ts';
+import {
+  loadHistory,
+  opsView,
+  recordChecks,
+  recordCost,
+  recordMerges,
+  recordQa,
+  type OpsFloorState,
+} from './metrics.ts';
+import { clampTrimIdleMin, desksToTrim, formatBytes, freedMessage, idleSince, TRIM_SWEEP_MS } from './deskTrim.ts';
+import { cliLabel, isCli } from './clis.ts';
+import { machineName } from './machines.ts';
+import type { DeskTrim } from './workspace.ts';
+import { costsRequest, floorSpend, mergedPulls, taskEfforts, taskKindOf } from './costLedger.ts';
 import { resolveEffort, type CostsView, type TaskKind } from '../shared/costs.ts';
-import { sampleDay, seeded } from './journalSample.ts';
-import { addTenure, apply as applyLedger, buy as buyDecor, emptyLedger, grant as grantCoins, loadLedger, place as placeDecor, progressView, type CommandResult, type Effects, type LedgerEvent, type LedgerState } from './ledger.ts';
+import {
+  addTenure,
+  apply as applyLedger,
+  buy as buyDecor,
+  grant as grantCoins,
+  loadLedger,
+  place as placeDecor,
+  progressView,
+  type CommandResult,
+  type Effects,
+  type LedgerEvent,
+} from './ledger.ts';
 import { AgentTerminal } from './terminal.ts';
-import { Ticker } from './ticker.ts';
-import { Outbox } from './outbox.ts';
-import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, Voice, voiceSettings } from './voice.ts';
-import { Notifier } from './notifier.ts';
+import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, speaks, voiceSettings } from './voice.ts';
 import { teamKeyboard, telegramChat } from './telegram.ts';
-import { TelegramBot } from './telegramBot.ts';
 import { clip, plainText, stuckAgents, type TeamChange } from './notify.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
-import { cleanSwitches, DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, isToolId, mergeSwitches, officeItems, sessionTools, setSwitch, toolArgsLine, toolSettings, type SessionTools, type ToolInventory, type ToolSwitches } from '../shared/tooling.ts';
-import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../shared/activity.ts';
-import { WeatherService } from './weather.ts';
+import {
+  cleanSwitches,
+  DEFAULT_TOOL_SETTINGS,
+  isToolId,
+  mergeSwitches,
+  sessionTools,
+  setSwitch,
+  toolArgsLine,
+  toolSettings,
+  type SessionTools,
+} from '../shared/tooling.ts';
 import { blockers, holdUps, waitsMessage } from '../shared/issues.ts';
-import { dayKey, journalFrame, legacyAgent, legacyRequest, redact as scrub } from '../shared/journal.ts';
-import { addFollowup, DEFAULT_FOLLOWUPS, emptyFollowups, followupEvents, followupSettings, followupStep, followupWaiting, liveMandates, loadFollowups, mandateFor, mandateList, MAX_MANDATES, quietReply, takeFollowups, unblockedIssues, type FollowupEvent, type FollowupState } from '../shared/followups.ts';
-import { cleanStyle, HAIR_COLORS, SKIN_TONES, type AgentStyle } from '../shared/looks.ts';
+import { legacyAgent, legacyRequest, redact as scrub } from '../shared/journal.ts';
+import {
+  addFollowup,
+  DEFAULT_FOLLOWUPS,
+  followupEvents,
+  followupSettings,
+  followupStep,
+  followupWaiting,
+  liveMandates,
+  loadFollowups,
+  mandateFor,
+  mandateList,
+  MAX_MANDATES,
+  quietReply,
+  takeFollowups,
+  unblockedIssues,
+  type FollowupEvent,
+} from '../shared/followups.ts';
+import { cleanStyle } from '../shared/looks.ts';
 import { achievementDef, type ProgressView } from '../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../shared/pong.ts';
 import { effectiveModel } from '../shared/models.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, dueGreeting, themeSettings } from '../shared/themes.ts';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS, INSTALL_STEP, PLAYBOOK_MAX } from '../shared/types.ts';
+import {
+  CEO_ID,
+  DEFAULT_DOG_NAME,
+  DEFAULT_MAX_AGENTS,
+  FLOOR_SEATS,
+  INSTALL_STEP,
+  PLAYBOOK_MAX,
+} from '../shared/types.ts';
 import { forwardText, nextDelivery } from '../shared/chat.ts';
-import { makeArtifacts, parseCeoMessage, snapshotMessages } from '../shared/chatParts.ts';
+import { makeArtifacts, parseCeoMessage } from '../shared/chatParts.ts';
 import { SWEEP_MS } from '../shared/files.ts';
 import type { QuickPicks } from '../shared/used.ts';
-import { CeoFiles, quickPicks } from './ceoFiles.ts';
+import { quickPicks } from './ceoFiles.ts';
 import { parseReport, QA_SCHEMA, type QaReport } from './qaReport.ts';
-import { FileStore } from './files.ts';
 import type {
-  AgentActivity,
   AgentCli,
   AgentLook,
   AgentPromptView,
-  AgentRole,
   AgentStatus,
-  AgentTask,
-  AgentView,
   CeoInfo,
-  CliView,
-  ClientEvent,
   CloudSettings,
   DoctorFinding,
   DoctorFix,
@@ -102,387 +229,73 @@ import type {
   OfficeUpdateView,
   OpsView,
   PhoneMessage,
-  PongRow,
-  PreviewConfig,
   PreviewView,
   PrPreviewView,
   ProjectFolderView,
   PullInfo,
-  QaView,
   RepoView,
   ServerDelivery,
-  ServerEvent,
   SwarmSettings,
   UsageReading,
   UsageView,
   UsageWarningView,
-  WorldSnapshot,
 } from '../shared/types.ts';
-
-// ---------- persisted shape ----------
-
-interface PersistedRepo {
-  id: string;
-  fullName: string;
-  description: string;
-  url: string;
-  defaultBranch: string;
-  floor: number;
-  color: string;
-  autoAssign: boolean;
-  autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
-  browserTesting: boolean;
-  links: string[]; // other connected repos this floor's agents may read
-  localPath: string | null; // the manager's own project folder (null: a clone under WORKSPACE_ROOT)
-  mission: string;
-  summary: string;
-  qaBrief: string;
-  playbook: string;
-  preview: PreviewConfig; // how the floor's app runs for the preview monitor
-  addedAt: number;
-}
-
-interface PersistedAgent {
-  id: string;
-  name: string;
-  repoId: string; // '' for the CEO, who works in the lobby
-  role: AgentRole;
-  look: AgentLook;
-  task: AgentTask | null;
-  desk: number; // one numbering per floor, 0 to FLOOR_SEATS - 1
-  color: string;
-  hair: string;
-  skin: string;
-  style: AgentStyle | null; // the look editor's picks (null: seeded from the id)
-  model: string;
-  effort: EffortLevel | '';
-  cli: AgentCli | ''; // '' = the office's default CLI
-  machine: string | null; // their machine (machines.ts); null for an agent from before machines, until their next task
-  host?: MachineHost; // 'box': their machine is an Upstash Box (docs/cloud.md); absent: a folder on this computer
-  boxCli?: BoxCliRecord | null; // a cloud agent's live CLI in their Box, to pick up again after a restart
-  needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
-  tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
-  status: AgentStatus;
-  issueNumber: number | null;
-  issueTitle: string | null;
-  branch: string | null;
-  prNumber: number | null;
-  prUrl: string | null;
-  startedAt: number | null;
-  endedAt: number | null;
-  costUsd: number;
-  turns: number;
-  sessionId: string | null;
-  sessionCli: AgentCli | null; // the CLI whose session sessionId is: only it can resume it
-  lastError: string | null;
-  logTail: LogLine[];
-}
-
-/** A pull request's trip through QA. */
-interface QaRecord extends Omit<QaView, 'ceoLooking'> {
-  issueNumber: number | null;
-  devSessionId: string | null; // the dev's Claude Code session, resumed to fix QA findings
-  fixInstructions: string | null;
-  sessionFailures: number;
-  testedSha: string | null; // the head commit QA is testing
-  passedSha: string | null; // the head commit QA signed off on: auto-merge merges exactly that
-  fixReason: 'qa' | 'checks' | 'conflict' | null; // why it was last sent back to a developer
-  mergeFixes: number; // times it went back for failing checks or conflicts
-  retests: number; // QA rounds caused by merge fixes or new commits rather than by QA failing it
-  preQa: PreQa | null; // a conflict found before QA tested the head is being fixed
-  noChangeSha: string | null; // the head a developer last said needed no change (one free re-test per commit)
-  pendingSince: number | null; // when auto-merge started waiting on its checks
-  mergeRetryAt: number | null; // GitHub refused the merge: try again after this
-  alerted: boolean; // the manager has been told it's stuck
-  rerunSha: string | null; // the head commit whose failed checks the office re-ran (once per commit)
-  rerunAt: number | null;
-  qaChecks: PullInfo['checks'] | null; // GitHub's checks when QA last failed it: a later re-run can be the fix
-  stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
-  triages: number; // CEO triage jobs it has had (triage.ts caps them)
-  escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
-}
-
-/** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */
-type PrepJob = { rec: QaRecord; task: 'qa' } | { rec: QaRecord; task: 'fix'; author: string | null };
-const prepKey = (repoId: string, prNumber: number, task: PrepJob['task']) => `${repoId}#${prNumber}:${task}`;
-
-/** Choices made when a project moves into the office. */
-interface FloorOptions {
-  mission?: string; // brief for the CEO to plan from
-  autoAssign?: boolean; // free agents pick up backlog issues as soon as they're filed
-}
-
-interface CeoState {
-  queue: CeoJob[];
-  job: CeoJob | null; // the job the CEO is on right now
-  lastReviewAt: number | null;
-  lastFingerprint: string | null; // company state at the last review; unchanged means the next review is skipped
-  followups: FollowupState; // office events waiting for a follow-up job (shared/followups.ts)
-}
-
-/** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */
-interface HeldIssue {
-  repoId: string;
-  issue: number;
-  pr: number;
-}
-
-interface Persisted {
-  settings: SwarmSettings;
-  repos: PersistedRepo[];
-  agents: PersistedAgent[];
-  qa: QaRecord[];
-  requests: HireRequestView[];
-  ceo: CeoState;
-  messages: PhoneMessage[];
-  phoneReadAt: number;
-  prLimits: number; // the PR budgets (PR_LIMITS_VERSION) needs-human records were judged by
-  ops: OpsHistory; // mission control's rolling week of merges, QA verdicts, check runs and costs
-  held: HeldIssue[];
-  progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
-  pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
-  officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
-  claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
-}
-
-interface Shot {
-  data: Buffer;
-  mime: string;
-  url: string | null;
-  at: number;
-}
-
-interface AgentRuntime {
-  log: LogLine[];
-  session: SessionHandle | null;
-  currentTool: string | null;
-  browserUrl: string | null;
-  screenshot: { data: Buffer; mime: string; at: number } | null;
-  shots: Shot[]; // every screenshot of the current session (QA evidence)
-  terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
-  qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
-}
-
-interface RepoRuntime {
-  issues: IssueInfo[];
-  pulls: PullInfo[];
-  lastSync: number | null;
-  syncError?: string;
-  syncing: boolean;
-  cloneStatus: RepoView['cloneStatus'];
-  cloneError?: string;
-  fetchedAt?: number; // when the latest issues/PRs fetch started
-  lastMergedAt: string | null; // newest merge seen: a newer one means the folder needs a sync
-  folderSync: string | null;
-  merging: boolean;
-  closedIssues: Map<number, number>; // issues the office learned are closed, and when (closeCleanup.ts)
-  closedPulls: Map<number, LearnedPull>; // PRs it learned are closed or merged
-  openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
-}
-
-/** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */
-interface Restart {
-  carryOn: PersistedAgent[];
-  interrupted: PersistedAgent[];
-  preparing: Set<PersistedAgent>;
-  requeue: Set<PersistedAgent>;
-  counts: RestartCounts;
-}
-
-// ---------- flavour ----------
-
-const FLOOR_COLORS = ['#ff8a5b', '#4fb3e8', '#8fd14f', '#c77dff', '#ffc93c', '#ff6fb5', '#2ec4b6', '#f25f5c'];
-const SHIRTS = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261', '#9b5de5', '#f15bb5', '#00bbf9', '#06d6a0', '#ffbe0b', '#8338ec', '#fb5607', '#3a86ff'];
-const HAIR = HAIR_COLORS;
-const SKIN = SKIN_TONES;
-// New agents are named after computing pioneers, then fictional detectives.
-const NAMES = [
-  'Ada', 'Linus', 'Grace', 'Alan', 'Margaret', 'Dennis', 'Barbara', 'Ken', 'Radia', 'Guido', 'Hedy', 'Tim', 'Katherine',
-  'Bjarne', 'Frances', 'Edsger', 'Anita', 'Donald', 'Sophie', 'Yukihiro', 'Jean', 'Niklaus', 'Karen', 'Brendan',
-  'Sherlock', 'Marple', 'Poirot', 'Nancy', 'Columbo', 'Fletcher', 'Watson', 'Morse', 'Holmes', 'Maigret',
-];
-
-// Names that get the feminine character look: everyone in the name pool above, plus common first names
-// for agents the manager names themselves. The manager can always change an agent's look in the console.
-const FEMININE_NAMES = new Set(
-  (
-    'ada grace margaret barbara radia hedy katherine frances anita sophie jean karen marple nancy fletcher ' +
-    'alice amanda amelia amy ana anna anne aisha astrid ava bella beth carla caroline charlotte chloe claire clara ' +
-    'diana elena elizabeth ella ellie emily emma eva fatima fiona freya georgia hannah harper helen holly ingrid iris ' +
-    'isabella ivy jane jasmine jessica julia kate laura leah leila lena lily linda lisa lucy maria marie mary maya mei ' +
-    'mia mila monica naomi natalie nina nora olivia paula priya rachel rose ruby sandra sara sarah scarlett sofia ' +
-    'stella susan tess tessa tina vera victoria yuki zara zoe'
-  ).split(' '),
-);
-const lookFor = (name: string): AgentLook => (FEMININE_NAMES.has(name.trim().split(/\s+/)[0].toLowerCase()) ? 'feminine' : 'masculine');
-const LOOKS: AgentLook[] = ['feminine', 'masculine'];
-// Every agent runs Claude Opus 5.5 at medium effort unless the manager overrides it.
-const DEFAULT_MODEL = 'claude-opus-5-5';
-const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-// The CEO thinks harder than the staff: Opus 5.5 at xhigh effort unless the manager changes it.
-const CEO_MODEL = 'claude-opus-5-5';
-const CEO_EFFORT: EffortLevel = 'xhigh';
-const CEO_NAME = 'Morgan';
-// The CEO's own folder: its notes about the company live here. Repos are read through their clones.
-const CEO_DIR = path.join(HOME_DIR, 'ceo');
-// The chat's files (server/files.ts): outside every worktree, so agents only ever read them.
-const FILES_DIR = path.join(HOME_DIR, 'files');
-const DEFAULT_PROJECTS_DIR = defaultProjectsDir(path.resolve(import.meta.dirname, '..'));
-const MAX_ISSUES_PER_JOB = 12;
-const KEEP_MESSAGES = 200;
-const KEEP_DECIDED_REQUESTS = 40;
-
-const pick = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
-const slugify = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40) || 'agent';
-
-const BUSY: AgentStatus[] = ['preparing', 'working'];
-const FREE: AgentStatus[] = ['idle', 'done'];
-// An agent whose session failed sits out this long before taking new work, so a broken setup can't burn through the queue.
-const ERROR_COOLDOWN_MS = 2 * 60_000;
-// Auto-assign stops retrying an issue after this many failed sessions; the manager can still assign it by hand.
-const MAX_ISSUE_FAILURES = 2;
-// Failed QA runs (sessions, or desks that couldn't be set up) before a PR goes to the manager.
-const MAX_QA_FAILURES = 2;
-// How long the office waits after Claude's usage limit is hit when Claude doesn't say when it resets.
-const LIMIT_PAUSE_MS = 15 * 60_000;
-const READINGS_MS = 3000; // Claude's usage readings arrive with every status line: the office gets them at most this often
-// Everyone on a floor this size or bigger busy at once is a full house (an achievement).
-const FULL_HOUSE = 4;
-// Mission control's numbers are recomputed after these events (debounced), and every half minute for the clock's sake.
-const OPS_EVENTS = new Set<ServerEvent['type']>(['repo', 'repoRemoved', 'agent', 'agentRemoved', 'qa', 'qaRemoved', 'ceo']);
-const OPS_TICK_MS = 30_000;
-// How often the watchdog looks for stuck work (watchdog.ts).
-const WATCHDOG_MS = 60_000;
-const oneLine = (err: unknown) => (err instanceof Error ? err.message : String(err)).split(/\r?\n/)[0].slice(0, 200);
-// While a cloud agent signs in, the office looks whether it's done this often (someone watching their terminal), else less.
-const SIGN_IN_POLL_MS = 8_000;
-const SIGN_IN_IDLE_POLL_MS = 60_000;
-// What a session that lost its sign-in mid-task is told when it carries on.
-const SIGNED_IN_AGAIN = 'You were signed out in the middle of your task and are signed in again. Carry on where you left off.';
-
-/** A cloud agent's CLI that runs in a Box and can sign in there (OpenCode can't run in one). */
-type BoxCliId = 'claude' | 'codex';
-
-/** A cloud agent's CLI isn't signed in in their Box: their task waits for the manager to sign it in (docs/cloud.md). */
-class SignInNeeded extends Error {
-  constructor(readonly cli: BoxCliId) {
-    super(`${cliLabel(cli)} isn't signed in in their cloud machine.`);
-  }
-}
-
-/** A cloud agent signing in: the task it holds (started once they're signed in) and the sign-in in their terminal. */
-interface SignIn {
-  cli: BoxCliId;
-  held: (() => void) | null;
-  run: BoxSignIn | null;
-  starting: boolean;
-  poll: NodeJS.Timeout | null;
-}
-
-// The latest browser screenshot per agent is kept on disk so monitors survive a server restart.
-const SCREENS_DIR = path.join(HOME_DIR, 'screens');
-const MIME_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
-const screenFile = (agentId: string, mime: string) => path.join(SCREENS_DIR, `${agentId}.${MIME_EXT[mime] ?? 'img'}`);
-
-async function loadScreen(agentId: string): Promise<{ data: Buffer; mime: string; at: number } | null> {
-  for (const [mime, ext] of Object.entries(MIME_EXT)) {
-    const file = path.join(SCREENS_DIR, `${agentId}.${ext}`);
-    try {
-      const [data, stat] = await Promise.all([fs.readFile(file), fs.stat(file)]);
-      return { data, mime, at: stat.mtimeMs };
-    } catch {
-      // try the next extension
-    }
-  }
-  return null;
-}
-
-// QA's screenshots of each PR's latest round, for the app viewer's QA panel (qaShots.ts).
-const QA_SHOTS_DIR = path.join(HOME_DIR, 'qa-shots');
-
-async function removeScreens(agentId: string) {
-  await Promise.all(Object.values(MIME_EXT).map((ext) => fs.rm(path.join(SCREENS_DIR, `${agentId}.${ext}`), { force: true })));
-}
-
-// Each agent's terminal (screen and scrollback) is saved too, so the office shows what they did after a restart.
-const TERMINALS_DIR = path.join(HOME_DIR, 'terminals');
-const terminalFile = (agentId: string) => path.join(TERMINALS_DIR, `${agentId}.ansi`);
-const TERMINAL_SAVE_MS = 20_000;
-
-const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
-
-/** A tab's message on /ws asking for the live office again (ClientEvent 'resync'). */
-function isResync(raw: unknown): boolean {
-  try {
-    return (JSON.parse(String(raw)) as Partial<ClientEvent> | null)?.type === 'resync';
-  } catch {
-    return false;
-  }
-}
-
-const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
-
-const clampMaxAgents = (n: unknown) => Math.max(1, Math.min(FLOOR_SEATS, Math.round(Number(n)) || DEFAULT_MAX_AGENTS));
+import {
+  type PersistedRepo,
+  type PersistedAgent,
+  type QaRecord,
+  type PrepJob,
+  prepKey,
+  type FloorOptions,
+  type Persisted,
+  type Shot,
+  type RepoRuntime,
+  type Restart,
+  DEFAULT_MODEL,
+  EFFORTS,
+  CEO_MODEL,
+  CEO_EFFORT,
+  CEO_NAME,
+  CEO_DIR,
+  MAX_ISSUES_PER_JOB,
+  KEEP_MESSAGES,
+  KEEP_DECIDED_REQUESTS,
+  BUSY,
+  FREE,
+  ERROR_COOLDOWN_MS,
+  MAX_ISSUE_FAILURES,
+  MAX_QA_FAILURES,
+  LIMIT_PAUSE_MS,
+  READINGS_MS,
+  FULL_HOUSE,
+  OPS_TICK_MS,
+  WATCHDOG_MS,
+  oneLine,
+  SIGN_IN_POLL_MS,
+  SIGN_IN_IDLE_POLL_MS,
+  SIGNED_IN_AGAIN,
+  type BoxCliId,
+  SignInNeeded,
+  type SignIn,
+  QA_SHOTS_DIR,
+  terminalFile,
+  TERMINAL_SAVE_MS,
+  cell,
+  ICON,
+  clampMaxAgents,
+} from './swarm/model.ts';
+import { FLOOR_COLORS, SHIRTS, HAIR, SKIN, NAMES, lookFor, LOOKS, pick, slugify } from './swarm/flavour.ts';
+import { SCREENS_DIR, MIME_EXT, screenFile, loadScreen, removeScreens } from './swarm/screens.ts';
+import { SwarmCore } from './swarm/core.ts';
 
 export { HttpError };
 
-export class Swarm {
-  private state: Persisted = {
-    settings: {
-      sessionLimit: 0,
-      defaultModel: DEFAULT_MODEL,
-      defaultEffort: 'medium',
-      taskEffort: {},
-      runtime: 'terminal',
-      defaultCli: 'claude',
-      scaling: 'approve',
-      maxAgents: DEFAULT_MAX_AGENTS,
-      ceoHeartbeatMin: 60,
-      ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
-      ceoMandates: [],
-      managerName: '',
-      companyName: '',
-      dogName: DEFAULT_DOG_NAME,
-      projectsDir: DEFAULT_PROJECTS_DIR,
-      setupDone: false,
-      tutorialStep: 0,
-      autoUpdate: true,
-      pacingSessions: DEFAULT_PACING_SESSIONS,
-      trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
-      voice: { ...DEFAULT_VOICE },
-      themes: DEFAULT_THEME_SETTINGS,
-      weather: { ...DEFAULT_WEATHER },
-      worldEvents: { ...DEFAULT_WORLD_EVENTS },
-      listen: { ...DEFAULT_LISTEN },
-      notify: notifySettings(DEFAULT_NOTIFY, {}),
-      cloud: { ...DEFAULT_CLOUD },
-      tools: DEFAULT_TOOL_SETTINGS,
-    },
-    repos: [],
-    agents: [],
-    qa: [],
-    requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups() },
-    messages: [],
-    phoneReadAt: 0,
-    prLimits: PR_LIMITS_VERSION,
-    ops: emptyHistory(),
-    held: [],
-    progress: emptyLedger(),
-    pong: {},
-    officeId: officeId(),
-    claudeUsage: [],
-  };
+export class Swarm extends SwarmCore {
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
    * a shared one left the next session connected but without any tools while an earlier session still held it.
    */
-  private officeTools(): OfficeTools {
+  protected officeTools(): OfficeTools {
     const acts = this.spend.acts;
     return createOfficeTools({
       companyStatus: () => this.companyStatus(),
@@ -506,156 +319,6 @@ export class Swarm {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
-    });
-  }
-  /** The chat's files store; every change goes out to the tabs as a `files` event. */
-  readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));
-  private ceoFiles = new CeoFiles(this.files, CEO_DIR);
-
-  private ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
-  private ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
-  private messageSeq = 1;
-  private agentRt = new Map<string, AgentRuntime>();
-  private seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
-  private shownActivity = new Map<string, AgentActivity | null>(); // agent id -> the activity clients last heard
-  private ticker = new Ticker({
-    name: (id) => this.state.agents.find((a) => a.id === id)?.name ?? null,
-    author: (repoId, pr) => this.state.agents.find((a) => a.repoId === repoId && a.role !== 'ceo' && a.task !== 'qa' && a.prNumber === pr)?.name ?? null,
-  });
-  private repoRt = new Map<string, RepoRuntime>();
-  private issueAges = new IssueAges(); // when the issues behind recent merges were filed, for the whiteboard
-  private deskAlerts = new Map<string, string>(); // agent id -> the desk setup error the manager was last told about
-  private prepStrikes = new Map<string, PrepStrikes>(); // `${repoId}#${pr}:${task}` -> its desks that couldn't be set up
-  private dropping = new Map<string, string>(); // agent id -> why their task's issue or PR closed: the desk clears once the session ends
-  // Everything sent to the tabs on /ws: agent and floor changes batched as patches, terminal lines only where shown.
-  private outbox = new Outbox({
-    agents: () => this.state.agents.map((a) => ({ id: a.id, floor: this.floorOf(a) })),
-    log: (id) => this.agentRt.get(id)?.log ?? [],
-    beforeFlush: (ids) => this.updateSigns(ids),
-  });
-  private user: string | null = null;
-  private ghError: string | undefined;
-  private saveTimer: NodeJS.Timeout | null = null;
-  private writing: Promise<void> = Promise.resolve(); // state file writes, one at a time: they share its temp file
-  private logSeq = 1;
-  private previews: Previews;
-  private officeHead: string | null = null; // the commit the office runs (null: not a git checkout, so no self-update)
-  private officeUpdate = {
-    behind: 0,
-    requested: false,
-    postponedUntil: null as number | null,
-    postponedBehind: 0,
-    failed: null as string | null,
-    failedBehind: null as number | null,
-    drainingSince: null as number | null,
-    sent: false,
-    handedOver: false, // sessions cut off by the hand-over are the restarted office's to recover
-  };
-  private lastOfficeView = '';
-  private clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)
-  private tooling: ToolInventory = { ...EMPTY_INVENTORY, items: officeItems() }; // Tools & skills (scanned at startup and on demand)
-  /** Phone messages read aloud. The demo keeps its own key and clips, so it never touches the real ones. */
-  readonly voice: Voice;
-  /** The real local weather (Settings → Weather), read by the server so it's cached and survives a restart. */
-  readonly weather: WeatherService;
-  /** What the office looked like over the last week, for the time-lapse replay. The demo keeps its own. */
-  readonly journal: Journal;
-  private readonly envSecrets = envSecrets(process.env);
-  /** Notifications to the manager's devices and chat apps (docs/pocket.md). The demo's only log what they'd send. */
-  readonly notifier: Notifier;
-  /** The manager's own Telegram bot: notifications, the CEO chat both ways, team-change buttons. The demo's is fake. */
-  readonly telegram: TelegramBot;
-  /** Settings → Cloud agents: the Upstash account and what cloud agents sign in with (docs/cloud.md). The demo's is fake. */
-  readonly cloud: Cloud;
-  /** Cloud agents' machines: an Upstash Box each. */
-  private boxMachines: BoxMachines;
-  /** Cloud agents waiting for a sign-in in their terminal (holdForSignIn), by agent id. */
-  private signIns = new Map<string, SignIn>();
-  private toldStuck = new Set<string>(); // `${agentId}:${endedAt}`: agents in an error the manager was notified about
-  /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
-  private spend: SessionCosts;
-
-  constructor(private backend: Backend) {
-    this.weather = new WeatherService({
-      api: backend.weather,
-      file: path.join(HOME_DIR, backend.demo ? 'demo-weather.json' : 'weather.json'),
-      settings: () => this.state.settings.weather,
-      changed: (weather) => this.broadcast({ type: 'weather', weather }),
-      log: (line) => console.log(line),
-    });
-    this.voice = new Voice({
-      api: backend.voice,
-      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-secrets.json' : 'secrets.json'),
-      cacheDir: path.join(HOME_DIR, backend.demo ? 'demo-voice' : 'voice'),
-      settings: () => this.state.settings.voice,
-      listen: () => this.state.settings.listen,
-      messages: () => this.state.messages,
-      officeNote: (text) => this.postMessage('office', text),
-      keyChanged: (view) => this.broadcast({ type: 'voiceKey', ...view }),
-      cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
-      log: (line) => console.log(line),
-    });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited());
-    this.journal = new Journal({
-      dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
-      frame: () => journalFrame(this.snapshot(), this.secrets()),
-      secrets: () => this.secrets(),
-    });
-    this.telegram = new TelegramBot({
-      api: backend.telegram,
-      // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
-      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
-      message: async (text) => void (await this.messageCeo(text, undefined, 'telegram')),
-      decide: (verdict, id) => this.decideFromTelegram(verdict, id),
-      changed: () => this.notifier.refresh(),
-      log: (line) => console.warn(line),
-    });
-    this.notifier = new Notifier({
-      transport: backend.notify,
-      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-secrets.json' : 'secrets.json'),
-      pushFile: path.join(HOME_DIR, backend.demo ? 'demo-push.json' : 'push.json'),
-      settings: () => this.state.settings.notify,
-      broadcast: (note) => this.broadcast({ type: 'notify', note }),
-      channelsChanged: (notifyChannels) => this.broadcast({ type: 'notifyChannels', notifyChannels }),
-      log: (line) => console.warn(line),
-      telegram: {
-        linked: () => this.telegram.linked(),
-        mirrors: () => this.mirrorsToTelegram(),
-        send: (text, keyboard) => this.telegram.send(text, keyboard),
-        view: () => this.telegram.view(),
-      },
-    });
-    this.cloud = new Cloud({
-      // The demo's fake cloud keeps a file of its own: its tests run beside the notifier's, which share demo-secrets.json.
-      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-cloud-secrets.json' : 'secrets.json'),
-      env: backend.cloud.env(),
-      boxes: (key) => backend.cloud.boxes(key),
-      ghToken: () => backend.cloud.ghToken(),
-      office: () => this.state.officeId,
-      machines: () => new Set(this.state.agents.filter((a) => a.host === 'box' && a.machine).map((a) => a.machine!)),
-      changed: (cloud) => this.broadcast({ type: 'cloud', cloud }),
-      log: (line) => console.warn(line),
-    });
-    this.boxMachines = new BoxMachines({
-      api: () => this.cloud.boxApi(),
-      office: () => this.state.officeId,
-      size: () => this.state.settings.cloud.boxSize,
-      versions: boxVersions(),
-      git: () => backend.cloud.gitIdentity(this.user),
-      githubEnv: () => this.cloud.githubEnv(),
-      state: (machine) => this.boxState(machine),
-      secrets: () => this.secrets(),
-      log: (line) => console.warn(line),
-    });
-    this.previews = new Previews(backend, {
-      emit: (id) => {
-        const r = this.state.repos.find((x) => x.id === id);
-        if (r && this.repoRt.has(id)) this.emitRepo(r);
-      },
-      pulls: (id) => this.repoRt.get(id)?.pulls ?? [],
-      emitPr: (preview) => this.broadcast({ type: 'prPreview', preview }),
-      prRemoved: (repoId, pr) => this.broadcast({ type: 'prPreviewRemoved', repoId, pr }),
-      note: (text) => this.toast('info', text),
     });
   }
 
@@ -920,7 +583,7 @@ export class Swarm {
    * again only on open work at a desk that's still there; everyone else who was busy is stopped, to resume or start
    * over once the floors have synced (finishRestart). alive: the agent's CLI kept working on this task.
    */
-  private async reconcileRestart(alive: (a: PersistedAgent) => boolean): Promise<Restart> {
+  protected async reconcileRestart(alive: (a: PersistedAgent) => boolean): Promise<Restart> {
     const plan = new Map<PersistedAgent, ReconcileStep>();
     await Promise.all(
       this.state.agents.map(async (a) => {
@@ -973,7 +636,7 @@ export class Swarm {
   }
 
   /** After the startup sync: the restart's interrupted work resumes or goes back in line, and the phone hears what happened. */
-  private finishRestart(r: Restart) {
+  protected finishRestart(r: Restart) {
     this.recover([...r.interrupted, ...[...r.requeue].filter((a) => !r.interrupted.includes(a))], r.preparing, r.requeue, r.counts);
     const text = restartMessage(r.counts);
     if (text) this.postMessage('office', text);
@@ -983,7 +646,7 @@ export class Swarm {
    * Agents cut off by a server restart pick their session back up, told what they were doing. QA, demo agents, tasks
    * still being prepared and work whose desk is gone (requeue) start over from the queue, without a strike.
    */
-  private recover(agents: PersistedAgent[], preparing: Set<PersistedAgent>, requeue = new Set<PersistedAgent>(), counts: RestartCounts = { cleared: 0, reattached: 0, resumed: 0, requeued: 0 }) {
+  protected recover(agents: PersistedAgent[], preparing: Set<PersistedAgent>, requeue = new Set<PersistedAgent>(), counts: RestartCounts = { cleared: 0, reattached: 0, resumed: 0, requeued: 0 }) {
     for (const a of agents) {
       if (!a.task) continue; // its issue or PR closed while the office was down: the startup sync cleared the desk
       const fix = a.task === 'fix' ? this.state.qa.find((q) => q.devAgentId === a.id && q.status === 'fixing') : undefined;
@@ -1003,7 +666,7 @@ export class Swarm {
   }
 
   /** One-off, on the first start with bigger PR budgets: PRs the manager got under the old ones go back to work. */
-  private catchUpPrs() {
+  protected catchUpPrs() {
     const back: string[] = [];
     for (const rec of this.state.qa) {
       const status = catchUp(rec);
@@ -1014,387 +677,6 @@ export class Swarm {
     }
     this.state.prLimits = PR_LIMITS_VERSION;
     if (back.length) this.postMessage('office', `↩️ Developers now get more tries at their PRs, so ${back.join(', ')} went back to them instead of waiting for you.`);
-  }
-
-  // ---------- views ----------
-
-  private repoView(r: PersistedRepo): RepoView {
-    const rt = this.repoRt.get(r.id)!;
-    return {
-      id: r.id,
-      fullName: r.fullName,
-      description: r.description,
-      url: r.url,
-      defaultBranch: r.defaultBranch,
-      floor: r.floor,
-      color: r.color,
-      autoAssign: r.autoAssign,
-      autoMerge: r.autoMerge,
-      folderSync: rt.folderSync,
-      browserTesting: r.browserTesting,
-      links: r.links,
-      mission: r.mission,
-      summary: r.summary,
-      qaBrief: r.qaBrief,
-      playbook: r.playbook,
-      localPath: r.localPath,
-      checkoutPath: this.backend.mainDir(r.fullName),
-      cloneStatus: rt.cloneStatus,
-      cloneError: rt.cloneError,
-      issues: rt.issues,
-      pulls: rt.pulls,
-      held: this.state.held.filter((h) => h.repoId === r.id).map((h) => ({ issue: h.issue, pr: h.pr })),
-      lastSync: rt.lastSync,
-      syncError: rt.syncError,
-      previewConfig: r.preview,
-      preview: this.previews.view(r),
-    };
-  }
-
-  private agentView(a: PersistedAgent, withLog: boolean): AgentView {
-    const rt = this.agentRt.get(a.id)!;
-    return {
-      id: a.id,
-      name: a.name,
-      repoId: a.repoId,
-      role: a.role,
-      look: a.look,
-      task: a.task,
-      desk: a.desk,
-      color: a.color,
-      hair: a.hair,
-      skin: a.skin,
-      style: a.style,
-      model: a.model,
-      effort: a.effort,
-      cli: a.cli,
-      host: a.host === 'box' ? 'box' : 'local',
-      ...(a.host === 'box' ? { cloud: this.boxMachines.stateOf(a.machine ?? machineName(a.id)), needsSignIn: !!a.needsSignIn } : {}),
-      terminal: !!rt.terminal,
-      status: a.status,
-      issueNumber: a.issueNumber,
-      issueTitle: a.issueTitle,
-      branch: a.branch,
-      prNumber: a.prNumber,
-      prUrl: a.prUrl,
-      currentTool: rt.currentTool,
-      startedAt: a.startedAt,
-      endedAt: a.endedAt,
-      costUsd: a.costUsd,
-      turns: a.turns,
-      browserUrl: rt.browserUrl,
-      hasScreenshot: !!rt.screenshot,
-      screenshotAt: rt.screenshot?.at ?? null,
-      lastError: a.lastError,
-      career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
-      log: withLog ? rt.log : [],
-      activity: this.activityOf(a),
-      ...(a.role !== 'ceo' ? { tools: a.tools ?? {} } : {}), // always sent: a patch can't drop a field
-    };
-  }
-
-  /** What the sign over their head says (shared/activity.ts): from their status and latest action, never raw input. */
-  private activityOf(a: PersistedAgent): AgentActivity | null {
-    const chat = a.role === 'ceo' && this.state.ceo.job?.kind === 'chat';
-    const { status, task, issueNumber, prNumber, startedAt } = a;
-    const currentTool = this.agentRt.get(a.id)?.currentTool ?? null;
-    return agentActivity({ status, task, currentTool, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
-  }
-
-  private qaView(q: QaRecord): QaView {
-    return {
-      repoId: q.repoId,
-      prNumber: q.prNumber,
-      status: q.status,
-      round: q.round,
-      devAgentId: q.devAgentId,
-      qaAgentId: q.qaAgentId,
-      summary: q.summary,
-      checks: q.checks,
-      commentUrl: q.commentUrl,
-      mergeNote: q.mergeNote,
-      ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
-      updatedAt: q.updatedAt,
-      shots: q.shots ?? [],
-    };
-  }
-
-  snapshot(): WorldSnapshot {
-    return {
-      user: this.user,
-      ghReady: !this.ghError,
-      ghError: this.ghError,
-      demo: this.backend.demo,
-      machinesRoot: MACHINES_DIR,
-      settings: this.state.settings,
-      repos: this.state.repos.map((r) => this.repoView(r)),
-      // no terminal lines: each tab asks for the ones it shows (shared/watch.ts)
-      agents: this.state.agents.map((a) => this.agentView(a, false)),
-      qa: this.state.qa.map((q) => this.qaView(q)),
-      prPreviews: this.previews.prViews(),
-      requests: this.state.requests,
-      ceo: this.ceoInfo(),
-      messages: snapshotMessages(this.state.messages.slice(-100)),
-      phoneReadAt: this.state.phoneReadAt,
-      usage: this.usageNow(),
-      claudeUsage: this.state.claudeUsage,
-      ops: this.opsNow(),
-      doctor: this.doctorView(),
-      clis: this.clis,
-      ...this.voice.keyView(),
-      voiceCache: this.voice.cacheInfo(),
-      weather: this.weather.current(),
-      ticker: this.ticker.recent(),
-      notifyChannels: this.notifier.channelsView(),
-      cloud: this.cloud.view(),
-      version: VERSION,
-      officeCommit: this.officeHead?.slice(0, 7) ?? null,
-      officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
-      progress: this.progressView(),
-      pong: this.state.pong,
-      files: this.files.list(),
-      tooling: this.tooling,
-    };
-  }
-
-  /** The short commit the office runs, or null when it isn't a git checkout. */
-  officeCommit(): string | null {
-    return this.officeHead?.slice(0, 7) ?? null;
-  }
-
-  /** The agent's latest screenshot: null when it has none right now, undefined for an unknown agent. */
-  screenshot(agentId: string) {
-    const rt = this.agentRt.get(agentId);
-    return rt ? rt.screenshot : undefined;
-  }
-
-  // ---------- clients ----------
-
-  addClient(ws: WebSocket) {
-    this.outbox.add(ws);
-    ws.on('close', () => this.outbox.remove(ws));
-    ws.on('message', (raw) => {
-      // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
-      // otherwise it's saying what it shows (shared/watch.ts).
-      if (isResync(raw)) {
-        this.send(ws, { type: 'snapshot', data: this.snapshot() });
-        this.outbox.resync(ws);
-      } else this.outbox.receive(ws, String(raw));
-    });
-    this.send(ws, { type: 'snapshot', data: this.snapshot() });
-  }
-
-  /** The floor an agent's desk is on, for routing their terminal lines: 0 for the CEO in the lobby, null for none. */
-  private floorOf(a: PersistedAgent): number | null {
-    if (a.role === 'ceo') return 0;
-    return this.state.repos.find((r) => r.id === a.repoId)?.floor ?? null;
-  }
-
-  private send(ws: WebSocket, ev: ServerEvent) {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(ev));
-  }
-
-  private broadcast(ev: ServerEvent) {
-    this.outbox.broadcast(ev);
-    this.observe(ev);
-  }
-
-  /** What follows from an event besides the tabs hearing it: ticker lines and mission control's numbers. */
-  private observe(ev: ServerEvent) {
-    for (const item of this.ticker.observe(ev)) this.broadcast({ type: 'ticker', item });
-    if (OPS_EVENTS.has(ev.type)) this.opsSoon();
-    this.journal.record(ev);
-  }
-
-  /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */
-  private secrets(): string[] {
-    const key = this.voice.secret();
-    const bot = this.telegram.secret();
-    return [...this.envSecrets, ...(key ? [key] : []), ...(bot ? [bot] : []), ...this.cloud.secretValues()];
-  }
-
-  /** POST /api/journal/sample (demo only): writes a made-up working day as yesterday's journal, to replay. */
-  async journalSample(): Promise<{ day: string }> {
-    if (!this.backend.demo) throw new HttpError(400, 'Sample days are only for the demo office');
-    const today = new Date();
-    const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime();
-    const day = await this.journal.writeDay(sampleDay(journalFrame(this.snapshot(), this.secrets()), midnight, seeded(Number(dayKey(midnight).replace(/-/g, '')))));
-    return { day };
-  }
-
-  private toast(level: 'info' | 'success' | 'error', text: string) {
-    this.broadcast({ type: 'toast', level, text });
-  }
-
-  private emitRepo(r: PersistedRepo) {
-    const repo = this.repoView(r);
-    this.observe({ type: 'repo', repo });
-    // to the tabs with the next batch: a big company syncs and merges many times a minute
-    this.outbox.repo(repo);
-  }
-
-  private emitAgent(a: PersistedAgent) {
-    // A session can finish after its agent was let go (their floor disconnected mid-task); they're gone, so say nothing.
-    if (!this.agentRt.has(a.id)) return;
-    const { log: _log, ...rest } = this.agentView(a, false);
-    this.shownActivity.set(a.id, rest.activity ?? null);
-    this.observe({ type: 'agent', agent: rest });
-    // to the tabs with the next batch: a busy agent changes tools many times a minute
-    this.outbox.agent(rest);
-  }
-
-  private setQa(rec: QaRecord, patch: Partial<QaRecord>) {
-    const told = rec.status === 'needs-human' && rec.escalated;
-    Object.assign(rec, patch, { updatedAt: Date.now() });
-    if (!this.state.qa.includes(rec)) return; // it left QA (its PR closed) while a session on it was still wrapping up
-    if (rec.status !== 'needs-human') rec.escalated = false;
-    else this.ledger({ kind: 'needs-human', repoId: rec.repoId, pr: rec.prNumber });
-    this.broadcast({ type: 'qa', qa: this.qaView(rec) });
-    this.save();
-    // Every way a PR reaches the manager (escalated by the CEO, or straight to them) passes here.
-    if (!told && rec.status === 'needs-human' && rec.escalated) this.notifyNeedsHuman(rec);
-  }
-
-  private appendLog(a: PersistedAgent, entries: LogEntry[]) {
-    const rt = this.agentRt.get(a.id);
-    if (!rt) return;
-    const t = Date.now();
-    const lines: LogLine[] = [];
-    for (const e of entries) {
-      const line: LogLine = { id: this.logSeq++, t, kind: e.kind, text: e.text, tool: e.tool };
-      rt.log.push(line);
-      lines.push(line);
-      const act = lineActivity(line);
-      if (act) this.seenActivity.set(a.id, { ...act, at: t });
-    }
-    if (rt.log.length > LOG_BUFFER) rt.log.splice(0, rt.log.length - LOG_BUFFER);
-    this.outbox.log(a.id, lines);
-    this.save();
-  }
-
-  /** Before new lines go out: a new action changes the sign over their head (tool changes already sent most of them). */
-  private updateSigns(agentIds: string[]) {
-    for (const id of agentIds) {
-      const a = this.state.agents.find((x) => x.id === id);
-      if (a && !sameActivity(this.activityOf(a), this.shownActivity.get(id))) this.emitAgent(a);
-    }
-  }
-
-  // ---------- persistence ----------
-
-  private save() {
-    if (this.saveTimer) return;
-    this.saveTimer = setTimeout(() => void this.writeState().catch((err) => console.warn('could not save the state', err)), 1500);
-  }
-
-  /** Write the state file now, e.g. before the office stops or hands itself to the launcher. Waits for a write in progress. */
-  private writeState(): Promise<void> {
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = null;
-    const next = this.writing.then(() => this.writeStateFile());
-    this.writing = next.catch(() => undefined);
-    return next;
-  }
-
-  private async writeStateFile() {
-    for (const a of this.state.agents) a.logTail = (this.agentRt.get(a.id)?.log ?? []).slice(-200);
-    await fs.mkdir(path.dirname(STATE_FILE), { recursive: true });
-    const tmp = `${STATE_FILE}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(this.state, null, 2));
-    await fs.rename(tmp, STATE_FILE);
-  }
-
-  // ---------- lookups ----------
-
-  private repo(id: string) {
-    const r = this.state.repos.find((x) => x.id === id);
-    if (!r) throw new HttpError(404, `Repo ${id} is not connected`);
-    return r;
-  }
-
-  private agent(id: string) {
-    const a = this.state.agents.find((x) => x.id === id);
-    if (!a) throw new HttpError(404, `No agent ${id}`);
-    return a;
-  }
-
-  private running() {
-    return this.state.agents.filter((a) => BUSY.includes(a.status)).length;
-  }
-
-  /** Cloud agents working on a task in their Box, which an office restart doesn't stop. */
-  private inBoxes() {
-    return this.state.agents.filter((a) => a.host === 'box' && a.status === 'working' && !!a.boxCli);
-  }
-
-  /** True when the manager has set a session limit and every slot is taken. */
-  private slotsFull() {
-    const limit = this.state.settings.sessionLimit;
-    return limit > 0 && this.running() >= limit;
-  }
-
-  private agentSlug(a: PersistedAgent) {
-    return `${slugify(a.name)}-${a.id.slice(0, 4)}`;
-  }
-
-  /** The machines an agent's machine is one of: folders on this computer, or Upstash Boxes (docs/cloud.md). */
-  private machinesFor(a: Pick<PersistedAgent, 'host'>): MachineProvider {
-    return a.host === 'box' ? this.boxMachines : this.backend.machines;
-  }
-
-  /** Where an agent works: their machine's worktree, or (from before machines, until their next task) their floor desk. */
-  private deskOf(a: PersistedAgent, repo: PersistedRepo) {
-    return a.machine ? this.machinesFor(a).deskDir(a.machine, repo.fullName) : this.backend.deskDir(repo.fullName, this.agentSlug(a));
-  }
-
-  /** Stop what an agent left running at their desk: on their port, or started there. */
-  private releaseDesk(a: PersistedAgent, repo: PersistedRepo) {
-    return a.machine ? this.machinesFor(a).release(a.machine, repo.fullName, this.port(a)) : this.backend.releaseDesk(repo.fullName, this.agentSlug(a), this.port(a));
-  }
-
-  /**
-   * An agent's machine; one from before machines moves to theirs now, at the start of a task. Their sessions were kept
-   * by the old desk folder (Claude Code stores them by folder), so none is resumed from the machine: fixes start fresh.
-   */
-  private machineOf(a: PersistedAgent) {
-    if (a.machine) return a.machine;
-    a.machine = machineName(a.id);
-    a.sessionId = null;
-    a.sessionCli = null;
-    for (const q of this.state.qa) if (q.devAgentId === a.id) q.devSessionId = null;
-    this.appendLog(a, [{ kind: 'system', text: '🖥️ Moving to a machine of their own: their own clone of the repository, worktree and temp folder.' }]);
-    this.save(); // a restart from here on must know the machine is theirs, or its sweep takes it
-    return a.machine;
-  }
-
-  /** The environment of an agent's sessions on their machine; nothing extra for one not on a machine yet. */
-  private machineEnv(a: PersistedAgent): Record<string, string> | undefined {
-    try {
-      return a.machine ? this.machinesFor(a).env(a.machine) : undefined;
-    } catch (err) {
-      console.warn(`could not set up ${a.name}'s machine environment: ${oneLine(err)}`);
-      return undefined;
-    }
-  }
-
-  /** Remove a machine, saying where its unpushed work went; one still in use is tried again by sweepMachines. */
-  private async removeMachine(machine: string, name: string | null, host: MachineHost = 'local') {
-    const r = await this.machinesFor({ host }).remove(machine).catch(() => ({ removed: false, patches: [] as string[] }));
-    if (r.patches.length) this.postMessage('office', `🧳 ${name ?? 'A former agent'} left work that was on no GitHub branch: saved in ${path.dirname(r.patches[0])}.`);
-    if (host === 'box' && r.removed) void this.cloud.count().catch(() => undefined);
-  }
-
-  /** Machines whose agents are gone (on this computer, or Boxes of this office): removed while still in use, or left by an office that stopped half-way. */
-  private async sweepMachines() {
-    for (const host of ['local', 'box'] as const) {
-      const anyones = (m: string) => this.state.agents.some((a) => a.role !== 'ceo' && (a.host ?? 'local') === host && (a.machine ?? machineName(a.id)) === m);
-      for (const m of await this.machinesFor({ host }).list().catch(() => [])) if (!anyones(m)) await this.removeMachine(m, null, host);
-    }
-  }
-
-  private clearTask(a: PersistedAgent) {
-    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null });
-    this.emitAgent(a);
   }
 
   // ---------- GitHub / repos ----------
@@ -1449,7 +731,7 @@ export class Swarm {
   }
 
   /** Where a GitHub repo's checkout goes when you connect it without picking a folder. */
-  private async projectFolderFor(fullName: string): Promise<string> {
+  protected async projectFolderFor(fullName: string): Promise<string> {
     const root = this.state.settings.projectsDir;
     const folders = await this.backend.scanProjects(root).catch(() => []);
     const match = folders.find((f) => f.github?.toLowerCase() === fullName.toLowerCase());
@@ -1562,7 +844,7 @@ export class Swarm {
    * checks are green. Failing checks and merge conflicts go back to a developer; new commits after QA's sign-off send
    * it back to QA. Merging deletes the remote branch, and the floor's folder then fast-forwards (syncRepo sees the merge).
    */
-  private async advanceMerges(repo: PersistedRepo) {
+  protected async advanceMerges(repo: PersistedRepo) {
     const rt = this.repoRt.get(repo.id);
     if (!rt || !repo.autoMerge || rt.merging) return;
     rt.merging = true;
@@ -1590,7 +872,7 @@ export class Swarm {
   }
 
   /** One step toward merging a QA-passed PR. Returns true when it merged. */
-  private async advanceMerge(repo: PersistedRepo, rec: QaRecord, pr: PullInfo): Promise<boolean> {
+  protected async advanceMerge(repo: PersistedRepo, rec: QaRecord, pr: PullInfo): Promise<boolean> {
     let step = mergeStep(pr, rec, Date.now(), { base: repo.defaultBranch });
     if (step.do === 'details') {
       // GitHub works mergeability out lazily and lists often say UNKNOWN; asking about the PR itself gets an answer.
@@ -1663,7 +945,7 @@ export class Swarm {
    * After the office merges a PR: close the issues it resolves now rather than waiting for GitHub's "Closes #N" (which
    * lags, and never comes when the link wasn't recognised), so the scheduler doesn't hand them out again. Never throws.
    */
-  private async closeResolvedIssues(repo: PersistedRepo, prNumber: number, pr: Pick<PullInfo, 'headRefName' | 'closesIssues'>) {
+  protected async closeResolvedIssues(repo: PersistedRepo, prNumber: number, pr: Pick<PullInfo, 'headRefName' | 'closesIssues'>) {
     const numbers = issuesResolvedBy(pr);
     const rt = this.repoRt.get(repo.id);
     if (rt && rt.issues.some((i) => numbers.includes(i.number))) {
@@ -1686,7 +968,7 @@ export class Swarm {
   }
 
   /** Show where auto-merge stands on a PR's card. Doesn't count as a change to the record. */
-  private mergeNote(rec: QaRecord, text: string | null) {
+  protected mergeNote(rec: QaRecord, text: string | null) {
     if (rec.mergeNote !== text) {
       rec.mergeNote = text;
       this.broadcast({ type: 'qa', qa: this.qaView(rec) });
@@ -1695,7 +977,7 @@ export class Swarm {
   }
 
   /** QA passed, but the PR can't merge as it is: a developer fixes it, and QA re-tests if the code changed. */
-  private sendBack(repo: PersistedRepo, rec: QaRecord, reason: 'checks' | 'conflict', fixInstructions: string, needsHuman: boolean) {
+  protected sendBack(repo: PersistedRepo, rec: QaRecord, reason: 'checks' | 'conflict', fixInstructions: string, needsHuman: boolean) {
     if (needsHuman) {
       this.stuck(rec, { mergeNote: null }, `it still ${reason === 'conflict' ? `conflicts with ${repo.defaultBranch}` : 'fails its checks'} after ${MAX_MERGE_FIXES} fixes`);
       return false;
@@ -1706,7 +988,7 @@ export class Swarm {
   }
 
   /** Fast-forward the floor's main checkout (usually your own project folder) and report how it stands. */
-  private async syncFolder(repo: PersistedRepo) {
+  protected async syncFolder(repo: PersistedRepo) {
     const rt = this.repoRt.get(repo.id);
     if (!rt || rt.cloneStatus !== 'ready') return rt?.folderSync ?? null;
     const own = this.backend.office.isOwnFolder(this.backend.mainDir(repo.fullName)); // updating the running office restarts it mid-work
@@ -1726,10 +1008,10 @@ export class Swarm {
     return status;
   }
 
-  private audits = new Map<string, number>(); // repo id -> docs/code-health.md's mtime when last seen
+  protected audits = new Map<string, number>(); // repo id -> docs/code-health.md's mtime when last seen
 
   /** A fast-forward brought a new code-health audit (docs/code-health.md): the CEO follows up on it. Never throws. */
-  private async checkAudit(repo: PersistedRepo) {
+  protected async checkAudit(repo: PersistedRepo) {
     const file = path.join(this.backend.mainDir(repo.fullName), 'docs', 'code-health.md');
     const mtime = await fs.stat(file).then((st) => st.mtimeMs, () => null);
     const seen = this.audits.get(repo.id);
@@ -1745,7 +1027,7 @@ export class Swarm {
   }
 
   /** Remove the floor's desks, desk folders and swarm/qa branches nobody uses any more; say so when something went. */
-  private async sweepFloor(repoId: string) {
+  protected async sweepFloor(repoId: string) {
     const repo = this.state.repos.find((r) => r.id === repoId);
     const rt = this.repoRt.get(repoId);
     if (!repo || !rt || rt.cloneStatus !== 'ready') return;
@@ -1832,7 +1114,7 @@ export class Swarm {
     await this.previews.stopAll(this.state.repos);
   }
 
-  private async cloneRepo(id: string) {
+  protected async cloneRepo(id: string) {
     const repo = this.state.repos.find((r) => r.id === id);
     const rt = this.repoRt.get(id);
     if (!repo || !rt || rt.cloneStatus === 'cloning') return;
@@ -1895,7 +1177,7 @@ export class Swarm {
   }
 
   /** When the issues behind the day's merges were filed, if the office never saw them open (e.g. after a restart). */
-  private async lookUpIssueAges(repo: PersistedRepo) {
+  protected async lookUpIssueAges(repo: PersistedRepo) {
     const wanted = this.issueAges.wanted(repo.id, this.repoRt.get(repo.id)?.pulls ?? [], Date.now());
     if (!wanted.length) return;
     for (const n of wanted) this.issueAges.know(repo.id, n, (await this.backend.issueDetails(repo.fullName, n).catch(() => null))?.createdAt);
@@ -1906,7 +1188,7 @@ export class Swarm {
   }
 
   /** Tell the ledger what a sync saw: open PRs (and their checks), merges, and which PRs went away. */
-  private ledgerPulls(repo: PersistedRepo, pulls: PullInfo[]) {
+  protected ledgerPulls(repo: PersistedRepo, pulls: PullInfo[]) {
     const now = Date.now();
     for (const pr of pulls) {
       if (pr.state === 'OPEN') this.ledger({ kind: 'pr-open', repoId: repo.id, pr: pr.number, title: pr.title, author: this.prAuthor(repo, pr), checks: pr.checks, at: now });
@@ -1922,7 +1204,7 @@ export class Swarm {
    * Every swarm PR goes through QA, including ones opened before QA existed or while the server was down. (Merged and
    * closed PRs leave QA, and agents who had them are cleared, in cleanUpClosed.)
    */
-  private reconcilePulls(repo: PersistedRepo, pulls: PullInfo[]) {
+  protected reconcilePulls(repo: PersistedRepo, pulls: PullInfo[]) {
     for (const pr of pulls) {
       if (pr.state !== 'OPEN' || pr.isDraft || !pr.headRefName.startsWith('swarm/')) continue;
       if (this.state.qa.some((q) => q.repoId === repo.id && q.prNumber === pr.number)) continue;
@@ -1981,17 +1263,17 @@ export class Swarm {
   // ---------- closed issues and PRs ----------
 
   /** The floor's issues and PRs as the office knows them now (closeCleanup.ts). */
-  private floorState(rt: RepoRuntime): FloorState {
+  protected floorState(rt: RepoRuntime): FloorState {
     return { fetchedAt: rt.fetchedAt ?? 0, openIssues: rt.issues.map((i) => i.number), pulls: rt.pulls, closedIssues: rt.closedIssues, closedPulls: rt.closedPulls };
   }
 
   /** The floor's agents whose work a closure can end. One whose stopped session is still ending is left to finish. */
-  private holders(repo: PersistedRepo) {
+  protected holders(repo: PersistedRepo) {
     return this.state.agents.filter((a) => a.repoId === repo.id && !this.dropping.has(a.id));
   }
 
   /** Ask GitHub about the issues and PRs agents, QA records or holds hold that the last sync doesn't list. */
-  private async askGitHub(repo: PersistedRepo, rt: RepoRuntime) {
+  protected async askGitHub(repo: PersistedRepo, rt: RepoRuntime) {
     const held = this.state.held.filter((h) => h.repoId === repo.id).map((h) => h.issue);
     const ask = toAsk(this.holders(repo), this.state.qa.filter((q) => q.repoId === repo.id), held, this.floorState(rt), rt.openAt, Date.now());
     await Promise.all([
@@ -2012,7 +1294,7 @@ export class Swarm {
   }
 
   /** After a sync: forget closures it shows reopened, and keep what it lists in step with closures learned since it started. */
-  private settleLearned(rt: RepoRuntime) {
+  protected settleLearned(rt: RepoRuntime) {
     const gone = forgettable(this.floorState(rt), Date.now());
     for (const n of gone.issues) rt.closedIssues.delete(n);
     for (const n of gone.pulls) rt.closedPulls.delete(n);
@@ -2023,7 +1305,7 @@ export class Swarm {
   }
 
   /** Stop and clear the work on the floor's closed issues and PRs (closeCleanup.ts). Returns the names of those it stopped. */
-  private cleanUpClosed(repo: PersistedRepo): string[] {
+  protected cleanUpClosed(repo: PersistedRepo): string[] {
     const rt = this.repoRt.get(repo.id);
     if (!rt) return [];
     const f = this.floorState(rt);
@@ -2039,7 +1321,7 @@ export class Swarm {
     return closures.flatMap((c) => this.applyClosure(repo, c));
   }
 
-  private applyClosure(repo: PersistedRepo, c: Closure): string[] {
+  protected applyClosure(repo: PersistedRepo, c: Closure): string[] {
     const plan = afterClose(c, this.holders(repo), this.state.qa.filter((q) => q.repoId === repo.id), BUSY);
     const agent = (id: string) => this.state.agents.find((a) => a.id === id)!;
     const why = closedWhy(c);
@@ -2060,7 +1342,7 @@ export class Swarm {
   }
 
   /** End a session whose issue or PR closed, as ■ Stop does. Its desk is cleared once the session has ended. */
-  private stopForClosure(a: PersistedAgent, why: string) {
+  protected stopForClosure(a: PersistedAgent, why: string) {
     a.status = 'stopped';
     a.lastError = `Stopped: ${why}`;
     this.dropping.set(a.id, why);
@@ -2076,7 +1358,7 @@ export class Swarm {
   }
 
   /** Clear the desk of an agent whose work closed, as ↺ Clear desk does. */
-  private dropTask(a: PersistedAgent, text: string | null, kind: LogLine['kind'] = 'system') {
+  protected dropTask(a: PersistedAgent, text: string | null, kind: LogLine['kind'] = 'system') {
     this.dropping.delete(a.id);
     this.agentRt.get(a.id)?.terminal?.releaseIdle?.();
     this.clearTask(a);
@@ -2084,13 +1366,13 @@ export class Swarm {
   }
 
   /** A task given up before its session started: one stopped because its issue or PR closed clears the desk now. */
-  private abandoned(a: PersistedAgent): null {
+  protected abandoned(a: PersistedAgent): null {
     if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.');
     return null;
   }
 
   /** A closed or merged PR leaves QA, so its QA or fix is never handed out again. */
-  private dropRecord(repo: PersistedRepo, prNumber: number) {
+  protected dropRecord(repo: PersistedRepo, prNumber: number) {
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     if (!rec) return;
     this.state.qa = this.state.qa.filter((q) => q !== rec);
@@ -2102,7 +1384,7 @@ export class Swarm {
   }
 
   /** The office closed an issue, or found it closed: off the board, and its work cleaned up now. Returns who it stopped. */
-  private learnIssueClosed(repo: PersistedRepo, n: number): string[] {
+  protected learnIssueClosed(repo: PersistedRepo, n: number): string[] {
     const rt = this.repoRt.get(repo.id);
     if (!rt) return [];
     rt.closedIssues.set(n, Date.now());
@@ -2117,7 +1399,7 @@ export class Swarm {
    * The office closed or merged a PR, or found it so: its work is cleaned up now, not at the next sync. A closed PR's
    * issues wait for the manager, unless it was closed to be built again (rebuild). Returns who it stopped.
    */
-  private learnPull(repo: PersistedRepo, pr: Omit<KnownPull, 'state'>, state: 'CLOSED' | 'MERGED', rebuild = false): string[] {
+  protected learnPull(repo: PersistedRepo, pr: Omit<KnownPull, 'state'>, state: 'CLOSED' | 'MERGED', rebuild = false): string[] {
     const rt = this.repoRt.get(repo.id);
     if (!rt) return [];
     const known: LearnedPull = { number: pr.number, headRefName: pr.headRefName, closesIssues: pr.closesIssues, state, at: Date.now() };
@@ -2131,7 +1413,7 @@ export class Swarm {
   }
 
   /** A closed PR's open issues wait for the manager instead of going back to auto-assign (toHold). */
-  private holdIssues(repo: PersistedRepo, pr: KnownPull) {
+  protected holdIssues(repo: PersistedRepo, pr: KnownPull) {
     const rt = this.repoRt.get(repo.id);
     const add = rt ? toHold(pr, this.floorState(rt)).filter((n) => !this.isHeld(repo.id, n)) : [];
     if (!add.length) return;
@@ -2140,7 +1422,7 @@ export class Swarm {
     this.save();
   }
 
-  private isHeld(repoId: string, n: number) {
+  protected isHeld(repoId: string, n: number) {
     return this.state.held.some((h) => h.repoId === repoId && h.issue === n);
   }
 
@@ -2227,7 +1509,7 @@ export class Swarm {
    * room under the plan's Box limit and a CLI a Box can run (Claude Code or Codex). `strict`: the manager asked for the
    * cloud, so say why not; otherwise (a floor's first agent, the demo) they work on this computer instead.
    */
-  private hostFor(asked: string | undefined, cli: AgentCli, strict: boolean, moving?: PersistedAgent): MachineHost {
+  protected hostFor(asked: string | undefined, cli: AgentCli, strict: boolean, moving?: PersistedAgent): MachineHost {
     const want: MachineHost = asked === 'box' || asked === 'local' ? asked : this.state.settings.cloud.machineKind;
     if (want === 'local') return 'local';
     const why = !this.cloud.boxApi()
@@ -2243,13 +1525,13 @@ export class Swarm {
   }
 
   /** There's room for one more Box under the plan's limit (Boxes on the account, or cloud agents, whichever is more). */
-  private boxRoom(moving?: PersistedAgent) {
+  protected boxRoom(moving?: PersistedAgent) {
     const agents = this.state.agents.filter((a) => a.host === 'box' && a !== moving).length;
     return Math.max(this.cloud.view().boxes?.total ?? 0, agents) < this.state.settings.cloud.boxLimit;
   }
 
   /** Create and set up a new cloud agent's Box in the background, so their first task doesn't wait for it. */
-  private bringUpBox(a: PersistedAgent) {
+  protected bringUpBox(a: PersistedAgent) {
     const machine = this.machineOf(a);
     const note = (text: string) => this.appendLog(a, [{ kind: 'system', text: `☁ ${text}` }]);
     void this.boxMachines
@@ -2270,7 +1552,7 @@ export class Swarm {
    * Move an agent between this computer and the cloud, while they have no task. Their old machine goes (unpushed work
    * saved to leftovers); sessions can't move between machines, so their next one starts fresh.
    */
-  private moveAgent(a: PersistedAgent, to: MachineHost) {
+  protected moveAgent(a: PersistedAgent, to: MachineHost) {
     if ((a.host ?? 'local') === to) return;
     if (a.task || BUSY.includes(a.status)) throw new HttpError(409, `${a.name} is on a task: move them once it's done.`);
     const host = this.hostFor(to, a.cli || this.state.settings.defaultCli, true, a);
@@ -2294,7 +1576,7 @@ export class Swarm {
    * Without a key from the office, their CLI uses its own login in the Box: it's checked first (a signed-out one throws
    * SignInNeeded), except for a prompt the manager already typed into the CLI.
    */
-  private async boxTarget(a: PersistedAgent, cli: AgentCli, browserTesting: boolean, check = true): Promise<BoxTarget> {
+  protected async boxTarget(a: PersistedAgent, cli: AgentCli, browserTesting: boolean, check = true): Promise<BoxTarget> {
     const api = this.cloud.boxApi();
     if (!api) throw new Error('Cloud agents need your Upstash Box API key: Settings → Cloud agents.');
     const machine = this.machineOf(a);
@@ -2308,7 +1590,7 @@ export class Swarm {
   }
 
   /** A cloud agent's live CLI record changed: kept with them, so a restart picks the CLI up. Gone with no task: the Box can pause. */
-  private boxCliRecord(agentId: string, rec: BoxCliRecord | null) {
+  protected boxCliRecord(agentId: string, rec: BoxCliRecord | null) {
     const a = this.state.agents.find((x) => x.id === agentId);
     if (!a) return;
     const was = a.boxCli;
@@ -2319,7 +1601,7 @@ export class Swarm {
   }
 
   /** A machine's Box changed state: its agent's card shows it. */
-  private boxState(machine: string) {
+  protected boxState(machine: string) {
     const a = this.state.agents.find((x) => x.host === 'box' && x.machine === machine);
     if (a) this.emitAgent(a);
   }
@@ -2353,7 +1635,7 @@ export class Swarm {
    * A cloud agent's CLI has no login in their Box (a new Box, or one that expired): they're marked as needing a sign-in
    * and take no work, the task they were starting (if any) waits, and the CLI's own sign-in starts in their terminal.
    */
-  private holdForSignIn(a: PersistedAgent, cli: BoxCliId, task: (() => void) | null, expired = false) {
+  protected holdForSignIn(a: PersistedAgent, cli: BoxCliId, task: (() => void) | null, expired = false) {
     if (!this.state.agents.includes(a) || a.host !== 'box') return;
     const s = this.signInOf(a, cli);
     const label = cliLabel(cli);
@@ -2381,7 +1663,7 @@ export class Swarm {
   }
 
   /** Their sign-in's state, made (or switched to another CLI, keeping the held task) when needed. */
-  private signInOf(a: PersistedAgent, cli: BoxCliId): SignIn {
+  protected signInOf(a: PersistedAgent, cli: BoxCliId): SignIn {
     let s = this.signIns.get(a.id);
     if (!s) {
       s = { cli, held: null, run: null, starting: false, poll: null };
@@ -2395,7 +1677,7 @@ export class Swarm {
   }
 
   /** Their sign-in goes (they left, moved to this computer): its CLI closes and a held task is dropped with it. */
-  private dropSignIn(agentId: string) {
+  protected dropSignIn(agentId: string) {
     const s = this.signIns.get(agentId);
     if (!s) return;
     this.signIns.delete(agentId);
@@ -2404,7 +1686,7 @@ export class Swarm {
   }
 
   /** Start the CLI's own sign-in in their terminal, unless it's running already. */
-  private async startSignIn(a: PersistedAgent) {
+  protected async startSignIn(a: PersistedAgent) {
     const cli = a.cli || this.state.settings.defaultCli;
     const api = this.cloud.boxApi();
     if (!a.needsSignIn || a.host !== 'box' || cli === 'opencode' || !api) return;
@@ -2425,7 +1707,7 @@ export class Swarm {
   }
 
   /** While the sign-in runs, look now and then whether it's done (often while someone watches their terminal). */
-  private pollSignIn(a: PersistedAgent, s: SignIn) {
+  protected pollSignIn(a: PersistedAgent, s: SignIn) {
     if (s.poll) clearTimeout(s.poll);
     const wait = this.agentRt.get(a.id)?.terminal?.watched ? SIGN_IN_POLL_MS : SIGN_IN_IDLE_POLL_MS;
     s.poll = setTimeout(() => {
@@ -2443,7 +1725,7 @@ export class Swarm {
   }
 
   /** The sign-in's CLI exited: signed in, or the manager can start it again from their terminal. */
-  private async signInEnded(a: PersistedAgent, s: SignIn, code: number) {
+  protected async signInEnded(a: PersistedAgent, s: SignIn, code: number) {
     if (this.signIns.get(a.id) !== s) return;
     s.run = null;
     if (s.poll) clearTimeout(s.poll);
@@ -2455,7 +1737,7 @@ export class Swarm {
   }
 
   /** Their CLI is signed in: the flag goes and the task it held starts (a sign-in still on screen gets a moment to finish). */
-  private signedIn(a: PersistedAgent) {
+  protected signedIn(a: PersistedAgent) {
     const s = this.signIns.get(a.id);
     this.signIns.delete(a.id);
     if (s?.poll) clearTimeout(s.poll);
@@ -2475,7 +1757,7 @@ export class Swarm {
    * Is a cloud agent's CLI signed in? Looked at when their Box is set up, after a restart and when keys or their CLI
    * change. `fresh`: their CLI changed, so a sign-in for the old one stops.
    */
-  private async checkSignIn(a: PersistedAgent, fresh = false) {
+  protected async checkSignIn(a: PersistedAgent, fresh = false) {
     const cli = a.cli || this.state.settings.defaultCli;
     if (a.host !== 'box' || a.role === 'ceo' || !this.cloud.boxApi()) return;
     if (fresh) {
@@ -2526,19 +1808,19 @@ export class Swarm {
   }
 
   /** Every floor has at least one agent. */
-  private ensureAgent(repo: PersistedRepo) {
+  protected ensureAgent(repo: PersistedRepo) {
     if (this.state.agents.some((a) => a.repoId === repo.id)) return;
     this.hireAgent(repo.id, {});
   }
 
   /** A name from the pool that no agent or waiting candidate has. */
-  private freeName() {
+  protected freeName() {
     const taken = new Set([...this.state.agents.map((a) => a.name), ...this.state.requests.filter((r) => r.status === 'pending').map((r) => r.name)]);
     return NAMES.find((n) => !taken.has(n)) || `Agent ${this.state.agents.length + 1}`;
   }
 
   /** The coding agent is installed here (or the office hasn't looked yet: then the session says so if it isn't). */
-  private cliReady(cli: AgentCli) {
+  protected cliReady(cli: AgentCli) {
     return !this.clis.length || this.clis.some((c) => c.id === cli && c.installed);
   }
 
@@ -2623,7 +1905,7 @@ export class Swarm {
   }
 
   /** An agent whose CLI kept working through the office's restart: the office follows its session again. */
-  private reattachSession(a: PersistedAgent) {
+  protected reattachSession(a: PersistedAgent) {
     const repo = this.state.repos.find((r) => r.id === a.repoId);
     if (!repo) return;
     this.appendLog(a, [{ kind: 'system', text: '↻ The office restarted; their CLI kept working and the office is following it again.' }]);
@@ -2631,7 +1913,7 @@ export class Swarm {
   }
 
   /** The manager pressed Esc in the agent's terminal and the CLI stopped its turn: a Stop that leaves the CLI to them. */
-  private interrupted(a: PersistedAgent) {
+  protected interrupted(a: PersistedAgent) {
     if (!BUSY.includes(a.status)) return;
     a.status = 'stopped';
     a.lastError = 'Interrupted in the terminal';
@@ -2651,7 +1933,7 @@ export class Swarm {
     this.save();
   }
 
-  private issueTaken(repo: PersistedRepo, n: number) {
+  protected issueTaken(repo: PersistedRepo, n: number) {
     return issueTaken(
       n,
       this.state.agents.filter((a) => a.repoId === repo.id),
@@ -2660,7 +1942,7 @@ export class Swarm {
     );
   }
 
-  private ensureSlot() {
+  protected ensureSlot() {
     if (this.slotsFull()) {
       throw new HttpError(429, `All ${this.state.settings.sessionLimit} session slots are busy. Raise or clear the session limit in the manager's console, or wait.`);
     }
@@ -2689,11 +1971,11 @@ export class Swarm {
     return this.agentView(a, false);
   }
 
-  private port(a: PersistedAgent) {
+  protected port(a: PersistedAgent) {
     return 5200 + (parseInt(a.id.slice(0, 4), 16) % 700);
   }
 
-  private linkedRepos(repo: PersistedRepo) {
+  protected linkedRepos(repo: PersistedRepo) {
     return repo.links.map((id) => this.state.repos.find((r) => r.id === id)).filter((r): r is PersistedRepo => !!r);
   }
 
@@ -2701,7 +1983,7 @@ export class Swarm {
    * How an agent's next session runs: the CLI in their terminal (the terminal runtime), or Claude Code through the
    * SDK. A session can only be resumed by the CLI that made it, so a follow-up stays with that CLI.
    */
-  private sessionRuntime(a: PersistedAgent, resume?: string): { terminal?: AgentTerminal; cli?: AgentCli; label?: string; resumeSessionId?: string } {
+  protected sessionRuntime(a: PersistedAgent, resume?: string): { terminal?: AgentTerminal; cli?: AgentCli; label?: string; resumeSessionId?: string } {
     // A cloud agent's CLI always runs in a terminal: their Box's, which needs nothing from this computer.
     const inTerminal = a.host === 'box' || (this.state.settings.runtime === 'terminal' && this.backend.terminals);
     let cli: AgentCli = a.role === 'ceo' ? 'claude' : a.cli || this.state.settings.defaultCli;
@@ -2718,7 +2000,7 @@ export class Swarm {
    * What the manager's Tools & skills switches take away from a Claude Code session (the Agent SDK runs Claude Code
    * too), logged so it shows in the agent's terminal. Codex and OpenCode load their own setup: nothing.
    */
-  private sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined): SessionTools | undefined {
+  protected sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined): SessionTools | undefined {
     if ((cli ?? 'claude') !== 'claude') return undefined;
     const t = this.state.settings.tools;
     const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
@@ -2763,13 +2045,13 @@ export class Swarm {
   }
 
   /** The model to ask for (the Agent SDK runs Claude Code). '' lets another coding agent use its own default. */
-  private modelFor(a: PersistedAgent, cli: AgentCli | undefined) {
+  protected modelFor(a: PersistedAgent, cli: AgentCli | undefined) {
     return effectiveModel(a.model, cli ?? 'claude', this.state.settings, DEFAULT_MODEL);
   }
 
   // ---------- terminals ----------
 
-  private async loadTerminal(agentId: string): Promise<AgentTerminal | null> {
+  protected async loadTerminal(agentId: string): Promise<AgentTerminal | null> {
     if (!(await fs.stat(terminalFile(agentId)).catch(() => null))) return null;
     const t = this.newTerminal(agentId);
     await t.load(terminalFile(agentId));
@@ -2777,13 +2059,13 @@ export class Swarm {
   }
 
   /** The agent's terminal, made the first time they run in the terminal runtime. */
-  private terminalFor(a: PersistedAgent): AgentTerminal {
+  protected terminalFor(a: PersistedAgent): AgentTerminal {
     const rt = this.agentRt.get(a.id)!;
     rt.terminal ??= this.newTerminal(a.id);
     return rt.terminal;
   }
 
-  private newTerminal(agentId: string) {
+  protected newTerminal(agentId: string) {
     const t = new AgentTerminal();
     // Typed at a CLI waiting at its prompt after its task: a follow-up, which starts synchronously when it can.
     t.onIdlePrompt = (text) => {
@@ -2793,7 +2075,7 @@ export class Swarm {
     return t;
   }
 
-  private async saveTerminals(all = false) {
+  protected async saveTerminals(all = false) {
     for (const [id, rt] of this.agentRt) {
       if (rt.terminal && (all || rt.terminal.dirty)) await rt.terminal.save(terminalFile(id)).catch((err) => console.warn('could not save a terminal', err));
     }
@@ -2812,12 +2094,12 @@ export class Swarm {
     t.attach(ws);
   }
 
-  private buildSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, fixing?: { pr: number; headRef: string }, deps?: DepsOutcome) {
+  protected buildSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, fixing?: { pr: number; headRef: string }, deps?: DepsOutcome) {
     return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps) });
   }
 
   /** The floor's linked repos where the agent reads them: the floor checkouts here, or their copies in a cloud agent's Box. */
-  private linkedDirs(repo: PersistedRepo, a?: PersistedAgent) {
+  protected linkedDirs(repo: PersistedRepo, a?: PersistedAgent) {
     return this.linkedRepos(repo).map((r) => ({ fullName: r.fullName, dir: a?.host === 'box' ? boxLinkedDir(r.fullName) : this.backend.mainDir(r.fullName) }));
   }
 
@@ -2829,7 +2111,7 @@ export class Swarm {
     return agentPromptPreview({ agent: a, repo, port: this.port(a), slug: slugify(a.name), linked: this.linkedDirs(repo, a) });
   }
 
-  private beginTask(a: PersistedAgent, patch: Partial<PersistedAgent>, banner: string, preparing: string) {
+  protected beginTask(a: PersistedAgent, patch: Partial<PersistedAgent>, banner: string, preparing: string) {
     const rt = this.agentRt.get(a.id)!;
     this.dropping.delete(a.id);
     Object.assign(a, {
@@ -2855,7 +2137,7 @@ export class Swarm {
   }
 
   /** job: the PR fix or QA run this desk is for; if the desk can't be set up, the PR pays for it, not the agent. */
-  private async prepare(a: PersistedAgent, repo: PersistedRepo, base: { pr?: number }, branch: string, job?: PrepJob): Promise<{ cwd: string; deps: DepsOutcome } | null> {
+  protected async prepare(a: PersistedAgent, repo: PersistedRepo, base: { pr?: number }, branch: string, job?: PrepJob): Promise<{ cwd: string; deps: DepsOutcome } | null> {
     try {
       if (this.repoRt.get(repo.id)?.cloneStatus !== 'ready') await this.cloneRepo(repo.id);
       const note = (text: string) => this.appendLog(a, [{ kind: 'system', text }]);
@@ -2900,7 +2182,7 @@ export class Swarm {
    * A desk couldn't be set up for a PR's fix or QA run (#199). Nothing ran, so the agent is free again at once. The PR
    * is handed out again; after repeated failures it sits out a while (one phone message), and in time needs the manager.
    */
-  private jobDeskFailed(a: PersistedAgent, repo: PersistedRepo, job: PrepJob, error: string) {
+  protected jobDeskFailed(a: PersistedAgent, repo: PersistedRepo, job: PrepJob, error: string) {
     const { rec, task } = job;
     this.appendLog(a, [
       { kind: 'error', text: `✗ ${error}` },
@@ -2929,12 +2211,12 @@ export class Swarm {
     );
   }
 
-  private clearPrepStrikes(repoId: string, prNumber: number) {
+  protected clearPrepStrikes(repoId: string, prNumber: number) {
     for (const task of ['fix', 'qa'] as const) this.prepStrikes.delete(prepKey(repoId, prNumber, task));
   }
 
   /** The desk's dependencies, shown on the agent's card ("Installing dependencies") while npm runs. */
-  private async installDeps(a: PersistedAgent, cwd: string, repo: PersistedRepo): Promise<DepsOutcome> {
+  protected async installDeps(a: PersistedAgent, cwd: string, repo: PersistedRepo): Promise<DepsOutcome> {
     const rt = this.agentRt.get(a.id);
     const cb = {
       log: (lines: string[]) => this.appendLog(a, lines.map((text) => ({ kind: text.startsWith('⚠') ? 'error' : 'system', text }) as LogEntry)),
@@ -2955,7 +2237,7 @@ export class Swarm {
     }
   }
 
-  private async runTask(a: PersistedAgent, repo: PersistedRepo, issue: IssueInfo, note?: string) {
+  protected async runTask(a: PersistedAgent, repo: PersistedRepo, issue: IssueInfo, note?: string) {
     const branch = devBranch(issue.number, slugify(a.name));
     this.beginTask(
       a,
@@ -2992,7 +2274,7 @@ export class Swarm {
     this.startAgentSession(a, repo, cwd, prompt, this.buildSystemAppend(a, repo, cwd, branch, undefined, desk.deps));
   }
 
-  private startAgentSession(
+  protected startAgentSession(
     a: PersistedAgent,
     repo: PersistedRepo,
     cwd: string,
@@ -3026,7 +2308,7 @@ export class Swarm {
     this.launchSession(a, repo, cwd, prompt, systemAppend, resumeSessionId, outputSchema, mode);
   }
 
-  private launchSession(
+  protected launchSession(
     a: PersistedAgent,
     repo: PersistedRepo,
     cwd: string,
@@ -3124,7 +2406,7 @@ export class Swarm {
   }
 
   /** A cloud agent's session that ended because their CLI's login is gone (cliRunner's signedOut). */
-  private async signedOutMidTask(a: PersistedAgent, repo: PersistedRepo, result: SessionResult, cli: AgentCli, again: () => void) {
+  protected async signedOutMidTask(a: PersistedAgent, repo: PersistedRepo, result: SessionResult, cli: AgentCli, again: () => void) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return;
     const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli).catch(() => null);
@@ -3145,15 +2427,15 @@ export class Swarm {
     this.holdForSignIn(a, cli, again, true);
   }
 
-  private taskKind = (a: PersistedAgent) => taskKindOf(a.task, this.prRecord(a)?.fixReason);
-  private prRecord = (a: PersistedAgent) => (a.prNumber === null ? undefined : this.state.qa.find((q) => q.repoId === a.repoId && q.prNumber === a.prNumber));
+  protected taskKind = (a: PersistedAgent) => taskKindOf(a.task, this.prRecord(a)?.fixReason);
+  protected prRecord = (a: PersistedAgent) => (a.prNumber === null ? undefined : this.state.qa.find((q) => q.repoId === a.repoId && q.prNumber === a.prNumber));
 
   /** GET /api/costs: the usage view over the last `days` days, for one floor or all of them. */
   costsView(days: unknown, repoId: unknown): CostsView {
     return costsRequest(this.spend.ledger.all(), days, repoId, (id) => this.state.repos.some((r) => r.id === id));
   }
 
-  private async onFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
+  protected async onFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return; // fired
     if (this.officeUpdate.handedOver && a.host !== 'box') return; // stopped for the office's update: recovered like after a restart
@@ -3185,18 +2467,18 @@ export class Swarm {
     setTimeout(() => this.schedule(), 500);
   }
 
-  private minutes(a: PersistedAgent) {
+  protected minutes(a: PersistedAgent) {
     return a.startedAt && a.endedAt ? Math.max(1, Math.round((a.endedAt - a.startedAt) / 60000)) : 0;
   }
 
-  private fail(a: PersistedAgent, result: SessionResult, what: string) {
+  protected fail(a: PersistedAgent, result: SessionResult, what: string) {
     a.status = 'error';
     a.lastError = result.errors.join('; ') || 'Session failed';
     this.appendLog(a, [{ kind: 'error', text: `✗ ${a.lastError}` }]);
     this.toast('error', `${a.name} hit a problem on ${what}: ${a.lastError.slice(0, 120)}`);
   }
 
-  private async onIssueFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
+  protected async onIssueFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
     const escaped = repo.fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const m = result.text.match(new RegExp(`https://github\\.com/${escaped}/pull/(\\d+)`, 'i'));
     if (m) {
@@ -3238,7 +2520,7 @@ export class Swarm {
    * An issue session ended without a PR, which would leave the issue "taken" with nobody on it. The same developer,
    * who has the context and the worktree, is asked once to finish; after that the issue goes back on the board.
    */
-  private noPullRequest(a: PersistedAgent, repo: PersistedRepo) {
+  protected noPullRequest(a: PersistedAgent, repo: PersistedRepo) {
     const key = `${repo.id}#${a.issueNumber}`;
     if (this.nudged.has(key)) return this.releaseIssue(a, repo);
     this.nudged.add(key);
@@ -3249,7 +2531,7 @@ export class Swarm {
     ).catch(() => this.releaseIssue(a, repo));
   }
 
-  private releaseIssue(a: PersistedAgent, repo: PersistedRepo) {
+  protected releaseIssue(a: PersistedAgent, repo: PersistedRepo) {
     const n = a.issueNumber;
     this.clearTask(a);
     this.postMessage('office', `⚠️ ${a.name} finished #${n} on ${repo.fullName} without opening a pull request, so it's back on the board for anyone.`);
@@ -3257,7 +2539,7 @@ export class Swarm {
 
   // ---------- QA ----------
 
-  private queueQa(repo: PersistedRepo, prNumber: number, dev: PersistedAgent | null, issueNumber: number | null) {
+  protected queueQa(repo: PersistedRepo, prNumber: number, dev: PersistedAgent | null, issueNumber: number | null) {
     const rt = this.repoRt.get(repo.id);
     if (rt && !stillOpen({ kind: 'pr', number: prNumber }, this.floorState(rt))) return; // it closed: QA has nothing to test
     let rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
@@ -3349,11 +2631,11 @@ export class Swarm {
     this.toast('info', `PR #${prNumber} goes back to a developer${patch.fixReason === 'conflict' ? ' to resolve its conflicts' : ''}`);
   }
 
-  private buildQaSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, pr: PrDetails, testStep: string, deps?: DepsOutcome) {
+  protected buildQaSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, pr: PrDetails, testStep: string, deps?: DepsOutcome) {
     return qaSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, pr, testStep, depsLine: depsPromptLine(deps) });
   }
 
-  private async runQa(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord) {
+  protected async runQa(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord) {
     const branch = qaBranch(rec.prNumber, slugify(a.name));
     this.qaWaits.set(`${repo.id}#${rec.prNumber}`, Date.now() - rec.updatedAt); // queued since its last change
     this.setQa(rec, { status: 'testing', qaAgentId: a.id });
@@ -3462,7 +2744,7 @@ export class Swarm {
     this.startAgentSession(a, repo, cwd, prompt, systemAppend, undefined, QA_SCHEMA);
   }
 
-  private async onQaFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
+  protected async onQaFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === a.prNumber);
     const rt = this.agentRt.get(a.id)!;
     const report = result.ok ? parseReport(result) : null;
@@ -3560,7 +2842,7 @@ export class Swarm {
     }
   }
 
-  private async renderQaComment(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord, report: QaReport, shots: Shot[], next: QaNext) {
+  protected async renderQaComment(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord, report: QaReport, shots: Shot[], next: QaNext) {
     const pass = report.verdict === 'pass';
     const images: string[] = [];
     const evidence = shots.slice(-8);
@@ -3601,7 +2883,7 @@ export class Swarm {
   }
 
   /** Send a failed PR back to the agent who wrote it (or any free agent on the floor). */
-  private async runFix(dev: PersistedAgent, repo: PersistedRepo, rec: QaRecord) {
+  protected async runFix(dev: PersistedAgent, repo: PersistedRepo, rec: QaRecord) {
     const original = rec.devAgentId === dev.id;
     const pull = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === rec.prNumber);
     const headRef = pull?.headRefName ?? dev.branch ?? `pr-${rec.prNumber}`;
@@ -3684,7 +2966,7 @@ export class Swarm {
     this.startAgentSession(dev, repo, cwd, prompt, this.buildSystemAppend(dev, repo, cwd, headRef, { pr: rec.prNumber, headRef }, desk.deps), resume);
   }
 
-  private async onFixFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
+  protected async onFixFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === a.prNumber);
     // Did it push anything? A checks fix may only re-run a flaky check, so only QA and conflict fixes are asked.
     const current = rec && result.ok && a.status !== 'stopped' && rec.fixReason !== 'checks' ? await this.prHead(a, repo, rec.prNumber) : null;
@@ -3758,7 +3040,7 @@ export class Swarm {
   }
 
   /** A fix that pushed nothing counts as a failed session (fixOutcome's step). */
-  private unpushed(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord, step: ReturnType<typeof fixOutcome>) {
+  protected unpushed(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord, step: ReturnType<typeof fixOutcome>) {
     // Like a failed session: someone gets another go, with the same instructions, before it lands on the CEO.
     this.fixNudged.delete(`${repo.id}#${rec.prNumber}`);
     const needsHuman = step.set.status === 'needs-human';
@@ -3771,7 +3053,7 @@ export class Swarm {
   }
 
   /** The PR's head commit and checks now; null (with a warning in the agent's log) when GitHub can't be asked. */
-  private async prHead(a: PersistedAgent, repo: PersistedRepo, prNumber: number): Promise<Pick<PrDetails, 'headSha' | 'checks'> | null> {
+  protected async prHead(a: PersistedAgent, repo: PersistedRepo, prNumber: number): Promise<Pick<PrDetails, 'headSha' | 'checks'> | null> {
     try {
       return await this.backend.prDetails(repo.fullName, prNumber);
     } catch (err) {
@@ -3885,31 +3167,31 @@ export class Swarm {
    * Can this agent take work now? One whose last session failed sits out a short cooldown, then gets work like everyone
    * else instead of waiting for the manager to reset them.
    */
-  private isFree(a: PersistedAgent) {
+  protected isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
   }
 
   /** A floor's agents who can take work now, by desk. */
-  private available(repo: PersistedRepo) {
+  protected available(repo: PersistedRepo) {
     return this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && this.isFree(a)).sort((x, y) => x.desk - y.desk);
   }
 
-  private scheduleOffset = 0;
-  private issueFailures = new Map<string, number>(); // `${repoId}#${issue}` → failed sessions on it
-  private nudged = new Set<string>(); // `${repoId}#${issue}`: its agent was asked once to finish the missing PR
-  private fixNudged = new Set<string>(); // `${repoId}#${pr}`: its fix session was asked once to push or say why not
-  private pausedUntil = 0; // Claude's usage limit was hit: nothing new starts before this
-  private pacingUntil = 0; // Claude warned about usage: new issues are paced until this
-  private pacingLimit: string | null = null; // which of Claude's limits the pacing is for
-  private lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
-  private waiver: Waiver | null = null; // pacing the manager cleared with "Resume full speed"
-  private lastUsage = '';
-  private shownReadings: UsageReading[] = []; // the readings the office was last sent
-  private readingsTimer: NodeJS.Timeout | null = null;
+  protected scheduleOffset = 0;
+  protected issueFailures = new Map<string, number>(); // `${repoId}#${issue}` → failed sessions on it
+  protected nudged = new Set<string>(); // `${repoId}#${issue}`: its agent was asked once to finish the missing PR
+  protected fixNudged = new Set<string>(); // `${repoId}#${pr}`: its fix session was asked once to push or say why not
+  protected pausedUntil = 0; // Claude's usage limit was hit: nothing new starts before this
+  protected pacingUntil = 0; // Claude warned about usage: new issues are paced until this
+  protected pacingLimit: string | null = null; // which of Claude's limits the pacing is for
+  protected lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
+  protected waiver: Waiver | null = null; // pacing the manager cleared with "Resume full speed"
+  protected lastUsage = '';
+  protected shownReadings: UsageReading[] = []; // the readings the office was last sent
+  protected readingsTimer: NodeJS.Timeout | null = null;
 
   /** Backlog issues that can start now, most urgent first: the ones holding up the longest chain of other issues, then the oldest. */
-  private readyIssues(repo: PersistedRepo) {
+  protected readyIssues(repo: PersistedRepo) {
     const issues = this.repoRt.get(repo.id)!.issues;
     const open = new Set(issues.map((i) => i.number));
     const weight = holdUps(issues);
@@ -3932,7 +3214,7 @@ export class Swarm {
    * author is still in a session on it, it waits for them; otherwise any free agent takes it. A PR whose desks keep
    * failing to set up sits out.
    */
-  private startPipelineWork(repo: PersistedRepo): boolean {
+  protected startPipelineWork(repo: PersistedRepo): boolean {
     const free = this.available(repo);
     if (!free.length) return false;
     const now = Date.now();
@@ -3971,7 +3253,7 @@ export class Swarm {
    * Give a free agent the next backlog issue (auto-assign floors only). Returns true if work started. Issues that say
    * "Depends on #N" wait until #N is closed; the rest go in readyIssues() order.
    */
-  private startIssueWork(repo: PersistedRepo): boolean {
+  protected startIssueWork(repo: PersistedRepo): boolean {
     if (!repo.autoAssign || !this.mayStart('issue')) return false;
     const agent = this.available(repo)[0];
     const next = agent ? this.readyIssues(repo)[0] : undefined;
@@ -3981,12 +3263,12 @@ export class Swarm {
     return agent.status === 'preparing';
   }
 
-  private limited() {
+  protected limited() {
     return Date.now() < this.pausedUntil;
   }
 
   /** Claude turned a session away for the usage limit: start nothing new until it resets, rather than failing agent after agent. */
-  private pauseForLimit(resetsAt: number | null) {
+  protected pauseForLimit(resetsAt: number | null) {
     const until = (resetsAt ?? Date.now() + LIMIT_PAUSE_MS) + 30_000;
     if (until <= this.pausedUntil) return;
     const fresh = Date.now() >= this.pausedUntil;
@@ -3996,7 +3278,7 @@ export class Swarm {
   }
 
   /** Claude warned that usage is getting high: pace new issues until the window resets, rather than run into the limit. */
-  private paceForWarning(info: UsageWarning) {
+  protected paceForWarning(info: UsageWarning) {
     const now = Date.now();
     this.lastWarning = warningView(info, now);
     const until = info.resetsAt && info.resetsAt > now ? info.resetsAt : now + PACING_MS;
@@ -4037,15 +3319,15 @@ export class Swarm {
   }
 
   /** May work of this kind start now, as far as Claude's usage goes? */
-  private mayStart(kind: WorkKind) {
+  protected mayStart(kind: WorkKind) {
     return mayStart(kind, { now: Date.now(), pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil, running: this.running(), pacingSessions: this.state.settings.pacingSessions });
   }
 
-  private usageNow() {
+  protected usageNow() {
     return usageView({ now: Date.now(), pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil }, this.lastWarning);
   }
 
-  private emitUsage() {
+  protected emitUsage() {
     const usage = this.usageNow();
     const key = JSON.stringify(usage);
     if (key === this.lastUsage) return;
@@ -4064,7 +3346,7 @@ export class Swarm {
   }
 
   /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
-  private recordUsage(readings: UsageReading[]) {
+  protected recordUsage(readings: UsageReading[]) {
     this.state.claudeUsage = mergeReadings(this.state.claudeUsage, readings);
     if (this.readingsTimer || !readingsChanged(this.shownReadings, this.state.claudeUsage)) return;
     this.readingsTimer = setTimeout(() => {
@@ -4077,7 +3359,7 @@ export class Swarm {
   }
 
   /** Pacing and pauses run out on their own: say so when pacing ends. */
-  private tickUsage() {
+  protected tickUsage() {
     if (this.pacingUntil && Date.now() >= this.pacingUntil) {
       this.pacingUntil = 0;
       this.postMessage('office', "✅ Claude's usage is back to normal. The office starts new work at full speed again.");
@@ -4087,19 +3369,19 @@ export class Swarm {
 
   // ---------- mission control ----------
 
-  private opsTimer: NodeJS.Timeout | null = null;
-  private lastOps = '';
-  private qaWaits = new Map<string, number>(); // `${repoId}#${pr}` -> how long its QA run in progress waited for a tester
+  protected opsTimer: NodeJS.Timeout | null = null;
+  protected lastOps = '';
+  protected qaWaits = new Map<string, number>(); // `${repoId}#${pr}` -> how long its QA run in progress waited for a tester
 
   /** A sync's merges (stamped with their issues' ages) and finished check runs go into mission control's history. */
-  private recordSync(repo: PersistedRepo, pulls: PullInfo[]) {
+  protected recordSync(repo: PersistedRepo, pulls: PullInfo[]) {
     const now = Date.now();
     if (recordMerges(this.state.ops, repo.id, pulls, now) + recordChecks(this.state.ops, repo.id, pulls, now) > 0) this.save();
     void this.spend.ledger.merges(mergedPulls(repo.id, pulls, now));
   }
 
   /** Every floor as mission control sees it now. */
-  private opsNow(): OpsView {
+  protected opsNow(): OpsView {
     const floors: OpsFloorState[] = this.state.repos.map((r) => {
       const rt = this.repoRt.get(r.id);
       return {
@@ -4119,12 +3401,12 @@ export class Swarm {
   }
 
   /** Recompute mission control shortly: changes usually come several at a time. */
-  private opsSoon() {
+  protected opsSoon() {
     this.opsTimer ??= setTimeout(() => this.emitOps(), 400);
   }
 
   /** Broadcast mission control's numbers, but only when they changed: the wall repaints only then. */
-  private emitOps() {
+  protected emitOps() {
     if (this.opsTimer) clearTimeout(this.opsTimer);
     this.opsTimer = null;
     const ops = this.opsNow();
@@ -4135,7 +3417,7 @@ export class Swarm {
   }
 
   /** A failed session releases its issue for someone else; an issue that keeps failing waits for the manager. */
-  private issueFailed(repo: PersistedRepo, n: number | null) {
+  protected issueFailed(repo: PersistedRepo, n: number | null) {
     if (n == null || this.limited()) return; // the usage limit isn't the issue's fault
     const key = `${repo.id}#${n}`;
     const failures = (this.issueFailures.get(key) ?? 0) + 1;
@@ -4150,7 +3432,7 @@ export class Swarm {
    * Within each phase floors take turns (one job per floor per pass), and the starting floor rotates between calls,
    * so no repo can hog the slots.
    */
-  private schedule() {
+  protected schedule() {
     this.tickUsage();
     this.progressTick();
     if (this.officeUpdateTick()) return; // draining for the office's own update
@@ -4181,7 +3463,7 @@ export class Swarm {
 
   // ---------- the office's own update ----------
 
-  private drainInput(): DrainInput {
+  protected drainInput(): DrainInput {
     const u = this.officeUpdate;
     return {
       now: Date.now(),
@@ -4199,7 +3481,7 @@ export class Swarm {
     };
   }
 
-  private officeUpdateView(): OfficeUpdateView {
+  protected officeUpdateView(): OfficeUpdateView {
     const u = this.officeUpdate;
     const input = this.drainInput();
     const d = drainDecision(input);
@@ -4208,7 +3490,7 @@ export class Swarm {
     return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: u.drainingSince ?? d.drainingSince, running: input.running, detail };
   }
 
-  private emitOfficeUpdate() {
+  protected emitOfficeUpdate() {
     if (!this.officeHead) return;
     const view = this.officeUpdateView();
     const key = JSON.stringify(view);
@@ -4218,7 +3500,7 @@ export class Swarm {
   }
 
   /** The own-folder check found the office this many commits behind GitHub. */
-  private setOfficeBehind(behind: number) {
+  protected setOfficeBehind(behind: number) {
     const u = this.officeUpdate;
     if (u.failed && u.failedBehind === null) u.failedBehind = behind; // only a newer commit retries a failed update by itself
     u.behind = behind;
@@ -4230,7 +3512,7 @@ export class Swarm {
    * Take the office's own update one step (see drainDecision): drain, and once nothing is running, or the drain timed
    * out, hand it to the launcher. True while nothing new may start.
    */
-  private officeUpdateTick(): boolean {
+  protected officeUpdateTick(): boolean {
     if (!this.officeHead) return false;
     const u = this.officeUpdate;
     const d = drainDecision(this.drainInput());
@@ -4248,7 +3530,7 @@ export class Swarm {
   }
 
   /** Drained: hand the update to the launcher. Sessions still running after the timeout stop the way a restart stops them. */
-  private async handOver(timedOut: boolean) {
+  protected async handOver(timedOut: boolean) {
     const u = this.officeUpdate;
     const from = this.officeHead!;
     u.sent = true;
@@ -4268,7 +3550,7 @@ export class Swarm {
   }
 
   /** An update that didn't restart the office (the demo, or a failed hand-over): recover like a restart would, then report it. */
-  private async afterUpdate(result: LastUpdate) {
+  protected async afterUpdate(result: LastUpdate) {
     const u = this.officeUpdate;
     Object.assign(u, { sent: false, handedOver: false, requested: false, drainingSince: null });
     const interrupted = this.state.agents.filter((a) => BUSY.includes(a.status) && !this.inBoxes().includes(a));
@@ -4291,7 +3573,7 @@ export class Swarm {
   }
 
   /** One phone message about the last update (the launcher's last-update.json, or the demo's fake). */
-  private async reportUpdate(result: LastUpdate) {
+  protected async reportUpdate(result: LastUpdate) {
     const commits = result.ok && result.to ? await this.backend.office.commitsBetween(result.from, result.to) : null;
     this.postMessage('office', lastUpdateMessage(result, commits));
     Object.assign(this.officeUpdate, { failed: result.ok ? null : result.error || 'unknown error', failedBehind: null });
@@ -4313,12 +3595,12 @@ export class Swarm {
 
   // ---------- the CEO ----------
 
-  private ceo() {
+  protected ceo() {
     return this.state.agents.find((a) => a.id === CEO_ID)!;
   }
 
   /** The company always has a CEO. One cut off by a server restart picks its job back up. */
-  private ensureCeo(interrupted: PersistedAgent[]) {
+  protected ensureCeo(interrupted: PersistedAgent[]) {
     let a = this.state.agents.find((x) => x.id === CEO_ID);
     if (!a) {
       a = {
@@ -4370,13 +3652,13 @@ export class Swarm {
     this.state.ceo.lastReviewAt ??= Date.now(); // the first review comes one heartbeat after the office opens
   }
 
-  private ceoFloor(repoId?: string) {
+  protected ceoFloor(repoId?: string) {
     const repo = repoId ? this.state.repos.find((r) => r.id === repoId) : undefined;
     if (!repo) return null;
     return { floor: repo.floor, fullName: repo.fullName, clone: this.backend.mainDir(repo.fullName), mission: repo.mission, backlog: this.repoRt.get(repo.id)?.issues.length ?? 0 };
   }
 
-  private ceoInfo(): CeoInfo {
+  protected ceoInfo(): CeoInfo {
     const c = this.state.ceo;
     const view = (j: CeoJob) => ({ kind: j.kind, label: jobLabel(j, this.ceoFloor(j.repoId)) });
     const min = this.state.settings.ceoHeartbeatMin;
@@ -4389,12 +3671,12 @@ export class Swarm {
     };
   }
 
-  private emitCeo() {
+  protected emitCeo() {
     this.broadcast({ type: 'ceo', ceo: this.ceoInfo() });
   }
 
   /** Queue a job for the CEO: one onboarding and one plan per floor, one review, and chat messages merge into one reply. */
-  private enqueueCeo(job: CeoJob) {
+  protected enqueueCeo(job: CeoJob) {
     const q = this.state.ceo.queue;
     const same = q.findIndex((j) => j.kind === job.kind && (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber)));
     if (same >= 0 && job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
@@ -4406,7 +3688,7 @@ export class Swarm {
   }
 
   /** Start the CEO's next job when they're free and a session slot is open. Replies to the manager go first. */
-  private startCeoWork(): void {
+  protected startCeoWork(): void {
     const a = this.state.agents.find((x) => x.id === CEO_ID);
     const c = this.state.ceo;
     // A triage whose PR is no longer stuck (the manager stepped in, or it closed) has nothing left to do.
@@ -4438,12 +3720,12 @@ export class Swarm {
     void this.runCeoJob(a, job);
   }
 
-  private ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
+  protected ceoPromptInput(a: PersistedAgent): Parameters<typeof ceoSystemPrompt>[0] {
     const s = this.state.settings;
     return { name: a.name, company: s.companyName, manager: s.managerName, notesFile: path.join(CEO_DIR, 'NOTES.md'), sessionLimit: s.sessionLimit, maxAgents: s.maxAgents, scaling: s.scaling };
   }
 
-  private async runCeoJob(a: PersistedAgent, job: CeoJob) {
+  protected async runCeoJob(a: PersistedAgent, job: CeoJob) {
     const rt = this.agentRt.get(a.id)!;
     const floor = this.ceoFloor(job.repoId);
     const label = jobLabel(job, floor);
@@ -4525,7 +3807,7 @@ export class Swarm {
     );
   }
 
-  private onCeoFinished(a: PersistedAgent, result: SessionResult) {
+  protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || this.officeUpdate.handedOver) return;
     rt.session = null;
@@ -4585,7 +3867,7 @@ export class Swarm {
   }
 
   /** Moves the manager's messages along (shared/chat.ts nextDelivery) and tells the phones which ones moved. */
-  private markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
+  protected markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
     const moved: number[] = [];
     let to: ServerDelivery | null = null;
     for (const m of this.state.messages) {
@@ -4623,7 +3905,7 @@ export class Swarm {
   }
 
   /** Everything the heartbeat cares about. When it hasn't changed since the last review, the review is skipped. */
-  private fingerprint() {
+  protected fingerprint() {
     const data = {
       repos: this.state.repos.map((r) => {
         const rt = this.repoRt.get(r.id);
@@ -4636,7 +3918,7 @@ export class Swarm {
     return crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex');
   }
 
-  private maybeHeartbeat() {
+  protected maybeHeartbeat() {
     const min = this.state.settings.ceoHeartbeatMin;
     const c = this.state.ceo;
     if (!min || this.state.repos.length === 0 || c.job?.kind === 'review' || c.queue.some((j) => j.kind === 'review')) return;
@@ -4653,7 +3935,7 @@ export class Swarm {
   // ---------- follow-ups (#27) ----------
 
   /** Something happened the CEO may want to follow up on: queued unless Settings → The CEO turned its kind off. */
-  private followup(ev: Omit<FollowupEvent, 'id' | 'at'>) {
+  protected followup(ev: Omit<FollowupEvent, 'id' | 'at'>) {
     if (!addFollowup(this.state.ceo.followups, { ...ev, at: Date.now() }, this.state.settings.ceoFollowups)) return;
     this.emitCeo();
     this.save();
@@ -4661,7 +3943,7 @@ export class Swarm {
   }
 
   /** Start a follow-up job when its batch window has passed, unless the hourly cap or Claude's usage holds it. */
-  private maybeFollowup() {
+  protected maybeFollowup() {
     const f = this.state.ceo.followups;
     const had = f.pending.length;
     const step = followupStep(f, { now: Date.now(), settings: this.state.settings.ceoFollowups, usage: this.usageNow().state });
@@ -4672,11 +3954,11 @@ export class Swarm {
     }
   }
 
-  private followupView(): CeoInfo['followups'] {
+  protected followupView(): CeoInfo['followups'] {
     return followupWaiting(this.state.ceo.followups, { now: Date.now(), settings: this.state.settings.ceoFollowups, usage: this.usageNow().state });
   }
 
-  private floorName(repo: PersistedRepo) {
+  protected floorName(repo: PersistedRepo) {
     return `floor ${repo.floor} (${repo.fullName})`;
   }
 
@@ -4686,7 +3968,7 @@ export class Swarm {
    * A PR the office can't move on its own (needs-human): the CEO triages it first, at most MAX_TRIAGES times, and the
    * manager hears when the CEO escalates or takes no action, or when it keeps getting stuck. True: it went to the CEO.
    */
-  private stuck(rec: QaRecord, patch: Partial<QaRecord>, why: string): boolean {
+  protected stuck(rec: QaRecord, patch: Partial<QaRecord>, why: string): boolean {
     if (!this.state.qa.includes(rec)) return false; // its PR closed: nothing is stuck
     this.setQa(rec, { ...patch, status: 'needs-human', stuckWhy: why });
     const step = triageStep({ kind: 'stuck', triages: rec.triages });
@@ -4701,7 +3983,7 @@ export class Swarm {
   }
 
   /** Tell the manager a stuck PR needs them, once each time it gets stuck. note: what the CEO adds. */
-  private escalate(rec: QaRecord, note: string | null) {
+  protected escalate(rec: QaRecord, note: string | null) {
     if (rec.status !== 'needs-human' || rec.escalated) return;
     this.setQa(rec, { escalated: true });
     const repo = this.state.repos.find((r) => r.id === rec.repoId);
@@ -4709,18 +3991,18 @@ export class Swarm {
   }
 
   /** The CEO's triage job for this PR, queued or running. */
-  private triageJob(q: Pick<QaRecord, 'repoId' | 'prNumber'>) {
+  protected triageJob(q: Pick<QaRecord, 'repoId' | 'prNumber'>) {
     const c = this.state.ceo;
     return [c.job, ...c.queue].find((j) => j?.kind === 'triage' && j.repoId === q.repoId && j.prNumber === q.prNumber) ?? null;
   }
 
   /** The record a triage job is for, while it is still waiting on a decision. */
-  private stuckRecord(job: CeoJob) {
+  protected stuckRecord(job: CeoJob) {
     return this.state.qa.find((q) => q.repoId === job.repoId && q.prNumber === job.prNumber && q.status === 'needs-human' && !q.escalated);
   }
 
   /** What a triage job's prompt says about its PR: the QA record and GitHub's view of it now. null: no longer stuck. */
-  private async triagePr(job: CeoJob): Promise<TriagePr | null> {
+  protected async triagePr(job: CeoJob): Promise<TriagePr | null> {
     const rec = this.stuckRecord(job);
     const repo = this.state.repos.find((r) => r.id === job.repoId);
     if (!rec || !repo) return null;
@@ -4746,7 +4028,7 @@ export class Swarm {
   }
 
   /** A triage job ended (done, failed or stopped): a PR still waiting on a decision goes to the manager. */
-  private endTriage(job: CeoJob) {
+  protected endTriage(job: CeoJob) {
     const rec = this.stuckRecord(job);
     const pull = rec && this.repoRt.get(rec.repoId)?.pulls.find((p) => p.number === rec.prNumber);
     const step = triageStep({ kind: 'ended', acted: !rec || (pull != null && pull.state !== 'OPEN') }); // a closed PR leaves QA on the next sync
@@ -4754,7 +4036,7 @@ export class Swarm {
   }
 
   /** The stuck PR a triage tool names; refused unless it is on the current triage job's floor (see checkTriageTarget). */
-  private async triageTarget(x: { floor: number; pr: number }) {
+  protected async triageTarget(x: { floor: number; pr: number }) {
     const job = this.state.ceo.job;
     const jobFloor = job?.kind === 'triage' ? (this.state.repos.find((r) => r.id === job.repoId)?.floor ?? null) : null;
     const repo = this.state.repos.find((r) => r.floor === x.floor);
@@ -4767,13 +4049,13 @@ export class Swarm {
     return { repo: repo!, rec: rec!, listed };
   }
 
-  private async triageRetryQa(x: { floor: number; pr: number }) {
+  protected async triageRetryQa(x: { floor: number; pr: number }) {
     const { repo, rec } = await this.triageTarget(x);
     await this.sendToQa(repo.id, rec.prNumber);
     return `PR #${rec.prNumber} is queued for QA round ${rec.round}.`;
   }
 
-  private async triageSendBack(x: { floor: number; pr: number; note: string }) {
+  protected async triageSendBack(x: { floor: number; pr: number; note: string }) {
     const { repo, rec } = await this.triageTarget(x);
     const note = String(x.note ?? '').trim();
     if (!note) throw new HttpError(400, 'Say what the developer should do: the note goes with the fix.');
@@ -4781,7 +4063,7 @@ export class Swarm {
     return `PR #${rec.prNumber} goes back to a developer with QA's findings and your note.`;
   }
 
-  private async triageRerunChecks(x: { floor: number; pr: number }) {
+  protected async triageRerunChecks(x: { floor: number; pr: number }) {
     const { repo, rec, listed } = await this.triageTarget(x);
     const runIds = failedRunIds(listed?.failedChecks ?? []);
     if (!listed || !runIds.length) {
@@ -4799,7 +4081,7 @@ export class Swarm {
     return `Re-running ${runs} on PR #${rec.prNumber}, and it is queued for QA round ${rec.round}.`;
   }
 
-  private async triageClosePull(x: { floor: number; pr: number; comment: string }) {
+  protected async triageClosePull(x: { floor: number; pr: number; comment: string }) {
     const { repo, rec, listed } = await this.triageTarget(x);
     const comment = String(x.comment ?? '').trim();
     if (!comment) throw new HttpError(400, 'Say why the pull request is closing: the comment is posted on it.');
@@ -4815,7 +4097,7 @@ export class Swarm {
     return `Closed PR #${rec.prNumber}.${issues.length ? ` ${issues.map((n) => `#${n}`).join(', ')} stay${issues.length === 1 ? 's' : ''} open, so a developer builds it again.` : ''}`;
   }
 
-  private async triageEscalate(x: { floor: number; pr: number; reason: string }) {
+  protected async triageEscalate(x: { floor: number; pr: number; reason: string }) {
     const { rec } = await this.triageTarget(x);
     const step = triageStep({ kind: 'escalate', reason: String(x.reason ?? '').split('\n')[0].slice(0, 300) });
     if (step.do === 'escalate') this.escalate(rec, step.note && `${this.ceo().name}: ${step.note}`);
@@ -4824,12 +4106,12 @@ export class Swarm {
 
   // ---------- idle desks ----------
 
-  private bootAt = Date.now();
-  private deskWatch = new Map<string, { busyAt: number | null; trimmedAt: number | null }>(); // desk → what the sweeps saw
-  private trimming = false;
+  protected bootAt = Date.now();
+  protected deskWatch = new Map<string, { busyAt: number | null; trimmedAt: number | null }>(); // desk → what the sweeps saw
+  protected trimming = false;
 
   /** An agent's desk is in use: a task (preparing, working, testing or fixing) or a live CLI in their terminal. Hands off a fired agent's. */
-  private deskBusy(a: PersistedAgent) {
+  protected deskBusy(a: PersistedAgent) {
     const rt = this.agentRt.get(a.id);
     return !rt || !this.state.agents.includes(a) || BUSY.includes(a.status) || !!rt.session || !!rt.terminal?.live;
   }
@@ -4838,7 +4120,7 @@ export class Swarm {
    * Free disk space on desks idle longer than settings.trimIdleDesksMin: every agent's desk, and each floor's preview
    * worktree while no preview runs. One desk at a time, once per idle stretch; one phone message per sweep that freed anything.
    */
-  private async trimIdleDesks() {
+  protected async trimIdleDesks() {
     const min = this.state.settings.trimIdleDesksMin;
     if (!min || this.trimming) return;
     this.trimming = true;
@@ -4891,19 +4173,19 @@ export class Swarm {
 
   // ---------- the watchdog and the office doctor (#262) ----------
 
-  private activity = new Map<string, number>(); // agent id -> their session's latest output or tool activity
-  private watch: WatchMemory = { remedied: new Map(), nudged: new Map() };
-  private doctor: DoctorFinding[] = [];
-  private ignored = new Set<string>(); // findings the manager ignored, until they go away
-  private lastDoctor = '';
-  private silenced = new Set<string>(); // sessions the demo's pretend restart cut off: their end is ignored
-  private stalled = new Set<string>(); // the demo's stuck sessions
+  protected activity = new Map<string, number>(); // agent id -> their session's latest output or tool activity
+  protected watch: WatchMemory = { remedied: new Map(), nudged: new Map() };
+  protected doctor: DoctorFinding[] = [];
+  protected ignored = new Set<string>(); // findings the manager ignored, until they go away
+  protected lastDoctor = '';
+  protected silenced = new Set<string>(); // sessions the demo's pretend restart cut off: their end is ignored
+  protected stalled = new Set<string>(); // the demo's stuck sessions
 
   /**
    * A session about to start in a desk folder that's gone: the desk is set up again first, on the same branch (at the
    * PR's head when there is one). Null when it couldn't be (prepare() said why) or the agent was stopped meanwhile.
    */
-  private async restoreDesk(a: PersistedAgent, repo: PersistedRepo): Promise<string | null> {
+  protected async restoreDesk(a: PersistedAgent, repo: PersistedRepo): Promise<string | null> {
     a.status = 'preparing';
     this.appendLog(a, [{ kind: 'system', text: 'Their desk folder is gone, so it is set up again first.' }]);
     this.emitAgent(a);
@@ -4912,14 +4194,14 @@ export class Swarm {
   }
 
   /** When an agent's session last showed signs of life. Claude Code reports every step; other CLIs may only report a turn's end, so their terminal output counts too. */
-  private activeAt(a: PersistedAgent) {
+  protected activeAt(a: PersistedAgent) {
     const term = this.agentRt.get(a.id)?.terminal;
     const cli = a.sessionCli ?? (a.cli || this.state.settings.defaultCli);
     return Math.max(this.activity.get(a.id) ?? a.startedAt ?? Date.now(), cli !== 'claude' && term ? term.outputAt : 0);
   }
 
   /** The agent's task as the office knows it now (closeCleanup.ts). */
-  private workOf(a: PersistedAgent): WorkState {
+  protected workOf(a: PersistedAgent): WorkState {
     const rt = this.repoRt.get(a.repoId);
     if (!rt || !a.task) return 'unknown';
     const f = this.floorState(rt);
@@ -4928,7 +4210,7 @@ export class Swarm {
   }
 
   /** Every minute: find what's stuck (watchdog.ts), heal what can safely be healed, and list the rest for the doctor. heal false: only list. */
-  private watchdogTick(heal = true) {
+  protected watchdogTick(heal = true) {
     const now = Date.now();
     forget(this.watch, now);
     // A cloud agent whose Box is being set up, that the office can't reach right now or that waits to be signed in isn't stuck: left be.
@@ -4965,7 +4247,7 @@ export class Swarm {
   }
 
   /** Apply an automatic remedy. Returns what to tell the manager, or null. */
-  private remedy(p: Problem, remedy: Remedy, now: number): string | null {
+  protected remedy(p: Problem, remedy: Remedy, now: number): string | null {
     const a = p.agentId ? this.state.agents.find((x) => x.id === p.agentId) : undefined;
     const rec = p.prNumber != null ? this.state.qa.find((q) => q.repoId === p.repoId && q.prNumber === p.prNumber) : undefined;
     const what = p.prNumber != null ? `PR #${p.prNumber}` : `#${p.issueNumber}`;
@@ -5002,7 +4284,7 @@ export class Swarm {
   }
 
   /** Stop the agent if they're busy and put their work back in line, without a strike: an issue back on the board, a QA run or fix back in its PR's queue. */
-  private requeue(a: PersistedAgent, why: string) {
+  protected requeue(a: PersistedAgent, why: string) {
     for (const q of this.state.qa) {
       if (q.qaAgentId === a.id && q.status === 'testing') this.setQa(q, { status: 'queued', qaAgentId: null });
       if (q.devAgentId === a.id && q.status === 'fixing') this.setQa(q, { status: 'failed' });
@@ -5016,11 +4298,11 @@ export class Swarm {
     this.save();
   }
 
-  private doctorView(): DoctorFinding[] {
+  protected doctorView(): DoctorFinding[] {
     return this.doctor.filter((f) => !this.ignored.has(f.id));
   }
 
-  private emitDoctor() {
+  protected emitDoctor() {
     const doctor = this.doctorView();
     const key = JSON.stringify(doctor);
     if (key === this.lastDoctor) return;
@@ -5107,7 +4389,7 @@ export class Swarm {
    * end as if the office stopped and their desks are gone, and half of those finished their work on GitHub meanwhile.
    * Then the office reconciles as it does after a real restart.
    */
-  private async demoRestart(dd: NonNullable<Backend['demoDoctor']>): Promise<string> {
+  protected async demoRestart(dd: NonNullable<Backend['demoDoctor']>): Promise<string> {
     if (this.state.agents.some((a) => a.status === 'preparing')) throw new HttpError(409, 'Someone is still setting up a desk. Try again in a moment.');
     const busy = this.state.agents.filter((a) => a.role !== 'ceo' && a.status === 'working' && a.task && this.agentRt.get(a.id)?.session);
     if (busy.length < 2) throw new HttpError(409, 'Wait until at least two people are working, then try again.');
@@ -5136,11 +4418,11 @@ export class Swarm {
   // ---------- progress: coins, decorations, achievements and careers (#210, #226) ----------
 
   /** Tell the ledger something happened; send on whatever it changed. emitAgents false: the caller emits them. */
-  private ledger(ev: LedgerEvent, emitAgents = true) {
+  protected ledger(ev: LedgerEvent, emitAgents = true) {
     this.fanout(applyLedger(this.state.progress, ev), emitAgents);
   }
 
-  private fanout(fx: Effects, emitAgents = true) {
+  protected fanout(fx: Effects, emitAgents = true) {
     if (!fx.changed) return;
     if (fx.reward) this.broadcast({ type: 'reward', reward: fx.reward });
     if (emitAgents) {
@@ -5159,12 +4441,12 @@ export class Swarm {
     this.save();
   }
 
-  private progressView(): ProgressView {
+  protected progressView(): ProgressView {
     return progressView(this.state.progress, this.state.repos.map((r) => r.id));
   }
 
   /** Who wrote a PR, as far as the office knows: its QA record's author, the one holding it, or the one its branch is named after. */
-  private prAuthor(repo: PersistedRepo, pr: PullInfo): string | null {
+  protected prAuthor(repo: PersistedRepo, pr: PullInfo): string | null {
     const devs = this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo');
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === pr.number);
     if (rec?.devAgentId && devs.some((a) => a.id === rec.devAgentId)) return rec.devAgentId;
@@ -5175,7 +4457,7 @@ export class Swarm {
   }
 
   /** The scheduler's beat: a new day for the ledger, and a full house when everyone on a floor is busy at once. */
-  private progressTick() {
+  protected progressTick() {
     const now = Date.now();
     this.ledger({ kind: 'tick', at: now });
     for (const r of this.state.repos) {
@@ -5184,7 +4466,7 @@ export class Swarm {
     }
   }
 
-  private command(r: CommandResult): ProgressView {
+  protected command(r: CommandResult): ProgressView {
     if ('error' in r) throw new HttpError(409, r.error);
     this.fanout(r.effects);
     return this.progressView();
@@ -5226,7 +4508,7 @@ export class Swarm {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  private postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used'> & { changes?: TeamChange[] } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
@@ -5254,7 +4536,7 @@ export class Swarm {
   }
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
-  private postCeoReply(text: string) {
+  protected postCeoReply(text: string) {
     this.postMessage('ceo', text, undefined, this.ceoFiles.takeReply());
   }
 
@@ -5264,14 +4546,14 @@ export class Swarm {
   }
 
   /** CEO messages go to Telegram too: the manager's last message came from there, or Settings mirrors the whole chat. */
-  private mirrorsToTelegram(): boolean {
+  protected mirrorsToTelegram(): boolean {
     if (!this.telegram.linked()) return false;
     if (this.state.settings.notify.telegramMirror) return true;
     return [...this.state.messages].reverse().find((m) => m.from === 'manager')?.telegram === 'in';
   }
 
   /** A team-change button pressed on Telegram: the same approve and decline as the lobby's. */
-  private decideFromTelegram(verdict: 'approve' | 'decline', id: string): string {
+  protected decideFromTelegram(verdict: 'approve' | 'decline', id: string): string {
     const req = this.state.requests.find((r) => r.id === id);
     if (verdict === 'approve') this.approveRequest(id);
     else this.rejectRequest(id);
@@ -5279,7 +4561,7 @@ export class Swarm {
   }
 
   /** The CEO's send_telegram: to the manager's linked chat only. */
-  private async sendTelegram(a: { text: string }): Promise<string> {
+  protected async sendTelegram(a: { text: string }): Promise<string> {
     if (!this.telegram.linked()) throw new Error("Telegram isn't set up: the manager links their chat in Settings → Notifications → Telegram. Answer here instead.");
     const text = String(a.text ?? '').trim();
     if (!text) throw new Error('Write the message.');
@@ -5302,21 +4584,21 @@ export class Swarm {
   }
 
   /** The team's holiday greeting (shared/themes.ts) from the CEO, once a day while a theme is on. */
-  private greet() {
+  protected greet() {
     const text = dueGreeting(new Date(), this.state.settings.themes, this.state.settings.managerName || this.user || '', this.state.messages);
     if (text) this.postMessage('ceo', text);
   }
 
   // ---------- notifications ----------
 
-  private notifyNeedsHuman(rec: QaRecord) {
+  protected notifyNeedsHuman(rec: QaRecord) {
     const repo = this.state.repos.find((r) => r.id === rec.repoId);
     const title = this.repoRt.get(rec.repoId)?.pulls.find((p) => p.number === rec.prNumber)?.title;
     const name = repo?.fullName.split('/')[1] ?? rec.repoId;
     this.notifier.notify('needsHuman', `PR #${rec.prNumber} needs you`, `${name}${title ? `: ${title}` : ''}. ${rec.stuckWhy ? `Stuck because ${rec.stuckWhy}.` : rec.summary ?? ''}`, `${name} #${rec.prNumber}${title ? ` ${title}` : ''}`);
   }
 
-  private notifyMerge(repo: PersistedRepo, n: number, title: string) {
+  protected notifyMerge(repo: PersistedRepo, n: number, title: string) {
     const name = repo.fullName.split('/')[1];
     this.notifier.notify('merge', `Merged PR #${n}`, `${name}${title ? `: ${title}` : ''}`, `${name} #${n}${title ? ` ${title}` : ''}`);
     const closes = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === n)?.closesIssues ?? [];
@@ -5324,7 +4606,7 @@ export class Swarm {
   }
 
   /** Agents stuck in an error for STUCK_ERROR_MS: the manager hears once per error (checked every minute). */
-  private notifyStuck() {
+  protected notifyStuck() {
     const now = Date.now();
     for (const { agent: a, key } of stuckAgents(this.state.agents, now, this.toldStuck)) {
       this.toldStuck.add(key);
@@ -5369,7 +4651,7 @@ export class Swarm {
 
   // ---------- team changes ----------
 
-  private addRequest(req: HireRequestView) {
+  protected addRequest(req: HireRequestView) {
     this.state.requests.push(req);
     const decided = this.state.requests.filter((r) => r.status !== 'pending');
     if (decided.length > KEEP_DECIDED_REQUESTS) {
@@ -5380,14 +4662,14 @@ export class Swarm {
     this.save();
   }
 
-  private decide(req: HireRequestView, patch: Pick<HireRequestView, 'status' | 'note' | 'decidedBy'>) {
+  protected decide(req: HireRequestView, patch: Pick<HireRequestView, 'status' | 'note' | 'decidedBy'>) {
     Object.assign(req, patch, { decidedAt: Date.now() });
     this.broadcast({ type: 'request', request: req });
     this.save();
   }
 
   /** "Codex · gpt-6 · high": what an agent runs, where it isn't the office default ('' when it all is). */
-  private setupLabel(x: { cli: AgentCli | ''; model: string; effort: EffortLevel | ''; host?: MachineHost | '' }) {
+  protected setupLabel(x: { cli: AgentCli | ''; model: string; effort: EffortLevel | ''; host?: MachineHost | '' }) {
     return [x.cli ? cliLabel(x.cli) : '', x.model, x.effort ? `${x.effort} effort` : '', x.host === 'box' ? 'in the cloud' : ''].filter(Boolean).join(' · ');
   }
 
@@ -5448,7 +4730,7 @@ export class Swarm {
    * With team changes applied straight away: new agents waiting in the lobby join (a floor that's full keeps them
    * waiting), and agents let go leave as soon as they aren't preparing or working. A floor's last agent never leaves.
    */
-  private applyTeamChanges() {
+  protected applyTeamChanges() {
     if (this.state.settings.scaling !== 'auto') return;
     for (const req of this.state.requests.filter((r) => r.status === 'pending')) {
       const a = req.agentId ? this.state.agents.find((x) => x.id === req.agentId) : undefined;
@@ -5466,7 +4748,7 @@ export class Swarm {
   }
 
   /** A floor's team as scale_team sees it: who's there, and the team changes waiting for the manager. */
-  private teamNow(repo: PersistedRepo): TeamNow {
+  protected teamNow(repo: PersistedRepo): TeamNow {
     const pending = this.state.requests.filter((q) => q.repoId === repo.id && q.status === 'pending');
     return {
       agents: this.state.agents.filter((a) => a.repoId === repo.id).map((a) => ({ id: a.id, desk: a.desk, free: this.isFree(a) })),
@@ -5475,7 +4757,7 @@ export class Swarm {
     };
   }
 
-  private newHire(repo: PersistedRepo, reason: string, setup: Pick<HireRequestView, 'cli' | 'model' | 'effort'>): HireRequestView {
+  protected newHire(repo: PersistedRepo, reason: string, setup: Pick<HireRequestView, 'cli' | 'model' | 'effort'>): HireRequestView {
     const name = this.freeName();
     const req: HireRequestView = {
       id: crypto.randomUUID(),
@@ -5499,7 +4781,7 @@ export class Swarm {
     return req;
   }
 
-  private newLetGo(a: PersistedAgent, reason: string): HireRequestView {
+  protected newLetGo(a: PersistedAgent, reason: string): HireRequestView {
     const req: HireRequestView = {
       id: crypto.randomUUID(),
       kind: 'let-go',
@@ -5529,7 +4811,7 @@ export class Swarm {
    * let-gos are envelopes on desks until the manager decides; on auto, they go through at once, bar busy agents, who
    * leave when their task is over (leaveIfDue).
    */
-  private scaleTeam(x: { floor: number; size: number; reason: string; cli?: string; model?: string; effort?: string }) {
+  protected scaleTeam(x: { floor: number; size: number; reason: string; cli?: string; model?: string; effort?: string }) {
     const repo = this.floorRepo(x.floor);
     const reason = String(x.reason ?? '').trim().slice(0, 600);
     if (!reason) throw new Error('Say why: the manager reads the reason.');
@@ -5598,25 +4880,25 @@ export class Swarm {
 
   // ---------- the CEO's office tools ----------
 
-  private floorRepo(floor: number) {
+  protected floorRepo(floor: number) {
     const r = this.state.repos.find((x) => x.floor === Number(floor));
     if (!r) throw new Error(`There is no floor ${floor}. Floors: ${this.state.repos.map((x) => `${x.floor} (${x.fullName})`).join(', ') || 'none'}.`);
     return r;
   }
 
-  private agentByRef(ref: string) {
+  protected agentByRef(ref: string) {
     const r = String(ref ?? '').trim().toLowerCase();
     const a = this.state.agents.find((x) => x.id === ref || x.name.toLowerCase() === r);
     if (!a) throw new Error(`No agent "${ref}". Use the ids from company_status.`);
     return a;
   }
 
-  private agentDoing(a: PersistedAgent) {
+  protected agentDoing(a: PersistedAgent) {
     return !BUSY.includes(a.status) ? null : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `issue #${a.issueNumber}`;
   }
 
   /** What an agent runs, defaults resolved, for the CEO. */
-  private agentSetup(a: PersistedAgent) {
+  protected agentSetup(a: PersistedAgent) {
     const ceo = a.role === 'ceo';
     const cli = ceo ? 'claude' : a.cli || this.state.settings.defaultCli;
     return {
@@ -5626,7 +4908,7 @@ export class Swarm {
     };
   }
 
-  private companyStatus() {
+  protected companyStatus() {
     const s = this.state.settings;
     const ops = this.opsNow();
     const pending = this.state.requests.filter((r) => r.status === 'pending');
@@ -5716,7 +4998,7 @@ export class Swarm {
     );
   }
 
-  private agentDetail(x: { agent_id: string }) {
+  protected agentDetail(x: { agent_id: string }) {
     const a = this.agentByRef(x.agent_id);
     const repo = this.state.repos.find((r) => r.id === a.repoId);
     return JSON.stringify(
@@ -5736,7 +5018,7 @@ export class Swarm {
     );
   }
 
-  private setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }) {
+  protected setFloorProfile(x: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string> }) {
     const r = this.floorRepo(x.floor);
     const preview = parsePreviewPatch(x.preview_command, x.preview_env);
     if (x.summary !== undefined) r.summary = String(x.summary).trim().slice(0, 140);
@@ -5750,7 +5032,7 @@ export class Swarm {
   }
 
   /** configure_agent: an agent's coding agent, model or effort, from their next task. */
-  private configureAgent(x: { agent_id: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
+  protected configureAgent(x: { agent_id: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
     const a = this.agentByRef(x.agent_id);
     if (a.role === 'ceo') throw new Error("That's you: the manager sets the CEO up.");
     const switches = [...(x.tools_off ?? []).map((r) => [r, false] as const), ...(x.tools_on ?? []).map((r) => [r, true] as const), ...(x.tools_reset ?? []).map((r) => [r, null] as const)];
@@ -5773,7 +5055,7 @@ export class Swarm {
     return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.`;
   }
 
-  private async fileIssue(x: { floor: number; title: string; body: string }) {
+  protected async fileIssue(x: { floor: number; title: string; body: string }) {
     const repo = this.floorRepo(x.floor);
     const refused = issueRefusal({ kind: this.state.ceo.job?.kind ?? null, asked: this.ceoAsked, floor: repo.floor, mandate: mandateFor(this.state.settings.ceoMandates, repo.floor, Date.now()) });
     if (refused) throw new Error(refused);
@@ -5787,7 +5069,7 @@ export class Swarm {
   }
 
   /** Rewrite an open issue's "Depends on #N" line (see planDependencies for what is refused). */
-  private async setDependencies(x: { floor: number; number: number; depends_on: number[] }) {
+  protected async setDependencies(x: { floor: number; number: number; depends_on: number[] }) {
     const repo = this.floorRepo(x.floor);
     const issues = this.repoRt.get(repo.id)?.issues ?? [];
     const deps = (x.depends_on ?? []).map(Number);
@@ -5809,7 +5091,7 @@ export class Swarm {
   }
 
   /** Close an open issue as not planned, with the CEO's reason as its comment (see checkCloseIssue for what is refused). */
-  private async closeIssue(x: { floor: number; number: number; reason: string }) {
+  protected async closeIssue(x: { floor: number; number: number; reason: string }) {
     const repo = this.floorRepo(x.floor);
     const n = Number(x.number);
     const rt = this.repoRt.get(repo.id);
@@ -5827,7 +5109,7 @@ export class Swarm {
   // ---------- the CEO's mandates and read-only tools (#27) ----------
 
   /** set_mandate: the manager's "keep working on X until it's perfected", for follow-ups to file issues under. */
-  private setMandate(x: { text: string; floors?: number[]; expires_in_hours?: number }) {
+  protected setMandate(x: { text: string; floors?: number[]; expires_in_hours?: number }) {
     if (!this.ceoAsked) throw new Error(MANDATE_NOT_ASKED);
     const text = String(x.text ?? '').trim();
     if (!text) throw new Error('Say what the mandate is, in the manager\'s words.');
@@ -5843,7 +5125,7 @@ export class Swarm {
   }
 
   /** agent_log: an agent's last terminal lines and their session, secrets masked as for the journal. */
-  private agentLog(x: { agent_id: string; lines?: number }) {
+  protected agentLog(x: { agent_id: string; lines?: number }) {
     const a = this.agentByRef(x.agent_id);
     const rt = this.agentRt.get(a.id);
     const secrets = this.secrets();
@@ -5853,7 +5135,7 @@ export class Swarm {
   }
 
   /** qa_report: a PR's latest QA verdict, report and screenshots (as files the CEO can Read). */
-  private qaReport(x: { floor: number; pr: number }) {
+  protected qaReport(x: { floor: number; pr: number }) {
     const repo = this.floorRepo(x.floor);
     const pr = Number(x.pr);
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === pr);
@@ -5864,7 +5146,7 @@ export class Swarm {
   }
 
   /** worktree_file: a file or diff from an agent's worktree, or their branch in the floor's clone once it's gone. */
-  private async worktreeFile(x: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }) {
+  protected async worktreeFile(x: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }) {
     const a = this.agentByRef(x.agent_id);
     if (a.role === 'ceo') throw new Error('You have no worktree. Read the clones directly.');
     const repo = this.state.repos.find((r) => r.id === a.repoId);
@@ -5883,7 +5165,7 @@ export class Swarm {
   }
 
   /** pr_diff: a PR's changed files, and its diff when asked, through gh. */
-  private async prDiff(x: { floor: number; pr: number; patch?: boolean }) {
+  protected async prDiff(x: { floor: number; pr: number; patch?: boolean }) {
     const repo = this.floorRepo(x.floor);
     const d = await this.backend.prDiff(repo.fullName, Number(x.pr), !!x.patch);
     return prDiffText({ files: d.files, diff: d.diff === null ? null : scrub(d.diff, this.secrets()) });
