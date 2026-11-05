@@ -73,7 +73,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'This device'],
+    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device'],
   },
   {
     name: "manager's console",
@@ -83,7 +83,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'Time-lapse', 'Accessibility'],
+    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
   },
   { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },

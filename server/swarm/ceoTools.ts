@@ -11,6 +11,7 @@ import {
   agentLogText,
   qaReportText,
   AGENT_LOG_MAX as AGENT_LOG_MAX_LINES,
+  type OfficeHandlers,
   type OfficeTools,
 } from '../ceo.ts';
 import { researchReadOnly } from '../research.ts';
@@ -25,6 +26,7 @@ import { checkRestart, sessionKind } from '../health.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
 import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
+import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
 import type { HireRequestView } from '../../shared/types.ts';
@@ -64,6 +66,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      sessionHistory: (a) => this.sessionHistory(a),
     }, () => this.state.ceo.job?.kind === 'research'));
   }
 
@@ -333,6 +336,15 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const lines = rt?.terminal ? rt.terminal.tail(AGENT_LOG_MAX_LINES) : (rt?.log ?? a.logTail).map((l) => l.text);
     const floor = this.state.repos.find((r) => r.id === a.repoId)?.floor ?? null;
     return agentLogText(a, { floor, doing: this.agentDoing(a), lines, wanted: x.lines, mask: (t) => scrub(t, secrets) });
+  }
+
+  /** session_history: past sessions from the history (#49), filtered, newest first, a page at a time. */
+  protected sessionHistory(x: Parameters<OfficeHandlers['sessionHistory']>[0]) {
+    const per = 20;
+    const page = Math.max(1, Math.floor(x.page ?? 1));
+    const repoId = x.floor === undefined ? undefined : this.floorRepo(x.floor).id;
+    const since = Date.now() - (x.days ?? 7) * 86_400_000;
+    return historyText(this.history.page({ repoId, agent: x.agent, kind: x.kind, outcome: x.outcome, issue: x.issue, pr: x.pr, q: x.query, since, offset: (page - 1) * per, limit: per }), page, per);
   }
 
   /** The CEO still chats while the office drains for its update (#46), but starts no agent's session until the restart. */

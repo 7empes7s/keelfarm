@@ -16,6 +16,7 @@ import { loadScreenshot } from '../screenshot';
 import { toolVerb } from '../world/draw';
 import { followAgent } from '../world/camera/rig';
 import { StatusPill } from './StatusPill';
+import { HistoryButton } from './HistoryTab';
 
 function elapsed(from: number | null, to: number | null) {
   if (!from) return '';
@@ -183,6 +184,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
         {agent.startedAt && <span className="muted">⏱ {elapsed(agent.startedAt, working ? null : agent.endedAt)}</span>}
         {agent.turns > 0 && <span className="muted">{agent.turns} turns</span>}
         {agent.costUsd > 0 && <span className="muted" title="API-equivalent cost reported by the coding agent; subscription usage is billed by plan">≈${agent.costUsd.toFixed(2)}</span>}
+        <HistoryButton focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
       </div>
       {agent.lastError && agent.status !== 'working' && !signIn && <div className="term-error">⚠️ {agent.lastError}</div>}
       {agent.blocked && agent.status === 'working' && <div className="term-error">⛔ Blocked: {agent.blocked}. Answer it in the terminal.</div>}

@@ -11,6 +11,7 @@ import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { LabView } from './experiments.ts';
+import type { HistoryEntry } from './history.ts';
 import type { HealthView, MemorySettings } from './health.ts';
 
 export type AgentStatus =
@@ -388,6 +389,8 @@ export interface SwarmSettings {
   autoUpdate?: boolean; // update the office itself once it's quiet (absent on servers without self-update)
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
+  dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
+  historyDays: number; // days the session history and its transcripts are kept; 0 = forever
   voice: VoiceSettings;
   themes: ThemeSettings; // holiday themes: Settings → Themes (shared/themes.ts)
   weather: WeatherSettings; // Settings → Weather: the calm cycle, off, or the manager's real local weather
@@ -813,6 +816,8 @@ export type ServerEvent =
   | { type: 'cloud'; cloud: CloudView }
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
+  /** A session (or merge) went into the history (#49): an open History screen shows it. */
+  | { type: 'history'; entry: HistoryEntry }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }

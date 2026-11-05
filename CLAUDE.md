@@ -161,6 +161,10 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   Each new session's startup context (#50: its first turn's input tokens, split into the office's texts, CLAUDE.md
   files and the rest) is on its line: `shared/startup.ts`. Lean role profiles (builders and fixers, QA, the CEO) are in
   `shared/tooling.ts`; the office-wide playbook is `settings.officePlaybook`, in `prompts.ts`'s stable `floorContext`.
+- `history.ts`: the daily work log and session history (#49): an entry per finished session and office merge in
+  `<daily dir>/YYYY-MM-DD.md` (Settings; `/opt/ai-vault/daily` when it exists, never from the demo or tests), each
+  Claude Code transcript gzipped to `<SWARM_HOME>/history/YYYY/MM/DD/`, an index for the History tab and the CEO's
+  `session_history`, the nightly sweep. Formats and rules are pure, in `shared/history.ts`; `historySample.ts` is the demo's.
 - `experiments.ts`: the lab (#23): A/B experiments on harness practices in `state.json`, the variant each new issue in a
   running one gets (seeded, stratified by floor and size), what it changes in its sessions (`launchSession`), and its PR's
   outcome and survival. The rules and statistics are pure, in `shared/experiments.ts`; `experimentSample.ts` is the demo's.
