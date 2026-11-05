@@ -1,0 +1,34 @@
+// knip: unused files, exports and dependencies, run by npm run lint (scripts/codeHealth.mjs) against the baseline.
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "server/index.ts",
+    // Its own process (the terminal keeper), bundled next to index.ts by scripts/build-server.mjs.
+    "server/ptyHost.ts",
+    // Loaded by path in each agent's browser.
+    "server/browser-init.js",
+    "bin/cubefarm.js",
+    "scripts/*.mjs",
+    "scripts/box-smoke.ts",
+    "client/src/main.tsx"
+  ],
+  "project": [
+    "client/**/*.{ts,tsx}",
+    "server/**/*.{ts,js}",
+    "shared/**/*.ts",
+    "scripts/**/*.{ts,mjs,mts}",
+    "bin/**/*.js",
+    "e2e/**/*.ts"
+  ],
+  "ignoreDependencies": [
+    // Resolved by path at runtime (server/browser.ts) and pinned for agents' browsers.
+    "@playwright/mcp",
+    // Run by path from scripts/codeHealth.mjs; tsgolint is the type-aware backend oxlint finds on its own.
+    "oxlint",
+    "oxlint-tsgolint",
+    // scripts/pocketIcons.mjs installs these with --no-save when the icon font is rebuilt.
+    "lucide-static",
+    "opentype.js",
+    "wawoff2"
+  ]
+}
