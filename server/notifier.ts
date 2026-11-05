@@ -1,5 +1,6 @@
 // Notifications, the sending part (docs/pocket.md): the rate-limited fan-out of a note to this office's open tabs
-// (desktop notifications), Web Push to the manager's devices and the chat apps' webhooks. Webhook URLs and tokens live
+// (desktop notifications), Web Push to the manager's devices, the chat apps' webhooks and the manager's Telegram bot
+// (telegramBot.ts). Webhook URLs and tokens live
 // in the secrets file next to the ElevenLabs key; the VAPID keys and push subscriptions in <SWARM_HOME>/push.json.
 // None of it is ever logged or sent to a browser, except the VAPID public key a browser subscribes with.
 import crypto from 'node:crypto';
@@ -7,7 +8,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { NOTIFY_WEBHOOKS, noteTab } from '../shared/notify.ts';
 import { NTFY_SERVER, ntfyTopic } from '../shared/ntfy.ts';
-import type { NoteView, NotifyChannel, NotifyChannelsView, NotifyEvent, NotifyHealth, NotifySettings, NotifyWebhook, PushTestView } from '../shared/types.ts';
+import type { NoteView, NotifyChannel, NotifyChannelsView, NotifyEvent, NotifyHealth, NotifySettings, NotifyWebhook, PushTestView, TelegramView } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import {
   due,
@@ -24,9 +25,11 @@ import {
   webhookHint,
   type Gates,
   type Note,
+  type TeamChange,
   type WebhookSecrets,
 } from './notify.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
+import { teamKeyboard, telegramNote, type TgButton } from './telegram.ts';
 import { checkSubscription, checkVapidKeys, generateVapidKeys, pushRequest, type PushSub, type VapidKeys } from './webPush.ts';
 
 /** One POST to a chat app or a push service; resolves with the HTTP status. `text` is the note as plain text. */
@@ -66,10 +69,24 @@ export interface NotifierDeps {
   channelsChanged(view: NotifyChannelsView): void;
   /** Server log lines (a send failed), never a secret. */
   log(line: string): void;
+  /** The manager's Telegram bot, when the office has one. */
+  telegram?: TelegramChannel;
   now?(): number;
 }
 
-const LABEL: Record<NotifyChannel, string> = { desktop: 'Desktop', push: 'Push', ntfy: 'ntfy' };
+/** What the notifier needs of the Telegram bot (telegramBot.ts, with the swarm's mirror rule). */
+export interface TelegramChannel {
+  linked(): boolean;
+  /** The CEO chat goes to Telegram as it happens, so its notes (CEO messages, team changes) would only repeat it there. */
+  mirrors(): boolean;
+  /** Null when it arrived, else why not. */
+  send(text: string, keyboard?: TgButton[][]): Promise<string | null>;
+  view(): TelegramView;
+}
+
+const NO_TELEGRAM: TelegramView = { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null };
+
+const LABEL: Record<NotifyChannel, string> = { desktop: 'Desktop', push: 'Push', ntfy: 'ntfy', telegram: 'Telegram' };
 const MAX_DEVICES = 20;
 /** VAPID's contact for push services: the project, as no email address is configured. */
 const SUBJECT = 'https://github.com/leonvanzyl/cubefarm';
@@ -157,13 +174,13 @@ export class Notifier {
       const id = deviceId(d.endpoint);
       return { id, name: d.name, addedAt: d.addedAt, last: last(`push:${id}`) };
     });
-    return { webhooks, pushDevices: devices.length, devices, desktop: last('desktop') };
+    return { webhooks, pushDevices: devices.length, devices, desktop: last('desktop'), telegram: this.deps.telegram?.view() ?? NO_TELEGRAM };
   }
 
   /** Something happened: tell the manager on every channel that's on, unless the event is off or had its minute. */
-  notify(event: NotifyEvent, title: string, body: string, line?: string) {
+  notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[]) {
     if (!this.deps.settings().events[event]) return;
-    const r = offer(this.gates, note(event, title, body, line), this.now());
+    const r = offer(this.gates, note(event, title, body, line, changes), this.now());
     this.gates = r.gates;
     if (r.send) void this.deliver(r.send);
     this.arm();
@@ -183,6 +200,7 @@ export class Notifier {
     if (!isChannel(channel)) throw new HttpError(400, `There's no notification channel called "${channel}".`);
     if (isWebhook(channel) && !this.webhooks[channel]) throw new HttpError(409, `Save the ${LABEL[channel]} settings first.`);
     if (channel === 'push' && !this.push.devices.length) throw new HttpError(409, 'No device gets push yet: turn push on on a device first.');
+    if (channel === 'telegram' && !this.deps.telegram?.linked()) throw new HttpError(409, 'Link your Telegram chat first: open your bot and press Start.');
     const n = note('test', 'Test from cubefarm', channel === 'desktop' ? 'Desktop notifications work in this browser.' : `${LABEL[channel]} notifications from the office work.`);
     const results = await this.deliver(n, channel);
     const failed = results.filter((r) => r !== null);
@@ -317,6 +335,9 @@ export class Notifier {
     }
     const sends: Promise<string | null>[] = [];
     for (const c of NOTIFY_WEBHOOKS) if (on(c) && this.webhooks[c]) sends.push(this.send(this.webhookRequest(c, n, s.officeUrl)));
+    const tg = this.deps.telegram;
+    const repeats = (n.event === 'ceoMessage' || n.event === 'hire') && !only && tg?.mirrors();
+    if (on('telegram') && tg?.linked() && !repeats) sends.push(tg.send(telegramNote(n, s.officeUrl), n.changes ? teamKeyboard(n.changes) : undefined));
     if (on('push') && this.push.vapid) {
       const payload = JSON.stringify({ title: view.title, body: view.body, tag: `cubefarm-${view.id}`, url: view.url });
       for (const d of [...this.push.devices]) sends.push(this.sendPush(d, payload, noteText(n)));
@@ -356,6 +377,11 @@ export class Notifier {
     return [...secretValues(this.webhooks), ...this.push.devices.map((d) => d.endpoint), ...(this.push.vapid ? [this.push.vapid.privateKey] : [])];
   }
 
+  /** Tells the tabs the channels changed (the Telegram bot linked, a send went out). */
+  refresh() {
+    this.changed();
+  }
+
   private changed(): NotifyChannelsView {
     const view = this.channelsView();
     this.deps.channelsChanged(view);
@@ -382,7 +408,7 @@ export class Notifier {
 }
 
 const isWebhook = (c: string): c is NotifyWebhook => (NOTIFY_WEBHOOKS as string[]).includes(c);
-const isChannel = (c: string): c is NotifyChannel => c === 'desktop' || c === 'push' || isWebhook(c);
+const isChannel = (c: string): c is NotifyChannel => c === 'desktop' || c === 'push' || c === 'telegram' || isWebhook(c);
 
 /** The chat apps' settings read back from the secrets file, each checked again; anything malformed is dropped. */
 export function loadWebhooks(raw: unknown): WebhookSecrets {

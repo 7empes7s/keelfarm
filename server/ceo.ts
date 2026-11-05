@@ -42,6 +42,7 @@ export interface OfficeHandlers {
   rerunChecks(a: { floor: number; pr: number }): Promise<string>;
   closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
+  sendTelegram(a: { text: string }): Promise<string>;
 }
 
 export interface OfficeTools {
@@ -196,6 +197,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       'Triage only: hand a stuck pull request to the manager with your one-line diagnosis, when it needs a decision only they can make.',
       { floor: z.number().int(), pr: z.number().int().positive(), reason: z.string().min(1).max(300).describe('One line: what is wrong and what the manager has to decide') },
       (a) => run(() => h.escalate(a)),
+    ),
+    tool(
+      'send_telegram',
+      "Send the manager a message on their linked Telegram chat, only when they ask for something there (\"send me the plan on Telegram\"). Refused when Telegram isn't set up. It never reaches anyone else.",
+      { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
+      (a) => run(() => h.sendTelegram(a)),
     ),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });

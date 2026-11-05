@@ -269,6 +269,8 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `🗂️ close_pull PR #${String(input.pr ?? '?')}${floor}`;
     case 'escalate':
       return `📣 escalate PR #${String(input.pr ?? '?')}${floor}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
+    case 'send_telegram':
+      return `✈️ send_telegram: ${clip(String(input.text ?? ''), 90)}`;
   }
   return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }

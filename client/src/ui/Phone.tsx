@@ -481,6 +481,8 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
+          {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
+          {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>

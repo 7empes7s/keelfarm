@@ -4859,6 +4859,25 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   overflow-wrap: anywhere;
 }
 
+/* ui/TelegramSettings.tsx */
+.telegram-go {
+  margin-top: 4px;
+  white-space: normal;
+  max-width: 100%;
+}
+.telegram-demo {
+  margin-top: 8px;
+}
+.telegram-demo .row {
+  margin-top: 6px;
+}
+.telegram-demo input {
+  min-width: 0;
+}
+.bubble-via {
+  opacity: 0.8;
+}
+
 /* ui/CloudSettings.tsx */
 .cloud-steps {
   margin: 2px 0 8px;

@@ -379,8 +379,8 @@ export interface SwarmSettings {
 /** What the office tells the manager about when they're away (docs/pocket.md). */
 export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'merge';
 
-/** Where it tells them: this browser, Web Push to their devices, or a chat app's webhook. */
-export type NotifyChannel = 'desktop' | 'push' | 'ntfy';
+/** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
+export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
 
 /** The chat apps, whose webhook URLs and tokens live in the server's secrets file. */
 export type NotifyWebhook = 'ntfy';
@@ -389,6 +389,7 @@ export interface NotifySettings {
   events: Record<NotifyEvent, boolean>;
   channels: Record<NotifyChannel, boolean>; // a chat app also needs its webhook saved
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
+  telegramMirror: boolean; // every CEO message also goes to Telegram (otherwise only replies to messages sent from there)
 }
 
 /** A channel's last send since the office started: when, and whether it arrived (else why not). */
@@ -412,6 +413,19 @@ export interface NotifyChannelsView {
   pushDevices: number;
   devices: PushDeviceView[];
   desktop: NotifyHealth | null;
+  telegram: TelegramView;
+}
+
+/** The manager's Telegram bot (docs/pocket.md): its token and their chat id stay on the server. */
+export interface TelegramView {
+  set: boolean; // a bot token is saved
+  bot: string; // its username, e.g. "my_office_bot"
+  linked: boolean; // the manager pressed Start in their chat
+  chat: string; // that chat's first name, for "Linked to …"
+  linking: boolean; // a Start link is waiting to be pressed
+  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages
+  error: string; // why the last read failed, while retrying
+  last: NotifyHealth | null; // its last send
 }
 
 /** A test push to one device: the push service took it, the device is gone (and dropped), or another error. */
@@ -625,6 +639,7 @@ export interface PhoneMessage {
   at: number;
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
+  telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
   replyTo?: number; // the manager's message replies to this one (its id)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)

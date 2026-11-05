@@ -101,6 +101,35 @@ a **Subscribe in the ntfy app** link and a QR code for another phone's camera, w
 links. Anyone who knows the topic can read it, so it's never shown again; **Make a new ntfy topic** replaces it.
 **Use my own ntfy server or topic** takes a topic URL and an access token (`tk_…`) instead.
 
+### Telegram
+
+Your own Telegram bot gets the notifications and lets you talk to the CEO from Telegram. In **⚙️ → Notifications →
+Telegram**:
+
+1. **Make a bot**: open [@BotFather](https://t.me/BotFather), send `/newbot`, pick a name and a username ending in
+   `bot`, and copy the token it gives you.
+2. **Paste the token**: the office checks it with Telegram (`getMe`) before saving it.
+3. **Open your bot and press Start** with the link the office shows. It carries a one-time code (good for 30
+   minutes): the chat that presses Start with it is linked, and the office never listens to any other chat.
+
+Then Telegram is one more channel with its own **On** switch, the same events, rate limit and summaries, and the
+office link at the end. **Send test**, **Link another chat** and **Remove** are there too.
+
+- **Chat with the CEO:** what you write to the bot reaches the CEO as a phone message does, and shows in the phone
+  chat marked *via Telegram*. Replying to one of the bot's messages quotes it to the CEO. When your last message came
+  from Telegram, the CEO's answers go there too (*✈️ sent to Telegram* in the phone chat); **Mirror the whole CEO
+  chat to Telegram** sends every CEO message.
+- **Team changes** arrive with **✅ Hire** / **✋ Decline** buttons, which go through the same approve and decline
+  as the lobby's.
+- **The CEO can send you a message** there when you ask ("send me the plan on Telegram"), only to your linked chat.
+
+The office reads the bot's messages with long polling (`getUpdates`), so no public address is needed: it works with
+the office on `127.0.0.1` or your tailnet. It retries with a growing pause when Telegram can't be reached, and stops
+at shutdown. Give the office a bot of its own: two programs can't read one bot's messages. The token and your chat
+are kept in `secrets.json` under `telegram` (see below); **Remove** forgets both. A demo office talks to a fake
+Telegram that prints what it would send, and its settings have buttons that play you on Telegram (press Start, write
+a message, press a team change's button).
+
 ### Channels
 
 Each channel shows when it last sent and whether that worked, with the error if it didn't: desktop (the office's
@@ -112,10 +141,10 @@ this browser**. A tab you're looking at doesn't: the office chimes and shows the
 
 ### Where the secrets live
 
-The ntfy topic and token are kept in `<SWARM_HOME>/secrets.json`
+The ntfy topic and token, and the Telegram bot's token and your chat, are kept in `<SWARM_HOME>/secrets.json`
 (`~/.cubefarm/secrets.json` by default) next to the ElevenLabs key: owner-only file permissions, never in
 `state.json`, never logged, never sent to a browser (the settings show the last 4 characters) and never given to
-agents. **Remove** deletes them. A demo office keeps its own `demo-secrets.json` and `demo-push.json`.
+agents. **Remove** deletes them. A demo office keeps its own `demo-secrets.json`, `demo-telegram-secrets.json` and `demo-push.json`.
 
 ## Reach the office from your phone
 
