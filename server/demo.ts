@@ -11,6 +11,7 @@ import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
+import { keyName } from '../shared/termKeys.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
 import { takeLastUpdate, underLauncher, type OfficeHost } from './officeUpdate.ts';
@@ -558,6 +559,9 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
   let line = '';
   term.bind({
     write: (data) => {
+      // Keys with no character (Esc, arrows, Shift+Tab, Ctrl+C…) are echoed by name, so the key bar can be checked here.
+      const key = keyName(data);
+      if (key) return term.write(`\x1b[2m⟨${key}⟩\x1b[0m`);
       for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
         if (ch === '\r') {
           const text = line.trim();
