@@ -5,6 +5,7 @@ import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { Panel } from './Panel';
+import { HistoryButton } from './HistoryTab';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
@@ -290,6 +291,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 <span className="spacer" />
                 <QaLink card={c} />
                 {previewButton(c)}
+                <HistoryButton focus={{ repoId: repo.id, pr: c.number }} label={`The sessions on PR #${c.number}`} />
                 {(st === 'testing' || st === 'fixing') && terminalButton(c)}
                 {(!st || st === 'needs-human') && (
                   <button className="btn btn-small btn-good" disabled={pending === c.key} onClick={() => act(c.key, () => api.sendToQa(repo.id, c.number))}>
@@ -328,6 +330,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 <span className="spacer" />
                 <QaLink card={c} />
                 {previewButton(c)}
+                <HistoryButton focus={{ repoId: repo.id, pr: c.number }} label={`The sessions on PR #${c.number}`} />
                 <button className="btn btn-small btn-good" disabled={pending === c.key || pr?.isDraft} onClick={() => merge(c)}>
                   Merge
                 </button>

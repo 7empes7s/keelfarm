@@ -28,6 +28,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoAnswered, demoCeoAnswer, demoPrompts, demoQuestion } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
+import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
@@ -916,6 +917,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
       return inTerminal(opts, cb, (c) => (opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, c, deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
+    sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
     terminals: true,
     reconnectClis: async () => [], // fake sessions end with the office
     hooksReady: () => undefined,

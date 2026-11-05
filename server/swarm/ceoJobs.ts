@@ -257,7 +257,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const kind: TaskKind = `ceo-${job.kind}`;
     const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0));
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }) });
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
@@ -286,6 +286,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? 'claude' : null;
+          if (id) run.sessionId = id;
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
