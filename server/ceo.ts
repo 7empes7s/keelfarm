@@ -134,6 +134,8 @@ export interface OfficeHandlers {
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
+  restartAgent(a: { agent_id: string }): string;
+  messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
   qaReport(a: { floor: number; pr: number }): string;
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
@@ -322,6 +324,18 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.agentLog(a)),
     ),
     tool(
+      'restart_agent',
+      "Restart a stopped or errored agent's task: their CLI resumes the same conversation on the same branch. A QA run, or a task with nothing to resume, goes back to the queue instead.",
+      { agent_id: z.string().describe('An id (or name) from company_status') },
+      (a) => run(() => h.restartAgent(a)),
+    ),
+    tool(
+      'message_agent',
+      'Send guidance into an agent\'s session, e.g. "the test is flaky, rerun it". Typed in after their current step if they are working, else their session resumes with it. Only to an agent on the floor you name.',
+      { floor: z.number().int(), agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000) },
+      (a) => run(() => h.messageAgent(a)),
+    ),
+    tool(
       'qa_report',
       "A pull request's latest QA verdict, report (summary, checks, fix instructions) and screenshots. Screenshots are file paths you can Read to see them. Read-only.",
       { floor: z.number().int(), pr: z.number().int().positive() },
@@ -449,6 +463,7 @@ export function ceoSystemPrompt(o: {
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
+    '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',

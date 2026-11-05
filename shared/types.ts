@@ -10,6 +10,7 @@ import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
+import type { HealthView, MemorySettings } from './health.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -354,6 +355,7 @@ export interface QaShotView {
 
 export interface SwarmSettings {
   sessionLimit: number; // most agent sessions running at once; 0 = no limit
+  memory: MemorySettings; // memory headroom, the per-session ceiling and learned estimates (shared/health.ts)
   defaultModel: string;
   defaultEffort: EffortLevel;
   taskEffort: Partial<Record<TaskKind, EffortLevel>>; // effort per kind of task (#18); an agent's own wins, and a kind without one runs at the default
@@ -384,7 +386,7 @@ export interface SwarmSettings {
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
-export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'merge';
+export type NotifyEvent = 'needsHuman' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
 
 /** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
 export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
@@ -703,6 +705,7 @@ export interface WorldSnapshot {
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
   usage: UsageView;
+  health?: HealthView; // memory, load and sessions, for the health strip (#55); absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
@@ -755,6 +758,7 @@ export type ServerEvent =
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
+  | { type: 'health'; health: HealthView }
   | { type: 'claudeUsage'; readings: UsageReading[] }
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }

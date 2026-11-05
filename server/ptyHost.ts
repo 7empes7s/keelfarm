@@ -96,8 +96,8 @@ function start(m: Extract<ToHost, { op: 'spawn' }>) {
     h.bytes += data.length;
     while (h.bytes > BACKLOG_BYTES && h.backlog.length > 1) h.bytes -= h.backlog.shift()!.length;
   });
-  proc.onExit(({ exitCode }) => {
-    h.exit = exitCode;
+  proc.onExit(({ exitCode, signal }) => {
+    h.exit = signal ? 128 + signal : exitCode; // killed (the OOM killer's SIGKILL: 137), as a shell reports it
     quietly(() => proc.kill()); // on Windows the terminal's console host (conhost.exe) outlives the CLI until then
     if (h.attached && office) send({ op: 'exit', id: m.id, code: exitCode });
     if ((h.attached && office) || h.killed) held.delete(m.id);
