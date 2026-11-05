@@ -20,7 +20,7 @@ import {
 } from '../shared/costs.ts';
 import { DAY_MS, startOfDay } from './metrics.ts';
 
-export const KEEP_DAYS = 30;
+const KEEP_DAYS = 30;
 const TOP = 10;
 const MAX_WASTE = 50;
 
@@ -117,7 +117,7 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
   }
 
   const kinds: CostKindRow[] = [];
-  for (const kind of [...new Set(sessions.map((s) => s.kind))]) {
+  for (const kind of new Set(sessions.map((s) => s.kind))) {
     const of = sessions.filter((s) => s.kind === kind);
     const efforts = [...new Set(of.map((s) => s.effort))];
     kinds.push({
