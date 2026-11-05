@@ -38,7 +38,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
    */
   protected officeTools(): OfficeTools {
     const acts = this.spend.acts;
-    return createOfficeTools(researchReadOnly({
+    // Every call is noted for a Stop's reply (ceoChat.ts).
+    return createOfficeTools(this.ceoChat.track(researchReadOnly({
       companyStatus: () => this.companyStatus(),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
@@ -63,7 +64,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
-    }, () => this.state.ceo.job?.kind === 'research'));
+    }, () => this.state.ceo.job?.kind === 'research')));
   }
 
   // ---------- the CEO's office tools ----------

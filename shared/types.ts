@@ -12,6 +12,9 @@ import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
+import type { CeoLive } from './ceoStream.ts';
+import type { Conversation } from './conversations.ts';
+import type { MemoryNote } from './ceoMemory.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -659,6 +662,16 @@ export interface PhoneMessage {
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
+  steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
+  edited?: number; // the manager's: when they last edited it
+}
+
+/** The CEO chat beyond its messages (#51): the reply being written, the conversations and the manager's pinned notes. */
+export interface CeoChatView {
+  live: CeoLive | null;
+  current: string; // the conversation the phone shows
+  conversations: Conversation[];
+  memory: MemoryNote[];
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -726,6 +739,7 @@ export interface WorldSnapshot {
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
   experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
+  chat?: CeoChatView; // absent in a replay
 }
 
 /** What changed about an agent since the office last sent it, with its id; every field for one it never sent. */
@@ -761,6 +775,8 @@ export type ServerEvent =
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
+  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
+  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }

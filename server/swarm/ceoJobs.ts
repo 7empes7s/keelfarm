@@ -32,7 +32,9 @@ import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseCeoMessage } from '../../shared/chatParts.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
-import type { AgentStatus, CeoInfo, PhoneMessage, ServerDelivery } from '../../shared/types.ts';
+import type { AgentStatus, CeoChatView, CeoInfo, PhoneMessage, ServerDelivery } from '../../shared/types.ts';
+import { memoryPrompt } from '../../shared/ceoMemory.ts';
+import { conversationsView, currentConversation, touchConversation } from '../../shared/conversations.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -129,6 +131,11 @@ export abstract class SwarmCeo extends SwarmUpdate {
     };
   }
 
+  /** The chat's live reply, conversations and the manager's notes (#51). */
+  protected chatView(): CeoChatView {
+    return { live: this.ceoChat.live, current: this.state.ceo.chats.current, conversations: conversationsView(this.state.ceo.chats), memory: this.state.ceo.remember };
+  }
+
   protected emitCeo() {
     this.broadcast({ type: 'ceo', ceo: this.ceoInfo() });
   }
@@ -197,6 +204,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB);
     this.spend.ceoActs = 0;
     this.ceoAsked = askedFor(job);
+    this.ceoChat.startJob();
     this.emitAgent(a);
     this.emitCeo();
     this.save();
@@ -216,7 +224,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     rt.session = this.backend.startSession(
       {
         cwd: CEO_DIR,
-        prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin),
+        prompt: ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + memoryPrompt(this.state.ceo.remember),
         systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)),
         model: run.model,
         effort: run.effort,
@@ -226,13 +234,16 @@ export abstract class SwarmCeo extends SwarmUpdate {
         role: 'ceo',
         office: this.officeTools(),
         tools: this.sessionToolsFor(a, 'claude'),
+        stream: true,
         ...how,
       },
       {
         log: (entries) => {
           this.appendLog(a, entries);
           this.ceoFiles.record(entries);
+          this.ceoChat.log(entries);
         },
+        text: (text, done) => this.ceoChat.text(text, done),
         tool: (name) => {
           if (rt.currentTool === name) return;
           rt.currentTool = name;
@@ -246,7 +257,10 @@ export abstract class SwarmCeo extends SwarmUpdate {
         screenshot: () => undefined,
         // A follow-up that found nothing to do stays off the manager's phone.
         turn: (text) => {
-          if (job.kind === 'followup' && quietReply(text)) return;
+          if (job.kind === 'followup' && quietReply(text)) {
+            this.ceoChat.finishTurn(text);
+            return;
+          }
           this.postCeoReply(text);
           this.markDelivery('all', 'replied');
         },
@@ -275,6 +289,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
+    this.ceoChat.endJob();
     if (result.interrupted) this.interrupted(a);
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
     void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, this.spend.take(a.id), 'ceo-chat', result, { stopped: a.status === 'stopped', ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
@@ -562,7 +577,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research'> & { changes?: TeamChange[] } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'steps'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
     const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
@@ -580,6 +595,9 @@ export abstract class SwarmCeo extends SwarmUpdate {
     this.state.messages.push(m);
     if (this.state.messages.length > KEEP_MESSAGES) this.state.messages.splice(0, this.state.messages.length - KEEP_MESSAGES);
     this.broadcast({ type: 'message', message: m });
+    const { title } = currentConversation(this.state.ceo.chats);
+    touchConversation(this.state.ceo.chats, m);
+    if (currentConversation(this.state.ceo.chats).title !== title) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
     this.save();
     // Proposals are notified as such (proposeHire, proposeLetGo).
     if (from === 'ceo' && !requestId) {
@@ -591,7 +609,8 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
   protected postCeoReply(text: string) {
-    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job) });
+    const steps = this.ceoChat.finishTurn(text);
+    this.postMessage('ceo', text, undefined, { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...(steps.length && { steps }) });
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */

@@ -43,6 +43,8 @@ import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { CeoFiles } from '../ceoFiles.ts';
+import { CeoChat } from '../ceoChat.ts';
+import { loadChats } from '../../shared/conversations.ts';
 import { FileStore } from '../files.ts';
 import type {
   AgentActivity,
@@ -64,6 +66,7 @@ import {
   type RepoRuntime,
   DEFAULT_MODEL,
   CEO_DIR,
+  CONVERSATIONS_DIR,
   FILES_DIR,
   MAX_ISSUES_PER_JOB,
   BUSY,
@@ -112,7 +115,7 @@ export abstract class SwarmCore extends SwarmContract {
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups() },
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), chats: loadChats(undefined, [], Date.now()), remember: [] },
     messages: [],
     phoneReadAt: 0,
     prLimits: PR_LIMITS_VERSION,
@@ -127,6 +130,7 @@ export abstract class SwarmCore extends SwarmContract {
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
   readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));
   protected ceoFiles = new CeoFiles(this.files, CEO_DIR);
+  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }));
 
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
@@ -410,6 +414,7 @@ export abstract class SwarmCore extends SwarmContract {
       prPreviews: this.previews.prViews(),
       requests: this.state.requests,
       ceo: this.ceoInfo(),
+      chat: this.chatView(),
       messages: snapshotMessages(this.state.messages.slice(-100)),
       phoneReadAt: this.state.phoneReadAt,
       usage: this.usageNow(),

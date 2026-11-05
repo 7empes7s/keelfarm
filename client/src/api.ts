@@ -7,6 +7,7 @@ import type { CostsView, TaskKind } from '../../shared/costs';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
+import type { ConversationHit } from '../../shared/conversations';
 import type { HealthView } from '../../shared/health';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
@@ -144,6 +145,18 @@ export const api = {
   keepFile: (id: string, keep: boolean) => call('POST', `/api/files/${id}/keep`, { keep }),
   deleteFile: (id: string, toast = true) => call('DELETE', `/api/files/${id}`, undefined, toast),
   ceoReview: () => call('POST', '/api/ceo/review'),
+  // The chat closer to Claude's (#51)
+  ceoStop: () => call('POST', '/api/ceo/stop'),
+  ceoRetry: () => call('POST', '/api/ceo/retry'),
+  editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
+  newConversation: () => call<{ id: string }>('POST', '/api/ceo/conversations'),
+  openConversation: (id: string) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/open`),
+  pinConversation: (id: string, pinned: boolean) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/pin`, { pinned }),
+  searchConversations: (q: string) => call<{ hits: ConversationHit[] }>('GET', `/api/ceo/conversations/search?q=${encodeURIComponent(q)}`, undefined, false),
+  ceoNotes: () => call<{ text: string; truncated: boolean; at: number | null }>('GET', '/api/ceo/notes'),
+  addMemory: (text: string) => call('POST', '/api/ceo/memory', { text }),
+  editMemory: (id: string, text: string) => call('PUT', `/api/ceo/memory/${encodeURIComponent(id)}`, { text }),
+  deleteMemory: (id: string) => call('DELETE', `/api/ceo/memory/${encodeURIComponent(id)}`),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   artifact: (messageId: number, artifactId: string) => call<{ markdown: string }>('GET', `/api/messages/${messageId}/artifacts/${encodeURIComponent(artifactId)}`),
   /** A finished ping-pong game on a floor, for its leaderboard (shared/pong.ts parsePongResult). */

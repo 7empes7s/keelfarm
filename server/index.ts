@@ -315,6 +315,18 @@ app.post(
 );
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
+// The chat closer to Claude's (#51): stop, edit and retry, conversations, and what the CEO remembers
+app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
+app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
+app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
+app.post('/api/ceo/conversations', route(() => swarm.newConversation()));
+app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
+app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));
+app.post('/api/ceo/conversations/:id/pin', route((req) => swarm.pinConversation(String(req.params.id), req.body?.pinned === true)));
+app.get('/api/ceo/notes', route(() => swarm.ceoNotes()));
+app.post('/api/ceo/memory', route((req) => swarm.addMemory(str(req.body?.text))));
+app.put('/api/ceo/memory/:id', route((req) => swarm.editMemory(String(req.params.id), str(req.body?.text))));
+app.delete('/api/ceo/memory/:id', route((req) => swarm.deleteMemory(String(req.params.id))));
 app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
 app.post(

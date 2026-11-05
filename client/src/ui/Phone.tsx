@@ -9,8 +9,13 @@ import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
 import { retrySend, sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { Markdown } from './Markdown';
-import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
+import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
+import { copyText } from './clipboard';
 import { MessageBox } from './MessageBox';
+import { LiveBubble, LongText, StepsList } from './ChatLive';
+import { Conversations } from './ChatHistory';
+import { CeoMemory } from './CeoMemory';
+import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
 import { useAttachments } from './chatUpload';
 import type { FileRef } from '../../../shared/files';
@@ -479,18 +484,20 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
             )}
           </div>
         ) : (
-          text && <Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} />
+          text && <LongText text={text}><Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} /></LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
         ))}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {m?.used && <UsedLine used={m.used} />}
+        {!!m?.steps?.length && <StepsList steps={m.steps} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
           {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
           {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
+          {m?.edited && <span className="bubble-via">edited · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>
@@ -505,8 +512,8 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   );
 }
 
-/** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, and Retry for a failed send. */
-function MessageActions({ item, ceoName, onReply, onClose }: { item: Item; ceoName: string; onReply: (id: number) => void; onClose: () => void }) {
+/** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, Retry for a failed send, and `more` (edit, retry, remember). */
+function MessageActions({ item, ceoName, more, onReply, onClose }: { item: Item; ceoName: string; more: { label: string; run: () => void }[]; onReply: (id: number) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useDialogFocus(ref);
@@ -549,6 +556,11 @@ function MessageActions({ item, ceoName, onReply, onClose }: { item: Item; ceoNa
           <button type="button" className="btn btn-small" onClick={act(copy)}>
             📋 Copy text
           </button>
+          {more.map((x) => (
+            <button key={x.label} type="button" className="btn btn-small" onClick={act(x.run)}>
+              {x.label}
+            </button>
+          ))}
           {item.out?.delivery === 'failed' && (
             <button type="button" className="btn btn-small btn-good" onClick={act(() => retrySend(item.out!.key))}>
               ⟳ Retry
@@ -576,6 +588,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const running = useStore((s) => Object.values(s.agents).filter(isBusy).length);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [editing, setEditing] = useState<number | null>(null); // the manager's last message, being edited to send again
+  const endEdit = () => (setEditing(null), setText(''));
+  const [sheet, setSheet] = useState<'chats' | 'memory' | null>(null);
+  const chat = useStore((s) => s.chat);
   const [menu, setMenu] = useState<Item | null>(null);
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
   const [artifactList, setArtifactList] = useState(false);
@@ -618,7 +634,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
       }
     }
     if (stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length, outbox.length, info.job?.kind]);
+  }, [messages.length, outbox.length, info.job?.kind, chat.live]);
   useEffect(() => {
     if (flash === null) return;
     const t = setTimeout(() => setFlash(null), 1600);
@@ -648,6 +664,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   };
   // The message box's own send carries the tray's files; quick chips and suggestions send text only.
   const sendTyped = () => {
+    if (editing !== null) {
+      if (text.trim()) void attempt(() => api.editMessage(editing, text));
+      return endEdit();
+    }
     if (att.busy) return;
     if (!text.trim() && !att.ready.length) return;
     send(text, replyTo, att.ready);
@@ -670,6 +690,17 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     setFlash(id);
   };
   const replying = ceo.status === 'working' && info.job?.kind === 'chat';
+  const stop = () => void attempt(api.ceoStop);
+  const last = (from: PhoneMessage['from']) => [...messages].reverse().find((x) => x.from === from)?.id;
+  const actionsFor = (item: Item) => {
+    const m = item.m;
+    if (!m || m.from === 'office') return [];
+    return [
+      ...(m.id === last('manager') ? [{ label: '✏️ Edit and resend', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
+      ...(m.id === last('ceo') ? [{ label: '⟳ Retry', run: () => void attempt(api.ceoRetry) }] : []),
+      { label: '📌 Remember this', run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (🧠 to see or edit)`)) },
+    ];
+  };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
   const presence =
     ceo.status === 'working'
@@ -730,6 +761,12 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             📎 Files ({fileCount})
           </button>
         )}
+        <button type="button" className="hands-free" onClick={() => setSheet('chats')} aria-haspopup="dialog" aria-label="Conversations" title="Conversations: a new one, or an earlier one">
+          💬
+        </button>
+        <button type="button" className="hands-free" onClick={() => setSheet('memory')} aria-haspopup="dialog" aria-label={`What ${ceo.name} remembers`} title={`What ${ceo.name} remembers`}>
+          🧠
+        </button>
         <HandsFreeToggle ceoName={ceo.name} />
       </div>
       <div className="chat-log-wrap">
@@ -770,22 +807,16 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {replying && (
-            <div className="bubble-row">
-              <div className="bubble bubble-them bubble-typing">
-                <span />
-                <span />
-                <span />
-              </div>
-            </div>
-          )}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} />}
         </div>
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label="Jump to the latest message">
             ↓ Latest
           </button>
         )}
-        {menu && <MessageActions item={menu} ceoName={ceo.name} onReply={reply} onClose={() => setMenu(null)} />}
+        {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
+        {sheet === 'chats' && <Conversations onClose={() => setSheet(null)} />}
+        {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
         )}
@@ -821,12 +852,23 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
             </button>
           </>
         )}
+        {(ceo.status === 'error' || ceo.status === 'stopped') && last('manager') !== undefined && (
+          <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
+        )}
         {QUICK.map((q) => (
           <button key={q} className="quick-chip" onClick={() => send(q, null)}>
             {q}
           </button>
         ))}
       </div>
+      {editing !== null && (
+        <div className="chat-reply">
+          <b className="grow small">✏️ Editing your message: Send replaces it, and {ceo.name} answers the new version</b>
+          <button type="button" className="chat-reply-x" aria-label="Cancel the edit" onClick={endEdit}>
+            ✕
+          </button>
+        </div>
+      )}
       {replyTo !== null && (
         <div className="chat-reply">
           <div className="grow chat-reply-body">
@@ -874,9 +916,15 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         <button type="button" className="btn btn-small" disabled={!text.trim() || researchTopic(text) !== null} onClick={() => send(`${RESEARCH_PREFIX}${text.trim()}`, null)} aria-label={`Ask ${ceo.name} to research this`} title="Research it: options with sources, from the web and your apps">
           🔎
         </button>
-        <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
-          Send
-        </button>
+        {ceo.status === 'working' && editing === null && !text.trim() && !att.ready.length ? (
+          <button type="button" className="btn btn-small btn-bad" onClick={stop} aria-label={`Stop ${ceo.name}`} title="Stop: what's done stays done, and the reply says what that was">
+            ■ Stop
+          </button>
+        ) : (
+          <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
+            {editing !== null ? 'Resend' : 'Send'}
+          </button>
+        )}
       </form>
     </div>
   );

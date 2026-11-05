@@ -30,6 +30,7 @@ import { sampleOffice } from './costSample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { demoPrDiff, demoReadWorktree } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
+import { seedDemoNotes } from './demoNotes.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -665,6 +666,7 @@ async function fakeTrim(stillIdle: () => boolean) {
 export function createDemoBackend(scale: DemoScale | null = null): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
+  seedDemoNotes();
   // Tie each fake session back to its repo via the desk directory name.
   const deskRepo = new Map<string, string>();
   // Desks whose pretend dependencies are installed: the first task on a desk installs, the next ones skip.
@@ -1245,7 +1247,20 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     return out;
   };
   const read = (file: string, lines: number) => step([{ kind: 'tool', tool: 'Read', text: `⏺ Read ${file}` }, { kind: 'result', text: `  ⎿ Read ${lines} lines` }]);
-  const think = (text: string) => step([{ kind: 'thinking', text: '✻ Thinking…' }, { kind: 'text', text: `● ${text}` }], 1800);
+  const think = (text: string) => {
+    if (opts.stream) cb.text?.(text, true);
+    return step([{ kind: 'thinking', text: '✻ Thinking…' }, { kind: 'text', text: `● ${text}` }], 1800);
+  };
+  /** The reply as it is written, a few words at a time, in about five seconds at most (the real one comes a block at a time). */
+  const write = async (reply: string) => {
+    const words = reply.split(/(?<=\s)/);
+    const n = Math.max(4, Math.ceil(words.length / 40));
+    for (let i = n; opts.stream && i < words.length + n; i += n) {
+      if (stopped) throw new Error('Stopped by manager');
+      cb.text?.(words.slice(0, i).join(''), i >= words.length);
+      await wait(120);
+    }
+  };
   const short = (s: string, n = 48) => (s.length > n ? `${s.slice(0, n - 1).trim()}…` : s);
   const refused = (out: string) => out.replace(/^Refused: /, '');
   /** What happens next, by Settings → Team changes; `added`: new agents (negative: agents leaving). */
@@ -1474,6 +1489,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       try {
         cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · CEO` }]);
         const reply = await run();
+        await write(reply);
         cb.log([{ kind: 'text', text: `● ${reply}` }]);
         cb.turn?.(reply);
         finish(true, reply);
