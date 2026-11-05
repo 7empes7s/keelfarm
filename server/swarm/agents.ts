@@ -617,10 +617,10 @@ export abstract class SwarmAgents extends SwarmMerge {
    * What the manager's Tools & skills switches take away from a Claude Code session (the Agent SDK runs Claude Code
    * too), logged so it shows in the agent's terminal. Codex and OpenCode load their own setup: nothing.
    */
-  protected sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined): SessionTools | undefined {
+  protected sessionToolsFor(a: PersistedAgent, cli: AgentCli | undefined, off: string[] = []): SessionTools | undefined {
     if ((cli ?? 'claude') !== 'claude') return undefined;
     const t = this.state.settings.tools;
-    const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
+    const tools = a.role === 'ceo' ? sessionTools(this.tooling.items, 'ceo', mergeSwitches(t.everyone, t.ceo)) : sessionTools(this.tooling.items, 'agent', { ...mergeSwitches(t.everyone, a.tools), ...Object.fromEntries(off.map((id) => [id, false])) });
     if (tools.disallowed.length || tools.disabledPlugins.length) this.appendLog(a, [{ kind: 'system', text: `🧰 Tools & skills off this session: claude … ${toolArgsLine(tools)}` }]);
     return tools;
   }

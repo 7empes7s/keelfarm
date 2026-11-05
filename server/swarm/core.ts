@@ -8,6 +8,7 @@ import { BoxMachines } from '../boxMachines.ts';
 import { Cloud, officeId } from '../cloud.ts';
 import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, STATE_FILE, VERSION } from '../config.ts';
 import { IssueCap } from '../ceo.ts';
+import { DEFAULT_RESEARCH_MIN, ResearchGuard } from '../research.ts';
 import type { PrepStrikes } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
 import { IssueAges } from '../issueAges.ts';
@@ -21,6 +22,7 @@ import { machineName, type MachineProvider } from '../machines.ts';
 import { MACHINES_DIR } from '../workspace.ts';
 import { envSecrets, Journal } from '../journal.ts';
 import { CostLedger, SessionCosts } from '../costLedger.ts';
+import { Lab, loadLab } from '../experiments.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
@@ -85,6 +87,7 @@ export abstract class SwarmCore extends SwarmContract {
       scaling: 'approve',
       maxAgents: DEFAULT_MAX_AGENTS,
       ceoHeartbeatMin: 60,
+      researchMin: DEFAULT_RESEARCH_MIN,
       ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
       ceoMandates: [],
       managerName: '',
@@ -119,6 +122,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
+    experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
   readonly files = new FileStore(FILES_DIR, () => this.broadcast({ type: 'files', files: this.files.list() }));
@@ -126,6 +130,7 @@ export abstract class SwarmCore extends SwarmContract {
 
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
+  protected researchGuard = new ResearchGuard(); // the running research job's time budget
   protected messageSeq = 1;
   protected agentRt = new Map<string, AgentRuntime>();
   protected seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
@@ -197,6 +202,8 @@ export abstract class SwarmCore extends SwarmContract {
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
+  /** The experiments (#23): the variant each new issue in one gets, and what came of it. */
+  readonly lab = new Lab(() => this.state.experiments, { save: () => this.save(), emit: (experiments) => this.broadcast({ type: 'experiments', experiments }), floorOk: (id) => this.state.repos.some((r) => r.id === id) });
 
   constructor(protected backend: Backend) {
     super();
@@ -219,7 +226,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited());
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line) => this.lab.session(line));
     this.journal = new Journal({
       dir: path.join(HOME_DIR, backend.demo ? 'demo-journal' : 'journal'),
       frame: () => journalFrame(this.snapshot(), this.secrets()),
@@ -424,6 +431,7 @@ export abstract class SwarmCore extends SwarmContract {
       pong: this.state.pong,
       files: this.files.list(),
       tooling: this.tooling,
+      experiments: this.lab.view(),
     };
   }
 
