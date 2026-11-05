@@ -69,7 +69,8 @@ export function fileRoutes(store: FileStore, opts: { max?: number; onDeleted?: (
         ...(f.type !== 'application/pdf' && { 'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox" }),
         'Cache-Control': 'private, max-age=86400',
       });
-      return new Promise<void>((resolve, reject) => res.sendFile(store.pathOf(f.id), { cacheControl: false }, (err) => (err && !res.headersSent ? reject(new HttpError(404, 'That file is no longer saved')) : resolve())));
+      // dotfiles: the store lives under ~/.cubefarm
+      return new Promise<void>((resolve, reject) => res.sendFile(store.pathOf(f.id), { cacheControl: false, dotfiles: 'allow' }, (err) => (err && !res.headersSent ? reject(new HttpError(404, 'That file is no longer saved')) : resolve())));
     }),
   );
 
