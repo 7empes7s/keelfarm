@@ -109,3 +109,5 @@ export function defaultProjectsDir(appDir: string, home = os.homedir()): string 
   const names = ['Projects', 'projects', 'code', 'Code', 'dev', 'Developer', 'src', 'repos', 'git', 'GitHub'];
   return names.map((n) => path.join(home, n)).find((d) => fs.existsSync(d)) ?? path.join(home, 'Projects');
 }
+// Here, not in server/swarm/: this file sits in the app's folder both run from source (server/) and bundled (dist-server/).
+export const DEFAULT_PROJECTS_DIR = defaultProjectsDir(path.resolve(import.meta.dirname, '..'));
