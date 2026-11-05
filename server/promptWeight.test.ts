@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ceoJobPrompt, ceoSystemPrompt, type CeoJob } from './ceo.ts';
 import { devBranch, devSystemPrompt, qaBranch, qaSystemPrompt } from './prompts.ts';
 
-const repo = { fullName: 'acme/shop', defaultBranch: 'main', autoMerge: true, browserTesting: true, summary: 'A shop that sells socks online', mission: 'Sell socks', qaBrief: 'Check the cart' };
+const repo = { fullName: 'acme/shop', defaultBranch: 'main', autoMerge: true, browserTesting: true, summary: 'A shop that sells socks online', mission: 'Sell socks', qaBrief: 'Check the cart', playbook: '' };
 const agent = { name: 'Margaret' };
 const linked = [{ fullName: 'acme/api', dir: '/clones/acme/api/main' }];
 const pr = { number: 42, title: 'Add socks', headRefName: devBranch(7, 'margaret'), url: 'https://github.com/acme/shop/pull/42' };
@@ -14,8 +14,8 @@ const job = (kind: CeoJob['kind'], o: Partial<CeoJob> = {}): CeoJob => ({ kind, 
 
 /** Characters, roughly 4 per token. Today's sizes plus about 10%. */
 const PROMPTS: [string, string, number][] = [
-  ['issue (system)', devSystemPrompt(dev), 2800],
-  ['fix (system)', devSystemPrompt({ ...dev, fixing: { pr: 42, headRef: pr.headRefName } }), 2650],
+  ['issue (system)', devSystemPrompt(dev), 3350],
+  ['fix (system)', devSystemPrompt({ ...dev, fixing: { pr: 42, headRef: pr.headRefName } }), 3200],
   ['qa (system)', qaSystemPrompt({ agent, repo, port: 5839, cwd: '/desk/q', branch: qaBranch(42, 'margaret'), pr }), 3200],
   ['ceo (system)', ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: '/notes.md', sessionLimit: 4, maxAgents: 10, scaling: 'approve' }), 6300],
   ['ceo-review (job)', ceoJobPrompt(job('review'), null), 900],
