@@ -7,6 +7,8 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { readPicks } from './picks.ts';
+import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
@@ -20,6 +22,7 @@ import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
 import type { OpsHistory } from './metrics.ts';
+import type { CostRecord } from '../shared/costs.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
 
@@ -94,6 +97,8 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
+  quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
@@ -112,6 +117,8 @@ export interface Backend {
   cloud: CloudBackend;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
+  /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
+  seedCosts?(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */
@@ -212,6 +219,7 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
   previews: realPreviews,
   office: realOffice,

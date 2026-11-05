@@ -220,6 +220,8 @@ export function describeTool(cwd: string, name: string, input: Record<string, un
       return `Subagent: ${input.description ?? ''}`;
     case 'TodoWrite':
       return 'Update todo list';
+    case 'Skill':
+      return `Skill ${input.skill ?? input.command ?? ''}`;
     case 'ToolSearch':
       return `Load tools ${String(input.query ?? '').replace(/^select:/, '')}`;
     case 'apply_patch': {
@@ -267,6 +269,10 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `🔄 rerun_checks PR #${String(input.pr ?? '?')}${floor}`;
     case 'close_pull':
       return `🗂️ close_pull PR #${String(input.pr ?? '?')}${floor}`;
+    case 'attach_file':
+      return `📎 attach_file ${path.basename(String(input.path ?? ''))}`;
+    case 'keep_file':
+      return `📌 ${input.keep === false ? 'unkeep' : 'keep'}_file ${String(input.id ?? '')}`;
     case 'escalate':
       return `📣 escalate PR #${String(input.pr ?? '?')}${floor}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
     case 'set_mandate':

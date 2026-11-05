@@ -9,6 +9,7 @@ import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
 import { messageSpeech } from '../../shared/speech';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
+import type { FileView } from '../../shared/files';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -121,6 +122,7 @@ interface State {
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
+  files: FileView[]; // the chat's files store (shared/files.ts), newest first
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   version?: string; // the cubefarm version the server runs
@@ -222,6 +224,7 @@ export const useStore = create<State>((set, get) => ({
     sessionLimit: 0,
     defaultModel: 'claude-opus-5-5',
     defaultEffort: 'medium',
+    taskEffort: {},
     runtime: 'terminal',
     defaultCli: 'claude',
     scaling: 'approve',
@@ -258,6 +261,7 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
+  files: [],
   chatOutbox: [],
   phoneReadAt: 0,
   usage: { state: 'normal', until: null, warning: null },
@@ -335,6 +339,7 @@ export const useStore = create<State>((set, get) => ({
           requests: d.requests,
           ceo: d.ceo,
           messages: d.messages,
+          files: d.files ?? [],
           phoneReadAt: d.phoneReadAt,
           version: d.version,
           officeCommit: d.officeCommit,
@@ -502,6 +507,9 @@ export const useStore = create<State>((set, get) => ({
         }
         break;
       }
+      case 'files':
+        set({ files: ev.files });
+        break;
       case 'delivery':
         set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
         break;

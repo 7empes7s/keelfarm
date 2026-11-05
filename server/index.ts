@@ -12,6 +12,7 @@ import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
 import { createDemoBackend } from './demo.ts';
+import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
 import { underLauncher } from './officeUpdate.ts';
 import { serviceWorkerSource, swVersion } from './pwa.ts';
@@ -38,6 +39,8 @@ app.use((req, res, next) => void (handleGateway(req, res, proxied) || next()));
 app.post('/api/hooks/:token', express.json({ limit: '64mb' }), (req, res) => void res.json(handleHook(String(req.params.token), req.body)));
 app.post('/api/mcp/:token', express.json({ limit: '4mb' }), (req, res, next) => void handleMcp(String(req.params.token), req, res).catch(next));
 app.all('/api/mcp/:token', (_req, res) => void res.status(405).set('Allow', 'POST').end());
+// The chat's files (server/fileRoutes.ts): uploads stream to disk, so before the JSON body parser.
+app.use(fileRoutes(swarm.files));
 app.use(express.json({ limit: '1mb' }));
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
@@ -184,6 +187,7 @@ app.post('/api/agents/:id/stop', route((req) => swarm.stopAgent(String(req.param
 app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.params.id))));
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
+app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
   const shot = swarm.screenshot(String(req.params.id));
@@ -296,7 +300,15 @@ app.get(
 app.post('/api/journal/sample', route(() => swarm.journalSample()));
 
 // The CEO and the manager's phone
-app.post('/api/ceo/message', route((req) => swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined)));
+app.post(
+  '/api/ceo/message',
+  route((req) => {
+    const files: unknown = req.body.files ?? [];
+    if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) throw new HttpError(400, 'files is a list of file ids');
+    return swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, undefined, files);
+  }),
+);
+app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
 app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));

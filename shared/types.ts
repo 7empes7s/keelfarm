@@ -5,6 +5,9 @@ import type { ProgressView, RewardView } from './progress.ts';
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
 import type { ThemeSettings } from './themes.ts';
 import type { AgentStyle } from './looks.ts';
+import type { TaskKind } from './costs.ts';
+import type { FileRef, FileView } from './files.ts';
+import type { UsedView } from './used.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 
@@ -353,6 +356,7 @@ export interface SwarmSettings {
   sessionLimit: number; // most agent sessions running at once; 0 = no limit
   defaultModel: string;
   defaultEffort: EffortLevel;
+  taskEffort: Partial<Record<TaskKind, EffortLevel>>; // effort per kind of task (#18); an agent's own wins, and a kind without one runs at the default
   runtime: AgentRuntime;
   defaultCli: AgentCli; // what agents run in their terminals unless they have their own
   scaling: 'approve' | 'auto'; // the CEO's team changes wait for the manager (new agents wait in the lobby), or apply at once
@@ -647,6 +651,8 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+  attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
+  used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -710,6 +716,7 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   progress: ProgressView; // coins, decorations and achievements (#210)
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
+  files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
 }
 
@@ -743,6 +750,8 @@ export type ServerEvent =
   | { type: 'message'; message: PhoneMessage }
   /** The manager's messages moved on: the CEO read them, or replied. */
   | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
+  /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
+  | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }

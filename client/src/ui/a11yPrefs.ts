@@ -56,43 +56,50 @@ export const DEFAULT_A11Y: A11yPrefs = {
   highContrast: false,
 };
 
+/** UI scale on touch screens with nothing saved: buttons and labels big enough for a thumb. */
+export const TOUCH_UI_SCALE = 115;
+
+/** The defaults for this device: the office as it was, with a bigger UI scale on a touch screen. */
+export const defaultA11y = (touch = false): A11yPrefs => (touch ? { ...DEFAULT_A11Y, uiScale: TOUCH_UI_SCALE } : { ...DEFAULT_A11Y });
+
 type NumberKey = keyof typeof LIMITS;
 
 /** A number in its range, snapped to its step, or the fallback when it's missing, not a number or out of range. */
-function inRange(key: NumberKey, v: unknown): number {
+function inRange(key: NumberKey, v: unknown, base: A11yPrefs): number {
   const { min, max, step } = LIMITS[key];
-  if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max) return DEFAULT_A11Y[key];
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max) return base[key];
   return Math.min(max, Math.max(min, min + Math.round((v - min) / step) * step));
 }
 
 const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
 
-/** Any saved value as complete, valid prefs: each bad field falls back to its default on its own. */
-export function normalizeA11yPrefs(raw: unknown): A11yPrefs {
+/** Any saved value as complete, valid prefs: each bad field falls back to its default (`base`'s) on its own. */
+export function normalizeA11yPrefs(raw: unknown, base: A11yPrefs = DEFAULT_A11Y): A11yPrefs {
   const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   return {
-    captions: bool(p.captions, DEFAULT_A11Y.captions),
-    captionSize: inRange('captionSize', p.captionSize),
-    captionBg: inRange('captionBg', p.captionBg),
-    palette: PALETTES.includes(p.palette as Palette) ? (p.palette as Palette) : DEFAULT_A11Y.palette,
-    statusShapes: bool(p.statusShapes, DEFAULT_A11Y.statusShapes),
-    fov: inRange('fov', p.fov),
-    headBob: bool(p.headBob, DEFAULT_A11Y.headBob),
-    cameraShake: bool(p.cameraShake, DEFAULT_A11Y.cameraShake),
-    reduceMotion: REDUCE_MOTION.includes(p.reduceMotion as ReduceMotion) ? (p.reduceMotion as ReduceMotion) : DEFAULT_A11Y.reduceMotion,
-    centerDot: bool(p.centerDot, DEFAULT_A11Y.centerDot),
-    uiScale: inRange('uiScale', p.uiScale),
-    readableFont: bool(p.readableFont, DEFAULT_A11Y.readableFont),
-    highContrast: bool(p.highContrast, DEFAULT_A11Y.highContrast),
+    captions: bool(p.captions, base.captions),
+    captionSize: inRange('captionSize', p.captionSize, base),
+    captionBg: inRange('captionBg', p.captionBg, base),
+    palette: PALETTES.includes(p.palette as Palette) ? (p.palette as Palette) : base.palette,
+    statusShapes: bool(p.statusShapes, base.statusShapes),
+    fov: inRange('fov', p.fov, base),
+    headBob: bool(p.headBob, base.headBob),
+    cameraShake: bool(p.cameraShake, base.cameraShake),
+    reduceMotion: REDUCE_MOTION.includes(p.reduceMotion as ReduceMotion) ? (p.reduceMotion as ReduceMotion) : base.reduceMotion,
+    centerDot: bool(p.centerDot, base.centerDot),
+    uiScale: inRange('uiScale', p.uiScale, base),
+    readableFont: bool(p.readableFont, base.readableFont),
+    highContrast: bool(p.highContrast, base.highContrast),
   };
 }
 
-/** The prefs saved as JSON text (null when nothing is saved). */
-export function parseA11yPrefs(text: string | null): A11yPrefs {
+/** The prefs saved as JSON text (null when nothing is saved); `touch` picks a touch screen's defaults. */
+export function parseA11yPrefs(text: string | null, touch = false): A11yPrefs {
+  const base = defaultA11y(touch);
   try {
-    return normalizeA11yPrefs(JSON.parse(text ?? 'null'));
+    return normalizeA11yPrefs(JSON.parse(text ?? 'null'), base);
   } catch {
-    return { ...DEFAULT_A11Y };
+    return base;
   }
 }
 

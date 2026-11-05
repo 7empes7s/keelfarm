@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_A11Y, LIMITS, normalizeA11yPrefs, parseA11yPrefs, reducesMotion, showsShapes } from './a11yPrefs';
+import { DEFAULT_A11Y, LIMITS, normalizeA11yPrefs, parseA11yPrefs, reducesMotion, showsShapes, TOUCH_UI_SCALE } from './a11yPrefs';
 
 describe('parseA11yPrefs', () => {
   it('uses the defaults when nothing is saved, and the defaults change nothing', () => {
@@ -67,5 +67,18 @@ describe('showsShapes', () => {
     expect(showsShapes({ statusShapes: false, palette: 'standard' })).toBe(false);
     expect(showsShapes({ statusShapes: true, palette: 'standard' })).toBe(true);
     expect(showsShapes({ statusShapes: false, palette: 'protanopia' })).toBe(true);
+  });
+});
+
+describe('touch defaults', () => {
+  it('starts a touch screen with a bigger UI scale, and nothing else changed', () => {
+    expect(parseA11yPrefs(null, true)).toEqual({ ...DEFAULT_A11Y, uiScale: TOUCH_UI_SCALE });
+    expect(parseA11yPrefs('not json', true).uiScale).toBe(TOUCH_UI_SCALE);
+    expect(parseA11yPrefs(null).uiScale).toBe(100);
+  });
+
+  it('keeps a scale the player chose on a touch screen', () => {
+    expect(parseA11yPrefs(JSON.stringify({ uiScale: 100 }), true).uiScale).toBe(100);
+    expect(parseA11yPrefs(JSON.stringify({ fov: 80 }), true)).toEqual({ ...DEFAULT_A11Y, uiScale: TOUCH_UI_SCALE, fov: 80 });
   });
 });

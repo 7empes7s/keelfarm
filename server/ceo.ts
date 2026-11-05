@@ -130,6 +130,8 @@ export interface OfficeHandlers {
   rerunChecks(a: { floor: number; pr: number }): Promise<string>;
   closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
+  attachFile(a: { path: string }): Promise<string>;
+  keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   qaReport(a: { floor: number; pr: number }): string;
@@ -292,6 +294,18 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.escalate(a)),
     ),
     tool(
+      'attach_file',
+      "Send the manager a file you made (a document, slides, spreadsheet, PDF, image, video, markdown, CSV or zip, at most 50 MB) with your next message: it shows on their phone with a preview and Download. The path must be absolute, inside your working folder or the temp folder. Kept on the office server for 30 days unless kept.",
+      { path: z.string().min(1).max(1000).describe('Absolute path of the file') },
+      (a) => run(() => h.attachFile(a)),
+    ),
+    tool(
+      'keep_file',
+      'Keep a file of the chat (by its file id) past its 30 days, or stop keeping it: it then goes 30 days after upload, at once if that has passed.',
+      { id: z.string().regex(/^[a-f0-9]{24}$/).describe('The file id'), keep: z.boolean(), reason: z.string().min(1).max(200).describe('Why, in a few words') },
+      (a) => run(() => h.keepFile(a)),
+    ),
+    tool(
       'set_mandate',
       'Record a standing mandate when the manager asks you to keep working on something ("keep improving floor 3 until it\'s perfected"). Follow-up jobs may file issues only on floors a mandate covers. The same text again replaces it; the manager removes mandates in the CEO tab.',
       {
@@ -414,7 +428,7 @@ export function ceoSystemPrompt(o: {
     '',
     'Your job is to run the company, not to write code:',
     '- Understand each project: what it is, its stack and how far along it is. Projects differ a lot: a static marketing site, a 3D browser game and a REST API need different QA.',
-    `- Size each floor's team from its throughput (team, throughput and capacity in company_status): grow it when issues ready to start or PRs waiting for QA keep waiting for free agents, shrink it when agents sit idle with nothing ready. More agents is not always faster: agents on the same coding agent share one subscription's usage limits${o.sessionLimit ? `, at most ${o.sessionLimit} sessions run at once,` : ''} and many agents on one repository mostly add merge conflicts, so a floor rarely needs more than 4 to 6. A floor holds at most ${o.maxAgents}. When the manager asks for a different size, follow that.`,
+    `- Size each floor's team from its throughput (team, throughput, capacity and spend in company_status: costPerMerge is 7 days' cost per merged PR, wasteToday what sessions without a result cost today): grow it when issues ready to start or PRs waiting for QA keep waiting for free agents, shrink it when agents sit idle with nothing ready. More agents is not always faster: agents on the same coding agent share one subscription's usage limits${o.sessionLimit ? `, at most ${o.sessionLimit} sessions run at once,` : ''} and many agents on one repository mostly add merge conflicts, so a floor rarely needs more than 4 to 6. A floor holds at most ${o.maxAgents}. When the manager asks for a different size, follow that.`,
     "- Plan the work the manager asks for (a plan job from their brief, or their message): turn it into well-specified GitHub issues with acceptance criteria. An issue is a whole feature the manager would recognise (voice messages, a jukebox, the outside world), sized for one agent working for up to a few hours. Agents have large context windows and handle long jobs. Every extra issue costs a fresh exploration, a PR, a CI run, a QA round and often a conflict with its sibling PRs.",
     '- Split a feature only when its parts are truly independent AND touch different files, or when one risky foundation part should land and be tested first. Never split a feature just to give idle agents something to do: parallel work comes from different features side by side. Unrelated small fixes are still their own issues.',
     "- Write each floor's QA brief: what every QA pass must check for this kind of project (for a 3D game: the canvas renders, controls respond, frame rate is smooth; for a website: links, phone layout, accessibility; for an API: status codes, validation, error cases).",
@@ -437,6 +451,7 @@ export function ceoSystemPrompt(o: {
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
+    '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
   ].join('\n');
 }
