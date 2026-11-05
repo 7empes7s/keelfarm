@@ -222,6 +222,9 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   `PhotoPanel.tsx`, and pure `flight.ts`, `shots.ts`, `filters.ts`.
 - `src/store.ts`: the zustand store; `apply(ServerEvent)` folds websocket events into UI state.
 - `src/api.ts`: REST calls; errors become toasts.
+- `src/viewport.ts`: the phone's viewport (#73): `--app-height` / `--app-top` from visualViewport for every full-screen
+  view (pocket mode divides them by the UI scale), put back after the keyboard, a send, a photo or `pageshow`; the
+  zoom lock on touch screens; `data-insets-covered` where a browser's toolbars cover the safe areas it reports.
 - `src/net.ts`: the websocket connection with reconnect; it sends the tab's watch (`src/watch.ts`) as it changes.
   `src/perf.tsx`: render pausing, adaptive DPR, `?stats` (and `window.__swarmStats` with a census of what's drawn).
 - `src/world/batch.ts` / `Batched.tsx`: a floor's repeated parts (Toon.tsx's boxes, people's `Piece`s) drawn as

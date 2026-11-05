@@ -3575,7 +3575,7 @@ input.inline:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  padding: 10px 14px calc(10px + var(--ds-safe-bottom));
   border-top: 2px solid rgba(31, 29, 43, 0.12);
   background: var(--ds-surface-raised);
 }
@@ -3638,8 +3638,9 @@ input.inline:focus {
 }
 .file-thumb img {
   display: block;
+  /* a fixed height, kept before the picture loads, so a tall screenshot never pushes the conversation away */
+  height: 180px;
   max-width: 220px;
-  max-height: 180px;
   object-fit: cover;
 }
 .file-view-body {
@@ -4616,10 +4617,17 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .pocket {
   position: fixed;
   inset: 0;
+  /* the visible part of the page (viewport.ts): above the keyboard, never a height left over from it; in the UI scale's
+     zoomed px (a phone's default is 115%) */
+  top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
+  bottom: auto;
+  height: calc(100vh / var(--ui-scale, 1));
+  height: calc(var(--app-height, 100dvh) / var(--ui-scale, 1));
   display: flex;
   flex-direction: column;
   background: var(--ds-surface-sunken);
   overflow: hidden;
+  overflow: clip; /* hidden boxes can still be scrolled by a focused field, and iOS leaves them scrolled */
 }
 .pk-head {
   flex: none;
@@ -4627,7 +4635,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  padding-top: max(8px, env(safe-area-inset-top));
+  padding-top: max(8px, var(--ds-safe-top));
   background: var(--accent);
   border-bottom: 3px solid var(--ds-outline);
 }
@@ -4676,6 +4684,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow: clip;
 }
 .pk-main-chat .phone-chat {
   width: 100%;
@@ -4697,7 +4706,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   display: flex;
   gap: 2px;
   padding: 6px 4px;
-  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  padding-bottom: max(6px, var(--ds-safe-bottom));
   background: #23263a;
   border-top: 3px solid var(--ds-outline);
 }
@@ -4926,7 +4935,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 /* at the top, two at most and two lines each, so they never cover the tabs or a message box */
 .pocket .toasts {
-  top: calc(66px + env(safe-area-inset-top));
+  top: calc(66px + var(--ds-safe-top));
   bottom: auto;
   left: 12px;
   right: 12px;
@@ -4941,9 +4950,26 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.pocket .quick {
-  flex-wrap: wrap;
-  overflow: visible;
+/* the CEO's name and what they're doing, a line each: a long job label doesn't take the conversation's room */
+.pocket .chat-head .grow,
+.pocket .chat-head .grow > div {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* on a phone the message box gets a row of its own, its buttons the row under it */
+@media (max-width: 480px) {
+  .pocket .chat-input {
+    flex-wrap: wrap;
+  }
+  .pocket .chat-input .msg-box {
+    order: -1;
+    flex: 1 1 100%;
+  }
+  .pocket .chat-input .btn-good {
+    margin-left: auto;
+  }
 }
 .pocket .md pre {
   white-space: pre-wrap;
@@ -4954,6 +4980,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 @media (max-width: 760px) {
   .pocket .overlay {
+    top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
+    bottom: auto;
+    height: calc(100vh / var(--ui-scale, 1));
+    height: calc(var(--app-height, 100dvh) / var(--ui-scale, 1));
     padding: 0;
   }
   .pocket .panel {
@@ -4965,7 +4995,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
     box-shadow: none;
   }
   .pocket .panel-head {
-    padding-top: max(12px, env(safe-area-inset-top));
+    padding-top: max(12px, var(--ds-safe-top));
   }
   .pocket .panel-body {
     padding: 12px;
