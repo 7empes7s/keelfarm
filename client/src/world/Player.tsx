@@ -540,7 +540,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     }
     if (p && takePerchTurn()) look.current = { yaw: p.yaw, pitch: p.pitch };
 
-    // a second finger looks around, like the mouse
+    // a drag in the top half looks around, like the mouse
     if (touchInput.lookX || touchInput.lookY) {
       if (padOn) {
         const turn = TOUCH_LOOK * useTouchLook.getState().sensitivity * (p?.look ?? 1);

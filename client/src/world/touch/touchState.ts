@@ -1,6 +1,6 @@
 // Touch input for the 3D view, shared: TouchControls.tsx writes it from the fingers, Player.tsx reads the stick and
 // the look like the gamepad's, TouchStick.tsx draws the ring and HoldMenu.tsx the hold menu. The look sensitivity
-// (Help → Controls → Touch) is saved in this browser.
+// (Help → Controls → Touch) and whether the split screen's hints were used are saved in this browser.
 
 import { create } from 'zustand';
 import type { Focus } from '../../store';
@@ -21,11 +21,34 @@ interface StickView {
   ring: { cx: number; cy: number; kx: number; ky: number; run: boolean } | null;
   /** A held press that will open the menu when it lifts. */
   armed: { x: number; y: number } | null;
-  /** Walked at least once this visit (the hint goes away). */
+  /** Walked, and looked around, at least once on this device (each half's hint goes away). */
   walked: boolean;
+  looked: boolean;
 }
 
-export const useTouchStick = create<StickView>(() => ({ ring: null, armed: null, walked: false }));
+const HINTS = 'cubefarm:touch-hints';
+
+function loadHints(): { walked: boolean; looked: boolean } {
+  try {
+    const v = JSON.parse(localStorage.getItem(HINTS) ?? 'null') as { walked?: unknown; looked?: unknown } | null;
+    return { walked: v?.walked === true, looked: v?.looked === true };
+  } catch {
+    return { walked: false, looked: false };
+  }
+}
+
+export const useTouchStick = create<StickView>(() => ({ ring: null, armed: null, ...(typeof window === 'undefined' ? { walked: false, looked: false } : loadHints()) }));
+
+/** The first walk or look: that half's hint goes away, on this device for good. */
+export function markUsed(what: 'walked' | 'looked') {
+  useTouchStick.setState({ [what]: true });
+  const { walked, looked } = useTouchStick.getState();
+  try {
+    localStorage.setItem(HINTS, JSON.stringify({ walked, looked }));
+  } catch {
+    // lasts for this visit
+  }
+}
 
 export const useHoldMenu = create<{ focus: Focus | null }>(() => ({ focus: null }));
 

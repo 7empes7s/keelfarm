@@ -1,8 +1,8 @@
 // The 3D view's touch grammar, pure: fingers in, gestures out (TouchControls.tsx feeds it pointer events).
 // A tap is a quick press that barely moves: the primary action, aimed at the tap point. A press held still arms the
-// hold menu, which opens when the finger lifts. A press that moves past the slop, before or after the hold timer, is
-// the walking joystick centred where the finger landed, and never also taps or opens the menu. Any other finger
-// down at the same time looks around.
+// hold menu, which opens when the finger lifts. Tap and hold work anywhere. A press that moves past the slop is a drag,
+// and the half of the screen it landed in decides what it does (#83): the bottom half walks (the joystick centred
+// where the finger landed), the top half looks around. A finger keeps its role until it lifts.
 
 /** Every threshold in one place. Distances are CSS pixels (pointer events' units). */
 export const GESTURE = {
@@ -21,8 +21,21 @@ export const slopFor = (dpr: number) => Math.max(GESTURE.slopPx, GESTURE.minSlop
 
 type Role = 'press' | 'armed' | 'stick' | 'look';
 
+/** What a drag does, from the half of the screen the finger landed in. */
+export type Zone = 'stick' | 'look';
+
+/** The visible part of the page (viewport.ts's appViewport): where it starts and how tall it is, CSS pixels. */
+export interface View {
+  top: number;
+  height: number;
+}
+
+/** The split screen: a finger landing in the top half looks around, in the bottom half walks. */
+export const zoneAt = (y: number, view: View): Zone => (y < view.top + view.height / 2 ? 'look' : 'stick');
+
 interface Finger {
   role: Role;
+  zone: Zone;
   x0: number;
   y0: number;
   x: number;
@@ -51,23 +64,23 @@ const hasStick = (g: Gestures) => [...g.fingers.values()].some((f) => f.role ===
 
 const stickOf = (f: Finger): GestureEvent => ({ type: 'stick', cx: f.x0, cy: f.y0, x: f.x, y: f.y });
 
-/** A finger lands. A second finger takes any press's tap and menu away: that one walks, the new one looks. */
-export function fingerDown(g: Gestures, id: number, x: number, y: number, t: number): GestureEvent[] {
+/** The role a drag takes: its zone's, though there's only one joystick (a second walking finger looks instead). */
+const dragRole = (g: Gestures, f: Finger): Role => (f.zone === 'stick' && !hasStick(g) ? 'stick' : 'look');
+
+/** A finger lands in `zone`. A second finger takes any press's tap and menu away: both drag, each by its zone. */
+export function fingerDown(g: Gestures, id: number, x: number, y: number, t: number, zone: Zone): GestureEvent[] {
   const out: GestureEvent[] = [];
-  const others = [...g.fingers.values()];
-  let role: Role = 'press';
-  if (others.length) {
-    for (const f of others) {
-      if (f.role === 'press' || f.role === 'armed') {
-        f.role = hasStick(g) ? 'look' : 'stick';
-        if (f.role === 'stick') out.push(stickOf(f));
-      }
+  const f: Finger = { role: 'press', zone, x0: x, y0: y, x, y, t0: t };
+  if (g.fingers.size) {
+    for (const o of g.fingers.values()) {
+      if (o.role !== 'press' && o.role !== 'armed') continue;
+      o.role = dragRole(g, o);
+      if (o.role === 'stick') out.push(stickOf(o));
     }
-    role = hasStick(g) ? 'look' : 'stick';
+    f.role = dragRole(g, f);
+    if (f.role === 'stick') out.push(stickOf(f));
   }
-  const f: Finger = { role, x0: x, y0: y, x, y, t0: t };
   g.fingers.set(id, f);
-  if (role === 'stick') out.push(stickOf(f));
   return out;
 }
 
@@ -81,7 +94,7 @@ export function fingerMove(g: Gestures, id: number, x: number, y: number): Gestu
   if (f.role === 'look') return dx || dy ? [{ type: 'look', dx, dy }] : [];
   if (f.role === 'stick') return [stickOf(f)];
   if (Math.hypot(x - f.x0, y - f.y0) <= g.slop) return [];
-  f.role = hasStick(g) ? 'look' : 'stick';
+  f.role = dragRole(g, f);
   return f.role === 'stick' ? [stickOf(f)] : [{ type: 'look', dx: x - f.x0, dy: y - f.y0 }];
 }
 
