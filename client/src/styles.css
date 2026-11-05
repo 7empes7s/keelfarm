@@ -78,7 +78,6 @@ code {
 /* ---------- buttons & inputs ---------- */
 
 .btn {
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.95rem;
   padding: 8px 14px;
@@ -139,6 +138,7 @@ a.btn {
   text-decoration: none;
 }
 
+button,
 input,
 textarea,
 select {
@@ -245,7 +245,6 @@ input.inline:focus {
   background: #ffd166;
 }
 .pill-photo {
-  font-family: var(--font);
   color: var(--ink);
   cursor: pointer;
 }
@@ -411,7 +410,6 @@ input.inline:focus {
   left: 16px;
   max-width: min(420px, calc(100vw - 32px));
   padding: 5px 12px;
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.8rem;
   color: var(--ink);
@@ -736,7 +734,6 @@ input.inline:focus {
   gap: 6px;
   margin-left: 4px;
   padding: 4px 8px;
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.85rem;
   color: var(--ink);
@@ -833,7 +830,6 @@ input.inline:focus {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 14px;
-  font-family: var(--font);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -868,7 +864,6 @@ input.inline:focus {
   gap: 10px;
   width: 100%;
   padding: 5px 8px 5px 26px;
-  font-family: var(--font);
   color: var(--ink);
   text-align: left;
   background: none;
@@ -1274,7 +1269,6 @@ input.inline:focus {
 .key-btn {
   min-width: 70px;
   padding: 3px 10px;
-  font-family: var(--font);
   font-weight: 700;
   font-size: 0.85rem;
   color: var(--ink);
@@ -1387,7 +1381,6 @@ input.inline:focus {
   background: var(--ds-surface-raised);
   box-shadow: 0 4px 0 var(--ds-shadow-color);
   cursor: pointer;
-  font-family: var(--font);
 }
 .floor-btn:hover {
   transform: translateY(-1px);
@@ -1877,7 +1870,6 @@ input.inline:focus {
   box-shadow: 0 2px 0 var(--ds-shadow-color);
 }
 .seg-btn {
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.82rem;
   padding: 4px 10px;
@@ -2051,7 +2043,6 @@ input.inline:focus {
   align-items: center;
   gap: 6px;
   max-width: 360px;
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.82rem;
   padding: 4px 12px;
@@ -2308,7 +2299,6 @@ input.inline:focus {
   margin-bottom: 12px;
 }
 .tab {
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.95rem;
   padding: 8px 14px;
@@ -2433,12 +2423,6 @@ input.inline:focus {
 }
 .repo-row select {
   width: auto;
-}
-.repo-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
 }
 .links {
   font-size: 0.85rem;
@@ -2940,7 +2924,6 @@ input.inline:focus {
   align-items: center;
   gap: 8px;
   padding: 6px 14px 6px 8px;
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--ink);
@@ -3071,7 +3054,6 @@ input.inline:focus {
   border-radius: 14px;
   background: transparent;
   color: #b8bbd6;
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.78rem;
   cursor: pointer;
@@ -3126,7 +3108,6 @@ input.inline:focus {
   border: none;
   padding: 0;
   color: var(--ds-link);
-  font-family: var(--font);
   font-weight: 600;
   cursor: pointer;
   text-align: left;
@@ -3337,7 +3318,6 @@ input.inline:focus {
   border-radius: 999px;
   background: var(--ds-surface-raised);
   color: var(--ink);
-  font-family: var(--font);
   font-size: 0.78rem;
   font-weight: 700;
   box-shadow: 0 2px 0 var(--ds-shadow-color);
@@ -3386,7 +3366,6 @@ input.inline:focus {
   margin: 2px 0 6px 6px;
 }
 .suggestion-chip {
-  font-family: var(--font);
   font-size: 0.8rem;
   font-weight: 600;
   padding: 5px 11px;
@@ -3992,7 +3971,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .quick-chip {
   flex: none;
-  font-family: var(--font);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 10px;
@@ -4633,7 +4611,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   border-radius: 14px;
   background: transparent;
   color: #b8bbd6;
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.72rem;
   cursor: pointer;
@@ -4664,7 +4641,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: var(--font);
   font-size: 1rem;
   color: var(--ink);
   cursor: pointer;
@@ -4689,7 +4665,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   border-radius: 16px;
   background: #ffe0e6;
   box-shadow: 0 3px 0 var(--ds-shadow-color);
-  font-family: var(--font);
   font-size: 1rem;
   color: var(--ink);
   cursor: pointer;
@@ -4783,7 +4758,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   border: 2px solid var(--ds-outline);
   border-radius: 999px;
   background: var(--ds-surface-raised);
-  font-family: var(--font);
   font-weight: 600;
   font-size: 0.82rem;
   overflow: hidden;
@@ -5244,7 +5218,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 
 .coin-pill {
   position: relative;
-  font-family: var(--font);
   color: var(--ink);
   background: #ffe8a3;
   cursor: pointer;

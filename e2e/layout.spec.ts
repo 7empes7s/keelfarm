@@ -247,7 +247,8 @@ async function menuProblems(page: Page, root: Locator): Promise<string[]> {
 async function axeProblems(page: Page, root: Locator): Promise<string[]> {
   await root.evaluate((el) => el.setAttribute('data-layout-under-test', ''));
   const { violations } = await new AxeBuilder({ page }).include('[data-layout-under-test]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-  if (process.env.LAYOUT_DEBUG) return violations.flatMap((v) => v.nodes.map((n) => `axe ${v.id}: ${n.target.join(' ')} ${n.any[0]?.message ?? ''}`)); // DEBUG
+  // LAYOUT_DEBUG=1 lists every failing node with axe's reason (the colours and ratio for contrast).
+  if (process.env.LAYOUT_DEBUG) return violations.flatMap((v) => v.nodes.map((n) => `axe ${v.id}: ${n.target.join(' ')} ${n.any[0]?.message ?? ''}`));
   return violations.map((v) => `axe ${v.id}: ${v.help} (${v.nodes.length}× e.g. ${v.nodes[0]?.target.join(' ')})`);
 }
 

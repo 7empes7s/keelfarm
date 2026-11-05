@@ -32,8 +32,8 @@ Rejected:
 - **Swipe-to-delete rows.** Hidden, easy to trigger by accident while scrolling, and not keyboard friendly.
 - **Undo toasts instead of confirmations.** Most of our dangerous actions (letting an agent go, closing on GitHub)
   can't be undone by the office, so a toast would promise what it can't keep.
-- **Dark mode for the whole app at once.** Screens with one-off colours would break; each screen opts in with
-  `.ds-auto-dark` once it's rebuilt on tokens.
+- **Dark pastels for every state colour.** A dark tint per chip, badge and banner is a token pair each; instead the
+  coloured fills stay light in the dark and keep light-mode text on them (design.css's fill list).
 
 ## Tokens (`client/src/design.css`, on `:root`)
 
@@ -43,7 +43,7 @@ Rejected:
 | Type | `--ds-text-xs` .75 · `-sm` .875 · `-md` 1 · `-lg` 1.125 · `-xl` 1.375 rem; `--ds-leading`, `--ds-leading-tight`, `--ds-weight(-strong)` |
 | Radii | `--ds-radius-sm` 8 · `-md` 12 · `-lg` 16 · `-xl` 24 · `-pill`; borders `--ds-border` 2, `--ds-border-strong` 3 |
 | Touch | `--ds-target` 44 px |
-| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`; `--ds-scrim` |
+| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim` |
 | Elevation | `--ds-shadow-1` (buttons), `-2` (cards), `-3` (panels), `--ds-shadow-float` (menus) |
 | Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
 | Layers | `--ds-z-hud` 10 · `-panel` 30 · `-menu` 50 · `-confirm` 60 · `-toast` 70 |
@@ -51,12 +51,17 @@ Rejected:
 
 Light values equal the office's old colours, so moving a rule onto tokens changes nothing in light mode. Dark values
 apply inside `.ds-auto-dark` when the device prefers dark (never over High contrast). Per-floor colour stays
-`var(--accent)` set on the element.
+`var(--accent)` set on the element. A light or coloured fill (the accent, a state chip, a badge) keeps its colour in the
+dark: add its class to design.css's fill list so what's on it keeps light-mode text, or use `--ds-on-color`.
+
+`client/src/designTokens.test.ts` is the ratchet: colour literals in the old stylesheets may only go down.
 
 ## Components
 
+- **Screens**: every Panel, the phone, pocket mode, the start screen and the HUD carry `.ds-screen .ds-auto-dark`:
+  every button, field, switch and disclosure row inside is at least 44 px, and dark mode follows the device.
 - **Panel / sheet** (`ui/Panel.tsx`): title (truncates), ✕ 44 px, body scrolls. Full-screen sheet ≤ 600 px.
-  Pass `className="ds-console ds-auto-dark"`-style classes to opt a screen into the system and dark mode.
+  `className="ds-console"` adds the console's tabs, cards and headings.
 - **Buttons**: `.btn` (primary actions: `.btn-good`; destructive confirm: `.btn-bad`; quiet: `.btn-ghost`) and
   `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44.
 - **Overflow menu** (`ui/Menu.tsx`): `<Menu label="More for Ada" title="Ada" items={[…]} />`. A popover on wide
@@ -100,3 +105,6 @@ violation. Run it alone with your reserved port:
 ```bash
 npm run build && E2E_PORT=<your port> E2E_SKIP_BUILD=1 npx playwright test layout --no-deps
 ```
+
+Pocket-mode screens run at all four widths; screens inside the 3D office at 390 and 1280 (WebGL is slow, and phones
+get pocket mode). `-g "phone at 390"` runs one; `LAYOUT_DEBUG=1` lists every axe node with its colours.
