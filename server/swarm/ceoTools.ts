@@ -483,17 +483,17 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     if (named?.host === 'box') throw new Error(`${named.name} works in a cloud machine: consult a local agent on floor ${repo.floor}.`);
     if (!named && !this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.host !== 'box')) throw new Error(`Floor ${repo.floor} has no local agents to consult.`);
     const awake = this.state.settings.ceoAwake;
-    const c: Consult = { id: crypto.randomUUID(), repoId: repo.id, floor: repo.floor, agentId: named?.id ?? null, question: x.question, hint: x.hint?.trim() || null, at: Date.now(), runningOn: null };
+    const c: Consult = { id: crypto.randomUUID(), repoId: repo.id, floor: repo.floor, agentId: named?.id ?? null, question: x.question, hint: x.hint?.trim() || null, at: Date.now(), runningOn: null, startedAt: null, dir: null };
     this.consults.push(c);
+    this.consultAnswers.set(c.id, null);
     this.appendLog(this.ceo(), [{ kind: 'system', text: `🔎 Consult queued: ${named ? named.name : `any free agent on floor ${repo.floor}`}` }]);
     setTimeout(() => this.schedule(), 100);
     // Queued behind QA and fixes, then its own time cap: the wait allows for both.
     return this.holds
       .wait(`${named ? named.name : `floor ${repo.floor}`}'s answer`, () => this.consultAnswers.get(c.id) ?? null, (awake.consultMin + 15) * 60_000)
-      .then((text) => {
-        this.consultAnswers.delete(c.id);
+      .finally(() => {
+        this.consultAnswers.delete(c.id); // no one waits on it any more
         if (!c.runningOn) this.consults = this.consults.filter((q) => q !== c);
-        return text;
       });
   }
 }

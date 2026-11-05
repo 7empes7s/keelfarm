@@ -48,7 +48,7 @@ import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '.
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { CeoHolds } from '../ceoHold.ts';
-import type { Consult } from '../consult.ts';
+import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
 import { FileStore } from '../files.ts';
 import type {
@@ -145,7 +145,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected holds = new CeoHolds(() => this.emitCeo()); // the CEO's waits, questions and consults (#28)
   protected ceoWaited = false; // the current CEO job waited (the ledger's ceo-wait)
   protected consults: Consult[] = []; // queued and running, oldest first
-  protected consultAnswers = new Map<string, string>();
+  protected consultAnswers = new Map<string, string | null>(); // consults the CEO waits on: their answer once in
   protected messageSeq = 1;
   protected agentRt = new Map<string, AgentRuntime>();
   protected seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
@@ -207,7 +207,7 @@ export abstract class SwarmCore extends SwarmContract {
   readonly health = new OfficeHealth({
     probe: () => this.backend.resources,
     settings: () => this.state.settings.memory,
-    sessions: () => this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })),
+    sessions: () => [...this.state.agents.filter((a) => BUSY.includes(a.status) && a.host !== 'box').map((a) => ({ id: a.id, kind: sessionKind(a), startedAt: a.startedAt ?? 0, dir: a.role === 'ceo' ? CEO_DIR : a.machine ? this.deskOf(a, this.repo(a.repoId)) : null })), ...consultSessions(this.consults)],
     log: (id, text) => this.state.agents.filter((a) => a.id === id).forEach((a) => this.appendLog(a, [{ kind: 'error', text }])),
     alert: (title, body) => this.notifier.notify('memory', title, body),
     emit: (health) => this.broadcast({ type: 'health', health }),

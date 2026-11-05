@@ -509,6 +509,12 @@ export abstract class SwarmAgents extends SwarmMerge {
 
   stopAgent(id: string) {
     const a = this.agent(id);
+    if (this.consulting(a)) {
+      // a consult leaves their saved status alone: stopping it ends the session, and the CEO hears they couldn't answer
+      this.appendLog(a, [{ kind: 'manager', text: '■ Manager stopped this consult.' }]);
+      this.agentRt.get(id)?.session?.stop();
+      return;
+    }
     if (!BUSY.includes(a.status)) return;
     a.status = 'stopped';
     a.lastError = 'Stopped by manager';
@@ -571,6 +577,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     const repo = this.repo(a.repoId);
     if (a.role === 'ceo') throw new HttpError(400, `${a.name} runs the company; give issues to the agents on the floors.`);
     if (BUSY.includes(a.status)) throw new HttpError(409, `${a.name} is busy: ${this.agentDoing(a)}`);
+    if (this.consulting(a)) throw new HttpError(409, `${a.name} is answering a consult`);
     this.ensureSlot();
     const issues = this.repoRt.get(repo.id)?.issues ?? [];
     const issue = issues.find((i) => i.number === issueNumber);

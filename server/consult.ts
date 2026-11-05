@@ -10,6 +10,8 @@ export interface Consult {
   hint: string | null; // "as a security reviewer", "use the architecture skill"
   at: number;
   runningOn: string | null; // the agent answering it, once started
+  startedAt: number | null; // its session's start, and where it runs: the memory guard measures it (#55)
+  dir: string | null;
 }
 
 /** An answer is cut to this many characters: the CEO pays for every one. */
@@ -17,16 +19,22 @@ export const CONSULT_ANSWER_MAX = 6000;
 
 /**
  * The consult a free agent on `repoId` takes next, or null: the oldest queued one there for them by name, or for any
- * free agent, while fewer than `cap` run. The scheduler asks only after QA and fixes had their pick of free agents.
+ * free agent, while fewer than `cap` run and the memory guard (#55) `admit`s one. The scheduler asks only after QA and
+ * fixes had their pick of free agents.
  */
-export function nextConsult(queue: readonly Consult[], repoId: string, free: readonly string[], cap: number): { consult: Consult; agentId: string } | null {
+export function nextConsult(queue: readonly Consult[], repoId: string, free: readonly string[], cap: number, admit: () => boolean): { consult: Consult; agentId: string } | null {
   if (queue.filter((c) => c.runningOn).length >= cap) return null;
   for (const c of [...queue].sort((x, y) => x.at - y.at)) {
     if (c.runningOn || c.repoId !== repoId) continue;
     const agentId = c.agentId ? (free.includes(c.agentId) ? c.agentId : null) : (free[0] ?? null);
-    if (agentId) return { consult: c, agentId };
+    if (agentId) return admit() ? { consult: c, agentId } : null;
   }
   return null;
+}
+
+/** Running consults as the memory guard's sessions: measured, reserved for and stopped under pressure like any other. */
+export function consultSessions(queue: readonly Consult[]): { id: string; kind: 'consult'; startedAt: number; dir: string | null }[] {
+  return queue.flatMap((c) => (c.runningOn ? [{ id: c.runningOn, kind: 'consult' as const, startedAt: c.startedAt ?? 0, dir: c.dir }] : []));
 }
 
 /** Built-in tools a consult session doesn't get (--disallowedTools), on top of the office's: no edits and no shell. */
@@ -38,6 +46,12 @@ const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'Skill', 
 /** Why a consult session's tool call is refused (the pre-tool check behind CONSULT_DISALLOWED), or null to allow it. */
 export function consultRefusal(tool: string): string | null {
   return READ_TOOLS.has(tool) ? null : `This is a read-only consult: ${tool} isn't available. Read the code with Read, Glob and Grep.`;
+}
+
+/** Claude Code's PreToolUse hook answer refusing a consult session's tool call (consultRefusal), or null. */
+export function consultDeny(tool: string) {
+  const why = consultRefusal(tool);
+  return why ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: why } } : null;
 }
 
 /** The consult session's prompt: the CEO's question, any role or skill hint, and the rules. Kept short: it's paid for. */

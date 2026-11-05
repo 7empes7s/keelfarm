@@ -1,5 +1,5 @@
 // Handing out work: the scheduler, pacing on Claude's usage, mission control's numbers.
-import type { SessionResult } from '../agentRunner.ts';
+import type { SessionHandle, SessionResult } from '../agentRunner.ts';
 import { stillOpen } from '../closeCleanup.ts';
 import { CONSULT_DISALLOWED, consultAnswer, consultPrompt, nextConsult, type Consult } from '../consult.ts';
 import { clip } from '../notify.ts';
@@ -353,7 +353,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   /** A free agent on this floor takes the next consult (nextConsult). True: one started. */
   protected startConsultWork(repo: PersistedRepo): boolean {
     const free = this.available(repo).filter((a) => a.host !== 'box' && !this.agentRt.get(a.id)?.session);
-    const pick = nextConsult(this.consults, repo.id, free.map((a) => a.id), this.state.settings.ceoAwake.consultMax);
+    const pick = nextConsult(this.consults, repo.id, free.map((a) => a.id), this.state.settings.ceoAwake.consultMax, () => this.health.admit('consult'));
     const a = pick && this.state.agents.find((x) => x.id === pick.agentId);
     if (!pick || !a) return false;
     this.startConsult(a, pick.consult, repo);
@@ -367,26 +367,34 @@ export abstract class SwarmScheduling extends SwarmQa {
     const startedAt = Date.now();
     const desk = a.machine ? this.deskOf(a, repo) : null;
     const cwd = desk && this.backend.deskExists(desk) ? desk : this.backend.mainDir(repo.fullName);
+    Object.assign(c, { startedAt, dir: cwd });
     this.appendLog(a, [{ kind: 'system', text: '' }, { kind: 'system', text: `━━━ 🔎 consult · ${this.ceo().name} asks: ${clip(c.question, 200)} ━━━` }]);
     this.emitAgent(a);
     const run = this.spend.start(a.id, { kind: 'consult', effort: resolveEffort(a.effort, 'consult', this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, 'claude') || a.model, startedAt, round: null });
     const t = this.state.settings.tools;
     const tools = sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
     const inTerminal = this.state.settings.runtime === 'terminal' && this.backend.terminals;
+    let handle: SessionHandle | undefined;
+    let done = false;
     const finished = (result: SessionResult) => {
+      done = true;
       clearTimeout(cap);
-      rt.session = null;
-      rt.currentTool = null;
+      if (rt.session === handle) {
+        // only its own handle: the office never lets other work start on a consulting agent, but stays safe if it did
+        rt.session = null;
+        rt.currentTool = null;
+      }
+      this.health.ended(a, 'consult', result.errors, false, false); // its peak teaches the consult estimate
       this.consults = this.consults.filter((q) => q !== c);
       const text = result.ok ? consultAnswer(a.name, repo.floor, result.text) : `${a.name} couldn't answer: ${result.errors.join('; ') || 'the consult session failed'}.`;
       this.appendLog(a, [{ kind: result.ok ? 'done' : 'error', text: `🔎 consult · ${result.ok ? 'answered' : 'no answer'} in ${Math.max(1, Math.round((Date.now() - startedAt) / 60_000))}m` }]);
       void this.spend.record({ ...a, startedAt, issueNumber: null, prNumber: null }, repo.id, run, 'consult', result, { stopped: false, ceoHint: 'done' });
-      this.consultAnswers.set(c.id, scrub(text, this.secrets()));
+      if (this.consultAnswers.has(c.id)) this.consultAnswers.set(c.id, scrub(text, this.secrets())); // else nobody waits any more
       this.holds.check();
       this.emitAgent(a);
       setTimeout(() => this.schedule(), 300);
     };
-    rt.session = this.backend.startSession(
+    handle = this.backend.startSession(
       {
         cwd,
         prompt: consultPrompt(c, repo.fullName, this.ceo().name),
@@ -413,6 +421,7 @@ export abstract class SwarmScheduling extends SwarmQa {
         finished,
       },
     );
-    const cap = setTimeout(() => rt.session?.stop(), this.state.settings.ceoAwake.consultMin * 60_000);
+    if (!done) rt.session = handle;
+    const cap = setTimeout(() => handle?.stop(), this.state.settings.ceoAwake.consultMin * 60_000);
   }
 }
