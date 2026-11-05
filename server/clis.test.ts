@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { sessionTools } from '../shared/tooling.ts';
 import { boxVersions, CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, localUrl, oneAtATime, signedOutScreen, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 import { LOCAL_PROVIDERS } from '../shared/models.ts';
 import { describeOfficeTool, describeTool, newScreenshots, screenshotFile, summariseResult } from './agentRunner.ts';
@@ -130,6 +131,13 @@ describe('launchArgs', () => {
     expect(CROSS_TURN_TOOLS).toEqual(['Monitor', 'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'RemoteTrigger']);
     expect(args.slice(args.indexOf('--disallowedTools'), args.indexOf('--'))).toEqual(['--disallowedTools', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS]);
     for (const cli of ['codex', 'opencode'] as const) expect(launchArgs(cli, ctx()).args.some((a) => a.includes('Monitor') || a.includes('ScheduleWakeup'))).toBe(false);
+  });
+
+  it("adds the manager's Tools & skills switches to Claude Code's disallowed tools, and only Claude Code's", () => {
+    const tools = sessionTools([], 'agent', { 'mcp:notion': false, 'mcp:playwright': false, 'skill:pdf': false });
+    const { args } = launchArgs('claude', ctx({ tools }));
+    expect(args.slice(args.indexOf('--disallowedTools'), args.indexOf('--'))).toEqual(['--disallowedTools', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS, 'Skill(pdf)', 'mcp__notion__*']);
+    for (const cli of ['codex', 'opencode'] as const) expect(launchArgs(cli, ctx({ tools })).args.join(' ')).not.toContain('mcp__notion');
   });
 
   it("runs Codex without its sandbox or approvals, and resumes Codex's thread", () => {

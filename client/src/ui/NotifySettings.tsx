@@ -1,5 +1,5 @@
 // Settings → Notifications (docs/pocket.md): which events, the office URL messages link to, this device (desktop
-// notifications, Web Push) and ntfy. Its topic URL and token are write-only: the browser sees a hint of them.
+// notifications, Web Push), ntfy and Telegram (TelegramSettings.tsx). Its topic URL and token are write-only: the browser sees a hint of them.
 import { useEffect, useId, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -10,6 +10,7 @@ import { showTestNote } from '../notifications';
 import { currentPush, disablePush, pushSupport } from '../pwa';
 import { ChannelHealth, NotifyGuide, NtfyQuick } from './NotifyGuide';
 import { suggestOfficeUrl } from './notifySteps';
+import { TelegramSettings } from './TelegramSettings';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md';
 
@@ -266,6 +267,8 @@ export function NotifySettings() {
       <p className="muted small">
         The topic and token stay on the office's PC and are never shown again. More, and how to reach the office from your phone safely: <a href={DOCS}>docs/pocket.md</a>.
       </p>
+      <h4 className="notify-h">Telegram</h4>
+      <TelegramSettings />
       <h4 className="notify-h">Channels</h4>
       <ChannelHealth />
     </div>
