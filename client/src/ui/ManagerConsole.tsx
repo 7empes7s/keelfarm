@@ -22,12 +22,13 @@ import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
-import { StatusPill } from './StatusPill';
+import { badgeStatus, StatusPill } from './StatusPill';
 import { ThemeSettings } from './ThemeSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { CloudSettings } from './CloudSettings';
 import { CeoMandates, FollowupSettings } from './CeoFollowups';
 import { ToolsTab } from './ToolsSettings';
+import { EveryProjectCard, FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { CharterTab } from './CharterTab';
@@ -201,6 +202,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           Open the app viewer
         </button>
       </details>
+      <FloorPractices repo={repo} />
     </div>
   );
 }
@@ -509,7 +511,7 @@ export function TeamTab() {
                             ☁
                           </span>
                         )}
-                        <StatusPill status={a.status} />
+                        <StatusPill status={badgeStatus(a)} />
                       </td>
                       <td className="small ds-cell-full roster-doing">
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
@@ -772,6 +774,7 @@ export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
         <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
         <FollowupSettings />
       </div>
+      <EveryProjectCard />
       <div className="card">
         <h3>⌨️ How agents run</h3>
         <label className="toggle block">
@@ -871,7 +874,7 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
     ['access', '♿ Accessibility'],
   ];
   return (
-    <Panel wide title="🧑‍💼 Manager's console" className="ds-console ds-auto-dark">
+    <Panel wide title="🧑‍💼 Manager's console" className="ds-console">
       <div className="tabs" role="tablist" aria-label="Console">
         {tabs.map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? 'tab-on' : ''}`} onClick={() => setTab(k)}>

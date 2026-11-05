@@ -56,6 +56,7 @@ import { SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpdate } from './update.ts';
 
 export abstract class SwarmCeo extends SwarmUpdate {
+  protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
   // ---------- the CEO ----------
 
   protected ceoPreempted: CeoJob | null = null; // the background job stopped for the manager's message: it goes back to the queue

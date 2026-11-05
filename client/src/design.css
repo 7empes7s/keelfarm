@@ -57,6 +57,7 @@
   --ds-bad-fill: #ff8fa3;
   --ds-warn-fill: #ffd166;
   --ds-danger-text: #b3123a;
+  --ds-warn-text: #a63c06;
   --ds-scrim: rgba(21, 21, 31, 0.35);
 
   /* elevation: the office's solid offset shadows */
@@ -118,6 +119,7 @@ html[data-reduce-motion] {
     --ds-link: #a9b8ff;
     --ds-focus: #a9b8ff;
     --ds-danger-text: #ff9db0;
+    --ds-warn-text: #ffb38a;
     --ds-scrim: rgba(5, 5, 10, 0.6);
     color: var(--ds-text);
   }
@@ -559,29 +561,30 @@ html[data-reduce-motion] {
   overflow-wrap: anywhere;
 }
 
-/* every control is at least 44px: buttons, fields, switches, disclosure rows */
-.ds-console button {
+/* every screen on the system (.ds-screen: panels, the phone, pocket mode, the start screen): each control is at least
+   44px (buttons, fields, switches, disclosure rows) */
+.ds-screen button {
   min-width: var(--ds-target);
   min-height: var(--ds-target);
 }
-.ds-console :is(.btn, .btn-small) {
+.ds-screen :is(.btn, .btn-small) {
   min-height: var(--ds-target);
   padding: 0 var(--ds-space-4);
   border-radius: var(--ds-radius-md);
   font-size: var(--ds-text-sm);
 }
-.ds-console .btn:not(.btn-small) {
+.ds-screen .btn:not(.btn-small) {
   font-size: var(--ds-text-md);
 }
-.ds-console :is(input:not([type='checkbox'], [type='radio'], [type='color'], [type='range']), select, textarea) {
+.ds-screen :is(input:not([type='checkbox'], [type='radio'], [type='color'], [type='range']), select, textarea) {
   min-height: var(--ds-target);
   border-radius: var(--ds-radius-md);
   font-size: var(--ds-text-md);
 }
-.ds-console input.inline {
+.ds-screen input.inline {
   min-width: 0;
 }
-.ds-console input[type='color'] {
+.ds-screen input[type='color'] {
   flex: none;
   width: var(--ds-target);
   height: var(--ds-target);
@@ -589,21 +592,21 @@ html[data-reduce-motion] {
   border-radius: var(--ds-radius-md);
   cursor: pointer;
 }
-.ds-console .toggle {
+.ds-screen .toggle {
   min-height: var(--ds-target);
   font-size: var(--ds-text-md);
 }
-.ds-console .toggle.block {
+.ds-screen .toggle.block {
   min-height: 0;
   padding: var(--ds-space-2) 0;
 }
-.ds-console :is(input[type='checkbox'], input[type='radio']) {
+.ds-screen :is(input[type='checkbox'], input[type='radio']) {
   width: 20px;
   height: 20px;
   margin: 0;
   flex: none;
 }
-.ds-console summary {
+.ds-screen summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -612,29 +615,29 @@ html[data-reduce-motion] {
   font-weight: 600;
   cursor: pointer;
 }
-.ds-console summary::before {
+.ds-screen summary::before {
   content: '▸';
   transition: transform var(--ds-dur) var(--ds-ease);
 }
-.ds-console details[open] > summary::before {
+.ds-screen details[open] > summary::before {
   transform: rotate(90deg);
 }
-.ds-console summary::-webkit-details-marker {
+.ds-screen summary::-webkit-details-marker {
   display: none;
 }
-.ds-console summary {
+.ds-screen summary {
   list-style: none;
 }
-.ds-console .field {
+.ds-screen .field {
   gap: var(--ds-space-1);
   margin: 0;
   font-size: var(--ds-text-sm);
 }
-.ds-console .row {
+.ds-screen .row {
   gap: var(--ds-space-2);
   margin: 0;
 }
-.ds-console :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+.ds-screen :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--ds-focus);
   outline-offset: 2px;
 }
@@ -735,6 +738,18 @@ html[data-reduce-motion] {
   }
   html:not([data-high-contrast]) .ds-auto-dark :is(.term-error, .office-state-bad) {
     color: var(--ds-danger-text);
+  }
+  html:not([data-high-contrast]) .ds-auto-dark .term-error {
+    background: var(--ds-surface-sunken);
+  }
+  /* coloured fills (state chips, badges, the accent) stay light in the dark, so what's on them keeps the light text */
+  html:not([data-high-contrast]) .ds-auto-dark :is(.tab-on, .btn-on, .seg-on, .channel-on, .picker-tab-on, .pk-head, .pk-chip-on, .kcol-head, .chip-good, .chip-warn, .pill-ok, .pill-bad, .pill-demo, .hud-banner, .office-chip, .qa-badge-passed, .qa-badge-failed, .qa-badge-needs-human, .qa-badge-testing, .qa-badge-fixing, .cardview-warn, .cardview-bad, .cardview-good, .bubble-me, .bubble-failed, .floor-chip, .suggestion-chip, .quick-answer, .hands-free-on, .mic-on, .report-good, .report-warn, .phone-nudge, .usage-chip-pacing, .usage-chip-paused, .doctor-chip, .usage-pill-good, .usage-pill-warn, .usage-pill-bad, .pk-banner, .pk-callout, .pk-stage-hot, .pk-agent-bad, .coin-pill, .game-chip, .pill-replay, .tour-cheer, .office-badge, .resume-letgo, .doc, .key-btn-wait, .key-btn-clash, .app-frame-hint, .emote-on, .chip[style*='background'], .badge) {
+    --ink: var(--ds-on-color);
+    --muted: #4f5368;
+    --ds-text: var(--ds-on-color);
+    --ds-text-muted: #4f5368;
+    --ds-link: #2a44b8;
+    color: var(--ds-on-color);
   }
   html:not([data-high-contrast]) .ds-auto-dark :is(.office-state-ok, .notify-ok) {
     color: #7fe39a;

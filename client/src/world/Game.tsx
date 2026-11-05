@@ -117,11 +117,14 @@ export function Game() {
   const photo = usePhotoGate((s) => s.active);
   const frozen = usePhotoGate((s) => s.frozen);
   usePauseLog(frozen);
+  // Behind the start screen the office is only a blurred backdrop: draw it when something in the scene changes,
+  // not every frame, so the start screen's buttons answer at once on a phone.
+  const started = useStore((s) => s.started);
 
   return (
     <Canvas
       shadows
-      frameloop={paused || frozen ? 'never' : 'always'}
+      frameloop={paused || frozen ? 'never' : started ? 'always' : 'demand'}
       dpr={currentDpr()}
       camera={{ fov: 72, near: 0.05, far: 560, position: [0, 1.65, 10] }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}

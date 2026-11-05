@@ -1,7 +1,7 @@
 // The demo's permission prompts and questions, answered by the office the way it answers a real session's (#54).
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { LogEntry, SessionCallbacks } from './agentRunner.ts';
+import type { LogEntry, SessionCallbacks, SessionOptions } from './agentRunner.ts';
 import { answerHook } from './unblock.ts';
 
 /** The prompt a fake session is blocked on now and then, until the manager answers it. */
@@ -33,9 +33,10 @@ function demoQuestion(issueNumber: number): string | null {
  * A fake build session's part in agents' questions: `answered` when its prompt answers its question ("Answer from … to
  * your question about #12: …", it goes on to the PR), else the `question` it stops halfway to ask, if any.
  */
-export function demoAsks(prompt: string, issueNumber: number, resumed: boolean): { answered: boolean; question: string | null } {
-  const answered = Number(prompt.match(/^Answer from .+? to your question about #(\d+): /)?.[1] ?? 0) === issueNumber;
-  return { answered, question: answered || resumed ? null : demoQuestion(issueNumber) };
+export function demoAsks(build: boolean, opts: Pick<SessionOptions, 'prompt' | 'resumeSessionId'>, issueNumber: number, title: string, issues: { number: number; title: string }[]): { answered: boolean; question: string | null; title: string } {
+  const answered = build && Number(opts.prompt.match(/^Answer from .+? to your question about #(\d+): /)?.[1] ?? 0) === issueNumber;
+  if (answered) return { answered, question: null, title: issues.find((i) => i.number === issueNumber)?.title ?? title };
+  return { answered, question: build && !opts.resumeSessionId ? demoQuestion(issueNumber) : null, title };
 }
 
 /** The fake session ends its turn with the question, keeping a session id the answer resumes. */

@@ -128,6 +128,21 @@ export interface MainSync {
   updatable: boolean; // on the default branch without local commits, so a fast-forward would bring it up to date
 }
 
+/** The main checkout's latest commits with the files each changed, for the floor's hot files (#24). [] without a checkout. */
+export async function fileHistory(fullName: string, commits = 400): Promise<{ subject: string; files: string[] }[]> {
+  const dir = mainDir(fullName);
+  if (!(await exists(path.join(dir, '.git')))) return [];
+  // Merges list the files their conflict resolutions touched (--cc): those are the most conflicted.
+  const out = await git(['log', `-n${commits}`, '--cc', '--name-only', '--format=%x1e%s'], { cwd: dir, timeoutMs: 30_000 });
+  return out
+    .split('\x1e')
+    .filter((c) => c.trim())
+    .map((c) => {
+      const [subject, ...files] = c.split(/\r?\n/);
+      return { subject: subject.trim(), files: files.map((f) => f.trim()).filter(Boolean) };
+    });
+}
+
 /**
  * Bring a floor's main checkout up to date with GitHub. It only ever fast-forwards, and only when the checkout is on
  * the default branch with no local changes: nothing is stashed, reset or discarded, and anything else leaves the

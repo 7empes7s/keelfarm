@@ -30,7 +30,7 @@ import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from '.
 import { sampleOffice } from './costSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
+import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 
@@ -120,8 +120,8 @@ function seed(fullName: string, description: string, titles: [string, string][])
 }
 
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage.\n\nObjective: O1'],
-  ['Todos should support due dates', 'Add an optional due date and highlight overdue items.\n\nObjective: O2'],
+  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
+  ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
@@ -380,8 +380,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   const pull = fixPromptPull(opts.prompt);
   const issueMatch = opts.prompt.match(/#(\d+):\s*(.+)/);
   const number = kind === 'issue' ? Number(issueMatch?.[1] ?? 0) : pull.number;
-  const { answered, question } = kind === 'issue' ? demoAsks(opts.prompt, number, !!opts.resumeSessionId) : { answered: false, question: null };
-  const title = (answered ? repos.get(fullName)?.issues.find((x) => x.number === number)?.title : kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up';
+  const { answered, question, title } = demoAsks(kind === 'issue', opts, number, (kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up', repos.get(fullName)?.issues ?? []);
   const round = Number(opts.prompt.match(/QA round (\d+)/)?.[1] ?? 1);
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
@@ -759,6 +758,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       if (headSha && pr.headSha !== headSha) throw new Error('Head branch was modified. Review and try the merge again.');
       mergedSinceSync.set(fullName, (mergedSinceSync.get(fullName) ?? 0) + 1);
       pr.state = 'MERGED';
+      demoMerged(r.pulls);
       // Now and then a merge leaves another open PR conflicting, so conflict fixes (before QA and after it) can be seen.
       for (const other of r.pulls) if (other.state === 'OPEN' && Math.random() < 0.25) Object.assign(other, { mergeable: 'CONFLICTING', mergeState: 'DIRTY' });
       pr.mergedAt = now();
@@ -780,6 +780,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       Object.assign(pr, { headSha: fakeSha(), mergeState: 'CLEAN' });
       runChecks(pr, false);
     },
+    ...demoPractices,
     failedRunLog: async (_fullName, runId) =>
       [
         `build\tRun npm test\t2025-01-01T00:00:00Z > vitest run (run ${runId})`,
@@ -1399,7 +1400,6 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async followup(events: string[]) {
       const needs: string[] = [];
       for (const e of events.slice(0, 4)) {
-        if (await demoCeoAnswer(e, use, think)) continue; // an escalated question reaches the manager's phone by itself
         const floor = Number(e.match(/floor (\d+)/)?.[1] ?? 0);
         const pr = Number(e.match(/PR #(\d+)/)?.[1] ?? 0);
         const agent = e.match(/\(([\w-]+)\)/)?.[1];
@@ -1408,7 +1408,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         else if (agent && / error | stalled /.test(e)) {
           await use('agent_log', { agent_id: agent, lines: 50 });
           if (/ error /.test(e) && (await use('restart_agent', { agent_id: agent })).startsWith('Refused')) needs.push(`${e.split(' (')[0]} is still in an error and I couldn't restart them; reset them from their desk.`);
-        } else await think('Nothing there needs me.');
+        } else if (!(await demoCeoAnswer(e, use, think))) await think('Nothing there needs me.'); // an agent's question: answered, or on the manager's phone
       }
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
       return needs.length ? needs.join(' ') : 'Nothing to do.';

@@ -49,6 +49,10 @@ export interface Backend {
   closeIssue(fullName: string, number: number, comment: string, reason?: 'completed' | 'not planned'): Promise<void>;
   mergePull(fullName: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void>;
   updateBranch(fullName: string, number: number): Promise<void>;
+  /** Commits of `base` the PR's head doesn't have yet (up to date before merge, #24). */
+  behindBy(fullName: string, base: string, headSha: string): Promise<number>;
+  /** The floor's main checkout's latest commits and the files each changed, for its hot files (#24). */
+  fileHistory(fullName: string): Promise<{ subject: string; files: string[] }[]>;
   /** The failed steps' log of a GitHub Actions run, for a checks fix. */
   failedRunLog(fullName: string, runId: string): Promise<string>;
   /** Re-run the failed jobs of these GitHub Actions runs. */
@@ -211,6 +215,8 @@ export const realBackend: Backend = {
   closeIssue: github.closeIssue,
   mergePull: github.mergePull,
   updateBranch: github.updateBranch,
+  behindBy: github.behindBy,
+  fileHistory: (fullName) => workspace.fileHistory(fullName),
   failedRunLog: github.failedRunLog,
   rerunFailedJobs: github.rerunFailedJobs,
   closePull: github.closePull,

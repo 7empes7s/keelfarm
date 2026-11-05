@@ -9,6 +9,7 @@ import { PROPOSE_CHARTER, PROPOSE_CHARTER_TEXT, type CharterProposalArgs } from 
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
+import { PRACTICE_SWITCHES } from './practiceSchema.ts';
 import { HttpError } from './httpError.ts';
 import { clip } from './notify.ts';
 import { ONE_TURN } from './prompts.ts';
@@ -183,7 +184,7 @@ export interface ExperimentToolInput {
   hypothesis: string;
   floors?: number[];
   kinds?: TaskKind[];
-  variants: { name: string; prompt?: string; qa_lens?: string; effort?: EffortLevel; model?: string; qa_cli?: AgentCli; tools_off?: string[] }[];
+  variants: { name: string; prompt?: string; qa_lens?: string; effort?: EffortLevel; model?: string; qa_cli?: AgentCli; tools_off?: string[]; practices?: z.infer<typeof PRACTICE_SWITCHES> }[];
   min_sample?: number;
 }
 
@@ -202,7 +203,7 @@ export function experimentInput(a: ExperimentToolInput, floorId: (floor: number)
     floors,
     kinds: a.kinds ?? [],
     minSample: a.min_sample,
-    variants: a.variants.map((v) => ({ name: v.name, settings: { prompt: v.prompt, qaLens: v.qa_lens, effort: each(v.effort), model: each(v.model), qaCli: v.qa_cli, toolsOff: v.tools_off } })),
+    variants: a.variants.map((v) => ({ name: v.name, settings: { prompt: v.prompt, qaLens: v.qa_lens, effort: each(v.effort), model: each(v.model), qaCli: v.qa_cli, toolsOff: v.tools_off, practices: v.practices } })),
   };
 }
 
@@ -405,7 +406,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
               effort: EFFORT.optional().describe("Effort for the sessions it changes"),
               model: z.string().max(80).optional().describe('Model for the Claude Code sessions it changes'),
               qa_cli: CLI.optional().describe('QA by a free agent on this coding agent when there is one (cross-model QA)'),
-              tools_off: TOOL_REFS.describe('Tools & skills switched off'),
+              tools_off: TOOL_REFS.describe('Tools & skills switched off'), practices: PRACTICE_SWITCHES,
             }),
           )
           .min(2)

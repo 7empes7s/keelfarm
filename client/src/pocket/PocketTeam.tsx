@@ -8,10 +8,11 @@ import { agentLabel, signInFor } from '../ui/floorRows';
 import { clearDesk, letGo } from '../ui/dangerActions';
 import { Menu } from '../ui/Menu';
 import { MessageBox } from '../ui/MessageBox';
+import { badgeStatus } from '../ui/StatusPill';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 
-const STATUS_LABEL: Record<string, string> = { idle: 'free', preparing: 'setting up', working: 'working', done: 'done', error: 'needs help', stopped: 'stopped' };
+const STATUS_LABEL: Record<string, string> = { idle: 'free', preparing: 'setting up', working: 'working', done: 'done', error: 'needs help', stopped: 'stopped', 'waiting-ceo': 'waiting for CEO', 'waiting-you': 'waiting for you' };
 
 export function Status({ status }: { status: string }) {
   return <span className={`status status-${status}`}>{STATUS_LABEL[status] ?? status}</span>;
@@ -71,7 +72,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
             {working && agent.currentTool ? <span className="muted"> · {toolVerb(agent.currentTool) || agent.currentTool}…</span> : null}
           </div>
         </div>
-        <Status status={agent.status} />
+        <Status status={badgeStatus(agent)} />
       </div>
       {agent.lastError && !working && <div className="term-error small pk-error">⚠️ {agent.lastError}</div>}
       {agent.blocked && working && <div className="term-error small pk-error">⛔ Blocked: {agent.blocked}</div>}

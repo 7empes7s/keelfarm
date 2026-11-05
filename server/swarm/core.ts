@@ -27,6 +27,8 @@ import { dailyLogDir, MACHINE_DAILY_DIR, SessionHistory } from '../history.ts';
 import { DEFAULT_HISTORY_DAYS, historyId, type HistoryEntry } from '../../shared/history.ts';
 import type { CostSession } from '../../shared/costs.ts';
 import { Lab, loadLab } from '../experiments.ts';
+import { FloorPractice } from '../practiceState.ts';
+import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
 import { emptyLedger } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
@@ -46,12 +48,11 @@ import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
-import { questionOf, waitingOn } from '../../shared/questions.ts';
+import { waitingOn } from '../../shared/questions.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { FileStore } from '../files.ts';
 import type {
   AgentActivity,
-  AgentQuestion,
   AgentView,
   CliView,
   LogLine,
@@ -116,6 +117,7 @@ export abstract class SwarmCore extends SwarmContract {
       notify: notifySettings(DEFAULT_NOTIFY, {}),
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
+      everyProject: emptyEveryProject(),
       officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
@@ -140,7 +142,6 @@ export abstract class SwarmCore extends SwarmContract {
   protected ceoFiles = new CeoFiles(this.files, CEO_DIR);
 
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
-  protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
   protected researchGuard = new ResearchGuard(); // the running research job's time budget
   protected messageSeq = 1;
@@ -347,7 +348,54 @@ export abstract class SwarmCore extends SwarmContract {
       previewConfig: r.preview,
       preview: this.previews.view(r),
       charter: charterView(r.charter, Date.now()),
+      ...this.practiceView(r),
     };
+  }
+
+  // ---------- version-control practices (#24) ----------
+
+  protected practiceRt = new Map<string, FloorPractice>();
+
+  protected floorPractice(repoId: string): FloorPractice {
+    let p = this.practiceRt.get(repoId);
+    if (!p) this.practiceRt.set(repoId, (p = new FloorPractice()));
+    return p;
+  }
+
+  /**
+   * The practice switches a floor's work runs with: Every project's, the floor's overrides, then (for an issue or PR)
+   * its experiment variant's. `peek`: an issue not started yet, for the variant it would get.
+   */
+  protected practicesOf(r: PersistedRepo, issue?: number | null, pr?: number | null, peek?: { number: number; body: string; labels: string[] }) {
+    const variant = issue != null || pr != null ? this.lab.practices(r.id, issue, pr, peek) : undefined;
+    return effectivePractices(this.state.settings.everyProject.practices, r.practices, variant);
+  }
+
+  /** Whether any of the floor's work may run with leases: the floor's switch, or a running experiment's variant. */
+  protected leasesWanted(r: PersistedRepo) {
+    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases');
+  }
+
+  /** The floor's leases now: each agent building or fixing an issue, and each open swarm PR (shared/practices.ts). */
+  protected leasesOf(r: PersistedRepo): Lease[] {
+    const rt = this.repoRt.get(r.id);
+    if (!rt) return [];
+    const fp = this.floorPractice(r.id);
+    const known = fp.known();
+    const work = this.state.agents
+      .filter((a) => a.repoId === r.id && a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber != null && BUSY.includes(a.status))
+      .map((a) => {
+        const issue = rt.issues.find((i) => i.number === a.issueNumber);
+        return { agentId: a.id, issue: a.issueNumber!, pr: a.prNumber, declared: a.declared ?? null, predicted: issue ? predictFiles(`${issue.title}\n${issue.body}`, known) : [] };
+      });
+    const pulls = rt.pulls.filter((p) => p.state === 'OPEN' && p.headRefName.startsWith('swarm/')).map((p) => ({ number: p.number, issues: p.closesIssues, files: fp.prFiles.get(p.number)?.files ?? [] }));
+    return floorLeases(work, pulls);
+  }
+
+  protected practiceView(r: PersistedRepo): Pick<RepoView, 'practices' | 'practiceOverrides' | 'leases' | 'leaseHolds' | 'hotFiles'> {
+    const leases = this.leasesWanted(r);
+    const fp = this.practiceRt.get(r.id);
+    return { practices: this.practicesOf(r), practiceOverrides: r.practices ?? {}, leases: leases ? this.leasesOf(r) : [], leaseHolds: (leases && fp?.holds) || [], hotFiles: (leases && fp?.hot) || [] };
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
@@ -400,8 +448,7 @@ export abstract class SwarmCore extends SwarmContract {
     const { status, task, issueNumber, prNumber, startedAt } = a;
     const rt = this.agentRt.get(a.id);
     if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
-    const waiting = waitingOn(this.state.questions, a.id);
-    if (waiting && a.status !== 'working') return { kind: 'waiting', detail: waiting === 'ceo' ? 'the CEO' : 'you' };
+    if (a.status !== 'working' && waitingOn(this.state.questions, a.id)) return { kind: 'waiting', detail: waitingOn(this.state.questions, a.id) === 'ceo' ? 'the CEO' : 'you' };
     return agentActivity({ status, task, currentTool: rt?.currentTool ?? null, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 
@@ -745,24 +792,9 @@ export abstract class SwarmCore extends SwarmContract {
     }
   }
 
-  // ---------- agents' questions (#36, shared/questions.ts) ----------
-
-  protected setQuestions(list: AgentQuestion[]) {
-    const touched = new Set([...this.state.questions, ...list].map((q) => q.agentId));
-    this.state.questions = list.filter((q) => this.state.agents.some((a) => a.id === q.agentId));
-    this.emitCeo();
-    for (const a of this.state.agents) if (touched.has(a.id)) this.emitAgent(a);
-    this.save();
-  }
-
-  /** The agent moved on (a new session, or their task cleared): their open question closes. */
-  protected dropQuestion(agentId: string) {
-    if (questionOf(this.state.questions, agentId)) this.setQuestions(this.state.questions.filter((q) => q.agentId !== agentId));
-  }
-
   protected clearTask(a: PersistedAgent) {
     this.dropQuestion(a.id);
-    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null });
+    Object.assign(a, { status: 'idle', task: null, issueNumber: null, issueTitle: null, branch: null, prNumber: null, prUrl: null, lastError: null, declared: null });
     this.emitAgent(a);
   }
 }

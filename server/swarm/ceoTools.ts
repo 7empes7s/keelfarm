@@ -400,6 +400,20 @@ export abstract class SwarmCeoTools extends SwarmTeam {
 
   // ---------- agents' questions (#36, shared/questions.ts) ----------
 
+  protected setQuestions(list: AgentQuestion[]) {
+    const touched = new Set([...this.state.questions, ...list].map((q) => q.agentId));
+    this.state.questions = list.filter((q) => this.state.agents.some((a) => a.id === q.agentId));
+    this.emitCeo();
+    for (const a of this.state.agents) if (touched.has(a.id)) this.emitAgent(a);
+    this.save();
+  }
+
+  /** The agent moved on (a new session, or their task cleared): their open question closes. */
+  protected dropQuestion(agentId: string) {
+    if (questionOf(this.state.questions, agentId)) this.setQuestions(this.state.questions.filter((q) => q.agentId !== agentId));
+  }
+
+
   /** A session that ended asking something: the agent waits, and a follow-up wakes the CEO (else the manager is asked). */
   protected ask(a: PersistedAgent, repo: PersistedRepo, text: string): boolean {
     const asked = questionFromTurn(scrub(text, this.secrets())); // it goes to the CEO, the chat and notifications

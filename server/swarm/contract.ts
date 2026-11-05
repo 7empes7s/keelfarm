@@ -10,6 +10,8 @@ export abstract class SwarmContract {
   protected abstract closeResolvedIssues(...a: Parameters<Swarm['closeResolvedIssues']>): ReturnType<Swarm['closeResolvedIssues']>;
   protected abstract learnIssueClosed(...a: Parameters<Swarm['learnIssueClosed']>): ReturnType<Swarm['learnIssueClosed']>;
   protected abstract learnPull(...a: Parameters<Swarm['learnPull']>): ReturnType<Swarm['learnPull']>;
+  protected abstract rebaseConflicting(...a: Parameters<Swarm['rebaseConflicting']>): ReturnType<Swarm['rebaseConflicting']>;
+  protected abstract refreshPractices(...a: Parameters<Swarm['refreshPractices']>): ReturnType<Swarm['refreshPractices']>;
   protected abstract settleLearned(...a: Parameters<Swarm['settleLearned']>): ReturnType<Swarm['settleLearned']>;
   protected abstract sweepFloor(...a: Parameters<Swarm['sweepFloor']>): ReturnType<Swarm['sweepFloor']>;
   protected abstract syncFolder(...a: Parameters<Swarm['syncFolder']>): ReturnType<Swarm['syncFolder']>;
@@ -88,6 +90,7 @@ export abstract class SwarmContract {
   // ceoTools.ts
   protected abstract agentDoing(...a: Parameters<Swarm['agentDoing']>): ReturnType<Swarm['agentDoing']>;
   protected abstract ask(...a: Parameters<Swarm['ask']>): ReturnType<Swarm['ask']>;
+  protected abstract dropQuestion(...a: Parameters<Swarm['dropQuestion']>): ReturnType<Swarm['dropQuestion']>;
   protected abstract floorRepo(...a: Parameters<Swarm['floorRepo']>): ReturnType<Swarm['floorRepo']>;
   protected abstract managerAnswer(...a: Parameters<Swarm['managerAnswer']>): ReturnType<Swarm['managerAnswer']>;
   protected abstract notifyQuestion(...a: Parameters<Swarm['notifyQuestion']>): ReturnType<Swarm['notifyQuestion']>;

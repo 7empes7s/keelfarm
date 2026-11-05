@@ -15,7 +15,7 @@ import { closeOverlay, Panel } from './Panel';
 import { loadScreenshot } from '../screenshot';
 import { toolVerb } from '../world/draw';
 import { followAgent } from '../world/camera/rig';
-import { StatusPill } from './StatusPill';
+import { badgeStatus, StatusPill } from './StatusPill';
 import { HistoryButton } from './HistoryTab';
 
 function elapsed(from: number | null, to: number | null) {
@@ -116,13 +116,13 @@ export function TerminalView({ agentId }: { agentId: string }) {
           <span className="chip" title="Their coding agent">
             ⌨️ {agentLabel(agent, settings, clis)}
           </span>
-          <StatusPill status={agent.status} />
+          <StatusPill status={badgeStatus(agent)} />
           {signIn && (
             <span className="chip sign-in-chip" title={`Waiting for you to sign ${signIn} in, in their terminal`}>
               🔑 needs sign-in
             </span>
           )}
-          {working && agent.currentTool && <span className="muted small">{toolVerb(agent.currentTool)}…</span>}
+          {working && agent.currentTool && <span className="chip">{toolVerb(agent.currentTool)}…</span>}
           <span className="spacer" />
           <button className="btn btn-small" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
             🎥 Follow
