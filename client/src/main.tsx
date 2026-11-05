@@ -5,6 +5,7 @@ import { registerServiceWorker } from './pwa';
 import { useStore } from './store';
 import './ui/a11y';
 import './styles.css';
+import './design.css';
 
 connect();
 registerServiceWorker();

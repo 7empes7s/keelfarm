@@ -1,10 +1,12 @@
 // Pocket mode's Team tab: everyone with their status, and the terminal panel's actions without the terminal: message,
-// ■ Stop, ↺ Clear desk and assigning an issue (or a PR to test). The terminal itself is one tap away.
+// ■ Stop, assigning an issue (or a PR to test); ↺ Clear desk and Let go in its ⋯. The terminal itself is one tap away.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent } from '../store';
 import { CEO_ID, type RepoView } from '../../../shared/types';
 import { agentLabel, signInFor } from '../ui/floorRows';
+import { clearDesk, letGo } from '../ui/dangerActions';
+import { Menu } from '../ui/Menu';
 import { MessageBox } from '../ui/MessageBox';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
@@ -106,11 +108,6 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
             </button>
           </>
         )}
-        {can.clear && (
-          <button className="btn btn-small" disabled={busy} onClick={() => void run(() => api.reset(agent.id))}>
-            ↺ Clear desk
-          </button>
-        )}
         {can.message && (
           <button className={`btn btn-small ${writing ? 'btn-ghost' : ''}`} aria-expanded={writing} onClick={() => setWriting(!writing)}>
             💬 Message
@@ -119,6 +116,15 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
         <button className="btn btn-small btn-ghost" onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
           Terminal
         </button>
+        <Menu
+          label={`More for ${agent.name}`}
+          title={agent.name}
+          className="pk-more"
+          items={[
+            can.clear && { label: '↺ Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
+            { label: `Let ${agent.name} go…`, hint: 'Their worktree is removed', danger: true, disabled: busy, onSelect: () => void letGo(agent) },
+          ]}
+        />
       </div>
       {writing && can.message && (
         <form

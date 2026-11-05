@@ -3,11 +3,12 @@ import { CareerCard } from './CareerCard';
 import { api } from '../api';
 import { isBusy, kanbanFor, agentsOnRepo, useStore } from '../store';
 import { AgentSetup } from './AgentSettings';
-import { confirmDialog } from './Confirm';
+import { clearDesk, letGo } from './dangerActions';
 import { LiveTerminal } from './LiveTerminal';
 import { effectiveModel } from '../../../shared/models';
 import { assignChoices } from '../pocket/pocketData';
 import { agentLabel, signInFor, workerCli } from './floorRows';
+import { Menu } from './Menu';
 import { MessageBox } from './MessageBox';
 import { MicButton } from './MicButton';
 import { closeOverlay, Panel } from './Panel';
@@ -305,34 +306,17 @@ export function TerminalView({ agentId }: { agentId: string }) {
             >
               {chosen?.kind === 'qa' ? `🔍 Test PR #${chosen.number}` : '▶ Start issue'}
             </button>
-            {agent.status !== 'idle' && (
-              <button className="btn" disabled={busy} onClick={() => run(() => api.reset(agent.id))}>
-                ↺ Clear desk
-              </button>
-            )}
           </>
         )}
         <span className="spacer" />
-        <button
-          className="btn btn-ghost"
-          disabled={busy}
-          onClick={() => {
-            void run(async () => {
-              const ok = await confirmDialog({
-                tone: 'danger',
-                icon: '👋',
-                title: `Let ${agent.name} go?`,
-                body: 'Their worktree is removed. Branches they pushed stay on GitHub.',
-                confirm: `Let ${agent.name} go`,
-              });
-              if (!ok) return;
-              await api.fireAgent(agent.id);
-              closeOverlay();
-            });
-          }}
-        >
-          Let go
-        </button>
+        <Menu
+          label={`More for ${agent.name}`}
+          title={agent.name}
+          items={[
+            !working && agent.status !== 'idle' && { label: '↺ Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
+            { label: `Let ${agent.name} go…`, hint: 'Their worktree is removed', danger: true, disabled: busy, onSelect: () => void letGo(agent).then((gone) => gone && closeOverlay()) },
+          ]}
+        />
       </div>
     </Panel>
   );
