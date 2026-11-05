@@ -2,8 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
-import { FLOOR_SEATS, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
-import { OFFICE_PLAYBOOK_MAX } from '../shared/officePlaybook.ts';
+import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
 import { MANDATE_MAX_CHARS } from '../shared/followups.ts';
 import {
@@ -129,6 +128,7 @@ describe('office tools', () => {
       companyStatus: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
+      proposeCharter: () => 'proposed',
       setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
@@ -181,6 +181,7 @@ describe('office tools', () => {
       'keep_file',
       'message_agent',
       'pr_diff',
+      'propose_charter',
       'qa_report',
       'rerun_checks',
       'restart_agent',
@@ -276,6 +277,15 @@ describe('office tools', () => {
     const tooLong = await client.callTool({ name: 'set_floor_profile', arguments: { floor: 1, playbook: 'x'.repeat(PLAYBOOK_MAX + 1) } });
     expect(tooLong.isError).toBe(true);
     expect(floors).toHaveLength(1);
+  });
+  it("checks propose_charter's input with its schema (#48)", async () => {
+    const { client } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'propose_charter', arguments: { floor: 1, reason: 'Tighter', ...args } })).isError;
+    expect(await ok({ focus: 'O1', objectives: [{ id: 'O1', outcome: 'Fast' }], standards: ['Tests pass'], non_goals: ['Accounts'] })).toBe(true);
+    expect(await ok({ objectives: [{ id: 'goal-1', outcome: 'Fast' }] })).toBe(false);
+    expect(await ok({ standards: ['x'.repeat(201)] })).toBe(false);
+    expect(await ok({ objectives: Array.from({ length: 9 }, () => ({ outcome: 'Fast' })) })).toBe(false);
+    expect(await ok({ reason: '' })).toBe(false);
   });
 });
 
@@ -549,7 +559,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok',
-          restartAgent: ok, messageAgent: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok,
+          restartAgent: ok, messageAgent: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok,
         },
         () => researching,
       ),

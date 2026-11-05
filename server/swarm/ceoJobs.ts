@@ -28,6 +28,7 @@ import {
   type FollowupEvent,
 } from '../../shared/followups.ts';
 import { dueGreeting } from '../../shared/themes.ts';
+import { charterOf, MISSION_MAX, renderCharter } from '../../shared/charter.ts';
 import { CEO_ID } from '../../shared/types.ts';
 import { forwardText, nextDelivery } from '../../shared/chat.ts';
 import { researchJob, researchRef } from '../research.ts';
@@ -119,7 +120,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   protected ceoFloor(repoId?: string) {
     const repo = repoId ? this.state.repos.find((r) => r.id === repoId) : undefined;
     if (!repo) return null;
-    return { floor: repo.floor, fullName: repo.fullName, clone: this.backend.mainDir(repo.fullName), mission: repo.mission, backlog: this.repoRt.get(repo.id)?.issues.length ?? 0 };
+    return { floor: repo.floor, fullName: repo.fullName, clone: this.backend.mainDir(repo.fullName), mission: repo.mission, charter: renderCharter(charterOf(repo.mission, repo.charter)), backlog: this.repoRt.get(repo.id)?.issues.length ?? 0 };
   }
 
   protected ceoInfo(): CeoInfo {
@@ -406,7 +407,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   planFloor(repoId: string, mission?: string, research = false) {
     const repo = this.repo(repoId);
     if (typeof mission === 'string') {
-      repo.mission = mission.trim().slice(0, 4000);
+      this.applyCharter(repo, { ...charterOf(repo.mission, repo.charter), mission: mission.trim().slice(0, MISSION_MAX) }, this.managerLabel(), 'brief edited');
       this.emitRepo(repo);
     }
     if (!repo.mission) throw new HttpError(400, 'Write a brief first: what should this floor build?');

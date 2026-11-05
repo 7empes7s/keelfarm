@@ -26,12 +26,13 @@ import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
-import { BLOCKED_DEMO, demoAnswered, demoCeoAnswer, demoPrompts, demoQuestion } from './demoPrompts.ts';
+import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { DEMO_REF_FILES, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { researchBrief } from './demoResearch.ts';
+import { demoCharter, demoDraft } from './demoCharters.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -119,17 +120,17 @@ function seed(fullName: string, description: string, titles: [string, string][])
 }
 
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage.'],
-  ['Todos should support due dates', 'Add an optional due date and highlight overdue items.'],
-  ['Drag and drop to reorder', 'Let users reorder todos by dragging.'],
+  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage.\n\nObjective: O1'],
+  ['Todos should support due dates', 'Add an optional due date and highlight overdue items.\n\nObjective: O2'],
+  ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
-  ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.'],
-  ['Fix: completed count off by one', 'The footer shows one more completed item than there is.'],
+  ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
+  ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ]);
 seed('demo-co/weather-api', 'Tiny weather REST API', [
-  ['Add /forecast endpoint', 'Return a 5-day forecast for a city.'],
-  ['Rate limit anonymous callers', '60 requests per minute per IP.'],
-  ['OpenAPI spec', 'Publish an OpenAPI 3.1 document at /openapi.json.'],
+  ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
+  ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
+  ['OpenAPI spec', 'Publish an OpenAPI 3.1 document at /openapi.json.\n\nObjective: O2'],
 ]);
 
 // ---------- the big company (--floors / --agents, #228) ----------
@@ -379,9 +380,8 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   const pull = fixPromptPull(opts.prompt);
   const issueMatch = opts.prompt.match(/#(\d+):\s*(.+)/);
   const number = kind === 'issue' ? Number(issueMatch?.[1] ?? 0) : pull.number;
-  const answered = kind === 'issue' && demoAnswered(opts.prompt) === number; // an answer to its question: on to the PR
+  const { answered, question } = kind === 'issue' ? demoAsks(opts.prompt, number, !!opts.resumeSessionId) : { answered: false, question: null };
   const title = (answered ? repos.get(fullName)?.issues.find((x) => x.number === number)?.title : kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up';
-  const question = kind === 'issue' && !answered && !opts.resumeSessionId ? demoQuestion(number) : null; // stops halfway to ask
   const round = Number(opts.prompt.match(/QA round (\d+)/)?.[1] ?? 1);
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
@@ -394,7 +394,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
-  const script = [header, ...(question ? body.slice(0, 7) : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
+  const script = [header, ...(question ? [...body.slice(0, 7), () => ((stopped = true), demoAsked(cb, question))] : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
 
   const expired = () => {
     if (stopped) return;
@@ -460,11 +460,6 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
       cb.log([{ kind: 'text', text }]);
       cb.finished({ ok: true, text, costUsd, turns, errors: [] });
       return;
-    }
-    if (question) {
-      cb.sessionId(`demo-issue-${crypto.randomUUID()}`); // resumed by the answer
-      cb.log([{ kind: 'text', text: `● ${question}` }]);
-      return cb.finished({ ok: true, text: question, costUsd, turns, errors: [] });
     }
     const repo = repos.get(fullName);
     let url = '';
@@ -736,6 +731,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       const pulls = repos.get(fullName)?.pulls ?? [];
       return [...pulls.filter((p) => p.state === 'OPEN'), ...pulls.filter((p) => p.state === 'MERGED').slice(0, 8)];
     },
+    exportCharter: async (fullName) => {
+      if (!repos.has(fullName)) throw new Error('Unknown repo');
+      return `https://github.com/${fullName}/compare/main...cubefarm/charter`; // the demo writes nothing
+    },
     createIssue: async (fullName, title, body, labels = []) => {
       const r = repos.get(fullName);
       if (!r) throw new Error('Unknown repo');
@@ -938,6 +937,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
+    demoCharter,
     simulateUsage: demoUsage,
     demoDoctor: {
       dropDesk: (dir) => {
@@ -1188,7 +1188,8 @@ export function answerReply({ quote, reply }: { quote: string; reply: string }):
 export interface DemoFloor {
   floor: number;
   repo: string;
-  brief: string | null;
+  description: string;
+  charter: string | null; // the compact rendering (shared/charter.ts)
   team: { size: number; max: number; free: number; pendingHires: number; pendingLetGos: number };
   capacity: { issuesReadyToStart: number; prsAwaitingQa: number };
   backlog: { number: number; title: string; inProgress: boolean }[];
@@ -1220,6 +1221,9 @@ interface DemoStatus {
   floors: DemoFloor[];
   pendingChanges: unknown[];
 }
+
+/** The objective ids in a floor's charter, in order. */
+const objectiveIds = (charter: string | null) => [...(charter ?? '').matchAll(/^- (O\d{1,2}):/gm)].map((m) => m[1]);
 
 /** The team a floor will have once the changes waiting for the manager are decided. */
 const plannedSize = (t: DemoFloor['team']) => t.size + t.pendingHires - t.pendingLetGos;
@@ -1299,23 +1303,24 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       : `Floor ${f.floor} goes from ${f.team.size} to ${plural(call.size, 'agent')}: ${call.reason} ${after(s, call.size - plannedSize(f.team))}`;
   };
 
-  /** Files the brief's first three issues; returns the skeleton's number. */
-  const planIssues = async (floor: number, mission: string) => {
+  /** Files the brief's first three issues, each naming an objective when the charter has some; returns the skeleton's number. */
+  const planIssues = async (floor: number, mission: string, ids: string[]) => {
+    const tag = (i: number) => (ids.length ? `\n\nObjective: ${ids[Math.min(i, ids.length - 1)]}` : '');
     const first = await use('file_issue', {
       floor,
       title: 'Set up the project skeleton',
-      body: `Scaffold the app so the rest of the milestone has something to build on.\n\nBrief: ${mission}\n\nAcceptance criteria:\n- The dev server starts\n- A placeholder home page renders\n- Lint, tests and build scripts exist`,
+      body: `Scaffold the app so the rest of the milestone has something to build on.\n\nBrief: ${mission}\n\nAcceptance criteria:\n- The dev server starts\n- A placeholder home page renders\n- Lint, tests and build scripts exist${tag(0)}`,
     });
     const n = Number(first.match(/#(\d+)/)?.[1] ?? 0);
     await use('file_issue', {
       floor,
       title: `Build the core: ${short(mission, 60)}`,
-      body: `${n ? `Depends on #${n}\n\n` : ''}Implement the heart of the brief.\n\nAcceptance criteria:\n- The main flow works end to end\n- Covered by tests`,
+      body: `${n ? `Depends on #${n}\n\n` : ''}Implement the heart of the brief.\n\nAcceptance criteria:\n- The main flow works end to end\n- Covered by tests${tag(0)}`,
     });
     await use('file_issue', {
       floor,
       title: 'Polish: phone layout and empty states',
-      body: `${n ? `Depends on #${n}\n\n` : ''}Make every screen work at 375px and add friendly empty states.`,
+      body: `${n ? `Depends on #${n}\n\n` : ''}Make every screen work at 375px and add friendly empty states.${tag(1)}`,
     });
     return n;
   };
@@ -1334,8 +1339,10 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const ready = f.capacity.issuesReadyToStart;
       const grow = demoGrow(f, ready);
       const team = grow ? await scale(s, f, grow) : `Its ${plural(f.team.size, 'agent')} can keep up with the ${plural(ready, 'issue')} ready to start.`;
-      const next = f.brief ? ' Your brief is next on my list: I plan it as soon as this is done.' : f.backlog.length === 0 ? ' The backlog is empty: tell me what you would like built and I will plan it.' : '';
-      return [`Floor ${floor}: ${p.summary}. I wrote a QA brief and a playbook for it.`, team, next].filter(Boolean).join(' ');
+      const drafted = f.charter ? '' : await use('propose_charter', { floor, ...demoDraft(f.description || p.summary, p.qa) });
+      const charter = drafted && !drafted.startsWith('Refused') ? 'I drafted a charter for it: approve or edit it in the Charter tab.' : '';
+      const next = f.backlog.length === 0 ? ' The backlog is empty: tell me what you would like built and I will plan it.' : '';
+      return [`Floor ${floor}: ${p.summary}. I wrote a QA brief and a playbook for it.`, team, charter, next].filter(Boolean).join(' ');
     },
     async plan(floor: number, mission: string) {
       const s = await status();
@@ -1343,7 +1350,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (!f) return 'That floor has gone, so there was nothing to plan.';
       await read(`${f.repo}/README.md`, 12);
       await think("Foundation first, so the parallel work doesn't collide.");
-      const n = await planIssues(floor, mission);
+      const n = await planIssues(floor, mission, objectiveIds(f.charter));
       const grow = demoGrow(f, f.capacity.issuesReadyToStart + (n ? 1 : 0));
       const team = grow ? ` ${await scale(s, f, grow)}` : '';
       return `I turned the brief into three issues on floor ${floor}. #${n} sets up the skeleton; the other two say "Depends on #${n}", so nobody starts them early.${team}`;
@@ -1392,12 +1399,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async followup(events: string[]) {
       const needs: string[] = [];
       for (const e of events.slice(0, 4)) {
-        const ask = demoCeoAnswer(e);
-        if (ask) {
-          await think(ask.tool === 'answer_agent' ? 'The repo settles this one: tests sit next to the code.' : "A product call: that's the manager's.");
-          await use(ask.tool, ask.args); // an escalated question reaches the manager's phone by itself
-          continue;
-        }
+        if (await demoCeoAnswer(e, use, think)) continue; // an escalated question reaches the manager's phone by itself
         const floor = Number(e.match(/floor (\d+)/)?.[1] ?? 0);
         const pr = Number(e.match(/PR #(\d+)/)?.[1] ?? 0);
         const agent = e.match(/\(([\w-]+)\)/)?.[1];
@@ -1438,6 +1440,14 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         const reason = close[2].trim() || 'No longer wanted.';
         const out = await use('close_issue', { floor: closeFloor.floor, number: Number(close[1]), reason });
         return out.startsWith('Refused') ? `I couldn't close #${close[1]}: ${refused(out)}` : `Done: ${out} I left "${short(reason, 80)}" on it as a comment.`;
+      }
+      // "Tighten floor 2's charter": a change for the manager to approve, through the real tool.
+      if (/\bcharter\b/i.test(text)) {
+        const f = s.floors.find((x) => new RegExp(`floor ${x.floor}\\b`, 'i').test(text)) ?? s.floors[0];
+        if (!f) return 'There are no floors yet: add a project first, and I will draft its charter.';
+        const ids = objectiveIds(f.charter);
+        const out = await use('propose_charter', { floor: f.floor, reason: 'You asked about the charter: finish the first objectives before starting new ones.', focus: ids.length ? `${ids.slice(0, 2).join(', ')}, until they are met` : 'The core flows first' });
+        return out.startsWith('Refused') ? `I couldn't propose it: ${refused(out)}` : `I proposed a new focus for floor ${f.floor}'s charter. Approve or edit it in the Charter tab: nothing changes until you do.`;
       }
       // Asked for a bigger team: one more agent where the most work waits, through the real tool.
       if (/\b(hire|hiring|grow|team|bigger)\b/i.test(text)) {

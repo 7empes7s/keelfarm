@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { pendingRequests, unreadMessages, useStore, type Focus } from '../store';
-import { loadView, saveView } from '../savedView';
+import { loadView, pendingRequests, saveView, unreadMessages, useStore, type Focus } from '../store';
 import { api } from '../api';
 import { EYE_HEIGHT, ROOF, SPAWN, collide, surfaceAt, type Rect } from './layout';
 import { pickFocus } from './interact';

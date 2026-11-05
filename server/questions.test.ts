@@ -93,3 +93,12 @@ describe("an agent's question", () => {
     expect(notes.mock.calls.filter(([kind]) => kind === 'question')).toHaveLength(1);
   });
 });
+
+describe("the follow-up prompt's question guidance", () => {
+  it('is there only when an agent asked something, so other follow-ups pay nothing for it', async () => {
+    const { followupPrompt } = await import('./followupPrompt.ts');
+    const ev = (kind: 'question' | 'merged') => ({ id: 'e1', kind, key: kind, label: kind, text: 'x', at: 0 });
+    expect(followupPrompt([ev('question')], [])).toContain('ask_manager_choice, with your pick, only for unclear choices');
+    expect(followupPrompt([ev('merged')], [])).not.toContain('ask_manager_choice');
+  });
+});

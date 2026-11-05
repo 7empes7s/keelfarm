@@ -44,8 +44,7 @@ import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS } from '../../shared/types.ts';
-import { DEFAULT_OFFICE_PLAYBOOK } from '../../shared/officePlaybook.ts';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { questionOf, waitingOn } from '../../shared/questions.ts';
 import { CeoFiles } from '../ceoFiles.ts';
@@ -78,6 +77,7 @@ import {
   oneLine,
   type SignIn,
 } from './model.ts';
+import { charterView } from '../../shared/charter.ts';
 import { slugify } from './flavour.ts';
 import { SwarmContract } from './contract.ts';
 
@@ -346,6 +346,7 @@ export abstract class SwarmCore extends SwarmContract {
       syncError: rt.syncError,
       previewConfig: r.preview,
       preview: this.previews.view(r),
+      charter: charterView(r.charter, Date.now()),
     };
   }
 

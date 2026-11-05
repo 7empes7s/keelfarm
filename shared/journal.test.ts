@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyCharterView } from './charter.ts';
 import {
   applyRepoPatch,
   compactAgent,
@@ -79,6 +80,7 @@ function repo(patch: Partial<RepoView> = {}): RepoView {
     lastSync: 123,
     previewConfig: { command: 'npm run dev', env: { API_KEY: 'preview-env-secret-123' } },
     preview: { status: 'running', port: 6301, url: 'http://localhost:6301', ref: 'main', pr: null, commit: 'abc1234', startedAt: 1, error: null, logTail: ['listening on 6301'] },
+    charter: emptyCharterView(),
     ...patch,
   };
 }

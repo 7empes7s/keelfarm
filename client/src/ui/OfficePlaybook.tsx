@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { OFFICE_PLAYBOOK_MAX } from '../../../shared/officePlaybook';
+import { OFFICE_PLAYBOOK_MAX } from '../../../shared/types';
 
 // The CEO tab's "Every project" playbook (#50): the office-wide rules above each floor's playbook in every build, fix
 // and QA prompt. Every session pays for it, so the count shows as you type and warns near the cap.

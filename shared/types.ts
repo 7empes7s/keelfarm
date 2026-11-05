@@ -1,5 +1,6 @@
 // Types shared between the swarm server and the 3D client.
 import type { CareerView } from './careers.ts';
+import type { CharterView } from './charter.ts';
 import type { ProgressView, RewardView } from './progress.ts';
 
 import type { WeatherSettings, WeatherView, WorldEventSettings } from './outside.ts';
@@ -95,6 +96,7 @@ export interface RepoView {
   syncError?: string;
   previewConfig: PreviewConfig;
   preview: PreviewView;
+  charter: CharterView; // the rest of the floor's charter (#48); `mission` above is its mission
 }
 
 /**
@@ -163,6 +165,16 @@ export const FLOOR_SEATS = 15;
 
 /** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
 export const PLAYBOOK_MAX = 3000;
+
+/** The longest the office-wide playbook may be (#50): it is in every builder's, fixer's and QA's prompt, on every floor. */
+export const OFFICE_PLAYBOOK_MAX = 1200;
+
+/** The office-wide playbook a new office starts with: small rules the prompts don't already say. */
+export const DEFAULT_OFFICE_PLAYBOOK = [
+  '- A fix comes with a test that fails without it.',
+  "- Don't reformat, rename or move code you aren't changing.",
+  '- Never run, edit or restart anything outside your worktree and reserved port: no live services, no other desks.',
+].join('\n');
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -833,6 +845,7 @@ export interface Watch {
   /** The workers list is showing: the latest line of every agent. */
   workers: boolean;
 }
+
 
 // ---------- presence: everyone viewing the office appears in it as a visitor ----------
 

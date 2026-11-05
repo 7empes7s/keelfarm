@@ -26,7 +26,6 @@ import { gongForMerge } from './world/gongRunner';
 import { ROOF } from './world/layout';
 import { emitReward } from './world/decor/rewards';
 import type { SnackId } from './world/fridge';
-import { loadView } from './savedView';
 
 export type Agent = Omit<AgentView, 'log'>;
 
@@ -52,7 +51,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'team' | 'issues' | 'settings' | 'tools' | 'history' | 'timelapse' | 'access';
+export type ManagerTab = 'floors' | 'ops' | 'ceo' | 'charter' | 'team' | 'issues' | 'settings' | 'tools' | 'history' | 'timelapse' | 'access';
 
 export interface Focus {
   id: string;
@@ -191,6 +190,32 @@ interface State {
 
 let toastSeq = 1;
 
+// Where the viewer was standing, so a refresh puts them back on the same floor and spot.
+export interface SavedView {
+  floor: number;
+  x: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+}
+const VIEW_KEY = 'cubefarm:view';
+
+export function loadView(): SavedView | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? 'null') as SavedView | null;
+    return v && [v.floor, v.x, v.z, v.yaw, v.pitch].every(Number.isFinite) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveView(v: SavedView) {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(v));
+  } catch {
+    // storage may be unavailable (private mode); the view just won't be remembered
+  }
+}
 const LOG_KEEP = 600;
 const TICKER_KEEP = 120; // ticker lines kept across every floor
 
