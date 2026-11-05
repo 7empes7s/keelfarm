@@ -20,6 +20,7 @@ import { telegramHttp, type TelegramApi } from './telegramBot.ts';
 import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
+import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { UsageWarning } from './pacing.ts';
 import type { CliView, GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
@@ -47,6 +48,10 @@ export interface Backend {
   closePull(fullName: string, number: number): Promise<void>;
   prForBranch(fullName: string, branch: string): Promise<{ number: number; url: string } | null>;
   prDetails(fullName: string, number: number): Promise<github.PrDetails>;
+  /** The CEO's pr_diff: changed files, and the diff itself when `patch`. */
+  prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
+  /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
+  readWorktree(r: WorktreeRead): Promise<string>;
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
@@ -183,6 +188,8 @@ export const realBackend: Backend = {
   closePull: github.closePull,
   prForBranch: github.prForBranch,
   prDetails: github.prDetails,
+  prDiff: github.prDiff,
+  readWorktree,
   issueDetails: github.issueDetails,
   commentPull: github.commentPull,
   uploadEvidence: github.uploadEvidence,

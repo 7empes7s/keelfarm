@@ -75,7 +75,7 @@ export interface NotifierDeps {
 }
 
 /** What the notifier needs of the Telegram bot (telegramBot.ts, with the swarm's mirror rule). */
-export interface TelegramChannel {
+interface TelegramChannel {
   linked(): boolean;
   /** The CEO chat goes to Telegram as it happens, so its notes (CEO messages, team changes) would only repeat it there. */
   mirrors(): boolean;

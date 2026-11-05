@@ -6,7 +6,7 @@ export type ToolKind = 'plugin' | 'skill' | 'mcp' | 'builtin';
 export type ToolRole = 'agent' | 'ceo';
 
 /** Why an item can't be switched for a role, and how it stays. */
-export interface ToolLock {
+interface ToolLock {
   on: boolean;
   why: string;
 }
@@ -77,7 +77,7 @@ export function setSwitch(switches: ToolSwitches, id: string, on: boolean | null
 // ---------- the office's own ----------
 
 /** MCP servers the office adds to its sessions: never switched off where it needs them. */
-export const OFFICE_SERVERS = ['office', 'playwright'];
+const OFFICE_SERVERS = ['office', 'playwright'];
 
 /** Claude Code tools whose result arrives in a later turn, while an office session ends with its turn. */
 export const CROSS_TURN_TOOLS = ['Monitor', 'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'RemoteTrigger'];
@@ -134,7 +134,7 @@ export function officeItems(): ToolItem[] {
 
 /** The switches a session follows: Everyone's, then the CEO's or the agent's own on top. */
 export function mergeSwitches(everyone: ToolSwitches, override: ToolSwitches | undefined): ToolSwitches {
-  return { ...everyone, ...(override ?? {}) };
+  return { ...everyone, ...override };
 }
 
 export interface ToolState {
@@ -163,10 +163,8 @@ export interface SessionTools {
   disabledPlugins: string[];
 }
 
-export const NO_SESSION_TOOLS: SessionTools = { disallowed: [], disabledPlugins: [] };
-
 /** The disallowed-tools pattern for every tool of an MCP server, by the prefix its tools are named with. */
-export const mcpPattern = (key: string) => `mcp__${key}__*`;
+const mcpPattern = (key: string) => `mcp__${key}__*`;
 
 /**
  * A session's extra disallowed tools and disabled plugins from its merged switches. Works from the switches' ids, so
@@ -210,7 +208,7 @@ export function toolArgsLine(t: SessionTools): string {
 
 // ---------- the screen ----------
 
-export const TOOL_GROUPS: { kind: ToolKind; label: string }[] = [
+const TOOL_GROUPS: { kind: ToolKind; label: string }[] = [
   { kind: 'plugin', label: 'Plugins' },
   { kind: 'skill', label: 'Skills' },
   { kind: 'mcp', label: 'MCP servers / connectors' },
