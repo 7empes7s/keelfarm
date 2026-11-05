@@ -1,16 +1,18 @@
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt, RESEARCH_PREFIX, researchTopic, yesNoFor, type OutgoingMessage } from '../../../shared/chat';
+import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
+import { refParts, refsMarkdown } from '../../../shared/chatRefs';
+import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
 import { speechText } from '../../../shared/speech';
 import { linkCeoText, urlParts, type FloorRef } from './chatLinks';
 import { retrySend, sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { Markdown } from './Markdown';
 import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
-import { copyText } from './clipboard';
+import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { Conversations } from './ChatHistory';
@@ -349,8 +351,6 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
 const SWIPE_PX = 60;
 const LONG_PRESS_MS = 500;
 
-/** A message the chat can act on: from the office (`m`), or still in this tab's outbox (`out`). */
-type Item = { m: PhoneMessage; out?: undefined } | { m?: undefined; out: OutgoingMessage };
 
 interface BubbleProps {
   item: Item;
@@ -366,7 +366,6 @@ interface BubbleProps {
   onFile: (id: string) => void;
 }
 
-const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
 
 function DeliveryTick({ d }: { d: Delivery }) {
   const icon = { sending: '🕓', sent: '✓', read: '✓✓', replied: '↩', failed: '⚠' }[d];
@@ -399,6 +398,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
+  const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   if (m?.from === 'office') return <div className="bubble-office">{m.text}</div>;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
@@ -473,18 +473,26 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {quote}
         {mine ? (
           text && <div className="bubble-text">
-            {urlParts(text).map((p, i) =>
-              p.url ? (
-                <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
-                  {p.text}
-                </a>
+            {refParts(text, m?.refs).map((r, j) =>
+              r.ref !== undefined ? (
+                <RefChip key={j} messageId={m!.id} index={r.ref}>
+                  {r.text}
+                </RefChip>
               ) : (
-                p.text
+                urlParts(r.text).map((p, i) =>
+                  p.url ? (
+                    <a key={`${j}-${i}`} href={p.url} target="_blank" rel="noopener noreferrer">
+                      {p.text}
+                    </a>
+                  ) : (
+                    p.text
+                  ),
+                )
               ),
             )}
           </div>
         ) : (
-          text && <LongText text={text}><Markdown className="bubble-md" text={linked(text)} onFloor={onFloor} /></LongText>
+          text && <LongText text={text}><Markdown className="bubble-md" text={linked(refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
@@ -512,69 +520,6 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   );
 }
 
-/** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, Retry for a failed send, and `more` (edit, retry, remember). */
-function MessageActions({ item, ceoName, more, onReply, onClose }: { item: Item; ceoName: string; more: { label: string; run: () => void }[]; onReply: (id: number) => void; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useDialogFocus(ref);
-  useEffect(() => ref.current?.querySelector<HTMLButtonElement>('button')?.focus(), []);
-  const text = item.m ? item.m.text : item.out.text;
-  const from = item.m ? who(item.m, ceoName) : 'you';
-  const act = (fn: () => void) => () => {
-    onClose();
-    fn();
-  };
-  const copy = () => void copyText(text).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied' : "Couldn't reach the clipboard"));
-  // A long-press's lifted finger sends a mouse press and a click onto the backdrop that just opened: not a dismissal.
-  const [openedAt] = useState(() => Date.now());
-  return (
-    <div className="chat-menu-back" onClick={(e) => e.target === e.currentTarget && Date.now() - openedAt > 500 && onClose()}>
-      <div
-        ref={ref}
-        className="chat-menu"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key !== 'Escape') return;
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }}
-      >
-        <div id={titleId} className="chat-menu-title">
-          Message actions · from {from}
-        </div>
-        <div className="chat-menu-quote">{excerpt(text, 120)}</div>
-        <div className="chat-menu-actions">
-          {item.m && (
-            <button type="button" className="btn btn-small" onClick={act(() => onReply(item.m!.id))}>
-              ↩ Reply
-            </button>
-          )}
-          <button type="button" className="btn btn-small" onClick={act(copy)}>
-            📋 Copy text
-          </button>
-          {more.map((x) => (
-            <button key={x.label} type="button" className="btn btn-small" onClick={act(x.run)}>
-              {x.label}
-            </button>
-          ))}
-          {item.out?.delivery === 'failed' && (
-            <button type="button" className="btn btn-small btn-good" onClick={act(() => retrySend(item.out!.key))}>
-              ⟳ Retry
-            </button>
-          )}
-          <button type="button" className="btn btn-small" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a floor chip opens (default: the elevator there). */
 export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFloor?: (repoId: string) => void }) {
   const messages = useStore((s) => s.messages);
@@ -582,10 +527,8 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const readAt = useStore((s) => s.phoneReadAt);
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const info = useStore((s) => s.ceo);
-  const settings = useStore((s) => s.settings);
   const repos = useStore((s) => s.repos);
   const goToFloor = useStore((s) => s.goToFloor);
-  const running = useStore((s) => Object.values(s.agents).filter(isBusy).length);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [editing, setEditing] = useState<number | null>(null); // the manager's last message, being edited to send again
@@ -613,6 +556,14 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
   const linked = useMemo(() => (t: string) => linkCeoText(t, floors), [floors]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const openFloor = (n: number) => {
+    const repo = repos.find((r) => r.floor === n);
+    if (!repo) return;
+    if (onFloor) onFloor(repo.id);
+    else goToFloor(n);
+  };
+  const refNav = useRefNav(scroller, openFloor);
+  const mention = useMentions(text, setText, () => form.current?.querySelector('textarea')?.focus());
 
   // Reading the thread marks it read.
   useEffect(() => {
@@ -625,6 +576,14 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     if (!el) return;
     if (!opened.current) {
       opened.current = true;
+      // Back from a chip's jump: where the chat was.
+      const back = takeChatScroll();
+      if (back !== null) {
+        el.scrollTop = back;
+        stick.current = el.scrollHeight - back - el.clientHeight < 40;
+        setAtEnd(stick.current);
+        return;
+      }
       const divider = el.querySelector<HTMLElement>('.chat-unread');
       if (divider && el.scrollHeight - divider.offsetTop > el.clientHeight) {
         el.scrollTop = divider.offsetTop - 8;
@@ -642,12 +601,6 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   }, [flash]);
 
   if (!ceo) return <p className="muted phone-empty">The corner office is empty.</p>;
-  const openFloor = (n: number) => {
-    const repo = repos.find((r) => r.floor === n);
-    if (!repo) return;
-    if (onFloor) onFloor(repo.id);
-    else goToFloor(n);
-  };
   const toEnd = () => {
     const el = scroller.current;
     if (!el) return;
@@ -710,8 +663,8 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           ? 'researching…'
           : `busy: ${info.job?.label ?? 'working'}`
       : chatQueued
-        ? settings.sessionLimit && running >= settings.sessionLimit
-          ? `will reply when a session slot frees up (${running}/${settings.sessionLimit} busy)`
+        ? info.held
+          ? 'held by the usage limit'
           : 'reading your message…'
         : info.queue.length
           ? `next up: ${info.queue[0].label}`
@@ -743,7 +696,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     );
   };
 
-  return (
+  return refNav.wrap(
     <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
         <Avatar name={ceo.name} color={ceo.color} />
@@ -821,6 +774,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
         )}
         {viewing && <FileViewer id={viewing} onClose={() => setViewing(null)} />}
+        {refNav.viewer}
         {filesOpen && (
           <FilesList
             onClose={() => setFilesOpen(false)}
@@ -880,7 +834,13 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           </button>
         </div>
       )}
+      {chatQueued && info.held && (
+        <div className="chat-held small" role="status">
+          ⏸ {heldBanner(info.held)}
+        </div>
+      )}
       <AttachTray pending={att.pending} onRemove={att.remove} />
+      {mention.picks}
       {slash.picks}
       <form
         ref={form}
@@ -904,7 +864,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           title="Enter sends · Shift+Enter adds a new line · Esc cancels a reply"
           autoFocus={autoFocus}
           onKeyDown={(e) => {
-            if (slash.onKeyDown(e)) return;
+            if (mention.onKeyDown(e) || slash.onKeyDown(e)) return;
             if (e.key !== 'Escape' || replyTo === null) return;
             e.preventDefault();
             e.stopPropagation();
@@ -926,7 +886,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           </button>
         )}
       </form>
-    </div>
+    </div>,
   );
 }
 

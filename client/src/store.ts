@@ -16,7 +16,7 @@ import type { FileView } from '../../shared/files';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
-import { needsManager, qaCardNote, type CardTone } from './qaCard';
+import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
 import { claimVoice } from './ui/voiceClaim';
@@ -37,7 +37,7 @@ export type Overlay =
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
-  | { kind: 'app'; repoId: string; pr?: number | null } // pr: open the viewer on that channel (null: main)
+  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean } // pr: open the viewer on that channel (null: main); qa: with its QA panel
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string } // card: an OpsAlarm id, or 'usage', to open at
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string }
@@ -119,6 +119,7 @@ interface State {
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
   latest: Record<string, LogLine>; // everyone's latest line worth listing, for the workers list
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
+  peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
   qa: Record<string, QaView>; // `${repoId}#${prNumber}`
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
@@ -156,6 +157,7 @@ interface State {
   floor: number; // 0 = lobby
   travel: { to: number; phase: 'closing' | 'opening' } | null;
   overlay: Overlay | null;
+  back: Overlay | null; // what closing the overlay goes back to: the phone's chat after a chip's jump (ui/RefChips.tsx)
   focus: Focus | null;
   locked: boolean;
   started: boolean;
@@ -256,6 +258,7 @@ export const useStore = create<State>((set, get) => ({
     notify: DEFAULT_NOTIFY,
     cloud: DEFAULT_CLOUD,
     tools: DEFAULT_TOOL_SETTINGS,
+    officePlaybook: '',
   },
   clis: [],
   repos: [],
@@ -263,6 +266,7 @@ export const useStore = create<State>((set, get) => ({
   logs: {},
   latest: {},
   workersOpen: false,
+  peek: null,
   screens: {},
   qa: {},
   prPreviews: {},
@@ -303,6 +307,7 @@ export const useStore = create<State>((set, get) => ({
   floor: loadView()?.floor ?? 0,
   travel: null,
   overlay: null,
+  back: null,
   focus: null,
   locked: false,
   started: false,
@@ -620,8 +625,11 @@ export const useStore = create<State>((set, get) => ({
       get().pushToast('info', '▶ That shows the live office: press Esc to leave the replay first.');
       return;
     }
+    // Closing a panel a chat chip opened goes back to the chat.
+    const back = get().back;
+    if (!overlay && back) overlay = back;
     // Opening any panel drops whatever you're carrying, so nothing is left floating behind it.
-    set(overlay ? { overlay, focus: null, held: null, chargeAt: null } : { overlay });
+    set(overlay ? { overlay, back: null, focus: null, held: null, chargeAt: null } : { overlay });
     if (overlay && document.pointerLockElement) document.exitPointerLock();
   },
   setFocus: (focus) => {
@@ -636,10 +644,10 @@ export const useStore = create<State>((set, get) => ({
   start: () => set({ started: true }),
   goToFloor(n) {
     if (n === get().floor || get().travel) {
-      set({ overlay: null });
+      set({ overlay: null, back: null });
       return;
     }
-    set({ overlay: null, held: null, chargeAt: null, travel: { to: n, phase: 'closing' } });
+    set({ overlay: null, back: null, held: null, chargeAt: null, travel: { to: n, phase: 'closing' } });
   },
   finishTravel(phase) {
     const t = get().travel;
@@ -657,6 +665,8 @@ export const useStore = create<State>((set, get) => ({
 }));
 
 // ---------- derived helpers ----------
+
+export { floorPrCounts } from './floorCounts';
 
 export const qaKey = (repoId: string, prNumber: number) => `${repoId}#${prNumber}`;
 
@@ -772,29 +782,4 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     .map((p) => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, agent: authorOf(p.number, p.headRefName) }));
 
   return { backlog, progress, qa, ready, merged };
-}
-
-export interface FloorPrCounts {
-  /** Open PRs in the Kanban's In QA column: queued, testing, failed, fixing, needs-human and untested ones. */
-  inQa: number;
-  /** Open PRs that passed QA (the Ready to merge column). */
-  ready: number;
-  /** Open PRs waiting on the manager (needs-human, and the CEO isn't triaging them); also counted in inQa. */
-  needsYou: number;
-}
-
-/**
- * A floor's PR counts, matching kanbanFor's columns. Only open PRs count: QA records outlive their PR's merge or
- * close, so counting records instead drifts further from the board with every merge.
- */
-export function floorPrCounts(repo: RepoView, qaRecords: Record<string, QaView>): FloorPrCounts {
-  const counts: FloorPrCounts = { inQa: 0, ready: 0, needsYou: 0 };
-  for (const p of repo.pulls) {
-    if (p.state !== 'OPEN') continue;
-    const rec = qaRecords[qaKey(repo.id, p.number)];
-    if (rec?.status === 'passed') counts.ready++;
-    else counts.inQa++;
-    if (needsManager(rec)) counts.needsYou++;
-  }
-  return counts;
 }

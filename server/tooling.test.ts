@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildInventory, frontMatter, maskServer, mcpKey, memoryFs, parsePluginList, pluginsFromFiles } from './tooling.ts';
+import { buildInventory, frontMatter, maskServer, mcpKey, memoryFiles, memoryFs, parsePluginList, pluginsFromFiles } from './tooling.ts';
 
 const home = path.resolve('/home/me/.claude');
 const plug = path.join(home, 'plugins', 'cache', 'official', 'canva', '1.0.0');
@@ -17,6 +17,7 @@ const files = {
   [path.resolve('/home/me/.claude.json')]: JSON.stringify({
     mcpServers: { notion: { command: '/usr/bin/npx', args: ['-y', '@notion/mcp', '--api-key', 'SECRET3', 'TOKEN=SECRET4'], env: { NOTION_TOKEN: 'SECRET5' } } },
     projects: { [project]: { mcpServers: { db: { command: 'pg-mcp', env: { PGPASSWORD: 'SECRET6' } } } } },
+    claudeAiMcpEverConnected: ['claude.ai Gmail', 'claude.ai Windsor.ai', 42],
   }),
   [path.join(project, '.mcp.json')]: JSON.stringify({ mcpServers: { sentry: { type: 'sse', url: 'https://user:SECRET7@sentry.io/mcp' } } }),
   [path.join(project, '.claude', 'skills', 'deploy', 'SKILL.md')]: '---\nname: deploy\ndescription: Ships it.\n---\n',
@@ -52,6 +53,14 @@ describe('the inventory', () => {
     expect(scan(null).find((i) => i.id === 'skill:pdf')).toMatchObject({ source: 'user', description: 'Reads and fills PDF forms.' });
   });
 
+  it('lists the claude.ai connectors Claude Code ever connected, named as their tools are', () => {
+    const connectors = scan(null).filter((i) => i.source === 'claude.ai');
+    expect(connectors.map((i) => [i.id, i.name])).toEqual([
+      ['mcp:claude_ai_Gmail', 'Gmail'],
+      ['mcp:claude_ai_Windsor_ai', 'Windsor.ai'],
+    ]);
+  });
+
   it('never shows a secret from an MCP config', () => {
     const text = JSON.stringify(scan(null));
     for (let n = 1; n <= 7; n++) expect(text).not.toContain(`SECRET${n}`);
@@ -59,6 +68,24 @@ describe('the inventory', () => {
     expect(items.find((i) => i.id === 'mcp:notion')?.detail).toBe('stdio npx -y @notion/mcp --api-key •••• •••• · env: NOTION_TOKEN');
     expect(items.find((i) => i.id === 'mcp:plugin_canva_canva')?.detail).toBe('http https://mcp.canva.com/mcp · headers: Authorization');
     expect(items.find((i) => i.id === 'mcp:sentry')?.detail).toBe('sse https://sentry.io/mcp');
+  });
+});
+
+describe('memory files (#50)', () => {
+  it("finds the user's CLAUDE.md and each folder's from the root down to the session's", () => {
+    const fs = memoryFs({
+      [path.join(home, 'CLAUDE.md')]: 'user rules',
+      [path.resolve('/work/CLAUDE.md')]: 'abc',
+      [path.resolve('/work/shop/CLAUDE.md')]: 'shop rules',
+      [path.resolve('/work/shop/.claude/CLAUDE.md')]: 'more',
+      [path.resolve('/work/shop/src/CLAUDE.md')]: 'only when reading src',
+    });
+    expect(memoryFiles(fs, path.resolve('/work/shop'), home)).toEqual([
+      { file: path.join(home, 'CLAUDE.md'), chars: 10 },
+      { file: path.resolve('/work/CLAUDE.md'), chars: 3 },
+      { file: path.resolve('/work/shop/CLAUDE.md'), chars: 10 },
+      { file: path.resolve('/work/shop/.claude/CLAUDE.md'), chars: 4 },
+    ]);
   });
 });
 

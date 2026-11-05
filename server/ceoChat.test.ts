@@ -85,6 +85,7 @@ describe('the CEO chat', () => {
     const { swarm, i, lives } = await office();
     const { id: first } = await swarm.messageCeo('Plan a bakery');
     expect(() => swarm.editMessage(first + 999, 'x')).toThrow(/last message/);
+    await expect(swarm.newConversation()).rejects.toThrow(/still answering you/); // the reply belongs to this conversation
     await until(() => lives.some((l) => l.steps.length > 0));
     swarm.editMessage(first, 'Plan a cake shop');
     expect(i.state.messages.find((m) => m.id === first)).toMatchObject({ text: 'Plan a cake shop', edited: expect.any(Number) });

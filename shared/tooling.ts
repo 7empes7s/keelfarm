@@ -42,12 +42,21 @@ export interface ToolInventory {
 /** Item id → on (true) or off (false). Missing: follow the scope above (Everyone), else on. */
 export type ToolSwitches = Record<string, boolean>;
 
+/** A role profile (#50): what one kind of session loads. Builders and fixers share one; the CEO's is its own scope. */
+export type Profile = 'build' | 'qa' | 'ceo';
+
 export interface ToolSettings {
   everyone: ToolSwitches;
   ceo: ToolSwitches;
+  /** The builders' and fixers' profile: on top of Everyone, under an agent's own. */
+  build: ToolSwitches;
+  /** QA's profile, the same way. */
+  qa: ToolSwitches;
+  /** Lean sessions: a plugin, MCP server or connector nobody switched is off unless its role's profile starts with it. */
+  lean: boolean;
 }
 
-export const DEFAULT_TOOL_SETTINGS: ToolSettings = { everyone: {}, ceo: {} };
+export const DEFAULT_TOOL_SETTINGS: ToolSettings = { everyone: {}, ceo: {}, build: {}, qa: {}, lean: true };
 export const EMPTY_INVENTORY: ToolInventory = { items: [], scannedAt: null, scanning: false, error: null, via: '' };
 
 const ID = /^(plugin|skill|mcp|tool):[^\s]{1,200}$/;
@@ -63,7 +72,8 @@ export function cleanSwitches(raw: unknown): ToolSwitches {
 
 export function toolSettings(base: ToolSettings, raw: unknown): ToolSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ToolSettings, unknown>>;
-  return { everyone: r.everyone === undefined ? base.everyone : cleanSwitches(r.everyone), ceo: r.ceo === undefined ? base.ceo : cleanSwitches(r.ceo) };
+  const sw = (k: 'everyone' | 'ceo' | 'build' | 'qa') => (r[k] === undefined ? (base[k] ?? {}) : cleanSwitches(r[k]));
+  return { everyone: sw('everyone'), ceo: sw('ceo'), build: sw('build'), qa: sw('qa'), lean: typeof r.lean === 'boolean' ? r.lean : (base.lean ?? true) };
 }
 
 /** One switch changed: on/off, or null to follow the scope above. */
@@ -130,26 +140,58 @@ export function officeItems(): ToolItem[] {
   ];
 }
 
+// ---------- role profiles ----------
+
+/**
+ * Plugins a lean session of each role starts with (#50): the review skills builders and QA use on a diff, and the UI
+ * skill floors' playbooks name. Everything else the manager switches on, per role or for Everyone.
+ */
+const LEAN_PLUGINS: Record<Profile, string[]> = {
+  build: ['code-review', 'code-simplifier', 'frontend-design'],
+  qa: ['code-review', 'code-simplifier', 'frontend-design'],
+  ceo: [],
+};
+
+/** A claude.ai connector (from the manager's claude.ai account): one env switch takes them all out of a session. */
+const isConnector = (item: Pick<ToolItem, 'id' | 'source'>) => item.source === 'claude.ai' || item.id.startsWith('mcp:claude_ai_');
+
+/**
+ * What a lean session of a role starts with when nobody switched the item. The repo's own tools (project and local
+ * skills and MCP servers), skills (hiding one doesn't shrink the list a session loads) and built-in tools stay;
+ * plugins only when the role's profile names them; user MCP servers and claude.ai connectors are off.
+ */
+export function leanDefault(item: Pick<ToolItem, 'id' | 'kind' | 'source' | 'plugin'>, profile: Profile): boolean {
+  if (item.kind === 'builtin' || item.kind === 'skill') return true;
+  if (/^(project|local) /.test(item.source)) return true;
+  if (item.kind === 'plugin') return LEAN_PLUGINS[profile].includes(item.id.slice('plugin:'.length).split('@')[0]);
+  return !!item.plugin; // a plugin's server goes with its plugin
+}
+
 // ---------- scopes ----------
 
-/** The switches a session follows: Everyone's, then the CEO's or the agent's own on top. */
-export function mergeSwitches(everyone: ToolSwitches, override: ToolSwitches | undefined): ToolSwitches {
-  return { ...everyone, ...override };
+/** The switches a session follows: Everyone's, then its role's profile, then the CEO's or the agent's own on top. */
+export function mergeSwitches(everyone: ToolSwitches, ...over: (ToolSwitches | undefined)[]): ToolSwitches {
+  return Object.assign({}, everyone, ...over);
 }
 
 export interface ToolState {
   on: boolean;
-  /** locked: can't be switched for this role · own: this scope's switch · everyone: Everyone's · default: nobody switched it. */
-  from: 'locked' | 'own' | 'everyone' | 'default';
+  /** locked: can't be switched for this role · own: this scope's switch · profile: its role's profile · everyone: Everyone's · lean: its role's lean start · default: nobody switched it. */
+  from: 'locked' | 'own' | 'profile' | 'everyone' | 'lean' | 'default';
   lock?: ToolLock;
 }
 
-/** Whether an item is on for a role, and why. `own` is the CEO's or agent's switches (absent for the Everyone scope). */
-export function itemState(item: ToolItem, role: ToolRole, everyone: ToolSwitches, own?: ToolSwitches): ToolState {
+/**
+ * Whether an item is on for a role, and why. `own` is the scope's own switches (absent for the Everyone scope),
+ * `profile` the role profile under them, `lean` the profile whose lean start applies (null: lean sessions are off).
+ */
+export function itemState(item: ToolItem, role: ToolRole, everyone: ToolSwitches, own?: ToolSwitches, profile?: ToolSwitches, lean: Profile | null = null): ToolState {
   const lock = item.locks?.[role];
   if (lock) return { on: lock.on, from: 'locked', lock };
   if (own && item.id in own) return { on: own[item.id], from: 'own' };
+  if (profile && item.id in profile) return { on: profile[item.id], from: 'profile' };
   if (item.id in everyone) return { on: everyone[item.id], from: 'everyone' };
+  if (lean && !leanDefault(item, lean)) return { on: false, from: 'lean' };
   return { on: true, from: 'default' };
 }
 
@@ -161,28 +203,38 @@ export interface SessionTools {
   disallowed: string[];
   /** Plugins turned off for the session (`enabledPlugins: { id: false }` in its --settings file). */
   disabledPlugins: string[];
+  /** Every claude.ai connector is off: the session runs with ENABLE_CLAUDEAI_MCP_SERVERS=false (absent: they load). */
+  noConnectors?: true;
 }
+
+/** The environment a session's tools add: claude.ai connectors off in one switch. */
+export const toolsEnv = (t: SessionTools | undefined): Record<string, string> => (t?.noConnectors ? { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' } : {});
 
 /** The disallowed-tools pattern for every tool of an MCP server, by the prefix its tools are named with. */
 const mcpPattern = (key: string) => `mcp__${key}__*`;
 
 /**
- * A session's extra disallowed tools and disabled plugins from its merged switches. Works from the switches' ids, so
- * it holds even before the inventory is scanned; the inventory adds the locks and which plugin brings a server.
- * Never touches the office's own servers or the tools it already disables.
+ * A session's extra disallowed tools and disabled plugins from its merged switches and, for a lean session, its role's
+ * lean start. Works from the switches' ids, so it holds even before the inventory is scanned; the inventory adds the
+ * locks, which plugin brings a server and what a lean session leaves out. Never touches the office's own servers or
+ * the tools it already disables. Connectors all off become one env switch instead of a pattern each.
  */
-export function sessionTools(items: ToolItem[], role: ToolRole, switches: ToolSwitches): SessionTools {
+export function sessionTools(items: ToolItem[], role: ToolRole, switches: ToolSwitches, lean: Profile | null = null): SessionTools {
   const byId = new Map([...officeItems(), ...items].map((i) => [i.id, i]));
   const off = (id: string) => {
     const item = byId.get(id);
     if (item?.locks?.[role]) return !item.locks[role]!.on;
-    return switches[id] === false;
+    if (id in switches) return switches[id] === false;
+    return !!lean && !!item && !leanDefault(item, lean);
   };
   const base = new Set([...OFFICE_DISALLOWED, ...(role === 'ceo' ? CEO_DISALLOWED : [])]);
+  const ids = [...new Set([...Object.keys(switches).filter(isToolId), ...(lean ? items.map((i) => i.id) : [])])];
+  const connectors = [...new Set([...items.filter(isConnector).map((i) => i.id), ...ids.filter((id) => isConnector({ id, source: '' }))])];
+  const noConnectors = connectors.length ? connectors.every(off) : !!lean;
   const disallowed: string[] = [];
   const disabledPlugins: string[] = [];
-  for (const [id, on] of Object.entries(switches)) {
-    if (on || !isToolId(id)) continue;
+  for (const id of ids) {
+    if (!off(id)) continue;
     const item = byId.get(id);
     if (item?.locks?.[role]) continue; // the office decides: an office server stays, a disabled tool is off already
     const [kind, ...rest] = id.split(':');
@@ -191,16 +243,17 @@ export function sessionTools(items: ToolItem[], role: ToolRole, switches: ToolSw
     else if (kind === 'mcp') {
       if (OFFICE_SERVERS.includes(key)) continue;
       if (item?.plugin && off(item.plugin)) continue; // off with its plugin
+      if (noConnectors && connectors.includes(id)) continue; // off with the env switch
       disallowed.push(mcpPattern(key));
     } else if (kind === 'skill') disallowed.push(`Skill(${key})`);
     else if (kind === 'tool' && /^[A-Za-z][A-Za-z0-9_]*$/.test(key) && !base.has(key)) disallowed.push(key);
   }
-  return { disallowed: [...new Set(disallowed)].sort(), disabledPlugins: [...new Set(disabledPlugins)].sort() };
+  return { disallowed: [...new Set(disallowed)].sort(), disabledPlugins: [...new Set(disabledPlugins)].sort(), ...(noConnectors ? { noConnectors: true as const } : {}) };
 }
 
 /** The tools part of a Claude Code command line, as the demo logs it: what `sessionTools` adds. */
 export function toolArgsLine(t: SessionTools): string {
-  const parts: string[] = [];
+  const parts: string[] = t.noConnectors ? ['ENABLE_CLAUDEAI_MCP_SERVERS=false'] : [];
   if (t.disabledPlugins.length) parts.push(`--settings {"enabledPlugins":{${t.disabledPlugins.map((p) => `"${p}":false`).join(',')}}}`);
   if (t.disallowed.length) parts.push(`--disallowedTools … ${t.disallowed.join(' ')}`);
   return parts.join(' ');

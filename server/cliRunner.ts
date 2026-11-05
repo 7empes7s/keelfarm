@@ -30,8 +30,9 @@ import type { OfficeTools } from './ceo.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
+import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
-import { TranscriptTail } from './transcriptTail.ts';
+import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -463,17 +464,6 @@ function idleHook(live: LiveCli, b: Record<string, unknown>): Record<string, unk
 
 // ---------- the session ----------
 
-/**
- * The Claude Code session a hook reports, once its conversation is on disk: only then can --resume pick it up. Claude
- * writes the file during the first turn, after SessionStart and UserPromptSubmit, so a session the office keeps any
- * earlier could be one that never existed.
- */
-export function resumableSession(b: Record<string, unknown>, exists: (file: string) => boolean): string | null {
-  const id = typeof b.session_id === 'string' ? b.session_id : '';
-  const file = typeof b.transcript_path === 'string' ? b.transcript_path : '';
-  return id && file && exists(file) ? id : null;
-}
-
 /** Claude Code was told to resume a conversation that isn't on disk (it says so and exits 1). */
 export const lostConversation = (screen: string) => /No conversation found with session ID/i.test(screen);
 
@@ -503,6 +493,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const launched: string[] = []; // every prompt the CLI was given, as given (Codex: finds its main thread)
   let mainThread: string | null = opts.resumeSessionId ?? null;
   let kept: string | null = opts.resumeSessionId ?? null; // the Claude session the agent has saved to resume
+  let measured = !!opts.resumeSessionId; // a new session's first turn is measured once, from its transcript at its end (#50)
   const usageResets = new Map<string, number | null>();
   const warned = new Set<string>();
   let done = false;
@@ -705,6 +696,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         cb.sessionId(id);
       }
     }
+    const startup = event === 'Stop' && !measured && cli === 'claude' && !inBox && typeof b.transcript_path === 'string' ? transcriptStartup(b.transcript_path, opts.cwd) : null;
+    if (event === 'Stop') measured = true;
+    if (startup) cb.startup?.(startup);
     switch (event) {
       case 'PreToolUse': {
         const name = String(b.tool_name ?? '');

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { run } from './exec.ts';
 import { commandFor } from './clis.ts';
 import { officeItems, type ToolInventory, type ToolItem } from '../shared/tooling.ts';
+import { firstTurnTokens } from '../shared/startup.ts';
 
 // The Tools & skills inventory (shared/tooling.ts): what a Claude Code session on this machine loads. Plugins come
 // from `claude plugin list --json` (falling back to installed_plugins.json and settings.json), their skills, commands,
@@ -261,6 +262,11 @@ export function buildInventory(r: ReadFs, input: ScanInput): ToolItem[] {
   skillsIn(r, path.join(input.configDir, 'skills')).forEach((s) => skill(s, 'user'));
   const global = obj(json(r, input.globalConfig));
   for (const [name, c] of Object.entries(obj(global.mcpServers))) add(mcpItem(name, c, 'user'));
+  // claude.ai connectors come from the manager's account, not a file: Claude Code lists the ones it ever connected.
+  const connectors = Array.isArray(global.claudeAiMcpEverConnected) ? global.claudeAiMcpEverConnected.filter((n): n is string => typeof n === 'string') : [];
+  for (const name of connectors.slice(0, 200)) {
+    add({ id: `mcp:${mcpKey(name)}`, kind: 'mcp', name: name.replace(/^claude\.ai /, ''), description: 'claude.ai connector, from your claude.ai account.', source: 'claude.ai', cost: null });
+  }
   for (const dir of input.projects) {
     const label = `project ${path.basename(dir)}`;
     skillsIn(r, path.join(dir, '.claude', 'skills')).forEach((s) => skill(s, label));
@@ -269,6 +275,46 @@ export function buildInventory(r: ReadFs, input: ScanInput): ToolItem[] {
     for (const [name, c] of Object.entries(obj(local.mcpServers))) add(mcpItem(name, c, `local ${path.basename(dir)}`));
   }
   return [...items.values()];
+}
+
+// ---------- memory files ----------
+
+/** The CLAUDE.md files a session in `cwd` loads, with their sizes: the user's, then each folder's from the root down. */
+export function memoryFiles(r: ReadFs, cwd: string, configDir: string): { file: string; chars: number }[] {
+  const dirs: string[] = [];
+  for (let d = path.resolve(cwd); ; d = path.dirname(d)) {
+    dirs.unshift(d);
+    if (path.dirname(d) === d) break;
+  }
+  const files = [path.join(configDir, 'CLAUDE.md'), ...dirs.flatMap((d) => ['CLAUDE.md', 'CLAUDE.local.md', path.join('.claude', 'CLAUDE.md')].map((f) => path.join(d, f)))];
+  return files.flatMap((file) => {
+    const text = r.text(file);
+    return text === null ? [] : [{ file, chars: text.length }];
+  });
+}
+
+/** How much CLAUDE.md text a session in `cwd` on this machine starts with. */
+export const memoryChars = (cwd: string, env: NodeJS.ProcessEnv = process.env) =>
+  memoryFiles(diskFs, cwd, env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude')).reduce((n, f) => n + f.chars, 0);
+
+/** The start of a file: a transcript's first turn is in its first lines, and a long session's file can be large. */
+function fileHead(file: string, bytes = 256 * 1024): string {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(bytes);
+    return buf.toString('utf8', 0, fs.readSync(fd, buf, 0, bytes, 0));
+  } catch {
+    return '';
+  } finally {
+    if (fd !== null) fs.closeSync(fd);
+  }
+}
+
+/** A new Claude Code session's startup context from its transcript's first turn (#50); null until it's written. */
+export function transcriptStartup(file: string, cwd: string): { tokens: number; memoryChars: number } | null {
+  const tokens = firstTurnTokens(fileHead(file));
+  return tokens ? { tokens, memoryChars: memoryChars(cwd) } : null;
 }
 
 /** Scan this machine: the CLI for plugins (30 s at most, no shell), the files for the rest. */

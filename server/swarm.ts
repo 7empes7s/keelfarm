@@ -31,12 +31,14 @@ import { conversationsView, loadChats, openConversation, pinConversation, search
 import { loadMemory, removeNote, saveNote, type MemoryNote } from '../shared/ceoMemory.ts';
 import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
 import { forwardText } from '../shared/chat.ts';
+import { messageGoesIn } from './ceoLane.ts';
+import type { CeoJob } from './ceo.ts';
 import { snapshotMessages } from '../shared/chatParts.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { clampResearchMin } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../shared/types.ts';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
 import { SWEEP_MS } from '../shared/files.ts';
 import type { AgentLook, CloudSettings, HireRequestView, PhoneMessage, SwarmSettings } from '../shared/types.ts';
 import {
@@ -165,6 +167,7 @@ export class Swarm extends SwarmCeoTools {
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
+      this.state.settings.officePlaybook = typeof loaded.settings?.officePlaybook === 'string' ? loaded.settings.officePlaybook.slice(0, OFFICE_PLAYBOOK_MAX) : DEFAULT_OFFICE_PLAYBOOK;
       // Offices that were set up before the setup wizard existed skip it.
       if (loaded.settings && loaded.settings.setupDone === undefined && this.state.repos.length > 0) {
         Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
@@ -493,7 +496,7 @@ export class Swarm extends SwarmCeoTools {
     const again = `The manager edited their last message. Answer this version instead:\n${this.forwardOf(m)}`;
     const rt = this.agentRt.get(CEO_ID);
     if (c.job?.messageIds?.includes(id)) this.stopAgent(CEO_ID);
-    else if (rt?.session) return rt.session.send(again);
+    else if (rt?.session && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: c.job?.kind ?? null, session: true })) return rt.session.send(again); // like messageCeo: a background job is preempted instead
     this.enqueueCeo({ kind: 'chat', text: again, messageIds: [id], at: Date.now() });
   }
 
@@ -506,12 +509,11 @@ export class Swarm extends SwarmCeoTools {
     this.enqueueCeo({ kind: 'chat', text: `The manager asked you to try again: answer their last message afresh.\n${this.forwardOf(m)}`, messageIds: [m.id], at: Date.now() });
   }
 
-  /** Switching conversations waits for the CEO: a reply on its way belongs to the one it was asked in. */
+  /** Switching conversations waits for a reply on its way: it belongs to the one it was asked in. Background jobs don't hold it. */
   private chatFree() {
-    const a = this.ceo();
-    if (BUSY.includes(a.status) || this.state.ceo.queue.some((j) => j.kind === 'chat' || j.kind === 'research')) {
-      throw new HttpError(409, `${a.name} is still working: wait for them to finish, or stop them, before switching conversations.`);
-    }
+    const c = this.state.ceo;
+    const replying = (j: CeoJob | null) => j?.kind === 'chat' || j?.kind === 'research';
+    if (replying(c.job) || c.queue.some(replying)) throw new HttpError(409, `${this.ceo().name} is still answering you: wait for the reply, or stop it, before switching conversations.`);
   }
 
   /** The phone shows another conversation's thread, and the CEO carries on that conversation's session (null: a fresh one). */
@@ -642,6 +644,8 @@ export class Swarm extends SwarmCeoTools {
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
     }
+    if (patch.tools !== undefined) s.tools = toolSettings(s.tools, patch.tools);
+    if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
       const next: CloudSettings = cloudSettings(s.cloud, patch.cloud);
       if (next.machineKind === 'box' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');

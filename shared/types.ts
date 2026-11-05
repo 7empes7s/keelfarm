@@ -12,6 +12,7 @@ import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { LabView } from './experiments.ts';
 import type { HealthView, MemorySettings } from './health.ts';
+import type { OpsView } from './ops.ts';
 import type { CeoLive } from './ceoStream.ts';
 import type { Conversation } from './conversations.ts';
 import type { MemoryNote } from './ceoMemory.ts';
@@ -163,6 +164,16 @@ export const FLOOR_SEATS = 15;
 
 /** The longest a floor's playbook may be, in characters: it is in every agent's prompt there. */
 export const PLAYBOOK_MAX = 3000;
+
+/** The longest the office-wide playbook may be (#50): it is in every builder's, fixer's and QA's prompt, on every floor. */
+export const OFFICE_PLAYBOOK_MAX = 1200;
+
+/** The office-wide playbook a new office starts with: small rules the prompts don't already say. */
+export const DEFAULT_OFFICE_PLAYBOOK = [
+  '- A fix comes with a test that fails without it.',
+  "- Don't reformat, rename or move code you aren't changing.",
+  '- Never run, edit or restart anything outside your worktree and reserved port: no live services, no other desks.',
+].join('\n');
 
 /** A floor's most agents unless the manager changes it (Settings). */
 export const DEFAULT_MAX_AGENTS = 10;
@@ -389,6 +400,7 @@ export interface SwarmSettings {
   notify: NotifySettings;
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
+  officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
@@ -525,62 +537,8 @@ export interface UsageReading {
   at: number; // when it was read
 }
 
-/** One floor's numbers on mission control (or the whole office's), computed by the server from its state and history. */
-export interface OpsNumbers {
-  // the pipeline, right now
-  ready: number; // backlog issues that can start
-  building: number; // issues a developer is working on
-  inQa: number; // open PRs waiting for QA or being tested (or not tested yet)
-  fixing: number; // open PRs back with a developer: QA failed, checks or a conflict
-  toMerge: number; // open PRs that passed QA
-  needsYou: number; // open PRs waiting on the manager (needsManager)
-  triage: number; // stuck PRs the CEO is looking at before they reach the manager
-  // throughput
-  mergedToday: number; // since midnight
-  mergedHour: number; // in the last 60 minutes
-  spark: number[]; // merges per clock hour over the last 24 hours, oldest first (the current hour last)
-  // flow, over the last 24 hours
-  leadMs: number | null; // median issue → merge
-  qaWaitMs: number | null; // median wait for an agent to start testing a PR
-  qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
-  qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
-  qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
-  // GitHub's checks, over 7 days
-  ciPass: number | null; // share of check runs that passed, 0-1
-  ciRuns: number;
-  ciMs: number | null; // median duration
-  // the team, right now
-  busy: number;
-  idle: number;
-  errors: number;
-  costToday: number; // dollars since midnight from finished sessions' reported cost: an estimate
-}
-
-export interface OpsFloor extends OpsNumbers {
-  repoId: string;
-  floor: number;
-  alarms: number;
-}
-
-/** Something that needs the manager: a PR the office can't move (needsManager), or an agent in error for over 10 minutes. */
-export interface OpsAlarm {
-  id: string; // "pr:<repo>#<n>" or "agent:<id>": the manager's console opens at this card
-  kind: 'pr' | 'agent';
-  repoId: string;
-  floor: number;
-  prNumber: number | null;
-  agentId: string | null;
-  text: string;
-  since: number;
-}
-
-/** Mission control: every floor's numbers, the office's total, and what needs the manager (oldest first). */
-export interface OpsView {
-  floors: OpsFloor[];
-  total: OpsNumbers;
-  ceoCostToday: number;
-  alarms: OpsAlarm[];
-}
+// Mission control's numbers live in ./ops.ts.
+export type { OpsAlarm, OpsFloor, OpsNumbers, OpsView } from './ops.ts';
 
 /** What the office doctor's one-click fixes do (#262): the console's own actions, nothing new. */
 export type DoctorFix = 'clear' | 'stop' | 'requeue' | 'retry-qa' | 'send-back' | 'close-issue';
@@ -661,6 +619,7 @@ export interface PhoneMessage {
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
+  refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
   edited?: number; // the manager's: when they last edited it
@@ -672,6 +631,24 @@ export interface CeoChatView {
   current: string; // the conversation the phone shows
   conversations: Conversation[];
   memory: MemoryNote[];
+}
+
+/** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
+export type ChatRef = { start: number; end: number } & (
+  | { kind: 'agent'; agentId: string; terminal?: true }
+  | { kind: 'floor'; repoId: string }
+  | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
+  | { kind: 'file'; repoId: string; path: string; line?: number }
+  | { kind: 'qa'; repoId: string; number: number }
+  | { kind: 'preview'; repoId: string; number?: number } // a PR's in the PR theatre, else the floor's app
+);
+
+/** GET /api/messages/:id/refs/:index/file: a file ref's text from the floor's default branch, size-capped. */
+export interface RefFileView {
+  path: string;
+  line: number | null;
+  text: string;
+  url: string; // the file on GitHub, at the line
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */
@@ -690,6 +667,13 @@ export interface CeoInfo {
   lastReviewAt: number | null;
   nextReviewAt: number | null; // null when the heartbeat is off
   followups?: { pending: string[]; startsAt: number | null; held: 'usage' | 'cap' | null }; // events waiting for a follow-up job (absent in old journals)
+  held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
+}
+
+/** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */
+export interface CeoHeld {
+  reason: 'usage';
+  until: number;
 }
 
 /** One player on a floor's ping-pong leaderboard: the manager or an agent, with their games on that floor. */

@@ -1,5 +1,6 @@
 // The CEO's text as it writes it (#51): Claude Code adds each finished message block to the session's transcript
 // (JSONL), so the office reads the file's new lines while the session runs. No extra model calls: the file is there anyway.
+// Also which session a hook's transcript makes resumable (cliRunner.ts).
 import fs from 'node:fs';
 
 const POLL_MS = 1000;
@@ -30,6 +31,17 @@ export function assistantTexts(chunk: string, since: number, seen: Set<string>):
     }
   }
   return out;
+}
+
+/**
+ * The Claude Code session a hook reports, once its conversation is on disk: only then can --resume pick it up. Claude
+ * writes the file during the first turn, after SessionStart and UserPromptSubmit, so a session the office keeps any
+ * earlier could be one that never existed.
+ */
+export function resumableSession(b: Record<string, unknown>, exists: (file: string) => boolean): string | null {
+  const id = typeof b.session_id === 'string' ? b.session_id : '';
+  const file = typeof b.transcript_path === 'string' ? b.transcript_path : '';
+  return id && file && exists(file) ? id : null;
 }
 
 /** Follows one session's transcript: `watch` it once a hook names the file; every new text block goes to `onText`. */
