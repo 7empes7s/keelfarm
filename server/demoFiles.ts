@@ -1,10 +1,13 @@
 // Small files the demo CEO "makes" for the manager (server/demo.ts): a one-page PDF and a PNG chart, generated
 // without any library, so attach_file has something real to send.
 
+import fs from 'node:fs';
+import path from 'node:path';
 import zlib from 'node:zlib';
+import type { LogEntry } from './agentRunner.ts';
 
 /** A one-page PDF with a title and lines of text (Helvetica, A4). */
-export function demoPdf(title: string, lines: readonly string[]): Buffer {
+function demoPdf(title: string, lines: readonly string[]): Buffer {
   const esc = (t: string) => t.replace(/[^\x20-\x7e]/g, '?').replace(/[\\()]/g, (c) => `\\${c}`);
   const text = [`BT /F1 22 Tf 56 770 Td (${esc(title)}) Tj ET`, ...lines.map((l, i) => `BT /F1 12 Tf 56 ${730 - i * 20} Td (${esc(l)}) Tj ET`)].join('\n');
   const objects = [
@@ -46,7 +49,7 @@ const chunk = (type: string, data: Buffer) => {
 };
 
 /** A PNG bar chart of `values` (0..1), `w` × `h` pixels, on a light background. */
-export function demoPng(values: readonly number[], w = 320, h = 200): Buffer {
+function demoPng(values: readonly number[], w = 320, h = 200): Buffer {
   const raw = Buffer.alloc((w * 3 + 1) * h);
   const bar = Math.floor(w / Math.max(1, values.length));
   for (let y = 0; y < h; y++) {
@@ -65,3 +68,45 @@ export function demoPng(values: readonly number[], w = 320, h = 200): Buffer {
   ihdr.set([8, 2, 0, 0, 0], 8); // 8-bit RGB
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
+
+/** What the demo CEO's script lends it: a logged step, a Read, an office tool call, and its folder. */
+interface DemoCeo {
+  step(entries: LogEntry[]): Promise<void>;
+  read(file: string, lines: number): Promise<void>;
+  use(tool: string, args: Record<string, unknown>): Promise<string>;
+  cwd: string;
+}
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/** Reads what the manager sent, "uses" a skill and Gmail, makes a PDF report and a chart, attaches both and keeps the PDF. */
+export async function demoMakeFiles(c: DemoCeo, floors: readonly { floor: number; repo: string; team: { size: number }; backlog: unknown[]; pullRequests: unknown[] }[], sent: RegExpMatchArray[]): Promise<string> {
+  for (const f of sent.slice(0, 2)) await c.read(f[1], f[3].startsWith('image/') ? 1 : 40);
+  await c.step([{ kind: 'tool', tool: 'Skill', text: '⏺ Skill pdf' }]);
+  await c.step([{ kind: 'tool', tool: 'mcp__claude_ai_Gmail__search_threads', text: '⏺ Gmail: search "weekly update"' }, { kind: 'result', text: '  ⎿ 3 threads' }]);
+  fs.mkdirSync(c.cwd, { recursive: true });
+  const pdf = path.join(c.cwd, 'Weekly report.pdf');
+  const png = path.join(c.cwd, 'Throughput.png');
+  const lines = floors.length ? floors.map((f) => `Floor ${f.floor} (${f.repo}): ${plural(f.team.size, 'agent')}, ${plural(f.backlog.length, 'open issue')}, ${plural(f.pullRequests.length, 'pull request')}`) : ['No floors yet.'];
+  fs.writeFileSync(pdf, demoPdf('Weekly report', [...lines, '', 'Made by the demo CEO.']));
+  fs.writeFileSync(png, demoPng(floors.length ? floors.map((f) => Math.min(1, (f.backlog.length + 1) / 10)) : [0.3, 0.6, 0.45, 0.8]));
+  await c.step([{ kind: 'tool', tool: 'Write', text: '⏺ Write Weekly report.pdf' }]);
+  const report = await c.use('attach_file', { path: pdf });
+  await c.use('attach_file', { path: png });
+  const id = /file id ([a-f0-9]{24})/.exec(report)?.[1];
+  if (id) await c.use('keep_file', { id, keep: true, reason: 'The weekly report, worth keeping' });
+  const got = sent.length ? `I read ${sent[0][2].trim()}${sent.length > 1 ? ` and ${plural(sent.length - 1, 'other file')}` : ''}. ` : '';
+  return `${got}Here's the weekly report as a PDF, with a throughput chart. I kept the report, so it stays past the usual 30 days.`;
+}
+
+/** The demo's "/" picks. */
+export const DEMO_PICKS = {
+  skills: ['docx', 'pdf', 'pptx', 'xlsx', 'frontend-design', 'superpowers:brainstorming', 'code-review'],
+  apps: ['Gmail', 'Google Drive', 'Google Docs', 'Google Slides', 'Figma', 'Notion'],
+};
+
+/** The manager's attachments in a chat prompt (shared/files.ts attachmentLines): path, name, type. */
+export const sentFiles = (prompt: string) => [...prompt.matchAll(/^- (\S.*?) \(([^,]+), ([^,]+), [^)]*\)$/gm)];
+
+/** The manager asked for a document. */
+export const wantsFile = (text: string) => /\b(pdf|slides?|deck|document|report|chart|file)\b/i.test(text);

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
+import { ACCEPT, daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
 import { matchPicks, pickText, usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
 import { Sheet } from './ChatArtifacts';
 import type { Pending } from './chatUpload';
@@ -10,10 +10,10 @@ import type { Pending } from './chatUpload';
 // full-size viewer, the tray of files being attached, the Files list, "Used" under a CEO reply and the "/" picks.
 
 const ICONS: Record<FileKind, string> = { image: '🖼', video: '🎬', pdf: '📕', document: '📝', slides: '📊', sheet: '📈', text: '📄', archive: '🗜' };
-export const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => ICONS[fileKind(f.name, f.type) ?? 'text'];
+const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => ICONS[fileKind(f.name, f.type) ?? 'text'];
 const url = (id: string, download = false) => `/api/files/${id}${download ? '?download' : ''}`;
 /** Images the browser can draw (HEIC is kept as it is and shown as a chip). */
-const drawable = (type: string) => /^image\//.test(type) && inlineType(type) && !/hei[cf]/.test(type);
+const drawable = (type: string) => type.startsWith('image/') && inlineType(type) && !/hei[cf]/.test(type);
 
 async function share(f: FileRef) {
   try {
@@ -231,10 +231,89 @@ export function UsedLine({ used }: { used: UsedView }) {
   );
 }
 
+/** 📎 (the file picker; on a phone, also the photo library) and, on touch screens, 📷 (the camera). */
+export function AttachButtons({ onFiles }: { onFiles: (files: File[]) => void }) {
+  const picker = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const [touch] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+  const take = (el: HTMLInputElement) => {
+    if (el.files?.length) onFiles([...el.files]);
+    el.value = '';
+  };
+  return (
+    <>
+      <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => take(e.currentTarget)} />
+      <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => take(e.currentTarget)} />
+      <button type="button" className="chat-attach" aria-label="Attach files" title="Attach files (or paste, or drop them here)" onClick={() => picker.current?.click()}>
+        📎
+      </button>
+      {touch && (
+        <button type="button" className="chat-attach" aria-label="Take a photo or video" title="Camera" onClick={() => camera.current?.click()}>
+          📷
+        </button>
+      )}
+    </>
+  );
+}
+
+/** Files dropped anywhere on the chat; `dragging` while some are held over it. */
+export function useDropZone(onFiles: (files: File[]) => void) {
+  const [dragging, setDragging] = useState(false);
+  const props = {
+    onDragOver: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: (e: DragEvent) => e.currentTarget === e.target && setDragging(false),
+    onDrop: (e: DragEvent) => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault();
+      setDragging(false);
+      onFiles([...e.dataTransfer.files]);
+    },
+  };
+  return { dragging, props };
+}
+
+/** The "/" picks for the message box: the list to show (or null) and its keys (arrows move, Enter or Tab pick). */
+export function useSlash(text: string, setText: (t: string) => void, focus: () => void) {
+  const [at, setAt] = useState(0);
+  const m = /^\/(\S*)$/.exec(text);
+  const pick = (t: string | null) => {
+    if (t) setText(t);
+    setAt(0);
+  };
+  const picks: ReactNode = m ? (
+    <SlashPicks
+      query={m[1]}
+      active={at}
+      onPick={(t) => {
+        pick(t);
+        focus();
+      }}
+    />
+  ) : null;
+  /** True when the key was the list's. */
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!m) return false;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setAt((n) => Math.max(0, n + (e.key === 'ArrowDown' ? 1 : -1)));
+      return true;
+    }
+    if (e.key !== 'Tab' && (e.key !== 'Enter' || e.shiftKey)) return false;
+    e.preventDefault();
+    void slashPick(m[1], at).then(pick);
+    return true;
+  };
+  return { picks, onKeyDown };
+}
+
 let picks: Promise<QuickPicks> | null = null;
 
 /** The "/" list above the message box: the manager's skills and apps; picking one starts the message with it. */
-export function SlashPicks({ query, active, onPick }: { query: string; active: number; onPick: (text: string) => void }) {
+function SlashPicks({ query, active, onPick }: { query: string; active: number; onPick: (text: string) => void }) {
   const [p, setP] = useState<QuickPicks | null>(null);
   useEffect(() => {
     picks ??= api.ceoPicks().catch(() => {
@@ -264,7 +343,7 @@ export function SlashPicks({ query, active, onPick }: { query: string; active: n
 }
 
 /** What Enter or Tab picks in the "/" list, or null when it's empty or still loading. */
-export async function slashPick(query: string, active: number): Promise<string | null> {
+async function slashPick(query: string, active: number): Promise<string | null> {
   const p = await (picks ?? Promise.resolve(null));
   const list = p ? matchPicks(p, query) : [];
   return list.length ? pickText(list[active % list.length].kind, list[active % list.length].name) : null;

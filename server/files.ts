@@ -23,7 +23,7 @@ export function filePath(root: string, id: string): string {
 }
 
 /** True when `child` is `parent` or inside it. */
-export function inside(child: string, parent: string): boolean {
+function inside(child: string, parent: string): boolean {
   const rel = path.relative(parent, child);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }

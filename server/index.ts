@@ -197,6 +197,8 @@ app.get('/api/agents/:id/screen', (req, res) => {
 });
 
 app.patch('/api/settings', route((req) => swarm.updateSettings(req.body ?? {})));
+app.post('/api/tools/refresh', route(() => swarm.refreshTooling()));
+app.post('/api/tools/switch', route((req) => swarm.setToolSwitch(str(req.body?.scope), req.body?.id, req.body?.on)));
 
 // Phone messages read aloud (docs/voice.md). The key goes in and never comes back out.
 const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
@@ -271,6 +273,10 @@ app.delete('/api/notify/push/devices/:id', route((req) => swarm.notifier.removeD
 app.post('/api/notify/push/devices/:id/test', route((req) => swarm.notifier.testDevice(String(req.params.id))));
 app.post('/api/notify/push/report', route((req) => swarm.notifier.report(req.body?.step, req.body?.error)));
 app.post('/api/notify/ntfy/quick', route(() => swarm.notifier.quickNtfy()));
+app.put('/api/notify/telegram', route((req) => swarm.telegram.setToken(req.body?.token)));
+app.post('/api/notify/telegram/link', route(() => swarm.telegram.link()));
+app.delete('/api/notify/telegram', route(() => swarm.telegram.remove()));
+app.post('/api/notify/telegram/demo', route((req) => swarm.telegramDemo(req.body ?? {})));
 // The office's own update: Update now / Later
 app.post('/api/office/update', route((req) => swarm.updateOffice(req.body?.action)));
 // Claude's usage: resume full speed after a usage warning; in the demo, a warning or the limit on demand
@@ -298,7 +304,7 @@ app.post(
   route((req) => {
     const files: unknown = req.body.files ?? [];
     if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) throw new HttpError(400, 'files is a list of file ids');
-    return swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, files);
+    return swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, undefined, files);
   }),
 );
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));

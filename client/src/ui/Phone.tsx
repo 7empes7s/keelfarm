@@ -11,9 +11,9 @@ import { reduceMotion } from './a11y';
 import { Markdown } from './Markdown';
 import { ArtifactCard, ArtifactList, ArtifactView, copyText } from './ChatArtifacts';
 import { MessageBox } from './MessageBox';
-import { AttachTray, FileCard, FilesList, FileViewer, SlashPicks, slashPick, UsedLine } from './ChatFiles';
+import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
 import { useAttachments } from './chatUpload';
-import { ACCEPT, type FileRef } from '../../../shared/files';
+import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { closeOverlay } from './Panel';
@@ -490,6 +490,8 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
+          {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
+          {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>
@@ -580,13 +582,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   const [artifactList, setArtifactList] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [pickAt, setPickAt] = useState(0);
   const att = useAttachments();
   const fileCount = useStore((s) => s.files.length);
-  const picker = useRef<HTMLInputElement>(null);
-  const camera = useRef<HTMLInputElement>(null);
-  const [touch] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+  const drop = useDropZone(att.add);
+  const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
@@ -655,10 +654,6 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
     send(text, replyTo, att.ready);
     att.clear();
   };
-  const slash = /^\/(\S*)$/.exec(text);
-  const takeFiles = (list: FileList | null) => {
-    if (list?.length) att.add([...list]);
-  };
   const reply = (id: number) => {
     setReplyTo(id);
     form.current?.querySelector('textarea')?.focus();
@@ -717,21 +712,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   };
 
   return (
-    <div
-      className={`phone-chat ${dragging ? 'chat-dropping' : ''}`}
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('Files')) return;
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
-      onDrop={(e) => {
-        if (!e.dataTransfer.files.length) return;
-        e.preventDefault();
-        setDragging(false);
-        takeFiles(e.dataTransfer.files);
-      }}
-    >
+    <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
         <Avatar name={ceo.name} color={ceo.color} />
         <div className="grow">
@@ -857,17 +838,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         </div>
       )}
       <AttachTray pending={att.pending} onRemove={att.remove} />
-      {slash && (
-        <SlashPicks
-          query={slash[1]}
-          active={pickAt}
-          onPick={(t) => {
-            setText(t);
-            setPickAt(0);
-            form.current?.querySelector('textarea')?.focus();
-          }}
-        />
-      )}
+      {slash.picks}
       <form
         ref={form}
         className="chat-input"
@@ -878,19 +849,10 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         onPaste={(e) => {
           if (!e.clipboardData.files.length) return;
           e.preventDefault();
-          takeFiles(e.clipboardData.files);
+          att.add([...e.clipboardData.files]);
         }}
       >
-        <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => (takeFiles(e.currentTarget.files), (e.currentTarget.value = ''))} />
-        <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => (takeFiles(e.currentTarget.files), (e.currentTarget.value = ''))} />
-        <button type="button" className="chat-attach" aria-label="Attach files" title="Attach files (or paste, or drop them here)" onClick={() => picker.current?.click()}>
-          📎
-        </button>
-        {touch && (
-          <button type="button" className="chat-attach" aria-label="Take a photo or video" title="Camera" onClick={() => camera.current?.click()}>
-            📷
-          </button>
-        )}
+        <AttachButtons onFiles={att.add} />
         <MessageBox
           value={text}
           onChange={setText}
@@ -899,19 +861,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           title="Enter sends · Shift+Enter adds a new line · Esc cancels a reply"
           autoFocus={autoFocus}
           onKeyDown={(e) => {
-            if (slash && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-              e.preventDefault();
-              setPickAt((n) => Math.max(0, n + (e.key === 'ArrowDown' ? 1 : -1)));
-              return;
-            }
-            if (slash && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey))) {
-              e.preventDefault();
-              void slashPick(slash[1], pickAt).then((t) => {
-                if (t) setText(t);
-                setPickAt(0);
-              });
-              return;
-            }
+            if (slash.onKeyDown(e)) return;
             if (e.key !== 'Escape' || replyTo === null) return;
             e.preventDefault();
             e.stopPropagation();

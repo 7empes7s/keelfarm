@@ -341,6 +341,14 @@ export function ChannelHealth() {
           </div>
         </li>
       )}
+      {channels.telegram.linked && (
+        <li>
+          <b>Telegram</b> <code className="small">@{channels.telegram.bot}</code>
+          <div>
+            <Health last={channels.telegram.last} />
+          </div>
+        </li>
+      )}
     </ul>
   );
 }

@@ -15,7 +15,7 @@ function known(store: FileStore, raw: string) {
 }
 
 /** An RFC 6266 Content-Disposition with the name in both forms. */
-export function disposition(kind: 'inline' | 'attachment', name: string) {
+function disposition(kind: 'inline' | 'attachment', name: string) {
   const ascii = name.replace(/[^\x20-\x7e]|["\\]/g, '_');
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
@@ -23,7 +23,7 @@ export function disposition(kind: 'inline' | 'attachment', name: string) {
 export function fileRoutes(store: FileStore, opts: { max?: number; onDeleted?: (id: string) => void } = {}) {
   const max = opts.max ?? MAX_FILE_BYTES;
   const r = express.Router();
-  const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => async (req: Request, res: Response, next: NextFunction) => {
+  const wrap = (fn: (req: Request, res: Response) => unknown) => async (req: Request, res: Response, next: NextFunction) => {
     try {
       const out = await fn(req, res);
       if (!res.headersSent) res.json(out ?? { ok: true });

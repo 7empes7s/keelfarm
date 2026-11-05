@@ -19,7 +19,7 @@ export interface Pending {
 }
 
 /** POSTs a file's bytes to the store; `abort` cancels it. */
-export function uploadFile(file: File, onProgress: (fraction: number) => void): { done: Promise<FileRef>; abort: () => void } {
+function uploadFile(file: File, onProgress: (fraction: number) => void): { done: Promise<FileRef>; abort: () => void } {
   const xhr = new XMLHttpRequest();
   const done = new Promise<FileRef>((resolve, reject) => {
     xhr.open('POST', '/api/files');
@@ -56,10 +56,13 @@ export function useAttachments() {
   const add = useCallback((files: readonly File[]) => {
     if (!files.length) return;
     const problem = attachmentProblem(files, latest.current.length);
-    if (problem) return void useStore.getState().pushToast('error', problem);
+    if (problem) {
+      useStore.getState().pushToast('error', problem);
+      return;
+    }
     for (const file of files) {
       const key = ++seq;
-      const showable = /^image\//.test(file.type) && inlineType(file.type) && !/hei[cf]/.test(file.type);
+      const showable = file.type.startsWith('image/') && inlineType(file.type) && !/hei[cf]/.test(file.type);
       setPending((all) => [...all, { key, name: file.name || 'file', type: file.type, size: file.size, preview: showable ? URL.createObjectURL(file) : null, progress: 0 }]);
       const up = uploadFile(file, (progress) => patch(key, { progress }));
       aborts.current.set(key, up.abort);

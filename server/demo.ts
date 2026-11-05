@@ -6,7 +6,9 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
-import { demoPdf, demoPng } from './demoFiles.ts';
+import { DEMO_PICKS, demoMakeFiles, sentFiles, wantsFile } from './demoFiles.ts';
+import { buildInventory, memoryFs } from './tooling.ts';
+import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
 import type { LocalFolder } from './workspace.ts';
@@ -17,6 +19,7 @@ import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
+import { TelegramCallError, type TelegramApi } from './telegramBot.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
@@ -301,6 +304,42 @@ export function fixPromptPull(prompt: string): { number: number; title?: string 
   return { number: Number(m?.[1] ?? 0), title: m?.[2]?.trim() };
 }
 
+// ---------- tools & skills ----------
+
+/** A made-up Claude Code setup, read by the real inventory parser from files in memory (never this computer's ~/.claude). */
+function demoTooling(projects: string[]): ToolInventory {
+  const home = path.join(HOME_DIR, 'demo-claude');
+  const plugin = (name: string, description: string, opts: { skills?: [string, string][]; commands?: string[]; mcp?: Record<string, unknown> }) => {
+    const dir = path.join(home, 'plugins', 'cache', 'claude-plugins-official', name, '1.0.0');
+    const files: Record<string, string> = { [path.join(dir, '.claude-plugin', 'plugin.json')]: JSON.stringify({ name, description }) };
+    for (const [s, d] of opts.skills ?? []) files[path.join(dir, 'skills', s, 'SKILL.md')] = `---\nname: ${s}\ndescription: ${d}\n---\n`;
+    for (const c of opts.commands ?? []) files[path.join(dir, 'commands', `${c}.md`)] = `# ${c}`;
+    if (opts.mcp) files[path.join(dir, '.mcp.json')] = JSON.stringify({ mcpServers: opts.mcp });
+    return { dir, files };
+  };
+  const plugins = {
+    canva: plugin('canva', 'Create and edit Canva designs from Claude Code.', { skills: [['brand-check', 'Checks a design against the brand kit.'], ['resize-for-social-media', 'Resizes a design for each social network.']], mcp: { canva: { type: 'http', url: 'https://mcp.canva.com/mcp' } } }),
+    superpowers: plugin('superpowers', 'Skills for planning, test-driven development and debugging.', { skills: [['brainstorming', 'Use before any creative work: explores intent before building.'], ['test-driven-development', 'Write the failing test first, then the code.'], ['systematic-debugging', 'Find the root cause before proposing fixes.']] }),
+    github: plugin('github', 'GitHub issues, pull requests and Actions through GitHub’s MCP server.', { mcp: { github: { type: 'http', url: 'https://api.githubcopilot.com/mcp/', headers: { Authorization: 'Bearer demo-not-a-real-token' } } } }),
+    'commit-commands': plugin('commit-commands', 'Commit, push and open a PR in one command.', { commands: ['commit', 'commit-push-pr', 'clean_gone'] }),
+    figma: plugin('figma', 'Turn Figma designs into code.', { skills: [['figma-design-to-code', 'Implements a Figma frame as components.']], mcp: { figma: { type: 'http', url: 'https://mcp.figma.com/mcp' } } }),
+  };
+  const files: Record<string, string> = Object.assign({}, ...Object.values(plugins).map((p) => p.files));
+  files[path.join(home, 'skills', 'pdf', 'SKILL.md')] = '---\nname: pdf\ndescription: Reads, fills and merges PDF files.\n---\n';
+  files[path.join(home, 'skills', 'release-notes', 'SKILL.md')] = '---\nname: release-notes\ndescription: Writes release notes from merged pull requests.\n---\n';
+  const global = path.join(home, '.claude.json');
+  files[global] = JSON.stringify({
+    mcpServers: {
+      notion: { command: 'npx', args: ['-y', '@notionhq/notion-mcp-server'], env: { NOTION_TOKEN: 'demo-secret-never-shown' } },
+      linear: { type: 'http', url: 'https://mcp.linear.app/mcp?key=demo-secret-never-shown' },
+    },
+  });
+  if (projects[0]) files[path.join(projects[0], '.mcp.json')] = JSON.stringify({ mcpServers: { sentry: { type: 'http', url: 'https://mcp.sentry.dev/mcp' } } });
+  const pluginList = Object.entries(plugins).map(([name, p]) => ({ id: `${name}@claude-plugins-official`, enabled: name !== 'figma', installPath: p.dir, version: '1.0.0' }));
+  const items = buildInventory(memoryFs(files), { configDir: home, globalConfig: global, projects, pluginList });
+  return { items, scannedAt: Date.now(), scanning: false, error: null, via: 'the demo’s made-up setup' };
+}
+
 function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
   const timers: NodeJS.Timeout[] = [];
   let stopped = false;
@@ -332,9 +371,11 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
   const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
 
+  const tools = opts.tools ? toolArgsLine(opts.tools) : '';
   const header: Step = [
     { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
     { kind: 'system', text: `  cwd ${opts.cwd}` },
+    ...(tools ? [{ kind: 'system' as const, text: `  $ claude --session-id … ${tools}` }] : []),
   ];
   const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
@@ -880,15 +921,14 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     releaseClis: async () => undefined,
     detectClis: async () =>
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
-    quickPicks: async () => ({
-      skills: ['docx', 'pdf', 'pptx', 'xlsx', 'frontend-design', 'superpowers:brainstorming', 'code-review'],
-      apps: ['Gmail', 'Google Drive', 'Google Docs', 'Google Slides', 'Figma', 'Notion'],
-    }),
+    quickPicks: async () => DEMO_PICKS,
+    toolInventory: async (projects) => demoTooling(projects),
     previews: demoPreviews,
     office: demoOffice,
     voice: demoVoice,
     weather: demoWeather,
     notify: demoNotify,
+    telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
     demoTeam: (floor) => demoTeam(scale, floor),
@@ -1254,26 +1294,6 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     return n;
   };
 
-  /** Reads what the manager sent, "uses" a skill and Gmail, then makes a PDF and a chart, attaches both and keeps the PDF. */
-  const makeFiles = async (s: DemoStatus, sent: RegExpMatchArray[]) => {
-    for (const f of sent.slice(0, 2)) await read(f[1], f[3].startsWith('image/') ? 1 : 40);
-    await step([{ kind: 'tool', tool: 'Skill', text: '⏺ Skill pdf' }]);
-    await step([{ kind: 'tool', tool: 'mcp__claude_ai_Gmail__search_threads', text: '⏺ Gmail: search "weekly update"' }, { kind: 'result', text: '  ⎿ 3 threads' }]);
-    fs.mkdirSync(opts.cwd, { recursive: true });
-    const pdf = path.join(opts.cwd, 'Weekly report.pdf');
-    const png = path.join(opts.cwd, 'Throughput.png');
-    const lines = s.floors.length ? s.floors.map((f) => `Floor ${f.floor} (${f.repo}): ${plural(f.team.size, 'agent')}, ${plural(f.backlog.length, 'open issue')}, ${plural(f.pullRequests.length, 'pull request')}`) : ['No floors yet.'];
-    fs.writeFileSync(pdf, demoPdf('Weekly report', [...lines, '', 'Made by the demo CEO.']));
-    fs.writeFileSync(png, demoPng(s.floors.length ? s.floors.map((f) => Math.min(1, (f.backlog.length + 1) / 10)) : [0.3, 0.6, 0.45, 0.8]));
-    await step([{ kind: 'tool', tool: 'Write', text: '⏺ Write Weekly report.pdf' }]);
-    const report = await use('attach_file', { path: pdf });
-    await use('attach_file', { path: png });
-    const id = /file id ([a-f0-9]{24})/.exec(report)?.[1];
-    if (id) await use('keep_file', { id, keep: true, reason: 'The weekly report, worth keeping' });
-    const got = sent.length ? `I read ${sent[0][2].trim()}${sent.length > 1 ? ` and ${plural(sent.length - 1, 'other file')}` : ''}. ` : '';
-    return `${got}Here's the weekly report as a PDF, with a throughput chart. I kept the report, so it stays past the usual 30 days.`;
-  };
-
   const scripts = {
     async onboard(floor: number, fullName: string) {
       const s = await status();
@@ -1335,12 +1355,17 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
-      // Files from the manager (shared/files.ts attachmentLines), or a document asked for: the demo makes one and attaches it.
-      const sent = [...opts.prompt.matchAll(/^- (\S.*?) \(([^,]+), ([^,]+), [^)]*\)$/gm)];
-      if (sent.length || /\b(pdf|slides?|deck|document|report|chart|file)\b/i.test(text)) return makeFiles(s, sent);
+      const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
+      if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
+      // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
+      if (/\btelegram\b/i.test(text)) {
+        const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+        const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
+        return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
       // "close #3, superseded by #5": through the real tool.
       const close = text.match(/\bclose #(\d+)[\s,:;.-]*(.*)/i);
       const closeFloor = close && (s.floors.find((f) => f.backlog.some((i) => i.number === Number(close[1]))) ?? s.floors[0]);
@@ -1532,6 +1557,56 @@ const demoNotify: NotifyTransport = {
     return ok ? 200 : 404;
   },
 };
+
+/**
+ * A fake Bot API with no network: any token in BotFather's shape is the bot @cubefarm_demo_bot (one with "bad" in it is
+ * refused), sends are logged, and getUpdates hands out what the demo's fake manager does (TelegramBot.demo).
+ */
+function demoTelegram(): TelegramApi {
+  let queue: Record<string, unknown>[] = [];
+  let nextUpdate = 1;
+  let nextMessage = 500;
+  let wake: (() => void) | null = null;
+  return {
+    async call(token, method, params, signal) {
+      if (/bad/i.test(token)) throw new TelegramCallError(401, 'Unauthorized');
+      switch (method) {
+        case 'getMe':
+          return { id: Number(token.split(':')[0]), is_bot: true, first_name: 'cubefarm demo', username: 'cubefarm_demo_bot' };
+        case 'getUpdates': {
+          if (!queue.length) {
+            await new Promise<void>((resolve) => {
+              const t = setTimeout(resolve, Number(params.timeout ?? 0) * 1000);
+              t.unref?.();
+              wake = () => (clearTimeout(t), resolve());
+              signal?.addEventListener('abort', wake, { once: true });
+            });
+            wake = null;
+          }
+          if (signal?.aborted) throw new TelegramCallError(0, 'stopped');
+          const out = queue.filter((u) => Number(u.update_id) >= Number(params.offset ?? 0));
+          queue = [];
+          return out;
+        }
+        case 'sendMessage': {
+          const buttons = (params.reply_markup as { inline_keyboard?: { text: string }[][] } | undefined)?.inline_keyboard ?? [];
+          const labels = buttons.flat().map((b) => `[${b.text}]`).join(' ');
+          console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
+          return { message_id: ++nextMessage };
+        }
+        case 'answerCallbackQuery':
+          console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
+          return true;
+        default:
+          return true;
+      }
+    },
+    inject(update) {
+      queue.push({ update_id: nextUpdate++, ...update });
+      wake?.();
+    },
+  };
+}
 
 // ---------- weather ----------
 

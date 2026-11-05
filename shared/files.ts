@@ -58,8 +58,8 @@ const ext = (name: string) => /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?
 export function fileKind(name: string, type = ''): FileKind | null {
   const k = KINDS[ext(name)];
   if (k) return k;
-  if (/^image\//.test(type)) return 'image';
-  if (/^video\//.test(type)) return 'video';
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/')) return 'video';
   if (type === 'application/pdf') return 'pdf';
   return null;
 }
@@ -70,12 +70,13 @@ export function fileType(name: string, given = ''): string {
 }
 
 /** Shown in the browser rather than downloaded: images (not SVG, which can run script), PDFs and videos. */
-export const inlineType = (type: string) => (/^image\//.test(type) && type !== 'image/svg+xml') || type === 'application/pdf' || /^video\//.test(type);
+export const inlineType = (type: string) => (type.startsWith('image/') && type !== 'image/svg+xml') || type === 'application/pdf' || type.startsWith('video/');
 
 /** A file name safe to save and show: no folders, control or reserved characters, at most 120 characters. */
 export function sanitizeName(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? '';
-  let n = base.replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').replace(/\s+/g, ' ').trim().replace(/^[.\s]+|[.\s]+$/g, '');
+  const printable = [...base].filter((c) => c.charCodeAt(0) > 31 && c.charCodeAt(0) !== 127).join('');
+  let n = printable.replace(/[<>:"|?*]/g, '').replace(/\s+/g, ' ').trim().replace(/^[.\s]+|[.\s]+$/g, '');
   if (n.length > 120) {
     const e = ext(n);
     n = e && e.length < 10 ? `${n.slice(0, 119 - e.length).trimEnd()}.${e}` : n.slice(0, 120);
