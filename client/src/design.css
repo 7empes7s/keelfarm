@@ -561,23 +561,6 @@ html[data-reduce-motion] {
 .ds-console .office-card .grow {
   min-width: 0;
 }
-/* The test lab card's recent results (#56). */
-.ds-console .lab-results {
-  list-style: none;
-  margin: var(--ds-space-2) 0;
-  padding: 0;
-}
-.ds-console .lab-results li {
-  gap: var(--ds-space-2);
-  overflow-wrap: anywhere;
-}
-.ds-console .lab-thumb {
-  width: 64px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: var(--ds-radius-sm);
-  flex: none;
-}
 .ds-console p {
   margin: 0;
 }

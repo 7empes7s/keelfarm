@@ -3,6 +3,7 @@
 // the console's Floors tab (so pocket mode shows it too); and its settings (Settings → Office).
 import { useStore } from '../store';
 import type { LabJobView, TestLabSettings } from '../../../shared/testLab';
+import './testLab.css';
 
 const ago = (at: number) => `${Math.max(0, Math.round((Date.now() - at) / 60_000))} min ago`;
 
