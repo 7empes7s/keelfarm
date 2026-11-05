@@ -407,7 +407,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
   protected ask(a: PersistedAgent, repo: PersistedRepo, text: string): boolean {
     const asked = questionFromTurn(scrub(text, this.secrets())); // it goes to the CEO, the chat and notifications
     if (!asked) return false;
-    const q = newQuestion(`q${Date.now().toString(36)}`, asked, { agentId: a.id, agentName: a.name, repoId: repo.id, floor: repo.floor, issue: a.issueNumber, pr: a.prNumber }, Date.now());
+    const q = newQuestion(`q-${crypto.randomUUID().slice(0, 8)}`, asked, { agentId: a.id, agentName: a.name, repoId: repo.id, floor: repo.floor, issue: a.issueNumber, pr: a.prNumber }, Date.now());
     this.setQuestions([...this.state.questions.filter((x) => x.agentId !== a.id), q]);
     this.appendLog(a, [{ kind: 'system', text: `❓ Waiting for an answer: ${clip(q.text, 160)}` }]);
     if (!this.followup(questionEvent(q, this.floorName(repo)))) this.askManager(q, { question: q.text, options: q.options, recommendation: '' }, 'office');
