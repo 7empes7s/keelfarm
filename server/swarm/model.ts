@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { SessionHandle } from '../agentRunner.ts';
 import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
-import { defaultProjectsDir, HOME_DIR } from '../config.ts';
+import { HOME_DIR } from '../config.ts';
 import type { CeoJob } from '../ceo.ts';
 import type { LearnedPull } from '../closeCleanup.ts';
 import type { PreQa } from '../qaOutcome.ts';
@@ -219,7 +219,6 @@ export const CEO_NAME = 'Morgan';
 export const CEO_DIR = path.join(HOME_DIR, 'ceo');
 // The chat's files (server/files.ts): outside every worktree, so agents only ever read them.
 export const FILES_DIR = path.join(HOME_DIR, 'files');
-export const DEFAULT_PROJECTS_DIR = defaultProjectsDir(path.resolve(import.meta.dirname, '..'));
 export const MAX_ISSUES_PER_JOB = 12;
 export const KEEP_MESSAGES = 200;
 export const KEEP_DECIDED_REQUESTS = 40;

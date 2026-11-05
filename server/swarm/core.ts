@@ -6,7 +6,7 @@ import type { Backend } from '../backend.ts';
 import type { LogEntry } from '../agentRunner.ts';
 import { BoxMachines } from '../boxMachines.ts';
 import { Cloud, officeId } from '../cloud.ts';
-import { HOME_DIR, LOG_BUFFER, STATE_FILE, VERSION } from '../config.ts';
+import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, STATE_FILE, VERSION } from '../config.ts';
 import { IssueCap } from '../ceo.ts';
 import type { PrepStrikes } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
@@ -62,7 +62,6 @@ import {
   DEFAULT_MODEL,
   CEO_DIR,
   FILES_DIR,
-  DEFAULT_PROJECTS_DIR,
   MAX_ISSUES_PER_JOB,
   BUSY,
   OPS_EVENTS,
