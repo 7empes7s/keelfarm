@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useR
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, researchTopic, yesNoFor } from '../../../shared/chat';
+import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
 import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
@@ -19,13 +19,12 @@ import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
-import { Menu } from './Menu';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
-import { AttachButtons, AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
+import { AttachTray, FileCard, FilesList, FileViewer, UsedLine, useDropZone, useSlash } from './ChatFiles';
 import { useAttachments } from './chatUpload';
 import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
-import { handsFreeProblem, setHandsFree } from './mic';
+import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
 import { closeOverlay } from './Panel';
 import { useDialogFocus } from './dialogFocus';
 import { isKey } from './controls';
@@ -329,28 +328,6 @@ function ReplayButton({ m }: { m: PhoneMessage }) {
   );
 }
 
-const QUICK = ["What's everyone working on?", 'Should a team grow?', 'Plan the next milestone for the busiest floor.'];
-
-/** The hands-free conversation's switch: after the CEO's spoken reply, the phone listens for up to 8 s. */
-function HandsFreeToggle({ ceoName }: { ceoName: string }) {
-  const listen = useStore((s) => s.settings.listen);
-  useStore((s) => `${s.voiceKeySet}:${s.settings.voice.provider}`); // handsFreeProblem() follows the key and the voice
-  if (!listen || listen.provider === 'off') return null;
-  const on = listen.handsFree;
-  const why = handsFreeProblem(ceoName);
-  return (
-    <button
-      type="button"
-      className={`hands-free ${on ? 'hands-free-on' : ''}`}
-      aria-pressed={on}
-      title={on ? `Hands-free is on: after ${ceoName}'s spoken reply the phone listens for up to 8 s and sends what you say. Esc or M closes the mic.` : why || `Hands-free: talk with ${ceoName} without touching anything`}
-      onClick={() => void setHandsFree(!on, ceoName)}
-    >
-      🎧 {on ? 'Hands-free on' : 'Hands-free'}
-    </button>
-  );
-}
-
 const SWIPE_PX = 60;
 const LONG_PRESS_MS = 500;
 
@@ -523,8 +500,11 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   );
 }
 
-/** The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a floor chip opens (default: the elevator there). */
-export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFloor?: (repoId: string) => void }) {
+/**
+ * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
+ * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
+ */
+export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null }) {
   const messages = useStore((s) => s.messages);
   const outbox = useStore((s) => s.chatOutbox);
   const readAt = useStore((s) => s.phoneReadAt);
@@ -721,23 +701,11 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
   return refNav.wrap(
     <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
-        <Avatar name={ceo.name} color={ceo.color} />
+        <Avatar name={ceo.name} color={ceo.color} size={28} />
         <div className="grow">
-          <b>{ceo.name}</b> <span className="muted small">CEO</span>
-          <div className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</div>
+          <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
         </div>
-        {artifactCount > 0 && (
-          <button type="button" className="hands-free" onClick={() => setArtifactList(true)} aria-haspopup="dialog" title="Every artifact in this conversation, newest first">
-            📄 Artifacts ({artifactCount})
-          </button>
-        )}
-        {fileCount > 0 && (
-          <button type="button" className="hands-free" onClick={() => setFilesOpen(true)} aria-haspopup="dialog" title="Every file in this conversation: keep or delete them">
-            📎 Files ({fileCount})
-          </button>
-        )}
-        <Menu label="Conversations and memory" title={`Chat with ${ceo.name}`} items={[{ label: '💬 Conversations', hint: 'A new one, or an earlier one', onSelect: () => setSheet('chats') }, { label: `🧠 What ${ceo.name} remembers`, onSelect: () => setSheet('memory') }]} />
-        <HandsFreeToggle ceoName={ceo.name} />
+        <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} />
       </div>
       <div className="chat-log-wrap">
         <div
@@ -785,7 +753,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           </button>
         )}
         {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
-        {sheet === 'chats' && <Conversations onClose={() => setSheet(null)} />}
+        {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => setSheet('memory')} />}
         {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
@@ -812,6 +780,7 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           />
         )}
       </div>
+      {/* answers to a pending question stay inline; everything else is behind the + */}
       <div className="quick">
         {question !== null && !answered && (
           <>
@@ -826,11 +795,6 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
         {(ceo.status === 'error' || ceo.status === 'stopped') && last('manager') !== undefined && (
           <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
         )}
-        {QUICK.map((q) => (
-          <button key={q} className="quick-chip" onClick={() => send(q, null)}>
-            {q}
-          </button>
-        ))}
       </div>
       {editing !== null && (
         <div className="chat-reply">
@@ -872,11 +836,16 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           att.add([...e.clipboardData.files]);
         }}
       >
-        <AttachButtons
+        <ChatActionsSheet
+          text={text}
+          ceoName={ceo.name}
           onFiles={(files) => {
             att.add(files);
             resetViewport(); // back from the photo picker or the camera
           }}
+          // Research: the CEO brainstorms with the web and the manager's apps, and brings options with sources (server/research.ts).
+          onResearch={() => send(`${RESEARCH_PREFIX}${text.trim()}`, null)}
+          onQuick={(q) => send(q, null)}
         />
         <MessageBox
           value={text}
@@ -894,10 +863,6 @@ export function Chat({ autoFocus = true, onFloor }: { autoFocus?: boolean; onFlo
           }}
         />
         <MicButton kind="phone" value={text} onChange={setText} onSend={send} />
-        {/* Research: the CEO brainstorms with the web and the manager's apps, and brings options with sources (server/research.ts). */}
-        <button type="button" className="btn btn-small" disabled={!text.trim() || researchTopic(text) !== null} onClick={() => send(`${RESEARCH_PREFIX}${text.trim()}`, null)} aria-label={`Ask ${ceo.name} to research this`} title="Research it: options with sources, from the web and your apps">
-          🔎
-        </button>
         {ceo.status === 'working' && editing === null && !text.trim() && !att.ready.length ? (
           <button type="button" className="btn btn-small btn-bad" onClick={stop} aria-label={`Stop ${ceo.name}`} title="Stop: what's done stays done, and the reply says what that was">
             ■

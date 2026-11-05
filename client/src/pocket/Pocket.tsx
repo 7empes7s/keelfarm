@@ -243,6 +243,7 @@ export default function Pocket() {
   const ceoName = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const usage = useStore((s) => s.usage.state);
   const connected = useStore((s) => s.connected);
+  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the header (#81)
 
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
@@ -314,7 +315,14 @@ export default function Pocket() {
         <b className="pk-title">{company || 'cubefarm'}</b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
         <span className="spacer" />
-        {usage !== 'normal' && <span className="chip chip-warn">{usage === 'paused' ? '⏸ paused' : '🐢 pacing'}</span>}
+        {usage !== 'normal' && (
+          // On the Chat tab only its icon: the chat's buttons need the room.
+          <span className="chip chip-warn" title={usage === 'paused' ? 'Paused by the usage limit' : 'Pacing new work'}>
+            {usage === 'paused' ? '⏸' : '🐢'}
+            <span className={tab === 'chat' ? 'sr-only' : undefined}>{usage === 'paused' ? ' paused' : ' pacing'}</span>
+          </span>
+        )}
+        {tab === 'chat' && <div className="pk-head-tools" ref={setChatTools} />}
         <button className="pk-icon-btn" onClick={() => setSettings('floors')} aria-label="Settings and notifications" title="Settings and notifications">
           ⚙️
         </button>
@@ -330,7 +338,7 @@ export default function Pocket() {
         ) : (
           <>
             {tab === 'company' && <Company go={go} settings={setSettings} />}
-            {tab === 'chat' && <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} />}
+            {tab === 'chat' && <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={chatTools} />}
             {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
             {tab === 'team' && <Team focusRepo={repoId} />}
             {tab === 'approvals' && <Approvals />}

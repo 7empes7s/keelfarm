@@ -33,7 +33,8 @@ function Row({ c, current, snippet, onOpen }: { c: Conversation; current: boolea
   );
 }
 
-export function Conversations({ onClose }: { onClose: () => void }) {
+/** `onMemory`: opens what the CEO remembers (#81: it shares the top bar's 🔍 with the conversations). */
+export function Conversations({ ceoName, onClose, onMemory }: { ceoName: string; onClose: () => void; onMemory: () => void }) {
   const chat = useStore((s) => s.chat);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<ConversationHit[] | null>(null);
@@ -61,6 +62,9 @@ export function Conversations({ onClose }: { onClose: () => void }) {
       <div className="artifact-body conv-body">
         <button type="button" className="btn btn-good conv-new" disabled={busy} onClick={() => act(api.newConversation)} title="A fresh start: the CEO begins a new session, its notes carry over">
           ＋ New conversation
+        </button>
+        <button type="button" className="btn conv-new" onClick={onMemory}>
+          🧠 What {ceoName} remembers
         </button>
         <input className="conv-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every conversation…" aria-label="Search conversations" />
         {shown.length === 0 ? (

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { ACCEPT, daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
+import { daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
 import { matchPicks, pickText, usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
 import { Sheet } from './ChatArtifacts';
 import type { Pending } from './chatUpload';
@@ -228,31 +228,6 @@ export function UsedLine({ used }: { used: UsedView }) {
         ))}
       </ul>
     </details>
-  );
-}
-
-/** 📎 (the file picker; on a phone, also the photo library) and, on touch screens, 📷 (the camera). */
-export function AttachButtons({ onFiles }: { onFiles: (files: File[]) => void }) {
-  const picker = useRef<HTMLInputElement>(null);
-  const camera = useRef<HTMLInputElement>(null);
-  const [touch] = useState(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
-  const take = (el: HTMLInputElement) => {
-    if (el.files?.length) onFiles([...el.files]);
-    el.value = '';
-  };
-  return (
-    <>
-      <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => take(e.currentTarget)} />
-      <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => take(e.currentTarget)} />
-      <button type="button" className="chat-attach" aria-label="Attach files" title="Attach files (or paste, or drop them here)" onClick={() => picker.current?.click()}>
-        📎
-      </button>
-      {touch && (
-        <button type="button" className="chat-attach" aria-label="Take a photo or video" title="Camera" onClick={() => camera.current?.click()}>
-          📷
-        </button>
-      )}
-    </>
   );
 }
 
