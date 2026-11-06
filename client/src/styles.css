@@ -1210,6 +1210,8 @@ input.inline:focus {
   background: #fff;
   color: var(--ds-on-color);
   font-weight: 700;
+  font-size: var(--ds-text-lg);
+  line-height: 1;
   cursor: pointer;
   flex: none;
 }
@@ -2722,6 +2724,9 @@ input.inline:focus {
   flex-direction: column;
   gap: 8px;
 }
+.picker {
+  container-type: inline-size;
+}
 .picker-tabs {
   display: flex;
   gap: 6px;
@@ -2729,6 +2734,8 @@ input.inline:focus {
 }
 .picker-tab {
   flex: 1;
+  min-width: 0;
+  min-height: var(--ds-target);
   font-family: var(--font);
   font-weight: 600;
   font-size: 0.88rem;
@@ -2736,8 +2743,25 @@ input.inline:focus {
   border: 2.5px solid var(--ds-outline);
   border-radius: 12px;
   background: var(--ds-surface-raised);
+  color: var(--ds-text);
   cursor: pointer;
   white-space: nowrap;
+  text-align: center;
+}
+.picker-short {
+  display: none;
+}
+/* a phone's card: the modes' short names, so none is clipped */
+@container (max-width: 480px) {
+  .picker-long {
+    display: none;
+  }
+  .picker-short {
+    display: inline;
+  }
+  .picker-tab {
+    padding-inline: var(--ds-space-2);
+  }
 }
 .picker-tab-on {
   background: var(--accent);
@@ -5167,13 +5191,15 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   }
 }
 
-/* pocket mode's ⚙️ (PocketConsole.tsx): the console's tabs one column wide, its sections as chips that stay in view */
+/* pocket mode's ⚙️ (PocketConsole.tsx): the console's tabs one column wide, its sections as chips that stay in view.
+   Pinned flush under the header across the panel body's whole padding (.ds-console .panel-body), so nothing scrolled
+   shows above or beside them. */
 .pk-console .pk-console-chips {
   position: sticky;
-  top: -12px;
+  top: calc(-1 * var(--ds-space-4));
   z-index: 2;
-  margin: -12px -12px 12px;
-  padding: 10px 12px;
+  margin: calc(-1 * var(--ds-space-4)) calc(-1 * var(--ds-space-4)) var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-4);
   background: var(--paper);
   border-bottom: 1.5px solid rgba(31, 29, 43, 0.08);
 }

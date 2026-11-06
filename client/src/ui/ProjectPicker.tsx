@@ -234,17 +234,19 @@ export function ProjectPicker({ onConnected, initial = 'folder' }: { onConnected
     setMission('');
     onConnected?.(repo);
   };
-  const modes: [Mode, string][] = [
-    ['folder', '📁 A folder on this computer'],
-    ['github', '🐙 A GitHub repo'],
-    ['new', '✨ Something new'],
+  // The short label stands in for the long one when the card is narrow (a phone): styles.css .picker-tabs.
+  const modes: [Mode, string, string, string][] = [
+    ['folder', '📁', 'A folder on this computer', 'Folder'],
+    ['github', '🐙', 'A GitHub repo', 'GitHub'],
+    ['new', '✨', 'Something new', 'New'],
   ];
   return (
     <div className="picker">
       <div className="picker-tabs">
-        {modes.map(([k, label]) => (
-          <button key={k} className={`picker-tab ${mode === k ? 'picker-tab-on' : ''}`} onClick={() => setMode(k)}>
-            {label}
+        {modes.map(([k, icon, label, short]) => (
+          <button key={k} className={`picker-tab ${mode === k ? 'picker-tab-on' : ''}`} onClick={() => setMode(k)} aria-label={label} aria-pressed={mode === k}>
+            <span aria-hidden="true">{icon}</span> <span className="picker-long">{label}</span>
+            <span className="picker-short">{short}</span>
           </button>
         ))}
       </div>
