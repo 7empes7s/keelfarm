@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { effortHint, isCeoKind, TASK_KIND_LABELS, TASK_KINDS, type CostsView, type CostSplit, type TaskKind } from '../../../shared/costs';
 import type { EffortLevel, RepoView } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
+import { EmptyState } from './EmptyState';
 import './costs.css';
 
 // Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). Cost per
@@ -223,7 +224,7 @@ export function CostsSection() {
             🗑️ Waste {view.waste.length > 0 && <span className="badge">{view.waste.length}</span>}
           </h3>
           {view.waste.length === 0 ? (
-            <p className="muted small">Nothing wasted: every session ended with a PR, a commit or a verdict.</p>
+            <EmptyState kind="waste" compact />
           ) : (
             <ul id="costs-waste" className="costs-list small">
               {view.waste.map((w) => (

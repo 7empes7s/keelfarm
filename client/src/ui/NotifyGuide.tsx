@@ -10,6 +10,7 @@ import type { NotifyHealth, PushTestView } from '../../../shared/types';
 import { allowNotifications, currentPush, enablePush, preparePush, pushSupport, startWorker, workerState, type PushPrep } from '../pwa';
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
+import { EmptyState } from './EmptyState';
 import { deviceLabel, guideSteps, nextStep, platformOf, type GuideInput, type StepAction, type WorkerState } from './notifySteps';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -309,6 +310,11 @@ export function ChannelHealth() {
           <Health last={channels.desktop} />
         </div>
       </li>
+      {count === 0 && (
+        <li>
+          <EmptyState kind="devices" compact />
+        </li>
+      )}
       {channels.devices.map((d) => (
         <li key={d.id}>
           <div className="row wrap">

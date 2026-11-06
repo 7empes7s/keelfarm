@@ -19,6 +19,7 @@ import { NotifySettings } from './NotifySettings';
 import { ThemeSettings } from './ThemeSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { Panel } from './Panel';
+import { InfoButton } from './InfoButton';
 import { setMode } from '../pocket/mode';
 import './console.css';
 
@@ -233,6 +234,9 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
           )}
         </nav>
         <div ref={pane} className="cn-pane tab-body ds-stack-scope" role="tabpanel" id={`${ids}-pane`} aria-label={section.label}>
+          <div className="cn-pane-info">
+            <InfoButton key={section.id} screen={section.id} />
+          </div>
           <SectionBody key={section.id} id={section.id} where="office" focus={{ repoId: initialRepo, card, history }} />
         </div>
       </div>

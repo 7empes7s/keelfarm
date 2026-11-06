@@ -14,8 +14,14 @@ import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
 import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
-import { parseHash } from '../ui/consoleNav';
+import { parseHash, resolve } from '../ui/consoleNav';
 import type { HistoryFocus } from '../ui/HistoryTab';
+import { EmptyState } from '../ui/EmptyState';
+import { GuideCard } from '../ui/GuideCard';
+import { InfoButton } from '../ui/InfoButton';
+import { SearchButton, SearchPalette } from '../ui/SearchPalette';
+import { useFinder } from '../ui/goTo';
+import type { ScreenId } from '../ui/screenHelp';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -26,6 +32,7 @@ const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.C
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
 export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
+const HELP: Record<Exclude<PocketTab, 'chat'>, ScreenId> = { company: 'company', kanban: 'kanban', team: 'pocket-team', approvals: 'approvals' };
 const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'approvals'];
 
 /** The tab a link (a notification's ?tab=) asks for. */
@@ -106,6 +113,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
           <span>Approvals →</span>
         </button>
       )}
+      <GuideCard />
       <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
         <b className="small">🤖 Claude usage</b>
         <UsageBars />
@@ -124,7 +132,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
           </button>
         </div>
       )}
-      {floors.length === 0 && <p className="muted">No projects yet.</p>}
+      {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
         ➕ Move in a project
       </button>
@@ -181,7 +189,12 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
 function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => void }) {
   const repos = useStore((s) => s.repos);
   const id = repos.some((r) => r.id === repoId) ? repoId! : repos[0]?.id;
-  if (!id) return <p className="muted pk-page">No projects yet.</p>;
+  if (!id)
+    return (
+      <div className="pk-page">
+        <EmptyState kind="projects" />
+      </div>
+    );
   return (
     <div className="pk-page">
       {repos.length > 1 && (
@@ -223,11 +236,11 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ section, pick, onClose, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus }) {
+function Settings({ section, pick, onClose, history, repoId }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string }) {
   return (
     <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings ds-console">
       <Suspense fallback={<p className="muted">Loading…</p>}>
-        <PocketConsole section={section} pick={pick} history={history} />
+        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} />
       </Suspense>
     </Panel>
   );
@@ -277,15 +290,24 @@ export default function Pocket() {
     setSettings(null);
     go('kanban', kanban);
   }, [kanban]);
-  // The History asked for from an agent's desk or a PR card opens in the console here.
+  // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
-  const wantsHistory = useStore((s) => (s.overlay?.kind === 'manager' && s.overlay.tab === 'history' ? s.overlay : null));
+  const [focusRepo, setFocusRepo] = useState<string | undefined>();
+  const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
   useEffect(() => {
-    if (!wantsHistory) return;
+    if (!wantsSection) return;
     useStore.getState().openOverlay(null);
-    setHistory(wantsHistory.history);
-    setSettings('history');
-  }, [wantsHistory]);
+    setHistory(wantsSection.history);
+    setFocusRepo(wantsSection.repoId);
+    setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
+  }, [wantsSection]);
+  // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
+  const guide = useFinder((s) => s.guide);
+  useEffect(() => {
+    if (!guide) return;
+    setSettings(null);
+    setTab('company');
+  }, [guide]);
   // While the chat is on screen, new CEO messages don't toast (the store reads this as the phone's chat being open).
   useEffect(() => {
     const s = useStore.getState();
@@ -324,13 +346,15 @@ export default function Pocket() {
           </span>
         )}
         {usage !== 'normal' && (
-          // On the Chat tab only its icon: the chat's buttons need the room.
+          // Only its icon: the header's buttons need the room (the Company tab's banner says it in words).
           <span className="chip chip-warn" title={usage === 'paused' ? 'Paused by the usage limit' : 'Pacing new work'}>
             {usage === 'paused' ? '⏸' : '🐢'}
-            <span className={tab === 'chat' ? 'sr-only' : undefined}>{usage === 'paused' ? ' paused' : ' pacing'}</span>
+            <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
         {tab === 'chat' && <div className="pk-head-tools" ref={setChatTools} />}
+        <SearchButton className="pk-icon-btn" />
+        {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
         <button className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
           ⚙️
         </button>
@@ -365,11 +389,12 @@ export default function Pocket() {
         ))}
       </nav>
       <Toasts />
-      {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} />}
+      {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} />}
       {/* after the console, so a terminal or app opened from it shows over it */}
       <Suspense fallback={null}>
         <PocketOverlay />
       </Suspense>
+      <SearchPalette where="pocket" />
     </div>
   );
 }

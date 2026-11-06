@@ -14,6 +14,8 @@ import { HoldMenu } from './ui/HoldMenu';
 import { TouchStick } from './ui/TouchStick';
 import { useTouchPage } from './ui/touchMode';
 import { parseHash } from './ui/consoleNav';
+import { SearchPalette } from './ui/SearchPalette';
+import { GuideSheet } from './ui/GuideCard';
 
 // Photo mode's panel loads the first time it's opened; the HUD and the tutorial hide while it's on.
 const PhotoPanel = lazy(() => import('./photo/PhotoPanel'));
@@ -68,6 +70,8 @@ export default function Office() {
       <Overlays />
       <HoldMenu />
       {!photo && <Tutorial />}
+      <SearchPalette where="office" />
+      <GuideSheet />
       <StartScreen />
       {statsEnabled && <StatsReadout />}
     </>

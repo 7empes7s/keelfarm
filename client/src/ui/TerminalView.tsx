@@ -16,6 +16,7 @@ import { loadScreenshot } from '../screenshot';
 import { toolVerb } from '../world/draw';
 import { followAgent } from '../world/camera/rig';
 import { badgeStatus, StatusPill } from './StatusPill';
+import { agentPhrase } from './statusPhrase';
 import { HistoryButton } from './HistoryTab';
 import { confirmDialog } from './Confirm';
 import { useTermKeysPref } from './TermKeyBar';
@@ -452,7 +453,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
           <span className="chip" title="Their coding agent">
             ⌨️ {agentLabel(agent, settings, clis)}
           </span>
-          <StatusPill status={badgeStatus(agent)} />
+          <StatusPill status={badgeStatus(agent)} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
           {signIn && (
             <span className="chip sign-in-chip" title={`Waiting for you to sign ${signIn} in, in their terminal`}>
               🔑 needs sign-in

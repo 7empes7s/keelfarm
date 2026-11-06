@@ -21,6 +21,8 @@ import { Key, MoveKeys } from './Key';
 import { ROOF } from '../world/layout';
 import { useRoof } from '../world/roof/roofState';
 import { RoofHud } from './RoofHud';
+import { SearchButton } from './SearchPalette';
+import { GuideButton } from './GuideCard';
 import { usageChip } from '../ops';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
@@ -187,6 +189,8 @@ export function HUD() {
         <CoinChip />
         {user && <span className="pill">🐙 {user}</span>}
         <PhotoButton />
+        <SearchButton />
+        <GuideButton />
       </div>
 
       <WorkersPanel />

@@ -11,6 +11,7 @@ import { Menu } from '../ui/Menu';
 import { Resume } from '../ui/Phone';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
+import { EmptyState } from '../ui/EmptyState';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
   const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
@@ -106,7 +107,7 @@ export function Approvals() {
   const nothing = w.requests.length + w.stuck.length + w.ready.length + charters.length === 0;
   return (
     <div className="pk-page">
-      {nothing && <p className="pk-empty">Nothing waits on you. The team carries on, and your phone hears when that changes.</p>}
+      {nothing && <EmptyState kind="approvals" />}
       {w.requests.length > 0 && <h3 className="pk-h">👥 Team changes</h3>}
       {w.requests.map((r) => (
         <Resume key={r.id} req={r} />

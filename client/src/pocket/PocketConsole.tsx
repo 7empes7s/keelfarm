@@ -5,11 +5,12 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Badge, ConsoleSearch, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
 import { GROUPS, sectionById, sectionsIn, type SectionId } from '../ui/consoleNav';
 import type { HistoryFocus } from '../ui/HistoryTab';
+import { InfoButton } from '../ui/InfoButton';
 
 /** A section, or 'menu': the list of them. */
 export type ConsoleSection = SectionId | 'menu';
 
-export function PocketConsole({ section, pick, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus }) {
+export function PocketConsole({ section, pick, history, repoId }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus; repoId?: string }) {
   const open = section === 'menu' ? null : (sectionById(section) ?? null);
   const [query, setQuery] = useState('');
   const body = useRef<HTMLDivElement>(null);
@@ -30,9 +31,10 @@ export function PocketConsole({ section, pick, history }: { section: ConsoleSect
           <h2 className="cn-title">
             <span aria-hidden>{open.icon}</span> {open.label}
           </h2>
+          <InfoButton screen={open.id} />
         </div>
         <div className="ds-stack-scope" role="region" aria-label={open.label}>
-          <SectionBody id={open.id} where="pocket" focus={{ history }} />
+          <SectionBody id={open.id} where="pocket" focus={{ history, repoId }} />
         </div>
       </div>
     );

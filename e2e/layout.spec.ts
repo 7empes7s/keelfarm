@@ -135,6 +135,27 @@ const SCREENS: Screen[] = [
   { name: 'pocket team', widths: PHONES, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: PHONES, open: (page) => pocket(page, 'approvals'), tabs: [] },
   {
+    name: 'search palette (#109)',
+    widths: PHONES,
+    open: async (page) => {
+      const root = await pocket(page, 'company');
+      await root.getByRole('button', { name: /Search everything/ }).click();
+      await page.getByRole('combobox', { name: 'Search everything' }).fill('floor');
+      return page.getByRole('dialog', { name: /Search everything/ });
+    },
+    tabs: [],
+  },
+  {
+    name: 'ⓘ sheet (#109)',
+    widths: PHONES,
+    open: async (page) => {
+      const root = await pocket(page, 'kanban');
+      await root.getByRole('button', { name: /What can I do on Kanban/ }).click();
+      return page.getByRole('dialog', { name: /Kanban/ });
+    },
+    tabs: [],
+  },
+  {
     name: 'terminal view',
     widths: PHONES,
     open: async (page) => {

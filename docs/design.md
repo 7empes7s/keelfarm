@@ -105,6 +105,16 @@ The manager's console has five top tabs, and each one shows a side menu of its s
   long label clamps at two lines; nothing is cut sideways.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
 
+## Finding things and learning the office (#109)
+
+- **Search everything** (`ui/SearchPalette.tsx`, index in `ui/searchIndex.ts`): Ctrl/Cmd+K, or 🔍 in pocket's header
+  and the HUD. A new kind of thing or action goes in `buildIndex`; settings come from the console's `find` lists.
+- **Empty lists teach**: never a bare "Nothing here". Use `<EmptyState kind=… />`; its words (what shows up, why it's
+  empty, the next action) are in `ui/emptyStates.ts`.
+- **ⓘ on every main screen** (`ui/InfoButton.tsx`): the words are in `ui/screenHelp.ts`; a new console section adds one.
+- **Statuses** are worded by `ui/statusPhrase.ts` (what now · what happens next), not per screen.
+- **The guide** (`ui/guide.ts`): a checklist read from the office's state; a new feature worth setting up adds an item.
+
 ## Rules
 
 Do:
