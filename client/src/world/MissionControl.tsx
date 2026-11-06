@@ -125,6 +125,7 @@ export function MissionControl() {
   const repos = useStore((s) => s.repos);
   const usage = useStore((s) => s.usage);
   const readings = useStore((s) => s.claudeUsage);
+  const check = useStore((s) => s.claudeUsageCheck);
 
   const tags = useMemo(
     () =>
@@ -166,7 +167,7 @@ export function MissionControl() {
     state: m.state,
     tone: m.tone,
     bars: usageBars(readings, now),
-    note: readingsNote(readings, now),
+    note: readingsNote(readings, now, check),
     hint: usage.state === 'pacing' ? `Press ${use} to resume full speed` : usage.state === 'paused' ? "A pause at the limit can't be cleared early" : 'New work starts at full speed',
   };
   const meter = useScreen('usage', BOTTOM_PX, meterData, drawUsage);

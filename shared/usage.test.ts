@@ -76,6 +76,15 @@ describe('labels', () => {
     expect(ago(NOW - 50 * 60 * MIN, NOW)).toBe('2 days ago');
   });
 
+  it("says why the office's idle check couldn't read a fresher number (#89)", () => {
+    const old = [at('seven_day', 54, NOW - 9 * 60 * MIN)];
+    expect(readingsNote(old, NOW, 'failed')).toBe("as of 9 h ago · office idle, couldn't check");
+    expect(readingsNote(old, NOW, 'no-login')).toBe('as of 9 h ago · office idle, no Claude login to check with');
+    expect(readingsNote([at('seven_day', 54, NOW - MIN)], NOW, 'failed')).toBeNull(); // fresh enough: nothing to explain
+    expect(readingsNote([], NOW, 'expired')).toBe("No reading yet: office idle, Claude's login needs a session to refresh");
+    expect(readingsLabel(old, NOW, 'failed')).toBe("week 54% (as of 9 h ago · office idle, couldn't check)");
+  });
+
   it('gives the CEO the latest percentages', () => {
     const r = [at('five_hour', 42), at('seven_day', 61)];
     expect(readingsLabel(r, NOW)).toBe('5h 42% · week 61%');

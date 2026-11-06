@@ -12,6 +12,7 @@ import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
+import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type OfficeHost } from './officeUpdate.ts';
@@ -125,6 +126,8 @@ export interface Backend {
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
+  /** Claude's subscription usage read directly, while no session reports it (#89): no model tokens, never throws. */
+  usageCheck(): Promise<UsageCheck>;
   /** The default branch's commits and the issues filed since `since`: what says whether merged PRs survived (#23). */
   survivalSignals(fullName: string, since: number): Promise<SurvivalSignals>;
   /** Run a floor's app for the preview monitor (its own worktree, its own port). */
@@ -268,6 +271,7 @@ export const realBackend: Backend = {
   detectClis,
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
+  usageCheck: () => checkUsage(),
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

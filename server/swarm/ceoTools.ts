@@ -196,7 +196,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now())}`,
+          usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now(), this.usageCheck)}`,
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
           officePlaybook: s.officePlaybook || null,
         },

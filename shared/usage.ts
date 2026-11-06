@@ -1,7 +1,7 @@
 // How Claude's usage reads, on the server (phone messages, the CEO's company status) and in the office (the usage
 // meter, the HUD's pacing chip): clock times and the names of Claude's limits.
 
-import type { UsageReading } from './types.ts';
+import type { UsageCheckError, UsageReading } from './types.ts';
 
 /** "14:30", with the weekday when it isn't today. */
 export function clock(at: number, now: number): string {
@@ -84,11 +84,22 @@ export function ago(at: number, now: number): string {
   return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} day${h < 48 ? '' : 's'} ago`;
 }
 
-/** Under the meter: why there's nothing to show, "as of 12 min ago" when no session reported lately, else null. */
-export function readingsNote(readings: readonly UsageReading[], now: number): string | null {
-  if (!readings.length) return 'No reading yet: it updates while an agent is working';
+/** Why the office's idle check couldn't read the usage, in plain words. */
+function checkNote(error: UsageCheckError): string {
+  if (error === 'no-login') return 'office idle, no Claude login to check with';
+  if (error === 'expired') return "office idle, Claude's login needs a session to refresh";
+  return "office idle, couldn't check";
+}
+
+/**
+ * Under the meter: why there's nothing to show, "as of 12 min ago" when no reading is recent, else null; with why
+ * the office's own check failed when it did ("as of 9 h ago · office idle, couldn't check").
+ */
+export function readingsNote(readings: readonly UsageReading[], now: number, check: UsageCheckError | null = null): string | null {
+  if (!readings.length) return check ? `No reading yet: ${checkNote(check)}` : 'No reading yet: it updates while an agent is working';
   const newest = Math.max(...readings.map((r) => r.at));
-  return now - newest >= STALE_MS ? `as of ${ago(newest, now)}` : null;
+  if (now - newest < STALE_MS) return null;
+  return check ? `as of ${ago(newest, now)} · ${checkNote(check)}` : `as of ${ago(newest, now)}`;
 }
 
 /** One bar on the usage meter: "5-hour", 42%, its tone, and "resets 18:30" (or "reset 18:30" once it has). */
@@ -115,9 +126,9 @@ export function usageBars(readings: readonly UsageReading[], now: number): Usage
 }
 
 /** The latest numbers for the CEO's company status: "5h 42% · week 61%", with "(as of 12 min ago)" when old; "no reading yet" without any. */
-export function readingsLabel(readings: readonly UsageReading[], now: number): string {
+export function readingsLabel(readings: readonly UsageReading[], now: number, check: UsageCheckError | null = null): string {
   if (!readings.length) return 'no reading yet';
   const nums = readings.map((r) => `${SHORT_NAMES[r.type] ?? r.type.replace(/_/g, ' ')} ${r.pct}%`).join(' · ');
-  const note = readingsNote(readings, now);
+  const note = readingsNote(readings, now, check);
   return note ? `${nums} (${note})` : nums;
 }
