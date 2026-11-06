@@ -5,7 +5,7 @@ import { nameList } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
 import { cliLabel, isCli } from '../clis.ts';
 import { plainText } from '../notify.ts';
-import type { AgentCli, EffortLevel, HireRequestView, MachineHost } from '../../shared/types.ts';
+import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction } from '../../shared/types.ts';
 import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS, BUSY, oneLine } from './model.ts';
 import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
@@ -209,7 +209,9 @@ export abstract class SwarmTeam extends SwarmUpkeep {
       const text = `📈 Floor ${repo.floor}: from ${before} to ${plan.size} agents? I'd ${asks}. ${reason}`;
       const changes = made.map((r) => ({ id: r.id, name: r.name, kind: r.kind }));
       this.postMessage('ceo', hires.length ? `${text} ${hires.length === 1 ? `${hires[0].name} waits` : 'They wait'} in the lobby, where you can set them up before hiring.` : text, made.length === 1 ? made[0].id : undefined, { changes });
-      this.notifier.notify('hire', `Floor ${repo.floor}: ${before} → ${plan.size} agents?`, `${this.ceo().name} would ${asks}. ${plainText(reason)}`, `floor ${repo.floor} team change`, changes);
+      const body = `${this.ceo().name} would ${asks}. ${plainText(reason)}`;
+      const one = made.length === 1 ? { requestId: made[0].id, actions: ['approve', 'approvals'] as NoticeAction[] } : { actions: ['approvals'] as NoticeAction[] };
+      this.notice({ kind: 'approval', title: `Floor ${repo.floor}: ${before} → ${plan.size} agents?`, text: body, target: { kind: 'floor', repoId: repo.id }, ...one }, { event: 'hire', line: `floor ${repo.floor} team change`, changes });
     }
     return `Floor ${repo.floor} goes from ${before} to ${plan.size} agents${capped} once the manager agrees: ${asks || 'withdrew the waiting changes'}.`;
   }

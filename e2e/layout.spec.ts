@@ -169,6 +169,26 @@ const SCREENS: Screen[] = [
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
   {
+    name: 'pocket notification centre',
+    widths: PHONES,
+    open: async (page) => {
+      await (await pocket(page, 'company')).getByRole('button', { name: /^Notifications/ }).click();
+      return dialog(page, /Notifications/);
+    },
+    tabs: [],
+  },
+  {
+    name: 'notification centre',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page);
+      await page.locator('.hud-status .notice-bell').click(); // a real click: it fails while anything covers the bell
+      await expect(page.locator('.notice-centre')).toBeVisible();
+      return dialog(page, /Notifications/);
+    },
+    tabs: [],
+  },
+  {
     // the agent window (#117): the header row, then its details' tabs (a sheet on phones, a side panel at 1280)
     name: 'terminal view',
     widths: [360, 375, 390, 430, 1280],

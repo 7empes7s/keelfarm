@@ -159,7 +159,9 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   /** One phone message about the last update (the launcher's last-update.json, or the demo's fake). */
   protected async reportUpdate(result: LastUpdate) {
     const commits = result.ok && result.to ? await this.backend.office.commitsBetween(result.from, result.to) : null;
-    this.postMessage('office', lastUpdateMessage(result, commits));
+    const said = lastUpdateMessage(result, commits);
+    this.postMessage('office', said);
+    this.notice({ kind: 'update', level: result.ok ? 'success' : 'error', title: result.ok ? 'The office updated' : "The office's update failed", text: said });
     Object.assign(this.officeUpdate, { failed: result.ok ? null : result.error || 'unknown error', failedBehind: null });
   }
 

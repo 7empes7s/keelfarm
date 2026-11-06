@@ -582,7 +582,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.status = 'error';
     a.lastError = result.errors.join('; ') || 'Session failed';
     this.appendLog(a, [{ kind: 'error', text: `✗ ${a.lastError}` }]);
-    this.toast('error', `${a.name} hit a problem on ${what}: ${a.lastError.slice(0, 120)}`);
+    this.notice({ kind: 'error', title: `${a.name} hit a problem`, text: `On ${what}: ${a.lastError.slice(0, 120)}`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal', 'retry'] });
   }
 
   protected async onIssueFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
