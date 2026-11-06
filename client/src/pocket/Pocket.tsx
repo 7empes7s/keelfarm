@@ -141,6 +141,9 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
         <b className="small">🤖 Claude usage</b>
         <UsageBars />
       </button>
+      <button className="btn pk-wide" onClick={() => settings('map')}>
+        🗺️ Memory map
+      </button>
       {ceo && (
         <div className="pk-card pk-ceo">
           <span className="avatar" style={{ background: ceo.color }}>

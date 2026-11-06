@@ -66,7 +66,7 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 | Tab | Sections |
 | --- | --- |
 | 🏢 Work | Floors & repos, Issues (3D only; phones have the Kanban tab), Team |
-| 🛰️ Company | Mission control (with server health and the test lab), Charter |
+| 🛰️ Company | Mission control (with server health and the test lab), Charter, Memory map |
 | 🧠 CEO | The CEO (chat, mandates, team changes, project briefs), CEO settings, Tools & skills |
 | 📜 History | Sessions, Daily log, Time-lapse (3D only) |
 | ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
