@@ -19,7 +19,7 @@ export const ICONS = {
   '🔍': 'search', '🔎': 'search', '☁': 'cloud', '💬': 'message-circle', '🎉': 'party-popper', '🎙': 'mic',
   '📱': 'smartphone', '👋': 'hand', '✋': 'hand', '⏳': 'hourglass', '❌': 'circle-x', '🔧': 'wrench', '🛠': 'wrench',
   '🛰': 'satellite', '📁': 'folder', '⚡': 'zap', '🔀': 'git-merge', '⌨': 'keyboard', '🧭': 'compass',
-  '🩺': 'stethoscope', '🐙': 'github', '🎧': 'headphones', '🔨': 'hammer', '📡': 'radio-tower', '⏸': 'pause',
+  '🩺': 'stethoscope', '🐙': 'git-branch', '🎧': 'headphones', '🔨': 'hammer', '📡': 'radio-tower', '⏸': 'pause',
   '🐢': 'turtle', '➕': 'plus', '📊': 'chart-column', '🎨': 'palette', '📝': 'notebook-pen', '♿': 'accessibility',
   '⏩': 'fast-forward', '🚨': 'siren', '⭐': 'star', '🌦': 'cloud-sun-rain', '🏅': 'medal', '🌐': 'globe',
   '🔗': 'link', '📄': 'file-text', '🗺': 'map', 'ℹ': 'info', '📼': 'film', '🤖': 'bot', '↩': 'undo-2',
@@ -137,7 +137,8 @@ function main() {
   const iconFor = (name) => {
     if (iconGlyph.has(name)) return iconGlyph.get(name);
     const g = byName.get(name);
-    if (!g) throw new Error(`no Lucide icon named ${name}`);
+    // Lucide dropped its brand icons (github) but kept their names as empty glyphs: an empty one would draw a gap.
+    if (!g || !g.path.commands.length) throw new Error(`no Lucide icon named ${name}`);
     const path = new opentype.Path();
     for (const c of g.path.commands) {
       const t = { ...c };

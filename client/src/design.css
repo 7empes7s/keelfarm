@@ -455,6 +455,10 @@ html[data-reduce-motion] {
 .ds-console .panel-title {
   font-size: var(--ds-text-xl);
 }
+/* a button whose own style sets no colour takes the text's ink, never the browser's (iOS's blue, #91) */
+:where(.ds-console) button {
+  color: inherit;
+}
 
 /* the tabs: one row that scrolls sideways when it doesn't fit, never wrapping into a wall of buttons */
 .ds-console .tabs {

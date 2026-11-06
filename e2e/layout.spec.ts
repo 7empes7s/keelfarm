@@ -64,6 +64,15 @@ const game = (name: string): View => ({
   },
 });
 
+/** Settings → Floors, then one of Add a project's modes (#91). */
+const addProject = (mode: string): View => ({
+  name: `Add a project: ${mode}`,
+  go: async (root) => {
+    await root.getByRole('tab', { name: /Floors/ }).click();
+    await root.getByRole('button', { name: mode }).click();
+  },
+});
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -74,7 +83,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device'],
+    tabs: ['Floors', 'CEO', 'Charter', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device', addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -214,6 +223,7 @@ async function layoutProblems(root: Locator): Promise<string[]> {
           if (!hit || (hit !== x && !x.contains(hit))) out.push(`"${name}" is covered by ${hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : 'nothing'}`);
         }
         if (box.width < 43.5 || box.height < 43.5) out.push(`"${name}" is ${Math.round(box.width)}x${Math.round(box.height)}px, under 44x44`);
+        if (x.scrollWidth > x.clientWidth + 1) out.push(`"${name}"'s label is clipped (${x.scrollWidth} > ${x.clientWidth}px)`);
       }
       return out;
     })),
@@ -421,5 +431,25 @@ for (const width of [360, 390, 430]) {
     await expect.poll(async () => (await panel.boundingBox())?.y).toBe(0);
     const box = (await panel.boundingBox())!;
     expect(Math.abs(box.y + box.height - 844)).toBeLessThanOrEqual(1);
+  });
+}
+
+// Settings' tab row stays pinned flush under the header while the tab scrolls: nothing shows above or beside it (#91).
+for (const width of [360, 390, 430]) {
+  test(`pocket Settings' tab row covers the scrolled content at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/?pocket=1');
+    await page.getByRole('button', { name: 'Settings and notifications' }).click();
+    const panel = dialog(page, /Settings/);
+    await expect(panel.getByRole('tab', { name: /Floors/ })).toBeVisible();
+    const gaps = await panel.evaluate((el) => {
+      const body = el.querySelector('.panel-body')!;
+      body.scrollTop = 400;
+      const view = body.getBoundingClientRect();
+      const row = el.querySelector('.pk-console-chips')!.getBoundingClientRect();
+      return { top: Math.round(row.top - view.top), left: Math.round(row.left - view.left), right: Math.round(view.right - row.right) };
+    });
+    expect(gaps).toEqual({ top: 0, left: 0, right: 0 });
   });
 }

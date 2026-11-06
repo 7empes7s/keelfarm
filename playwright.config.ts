@@ -53,6 +53,8 @@ export default defineConfig({
     { name: 'chromium', testIgnore: 'smoke.spec.ts', dependencies: ['smoke'], use: chromium },
     // The phone 3D office's taps on Safari's engine too (#83), when WebKit is installed (never downloaded mid-run).
     ...(installed.webkit ? [{ name: 'iphone', testMatch: 'touch.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
+    // Settings' layout on Safari's engine too (#91): clipped labels, overflow and targets in every tab.
+    ...(installed.webkit ? [{ name: 'iphone-settings', testMatch: 'layout.spec.ts', grep: /pocket console at (360|390|430)px/, dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
   ],
   webServer: {
     command: webServerCommand(process.env),
