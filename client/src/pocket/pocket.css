@@ -380,6 +380,19 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
   top: 0;
   min-width: 0;
 }
+/* a phone's header needs its row for the name and the buttons (search, notifications, ⓘ, settings): no logo, and the
+   usage chip only on wider screens (the Company tab's banner says it in words) */
+.pk-layout-compact .pk-head {
+  gap: 6px;
+  padding-inline: 10px;
+}
+.pk-layout-compact .pk-title {
+  font-size: var(--ds-text-md);
+}
+.pk-layout-compact .pk-logo,
+.pk-layout-compact .pk-head .chip-warn {
+  display: none;
+}
 
 /* The memory note (#115): a banner you tap through to Mission control. */
 .pk-banner-tap {

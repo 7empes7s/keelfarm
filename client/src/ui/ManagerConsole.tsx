@@ -16,6 +16,8 @@ import { Menu } from './Menu';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
 import { badgeStatus, StatusPill } from './StatusPill';
+import { agentPhrase } from './statusPhrase';
+import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
@@ -203,12 +205,12 @@ export function FloorsTab() {
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
         <h3 className="section">🏢 Floors</h3>
-        {repos.length === 0 && <p className="muted">No floors yet. Add a project →</p>}
+        {repos.length === 0 && <EmptyState kind="projects" onAction={() => document.getElementById('add-project')?.scrollIntoView({ block: 'center' })} />}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
           <FloorRow key={r.id} repo={r} all={repos} />
         ))}
       </div>
-      <div className="card">
+      <div className="card" id="add-project">
         <h3>➕ Add a project</h3>
         <ProjectPicker />
       </div>
@@ -430,7 +432,7 @@ function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
       .finally(() => setBusy(false));
   };
   return (
-    <div className="ds-fields add-agent">
+    <div className="ds-fields add-agent" id={`add-agent-${repo.floor}`}>
       <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name (optional)" maxLength={24} aria-label={`New agent's name on floor ${repo.floor}`} />
       {terminal && (
         <select value={draft.cli} onChange={(e) => edit({ cli: e.target.value as AgentCli | '' })} aria-label="New agent's coding agent">
@@ -468,7 +470,7 @@ export function TeamTab() {
   const openOverlay = useStore((s) => s.openOverlay);
   const terminal = settings.runtime === 'terminal';
   const [openLook, setOpenLook] = useState<string | null>(null);
-  if (repos.length === 0) return <p className="muted">Connect a repo first; agents need a floor to sit on.</p>;
+  if (repos.length === 0) return <EmptyState kind="projects" />;
   return (
     <div>
       {[...repos].sort((a, b) => a.floor - b.floor).map((repo) => {
@@ -485,7 +487,7 @@ export function TeamTab() {
               </span>
             </div>
             <AddAgent repo={repo} size={team.length} />
-            {team.length === 0 && <div className="muted small">No one works here yet.</div>}
+            {team.length === 0 && <EmptyState kind="team" compact onAction={() => document.getElementById(`add-agent-${repo.floor}`)?.querySelector('input')?.focus()} />}
             <table className="team ds-table roster">
               <tbody>
                 {team.map((a) => (
@@ -499,7 +501,7 @@ export function TeamTab() {
                             ☁
                           </span>
                         )}
-                        <StatusPill status={badgeStatus(a)} />
+                        <StatusPill status={badgeStatus(a)} phrase={agentPhrase(a, { autoAssign: repo.autoAssign })} />
                       </td>
                       <td className="small ds-cell-full roster-doing">
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
@@ -563,7 +565,7 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
   const [repoId, setRepoId] = useState(initialRepo ?? repos[0]?.id ?? '');
   const repo = repos.find((r) => r.id === repoId);
   const agents = useMemo(() => agentsOnRepo(allAgents, repoId), [allAgents, repoId]);
-  if (repos.length === 0) return <p className="muted">Connect a repo first.</p>;
+  if (repos.length === 0) return <EmptyState kind="projects" />;
   return (
     <div className="tab-grid">
       <div className="card">
@@ -580,7 +582,7 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
       <div className="card">
         <h3>Open issues on {repo?.fullName}</h3>
         <div className="repo-list tall issue-list">
-          {repo?.issues.length === 0 && <div className="muted small">None. Nice.</div>}
+          {repo?.issues.length === 0 && <EmptyState kind="backlog" compact target={{ kind: 'ceo', text: `Plan the next milestone for floor ${repo.floor} (${repo.fullName}) and file the issues.` }} />}
           {repo?.issues.map((i) => {
             const holder = agents.find((a) => a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber === i.number && a.status !== 'idle');
             return (

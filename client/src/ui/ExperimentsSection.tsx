@@ -7,6 +7,7 @@ import type { AgentCli, EffortLevel, RepoView } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
 import { confirmDialog } from './Confirm';
 import { describePractices } from '../../../shared/practices';
+import { EmptyState } from './EmptyState';
 import './experiments.css';
 
 // Mission control → Experiments (#23): A/B tests of harness practices on real issues. Each experiment's numbers per
@@ -346,6 +347,7 @@ export function ExperimentsSection() {
       <p className="muted small">
         A running experiment gives each new issue on its floors a variant at random, balanced by floor and issue size, and its sessions run with it. Agents aren't told. Only you start, stop and promote one.
       </p>
+      {list.length === 0 && <EmptyState kind="experiments" compact />}
       {list.map((e) => (
         <ExperimentCard key={e.id} e={e} repos={repos} />
       ))}
