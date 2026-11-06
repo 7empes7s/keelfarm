@@ -2,24 +2,30 @@
 
 .ref-chip {
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  gap: var(--ds-space-1);
   max-width: 100%;
-  margin: 1px 0;
-  padding: 1px 8px;
+  margin: 1px 2px;
+  padding: 1px var(--ds-space-2);
   border: 1.5px solid var(--ds-outline);
-  border-radius: var(--ds-radius-pill);
+  border-radius: var(--ds-radius-sm);
   background: var(--ds-surface-sunken);
   color: var(--ds-text);
   font: inherit;
   font-size: 0.85em;
   font-weight: var(--ds-weight-strong);
-  line-height: 1.5;
+  line-height: var(--ds-leading-tight);
+  white-space: nowrap; /* the bubble's pre-wrap would keep the status's leading space inside its pill */
   vertical-align: baseline;
   cursor: pointer;
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
+}
+/* a tag inside a sentence, one line high: not held to the screen's 44px controls (WCAG 2.5.8's inline exception) */
+.ds-screen .ref-chip {
+  min-width: 0;
+  min-height: 0;
 }
 .ref-chip:hover,
 .ref-chip:focus-visible {
@@ -29,11 +35,10 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .ref-chip-status {
   flex: none;
-  padding: 0 5px;
+  padding: 1px 6px;
   border-radius: var(--ds-radius-pill);
   background: var(--ds-line);
   font-size: 0.85em;

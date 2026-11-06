@@ -222,7 +222,8 @@ async function layoutProblems(root: Locator): Promise<string[]> {
           const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
           if (!hit || (hit !== x && !x.contains(hit))) out.push(`"${name}" is covered by ${hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : 'nothing'}`);
         }
-        if (box.width < 43.5 || box.height < 43.5) out.push(`"${name}" is ${Math.round(box.width)}x${Math.round(box.height)}px, under 44x44`);
+        // a chat ref chip is a tag inside a sentence (WCAG 2.5.8's inline exception); its own checks are below (#100)
+        if (!x.matches('.ref-chip') && (box.width < 43.5 || box.height < 43.5)) out.push(`"${name}" is ${Math.round(box.width)}x${Math.round(box.height)}px, under 44x44`);
         if (x.scrollWidth > x.clientWidth + 1) out.push(`"${name}"'s label is clipped (${x.scrollWidth} > ${x.clientWidth}px)`);
       }
       return out;
@@ -451,5 +452,71 @@ for (const width of [360, 390, 430]) {
       return { top: Math.round(row.top - view.top), left: Math.round(row.left - view.left), right: Math.round(view.right - row.right) };
     });
     expect(gaps).toEqual({ top: 0, left: 0, right: 0 });
+  });
+}
+
+// ---------- chat chips and Kanban cards (#100) ----------
+
+// Ref chips are boxes in the sentence: one line high (never taller than two lines of the text), nothing clipped or
+// sticking out of the bubble, a box that doesn't fit moving to the next line whole.
+for (const width of PHONES) {
+  test(`chat chips sit in the sentence at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const state = await (await page.request.get('/api/state')).json();
+    const [a, b] = (state.agents as { name: string; role: string }[]).filter((x) => x.role !== 'ceo');
+    const text = `Could @${a.name} pair with @${b.name} on floor 1 today and tell me how it went? (#100)`;
+    await page.request.post('/api/ceo/message', { data: { text } });
+    await page.goto('/?pocket=1&tab=chat');
+    const bubble = page.locator('.bubble-text', { hasText: '(#100)' }).last();
+    await expect(bubble.locator('.ref-chip')).toHaveCount(3);
+    const problems = await bubble.evaluate((el) => {
+      const out: string[] = [];
+      const line = parseFloat(getComputedStyle(el).lineHeight);
+      const box = el.getBoundingClientRect();
+      for (const chip of el.querySelectorAll<HTMLElement>('.ref-chip')) {
+        const r = chip.getBoundingClientRect();
+        const name = chip.innerText.trim();
+        if (chip.getClientRects().length > 1) out.push(`"${name}" breaks across lines`);
+        if (r.height > 2 * line) out.push(`"${name}" is ${Math.round(r.height)}px tall, over two ${line}px lines`);
+        if (chip.scrollWidth > chip.clientWidth + 1) out.push(`"${name}" is clipped (${chip.scrollWidth} > ${chip.clientWidth}px)`);
+        if (r.left < box.left - 1 || r.right > box.right + 1) out.push(`"${name}" sticks out of the bubble`);
+        const status = chip.querySelector('.ref-chip-status')?.getBoundingClientRect();
+        if (status && Math.abs(status.top + status.height / 2 - (r.top + r.height / 2)) > 1.5) out.push(`"${name}"'s status isn't centred`);
+      }
+      return out;
+    });
+    expect(problems).toEqual([]);
+  });
+}
+
+// Every card at every column width, from the desktop board's narrowest to a phone's one column: nothing in it wider
+// than the card, no button's label clipped.
+for (const width of [390, 1280]) {
+  test(`Kanban cards fit their columns at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/?pocket=1&tab=kanban');
+    await expect(page.locator('.kcol-progress .kcard button').first()).toBeVisible({ timeout: 30_000 }); // an agent's card, with Terminal
+    const problems: string[] = [];
+    for (const col of [210, 250, 320]) {
+      if (col > width - 40) continue;
+      problems.push(
+        ...(await page.evaluate((col) => {
+          const out: string[] = [];
+          for (const k of document.querySelectorAll<HTMLElement>('.kanban')) k.style.gridTemplateColumns = `repeat(5, ${col}px)`;
+          for (const card of document.querySelectorAll<HTMLElement>('.kcard')) {
+            const r = card.getBoundingClientRect();
+            const name = card.querySelector('.kcard-title')?.textContent?.trim().slice(0, 30);
+            if (card.scrollWidth > card.clientWidth + 1) out.push(`${col}px: "${name}" overflows its card (${card.scrollWidth} > ${card.clientWidth}px)`);
+            for (const b of card.querySelectorAll<HTMLElement>('button')) {
+              const br = b.getBoundingClientRect();
+              if (b.scrollWidth > b.clientWidth + 1) out.push(`${col}px: "${b.innerText.trim()}" on "${name}" is clipped`);
+              if (br.right > r.right + 1 || br.left < r.left - 1) out.push(`${col}px: "${b.innerText.trim()}" on "${name}" sticks out of the card`);
+            }
+          }
+          return out;
+        }, col)),
+      );
+    }
+    expect(problems).toEqual([]);
   });
 }

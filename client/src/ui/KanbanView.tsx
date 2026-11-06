@@ -287,7 +287,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           (c) => {
             const st = c.qa?.status;
             return (
-              <div className="kcard-foot kcard-foot-wrap">
+              <div className="kcard-foot">
                 <AgentChip agent={c.agent} card={c} />
                 <span className="muted small">{c.note}</span>
                 <span className="spacer" />
@@ -323,7 +323,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           (c) => {
             const pr = repo.pulls.find((p) => p.number === c.prNumber);
             return (
-              <div className="kcard-foot kcard-foot-wrap">
+              <div className="kcard-foot">
                 <AgentChip agent={c.agent} card={c} />
                 <span className="muted small">
                   {c.note}
