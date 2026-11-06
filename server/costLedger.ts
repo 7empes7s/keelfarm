@@ -9,6 +9,7 @@ import type { EffortLevel, PullInfo } from '../shared/types.ts';
 import {
   isTaskKind,
   sessionOutcome,
+  wasteCause,
   wasteReason,
   type CostDayRow,
   type CostFloorRow,
@@ -56,13 +57,17 @@ function split(sessions: CostSession[], merges: number): CostSplit {
   const byKind: CostSplit['byKind'] = {};
   let usd = 0;
   let wasteUsd = 0;
+  let wasteSessions = 0;
   for (const s of sessions) {
     usd += s.usd;
     byKind[s.kind] = (byKind[s.kind] ?? 0) + s.usd;
-    if (wasteReason(s)) wasteUsd += s.usd;
+    if (wasteReason(s)) {
+      wasteUsd += s.usd;
+      wasteSessions++;
+    }
   }
   for (const k of Object.keys(byKind) as (keyof typeof byKind)[]) byKind[k] = cents(byKind[k]!);
-  return { usd: cents(usd), sessions: sessions.length, merges, perMerge: merges ? cents(usd / merges) : null, wasteUsd: cents(wasteUsd), byKind };
+  return { usd: cents(usd), sessions: sessions.length, merges, perMerge: merges ? cents(usd / merges) : null, wasteUsd: cents(wasteUsd), wasteSessions, byKind };
 }
 
 /** A session's piece of work: its issue if it has one (QA and fixes carry the issue their PR closes), else its PR. */
@@ -104,9 +109,10 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
   for (const s of sessions) {
     const key = workKey(s);
     if (!key || !s.repoId) continue;
-    const it = items.get(key) ?? { repoId: s.repoId, issue: s.issue, pr: null, usd: 0, sessions: 0, merged: false };
+    const it = items.get(key) ?? { repoId: s.repoId, issue: s.issue, pr: null, usd: 0, sessions: 0, qaRounds: 0, merged: false };
     it.usd += s.usd;
     it.sessions++;
+    if (s.kind === 'qa') it.qaRounds++;
     it.pr ??= s.pr;
     it.merged ||= (it.issue !== null && mergedIssues.has(`${s.repoId}#${it.issue}`)) || (s.pr !== null && mergedPrs.has(mergeKey(s.repoId, s.pr)));
     items.set(key, it);
@@ -116,10 +122,22 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
     .slice(0, TOP)
     .map((it) => ({ ...it, usd: cents(it.usd) }));
 
+  // Each wasted session's streak: how many of its piece of work's sessions of this kind in a row were wasted the same way.
+  const streaks = new Map<CostSession, number>();
+  const last = new Map<string, { cause: string | null; streak: number }>();
+  for (const s of sessions) {
+    const why = wasteReason(s);
+    const cause = why && wasteCause(s.kind, why);
+    const key = `${workKey(s) ?? s.repoId}:${s.kind}`;
+    const prev = last.get(key);
+    const streak = cause && prev?.cause === cause ? prev.streak + 1 : 1;
+    last.set(key, { cause, streak });
+    if (cause) streaks.set(s, streak);
+  }
   const waste: CostWaste[] = [];
   for (const s of [...sessions].reverse()) {
     const why = wasteReason(s);
-    if (why && waste.length < MAX_WASTE) waste.push({ at: s.at, repoId: s.repoId, agent: s.agent, kind: s.kind, issue: s.issue, pr: s.pr, usd: cents(s.usd), why });
+    if (why && waste.length < MAX_WASTE) waste.push({ at: s.at, repoId: s.repoId, agent: s.agent, kind: s.kind, issue: s.issue, pr: s.pr, usd: cents(s.usd), why, cause: wasteCause(s.kind, why), streak: streaks.get(s) ?? 1 });
   }
 
   const kinds: CostKindRow[] = [];
