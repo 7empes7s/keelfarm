@@ -1,6 +1,7 @@
 // The office's own update: settling, draining, the hand-over to the launcher, the result after a restart.
 import { HttpError } from '../httpError.ts';
 import { drainDecision, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
+import { cleanTerminalText } from '../../shared/terminalText.ts';
 import type { OfficeUpdateView } from '../../shared/types.ts';
 import { BUSY, oneLine, type PersistedAgent } from './model.ts';
 import { SwarmScheduling } from './scheduling.ts';
@@ -160,7 +161,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   protected async reportUpdate(result: LastUpdate) {
     const commits = result.ok && result.to ? await this.backend.office.commitsBetween(result.from, result.to) : null;
     this.postUpdateNotice(result, commits);
-    Object.assign(this.officeUpdate, { failed: result.ok ? null : result.error || 'unknown error', failedBehind: null });
+    Object.assign(this.officeUpdate, { failed: result.ok ? null : cleanTerminalText(result.error || '', 1000) || 'unknown error', failedBehind: null });
   }
 
   /** An update's result as a card in the chat, linking to the office's own repo when it's a floor. */
