@@ -1,0 +1,24 @@
+# The public demo's auto-update (docs/public-demo.md): builds CI-green main into a release folder of its own,
+# switches the demo to it and rolls back if its health check fails. Plain shell, no AI session. Run by the timer.
+[Unit]
+Description=cubefarm public demo auto-update (CI-green main)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/cubefarm-demo-update/cubefarm-demo-update.sh
+TimeoutStartSec=30min
+StateDirectory=cubefarm-demo-update
+CacheDirectory=cubefarm-demo-update
+Environment=HOME=/var/lib/cubefarm-demo-update
+Environment=npm_config_cache=/var/cache/cubefarm-demo-update/npm
+Nice=19
+IOSchedulingClass=idle
+# As cubefarm-demo.service where it can: root only to restart that unit, and it writes only its release folders.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/cubefarm-demo-releases
+ProtectHome=yes
+PrivateDevices=yes
