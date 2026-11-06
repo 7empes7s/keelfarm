@@ -38,6 +38,27 @@ time-lapse and the first-run setup. Pocket mode uses the same live connection an
 loads no 3D at all until you tap **🏢 Open the 3D office** (Company tab, or ⚙️ → This device), or open an agent's
 look, whose preview is 3D.
 
+### On a desktop
+
+Pocket mode is also the 2D office for a computer, for getting work done without walking around. **🗺️ 2D office** in
+the 3D office's top bar switches to it, **🏢 3D office** in pocket mode's header goes back, and **O** (Help →
+Controls) does either from the keyboard. Each device remembers the last choice; `?pocket=1` / `?pocket=0` still win.
+
+The layout follows the window's width (in the UI scale's px): up to 760 px it's the phone's, with the tabs at the
+bottom. From 761 px a rail on the left takes their place, with ⚙️ at its foot and badges for the chat and approvals:
+
+- **1024 px and wider**: the rail with labels, and the CEO's chat docked on the right while you use the other tabs
+  (✕ hides it, 💬 on the rail brings it back; remembered). Company shows the floors as a grid of cards with usage and
+  the CEO beside them, the Kanban its whole board side by side, Team its agents as a grid, and Approvals a list of
+  decisions beside the one picked. An agent's terminal, a floor's app or a card (from a tab or a chat chip) opens in a
+  pane beside the page; ⚙️ opens the console over the pages, with its top tabs and side menu.
+- **761-1023 px**: the rail with icons only; 💬 opens the chat as a drawer over the pages, and terminals, apps and
+  the console cover the pages.
+
+Touch-only screens keep the phone's layout below 1024 px. Keys, never while typing in a field: **1**-**5** (or
+**Alt+1**-**5**) the tabs in the rail's order, **/** the chat's message box, **Esc** closes the open panel, then the
+chat drawer.
+
 ## Install it
 
 The office is an installable web app: Chrome and Edge offer **Install** in the address bar (on Android: ⋮ → **Add
