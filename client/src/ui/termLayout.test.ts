@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phoneWindow, stepFont, termFontSize, termGrid, unzoomedFont } from './termLayout';
+import { liveStatus, phoneWindow, stepFont, termFontSize, termGrid, unzoomedFont } from './termLayout';
 
 // The terminal-first window on phones (#86): one header row (~56 px) and one bottom bar (~60 px) around the terminal.
 const phoneBox = (width: number, height: number) => termGrid(width, height - 56 - 60, termFontSize(true, width, null));
@@ -43,5 +43,14 @@ describe('the agent window on phones', () => {
     expect(stepFont(12, 1)).toBe(13);
     expect(stepFont(8, -1)).toBe(8);
     expect(stepFont(20, 1)).toBe(20);
+  });
+});
+
+describe('the live status line (#117)', () => {
+  it('says tap on a touch screen and click with a pointer', () => {
+    expect(liveStatus({ connected: true, live: true, focused: false, touch: true })).toBe('Live · tap the terminal to type into it');
+    expect(liveStatus({ connected: true, live: true, focused: false, touch: false })).toBe('Live · click the terminal to type into it');
+    expect(liveStatus({ connected: true, live: true, focused: true, touch: true })).toContain('tap outside');
+    expect(liveStatus({ connected: false, live: true, focused: false, touch: true })).toBe('Reconnecting…');
   });
 });

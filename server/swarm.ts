@@ -284,6 +284,8 @@ export class Swarm extends SwarmCeoTools {
     }
     // Agents from before the ledger start their careers now.
     for (const a of this.state.agents) if (a.role !== 'ceo') applyLedger(this.state.progress, { kind: 'hired', agentId: a.id, at: Date.now() });
+    // A fresh demo office's agents come with records of all kinds (#117).
+    if (seeded && this.backend.seedCareers) Object.assign(this.state.progress.careers, this.backend.seedCareers(this.state.agents.filter((a) => a.role !== 'ceo').map((a) => a.id), Date.now()));
 
     for (const r of this.state.repos) void this.cloneRepo(r.id);
     await Promise.all(this.state.repos.map((r) => this.syncRepo(r.id)));

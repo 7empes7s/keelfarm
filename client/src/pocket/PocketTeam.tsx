@@ -5,10 +5,12 @@ import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent } from '../store';
 import { CEO_ID, type RepoView } from '../../../shared/types';
 import { agentLabel, signInFor } from '../ui/floorRows';
-import { clearDesk, letGo } from '../ui/dangerActions';
+import { clearDesk, letGo, stopAgent } from '../ui/dangerActions';
 import { Menu } from '../ui/Menu';
 import { MessageBox } from '../ui/MessageBox';
 import { badgeStatus } from '../ui/StatusPill';
+import { AgentRing } from '../ui/AgentRing';
+import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 
@@ -61,19 +63,20 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
   };
   return (
     <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : ''}`}>
-      <div className="pk-agent-head">
-        <span className="avatar" style={{ background: agent.color }}>
-          {agent.name[0]}
-        </span>
-        <div className="grow">
-          <b>{agent.name}</b> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
-          <div className="small pk-ellipsis">
+      <button type="button" className="pk-agent-head pk-agent-open" title={`Open ${agent.name}'s window`} onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
+        <AgentRing agent={agent} />
+        <span className="grow">
+          <span>
+            <b>{agent.name}</b> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
+          </span>
+          <span className="small pk-ellipsis">
             {doing(agent)}
             {working && agent.currentTool ? <span className="muted"> · {toolVerb(agent.currentTool) || agent.currentTool}…</span> : null}
-          </div>
-        </div>
+          </span>
+          {agent.career && <span className="aw-stats-line">{keyStats(agent.career, Date.now())}</span>}
+        </span>
         <Status status={badgeStatus(agent)} />
-      </div>
+      </button>
       {agent.lastError && !working && <div className="term-error small pk-error">⚠️ {agent.lastError}</div>}
       {agent.blocked && working && <div className="term-error small pk-error">⛔ Blocked: {agent.blocked}</div>}
       {agent.waiting && !working && <div className="small pk-sign-in">❓ {agent.waiting === 'ceo' ? 'Asked a question: waiting for the CEO.' : 'Waiting for your answer in the Chat tab.'}</div>}
@@ -85,8 +88,8 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
           </button>
         )}
         {can.stop && (
-          <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => api.stop(agent.id))}>
-            ■ Stop
+          <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => stopAgent(agent))}>
+            ■ Stop…
           </button>
         )}
         {can.assign && (

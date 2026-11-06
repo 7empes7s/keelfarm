@@ -2,7 +2,7 @@
 // (PRs opened, QA verdicts, fixes, checks, merges, sessions) and kept in the state file. Floors earn coins and buy
 // decorations with them, the office unlocks achievements, and every agent builds a career. Pure, and idempotent: an
 // event seen twice changes nothing, so the swarm can report what it notices on every sync.
-import { DAY_MS, newCareer, RECENT_KEEP, WEEK_MS, type CareerView } from '../shared/careers.ts';
+import { DAY_MS, newCareer, RECENT_KEEP, SPARK_WEEKS, WEEK_MS, type CareerView } from '../shared/careers.ts';
 import {
   ACHIEVEMENTS,
   catalogueItem,
@@ -67,8 +67,8 @@ export type LedgerEvent =
   | { kind: 'let-go'; agentId: string }
   /** An open PR on GitHub, as a sync sees it. */
   | { kind: 'pr-open'; repoId: string; pr: number; title: string; author: string | null; checks: PullInfo['checks']; at: number }
-  /** An agent's session building an issue ended with this PR open. */
-  | { kind: 'opened'; repoId: string; pr: number; title: string; author: string; at: number }
+  /** An agent's session building an issue ended with this PR open, `took` ms after it started. */
+  | { kind: 'opened'; repoId: string; pr: number; title: string; author: string; at: number; took?: number }
   | { kind: 'qa'; repoId: string; pr: number; round: number; pass: boolean; tester: string | null; author: string | null; at: number }
   /** A fix round started; `key` tells rounds apart. */
   | { kind: 'fix'; repoId: string; pr: number; key: string; at: number }
@@ -192,7 +192,10 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
       t.title = ev.title.slice(0, 80) || t.title;
       out.changed = true;
       const c = markSeen(s, `open:${prKey(ev.repoId, ev.pr)}`) ? careerOf(s, ev.author, out) : null;
-      if (c) c.opened++;
+      if (c) {
+        c.opened++;
+        if (ev.took && ev.took > 0) c.toPr = [ev.took, ...c.toPr].slice(0, RECENT_KEEP);
+      }
       break;
     }
     case 'qa': {
@@ -213,6 +216,7 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
         if (ev.pass) c.qaPass++;
         else c.qaFail++;
         if (first && ev.round === 1) {
+          c.firstQa++;
           if (ev.pass) {
             c.firstPass++;
             c.run++;
@@ -324,7 +328,7 @@ function merged(s: LedgerState, ev: Extract<LedgerEvent, { kind: 'merged' }>, ou
     c.merged++;
     c.fixRounds += t.fixRounds;
     c.recent = [{ n: ev.pr, title, at: ev.at }, ...c.recent].slice(0, RECENT_KEEP);
-    c.week = [...c.week.filter((x) => x > ev.at - WEEK_MS), ev.at].slice(-100);
+    c.week = [...c.week.filter((x) => x > ev.at - SPARK_WEEKS * WEEK_MS), ev.at].slice(-200);
   }
   out.reward = { repoId: ev.repoId, prNumber: ev.pr, agentId: author, coins, reasons };
 
@@ -460,6 +464,7 @@ export function loadLedger(raw: unknown): LedgerState {
       opened: num(x.opened),
       merged: num(x.merged),
       firstPass: num(x.firstPass),
+      firstQa: num(x.firstQa),
       qaPass: num(x.qaPass),
       qaFail: num(x.qaFail),
       fixRounds: num(x.fixRounds),
@@ -474,6 +479,7 @@ export function loadLedger(raw: unknown): LedgerState {
         .map((m) => ({ n: m.n as number, title: typeof m.title === 'string' ? m.title : '', at: num(m.at) }))
         .slice(0, RECENT_KEEP),
       week: Array.isArray(x.week) ? x.week.filter((t): t is number => typeof t === 'number') : [],
+      toPr: (Array.isArray(x.toPr) ? x.toPr : []).filter((t): t is number => typeof t === 'number' && t > 0).slice(0, RECENT_KEEP),
     };
   }
   const known = new Set(ACHIEVEMENTS.map((a) => a.id));

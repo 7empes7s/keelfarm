@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { TeamStats } from './CareerCard';
+import { AgentRing } from './AgentRing';
+import { keyStats } from '../../../shared/careers';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore } from '../store';
@@ -492,7 +494,7 @@ export function TeamTab() {
                   <Fragment key={a.id}>
                     <tr>
                       <td className="ds-cell-head">
-                        <span className="dot" style={{ background: a.color }} />
+                        <AgentRing agent={a} size="sm" />
                         <NameInput agent={a} />
                         {a.host === 'box' && (
                           <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
@@ -503,6 +505,7 @@ export function TeamTab() {
                       </td>
                       <td className="small ds-cell-full roster-doing">
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
+                        {a.career && <div className="aw-stats-line">{keyStats(a.career, Date.now())}</div>}
                       </td>
                       {terminal && (
                         <td data-label="Coding agent">
