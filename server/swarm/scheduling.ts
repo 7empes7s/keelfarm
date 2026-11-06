@@ -11,6 +11,7 @@ import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
 import { fixGoesTo, pickTester, prepHeld } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
 import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
+import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
   mayStart,
   PACING_MS,
@@ -73,6 +74,8 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected lastUsage = '';
   protected shownReadings: UsageReading[] = []; // the readings the office was last sent
   protected readingsTimer: NodeJS.Timeout | null = null;
+  protected usagePoll: PollState = { lastTry: 0, failures: 0 }; // the office's own checks of Claude's usage while idle (#89)
+  protected usagePolling = false;
 
   /** Backlog issues that can start now, most urgent first: the ones holding up the longest chain of other issues, then the oldest. */
   protected readyIssues(repo: PersistedRepo) {
@@ -255,15 +258,41 @@ export abstract class SwarmScheduling extends SwarmQa {
 
   /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
   protected recordUsage(readings: UsageReading[]) {
+    this.usageCheck = null; // a fresh reading answers for itself
     this.state.claudeUsage = mergeReadings(this.state.claudeUsage, readings);
     if (this.readingsTimer || !readingsChanged(this.shownReadings, this.state.claudeUsage)) return;
     this.readingsTimer = setTimeout(() => {
       this.readingsTimer = null;
       this.shownReadings = this.state.claudeUsage;
-      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage });
+      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage, check: this.usageCheck });
       this.save();
     }, READINGS_MS);
     this.readingsTimer.unref?.();
+  }
+
+  /** No session has given a reading for a while: read Claude's usage directly, quietly backing off when that fails (#89). */
+  protected pollUsage() {
+    const now = Date.now();
+    const newest = Math.max(0, ...this.state.claudeUsage.map((r) => r.at));
+    if (this.usagePolling || !pollDue(newest, this.usagePoll, now)) return;
+    this.usagePolling = true;
+    void this.backend
+      .usageCheck()
+      .catch((): UsageCheck => ({ error: 'failed' }))
+      .then((res) => {
+        this.usagePoll = afterPoll(this.usagePoll, 'readings' in res, Date.now());
+        if ('error' in res) {
+          if (res.error === this.usageCheck) return; // quiet: no repeats, nothing logged
+          this.usageCheck = res.error;
+          this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage, check: res.error });
+          return;
+        }
+        this.recordUsage(res.readings); // clears the failed check
+        // A full 5-hour or weekly window pauses new work, as a session hitting the limit would.
+        const full = res.readings.find((r) => (r.type === 'five_hour' || r.type === 'seven_day') && r.pct >= 100 && r.resetsAt && r.resetsAt > Date.now());
+        if (full) this.pauseForLimit(full.resetsAt);
+      })
+      .finally(() => (this.usagePolling = false));
   }
 
   /** Pacing and pauses run out on their own: say so when pacing ends. */
@@ -342,6 +371,7 @@ export abstract class SwarmScheduling extends SwarmQa {
    */
   protected schedule() {
     this.tickUsage();
+    this.pollUsage();
     this.progressTick();
     const draining = this.officeUpdateTick(); // draining for the office's own update: only the CEO's chat starts
     if (!draining) this.applyTeamChanges(); // before handing out work, so agents on their way out get none

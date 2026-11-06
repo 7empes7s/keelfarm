@@ -3,7 +3,8 @@ import { readingsNote, usageBars } from '../../../shared/usage';
 import { useStore } from '../store';
 
 // Claude's latest usage, one bar per limit ("5-hour: 42%, resets 18:30"), in Mission control and on pocket mode's
-// company page. The numbers are the whole subscription's, read from the agents' and the CEO's sessions.
+// company page. The numbers are the whole subscription's, read from the agents' and the CEO's sessions,
+// or by the office itself while they're idle (#89).
 
 /** Re-render every `ms`, so "resets" and "as of" keep up with the clock. */
 function useNow(ms: number) {
@@ -17,8 +18,9 @@ function useNow(ms: number) {
 
 export function UsageBars() {
   const readings = useStore((s) => s.claudeUsage);
+  const check = useStore((s) => s.claudeUsageCheck);
   const now = useNow(30_000);
-  const note = readingsNote(readings, now);
+  const note = readingsNote(readings, now, check);
   return (
     <div className="usage-bars">
       {usageBars(readings, now).map((b) => (

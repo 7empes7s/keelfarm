@@ -552,6 +552,9 @@ export interface UsageReading {
   at: number; // when it was read
 }
 
+/** Why the office's own idle check of Claude's usage (#89) found nothing: no login on file, an expired one, or it failed. */
+export type UsageCheckError = 'no-login' | 'expired' | 'failed';
+
 // Mission control's numbers live in ./ops.ts.
 export type { OpsAlarm, OpsFloor, OpsNumbers, OpsView } from './ops.ts';
 
@@ -728,6 +731,7 @@ export interface WorldSnapshot {
   usage: UsageView;
   health?: HealthView; // memory, load and sessions, for the health strip (#55); absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
+  claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
@@ -786,7 +790,7 @@ export type ServerEvent =
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }
   | { type: 'testLab'; testLab: TestLabView }
-  | { type: 'claudeUsage'; readings: UsageReading[] }
+  | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null }
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }

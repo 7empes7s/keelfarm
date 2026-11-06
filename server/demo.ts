@@ -930,6 +930,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
     quickPicks: async () => DEMO_PICKS,
     toolInventory: async (projects) => demoTooling(projects),
+    // The idle check (#89) reads the made-up numbers; SWARM_DEMO_USAGE_CHECK=fail shows a check that can't read them.
+    usageCheck: async () => (process.env.SWARM_DEMO_USAGE_CHECK === 'fail' ? { error: 'failed' } : { readings: demoReadings(Date.now()) }),
     survivalSignals: demoSurvival,
     previews: demoPreviews,
     testLab: demoLabRunner(),

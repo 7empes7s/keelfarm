@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
@@ -140,6 +140,7 @@ interface State {
   health: HealthView | null; // memory, load and sessions for the health strip (null: a server without it, or a replay)
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
+  claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
@@ -291,6 +292,7 @@ export const useStore = create<State>((set, get) => ({
   health: null,
   testLab: null,
   claudeUsage: [],
+  claudeUsageCheck: null,
   ops: EMPTY_OPS,
   doctor: [],
   voiceKeySet: false,
@@ -377,6 +379,7 @@ export const useStore = create<State>((set, get) => ({
           health: d.health ?? null,
           testLab: d.testLab ?? null,
           claudeUsage: d.claudeUsage ?? [],
+          claudeUsageCheck: d.claudeUsageCheck ?? null,
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
           clis: d.clis ?? [],
@@ -567,7 +570,7 @@ export const useStore = create<State>((set, get) => ({
         set({ testLab: ev.testLab });
         break;
       case 'claudeUsage':
-        set({ claudeUsage: ev.readings });
+        set({ claudeUsage: ev.readings, claudeUsageCheck: ev.check ?? null });
         break;
       case 'ops':
         // A new alarm sounds once (rate-limited); the beacons spin until it's handled.

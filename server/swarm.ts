@@ -727,7 +727,7 @@ export class Swarm extends SwarmCeoTools {
 
   /** The history's sweep (#49): past the retention goes, and finished days get their totals in the daily log. */
   private sweepHistory() {
-    return this.history.sweep(this.state.settings.historyDays, readingsLabel(this.state.claudeUsage, Date.now())).catch((err) => console.warn('could not sweep the session history', err));
+    return this.history.sweep(this.state.settings.historyDays, readingsLabel(this.state.claudeUsage, Date.now(), this.usageCheck)).catch((err) => console.warn('could not sweep the session history', err));
   }
 
   /** The setup wizard: who you are, the company, and your CEO. */

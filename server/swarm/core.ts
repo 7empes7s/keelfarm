@@ -62,6 +62,7 @@ import type {
   QaView,
   RepoView,
   ServerEvent,
+  UsageCheckError,
   WorldSnapshot,
 } from '../../shared/types.ts';
 import {
@@ -150,6 +151,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected researchGuard = new ResearchGuard(); // the running research job's time budget
   protected consults: Consult[] = []; // the CEO's consults (#28), queued and running, oldest first
   protected messageSeq = 1;
+  protected usageCheck: UsageCheckError | null = null; // the office's last idle check of Claude's usage failed (#89)
   protected agentRt = new Map<string, AgentRuntime>();
   protected seenActivity = new Map<string, SeenActivity>(); // agent id -> their latest action in the log
   protected shownActivity = new Map<string, AgentActivity | null>(); // agent id -> the activity clients last heard
@@ -495,6 +497,7 @@ export abstract class SwarmCore extends SwarmContract {
       health: this.health.view(),
       testLab: this.labView(),
       claudeUsage: this.state.claudeUsage,
+      claudeUsageCheck: this.usageCheck,
       ops: this.opsNow(),
       doctor: this.doctorView(),
       clis: this.clis,
