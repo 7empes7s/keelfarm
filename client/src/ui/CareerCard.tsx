@@ -1,9 +1,11 @@
 // Careers (#226) in the HUD and the panels: an agent's career card (portrait, rank, badges, stats, last merged PRs and
-// what they're known for), the card that pops up when you look at a desk for a moment, and the Team tab's table.
+// what they're known for), the card that pops up when you look at a desk for a moment, the agent window's Profile tab
+// (#117) and the Team tab's table.
 import { useEffect, useRef, useState } from 'react';
-import { avgFixRounds, knownFor, mergesThisWeek, passRate, rank, tenureDays, type CareerView } from '../../../shared/careers';
-import { useStore, type Agent } from '../store';
+import { avgFixRounds, badges, knownFor, mergesThisWeek, passRate, profileStats, rank, tenureDays, weeklyMerges, type CareerView } from '../../../shared/careers';
+import { agentsOnRepo, useStore, type Agent } from '../store';
 import { drawPortrait } from './portrait';
+import './charter.css'; // the stat cards (docs/design.md)
 
 const PEEK_MS = 700;
 const LAST = 5;
@@ -47,7 +49,7 @@ function Stat({ label, value, title }: { label: string; value: string | number; 
   );
 }
 
-export function CareerCard({ agent, compact = false }: { agent: Agent; compact?: boolean }) {
+function CareerCard({ agent, compact = false }: { agent: Agent; compact?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === agent.repoId));
   const now = Date.now();
   const c = agent.career;
@@ -88,6 +90,84 @@ export function CareerCard({ agent, compact = false }: { agent: Agent; compact?:
           {c.recent.slice(0, compact ? 1 : LAST).map((r) => (
             <div key={r.n} className="career-pr">
               {compact && <span className="muted">Last merged </span>}
+              {repo ? (
+                <a href={`https://github.com/${repo.fullName}/pull/${r.n}`} target="_blank" rel="noreferrer">
+                  #{r.n}
+                </a>
+              ) : (
+                <b>#{r.n}</b>
+              )}{' '}
+              <span className="career-pr-title">{r.title || 'untitled'}</span> <span className="muted">{ago(r.at, now)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Merges per week over the last four weeks, as bars, oldest first. */
+function Sparkline({ weeks }: { weeks: number[] }) {
+  const top = Math.max(1, ...weeks);
+  return (
+    <figure className="pf-spark">
+      <svg viewBox={`0 0 ${weeks.length * 12} 32`} role="img" aria-label={`Merges per week, oldest first: ${weeks.join(', ')}`}>
+        {weeks.map((n, i) => (
+          <rect key={i} x={i * 12 + 2} y={30 - (n / top) * 28} width={8} height={Math.max(1.5, (n / top) * 28)} rx={2} />
+        ))}
+      </svg>
+      <figcaption className="muted small">Merges a week, last 4 weeks: {weeks.join(' · ')}</figcaption>
+    </figure>
+  );
+}
+
+/** The agent window's Profile tab (#117): who they are, then their numbers beside their floor's, a sparkline and badges. */
+export function AgentProfile({ agent }: { agent: Agent }) {
+  const repo = useStore((s) => s.repos.find((r) => r.id === agent.repoId));
+  const agents = useStore((s) => s.agents);
+  const now = Date.now();
+  const c = agent.career;
+  if (!c) return <p className="muted small">{agent.name} runs the company; their record is the whole office.</p>;
+  const floor = agentsOnRepo(agents, agent.repoId).flatMap((a) => (a.career && a.role !== 'ceo' ? [a.career] : []));
+  const stats = profileStats(c, floor, repo?.floor ?? 0, now);
+  const earned = badges(c);
+  return (
+    <div className="pf" style={{ ['--accent' as string]: agent.color }}>
+      <div className="career-head">
+        <Portrait agent={agent} size={64} />
+        <div className="career-who">
+          <div className="career-name">{agent.name}</div>
+          <div className="career-title">
+            {rank(c)}
+            {repo ? ` · floor ${repo.floor}` : ''} · {tenureText(c, now)} on the team
+          </div>
+          <div className="career-known">{knownFor(c)}</div>
+        </div>
+      </div>
+      <div className="cs-grid pf-grid">
+        {stats.map((x) => (
+          <div key={x.key} className={`cs-stat pf-stat ${x.verdict === 'better' ? 'cs-good' : x.verdict === 'worse' ? 'cs-warn' : ''}`} title={x.title}>
+            <span className="cs-stat-title">{x.label}</span>
+            <b className="pf-value">{x.text}</b>
+            {x.vsFloor && <small>{x.vsFloor}</small>}
+          </div>
+        ))}
+      </div>
+      <Sparkline weeks={weeklyMerges(c, now)} />
+      {earned.length > 0 && (
+        <div className="career-badges">
+          {earned.map((b) => (
+            <span key={b} className="career-badge">
+              {b}
+            </span>
+          ))}
+        </div>
+      )}
+      {c.recent.length > 0 && (
+        <div className="career-recent">
+          <div className="muted small">Last merged</div>
+          {c.recent.slice(0, LAST).map((r) => (
+            <div key={r.n} className="career-pr">
               {repo ? (
                 <a href={`https://github.com/${repo.fullName}/pull/${r.n}`} target="_blank" rel="noreferrer">
                   #{r.n}

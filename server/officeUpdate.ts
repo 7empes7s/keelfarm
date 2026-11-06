@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { HOME_DIR } from './config.ts';
 import { git } from './exec.ts';
-import type { OfficeUpdateState } from '../shared/types.ts';
+import { cleanTerminalText } from '../shared/terminalText.ts';
+import type { ChatNotice, OfficeUpdateState } from '../shared/types.ts';
 
 // The office updating itself (#37, #74). The server only decides when: it lets a run of merges settle into one update,
 // drains the sessions an office restart would stop (CLIs in the terminal keeper and in Boxes carry on through it), and
@@ -148,17 +149,35 @@ export async function takeLastUpdate(home: string): Promise<LastUpdate | null> {
   return parseLastUpdate(raw);
 }
 
-/** The phone message for an update: "Updated the office from abc1234 to def5678 (3 commits)" or why it failed. */
-export function lastUpdateMessage(u: LastUpdate, commits: number | null): string {
+/**
+ * The phone message for an update, "Updated the office from abc1234 to def5678 (3 commits)" or why it failed, and its
+ * card (#138): the cleaned output behind a failure as Details, and links to the commits on GitHub when the office's
+ * own repo (`repo`, owner/name) is known.
+ */
+export function lastUpdateNotice(u: LastUpdate, commits: number | null, repo?: string): { text: string; notice: ChatNotice } {
   const [from, to, target] = [u.from, u.to || u.from, u.target || ''].map((sha) => sha.slice(0, 7));
-  const error = u.error || 'unknown error';
-  if (!u.ok && u.stage === 'check') return `⚠️ Update refused: ${error}; still on ${from}`;
-  if (!u.ok && u.stage === 'preflight') return `⚠️ Update${target ? ` to ${target}` : ''} refused: ${error} in the preflight; still on ${from}`;
-  if (!u.ok && u.stage === 'probation') return `⚠️ Update${target ? ` to ${target}` : ''} rolled back: ${error}; back on ${to}`;
-  if (!u.ok) return `⚠️ Update failed and was rolled back: ${error}`;
-  if (u.from === u.to) return `The office is already up to date at ${from}`;
-  const n = commits === null ? '' : ` (${commits} commit${commits === 1 ? '' : 's'})`;
-  return `⬆️ Updated the office from ${u.from.slice(0, 7)} to ${u.to.slice(0, 7)}${n}`;
+  const error = cleanTerminalText(u.error || 'unknown error', 4000);
+  // "tests failed (npm test failed (exit 1): …)": the headline, and the output in brackets for Details.
+  const split = /^([^(\n]+?) \((.+)\)$/s.exec(error);
+  const head = split ? split[1] : error.split('\n')[0].slice(0, 200);
+  const what = /^tests\b/.test(head) ? `the ${head}` : head;
+  const to_ = target ? ` to ${target}` : '';
+  const text = (() => {
+    if (!u.ok && u.stage === 'check') return `⚠️ Update held back: ${what}. Still running ${from}.`;
+    if (!u.ok && u.stage === 'preflight') return `⚠️ Update${to_} held back: ${what} in the preflight. Still running ${from}.`;
+    if (!u.ok && u.stage === 'probation') return `⚠️ Update${to_} rolled back: ${what}. Back on ${to}.`;
+    if (!u.ok) return `⚠️ Update failed and was rolled back: ${what}.`;
+    if (u.from === u.to) return `The office is already up to date at ${from}`;
+    const n = commits === null ? '' : ` (${commits} commit${commits === 1 ? '' : 's'})`;
+    return `⬆️ Updated the office from ${from} to ${to}${n}`;
+  })();
+  const links: { label: string; url: string }[] = [];
+  const gh = `https://github.com/${repo}`;
+  if (repo && u.ok && u.from !== u.to) links.push({ label: 'Changes', url: `${gh}/compare/${u.from}...${u.to}` });
+  if (repo && !u.ok && u.target && target !== to) links.push({ label: `Commit ${target}`, url: `${gh}/commit/${u.target}` });
+  if (repo && !u.ok) links.push({ label: `Running ${to}`, url: `${gh}/commit/${u.to || u.from}` });
+  const details = u.ok ? '' : split ? split[2] : error === head ? '' : error;
+  return { text, notice: { ...(details && { details }), ...(links.length && { links }) } };
 }
 
 // ---------- the running office ----------

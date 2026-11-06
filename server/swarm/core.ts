@@ -85,6 +85,7 @@ import {
 } from './model.ts';
 import { charterView } from '../../shared/charter.ts';
 import { charterInsights } from '../../shared/charterStats.ts';
+import { cleanTerminalText } from '../../shared/terminalText.ts';
 import { slugify } from './flavour.ts';
 import { SwarmContract } from './contract.ts';
 
@@ -638,7 +639,7 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected toast(level: 'info' | 'success' | 'error', text: string) {
-    this.broadcast({ type: 'toast', level, text });
+    this.broadcast({ type: 'toast', level, text: cleanTerminalText(text, 500) });
   }
 
   /** A rich toast that joins the notification centre (#107); with `push`, the manager's devices hear of it with the same id. */

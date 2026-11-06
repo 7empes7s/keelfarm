@@ -111,6 +111,14 @@ describe('careers', () => {
     expect(s.careers.marple.reviews).toBe(5);
   });
 
+  it('count first rounds seen and the time each build took to its PR (#117)', () => {
+    const s = emptyLedger();
+    run(s, { kind: 'hired', agentId: 'ada', at: at(9) });
+    run(s, open(1, { took: 40 * 60_000 }), qa(1, true), open(2, { took: 20 * 60_000 }), qa(2, false), qa(2, true, 2), open(3), qa(3, false, 2));
+    expect(s.careers.ada).toMatchObject({ firstPass: 1, firstQa: 2, toPr: [20 * 60_000, 40 * 60_000] });
+    expect(loadLedger(JSON.parse(JSON.stringify(s))).careers.ada).toMatchObject({ firstQa: 2, toPr: [20 * 60_000, 40 * 60_000] });
+  });
+
   it('count each verdict, opening and session once', () => {
     const s = emptyLedger();
     run(s, { kind: 'hired', agentId: 'ada', at: NOON }, open(1), open(1), qa(1, true), qa(1, true));
@@ -118,10 +126,10 @@ describe('careers', () => {
     expect(s.careers.ada).toMatchObject({ opened: 1, qaPass: 1, firstPass: 1, costUsd: 0.5, turns: 12 });
   });
 
-  it('keep the last eight merges and a week of merge times', () => {
+  it('keep the last eight merges and four weeks of merge times', () => {
     const s = emptyLedger();
-    run(s, { kind: 'hired', agentId: 'ada', at: NOON - 20 * DAY_MS });
-    for (let n = 1; n <= 10; n++) run(s, open(n), merge(n, NOON - (10 - n) * DAY_MS));
+    run(s, { kind: 'hired', agentId: 'ada', at: NOON - 50 * DAY_MS });
+    for (let n = 1; n <= 10; n++) run(s, open(n), merge(n, NOON - (10 - n) * 4 * DAY_MS));
     expect(s.careers.ada.recent.map((r) => r.n)).toEqual([10, 9, 8, 7, 6, 5, 4, 3]);
     expect(s.careers.ada.week).toHaveLength(7);
   });

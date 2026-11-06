@@ -224,3 +224,71 @@ html[data-reduce-motion] .action-confetti {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* the office's notices as a card (#138); a tool's output scrolls inside its box, never the chat */
+.notice-card {
+  align-self: center;
+  width: min(100%, 30rem);
+  min-width: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1.5px solid var(--ds-line-strong);
+  border-left: 4px solid var(--ds-warn-fill);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.notice-card-title {
+  margin: 0;
+}
+.notice-card-details > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-target);
+  color: var(--ds-link);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.notice-card-details > pre {
+  max-height: 14rem;
+  margin: 0;
+  padding: var(--ds-space-2);
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  white-space: pre;
+}
+.notice-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--ds-space-3);
+}
+.notice-card-links > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ds-target);
+  color: var(--ds-link);
+  font-weight: var(--ds-weight-strong);
+}
+
+/* nothing in the chat is wider than it (#138): long unbroken strings wrap, code blocks scroll inside themselves */
+.chat-log {
+  overflow-x: hidden;
+}
+.chat-log > *,
+.chat-log .bubble-row > *,
+.chat-log .bubble,
+.chat-log .bubble-office {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chat-log pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.chat-log code {
+  word-break: break-word;
+}

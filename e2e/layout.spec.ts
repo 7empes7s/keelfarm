@@ -85,6 +85,13 @@ async function officeSection(root: Locator, group: string, label: string) {
   await expect(t).toHaveAttribute('aria-selected', 'true');
 }
 
+/** The agent window's details, opened from the header if they're closed, then one of their tabs (#117). */
+async function agentTab(root: Locator, tab: string) {
+  const who = root.locator('.aw-who');
+  if ((await who.getAttribute('aria-expanded')) !== 'true') await who.click();
+  await root.locator('#aw-details').getByRole('tab', { name: tab, exact: true }).click();
+}
+
 /** Every section of the console, as views. */
 const consoleSections = (where: Where): View[] =>
   GROUPS.flatMap((g) =>
@@ -229,14 +236,15 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    // the agent window (#117): the header row, then its details' tabs (a sheet on phones, a side panel at 1280)
     name: 'terminal view',
-    widths: PHONES,
+    widths: [360, 375, 390, 430, 1280],
     open: async (page) => {
       const root = await pocket(page, 'team');
       await root.getByRole('button', { name: 'Terminal', exact: true }).first().click();
       return page.getByRole('dialog');
     },
-    tabs: [],
+    tabs: ['', ...(['Now', 'Profile', 'Setup'] as const).map((t) => ({ name: `details › ${t}`, go: (root: Locator) => agentTab(root, t) }))],
   },
   {
     name: 'app viewer',
