@@ -5180,18 +5180,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   }
 }
 
-/* pocket mode's ⚙️ (PocketConsole.tsx): the console's tabs one column wide, its sections as chips that stay in view.
-   Pinned flush under the header across the panel body's whole padding (.ds-console .panel-body), so nothing scrolled
-   shows above or beside them. */
-.pk-console .pk-console-chips {
-  position: sticky;
-  top: calc(-1 * var(--ds-space-4));
-  z-index: 2;
-  margin: calc(-1 * var(--ds-space-4)) calc(-1 * var(--ds-space-4)) var(--ds-space-3);
-  padding: var(--ds-space-2) var(--ds-space-4);
-  background: var(--paper);
-  border-bottom: 1.5px solid rgba(31, 29, 43, 0.08);
-}
+/* pocket mode's ⚙️ (PocketConsole.tsx): the console's sections one column wide */
 .pk-console .tab-grid {
   grid-template-columns: minmax(0, 1fr);
 }

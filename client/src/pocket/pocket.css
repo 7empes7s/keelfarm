@@ -17,32 +17,6 @@ html.pocket-mode[data-readable-font] {
 
 /* ---------- the console (PocketConsole.tsx): the 3D office's console tabs, laid out for a phone ---------- */
 
-/* the sections: one row that scrolls sideways, pinned under the panel's title */
-.pk-console .pk-console-chips {
-  flex-wrap: nowrap;
-  gap: 8px;
-  overflow-x: auto;
-  scroll-padding-inline: 12px;
-  scrollbar-width: none;
-}
-.pk-console .pk-console-chips::-webkit-scrollbar {
-  display: none;
-}
-.pk-console .pk-chip {
-  flex: none;
-  min-height: var(--ds-target);
-  padding: 0 var(--ds-space-4);
-  border: var(--ds-border) solid var(--ds-outline);
-  background: var(--ds-surface-raised);
-  color: var(--ds-text);
-  font-size: var(--ds-text-sm);
-}
-.pk-console .pk-chip-on {
-  background: var(--accent);
-  color: var(--ds-on-color);
-  box-shadow: var(--ds-shadow-1);
-}
-
 /* cards, headings, fields and buttons come from the design system's console rules (design.css, .ds-console) */
 .pk-console .field > span:first-child {
   color: var(--ds-text-muted);

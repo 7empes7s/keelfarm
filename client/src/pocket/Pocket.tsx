@@ -14,6 +14,7 @@ import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
 import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
+import { parseHash } from '../ui/consoleNav';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import './pocket.css';
 
@@ -235,7 +236,7 @@ function Settings({ section, pick, onClose, history }: { section: ConsoleSection
 export default function Pocket() {
   const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? 'company');
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<ConsoleSection | null>(null);
+  const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
   const company = useStore((s) => s.settings.companyName);
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
@@ -330,7 +331,7 @@ export default function Pocket() {
           </span>
         )}
         {tab === 'chat' && <div className="pk-head-tools" ref={setChatTools} />}
-        <button className="pk-icon-btn" onClick={() => setSettings('floors')} aria-label="Settings and notifications" title="Settings and notifications">
+        <button className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
           ⚙️
         </button>
       </header>

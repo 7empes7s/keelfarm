@@ -27,7 +27,22 @@ test('the Team tab adds agents of one kind, and Settings sizes the teams', async
   await expect(page.getByRole('button', { name: /QA tester|Developer/ })).toHaveCount(0);
   await page.getByRole('tab', { name: /Settings/ }).click();
   await expect(page.getByLabel('Most agents per floor')).toHaveValue('10');
+  await page.locator('.cn-groups').getByRole('tab', { name: /CEO/ }).click();
+  await page.getByRole('tab', { name: 'CEO settings' }).click();
   const scaling = page.getByRole('radiogroup', { name: 'Team changes from the CEO' });
   await expect(scaling.getByRole('radio')).toHaveCount(2);
   await expect(scaling.getByRole('radio').first()).toBeChecked(); // I approve each one
+});
+
+test("the console's search finds a setting by its label and opens its section at it, linked in the address (#102)", async ({ page }) => {
+  await startAt(page, AT_DESK);
+  await enterOffice(page);
+  await page.keyboard.press('e');
+  const panel = page.getByRole('dialog', { name: /Manager's console/ });
+  await panel.getByRole('searchbox', { name: 'Search settings' }).fill('box size');
+  await panel.getByRole('button', { name: /^Box size/ }).click();
+  await expect(panel.getByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByRole('tab', { name: 'Cloud agents' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByLabel('Box size')).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('#settings/cloud-agents');
 });
