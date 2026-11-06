@@ -3,38 +3,28 @@ import { api } from '../api';
 import { fmtUsd } from '../ops';
 import { useStore } from '../store';
 import { effortHint, isCeoKind, TASK_KIND_LABELS, TASK_KINDS, type CostsView, type CostSplit, type TaskKind } from '../../../shared/costs';
-import type { EffortLevel, RepoView } from '../../../shared/types';
+import type { EffortLevel } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
 import { EmptyState } from './EmptyState';
+import { InsightStrip, TopIssues, WasteCards } from './CostCards';
 import './costs.css';
 
-// Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). Cost per
-// merged PR per floor and per day, split by task kind; the most expensive issues; and the waste list, each row linking
-// to its issue or PR.
+// Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). The
+// insight strip, cost per merged PR per floor and per day, split by task kind; the most expensive issues; and the waste
+// by cause (CostCards.tsx), each linking to its issue or PR.
 
 const DAYS = [1, 7, 30];
 
 const perMerge = (s: CostSplit) => (s.perMerge === null ? '—' : fmtUsd(s.perMerge));
 
-/** "#12" linking to the issue (or "PR #40" to the PR) on GitHub, plus the floor's Kanban. */
-function WorkLink({ repo, issue, pr }: { repo: RepoView | undefined; issue: number | null; pr: number | null }) {
-  const openOverlay = useStore((s) => s.openOverlay);
-  if (!repo) return <span className="muted">{issue !== null ? `#${issue}` : pr !== null ? `PR #${pr}` : 'the company'}</span>;
-  const href = issue !== null ? `https://github.com/${repo.fullName}/issues/${issue}` : pr !== null ? `https://github.com/${repo.fullName}/pull/${pr}` : null;
-  const title = issue !== null ? repo.issues.find((i) => i.number === issue)?.title : repo.pulls.find((p) => p.number === pr)?.title;
+/** A floor's or day's numbers as table cells, labelled for the card each row becomes on a phone. */
+function SplitCells({ s }: { s: CostSplit }) {
   return (
     <>
-      {href ? (
-        <a href={href} target="_blank" rel="noreferrer" title={title ?? 'Open on GitHub'}>
-          {issue !== null ? `#${issue}` : `PR #${pr}`}
-          {issue !== null && pr !== null ? ` · PR #${pr}` : ''} ↗
-        </a>
-      ) : (
-        <span className="muted">floor {repo.floor}</span>
-      )}{' '}
-      <button className="btn btn-small btn-ghost" title={`Floor ${repo.floor}'s Kanban`} onClick={() => openOverlay({ kind: 'kanban', repoId: repo.id })}>
-        📋
-      </button>
+      <td data-label="Cost">{fmtUsd(s.usd)}</td>
+      <td data-label="Merged">{s.merges}</td>
+      <td data-label="Per merge">{perMerge(s)}</td>
+      <td data-label="Waste">{s.wasteUsd ? fmtUsd(s.wasteUsd) : '—'}</td>
     </>
   );
 }
@@ -43,7 +33,7 @@ function KindSplit({ split }: { split: CostSplit }) {
   const kinds = (Object.entries(split.byKind) as [TaskKind, number][]).sort((a, b) => b[1] - a[1]);
   if (!kinds.length) return null;
   return (
-    <ul className="costs-kinds small">
+    <ul id="costs-kinds" className="costs-kinds small">
       {kinds.map(([k, usd]) => (
         <li key={k}>
           <span>{TASK_KIND_LABELS[k]}</span>
@@ -94,6 +84,7 @@ export function CostsSection() {
   const [repoId, setRepoId] = useState('');
   const [view, setView] = useState<CostsView | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cause, setCause] = useState<string | null>(null); // the waste group that's open
   const load = useCallback(() => {
     setLoading(true);
     api
@@ -136,6 +127,7 @@ export function CostsSection() {
         <p className="muted small">No finished sessions in this time yet. Every session that ends is written down here, with what it cost and what came of it.</p>
       ) : (
         <>
+          <InsightStrip view={view} floorName={floorName} onCause={setCause} />
           <div className="card costs-total">
             <div className="row wrap">
               <b>~{fmtUsd(view.total.usd)}</b>
@@ -154,7 +146,7 @@ export function CostsSection() {
             </div>
             <KindSplit split={view.total} />
           </div>
-          <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="Cost per floor">
+          <div id="costs-floors" className="costs-stack" role="region" aria-label="Cost per floor">
             <table className="ops-table costs-table">
               <thead>
                 <tr>
@@ -171,17 +163,14 @@ export function CostsSection() {
                     <th style={{ ['--accent' as string]: repo(f.repoId)?.color ?? '#1f1d2b' }} className="costs-floor">
                       {floorName(f.repoId)}
                     </th>
-                    <td>{fmtUsd(f.usd)}</td>
-                    <td>{f.merges}</td>
-                    <td>{perMerge(f)}</td>
-                    <td>{f.wasteUsd ? fmtUsd(f.wasteUsd) : '—'}</td>
+                    <SplitCells s={f} />
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {view.byDay.length > 1 && (
-            <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="Cost per day">
+            <div id="costs-days" className="costs-stack" role="region" aria-label="Cost per day">
               <table className="ops-table costs-table">
                 <thead>
                   <tr>
@@ -196,10 +185,7 @@ export function CostsSection() {
                   {view.byDay.map((d) => (
                     <tr key={d.day}>
                       <th>{new Date(`${d.day}T12:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</th>
-                      <td>{fmtUsd(d.usd)}</td>
-                      <td>{d.merges}</td>
-                      <td>{perMerge(d)}</td>
-                      <td>{d.wasteUsd ? fmtUsd(d.wasteUsd) : '—'}</td>
+                      <SplitCells s={d} />
                     </tr>
                   ))}
                 </tbody>
@@ -208,32 +194,14 @@ export function CostsSection() {
           )}
           <StartupTable view={view} />
           <h3 className="section">🏷️ Most expensive issues</h3>
-          <ol className="costs-list small">
-            {view.top.map((t) => (
-              <li key={`${t.repoId}:${t.issue}:${t.pr}`}>
-                <b>{fmtUsd(t.usd)}</b> <WorkLink repo={repo(t.repoId)} issue={t.issue} pr={t.pr} />
-                <span className="muted">
-                  {' '}
-                  · {t.sessions} session{t.sessions === 1 ? '' : 's'} · floor {repo(t.repoId)?.floor ?? '?'}
-                  {t.merged ? ' · merged' : ''}
-                </span>
-              </li>
-            ))}
-          </ol>
-          <h3 className="section">
-            🗑️ Waste {view.waste.length > 0 && <span className="badge">{view.waste.length}</span>}
+          <TopIssues top={view.top} repo={repo} />
+          <h3 id="costs-waste" className="section">
+            🗑️ Waste {view.total.wasteSessions > 0 && <span className="badge">{view.total.wasteSessions}</span>}
           </h3>
           {view.waste.length === 0 ? (
             <EmptyState kind="waste" compact />
           ) : (
-            <ul id="costs-waste" className="costs-list small">
-              {view.waste.map((w) => (
-                <li key={`${w.at}:${w.kind}:${w.agent}`}>
-                  <b>{fmtUsd(w.usd)}</b> {TASK_KIND_LABELS[w.kind]}: {w.why} · <WorkLink repo={repo(w.repoId)} issue={w.issue} pr={w.pr} />
-                  <span className="muted"> · {w.agent} · {new Date(w.at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                </li>
-              ))}
-            </ul>
+            <WasteCards view={view} repo={repo} open={cause} setOpen={setCause} />
           )}
         </>
       )}
