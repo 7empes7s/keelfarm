@@ -43,7 +43,6 @@
   background: var(--ds-line);
   font-size: 0.85em;
   font-weight: var(--ds-weight);
-  line-height: var(--ds-leading-tight);
 }
 .ref-chip-good .ref-chip-status {
   background: var(--ds-good-fill);
