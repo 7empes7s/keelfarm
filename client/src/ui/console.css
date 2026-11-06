@@ -1,0 +1,222 @@
+/* The manager's console's layout (ConsoleNav.tsx, #102): five top tabs that fit in one row, a side menu of the open
+   tab's sections (search on top), and the section beside it, scrolling on its own. Pocket mode (PocketConsole.tsx)
+   shows the side menu as a list you tap into, and a section under a back bar pinned to the panel's top. */
+
+.ds-console .cn-groups {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+@container (max-width: 560px) {
+  .ds-console .cn-groups {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+}
+
+/* the side menu and the section, each scrolling inside the panel: the console itself never scrolls */
+.cn-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(200px, 15rem) minmax(0, 1fr);
+  gap: var(--ds-space-4);
+  margin-bottom: calc(-1 * var(--ds-space-4));
+}
+.cn-side {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  padding: 0 var(--ds-space-1) var(--ds-space-4) 0;
+  border-right: var(--ds-border) solid var(--ds-line);
+}
+.cn-pane {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--ds-space-4);
+}
+/* a narrow office window: the menu above the section, the two scrolling as one */
+@media (max-width: 700px) {
+  .ds-console .panel-body:has(> .cn-split) {
+    overflow-y: auto;
+  }
+  .cn-split {
+    display: block;
+    flex: none;
+  }
+  .cn-side {
+    overflow: visible;
+    border-right: none;
+    padding: 0 0 var(--ds-space-3);
+  }
+  .cn-menu {
+    flex-flow: row wrap;
+  }
+  .cn-pane {
+    overflow: visible;
+  }
+}
+
+.cn-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+.cn-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid transparent;
+  border-radius: var(--ds-radius-md);
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.cn-item:hover {
+  background: var(--ds-surface-hover);
+}
+.cn-item-on {
+  border-color: var(--ds-outline);
+  background: var(--accent);
+  color: var(--ds-on-color);
+  font-weight: var(--ds-weight-strong);
+  box-shadow: var(--ds-shadow-1);
+}
+@media (max-width: 700px) {
+  .cn-menu .cn-item {
+    width: auto;
+  }
+}
+.cn-item-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cn-item-meta {
+  display: block;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+/* the search */
+.cn-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.cn-search input {
+  width: 100%;
+  min-height: var(--ds-target);
+}
+.cn-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+.cn-none {
+  padding: var(--ds-space-2) var(--ds-space-3);
+}
+/* the setting a search found, once its section opens */
+.cn-found {
+  outline: var(--ds-border-strong) solid var(--ds-focus);
+  outline-offset: var(--ds-space-1);
+  border-radius: var(--ds-radius-sm);
+}
+
+/* a section of one card: as wide as reads well */
+.cn-one {
+  max-width: 48rem;
+}
+
+/* About this office */
+.cn-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--ds-space-2) var(--ds-space-4);
+  margin: 0;
+}
+.cn-facts dt {
+  color: var(--ds-text-muted);
+}
+.cn-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- pocket mode: the list, then a section under a back bar ---------- */
+
+.pk-console .cn-search {
+  margin-bottom: var(--ds-space-4);
+}
+.cn-list {
+  margin-bottom: var(--ds-space-4);
+}
+.cn-list-head {
+  margin: 0 0 var(--ds-space-2);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.cn-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  overflow: hidden;
+}
+.cn-list li + li {
+  border-top: 1px solid var(--ds-line);
+}
+.cn-row {
+  border: none;
+  border-radius: 0;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  font-size: var(--ds-text-md);
+}
+.cn-chevron {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xl);
+  line-height: 1;
+}
+
+/* pinned flush under the header across the panel body's whole padding (.ds-console .panel-body, #91), so nothing
+   scrolled shows above or beside it */
+.pk-console .cn-back-bar {
+  position: sticky;
+  top: calc(-1 * var(--ds-space-4));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: calc(-1 * var(--ds-space-4)) calc(-1 * var(--ds-space-4)) var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background: var(--ds-surface);
+  border-bottom: 1px solid var(--ds-line);
+}
+.cn-back {
+  flex: none;
+  min-height: var(--ds-target);
+}
+.cn-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--ds-text-lg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

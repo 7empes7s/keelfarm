@@ -298,15 +298,16 @@ export function HistorySettings() {
         <span>Keep transcripts for (days, 0 = forever)</span>
         <input key={settings.historyDays} type="number" min={0} max={3650} defaultValue={settings.historyDays} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.historyDays && set({ historyDays: Number(e.target.value) })} />
       </label>
-      <p className="small">
+      <details className="small">
+        <summary>Details</summary>
         {usage ? (
-          <>
+          <p className="small">
             Writing to <code>{usage.dailyDir}</code>. {usage.sessions} session{usage.sessions === 1 ? '' : 's'} in the history; {usage.files} transcript{usage.files === 1 ? '' : 's'} take {bytes(usage.bytes)} in <code>{usage.historyDir}</code>.
-          </>
+          </p>
         ) : (
-          <span className="muted">Measuring the history…</span>
+          <p className="muted small">Measuring the history…</p>
         )}
-      </p>
+      </details>
     </div>
   );
 }
