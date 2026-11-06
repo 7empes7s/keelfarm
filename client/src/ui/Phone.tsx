@@ -27,7 +27,7 @@ import { useAttachments } from './chatUpload';
 import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
-import { backdropClose, closeOverlay } from './Panel';
+import { backdropClose, closeOverlay, useBackLayer } from './Panel';
 import { useDialogFocus } from './dialogFocus';
 import { isKey } from './controls';
 import { Key } from './Key';
@@ -1093,6 +1093,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   const openOverlay = useStore((s) => s.openOverlay);
   const box = useRef<HTMLDivElement>(null);
   useDialogFocus(box);
+  useBackLayer(closeOverlay);
   const requests = useStore((s) => s.requests);
   const messages = useStore((s) => s.messages);
   const readAt = useStore((s) => s.phoneReadAt);

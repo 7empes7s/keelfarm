@@ -1,0 +1,138 @@
+/* "What's new on this floor" (#129): FloorBuilds.tsx's swipeable row of build cards. */
+
+.fb {
+  margin: var(--ds-space-2) 0 var(--ds-space-3);
+  min-width: 0;
+}
+.fb-head {
+  margin: 0 0 var(--ds-space-1);
+  font-weight: var(--ds-weight-strong);
+  color: var(--ds-text-muted);
+}
+.fb-row {
+  display: flex;
+  gap: var(--ds-space-2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  padding: 2px 2px var(--ds-space-2);
+  scrollbar-width: thin;
+}
+.fb-item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+.fb-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  width: 168px;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2);
+  text-align: left;
+  font: inherit;
+  color: var(--ds-text);
+  background: var(--ds-surface-raised);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-1);
+  cursor: pointer;
+}
+.fb-card:hover {
+  background: var(--ds-surface-hover);
+}
+.fb-card:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+.fb-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--ds-radius-sm);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  background: color-mix(in srgb, var(--accent, var(--ds-surface-sunken)) 30%, var(--ds-surface-sunken));
+}
+.fb-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+}
+.fb-thumb-glyph {
+  font-size: 1.6rem;
+}
+.fb-running {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 6px;
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  color: var(--ds-on-color);
+  background: var(--ds-good-fill);
+}
+.fb-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+  min-height: calc(2em * var(--ds-leading-tight));
+}
+.fb-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.fb-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: var(--ds-border) solid var(--ds-outline);
+  color: #fff;
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.fb-chip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  border-radius: var(--ds-radius-pill);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.fb-passed .fb-chip,
+.fb-merged .fb-chip,
+.fb-live .fb-chip {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.fb-failed .fb-chip,
+.fb-needs-you .fb-chip {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.fb-qa .fb-chip,
+.fb-fixing .fb-chip,
+.fb-building .fb-chip {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.fb-open {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  color: var(--ds-link);
+}

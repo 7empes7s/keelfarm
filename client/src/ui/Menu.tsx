@@ -3,6 +3,7 @@
 // follow the WAI-ARIA menu button pattern: arrows move, Home/End jump, Esc closes and returns focus, Tab leaves.
 // Outside taps, scrolling and resizing close it. Rules (sections, keys, placement) are pure, in menuLogic.ts.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { pushLayer } from './backStack';
 import { menuKey, menuPlacement, menuSections, openKey, type MenuItem } from './menuLogic';
 
 export type { MenuItem } from './menuLogic';
@@ -49,6 +50,9 @@ export function Menu({
     const all = items(el);
     all[first.current < 0 ? all.length - 1 : first.current]?.focus({ preventScroll: true });
   }, [open]);
+
+  // An open sheet is the top layer: Back closes it (backStack.ts).
+  useEffect(() => (open ? pushLayer(() => setOpen(false)) : undefined), [open]);
 
   useEffect(() => {
     if (!open) return;
