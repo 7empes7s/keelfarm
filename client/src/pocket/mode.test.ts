@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickMode } from './mode';
+import { otherMode, pickLayout, pickMode } from './mode';
 
 describe('pocket mode', () => {
   const screen = { narrow: false, touch: false, saved: null, param: null };
@@ -28,5 +28,26 @@ describe('pocket mode', () => {
     expect(pickMode({ ...screen, crashed: true })).toBe('pocket');
     expect(pickMode({ ...screen, saved: 'office', crashed: false })).toBe('office');
     expect(pickMode({ ...screen, crashed: true, param: '0' })).toBe('office'); // the URL still decides one visit
+  });
+});
+
+describe("pocket mode's layout (#104)", () => {
+  const at = (width: number, touch = false) => pickLayout({ width, touch });
+
+  it('is the phone layout up to 760 px, the rail from 761 px and side by side from 1024 px', () => {
+    expect([360, 390, 430, 760].map((w) => at(w))).toEqual(['compact', 'compact', 'compact', 'compact']);
+    expect([761, 900, 1023].map((w) => at(w))).toEqual(['medium', 'medium', 'medium']);
+    expect([1024, 1280, 1920].map((w) => at(w))).toEqual(['expanded', 'expanded', 'expanded']);
+  });
+
+  it('keeps touch-only screens on the phone layout until they are expanded-wide', () => {
+    expect(at(390, true)).toBe('compact');
+    expect(at(900, true)).toBe('compact');
+    expect(at(1366, true)).toBe('expanded');
+  });
+
+  it('switches between the two offices', () => {
+    expect(otherMode('pocket')).toBe('office');
+    expect(otherMode('office')).toBe('pocket');
   });
 });

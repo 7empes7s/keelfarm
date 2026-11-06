@@ -1,7 +1,7 @@
 // Pocket mode's Approvals tab: everything waiting on the manager's decision. Team changes (new agents and let-gos, the
 // phone's cards), stuck PRs with the Kanban's Retry QA / Send back / Merge / Close, and passed PRs on floors that don't
-// merge on their own, and charter changes the CEO proposed (#48).
-import { useState } from 'react';
+// merge on their own, and charter changes the CEO proposed (#48). On a desktop (#104) a list beside the one picked.
+import { Fragment, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import type { QaView, RepoView } from '../../../shared/types';
@@ -98,32 +98,64 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
   );
 }
 
-export function Approvals() {
+/** One decision: its group's heading, its line in the desktop's list, and its card. */
+interface Decision {
+  key: string;
+  group: string;
+  label: string;
+  card: ReactNode;
+}
+
+export function Approvals({ wide }: { wide?: boolean }) {
   const repos = useStore((s) => s.repos);
   const qa = useStore((s) => s.qa);
   const requests = useStore((s) => s.requests);
+  const [picked, setPicked] = useState<string | null>(null);
   const w = waitingOnYou(repos, qa, requests);
   const charters = repos.filter((r) => r.charter.proposal);
-  const nothing = w.requests.length + w.stuck.length + w.ready.length + charters.length === 0;
+  const pr = (s: (typeof w.stuck)[number]) => `PR #${s.qa.prNumber} ${s.repo.pulls.find((p) => p.number === s.qa.prNumber)?.title ?? ''}`;
+  const items: Decision[] = [
+    ...w.requests.map((r) => ({ key: `req:${r.id}`, group: '👥 Team changes', label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} /> })),
+    ...charters.map((r) => ({ key: `charter:${r.id}`, group: '🎯 Charter changes (edit them in ⚙️ → Charter)', label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
+    ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: '⚠️ Pull requests that need you', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} /> })),
+    ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
+  ];
+  const heading = (d: Decision, i: number) => (i === 0 || items[i - 1].group !== d.group ? d.group : null);
+  if (items.length === 0) {
+    return (
+      <div className="pk-page">
+        <EmptyState kind="approvals" />
+      </div>
+    );
+  }
+  if (!wide) {
+    return (
+      <div className="pk-page">
+        {items.map((d, i) => (
+          <Fragment key={d.key}>
+            {heading(d, i) && <h3 className="pk-h">{d.group}</h3>}
+            {d.card}
+          </Fragment>
+        ))}
+      </div>
+    );
+  }
+  const open = items.find((d) => d.key === picked) ?? items[0];
   return (
-    <div className="pk-page">
-      {nothing && <EmptyState kind="approvals" />}
-      {w.requests.length > 0 && <h3 className="pk-h">👥 Team changes</h3>}
-      {w.requests.map((r) => (
-        <Resume key={r.id} req={r} />
-      ))}
-      {charters.length > 0 && <h3 className="pk-h">🎯 Charter changes (edit them in ⚙️ → Charter)</h3>}
-      {charters.map((r) => (
-        <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />
-      ))}
-      {w.stuck.length > 0 && <h3 className="pk-h">⚠️ Pull requests that need you</h3>}
-      {w.stuck.map((s) => (
-        <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} />
-      ))}
-      {w.ready.length > 0 && <h3 className="pk-h">✅ Ready to merge</h3>}
-      {w.ready.map((s) => (
-        <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready />
-      ))}
+    <div className="pk-page pk-split">
+      <ul className="pk-split-list" aria-label="Decisions waiting on you">
+        {items.map((d, i) => (
+          <Fragment key={d.key}>
+            {heading(d, i) && <li className="pk-h">{d.group}</li>}
+            <li>
+              <button className={`pk-split-item ${d === open ? 'pk-split-on' : ''}`} aria-current={d === open ? 'true' : undefined} onClick={() => setPicked(d.key)}>
+                {d.label}
+              </button>
+            </li>
+          </Fragment>
+        ))}
+      </ul>
+      <div className="pk-split-detail">{open.card}</div>
     </div>
   );
 }

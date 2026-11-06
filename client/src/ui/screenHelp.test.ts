@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { SECTIONS } from './consoleNav';
+import { SECTIONS } from './consoleNavRules';
 import { EMPTY } from './emptyStates';
 import { SCREEN_HELP } from './screenHelp';
 

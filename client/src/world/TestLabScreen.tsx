@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import { useStore } from '../store';
-import { TEST_LAB_SECTION } from '../ui/consoleNav';
+import { TEST_LAB_SECTION } from '../ui/consoleNavRules';
 import { useKeyName } from '../ui/controls';
 import { roundRect, SANS, wrap } from './draw';
 import { useCanvasTexture, useInteractable } from './interact';

@@ -3,7 +3,7 @@
 // Pocket mode turns a 'manager' overlay into its ⚙️ sheet and a 'phone' one into the Chat tab (Pocket.tsx).
 import { create } from 'zustand';
 import { useStore, type Overlay } from '../store';
-import type { SectionId } from './consoleNav';
+import type { SectionId } from './consoleNavRules';
 
 export type Target =
   | { kind: 'overlay'; overlay: Overlay }

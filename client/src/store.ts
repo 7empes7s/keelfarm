@@ -30,7 +30,7 @@ import { gongForMerge } from './world/gongRunner';
 import { ROOF } from './world/layout';
 import { emitReward } from './world/decor/rewards';
 import type { SnackId } from './world/fridge';
-import type { GroupId, SectionId } from './ui/consoleNav';
+import type { GroupId, SectionId } from './ui/consoleNavRules';
 
 export type Agent = Omit<AgentView, 'log'>;
 
@@ -56,7 +56,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-/** A console section, or a top tab (its remembered section): ui/consoleNav.ts. */
+/** A console section, or a top tab (its remembered section): ui/consoleNavRules.ts. */
 export type ManagerTab = SectionId | GroupId;
 
 export interface Focus {
@@ -167,6 +167,7 @@ interface State {
   travel: { to: number; phase: 'closing' | 'opening' } | null;
   overlay: Overlay | null;
   back: Overlay | null; // what closing the overlay goes back to: the phone's chat after a chip's jump (ui/RefChips.tsx)
+  chatDocked: boolean; // pocket mode's chat is open beside the pages on a desktop (#104): the CEO's messages don't toast
   focus: Focus | null;
   locked: boolean;
   started: boolean;
@@ -326,6 +327,7 @@ export const useStore = create<State>((set, get) => ({
   travel: null,
   overlay: null,
   back: null,
+  chatDocked: false,
   focus: null,
   locked: false,
   started: false,
@@ -529,7 +531,7 @@ export const useStore = create<State>((set, get) => ({
         set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
-        const reading = o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat';
+        const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
         // Read aloud, in this tab or another; the voice plays the chirp itself if it can't. Locked audio can't speak.
         const speak = live && audioUnlocked() && speakable(ev.message, get().settings.voice, Date.now());
         if (speak) {

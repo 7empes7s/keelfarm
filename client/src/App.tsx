@@ -1,5 +1,6 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useMode } from './pocket/mode';
+import { installSwitchKey } from './pocket/switchOffice';
 import { Captions, LiveRegions } from './ui/CaptionStrip';
 import { ConfirmDialog } from './ui/Confirm';
 import { OfficeBoundary } from './ui/OfficeBoundary';
@@ -13,6 +14,7 @@ export function App() {
   // A fresh lazy component per attempt: React keeps a failed import's error otherwise.
   const [attempt, setAttempt] = useState(0);
   const Office = useMemo(loadOffice, [attempt]);
+  useEffect(installSwitchKey, []);
   return (
     <>
       <Suspense fallback={<div className="app-loading">Loading the office…</div>}>

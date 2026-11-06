@@ -26,6 +26,7 @@ import { GuideButton } from './GuideCard';
 import { usageChip } from '../ops';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
+import { switchOffice } from '../pocket/switchOffice';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -100,6 +101,16 @@ function PhotoButton() {
     <button className="pill pill-photo" onClick={togglePhoto} title={replay ? `Photo mode (${photoKey}). Instant replay is on: ${replayKey} saves the last 15 s` : `Photo mode (${photoKey}): freeze the office, frame a shot, record a clip`}>
       📷 <kbd>{photoKey}</kbd>
       {replay && <span className="pill-photo-rec" aria-label="Instant replay on" />}
+    </button>
+  );
+}
+
+/** The 2D office (pocket mode, #104): the same office as pages, a click or a key away; this device remembers it. */
+function SwitchButton() {
+  const key = useKeyName('switchOffice');
+  return (
+    <button className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
+      🗺️ 2D office <kbd>{key}</kbd>
     </button>
   );
 }
@@ -191,6 +202,7 @@ export function HUD() {
         <PhotoButton />
         <SearchButton />
         <GuideButton />
+        <SwitchButton />
       </div>
 
       <WorkersPanel />

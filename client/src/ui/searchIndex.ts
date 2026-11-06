@@ -1,8 +1,8 @@
 // Search everything (#109): one index over floors, agents, issues, PRs, QA reports, settings (the console's own
-// index, consoleNav.ts), charter objectives, CEO messages and artifacts, plus actions ("Ask the CEO to plan…"). Fuzzy
+// index, consoleNavRules.ts), charter objectives, CEO messages and artifacts, plus actions ("Ask the CEO to plan…"). Fuzzy
 // matching, results grouped, recent picks first. Pure; SearchPalette.tsx draws it and goTo.ts runs a pick.
 import { CEO_ID, type AgentView, type PhoneMessage, type QaView, type RepoView } from '../../../shared/types';
-import { SECTIONS, type Where } from './consoleNav';
+import { SECTIONS, type Where } from './consoleNavRules';
 import type { Target } from './goTo';
 
 export type Kind = 'action' | 'floor' | 'agent' | 'issue' | 'pr' | 'qa' | 'setting' | 'objective' | 'message' | 'artifact';

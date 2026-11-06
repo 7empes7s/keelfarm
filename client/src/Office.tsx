@@ -13,7 +13,7 @@ import { Tutorial } from './ui/Tutorial';
 import { HoldMenu } from './ui/HoldMenu';
 import { TouchStick } from './ui/TouchStick';
 import { useTouchPage } from './ui/touchMode';
-import { parseHash } from './ui/consoleNav';
+import { parseHash } from './ui/consoleNavRules';
 import { SearchPalette } from './ui/SearchPalette';
 import { GuideSheet } from './ui/GuideCard';
 

@@ -2,7 +2,7 @@
 // has (searchIndex.ts), results grouped with icons, ↑ ↓ Enter or a tap to go.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
-import type { Where } from './consoleNav';
+import type { Where } from './consoleNavRules';
 import { go, openSearch, useFinder } from './goTo';
 import { buildIndex, loadRecent, saveRecent, searchAll, withRecent, type Item } from './searchIndex';
 import { Sheet } from './Sheet';

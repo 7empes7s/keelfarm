@@ -1,6 +1,6 @@
 // "What can I do here?" (#109): the ⓘ sheet on each main screen (pocket's tabs, every console section): what the screen
 // shows, its three most useful actions, and where the docs explain it. All the words are here, so they stay alike.
-import type { SectionId } from './consoleNav';
+import type { SectionId } from './consoleNavRules';
 import { DOCS } from './emptyStates';
 
 export type ScreenId = SectionId | 'company' | 'kanban' | 'pocket-team' | 'approvals';

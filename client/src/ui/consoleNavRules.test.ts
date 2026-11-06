@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUPS, hashFor, opening, parseHash, resolve, search, SECTIONS, sectionsIn, TEST_LAB_SECTION } from './consoleNav';
+import { GROUPS, hashFor, opening, parseHash, resolve, search, SECTIONS, sectionsIn, TEST_LAB_SECTION } from './consoleNavRules';
 
 describe('the console map', () => {
   it('has a handful of top tabs, each with sections, and unique section ids', () => {

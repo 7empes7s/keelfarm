@@ -1,9 +1,9 @@
-// The manager's console (#102): five top tabs (consoleNav.ts's groups), a side menu of the open tab's sections with a
+// The manager's console (#102): five top tabs (consoleNavRules.ts's groups), a side menu of the open tab's sections with a
 // search over every setting at its top, and one section beside it. Pocket mode draws the same map as a list you tap
 // into (PocketConsole.tsx); both keep the open section in the address (#settings/cloud-agents) and remember it.
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { pendingRequests, useStore, type ManagerTab } from '../store';
-import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionsIn, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNav';
+import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionsIn, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
@@ -179,38 +179,36 @@ export function ConsoleSearch({ where, query, setQuery, go }: { where: Where; qu
   );
 }
 
-/** The 3D office's console. tab: a section or one of the old tab names (consoleNav.ts `resolve`). */
-export function ManagerConsole({ initialTab, initialRepo, card, history }: { initialTab?: ManagerTab; initialRepo?: string; card?: string; history?: HistoryFocus }) {
-  const [section, setSection] = useState<Section>(() => opening(initialTab, location.hash, 'office', loadRemembered()));
+/** The console's top tabs, the open tab's side menu and one section beside it: the 3D office's console, and pocket mode's ⚙️ on a desktop (#104). */
+export function ConsoleSplit({ where, section, pick, focus }: { where: Where; section: Section; pick: (s: Section) => void; focus?: SectionFocus }) {
   const [query, setQuery] = useState('');
   const pane = useRef<HTMLDivElement>(null);
   const setFound = useFoundLabel(pane);
   const badges = useBadges();
   const ids = useId();
-  useSectionAddress(section);
   useEffect(() => {
     pane.current?.scrollTo(0, 0); // a block: Chrome's scrollTo can return a promise, which React would take for a cleanup
   }, [section]);
-  const openGroup = (g: GroupId) => setSection(opening(g, '', 'office', loadRemembered()));
-  const sections = sectionsIn(section.group, 'office');
+  const openGroup = (g: GroupId) => pick(opening(g, '', where, loadRemembered()));
+  const sections = sectionsIn(section.group, where);
   return (
-    <Panel wide title="🧑‍💼 Manager's console" className="ds-console">
+    <>
       <div className="tabs cn-groups" role="tablist" aria-label="Console">
         {GROUPS.map((g) => (
           <button key={g.id} role="tab" aria-selected={section.group === g.id} className={`tab ${section.group === g.id ? 'tab-on' : ''}`} onClick={() => openGroup(g.id)}>
-            {g.icon} {g.label} <Badge n={groupBadge(g.id, 'office', badges)} />
+            {g.icon} {g.label} <Badge n={groupBadge(g.id, where, badges)} />
           </button>
         ))}
       </div>
       <div className="cn-split">
         <nav className="cn-side" aria-label="Sections">
           <ConsoleSearch
-            where="office"
+            where={where}
             query={query}
             setQuery={setQuery}
             go={(h) => {
               setQuery('');
-              setSection(h.section);
+              pick(h.section);
               setFound(h.label === h.section.label ? null : h.label);
             }}
           />
@@ -223,7 +221,7 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
                   aria-selected={section.id === s.id}
                   aria-controls={`${ids}-pane`}
                   className={`cn-item ${section.id === s.id ? 'cn-item-on' : ''}`}
-                  onClick={() => setSection(s)}
+                  onClick={() => pick(s)}
                 >
                   <span aria-hidden>{s.icon}</span>
                   <span className="cn-item-text">{s.label}</span>
@@ -237,9 +235,20 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
           <div className="cn-pane-info">
             <InfoButton key={section.id} screen={section.id} />
           </div>
-          <SectionBody key={section.id} id={section.id} where="office" focus={{ repoId: initialRepo, card, history }} />
+          <SectionBody key={section.id} id={section.id} where={where} focus={focus} />
         </div>
       </div>
+    </>
+  );
+}
+
+/** The 3D office's console. tab: a section or one of the old tab names (consoleNavRules.ts `resolve`). */
+export function ManagerConsole({ initialTab, initialRepo, card, history }: { initialTab?: ManagerTab; initialRepo?: string; card?: string; history?: HistoryFocus }) {
+  const [section, setSection] = useState<Section>(() => opening(initialTab, location.hash, 'office', loadRemembered()));
+  useSectionAddress(section);
+  return (
+    <Panel wide title="🧑‍💼 Manager's console" className="ds-console">
+      <ConsoleSplit where="office" section={section} pick={setSection} focus={{ repoId: initialRepo, card, history }} />
     </Panel>
   );
 }

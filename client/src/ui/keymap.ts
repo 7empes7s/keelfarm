@@ -25,7 +25,8 @@ export type ActionId =
   | 'photo'
   | 'saveReplay'
   | 'emote'
-  | 'ping';
+  | 'ping'
+  | 'switchOffice';
 
 /**
  * Where an action works: `global` everywhere; `move` on foot and in the overview (where the movement keys pan);
@@ -67,6 +68,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'ping', label: 'Ping where you aim (or middle-click)', group: 'Office', scope: 'walk', keys: ['KeyX'] },
   { id: 'photo', label: 'Photo mode', group: 'Office', scope: 'global', keys: ['KeyK'] },
   { id: 'saveReplay', label: 'Save the last 15 s (instant replay)', group: 'Office', scope: 'global', keys: ['KeyI'] },
+  { id: 'switchOffice', label: '2D office / 3D office', group: 'Office', scope: 'global', keys: ['KeyO'] },
 ];
 
 export const ACTION_IDS = ACTIONS.map((a) => a.id);

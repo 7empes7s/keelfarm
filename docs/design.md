@@ -61,7 +61,7 @@ fill uses `--ds-on-color`.
 
 The manager's console has five top tabs, and each one shows a side menu of its sections with one section beside it
 (on a phone, the side menu is a list you tap into, with a back button, iOS Settings style). The map is
-`client/src/ui/consoleNav.ts`, drawn by `ui/ConsoleNav.tsx` (the 3D office) and `pocket/PocketConsole.tsx` (phones):
+`client/src/ui/consoleNavRules.ts`, drawn by `ui/ConsoleNav.tsx` (the 3D office) and `pocket/PocketConsole.tsx` (phones):
 
 | Tab | Sections |
 | --- | --- |
