@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { effortHint, isCeoKind, TASK_KIND_LABELS, TASK_KINDS, type CostsView, type CostSplit, type TaskKind } from '../../../shared/costs';
 import type { EffortLevel } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
+import { EmptyState } from './EmptyState';
 import { InsightStrip, TopIssues, WasteCards } from './CostCards';
 import './costs.css';
 
@@ -198,7 +199,7 @@ export function CostsSection() {
             🗑️ Waste {view.total.wasteSessions > 0 && <span className="badge">{view.total.wasteSessions}</span>}
           </h3>
           {view.waste.length === 0 ? (
-            <p className="muted small">Nothing wasted: every session ended with a PR, a commit or a verdict.</p>
+            <EmptyState kind="waste" compact />
           ) : (
             <WasteCards view={view} repo={repo} open={cause} setOpen={setCause} />
           )}

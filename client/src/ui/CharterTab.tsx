@@ -9,6 +9,7 @@ import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { reduceMotion } from './a11y';
 import { InsightStrip, ObjectiveCard } from './CharterStats';
+import { EmptyState } from './EmptyState';
 import './charter.css';
 
 // The manager's console → Charter (#48), also in pocket mode: each floor's charter as a page to read (#105), the
@@ -198,7 +199,7 @@ function Drift({ repo }: { repo: RepoView }) {
     <div className="card">
       <h3>🧭 Where the last 7 days went</h3>
       {merged === 0 ? (
-        <p className="muted small">No merges in the last 7 days. Merged pull requests show up here under the objective their issue named.</p>
+        <EmptyState kind="drift" compact target={{ kind: 'ceo', text: `Plan floor ${repo.floor}'s next issues against its charter objectives.` }} />
       ) : (
         <ul className="charter-drift">
           {groups.map((g) => (
