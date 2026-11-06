@@ -45,7 +45,7 @@ Rejected:
 | Type | `--ds-text-xs` .75 · `-sm` .875 · `-md` 1 · `-lg` 1.125 · `-xl` 1.375 rem; `--ds-leading`, `--ds-leading-tight`, `--ds-weight(-strong)` |
 | Radii | `--ds-radius-sm` 8 · `-md` 12 · `-lg` 16 · `-xl` 24 · `-pill`; borders `--ds-border` 2, `--ds-border-strong` 3 |
 | Touch | `--ds-target` 44 px |
-| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim` |
+| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; chart series `--ds-series-1…4` |
 | Elevation | `--ds-shadow-1` (buttons), `-2` (cards), `-3` (panels), `--ds-shadow-float` (menus) |
 | Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
 | Layers | `--ds-z-hud` 10 · `-panel` 30 · `-menu` 50 · `-confirm` 60 · `-toast` 70 |
@@ -75,6 +75,16 @@ fill uses `--ds-on-color`.
 - **Field groups** `.ds-fields` (as many columns as fit, one on a phone), switches `.ds-switches`, message box `.ds-compose`.
 - **Narrow tables** `.ds-table` inside a `.ds-stack-scope`: a table when the container is wider than 760 px, a card per
   row below it. Label cells with `data-label`; `.ds-cell-head` and `.ds-cell-full` span the card.
+- **Stat card** (`.costs-stat`, Mission control's insight strip): a button, so it taps through to the rows it counts.
+  Small muted label, the number at `--ds-text-xl`, one short note (a ↑/↓ % in `--ds-danger-text` when worse, a
+  sparkline). 2 px outline, `--ds-shadow-2`, `--ds-radius-md`; two per row on a phone, three from 600 px; a wide one
+  (a share bar) spans the row.
+- **Ranked card** (`.costs-card`): rank badge, the amount at `--ds-text-lg`, the title (two lines at most), then chips
+  (links ↗, floor with its colour dot, status filled with a state colour), muted facts, and a share bar against the top
+  one. The floor's colour is the left edge; the card's one action (📋) sits in the top-right corner as a 44 px target,
+  never in the text flow. Expandable groups are buttons with `aria-expanded`.
+- **Share bar** (`.costs-bar`): an 8 px pill, 1 px ink outline, segments in `--ds-series-1…4` in that order, with a
+  legend of dots below when there's more than one; give it `role="img"` and an `aria-label` with the numbers.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
 
 ## Rules

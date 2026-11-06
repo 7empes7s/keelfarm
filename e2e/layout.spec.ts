@@ -73,6 +73,18 @@ const addProject = (mode: string): View => ({
   },
 });
 
+/** Mission control with the costs' first waste group open (#106). */
+const wasteGroup: View = {
+  name: 'Mission control: a waste group open',
+  go: async (root) => {
+    await root.getByRole('tab', { name: /Mission control/ }).click();
+    const group = root.locator('.costs-group-head').first();
+    await group.scrollIntoViewIfNeeded();
+    await group.click();
+    await expect(group).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -83,7 +95,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Charter', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device', addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['Floors', 'CEO', 'Charter', 'Team', 'Office', 'Tools & skills', 'Mission control', wasteGroup, 'History', 'This device', addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -93,7 +105,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
+    tabs: ['Floors', 'Mission control', wasteGroup, 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
   },
   { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },

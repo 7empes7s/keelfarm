@@ -19,12 +19,14 @@ function sampleStartup(kind: TaskKind, usd: number): StartupContext {
 export interface SampleFloor {
   repoId: string;
   agents: { id: string; name: string }[];
+  /** Its open issues: today's work in flight is on them, so the usage view shows their titles, open ones and repeats. */
+  open?: number[];
 }
 
-/** The sample for an office: its floors, their agents and its CEO. */
-export function sampleOffice(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number, rand: () => number): CostRecord[] {
+/** The sample for an office: its floors, their agents and open issues, and its CEO. */
+export function sampleOffice(repos: { id: string; open?: number[] }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number, rand: () => number): CostRecord[] {
   const ceo = agents.find((a) => a.role === 'ceo') ?? { id: 'ceo', name: 'Morgan' };
-  return sampleCosts(repos.map((r) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id) })), ceo, now, rand);
+  return sampleCosts(repos.map((r) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id), open: r.open })), ceo, now, rand);
 }
 
 export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: string }, now: number, rand: () => number, days = 7): CostRecord[] {
@@ -76,6 +78,22 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
       const idle = kind === 'ceo-review' && rand() < 0.5;
       const ms = Math.round(between(2, 12) * 60_000);
       session({ repoId: '', issue: null, pr: null, effort: 'xhigh', at: Math.min(now, at() + ms), ms, agentId: ceo.id, agent: ceo.name, kind, usd: between(0.3, 2.4), outcome: idle ? 'ceo-idle' : 'ceo-acted' });
+    }
+  }
+  // Work in flight on open issues: one built three times in a row without a PR, one with an open PR back from QA.
+  for (const f of floors) {
+    const [stuck, open] = f.open ?? [];
+    const dev = f.agents[0];
+    if (!dev) continue;
+    const flight = (hoursAgo: number, kind: TaskKind, issue: number, pr: number | null, usd: number, outcome: SessionOutcome, round?: number) =>
+      session({ repoId: f.repoId, issue, pr, effort: 'medium', at: now - hoursAgo * HOUR_MS, ms: 20 * 60_000, agentId: dev.id, agent: dev.name, kind, usd, outcome, ...(round === undefined ? {} : { round }) });
+    if (stuck !== undefined) for (const h of [5, 3.5, 2]) flight(h, 'issue', stuck, null, between(0.8, 2), 'no-pr');
+    if (open !== undefined) {
+      const pr = prNo++;
+      flight(6, 'issue', open, pr, between(8, 11), 'pr');
+      flight(4.5, 'qa', open, pr, between(0.6, 1.4), 'qa-fail', 1);
+      flight(4, 'fix-qa', open, pr, between(0.8, 1.8), 'no-commit');
+      flight(1.5, 'qa', open, pr, between(0.6, 1.4), 'qa-fail', 2);
     }
   }
   return out.filter((r) => r.at <= now).sort((a, b) => a.at - b.at);

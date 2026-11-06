@@ -942,7 +942,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
-    seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random),
+    seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     demoCharter,
