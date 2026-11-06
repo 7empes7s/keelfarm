@@ -72,8 +72,11 @@ function artifactOf(info: string, body: string[]): { title: string; markdown: st
  */
 export function parseMessage(from: PhoneMessage['from'], raw: string): ParsedMessage {
   if (from === 'ceo') return parseCeoMessage(raw);
-  return { text: from === 'office' ? cleanTerminalText(raw, 6000) : raw };
+  return { text: from === 'office' ? officeText(raw) : raw };
 }
+
+/** An office note as the chat shows it: also run when one renders, so notes stored before #138 come out clean too. */
+export const officeText = (raw: string) => cleanTerminalText(raw, 6000);
 
 /** Lifts the suggestion and artifact blocks out of a CEO message. A message without valid ones comes back as it was. */
 export function parseCeoMessage(raw: string): ParsedMessage {

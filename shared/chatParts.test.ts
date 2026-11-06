@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARTIFACT_CHARS, artifactFileName, artifactLead, makeArtifacts, parseCeoMessage, parseMessage, snapshotMessages, suggestionsFor } from './chatParts';
+import { ARTIFACT_CHARS, artifactFileName, artifactLead, makeArtifacts, officeText, parseCeoMessage, parseMessage, snapshotMessages, suggestionsFor } from './chatParts';
 import { messageSpeech } from './speech';
 import type { PhoneMessage } from './types';
 
@@ -10,6 +10,11 @@ describe('parseMessage', () => {
     const raw = `tests failed (\x1b[2m${'─'.repeat(50)}[1/1]\x1b[22m)`;
     expect(parseMessage('office', raw)).toEqual({ text: 'tests failed (—[1/1])' });
     expect(parseMessage('manager', raw)).toEqual({ text: raw });
+  });
+
+  it('cleans a note stored before the fix when it renders: the old 2d99aaf update notice (#138)', () => {
+    const stored = `⚠️ Update to 2d99aaf held back: \x1b[31mFAIL\x1b[39m ${'─'.repeat(400)} \x1b[2mTest Files\x1b[22m 1 failed`;
+    expect(officeText(stored)).toBe('⚠️ Update to 2d99aaf held back: FAIL — Test Files 1 failed');
   });
 });
 

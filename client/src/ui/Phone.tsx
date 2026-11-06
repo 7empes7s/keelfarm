@@ -3,7 +3,7 @@ import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
 import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
-import { suggestionsFor } from '../../../shared/chatParts';
+import { officeText, suggestionsFor } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
 import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
 import { speechText } from '../../../shared/speech';
@@ -382,7 +382,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
-  if (m?.from === 'office') return m.notice ? <NoticeCard text={m.text} notice={m.notice} /> : <div className="bubble-office">{m.text}</div>;
+  if (m?.from === 'office') return m.notice ? <NoticeCard text={officeText(m.text)} notice={m.notice} /> : <div className="bubble-office">{officeText(m.text)}</div>;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
