@@ -19,6 +19,11 @@ export function ringStatus(a: Pick<AgentView, 'status' | 'task' | 'waiting' | 'b
   return { ring: 'idle', icon: '○', label: 'Free' };
 }
 
+/** Whether the Now tab offers them work: whenever they aren't working, as the server still assigns done, stopped and failed agents. */
+export function canPickWork(a: Pick<AgentView, 'status'>): boolean {
+  return a.status !== 'working' && a.status !== 'preparing';
+}
+
 /** The task as one line: "Building #1059 · Access package…", "Testing PR #12 · …", "Free". */
 export function taskLine(a: Pick<AgentView, 'status' | 'task' | 'issueNumber' | 'issueTitle' | 'prNumber'>): string {
   if (a.status === 'idle') return 'Free · pick work in Details';

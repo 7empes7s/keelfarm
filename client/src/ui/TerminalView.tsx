@@ -6,7 +6,7 @@ import { api } from '../api';
 import { isBusy, kanbanFor, agentsOnRepo, useStore } from '../store';
 import { AgentDetails, type DetailsTab } from './AgentDetails';
 import { AgentRing } from './AgentRing';
-import { sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
+import { canPickWork, sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
 import { clearDesk, letGo, stopAgent } from './dangerActions';
 import { LiveTerminal } from './LiveTerminal';
 import { effectiveModel } from '../../../shared/models';
@@ -250,13 +250,15 @@ export function TerminalView({ agentId }: { agentId: string }) {
     </div>
   );
 
+  // The picker's own rule, so "Pick work in Details" only shows when the Now tab has the picker.
+  const pickWork = canPickWork(agent);
   const placeholder = phone
-    ? working
+    ? !pickWork
       ? `Tell ${agent.name}…`
       : canMessage
         ? `Follow-up for ${agent.name}…`
         : 'Pick work in Details'
-    : working
+    : !pickWork
       ? `Tell ${agent.name} something while they work${agent.terminal ? ' (typed into their terminal)' : ''}…`
       : canMessage
         ? `Ask ${agent.name} for a follow-up (resumes their session)…`

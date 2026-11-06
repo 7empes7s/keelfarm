@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ringStatus, sheetAfterDrag, taskLine, taskSteps } from './agentWindow';
+import { canPickWork, ringStatus, sheetAfterDrag, taskLine, taskSteps } from './agentWindow';
 
 const agent = { status: 'working' as const, task: 'issue' as const, waiting: null, blocked: null, issueNumber: 1059, issueTitle: 'Access package assignment policy', prNumber: null };
 
@@ -12,6 +12,11 @@ describe('the agent window (#117)', () => {
     expect(ringStatus({ ...agent, blocked: 'a prompt' })).toMatchObject({ ring: 'error', label: 'Blocked' });
     expect(ringStatus({ ...agent, status: 'done', waiting: 'manager' })).toMatchObject({ ring: 'waiting', label: 'Waiting for you' });
     expect(ringStatus({ ...agent, status: 'idle', task: null })).toMatchObject({ ring: 'idle', label: 'Free' });
+  });
+
+  it('offers work whenever they are not working, not only when free', () => {
+    for (const status of ['idle', 'done', 'stopped', 'error'] as const) expect(canPickWork({ status })).toBe(true);
+    for (const status of ['working', 'preparing'] as const) expect(canPickWork({ status })).toBe(false);
   });
 
   it('says the task in one line', () => {

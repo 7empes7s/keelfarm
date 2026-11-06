@@ -9,7 +9,7 @@ import type { AssignChoice } from '../pocket/pocketData';
 import { AgentSetup } from './AgentSettings';
 import { AgentProfile } from './CareerCard';
 import { copyText } from './clipboard';
-import { taskLine, taskSteps } from './agentWindow';
+import { canPickWork, taskLine, taskSteps } from './agentWindow';
 
 export type DetailsTab = 'now' | 'profile' | 'setup';
 
@@ -122,7 +122,7 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
           </ol>
         )}
       </section>
-      {idle && (
+      {canPickWork(agent) && (
         <section className="aw-card aw-pick" aria-label="Give them work">
           <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Work to give them">
             <option value="">{choices.length ? 'Pick an issue to build or a PR to test…' : 'Nothing to pick up'}</option>
