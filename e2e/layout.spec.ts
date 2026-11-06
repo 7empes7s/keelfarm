@@ -110,6 +110,25 @@ const SCREENS: Screen[] = [
   { name: 'pocket team', widths: PHONES, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: PHONES, open: (page) => pocket(page, 'approvals'), tabs: [] },
   {
+    name: 'pocket notification centre',
+    widths: PHONES,
+    open: async (page) => {
+      await (await pocket(page, 'company')).getByRole('button', { name: /^Notifications/ }).click();
+      return dialog(page, /Notifications/);
+    },
+    tabs: [],
+  },
+  {
+    name: 'notification centre',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page);
+      await page.getByRole('button', { name: /^Notifications/ }).dispatchEvent('click'); // the canvas would take a real click
+      return dialog(page, /Notifications/);
+    },
+    tabs: [],
+  },
+  {
     name: 'terminal view',
     widths: PHONES,
     open: async (page) => {

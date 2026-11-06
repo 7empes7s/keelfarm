@@ -13,6 +13,7 @@ import { KanbanView } from './KanbanView';
 import { ManagerConsole } from './ManagerConsole';
 import { Panel } from './Panel';
 import { Phone } from './Phone';
+import { NoticeCentre } from './Notices';
 import { TerminalView } from './TerminalView';
 import { getAudioPrefs, setAudioPrefs, subscribeAudio } from './sfx';
 import { CHATTER_LEVELS, SOUND_GROUPS, type ChatterLevel, type SoundGroup } from './audioPrefs';
@@ -451,5 +452,7 @@ export function Overlays() {
       return <DecorBoxPanel repoId={overlay.repoId} />;
     case 'floorList':
       return <FloorList />;
+    case 'notices':
+      return <NoticeCentre />;
   }
 }

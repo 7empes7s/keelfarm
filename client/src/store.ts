@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
@@ -13,6 +13,7 @@ import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../.
 import { emptyLabView, type LabView } from '../../shared/experiments';
 import { emptyEveryProject } from '../../shared/practices';
 import { messageSpeech } from '../../shared/speech';
+import { addNotice, markRead, noticeOf, sticky } from '../../shared/notices';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { applyChat, EMPTY_CHAT } from './ceoChat';
 import type { FileView } from '../../shared/files';
@@ -50,7 +51,8 @@ export type Overlay =
   | { kind: 'catalogue'; repoId?: string } // the lobby kiosk (#210)
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
-  | { kind: 'floorList' };
+  | { kind: 'floorList' }
+  | { kind: 'notices' }; // the notification centre (ui/Notices.tsx)
 
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
@@ -105,6 +107,7 @@ export interface Toast {
   id: number;
   level: 'info' | 'success' | 'error';
   text: string;
+  notice?: NoticeView; // a rich toast (#107): ui/Notices.tsx draws it
 }
 
 interface State {
@@ -134,6 +137,7 @@ interface State {
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
+  notices: NoticeView[]; // the notification centre's (shared/notices.ts), oldest first
   version?: string; // the cubefarm version the server runs
   officeCommit?: string | null; // undefined: the server can't update itself
   officeUpdate?: OfficeUpdateView;
@@ -192,7 +196,7 @@ interface State {
   start(): void;
   goToFloor(n: number): void;
   finishTravel(phase: 'arrived' | 'done'): void;
-  pushToast(level: Toast['level'], text: string): void;
+  pushToast(level: Toast['level'], text: string, notice?: NoticeView): void;
   dismissToast(id: number): void;
 }
 
@@ -290,6 +294,7 @@ export const useStore = create<State>((set, get) => ({
   files: [],
   chatOutbox: [],
   phoneReadAt: 0,
+  notices: [],
   usage: { state: 'normal', until: null, warning: null },
   health: null,
   testLab: null,
@@ -375,6 +380,7 @@ export const useStore = create<State>((set, get) => ({
           chat: d.chat ?? EMPTY_CHAT,
           files: d.files ?? [],
           phoneReadAt: d.phoneReadAt,
+          notices: d.notices ?? [],
           version: d.version,
           officeCommit: d.officeCommit,
           officeUpdate: d.officeUpdate,
@@ -537,12 +543,8 @@ export const useStore = create<State>((set, get) => ({
         }
         // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
         if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
-        if (ev.message.from === 'ceo' && !reading) {
-          if (!speak) chirp();
-          const ceo = get().agents[CEO_ID]?.name ?? 'CEO';
-          const text = ev.message.text.replace(/\s+/g, ' ');
-          get().pushToast('info', `📱 ${ceo}: ${text.length > 110 ? `${text.slice(0, 109)}…` : text}`);
-        }
+        // Its toast is the office's notice (#107).
+        if (ev.message.from === 'ceo' && !reading && !speak) chirp();
         break;
       }
       case 'ceoChat':
@@ -557,8 +559,16 @@ export const useStore = create<State>((set, get) => ({
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
         break;
-      case 'toast':
-        get().pushToast(ev.level, ev.text);
+      case 'toast': {
+        const n = noticeOf(ev);
+        if (n && !replay) set({ notices: addNotice(get().notices, n, Date.now()) }); // the centre is live-only
+        const o = get().overlay;
+        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read).
+        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat')) get().pushToast(ev.level, ev.text, n ?? undefined);
+        break;
+      }
+      case 'noticesRead':
+        set({ notices: markRead(get().notices, ev.ids) });
         break;
       case 'officeUpdate':
         set({ officeUpdate: ev.officeUpdate });
@@ -680,11 +690,11 @@ export const useStore = create<State>((set, get) => ({
     if (phase === 'arrived') set({ floor: t.to, travel: { ...t, phase: 'opening' } });
     else set({ travel: null });
   },
-  pushToast(level, text) {
-    if (level === 'error') announce(text, 'assertive');
-    const id = toastSeq++;
-    set({ toasts: [...get().toasts.slice(-4), { id, level, text }] });
-    setTimeout(() => get().dismissToast(id), level === 'error' ? 9000 : 5000);
+  pushToast(level, text, notice) {
+    // Screen readers hear it (the CEO's messages are announced as they arrive); ui/Notices.tsx times it out.
+    if (level === 'error' || (notice && sticky(notice))) announce(notice ? `${notice.title}: ${notice.text}` : text, 'assertive');
+    else if (notice && notice.kind !== 'ceo') announce(`${notice.title}: ${notice.text}`);
+    set({ toasts: [...get().toasts.slice(-9), { id: toastSeq++, level, text, ...(notice && { notice }) }] });
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 }));

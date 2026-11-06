@@ -145,6 +145,16 @@ describe('the notifier', () => {
     expect(notes[0].url).toBe('/?tab=company');
   });
 
+  it("carries its notice's id (#107), so opening it marks the notice read", async () => {
+    const settings = notifySettings(DEFAULT_NOTIFY, { officeUrl: 'https://office.example/' });
+    const { n, posts, notes } = notifier(tmpDir(), () => 200, settings);
+    await n.setWebhook('ntfy', SECRETS.ntfy);
+    n.notify('needsHuman', 'PR #4 needs you', 'x', undefined, undefined, 'mh1-7');
+    await settle();
+    expect(notes.map((x) => [x.id, x.url])).toEqual([['mh1-7', '/?tab=approvals&note=mh1-7']]);
+    expect(JSON.parse(String(posts[0].body)).click).toBe('https://office.example/?note=mh1-7');
+  });
+
   it('says nothing about events or channels that are off', async () => {
     const settings = notifySettings(DEFAULT_NOTIFY, { channels: { desktop: false } });
     const { n, posts, notes } = notifier(tmpDir(), () => 200, settings);
@@ -285,5 +295,26 @@ describe('one-tap ntfy', () => {
     const a = await n.quickNtfy();
     expect(a.test).toEqual({ ok: false, message: "The test didn't arrive: couldn't reach ntfy." });
     expect(n.channelsView().webhooks.ntfy.set).toBe(true);
+  });
+});
+
+describe('the notification centre (#107)', () => {
+  it('keeps a notice in the snapshot with its push, and marks it read in every tab', async () => {
+    const swarm = new Swarm(createDemoBackend());
+    const sent: { type: string; [k: string]: unknown }[] = [];
+    swarm.addClient({ OPEN: 1, readyState: 1, send: (m: string) => sent.push(JSON.parse(m)), on: () => undefined } as unknown as WebSocket);
+    const notice = (swarm as unknown as { notice: (i: object, p?: object) => void }).notice.bind(swarm);
+    notice({ kind: 'needsYou', title: 'PR #4 needs you', text: 'pixel-todo', target: { kind: 'qa', repoId: 'r', number: 4 }, actions: ['openQa'] }, { event: 'needsHuman' });
+    await settle();
+    const [n] = swarm.snapshot().notices;
+    expect(n).toMatchObject({ kind: 'needsYou', level: 'info', title: 'PR #4 needs you', read: false, actions: ['openQa'] });
+    expect(sent.find((e) => e.type === 'toast')).toMatchObject({ id: n.id, kind: 'needsYou', title: 'PR #4 needs you', target: { kind: 'qa', number: 4 } });
+    expect(sent.find((e) => e.type === 'notify')).toMatchObject({ note: { id: n.id, url: `/?tab=approvals&note=${n.id}` } });
+    swarm.readNotices([n.id]);
+    expect(swarm.snapshot().notices[0].read).toBe(true);
+    expect(sent.filter((e) => e.type === 'noticesRead')).toEqual([{ type: 'noticesRead', ids: [n.id] }]);
+    swarm.readNotices(undefined); // nothing left unread: no event
+    expect(sent.filter((e) => e.type === 'noticesRead')).toHaveLength(1);
+    expect(() => swarm.readNotices('all')).toThrow(/list of notice ids/);
   });
 });
