@@ -1,11 +1,13 @@
 import { devices, type Page } from '@playwright/test';
 import { expect, test } from './helpers';
 
-// The agent window on phones (#86): terminal first. One header row, the terminal in at least 75% of the window, one
-// bottom bar, nothing past the right edge; the details sheet and the key bar fold away until tapped.
+// The agent window on phones (#86, #117): terminal first. One header row (× fully on screen), the terminal in at least
+// 75% of the window, one bottom bar, nothing past the right edge; the details sheet and the key bar fold away until
+// tapped, the sheet opens and closes by tap and swipe, and its stat tiles never clip. At 1280 the details are a side panel.
 
 const PHONES = [
   { width: 360, height: 780 },
+  { width: 375, height: 667 },
   { width: 390, height: 844 },
   { width: 430, height: 932 },
 ];
@@ -27,10 +29,10 @@ function measure(page: Page) {
     const bar = document.querySelector('.term-phone .term-input')!.getBoundingClientRect();
     const problems: string[] = [];
     if (term.height < panel.height * 0.75) problems.push(`the terminal is ${Math.round(term.height)}px of ${Math.round(panel.height)}`);
-    if (head.height > 80) problems.push(`the header is ${Math.round(head.height)}px tall`);
+    if (head.height > 64) problems.push(`the header is ${Math.round(head.height)}px tall`);
     if (bar.height > 80) problems.push(`the bottom bar is ${Math.round(bar.height)}px tall`);
     if (bar.bottom > innerHeight + 1) problems.push(`the bottom bar ends at ${Math.round(bar.bottom)}, the screen at ${innerHeight}`);
-    for (const el of document.querySelectorAll<HTMLElement>('.term-phone :is(button, a, input, textarea, .status-dot)')) {
+    for (const el of document.querySelectorAll<HTMLElement>('.term-phone :is(button, a, input, textarea, .aw-ring)')) {
       const r = el.getBoundingClientRect();
       if (r.width && r.right > innerWidth + 1 && !el.closest('.term-keys-row')) problems.push(`${el.textContent?.trim() || el.className} ends at ${Math.round(r.right)}`);
     }
@@ -51,17 +53,35 @@ for (const phone of PHONES) {
       console.log(`${phone.width}×${phone.height}: ${rows} terminal rows`);
       if (phone.width === 390) expect(rows).toBeGreaterThanOrEqual(40);
 
-      // The details sheet: closed by default, opens and closes from the toggle, holds History and Stop (with a confirm).
-      await expect(panel.locator('#term-details')).toHaveCount(0);
-      await panel.getByRole('button', { name: 'Details' }).click();
-      const sheet = panel.locator('#term-details');
+      // The details sheet: closed by default; a tap on the header opens it, its handle closes it, a swipe up opens it again.
+      await expect(panel.locator('#aw-details')).toHaveCount(0);
+      await panel.locator('.aw-who').click();
+      const sheet = panel.locator('#aw-details');
       await expect(sheet.getByRole('button', { name: /History/ })).toBeVisible();
-      await sheet.getByRole('button', { name: /Stop/ }).click();
-      const ask = page.getByRole('alertdialog', { name: /^Stop/ });
-      await expect(ask).toBeVisible();
-      await ask.getByRole('button', { name: 'Cancel' }).click();
-      await panel.getByRole('button', { name: 'Hide the details' }).first().click();
+      await sheet.getByRole('tab', { name: 'Profile', exact: true }).click();
+      const clipped = await sheet.evaluate((el) =>
+        [...el.querySelectorAll<HTMLElement>('.pf-stat')].filter((t) => t.scrollWidth > t.clientWidth + 1 || t.getBoundingClientRect().right > innerWidth + 1).map((t) => t.textContent),
+      );
+      expect(clipped).toEqual([]);
+      await sheet.getByRole('button', { name: /Close the details/ }).first().click();
       await expect(sheet).toHaveCount(0);
+      const who = await panel.locator('.aw-who').boundingBox();
+      await page.mouse.move(who!.x + who!.width / 2, who!.y + who!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(who!.x + who!.width / 2, who!.y - 80, { steps: 4 });
+      await page.mouse.up();
+      await expect(sheet).toBeVisible();
+      await panel.locator('.aw-grab').click();
+      await expect(sheet).toHaveCount(0);
+
+      // Stop asks first, from the header's ■ (when working) or the ⋯ menu.
+      const stop = panel.locator('.aw-stop');
+      if (await stop.isVisible()) {
+        await stop.click();
+        const ask = page.getByRole('alertdialog', { name: /^Stop/ });
+        await expect(ask).toBeVisible();
+        await ask.getByRole('button', { name: 'Cancel' }).click();
+      }
 
       // ⌨ shows and hides the key bar.
       const keys = panel.getByRole('button', { name: 'Terminal keys' });
@@ -88,3 +108,23 @@ for (const phone of PHONES) {
     });
   });
 }
+
+test.describe('agent window at 1280', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('header, a large terminal and the details beside it', async ({ page }) => {
+    await page.goto('/?pocket=1&tab=team');
+    await page.locator('.pocket').getByRole('button', { name: 'Terminal', exact: true }).first().click();
+    const panel = page.locator('.panel.aw-desk');
+    await expect(panel.locator('#aw-details.aw-side')).toBeVisible();
+    const sizes = await page.evaluate(() => {
+      const box = (q: string) => document.querySelector(q)!.getBoundingClientRect();
+      return { panel: box('.panel.aw-desk'), term: box('.aw-desk .term-split'), side: box('.aw-side'), head: box('.aw-desk .panel-head') };
+    });
+    expect(sizes.head.height).toBeLessThanOrEqual(72);
+    expect(sizes.term.width).toBeGreaterThan(sizes.panel.width * 0.6);
+    expect(sizes.side.left).toBeGreaterThanOrEqual(sizes.term.right);
+    await panel.locator('#aw-details').getByRole('tab', { name: 'Profile', exact: true }).click();
+    await expect(panel.locator('.pf-stat').first()).toBeVisible();
+  });
+});

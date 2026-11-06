@@ -27,6 +27,7 @@ import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { DemoCharter } from './demoCharters.ts';
+import type { CareerView } from '../shared/careers.ts';
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
@@ -153,6 +154,8 @@ export interface Backend {
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
   seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
+  /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
+  seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
   /** The demo only: an objective log over the made-up ledger (#105), so the Charter tab's numbers show from the start. */
   seedCharterLog?(charter: CharterParts, ledger: CostRecord[], now: number): ObjectiveLog;
   /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
