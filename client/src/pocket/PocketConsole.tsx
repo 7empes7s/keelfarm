@@ -1,15 +1,29 @@
 // Pocket mode's ⚙️: the manager's console on a phone (#102). The same tabs and sections as the 3D office's console
 // (ui/consoleNavRules.ts), as a list you tap into with a back button, iOS Settings style, and the search over every
-// setting on top. Loaded when first opened; nothing here loads 3D (the look editor's preview loads on its own).
+// setting on top; on a desktop (#104) the 3D office's top tabs and side menu instead. Loaded when first opened; nothing
+// here loads 3D (the look editor's preview loads on its own).
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Badge, ConsoleSearch, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
-import { GROUPS, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
+import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
+import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 
 /** A section, or 'menu': the list of them. */
 export type ConsoleSection = SectionId | 'menu';
 
-export function PocketConsole({ section, pick, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus }) {
+type Props = { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus };
+
+/** The console on a desktop: the menu opens at the section last shown. */
+function WideConsole({ section, pick, history }: Props) {
+  const open = (section === 'menu' ? null : sectionById(section)) ?? opening(undefined, '', 'pocket', loadRemembered());
+  useSectionAddress(open);
+  return <ConsoleSplit where="pocket" section={open} pick={(s) => pick(s.id)} focus={{ history }} />;
+}
+
+export function PocketConsole({ wide, ...props }: Props & { wide?: boolean }) {
+  return wide ? <WideConsole {...props} /> : <PhoneConsole {...props} />;
+}
+
+function PhoneConsole({ section, pick, history }: Props) {
   const open = section === 'menu' ? null : (sectionById(section) ?? null);
   const [query, setQuery] = useState('');
   const body = useRef<HTMLDivElement>(null);
