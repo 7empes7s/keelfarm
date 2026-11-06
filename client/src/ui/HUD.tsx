@@ -23,6 +23,7 @@ import { useRoof } from '../world/roof/roofState';
 import { RoofHud } from './RoofHud';
 import { NoticeBell, NoticeToasts } from './Notices';
 import { usageChip } from '../ops';
+import { heldNote } from '../../../shared/health';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
 import { switchOffice } from '../pocket/switchOffice';
@@ -50,6 +51,19 @@ function UsageChip() {
   if (!text || overlay?.kind === 'manager') return null;
   return (
     <button className={`office-chip usage-chip usage-chip-${usage.state}`} onClick={() => openOverlay({ kind: 'manager', tab: 'ops', card: 'usage' })} title="Claude's usage is holding new work back. Open Mission control">
+      {text}
+    </button>
+  );
+}
+
+/** While work waits for memory (#115): a quiet note, no sound; opens Mission control at the server's health. */
+function MemoryChip() {
+  const text = useStore((s) => heldNote(s.health?.heldWork));
+  const overlay = useStore((s) => s.overlay);
+  const openOverlay = useStore((s) => s.openOverlay);
+  if (!text || overlay?.kind === 'manager') return null;
+  return (
+    <button className="office-chip memory-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'ops', card: 'health' })} title="Work waits for memory and starts by itself. Open Mission control">
       {text}
     </button>
   );
@@ -206,6 +220,7 @@ export function HUD() {
       <div className="hud-chips">
         <OfficeUpdateChip />
         <UsageChip />
+        <MemoryChip />
         <DoctorChip />
       </div>
 

@@ -9,11 +9,12 @@ export interface MemorySettings {
   headroomMb: number; // kept free for the system: new work waits rather than eat into it
   sessionMaxMb: number; // most one agent's processes may use before the office stops them (Linux); 0 = no ceiling
   estimates: Partial<Record<SessionKind, number>>; // learned from past sessions' peak memory, MB
+  alertAfterMin: number; // work that has waited this long for memory pings the manager's devices (#115)
 }
 
 /** Before any session has been measured. */
 export const DEFAULT_ESTIMATES: Record<SessionKind, number> = { build: 1536, fix: 1536, qa: 1536, preview: 512, ceo: 512, consult: 1024, labBrowser: 512, labRun: 1536 };
-export const DEFAULT_MEMORY: MemorySettings = { headroomMb: 1536, sessionMaxMb: 4096, estimates: {} };
+export const DEFAULT_MEMORY: MemorySettings = { headroomMb: 1536, sessionMaxMb: 4096, estimates: {}, alertAfterMin: 15 };
 
 const KINDS = Object.keys(DEFAULT_ESTIMATES) as SessionKind[];
 const mb = (raw: unknown, min: number, max: number) => (Number.isFinite(Number(raw)) ? Math.max(min, Math.min(max, Math.round(Number(raw)))) : null);
@@ -27,6 +28,7 @@ export function memorySettings(base: MemorySettings, patch: unknown): MemorySett
     headroomMb: mb(p.headroomMb, 0, 65_536) ?? base.headroomMb,
     sessionMaxMb: sessionMax === null ? base.sessionMaxMb : sessionMax && Math.max(512, sessionMax),
     estimates: Object.fromEntries(KINDS.map((k) => [k, mb(est[k], 128, 65_536) ?? base.estimates[k]]).filter(([, v]) => v)),
+    alertAfterMin: mb(p.alertAfterMin, 1, 1440) ?? base.alertAfterMin ?? DEFAULT_MEMORY.alertAfterMin,
   };
 }
 
@@ -46,7 +48,21 @@ export interface HealthView {
   running: number; // agent sessions running
   waiting: number; // agents whose stopped session waits for memory to resume
   held: string | null; // why new work waits now, e.g. "Waiting for memory: …"
+  heldWork: HeldWork | null; // the same wait, counted, for the in-app note (#115)
   lastStop: { agent: string; why: string; at: number } | null; // the latest session the office lost to memory
 }
 
+/** Work waiting for memory: how many tasks, what's free and what the smallest of them needs (its estimate + headroom). */
+export interface HeldWork {
+  tasks: number;
+  freeMb: number;
+  needMb: number;
+}
+
 export const gb = (mbs: number) => `${(Math.max(0, mbs) / 1024).toFixed(1)} GB`;
+
+/** The quiet in-app note while work waits for memory (no push, no sound): "⏳ 2 tasks waiting for memory · …". */
+export function heldNote(h: HeldWork | null | undefined): string | null {
+  if (!h) return null;
+  return `⏳ ${h.tasks} ${h.tasks === 1 ? 'task' : 'tasks'} waiting for memory · ${gb(h.freeMb)} free, ${gb(h.needMb)} needed`;
+}

@@ -1,6 +1,6 @@
 // Pocket mode's Team tab: everyone with their status, and the terminal panel's actions without the terminal: message,
 // ■ Stop, assigning an issue (or a PR to test); ↺ Clear desk and Let go in its ⋯. The terminal itself is one tap away.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent } from '../store';
 import { CEO_ID, type RepoView } from '../../../shared/types';
@@ -181,13 +181,14 @@ function CeoCard() {
   );
 }
 
-export function Team({ focusRepo }: { focusRepo: string | null }) {
+export function Team({ focusRepo, top }: { focusRepo: string | null; top?: ReactNode }) {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const focus = useRef<HTMLElement>(null);
   useEffect(() => focus.current?.scrollIntoView({ block: 'start' }), []);
   return (
     <div className="pk-page">
+      {top}
       <CeoCard />
       {repos.length === 0 && <p className="muted">No floors yet, so no team.</p>}
       {repos.map((repo) => {

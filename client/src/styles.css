@@ -397,7 +397,8 @@ input.inline:focus {
     top: calc(2 * var(--ds-space-10) + var(--ds-space-4));
     max-width: calc(50vw - var(--ds-space-6));
   }
-  .hud-chips .usage-chip {
+  .hud-chips .usage-chip,
+  .hud-chips .memory-chip {
     max-width: 100%;
   }
   .workers {
@@ -4634,7 +4635,8 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .hud-chips .office-chip {
   position: static;
 }
-.hud-chips .usage-chip {
+.hud-chips .usage-chip,
+.hud-chips .memory-chip {
   max-width: min(600px, calc(100vw - 32px));
 }
 .usage-chip-pacing {
@@ -4645,6 +4647,9 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .doctor-chip {
   background: #d9d2ff;
+}
+.memory-chip {
+  background: #fdf1c7;
 }
 .usage-card {
   border-left: 12px solid var(--good);
