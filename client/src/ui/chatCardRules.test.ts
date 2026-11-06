@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionStatus, continuesGroup, daySeparator, elapsed, matchCommands, slashItems, starterChips, workingLine } from './chatCards';
+import { actionStatus, continuesGroup, daySeparator, elapsed, matchCommands, slashItems, starterChips, workingLine } from './chatCardRules';
 import type { RefWorld } from './chatRefs';
 import type { PullInfo } from '../../../shared/types';
 

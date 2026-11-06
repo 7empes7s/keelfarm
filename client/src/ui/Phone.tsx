@@ -18,7 +18,7 @@ import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
-import { continuesGroup } from './chatCards';
+import { continuesGroup } from './chatCardRules';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';

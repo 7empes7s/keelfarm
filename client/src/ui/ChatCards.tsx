@@ -3,12 +3,12 @@ import { useStore } from '../store';
 import type { ChatAction } from '../../../shared/ceoActions';
 import { currentStep } from '../../../shared/ceoStream';
 import { CEO_ID, type ChatIdea } from '../../../shared/types';
-import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCards';
+import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
 import { useRefOpen } from './RefChips';
 import './chatCards.css';
 
 // The CEO chat's cards (#108): what a reply did as action cards with a live status, its idea card (Accept / Edit /
-// Not now), the "working on it" strip with Stop, and the starter chips of an empty message box. Rules in chatCards.ts.
+// Not now), the "working on it" strip with Stop, and the starter chips of an empty message box. Rules in chatCardRules.ts.
 
 /** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. */
 function ActionCard({ action }: { action: ChatAction }) {

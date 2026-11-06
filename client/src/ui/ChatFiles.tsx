@@ -3,7 +3,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
 import { usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
-import { slashItems } from './chatCards';
+import { slashItems } from './chatCardRules';
 import './chatCards.css';
 import { Sheet } from './ChatArtifacts';
 import type { Pending } from './chatUpload';
