@@ -968,7 +968,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
-    seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
+    seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
