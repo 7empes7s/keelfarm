@@ -154,6 +154,28 @@ describe('costsView', () => {
     ]);
   });
 
+  it('gives each wasted session its cause and how many in a row its work was wasted that way', () => {
+    const records = [
+      session({ at: TODAY + HOUR_MS, outcome: 'no-pr' }),
+      session({ at: TODAY + 2 * HOUR_MS, issue: 8, outcome: 'no-pr' }),
+      session({ at: TODAY + 3 * HOUR_MS, outcome: 'no-pr' }),
+      session({ at: TODAY + 4 * HOUR_MS, kind: 'qa', round: 1, outcome: 'qa-fail' }),
+      session({ at: TODAY + 5 * HOUR_MS, outcome: 'no-pr' }),
+      session({ at: TODAY + 6 * HOUR_MS, outcome: 'pr' }),
+      session({ at: TODAY + 7 * HOUR_MS, outcome: 'watchdog' }),
+    ];
+    const v = costsView(records, { now: NOW, days: 1 });
+    expect(v.waste.map((w) => [w.issue, w.cause, w.streak])).toEqual([
+      [7, 'Build stopped by the watchdog', 1],
+      [7, 'Build ended without a PR', 3],
+      [7, 'Build ended without a PR', 2],
+      [8, 'Build ended without a PR', 1],
+      [7, 'Build ended without a PR', 1],
+    ]);
+    expect(v.total.wasteSessions).toBe(5);
+    expect(v.top[0]).toMatchObject({ issue: 7, sessions: 6, qaRounds: 1 });
+  });
+
   it('averages each kind of task at each effort', () => {
     const records = [session({ kind: 'qa', usd: 1, effort: 'medium' }), session({ kind: 'qa', usd: 3, effort: 'medium' }), session({ kind: 'qa', usd: 0.5, effort: 'low' })];
     const [qa] = costsView(records, { now: NOW, days: 7 }).kinds;
@@ -206,7 +228,7 @@ describe('the ledger file', () => {
 describe('the demo’s made-up week', () => {
   it('has sessions of several kinds, merges and waste on every floor', () => {
     const floors = [
-      { repoId: 'demo/a', agents: [{ id: 'a', name: 'Ada' }, { id: 'b', name: 'Bob' }] },
+      { repoId: 'demo/a', agents: [{ id: 'a', name: 'Ada' }, { id: 'b', name: 'Bob' }], open: [1, 2] },
       { repoId: 'demo/b', agents: [{ id: 'c', name: 'Cy' }] },
     ];
     const records = sampleCosts(floors, { id: 'ceo', name: 'Morgan' }, NOW, seeded(18));
@@ -216,6 +238,10 @@ describe('the demo’s made-up week', () => {
     expect(v.total.merges).toBeGreaterThan(5);
     expect(v.waste.length).toBeGreaterThan(0);
     expect(v.kinds.map((k) => k.kind)).toEqual(expect.arrayContaining(['issue', 'qa', 'fix-qa', 'ceo-review']));
+    // Today's work in flight on the open issues: three builds in a row without a PR, and an open PR back from QA.
+    expect(v.waste.find((w) => w.repoId === 'demo/a' && w.issue === 1)).toMatchObject({ cause: 'Build ended without a PR', streak: 3 });
+    expect(v.waste.some((w) => w.issue === 2 && w.cause === 'Fix ended without a commit')).toBe(true);
+    expect(v.top.find((t) => t.repoId === 'demo/a' && t.issue === 2)).toMatchObject({ merged: false, qaRounds: 2 });
   });
 });
 

@@ -100,6 +100,18 @@ const addProject = (mode: string): View => ({
   },
 });
 
+/** Mission control with the costs' first waste group open (#106). */
+const wasteGroup = (where: Where): View => ({
+  name: 'Mission control: a waste group open',
+  go: async (root) => {
+    await (where === 'pocket' ? pocketSection(root, 'Mission control') : officeSection(root, 'Company', 'Mission control'));
+    const group = root.locator('.costs-group-head').first();
+    await group.scrollIntoViewIfNeeded();
+    await group.click();
+    await expect(group).toHaveAttribute('aria-expanded', 'true');
+  },
+});
+
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
   name: 'Charter editor',
@@ -119,7 +131,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -129,7 +141,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: consoleSections('office'),
+    tabs: [...consoleSections('office'), wasteGroup('office')],
   },
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
