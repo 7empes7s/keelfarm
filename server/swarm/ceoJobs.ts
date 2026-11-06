@@ -675,7 +675,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
     if (from === 'ceo' && !requestId && !m.question) {
       const said = m.text || `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`;
-      this.notifier.notify('ceoMessage', this.ceo().name, plainText(said), `${this.ceo().name}: ${plainText(said, 100)}`);
+      this.notice({ kind: 'ceo', title: this.ceo().name, text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.ceo().name}: ${plainText(said, 100)}` });
     }
     return m;
   }
@@ -762,12 +762,12 @@ export abstract class SwarmCeo extends SwarmUpdate {
     const repo = this.state.repos.find((r) => r.id === rec.repoId);
     const title = this.repoRt.get(rec.repoId)?.pulls.find((p) => p.number === rec.prNumber)?.title;
     const name = repo?.fullName.split('/')[1] ?? rec.repoId;
-    this.notifier.notify('needsHuman', `PR #${rec.prNumber} needs you`, `${name}${title ? `: ${title}` : ''}. ${rec.stuckWhy ? `Stuck because ${rec.stuckWhy}.` : rec.summary ?? ''}`, `${name} #${rec.prNumber}${title ? ` ${title}` : ''}`);
+    this.notice({ kind: 'needsYou', title: `PR #${rec.prNumber} needs you`, text: `${name}${title ? `: ${title}` : ''}. ${rec.stuckWhy ? `Stuck because ${rec.stuckWhy}.` : rec.summary ?? ''}`, target: { kind: 'qa', repoId: rec.repoId, number: rec.prNumber }, actions: ['openQa', 'openPr'] }, { event: 'needsHuman', line: `${name} #${rec.prNumber}${title ? ` ${title}` : ''}` });
   }
 
   protected notifyMerge(repo: PersistedRepo, n: number, title: string) {
     const name = repo.fullName.split('/')[1];
-    this.notifier.notify('merge', `Merged PR #${n}`, `${name}${title ? `: ${title}` : ''}`, `${name} #${n}${title ? ` ${title}` : ''}`);
+    this.notice({ kind: 'merge', title: `Merged PR #${n} into ${repo.defaultBranch}`, text: `${name}${title ? `: ${title}` : ''}`, target: { kind: 'issue', repoId: repo.id, number: n }, actions: ['openPr'] }, { event: 'merge', title: `Merged PR #${n}`, line: `${name} #${n}${title ? ` ${title}` : ''}` });
     const closes = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === n)?.closesIssues ?? [];
     this.followup(followupEvents.merged(repo.id, this.floorName(repo), n, clip(title, 100), closes));
   }
@@ -779,12 +779,12 @@ export abstract class SwarmCeo extends SwarmUpdate {
       this.toldStuck.add(key);
       const repo = this.state.repos.find((r) => r.id === a.repoId);
       const mins = Math.round((now - (a.endedAt ?? now)) / 60_000);
-      this.notifier.notify('agentError', `${a.name} needs help`, `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, `${a.name}${repo ? ` (floor ${repo.floor})` : ''}`);
+      this.notice({ kind: 'stuck', title: `${a.name} needs help`, text: `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal', 'retry'] }, { event: 'agentError', line: `${a.name}${repo ? ` (floor ${repo.floor})` : ''}` });
       if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
     }
     for (const a of this.state.agents) { // blocked on a prompt the watchdog couldn't answer: told once (unblock.ts)
       const b = this.agentRt.get(a.id)?.blocked, n = blockedNotice(a.name, b, now, this.state.repos.find((r) => r.id === a.repoId)?.floor);
-      if (n && b) { b.told = true; this.notifier.notify('agentError', n.title, n.body, n.who); }
+      if (n && b) { b.told = true; this.notice({ kind: 'stuck', title: n.title, text: n.body, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal'] }, { event: 'agentError', line: n.who }); }
     }
     for (const q of this.state.questions) if (renotifyDue(q, now)) this.notifyQuestion(Object.assign(q, { renotified: true }), true);
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);

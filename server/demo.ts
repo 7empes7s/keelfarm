@@ -26,6 +26,7 @@ import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
+import { sampleNotices } from './noticeSample.ts';
 import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
@@ -117,10 +118,35 @@ function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
   }, 12_000 + Math.random() * 10_000);
 }
 
-function seed(fullName: string, description: string, titles: [string, string][]) {
+function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = []) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
   for (const [title, body] of titles) r.issues.push(issue(r.nextNumber++, title, body, fullName));
+  // What the floor shipped lately: the "What's new" cards' history (#129).
+  for (const [i, title] of shipped.entries()) r.pulls.push(shippedPull(fullName, r.nextNumber++, title, (i + 1) * 5 * 3_600_000));
   repos.set(fullName, r);
+}
+
+function shippedPull(fullName: string, number: number, title: string, agoMs: number): PullInfo {
+  return {
+    number,
+    title,
+    url: `https://github.com/${fullName}/pull/${number}`,
+    headRefName: `swarm/shipped-${number}`,
+    state: 'MERGED',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    reviewDecision: null,
+    closesIssues: [],
+    createdAt: new Date(Date.now() - agoMs - 3_600_000).toISOString(),
+    mergedAt: new Date(Date.now() - agoMs).toISOString(),
+    additions: 40,
+    deletions: 8,
+    checks: 'passing',
+    headSha: fakeSha(),
+    mergeState: 'CLEAN',
+    failedChecks: [],
+    pendingChecks: [],
+  };
 }
 
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
@@ -130,12 +156,12 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
-]);
+], ['Confetti when the list is cleared', 'Undo for deleted todos']);
 seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
   ['OpenAPI spec', 'Publish an OpenAPI 3.1 document at /openapi.json.\n\nObjective: O2'],
-]);
+], ['Cache city lookups for an hour', 'Health check at /healthz']);
 
 // ---------- the big company (--floors / --agents, #228) ----------
 
@@ -947,6 +973,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
+    seedNotices: sampleNotices,
     demoCharter,
     demoHeldUpdate,
     simulateUsage: demoUsage,
@@ -1089,6 +1116,10 @@ const DEMO_PROGRAMS = ['npm', 'npx', 'node', 'pnpm', 'yarn', 'bun', 'deno', 'vit
  * Floors made in the demo have nothing to run until they get a command, and a command whose program isn't in
  * DEMO_PROGRAMS fails, so the viewer's unconfigured and error states can be tried out.
  */
+// A PR preview on this floor fails its first start, so the viewer's failed card (and Ask the CEO) can be tried (#129).
+const FLAKY_PREVIEWS = 'demo-co/weather-api';
+const flakedOnce = new Set<string>();
+
 const demoPreviews: PreviewBackend = {
   hasDefault: async (fullName) => !bareRepos.has(fullName),
   start(job, cb) {
@@ -1120,6 +1151,16 @@ const demoPreviews: PreviewBackend = {
     later(1600, () => {
       cb.status('starting');
       cb.log([`$ ${job.command ?? 'npm run dev'}`.replaceAll('{port}', String(job.port))]);
+      const key = `${job.fullName}#${job.pr}`;
+      if (job.pr && job.fullName === FLAKY_PREVIEWS && !flakedOnce.has(key)) {
+        flakedOnce.add(key);
+        later(400, () => {
+          cb.log(["Error: Cannot find module './routes/forecast.js'", '    at Module._resolveFilename (node:internal/modules/cjs/loader:1145:15)']);
+          stopped = true;
+          cb.failed(`The app exited (code 1) before it listened on port ${job.port}.`);
+        });
+        return;
+      }
       const program = job.command?.trim().split(/\s+/)[0] ?? 'npm';
       if (!DEMO_PROGRAMS.includes(program.toLowerCase())) {
         later(400, () => {

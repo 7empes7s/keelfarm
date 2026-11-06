@@ -39,6 +39,7 @@ import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
 import { Notifier } from '../notifier.ts';
 import { TelegramBot } from '../telegramBot.ts';
 import { DEFAULT_NOTIFY, notifySettings } from '../../shared/notify.ts';
+import { addNotice, makeNotice, type NoticeInput } from '../../shared/notices.ts';
 import { DEFAULT_CLOUD } from '../../shared/cloud.ts';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, officeItems, type ToolInventory } from '../../shared/tooling.ts';
 import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../../shared/activity.ts';
@@ -59,6 +60,7 @@ import type {
   CliView,
   LogLine,
   MachineHost,
+  NotifyEvent,
   QaView,
   RepoView,
   ServerEvent,
@@ -134,6 +136,7 @@ export abstract class SwarmCore extends SwarmContract {
     ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
     messages: [],
     phoneReadAt: 0,
+    notices: [],
     prLimits: PR_LIMITS_VERSION,
     ops: emptyHistory(),
     held: [],
@@ -177,6 +180,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected saveTimer: NodeJS.Timeout | null = null;
   protected writing: Promise<void> = Promise.resolve(); // state file writes, one at a time: they share its temp file
   protected logSeq = 1;
+  private noticeSeq = 0;
   protected previews: Previews;
   protected officeHead: string | null = null; // the commit the office runs (null: not a git checkout, so no self-update)
   protected officeUpdate = {
@@ -495,6 +499,7 @@ export abstract class SwarmCore extends SwarmContract {
       chat: this.chatView(),
       messages: snapshotMessages(this.state.messages.slice(-100)),
       phoneReadAt: this.state.phoneReadAt,
+      notices: this.state.notices,
       usage: this.usageNow(),
       health: this.health.view(),
       testLab: this.labView(),
@@ -635,6 +640,17 @@ export abstract class SwarmCore extends SwarmContract {
 
   protected toast(level: 'info' | 'success' | 'error', text: string) {
     this.broadcast({ type: 'toast', level, text: cleanTerminalText(text, 500) });
+  }
+
+  /** A rich toast that joins the notification centre (#107); with `push`, the manager's devices hear of it with the same id. */
+  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4] }) {
+    const at = Date.now(), t = input.target;
+    const repoId = !t ? undefined : t.kind === 'agent' ? this.state.agents.find((a) => a.id === t.agentId)?.repoId : t.repoId;
+    const n = makeNotice({ ...input, floor: input.floor ?? this.state.repos.find((r) => r.id === repoId)?.floor }, `${at.toString(36)}-${++this.noticeSeq}`, at);
+    this.state.notices = addNotice(this.state.notices, n, at);
+    this.broadcast({ type: 'toast', ...n });
+    if (push) this.notifier.notify(push.event, push.title ?? n.title, n.text, push.line, push.changes, n.id);
+    this.save();
   }
 
   /** The Charter tab's numbers (#105) from the objective log, the cost ledger and the open issues; the view keeps them till the next. */

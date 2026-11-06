@@ -69,6 +69,7 @@ function frameSnapshot(f: JournalFrame): WorldSnapshot {
     ceo: f.ceo,
     messages: f.messages,
     phoneReadAt: Number.MAX_SAFE_INTEGER, // nothing replayed counts as unread
+    notices: s.notices, // the notification centre is live, like the settings
     files: s.files,
     version: s.version,
     officeCommit: s.officeCommit,

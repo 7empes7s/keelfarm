@@ -15,6 +15,7 @@ import {
   nextDue,
   clip,
   note,
+  noteLink,
   noteText,
   ntfyPayload,
   ntfyTarget,
@@ -178,9 +179,9 @@ export class Notifier {
   }
 
   /** Something happened: tell the manager on every channel that's on, unless the event is off or had its minute. */
-  notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[]) {
+  notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[], id?: string) {
     if (!this.deps.settings().events[event]) return;
-    const r = offer(this.gates, note(event, title, body, line, changes), this.now());
+    const r = offer(this.gates, note(event, title, body, line, changes, id), this.now());
     this.gates = r.gates;
     if (r.send) void this.deliver(r.send);
     this.arm();
@@ -328,16 +329,17 @@ export class Notifier {
     const s = this.deps.settings();
     const on = (c: NotifyChannel) => (only ? c === only : s.channels[c]);
     const at = this.now();
-    const view: NoteView = { id: `${at.toString(36)}-${++this.seq}`, event: n.event, title: n.title, body: n.body, at, url: `/?tab=${noteTab(n.event)}` };
+    const view: NoteView = { id: n.id ?? `${at.toString(36)}-${++this.seq}`, event: n.event, title: n.title, body: n.body, at, url: `/?tab=${noteTab(n.event)}${n.id ? `&note=${n.id}` : ''}` };
+    const link = noteLink(s.officeUrl, n);
     if (on('desktop')) {
       this.deps.broadcast(view);
       this.health.set('desktop', { at, ok: true, error: '' });
     }
     const sends: Promise<string | null>[] = [];
-    for (const c of NOTIFY_WEBHOOKS) if (on(c) && this.webhooks[c]) sends.push(this.send(this.webhookRequest(c, n, s.officeUrl)));
+    for (const c of NOTIFY_WEBHOOKS) if (on(c) && this.webhooks[c]) sends.push(this.send(this.webhookRequest(c, n, link)));
     const tg = this.deps.telegram;
     const repeats = (n.event === 'ceoMessage' || n.event === 'hire') && !only && tg?.mirrors();
-    if (on('telegram') && tg?.linked() && !repeats) sends.push(tg.send(telegramNote(n, s.officeUrl), n.changes ? teamKeyboard(n.changes) : undefined));
+    if (on('telegram') && tg?.linked() && !repeats) sends.push(tg.send(telegramNote(n, link), n.changes ? teamKeyboard(n.changes) : undefined));
     if (on('push') && this.push.vapid) {
       const payload = JSON.stringify({ title: view.title, body: view.body, tag: `cubefarm-${view.id}`, url: view.url });
       for (const d of [...this.push.devices]) sends.push(this.sendPush(d, payload, noteText(n)));

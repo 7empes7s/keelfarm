@@ -169,6 +169,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     const own = this.state.repos.find((r) => this.backend.office.isOwnFolder(this.backend.mainDir(r.fullName)));
     const { text, notice } = lastUpdateNotice(result, commits, own?.fullName);
     this.postMessage('office', text, undefined, { notice });
+    this.notice({ kind: 'update', level: result.ok ? 'success' : 'error', title: result.ok ? 'The office updated' : "The office's update failed", text });
   }
 
   /** The manager's Update now (drain now, even with automatic updates off) or Later (not for 2 hours, or until a newer commit). */

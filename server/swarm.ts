@@ -25,6 +25,7 @@ import { loadLab } from './experiments.ts';
 import { apply as applyLedger, loadLedger } from './ledger.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, voiceSettings } from './voice.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
+import { keepNotices, markRead, NOTICES_KEEP } from '../shared/notices.ts';
 import { cloudSettings, DEFAULT_CLOUD } from '../shared/cloud.ts';
 import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/tooling.ts';
 import { describePractices, emptyEveryProject, everyProjectSettings } from '../shared/practices.ts';
@@ -136,6 +137,7 @@ export class Swarm extends SwarmCeoTools {
         ceo: { ...this.state.ceo, ...loaded.ceo, followups: loadFollowups(loaded.ceo?.followups), chats: loadChats(loaded.ceo?.chats, loaded.messages ?? [], Date.now()), remember: loadMemory(loaded.ceo?.remember) },
         messages: loaded.messages ?? [],
         phoneReadAt: loaded.phoneReadAt ?? 0,
+        notices: keepNotices(loaded.notices, Date.now()),
         prLimits: loaded.prLimits ?? 1,
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
@@ -298,6 +300,8 @@ export class Swarm extends SwarmCeoTools {
       this.previews.clearOrphans(this.state.repos),
     ]);
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
+    // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
+    if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
     void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
@@ -352,6 +356,7 @@ export class Swarm extends SwarmCeoTools {
       for (const r of this.state.repos) this.seedCharterLog(r); // and the Charter tab's numbers over it
     }
     if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
+    if (this.backend.demo && !this.state.notices.length && this.backend.seedNotices) this.state.notices = this.backend.seedNotices(this.state.repos, this.state.agents, Date.now()); // and a day of notifications
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
     this.save();
@@ -491,6 +496,17 @@ export class Swarm extends SwarmCeoTools {
     if (a.task === null) a.task = 'issue';
     const fixing = a.task === 'fix' && a.prNumber ? { pr: a.prNumber, headRef: a.branch } : undefined;
     this.startAgentSession(a, repo, cwd, text, this.buildSystemAppend(a, repo, cwd, a.branch, fixing), a.sessionId, undefined, typed ? 'typed' : null);
+  }
+
+  /** POST /api/notices/read: these notices (no ids: all of them) are read, in every tab. */
+  readNotices(ids: unknown) {
+    if (ids !== undefined && (!Array.isArray(ids) || ids.length > NOTICES_KEEP || ids.some((x) => typeof x !== 'string'))) throw new HttpError(400, 'ids must be a list of notice ids');
+    const before = this.state.notices;
+    this.state.notices = markRead(before, (ids as string[] | undefined) ?? null);
+    const read = this.state.notices.filter((n, i) => n !== before[i]).map((n) => n.id);
+    if (!read.length) return;
+    this.broadcast({ type: 'noticesRead', ids: read });
+    this.save();
   }
 
   // ---------- the CEO chat (#51) ----------

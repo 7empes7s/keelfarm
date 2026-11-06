@@ -21,6 +21,8 @@ export interface Note {
   line: string;
   /** Team changes it asks about: Telegram shows a button to approve or decline each. A summary has none. */
   changes?: TeamChange[];
+  /** Its notice in the notification centre (#107): the links carry it, so opening one marks it read. */
+  id?: string;
 }
 
 /** A team change waiting for the manager, as its buttons name it. */
@@ -61,8 +63,16 @@ export function plainText(md: string, max = BODY_MAX): string {
 }
 
 /** A note with its event's icon in front of the title. */
-export function note(event: NotifyEvent | 'test', title: string, body: string, line = title, changes?: TeamChange[]): Note {
-  return { event, title: `${ICON[event]} ${clip(title, 120)}`, body: clip(body), line: clip(line, 120), ...(changes?.length ? { changes } : {}) };
+export function note(event: NotifyEvent | 'test', title: string, body: string, line = title, changes?: TeamChange[], id?: string): Note {
+  return { event, title: `${ICON[event]} ${clip(title, 120)}`, body: clip(body), line: clip(line, 120), ...(changes?.length ? { changes } : {}), ...(id ? { id } : {}) };
+}
+
+/** The office's link for a note: with its notice's id (`?note=`), so opening it there marks it read. */
+export function noteLink(officeUrl: string, n: Pick<Note, 'id'>): string {
+  if (!officeUrl || !n.id) return officeUrl;
+  const u = new URL(officeUrl);
+  u.searchParams.set('note', n.id);
+  return u.toString();
 }
 
 /** Several held notes of one event as a single summary (one note stays itself). `dropped`: more that weren't kept. */

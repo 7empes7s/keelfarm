@@ -4,9 +4,12 @@ import { qaKey, useStore } from '../store';
 import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../../shared/previewEnv';
 import type { PreviewStatus, PreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
 import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSync, onOfficeComputer, prAsPreview, QA_BADGE, qaShotUrl, reachable, relayPath, type Channel, type Side } from './channels';
+import { sendToCeo } from './chatSend';
 import { Markdown } from './Markdown';
+import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { tuneChannel, useChannel, useWatch } from './theatre';
+import './appViewer.css';
 
 const STATUS_LABEL: Record<PreviewStatus, string> = {
   unconfigured: 'not set up',
@@ -26,8 +29,29 @@ const STEPS: { status: PreviewStatus; label: string }[] = [
   { status: 'starting', label: 'Start the app' },
 ];
 
+type Width = 'desktop' | 'tablet' | 'phone';
+const WIDTHS: [Width, string][] = [
+  ['phone', '📱 Phone'],
+  ['tablet', '▭ Tablet'],
+  ['desktop', '🖥 Desktop'],
+];
+
 // The last width picked, so reopening the viewer keeps it.
-let lastWidth: 'desktop' | 'phone' = 'desktop';
+let lastWidth: Width = 'desktop';
+
+// A phone's screen: the viewer's controls go in a ⋯ menu and compare shows one side at a time (#129).
+const NARROW = '(max-width: 600px)';
+const narrowNow = () => typeof matchMedia === 'function' && matchMedia(NARROW).matches;
+function useNarrow() {
+  const [narrow, setNarrow] = useState(narrowNow);
+  useEffect(() => {
+    const m = matchMedia(NARROW);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return narrow;
+}
 
 // A cross-origin frame never tells us it was refused, so this only catches frames that don't load at all.
 const SLOW_LOAD_MS = 12_000;
@@ -158,17 +182,21 @@ function PreviewStage({
   onStart,
   frameRef,
   compact,
+  shots,
+  onAsk,
 }: {
   repo: RepoView;
   preview: PreviewView;
   label: string; // "main", "PR #212": what it is, for titles and buttons
   src: string | null; // the address to load: the preview's, a path on it, or its sync proxy
-  width: 'desktop' | 'phone';
+  width: Width;
   reloads: number;
   busy: boolean;
   onStart: () => void;
   frameRef?: Ref<HTMLIFrameElement>;
   compact?: boolean;
+  shots?: { url: string; caption: string }[]; // QA's screenshots of it, shown when the app won't show in the frame
+  onAsk?: () => void; // a failed start: ask the CEO about it
 }) {
   const [loaded, setLoaded] = useState(false);
   const [slow, setSlow] = useState(false);
@@ -185,7 +213,7 @@ function PreviewStage({
 
   if (running) {
     return (
-      <div className={`app-stage ${width === 'phone' ? 'app-stage-phone' : ''}`}>
+      <div className={`app-stage ${width === 'desktop' ? '' : `app-stage-${width}`}`}>
         <iframe
           key={frameKey}
           ref={frameRef}
@@ -197,12 +225,25 @@ function PreviewStage({
           onLoad={() => setLoaded(true)}
           onError={() => setSlow(true)}
         />
+        {!loaded && !slow && <div className="app-skeleton" aria-label={`Loading ${label}…`} role="status" />}
         {slow && !loaded && (
           <div className="app-frame-hint" role="status">
             <b>The app isn't showing up here.</b> It may refuse to be shown inside another page (X-Frame-Options or a CSP frame-ancestors rule).{' '}
             <a href={src} target="_blank" rel="noreferrer">
               Open it in a new tab ↗
             </a>
+            {!!shots?.length && (
+              <>
+                <div className="small">QA's screenshots of it meanwhile:</div>
+                <div className="app-frame-shots">
+                  {shots.slice(0, 4).map((s) => (
+                    <a key={s.url} href={s.url} target="_blank" rel="noreferrer" title={s.caption}>
+                      <img src={s.url} alt={s.caption} loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -241,6 +282,11 @@ function PreviewStage({
           <button className="btn" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
             ⚙️ Run settings
           </button>
+          {onAsk && (
+            <button className="btn" onClick={onAsk}>
+              💬 Ask the CEO
+            </button>
+          )}
         </div>
         {showSettings && <PreviewSettings repo={repo} />}
       </div>
@@ -265,7 +311,7 @@ function PreviewStage({
           : `Start it to use it right here. It runs from the floor's own preview worktree on port ${preview.port}.`}
       </p>
       <button className="btn btn-good" disabled={busy} onClick={onStart}>
-        ▶ Start {label}
+        ▶ Start {label} (about 1 min)
       </button>
       {!preview.pr && !compact && (
         <>
@@ -430,7 +476,7 @@ function CompareView({
   repo: RepoView;
   main: PreviewView;
   pr: PreviewView;
-  width: 'desktop' | 'phone';
+  width: Width;
   reloads: number;
   busy: boolean;
   onStartMain: () => void;
@@ -544,7 +590,9 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   const channel = useChannel(repoId);
   const [width, setWidth] = useState(lastWidth);
   const [compare, setCompare] = useState(lastCompare);
-  const [showQa, setShowQa] = useState(qa || lastQa);
+  const narrow = useNarrow();
+  const [showQa, setShowQa] = useState(qa || (lastQa && !narrowNow())); // on a phone QA's report takes room: only when asked
+  const [side, setSide] = useState<Side>('pr'); // compare on a phone: the side on screen
   const [busy, setBusy] = useState(false);
   const [reloads, setReloads] = useState(0);
   const toolbar = useRef<HTMLDivElement>(null);
@@ -597,6 +645,59 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   const label = channel == null ? repo.defaultBranch : `PR #${channel}`;
   const name = repo.fullName.split('/')[1];
   const comparing = compare && prView != null;
+  const rec = pull && qaRecords[qaKey(repo.id, pull.number)];
+  const shots = pull && rec?.shots?.map((s, i) => ({ url: qaShotUrl(repo.id, pull.number, i, rec.updatedAt), caption: s.caption }));
+  const ask = () => {
+    sendToCeo(`The ${label} preview of ${repo.fullName} won't run: ${current.error ?? 'it stopped unexpectedly'}. Can you find out why and fix it?`);
+    useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' });
+  };
+  const openUrl = current.url && reachable(current.url, location);
+  const toggleCompare = () => {
+    lastCompare = !compare;
+    setCompare(!compare);
+  };
+  const toggleQa = () => {
+    lastQa = !showQa;
+    setShowQa(!showQa);
+  };
+  const startStop = active ? (
+    <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
+      ■ Stop
+    </button>
+  ) : (
+    <button className="btn btn-small btn-good" disabled={busy || current.status === 'unconfigured'} onClick={() => void (channel == null ? startMain() : startPr())}>
+      ▶ Start
+    </button>
+  );
+  // On a phone: one button, compare's side, and the rest in ⋯.
+  const narrowBar = (
+    <div className="app-toolbar" role="toolbar" aria-label="App controls">
+      {startStop}
+      {comparing && (
+        <div className="seg" role="group" aria-label="Side on screen">
+          <button className={`seg-btn ${side === 'main' ? 'seg-on' : ''}`} aria-pressed={side === 'main'} onClick={() => setSide('main')}>
+            {repo.defaultBranch}
+          </button>
+          <button className={`seg-btn ${side === 'pr' ? 'seg-on' : ''}`} aria-pressed={side === 'pr'} onClick={() => setSide('pr')}>
+            {label}
+          </button>
+        </div>
+      )}
+      <span className="spacer" />
+      <Menu
+        label="More for the app"
+        title={`${name} · ${label}`}
+        items={[
+          { label: 'Open in browser ↗', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
+          { label: '⟳ Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
+          active && { label: '↻ Restart', onSelect: () => void (channel == null ? startMain() : startPr(true)) },
+          ...WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) })),
+          prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
+          prView && { label: showQa ? '📋 Hide the QA report' : '📋 QA report', onSelect: toggleQa },
+        ]}
+      />
+    </div>
+  );
 
   return (
     <Panel
@@ -618,31 +719,15 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
     >
       <div ref={toolbar}>
         <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />
-        <div className="app-toolbar" role="toolbar" aria-label="App controls">
-          {active ? (
-            <>
-              <button className="btn btn-small" disabled={busy} onClick={() => void (channel == null ? startMain() : startPr(true))} title={`Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
-                ↻ Restart
-              </button>
-              <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
-                ■ Stop
-              </button>
-            </>
-          ) : (
-            <button className="btn btn-small btn-good" disabled={busy || current.status === 'unconfigured'} onClick={() => void (channel == null ? startMain() : startPr())}>
-              ▶ Start
+        {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
+          {active && (
+            <button className="btn btn-small" disabled={busy} onClick={() => void (channel == null ? startMain() : startPr(true))} title={`Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
+              ↻ Restart
             </button>
           )}
+          {startStop}
           {prView && (
-            <button
-              className={`btn btn-small ${comparing ? 'btn-on' : ''}`}
-              aria-pressed={comparing}
-              onClick={() => {
-                lastCompare = !compare;
-                setCompare(!compare);
-              }}
-              title={`${repo.defaultBranch} on the left, PR #${channel} on the right`}
-            >
+            <button className={`btn btn-small ${comparing ? 'btn-on' : ''}`} aria-pressed={comparing} onClick={toggleCompare} title={`${repo.defaultBranch} on the left, PR #${channel} on the right`}>
               ⇆ Compare with {repo.defaultBranch}
             </button>
           )}
@@ -650,28 +735,20 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
             ⟳ Reload
           </button>
           <div className="seg" role="group" aria-label="Viewport width">
-            <button className={`seg-btn ${width === 'desktop' ? 'seg-on' : ''}`} aria-pressed={width === 'desktop'} onClick={() => pickWidth('desktop')}>
-              🖥 Desktop
-            </button>
-            <button className={`seg-btn ${width === 'phone' ? 'seg-on' : ''}`} aria-pressed={width === 'phone'} onClick={() => pickWidth('phone')} title="390px wide">
-              📱 Phone
-            </button>
+            {WIDTHS.map(([w, text]) => (
+              <button key={w} className={`seg-btn ${width === w ? 'seg-on' : ''}`} aria-pressed={width === w} onClick={() => pickWidth(w)} title={w === 'phone' ? '390px wide' : w === 'tablet' ? '768px wide' : undefined}>
+                {text}
+              </button>
+            ))}
           </div>
           <span className="spacer" />
           {prView && (
-            <button
-              className={`btn btn-small ${showQa ? 'btn-on' : ''}`}
-              aria-pressed={showQa}
-              onClick={() => {
-                lastQa = !showQa;
-                setShowQa(!showQa);
-              }}
-            >
+            <button className={`btn btn-small ${showQa ? 'btn-on' : ''}`} aria-pressed={showQa} onClick={toggleQa}>
               📋 QA
             </button>
           )}
-          {current.url ? (
-            <a className="btn btn-small" href={reachable(current.url, location)} target="_blank" rel="noreferrer">
+          {openUrl ? (
+            <a className="btn btn-small" href={openUrl} target="_blank" rel="noreferrer">
               Open in new tab ↗
             </a>
           ) : (
@@ -679,20 +756,26 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
               Open in new tab ↗
             </button>
           )}
-        </div>
+        </div>}
       </div>
 
       <div className="app-body">
         <div className="app-main">
-          {comparing ? (
+          {comparing && narrow ? (
+            side === 'main' ? (
+              <PreviewStage repo={repo} preview={main} label={repo.defaultBranch} src={main.url && reachable(main.url, location)} width={width} reloads={reloads} busy={busy} onStart={() => void startMain()} />
+            ) : (
+              <PreviewStage repo={repo} preview={prView} label={label} src={prView.url && reachable(prView.url, location)} width={width} reloads={reloads} busy={busy} onStart={() => void startPr()} shots={shots} onAsk={ask} />
+            )
+          ) : comparing ? (
             <CompareView repo={repo} main={main} pr={prView} width={width} reloads={reloads} busy={busy} onStartMain={() => void startMain()} onStartPr={() => void startPr()} />
           ) : (
-            <PreviewStage repo={repo} preview={current} label={label} src={current.url && reachable(current.url, location)} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} />
+            <PreviewStage repo={repo} preview={current} label={label} src={openUrl} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} shots={shots} onAsk={ask} />
           )}
         </div>
-        {prView && showQa && pull && <QaPanel repo={repo} pull={pull} qa={qaRecords[qaKey(repo.id, pull.number)]} />}
+        {prView && showQa && pull && <QaPanel repo={repo} pull={pull} qa={rec} />}
       </div>
-      {current.status === 'running' && (
+      {current.status === 'running' && !narrow && (
         <p className="muted small app-foot">
           Blank, or “refused to connect”? The app may block being framed: use <b>Open in new tab</b>. Keys typed in the app stay in the app, so <kbd>Esc</kbd> only closes this panel
           when focus is outside it; <b>✕</b> always does.
