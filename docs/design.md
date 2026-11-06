@@ -1,7 +1,7 @@
 # Design system
 
 Every 2D screen (panels, the console, pocket mode, the phone) follows this page. The manager's console
-(`client/src/ui/ManagerConsole.tsx` and pocket mode's `PocketConsole.tsx`) is the reference screen: copy it.
+(`client/src/ui/ConsoleNav.tsx` and its sections, and pocket mode's `PocketConsole.tsx`) is the reference screen: copy it.
 Tokens and shared styles are in `client/src/design.css`; components are in `client/src/ui/`.
 
 ## Direction
@@ -10,8 +10,8 @@ The office is a cartoon: thick ink outlines, solid offset shadows, round corners
 that voice but behaves like a good phone app, because the manager mostly uses the office on a phone.
 
 1. **Thumb first.** Every target is at least 44×44 px (Apple HIG 44 pt; Material 3 asks 48 dp). Fields are 16 px text
-   so iOS doesn't zoom. Lists wrap and stack; nothing scrolls sideways except a strip of tabs or a data matrix in its
-   own scroller.
+   so iOS doesn't zoom. Lists wrap and stack; nothing scrolls sideways except a data matrix in its own scroller (or, on a
+   narrow screen, a strip of tabs).
 2. **One rhythm.** Spacing, type, radii and shadows come from tokens. No one-off pixel values in new CSS.
 3. **Safe by default.** Nothing destructive or hard to undo is one visible tap away. It lives in a ⋯ menu's danger
    section and then asks to confirm (HIG: action sheets and destructive buttons; Material: menus and confirmation
@@ -56,6 +56,27 @@ add `prefers-color-scheme: dark` rules. Per-floor colour stays `var(--accent)` s
 fill uses `--ds-on-color`.
 
 `client/src/designTokens.test.ts` is the ratchet: colour literals in the old stylesheets may only go down.
+
+## The console's map (#102)
+
+The manager's console has five top tabs, and each one shows a side menu of its sections with one section beside it
+(on a phone, the side menu is a list you tap into, with a back button, iOS Settings style). The map is
+`client/src/ui/consoleNav.ts`, drawn by `ui/ConsoleNav.tsx` (the 3D office) and `pocket/PocketConsole.tsx` (phones):
+
+| Tab | Sections |
+| --- | --- |
+| 🏢 Work | Floors & repos, Issues (3D only; phones have the Kanban tab), Team |
+| 🛰️ Company | Mission control (with server health and the test lab), Charter |
+| 🧠 CEO | The CEO (chat, mandates, team changes, project briefs), CEO settings, Tools & skills |
+| 📜 History | Sessions, Daily log, Time-lapse (3D only) |
+| ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
+
+- Each section links as `#<tab>/<section>` (e.g. `#settings/cloud-agents`), and each tab remembers its last section in this browser.
+- The search at the top of the side menu finds sections and settings by label. A new setting adds its label to its
+  section's `find` list.
+- Progressive disclosure: diagnostics (versions, paths, storage, transcript counts) never sit in a section's main flow.
+  They go in a collapsed **Details** disclosure or in About this office. Nothing is removed, only tucked away.
+- A section scrolls inside its own pane. The console itself never scrolls, and the top tabs fit on one row on desktop.
 
 ## Components
 
