@@ -7,6 +7,8 @@ import { WebSocketServer } from 'ws';
 import { z } from 'zod';
 import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
+import { BEAT_MS } from '../shared/heartbeat.ts';
+import type { ServerEvent } from '../shared/types.ts';
 import { DEMO, DEMO_SCALE, HOST, PORT, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
@@ -405,6 +407,11 @@ wss.on('connection', (ws) => {
   swarm.addClient(ws);
   presence.attach(ws);
 });
+// The heartbeat (#93): a tab that stops hearing it knows its socket died quietly (a phone's background) and reconnects.
+const BEAT = JSON.stringify({ type: 'beat' } satisfies ServerEvent);
+setInterval(() => {
+  for (const ws of wss.clients) if (ws.readyState === ws.OPEN) ws.send(BEAT);
+}, BEAT_MS).unref();
 terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 'http://localhost').searchParams.get('agent') ?? '', ws));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
