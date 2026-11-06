@@ -392,6 +392,7 @@ app.put('/api/ceo/memory/:id', route((req) => swarm.editMemory(String(req.params
 app.delete('/api/ceo/memory/:id', route((req) => swarm.deleteMemory(String(req.params.id))));
 app.get('/api/messages/:id/artifacts/:artifactId', route((req) => swarm.artifact(Number(req.params.id), String(req.params.artifactId))));
 app.get('/api/messages/:id/refs/:index/file', route((req) => swarm.refFile(Number(req.params.id), Number(req.params.index))));
+app.post('/api/notices/read', route((req) => swarm.readNotices(req.body?.ids)));
 app.post('/api/phone/read', route((req) => swarm.markPhoneRead(Number(req.body?.at) || Date.now())));
 app.post(
   '/api/requests/:id/approve',

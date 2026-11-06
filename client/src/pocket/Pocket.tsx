@@ -20,6 +20,7 @@ import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
 import { parseHash } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
+import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -233,26 +234,13 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 
 // ---------- the shell ----------
 
-function Toasts() {
-  const toasts = useStore((s) => s.toasts);
-  const dismiss = useStore((s) => s.dismissToast);
-  return (
-    <div className="toasts">
-      {toasts.slice(-2).map((t) => (
-        <div key={t.id} className={`toast toast-${t.level}`} onClick={() => dismiss(t.id)}>
-          {t.text}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} />;
   if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
+  if (overlay?.kind === 'notices') return <NoticeCentre />;
   return null;
 }
 
@@ -417,6 +405,7 @@ export default function Pocket() {
           </span>
         )}
         {tab === 'chat' && !wide && <div className="pk-head-tools" ref={setChatTools} />}
+        {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
         {wide ? (
           <button className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>
@@ -427,7 +416,7 @@ export default function Pocket() {
           </button>
         )}
       </header>
-      <Toasts />
+      <NoticeToasts max={2} />
       <div className="pk-body">
         <nav className="pk-tabs" aria-label="Pocket office">
           {tabs.map(([k, icon, label, badge], i) => {

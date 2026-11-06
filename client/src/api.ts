@@ -168,6 +168,7 @@ export const api = {
   addMemory: (text: string) => call('POST', '/api/ceo/memory', { text }),
   editMemory: (id: string, text: string) => call('PUT', `/api/ceo/memory/${encodeURIComponent(id)}`, { text }),
   deleteMemory: (id: string) => call('DELETE', `/api/ceo/memory/${encodeURIComponent(id)}`),
+  readNotices: (ids?: string[]) => call('POST', '/api/notices/read', ids ? { ids } : {}, false),
   phoneRead: (at: number) => call('POST', '/api/phone/read', { at }),
   artifact: (messageId: number, artifactId: string) => call<{ markdown: string }>('GET', `/api/messages/${messageId}/artifacts/${encodeURIComponent(artifactId)}`),
   /** A chat file ref's text (the viewer shows its own error, so no toast). */

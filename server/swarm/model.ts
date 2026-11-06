@@ -34,6 +34,7 @@ import type {
   IssueInfo,
   LogLine,
   MachineHost,
+  NoticeView,
   PhoneMessage,
   PongRow,
   PreviewConfig,
@@ -171,6 +172,7 @@ export interface Persisted {
   ceo: CeoState;
   messages: PhoneMessage[];
   phoneReadAt: number;
+  notices: NoticeView[]; // the notification centre (shared/notices.ts)
   prLimits: number; // the PR budgets (PR_LIMITS_VERSION) needs-human records were judged by
   ops: OpsHistory; // mission control's rolling week of merges, QA verdicts, check runs and costs
   held: HeldIssue[];

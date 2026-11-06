@@ -26,6 +26,7 @@ import type { CloudBackend } from './backend.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
+import { sampleNotices } from './noticeSample.ts';
 import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
@@ -947,6 +948,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
+    seedNotices: sampleNotices,
     demoCharter,
     simulateUsage: demoUsage,
     demoDoctor: {
