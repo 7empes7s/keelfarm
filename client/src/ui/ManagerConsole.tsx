@@ -1,10 +1,10 @@
-import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { TeamStats } from './CareerCard';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
-import { agentsOnRepo, pendingRequests, useStore, type ManagerTab } from '../store';
-import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, PLAYBOOK_MAX, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
-import { CLAUDE_MODELS, modelSuggestions } from '../../../shared/models';
+import { agentsOnRepo, pendingRequests, useStore } from '../store';
+import { CEO_ID, PLAYBOOK_MAX, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
+import { modelSuggestions } from '../../../shared/models';
 import { CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
@@ -12,32 +12,16 @@ import { letGo } from './dangerActions';
 import { IssueForm } from './KanbanView';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
-import { OpsTab } from './MissionConsole';
-import { HealthStrip, MemoryFields } from './HealthStrip';
-import { TestLabCard, TestLabFields } from './TestLab';
-import { EffortByKind } from './CostsSection';
-import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
-import { NotifySettings } from './NotifySettings';
-import { ProfileSettings } from './ProfileSettings';
 import { Menu } from './Menu';
-import { Panel } from './Panel';
 import { Resume } from './Phone';
 import { ProjectPicker } from './ProjectPicker';
 import { badgeStatus, StatusPill } from './StatusPill';
-import { ThemeSettings } from './ThemeSettings';
-import { VoiceSettings } from './VoiceSettings';
-import { CloudSettings } from './CloudSettings';
-import { AwakeSettings, CeoMandates, CeoSession, FollowupSettings } from './CeoFollowups';
-import { ToolsTab } from './ToolsSettings';
-import { EveryProjectCard, FloorPractices } from './PracticesSettings';
+import { CeoMandates, CeoSession } from './CeoFollowups';
+import { FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
-import { AccessibilitySettings } from './AccessibilitySettings';
-import { CharterTab } from './CharterTab';
-import { OutsideSettings } from './OutsideSettings';
 import { useMode } from '../pocket/mode';
 
-// The time-lapse drives the 3D sky's clock, so it loads when its tab opens: pocket mode shows the other tabs without 3D.
-const TimeLapseTab = lazy(() => import('./TimeLapse').then((m) => ({ default: m.TimeLapseTab })));
+// The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
@@ -148,13 +132,16 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
         />
       </div>
       <div className="ds-row-meta">
-        {team.length} agents · {repo.issues.length} open issues · {repo.pulls.filter((p) => p.state === 'OPEN').length} open PRs · default branch <code>{repo.defaultBranch}</code>
+        {team.length} agents · {repo.issues.length} open issues · {repo.pulls.filter((p) => p.state === 'OPEN').length} open PRs
         {repo.cloneStatus !== 'ready' && ` · checkout: ${repo.cloneStatus}`}
       </div>
-      <div className="ds-row-meta" title={repo.localPath ? 'Your own project folder' : 'A clone the office manages'}>
-        📁 <code>{repo.checkoutPath}</code>
-        {officeFolder ? " · the office's own folder, updated from the Office row" : repo.folderSync && <span title={repo.folderSync}> · {repo.folderSync}</span>}
-      </div>
+      <details className="small">
+        <summary>Details</summary>
+        <div className="ds-row-meta" title={repo.localPath ? 'Your own project folder' : 'A clone the office manages'}>
+          📁 <code>{repo.checkoutPath}</code> · default branch <code>{repo.defaultBranch}</code>
+          {officeFolder ? " · the office's own folder, updated from the Office row" : repo.folderSync && <span title={repo.folderSync}> · {repo.folderSync}</span>}
+        </div>
+      </details>
       {repo.cloneError && <div className="term-error small">clone failed: {repo.cloneError}</div>}
       {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
       <div className="ds-switches">
@@ -215,8 +202,6 @@ export function FloorsTab() {
     <div className="tab-grid">
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
-        <HealthStrip />
-        <TestLabCard />
         <h3 className="section">🏢 Floors</h3>
         {repos.length === 0 && <p className="muted">No floors yet. Add a project →</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
@@ -346,7 +331,7 @@ export function CeoTab() {
             )}
           </div>
           <div className="muted small">
-            {info.nextReviewAt ? `Next company review around ${new Date(info.nextReviewAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (skipped if nothing changed).` : 'Periodic reviews are off (Settings).'}
+            {info.nextReviewAt ? `Next company review around ${new Date(info.nextReviewAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (skipped if nothing changed).` : 'Periodic reviews are off (CEO settings).'}
           </div>
           <PromptPreview agent={ceo} />
           {ceo.terminal ? (
@@ -393,7 +378,7 @@ export function CeoTab() {
         <CeoSession />
         <CeoMandates />
         <h3 className="section">📄 Team changes {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
-        {pending.length === 0 && <p className="muted small">None waiting. The CEO grows or shrinks a floor's team when its work calls for it (Settings → Team changes from the CEO).</p>}
+        {pending.length === 0 && <p className="muted small">None waiting. The CEO grows or shrinks a floor's team when its work calls for it (CEO settings → Team changes from the CEO).</p>}
         {pending.map((r) => (
           <Resume key={r.id} req={r} />
         ))}
@@ -467,7 +452,7 @@ function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
           </option>
         ))}
       </select>
-      <span className="add-agent-go" title={full ? `Floor ${repo.floor} has its most agents (${settings.maxAgents}): change it in Settings → Most agents per floor` : undefined}>
+      <span className="add-agent-go" title={full ? `Floor ${repo.floor} has its most agents (${settings.maxAgents}): change it in Settings → Agents → Most agents per floor` : undefined}>
         <button className="btn btn-small btn-good" disabled={busy || full} onClick={add}>
           + Agent
         </button>
@@ -572,7 +557,7 @@ export function TeamTab() {
 
 // ---------- issues ----------
 
-function IssuesTab({ initialRepo }: { initialRepo?: string }) {
+export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
   const repos = useStore((s) => s.repos);
   const allAgents = useStore((s) => s.agents);
   const [repoId, setRepoId] = useState(initialRepo ?? repos[0]?.id ?? '');
@@ -650,273 +635,5 @@ function IssuesTab({ initialRepo }: { initialRepo?: string }) {
         </div>
       </div>
     </div>
-  );
-}
-
-// ---------- settings ----------
-
-/** pocket: leave out the notification settings, which pocket mode shows under This device. */
-export function SettingsTab({ pocket = false }: { pocket?: boolean }) {
-  const settings = useStore((s) => s.settings);
-  const clis = useStore((s) => s.clis);
-  const user = useStore((s) => s.user);
-  const machinesRoot = useStore((s) => s.machinesRoot);
-  const demo = useStore((s) => s.demo);
-  const version = useStore((s) => s.version);
-  const commit = useStore((s) => s.officeCommit);
-  const set = (p: Parameters<typeof api.updateSettings>[0]) => void attempt(() => api.updateSettings(p));
-  const terminal = settings.runtime === 'terminal';
-  const defaultCli = terminal ? settings.defaultCli : 'claude';
-  return (
-    <div className="tab-grid">
-      <div className="card">
-        <h3>🧠 Agents</h3>
-        {terminal && (
-          <label className="field">
-            <span>Default coding agent</span>
-            <select value={settings.defaultCli} onChange={(e) => set({ defaultCli: e.target.value as AgentCli })}>
-              <CliOptions clis={clis} />
-            </select>
-          </label>
-        )}
-        <label className="field">
-          <span>Default model{terminal ? ` for ${cliName(clis, settings.defaultCli)}` : ''}</span>
-          <input
-            key={`${settings.defaultCli}:${settings.defaultModel}`}
-            list={defaultCli === 'claude' ? 'models-s' : undefined}
-            defaultValue={settings.defaultModel}
-            placeholder="the agent's own default"
-            onBlur={(e) => e.target.value !== settings.defaultModel && set({ defaultModel: e.target.value })}
-          />
-          <datalist id="models-s">
-            {CLAUDE_MODELS.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        </label>
-        <label className="field">
-          <span>Default effort</span>
-          <select value={settings.defaultEffort} onChange={(e) => set({ defaultEffort: e.target.value as EffortLevel })}>
-            {EFFORTS.map((x) => (
-              <option key={x} value={x}>
-                {x}
-              </option>
-            ))}
-          </select>
-        </label>
-        <EffortByKind />
-        <p className="muted small">
-          {terminal
-            ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
-            : 'The Agent SDK runs Claude Code. Each agent can use their own model and effort (Team tab).'}
-        </p>
-        <label className="field">
-          <span>Session limit</span>
-          <input type="number" min={0} placeholder="No limit" defaultValue={settings.sessionLimit || ''} onBlur={(e) => set({ sessionLimit: Number(e.target.value) || 0 })} />
-        </label>
-        <p className="muted small">
-          Leave empty so every agent with work runs at once. Agents on the same coding agent share its subscription's usage limits, and each one is its own process on this PC, so set a limit if
-          you hit either.
-        </p>
-        <MemoryFields memory={settings.memory} set={set} />
-        <TestLabFields testLab={settings.testLab} set={set} />
-        <label className="field">
-          <span>Sessions while pacing</span>
-          <input
-            key={settings.pacingSessions}
-            type="number"
-            min={1}
-            max={32}
-            defaultValue={settings.pacingSessions}
-            onBlur={(e) => Number(e.target.value) !== settings.pacingSessions && set({ pacingSessions: Number(e.target.value) || 3 })}
-          />
-        </label>
-        <p className="muted small">When Claude warns that usage is getting high, new issues only start while fewer sessions than this are running. QA, fixes and the CEO carry on.</p>
-        <label className="field">
-          <span>Most agents per floor</span>
-          <input
-            key={settings.maxAgents}
-            type="number"
-            min={1}
-            max={FLOOR_SEATS}
-            defaultValue={settings.maxAgents}
-            onBlur={(e) => {
-              const n = Math.min(FLOOR_SEATS, Math.max(1, Math.round(Number(e.target.value)) || DEFAULT_MAX_AGENTS));
-              if (n !== settings.maxAgents) set({ maxAgents: n });
-            }}
-          />
-        </label>
-        <p className="muted small">At most {FLOOR_SEATS}, one per desk. Adding agents past it is refused, by hand or by the CEO.</p>
-        <h3>🧠 The CEO</h3>
-        <div role="radiogroup" aria-label="Team changes from the CEO">
-          <div className="small">
-            <b>Team changes from the CEO</b>
-          </div>
-          <label className="toggle block">
-            <input type="radio" name="scaling" checked={settings.scaling === 'approve'} onChange={() => set({ scaling: 'approve' })} />
-            <span>
-              <b>I approve each one</b> (recommended): new agents wait in the lobby, where you can change their coding agent, model and effort before hiring them,
-              and a let-go waits as an envelope on their desk.
-            </span>
-          </label>
-          <label className="toggle block">
-            <input type="radio" name="scaling" checked={settings.scaling === 'auto'} onChange={() => set({ scaling: 'auto' })} />
-            <span>
-              <b>Apply straight away</b>, up to the most agents per floor. Idle agents leave first; busy ones finish their task.
-            </span>
-          </label>
-        </div>
-        <label className="field">
-          <span>Company review every (minutes, 0 = off)</span>
-          <input type="number" min={0} max={1440} defaultValue={settings.ceoHeartbeatMin} onBlur={(e) => set({ ceoHeartbeatMin: Number(e.target.value) })} />
-        </label>
-        <p className="muted small">A review checks team sizes, stuck PRs and floor profiles, and is skipped when nothing changed since the last one. It never files issues: new work only comes from you. The CEO's own model and effort are on the CEO tab.</p>
-        <label className="field">
-          <span>Research time budget (minutes)</span>
-          <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />
-        </label>
-        <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
-        <FollowupSettings />
-        <AwakeSettings />
-      </div>
-      <EveryProjectCard />
-      <div className="card">
-        <h3>⌨️ How agents run</h3>
-        <label className="toggle block">
-          <input type="radio" checked={settings.runtime === 'terminal'} onChange={() => set({ runtime: 'terminal' })} />
-          <span>
-            <b>Real terminals</b> (recommended): every agent is its actual coding agent running in its own terminal. Open a desk to watch it live or type into it.
-          </span>
-        </label>
-        <label className="toggle block">
-          <input type="radio" checked={settings.runtime === 'sdk'} onChange={() => set({ runtime: 'sdk' })} />
-          <span>
-            <b>Agent SDK</b>: Claude Code through the Claude Agent SDK, shown as a log of its steps. Claude Code only.
-          </span>
-        </label>
-        <p className="muted small">
-          Agents work like your own coding agents in a terminal, with your skills, MCP servers and settings, and don't stop to ask. The office's workflow (branches, pull requests, QA reporting
-          back) is in their instructions.
-        </p>
-        <h3>🏢 Company</h3>
-        <label className="field">
-          <span>Your name</span>
-          <input defaultValue={settings.managerName} placeholder={user ?? 'Boss'} onBlur={(e) => e.target.value !== settings.managerName && set({ managerName: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Company name</span>
-          <input defaultValue={settings.companyName} placeholder="cubefarm" onBlur={(e) => e.target.value !== settings.companyName && set({ companyName: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>The office dog's name</span>
-          <input key={settings.dogName} defaultValue={settings.dogName} placeholder="Biscuit" maxLength={24} onBlur={(e) => e.target.value.trim() !== settings.dogName && set({ dogName: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Projects folder (new projects are created here)</span>
-          <input key={settings.projectsDir} defaultValue={settings.projectsDir} onBlur={(e) => e.target.value.trim() && e.target.value !== settings.projectsDir && set({ projectsDir: e.target.value })} />
-        </label>
-        <label className="field">
-          <span>Free idle desks after (minutes, 0 = never)</span>
-          <input
-            key={settings.trimIdleDesksMin}
-            type="number"
-            min={0}
-            max={10080}
-            defaultValue={settings.trimIdleDesksMin}
-            onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.trimIdleDesksMin && set({ trimIdleDesksMin: Number(e.target.value) })}
-          />
-        </label>
-        <p className="muted small">A desk left idle this long loses its node_modules and build output to save disk space. Its next task installs them again.</p>
-        {typeof settings.autoUpdate === 'boolean' && (
-          <>
-            <label className="field">
-              <span>Update the office after merges settle (minutes)</span>
-              <input key={settings.updateSettleMin ?? 3} type="number" min={0} max={60} defaultValue={settings.updateSettleMin ?? 3} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.updateSettleMin && set({ updateSettleMin: Number(e.target.value) })} />
-            </label>
-            <p className="muted small">An automatic update waits this long after the latest merge (at most 15 minutes after the first), so a run of merges restarts the office once. Agents keep working meanwhile.</p>
-          </>
-        )}
-        <div className="row">
-          <button className="btn btn-small" onClick={() => set({ tutorialStep: 0 })}>
-            🧭 Replay the tour
-          </button>
-        </div>
-        <h3>ℹ️ Environment</h3>
-        <div className="small">
-          cubefarm: <b>{version ?? 'unknown'}</b>
-          {commit && (
-            <>
-              {' '}
-              (<code>{commit}</code>)
-            </>
-          )}
-          <br />
-          GitHub: <b>{user ?? 'not signed in'}</b>
-          {demo && ' (demo)'}
-          <br />
-          Agents' machines: <code>{machinesRoot}</code>
-        </div>
-      </div>
-      <ProfileSettings />
-      <HistorySettings />
-      <CloudSettings />
-      <VoiceSettings />
-      <OutsideSettings />
-      {!pocket && <NotifySettings />}
-      <ThemeSettings />
-    </div>
-  );
-}
-
-/** card: open Mission control at this card (an alarm's id, or 'usage'). */
-export function ManagerConsole({ initialTab, initialRepo, card, history }: { initialTab?: ManagerTab; initialRepo?: string; card?: string; history?: HistoryFocus }) {
-  const [tab, setTab] = useState<ManagerTab>(initialTab ?? 'floors');
-  const pending = useStore((s) => pendingRequests(s.requests).length);
-  const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
-  const proposals = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
-  const tabs: [ManagerTab, string][] = [
-    ['floors', '🏢 Floors & repos'],
-    ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
-    ['ceo', `🧠 CEO${pending ? ` (${pending})` : ''}`],
-    ['charter', `🎯 Charter${proposals ? ` (${proposals})` : ''}`],
-    ['team', '👩‍💻 Team'],
-    ['issues', '📝 Issues'],
-    ['settings', '⚙️ Settings'],
-    ['tools', '🧰 Tools & skills'],
-    ['history', '📜 History'],
-    ['timelapse', '📼 Time-lapse'],
-    ['access', '♿ Accessibility'],
-  ];
-  return (
-    <Panel wide title="🧑‍💼 Manager's console" className="ds-console">
-      <div className="tabs" role="tablist" aria-label="Console">
-        {tabs.map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? 'tab-on' : ''}`} onClick={() => setTab(k)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="tab-body ds-stack-scope" role="tabpanel" aria-label={tabs.find(([k]) => k === tab)?.[1]}>
-        {tab === 'floors' && <FloorsTab />}
-        {tab === 'ops' && <OpsTab card={card} />}
-        {tab === 'ceo' && <CeoTab />}
-        {tab === 'charter' && <CharterTab initialRepo={initialRepo} />}
-        {tab === 'team' && <TeamTab />}
-        {tab === 'issues' && <IssuesTab initialRepo={initialRepo} />}
-        {tab === 'settings' && <SettingsTab />}
-        {tab === 'tools' && <ToolsTab />}
-        {tab === 'history' && <HistoryTab key={JSON.stringify(history ?? {})} focus={history} />}
-        {tab === 'timelapse' && (
-          <Suspense fallback={<p className="muted">Loading…</p>}>
-            <TimeLapseTab />
-          </Suspense>
-        )}
-        {tab === 'access' && (
-          <div className="tab-grid a11y-grid">
-            <AccessibilitySettings />
-          </div>
-        )}
-      </div>
-    </Panel>
   );
 }
