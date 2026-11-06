@@ -3,6 +3,7 @@
 // CEO wrote, the compact rendering every build, fix and QA prompt starts with (capped, and byte-identical between
 // calls so prompt caching keeps it cheap), the Markdown export, objective tags on issues and the drift view.
 
+import type { CharterInsights, CheckNote, ObjectiveStatus } from './charterStats.ts';
 import type { IssueInfo, PullInfo } from './types.ts';
 
 /** One objective in a floor's charter (#48): issues name it by id ("Objective: O2"); measure: how we know it's met. */
@@ -22,8 +23,8 @@ export interface CharterChange { at: number; by: string; parts: string[]; note: 
 /** The drift view: merged PRs of the last 7 days under the objective their issue named; objective null: none. */
 export interface DriftGroup { objective: string | null; outcome: string; prs: { number: number; title: string }[] }
 
-/** history: newest first. */
-export interface CharterView extends CharterParts { proposal: CharterProposal | null; history: CharterChange[]; drift: DriftGroup[] }
+/** history: newest first. insights: the numbers per objective and for the floor (shared/charterStats.ts), null until the first sync. */
+export interface CharterView extends CharterParts { proposal: CharterProposal | null; history: CharterChange[]; drift: DriftGroup[]; insights: CharterInsights | null }
 
 /** The most characters of charter in a prompt: the rendering is cut there, and the editor warns above it. */
 export const CHARTER_PROMPT_MAX = 1500;
@@ -41,9 +42,12 @@ export const FOCUS_MAX = 200;
 const HISTORY_MAX = 20;
 /** The drift view's window. */
 export const DRIFT_MS = 7 * 24 * 3600_000;
+/** How long the objective log keeps merges and QA's charter checks: the insights' longest window. */
+export const LOG_MS = 30 * 24 * 3600_000;
+const CHECKS_MAX = 300;
 
 export const emptyCharter = (): CharterParts => ({ objectives: [], standards: [], nonGoals: [], focus: '' });
-export const emptyCharterView = (): CharterView => ({ ...emptyCharter(), proposal: null, history: [], drift: [] });
+export const emptyCharterView = (): CharterView => ({ ...emptyCharter(), proposal: null, history: [], drift: [], insights: null });
 
 const line = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 const lines = (v: unknown, each: number, most: number) =>
@@ -166,6 +170,9 @@ export function withChange(history: CharterChange[], before: Charter, after: Cha
   return parts.length ? [{ at, by, parts, note }, ...history].slice(0, HISTORY_MAX) : history;
 }
 
+/** History with an entry on top, at most HISTORY_MAX entries. */
+export const withNote = (history: CharterChange[], change: CharterChange) => [change, ...history].slice(0, HISTORY_MAX);
+
 // ---------- objectives on issues ----------
 
 /** The objective an issue body names on a line of its own ("Objective: O2"), or null. */
@@ -183,13 +190,14 @@ export function objectiveRefusal(body: string, c: Pick<Charter, 'objectives'>): 
   return null;
 }
 
-/** What the office remembers for the drift view: each issue's objective, and the PRs merged in the last 7 days. */
+/** What the office remembers for the drift view and the insights: each issue's objective, the PRs merged and QA's charter checks of the last 30 days. */
 export interface ObjectiveLog {
   tags: Record<string, string>; // issue number → objective id
   merged: { pr: number; title: string; at: number; objective: string | null }[];
+  checks: CheckNote[]; // newest first
 }
 
-export const emptyLog = (): ObjectiveLog => ({ tags: {}, merged: [] });
+export const emptyLog = (): ObjectiveLog => ({ tags: {}, merged: [], checks: [] });
 
 const TAGS_MAX = 500;
 
@@ -209,8 +217,13 @@ export function noteObjectives(log: ObjectiveLog, issues: Pick<IssueInfo, 'numbe
     const objective = p.closesIssues.map((n) => log.tags[String(n)]).find(Boolean) ?? null;
     log.merged.push({ pr: p.number, title: p.title.slice(0, 120), at, objective });
   }
-  log.merged = log.merged.filter((m) => now - m.at <= DRIFT_MS).sort((a, b) => b.at - a.at);
+  log.merged = log.merged.filter((m) => now - m.at <= LOG_MS).sort((a, b) => b.at - a.at);
   return JSON.stringify(log) !== before;
+}
+
+/** QA's charter check on a PR into the log (newest first), kept 30 days. */
+export function noteCheck(log: ObjectiveLog, note: CheckNote, now: number) {
+  log.checks = [note, ...log.checks].filter((c) => now - c.at <= LOG_MS).slice(0, CHECKS_MAX);
 }
 
 /** The drift view: the last 7 days' merges by objective, in the charter's order, then any it no longer has, then none. */
@@ -226,10 +239,13 @@ export function driftView(log: ObjectiveLog, c: Pick<Charter, 'objectives'>, now
 
 // ---------- the persisted record ----------
 
-/** A floor's charter as the state file keeps it, besides the mission (the floor's `mission`, the old brief). */
-export type CharterRecord = CharterParts & { proposal: CharterProposal | null; history: CharterChange[]; log: ObjectiveLog };
+/** A floor's charter as the state file keeps it, besides the mission (the floor's `mission`, the old brief). status: what the manager says of each objective. */
+export type CharterRecord = CharterParts & { proposal: CharterProposal | null; history: CharterChange[]; log: ObjectiveLog; status: Record<string, ObjectiveStatus> };
 
-export const newRecord = (): CharterRecord => ({ ...emptyCharter(), proposal: null, history: [], log: emptyLog() });
+export const newRecord = (): CharterRecord => ({ ...emptyCharter(), proposal: null, history: [], log: emptyLog(), status: {} });
+
+const STATUSES: ObjectiveStatus[] = ['on-track', 'at-risk', 'met'];
+export const isObjectiveStatus = (v: unknown): v is ObjectiveStatus => STATUSES.includes(v as ObjectiveStatus);
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
@@ -250,15 +266,17 @@ export function loadRecord(raw: unknown): CharterRecord {
     log: {
       tags: Object.fromEntries(Object.entries(log.tags && typeof log.tags === 'object' ? log.tags : {}).filter(([, v]) => typeof v === 'string')),
       merged: (Array.isArray(log.merged) ? log.merged : []).filter((m) => m && typeof m.pr === 'number' && typeof m.at === 'number'),
+      checks: (Array.isArray(log.checks) ? log.checks : []).filter((c) => c && typeof c.pr === 'number' && typeof c.at === 'number' && typeof c.rule === 'string' && ['ok', 'standard', 'nonGoal'].includes(c.kind)).slice(0, CHECKS_MAX),
     },
+    status: Object.fromEntries(Object.entries(r.status && typeof r.status === 'object' ? r.status : {}).filter(([k, v]) => /^O\d{1,2}$/.test(k) && isObjectiveStatus(v))),
   };
 }
 
 /** The whole charter: the floor's mission and its record's parts. */
 export const charterOf = (mission: string, r: CharterParts): Charter => ({ mission, objectives: r.objectives, standards: r.standards, nonGoals: r.nonGoals, focus: r.focus });
 
-/** What the tabs get: the parts, the proposal, the latest changes and the drift view. */
-export const charterView = (r: CharterRecord, now: number): CharterView => ({
+/** What the tabs get: the parts, the proposal, the latest changes, the drift view and the insights. */
+export const charterView = (r: CharterRecord, now: number, insights: CharterInsights | null): CharterView => ({
   objectives: r.objectives,
   standards: r.standards,
   nonGoals: r.nonGoals,
@@ -266,4 +284,5 @@ export const charterView = (r: CharterRecord, now: number): CharterView => ({
   proposal: r.proposal,
   history: r.history.slice(0, 10),
   drift: driftView(r.log, r, now),
+  insights,
 });

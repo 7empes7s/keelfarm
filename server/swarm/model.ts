@@ -20,6 +20,7 @@ import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
+import type { CharterInsights } from '../../shared/charterStats.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -215,6 +216,7 @@ export interface RepoRuntime {
   closedIssues: Map<number, number>; // issues the office learned are closed, and when (closeCleanup.ts)
   closedPulls: Map<number, LearnedPull>; // PRs it learned are closed or merged
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
+  insights?: CharterInsights; // the Charter tab's numbers, worked out at each sync and charter change (refreshInsights)
 }
 
 /** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */

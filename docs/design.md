@@ -75,7 +75,14 @@ fill uses `--ds-on-color`.
 - **Field groups** `.ds-fields` (as many columns as fit, one on a phone), switches `.ds-switches`, message box `.ds-compose`.
 - **Narrow tables** `.ds-table` inside a `.ds-stack-scope`: a table when the container is wider than 760 px, a card per
   row below it. Label cells with `data-label`; `.ds-cell-head` and `.ds-cell-full` span the card.
-- **Stat card** (`.costs-stat`, Mission control's insight strip): a button, so it taps through to the rows it counts.
+- **Stat cards** (`ui/CharterStats.tsx`, the Charter tab): a `.cs-grid` of `.cs-stat` buttons, as many columns of at
+  least 7rem as fit (two on a 390 px phone). Each is a 44 px-tall button: a `--ds-text-xs` uppercase title in
+  `--ds-text-muted`, the number in `--ds-text-lg` strong, a `<small>` line saying what it's of. `--ds-surface` on a
+  `--ds-line-strong` 1.5 px border, `--ds-radius-sm`; `.cs-warn` / `.cs-good` add a 4 px left edge in
+  `--ds-warn-fill` / `--ds-good-fill` (never colour alone: the words say it too). Tapping one sets `aria-expanded`
+  and lists what it counts under the grid (`.cs-refs`, links 44 px tall); tapping it again closes it. Text wraps, a
+  long label clamps at two lines; nothing is cut sideways.
+- **Insight stat card** (`.costs-stat`, Mission control's costs): a button, so it taps through to the rows it counts.
   Small muted label, the number at `--ds-text-xl`, one short note (a ↑/↓ % in `--ds-danger-text` when worse, a
   sparkline). 2 px outline, `--ds-shadow-2`, `--ds-radius-md`; two per row on a phone, three from 600 px; a wide one
   (a share bar) spans the row.

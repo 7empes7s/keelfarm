@@ -1,6 +1,7 @@
 import { useStore } from './store';
 import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
+import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
 import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
@@ -106,6 +107,8 @@ export const api = {
   setCharter: (repoId: string, charter: Charter) => call<RepoView>('PUT', `${r(repoId)}/charter`, { charter }),
   /** Approve the CEO's proposal (edited: as the manager changed it) or dismiss it. */
   decideCharter: (repoId: string, approve: boolean, charter?: Charter) => call<RepoView>('POST', `${r(repoId)}/charter/proposal`, { approve, charter }),
+  /** The manager's word on an objective (#105); null clears it. */
+  setObjectiveStatus: (repoId: string, objective: string, status: ObjectiveStatus | null) => call<RepoView>('PUT', `${r(repoId)}/charter/status`, { objective, status }),
   exportCharter: (repoId: string) => call<{ url: string }>('POST', `${r(repoId)}/charter/export`),
   mergePull: (repoId: string, n: number, method: 'squash' | 'merge' | 'rebase' = 'squash') => call('POST', `${r(repoId)}/pulls/${n}/merge`, { method }),
   closePull: (repoId: string, n: number) => call('POST', `${r(repoId)}/pulls/${n}/close`),
