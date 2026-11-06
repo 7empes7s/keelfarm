@@ -130,6 +130,7 @@ export function HUD() {
   const restarting = useStore((s) => s.restarting);
   const replaying = useStore((s) => s.replaying);
   const demo = useStore((s) => s.demo);
+  const publicDemo = useStore((s) => s.publicDemo);
   const user = useStore((s) => s.user);
   const ghReady = useStore((s) => s.ghReady);
   const ghError = useStore((s) => s.ghError);
@@ -178,7 +179,7 @@ export function HUD() {
       </div>
 
       <div className="hud-status">
-        {demo && <span className="pill pill-demo">DEMO</span>}
+        {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
         <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>{replaying ? '▶ replay' : connected ? '● live' : restarting ? '○ restarting' : '○ reconnecting'}</span>
         <span className="pill">
           ⚙️ {settings.sessionLimit ? `${running}/${settings.sessionLimit}` : running} sessions

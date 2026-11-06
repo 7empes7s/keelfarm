@@ -1,0 +1,26 @@
+# The public demo office for visitors (docs/public-demo.md): a demo with nothing real behind it, on loopback for the
+# Cloudflare tunnel. It resets itself by quitting; Restart=always starts it fresh.
+[Unit]
+Description=cubefarm public demo (port 4400)
+After=network.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=cubefarm-demo
+WorkingDirectory=/opt/cubefarm-demo
+Environment=NODE_ENV=production
+Environment=SWARM_PORT=4400
+Environment=SWARM_HOST=127.0.0.1
+Environment=SWARM_HOME=/var/lib/cubefarm-demo
+ExecStart=/usr/bin/node --max-old-space-size=384 dist-server/index.js --demo --public-demo
+Restart=always
+RestartSec=5
+MemoryMax=600M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+
+[Install]
+WantedBy=multi-user.target

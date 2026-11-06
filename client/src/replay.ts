@@ -59,6 +59,7 @@ function frameSnapshot(f: JournalFrame): WorldSnapshot {
     ghReady: s.ghReady,
     ghError: s.ghError,
     demo: s.demo,
+    publicDemo: s.publicDemo ?? undefined,
     machinesRoot: s.machinesRoot,
     settings: s.settings,
     repos: f.repos,

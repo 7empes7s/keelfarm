@@ -7,7 +7,7 @@ import type { Backend } from '../backend.ts';
 import type { LogEntry } from '../agentRunner.ts';
 import { BoxMachines } from '../boxMachines.ts';
 import { Cloud, officeId } from '../cloud.ts';
-import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, STATE_FILE, VERSION } from '../config.ts';
+import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION } from '../config.ts';
 import { IssueCap } from '../ceo.ts';
 import { DEFAULT_RESEARCH_MIN, ResearchGuard } from '../research.ts';
 import type { PrepStrikes } from '../handOut.ts';
@@ -510,6 +510,7 @@ export abstract class SwarmCore extends SwarmContract {
       version: VERSION,
       officeCommit: this.officeHead?.slice(0, 7) ?? null,
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
+      publicDemo: PUBLIC_DEMO && this.backend.demo ? { resetHours: PUBLIC_DEMO_RESET_H } : undefined,
       progress: this.progressView(),
       pong: this.state.pong,
       files: this.files.list(),
