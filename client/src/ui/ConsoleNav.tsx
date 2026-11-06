@@ -164,7 +164,7 @@ export function ConsoleSearch({ where, query, setQuery, go }: { where: Where; qu
   const hits = search(query, where);
   const id = useId();
   return (
-    <div className="cn-search">
+    <div className="cn-search" data-tour="console-search">
       <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search settings" aria-label="Search settings" aria-controls={query ? id : undefined} />
       {query.trim() && (
         <ul className="cn-hits" id={id} aria-label="Search results">

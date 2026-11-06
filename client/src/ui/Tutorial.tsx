@@ -1,227 +1,273 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { Key, MoveKeys } from './Key';
-import { useFinder } from './goTo';
+import { go as goTo, openSearch, useFinder } from './goTo';
+import type { ActionId } from './keymap';
+import { matchCommands } from './chatCardRules';
+import { reduceMotion } from './a11y';
+import { newSince, stepsFor, textParts, TOUR, isStep, type TourStep, type Track, type TryIt } from './tourSteps';
+import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
+import './tour.css';
 
-// The first-run tour: a coach card in the corner that moves on by itself as you try each thing,
-// with Next and Skip always there. Progress lives in settings.tutorialStep, so a refresh resumes it.
+// The tour (#121): a coach card with one sentence per step, a ring around the real control it's about, Back / Next /
+// Skip, progress dots and, where it's harmless, "Try it". Its steps are in tourSteps.ts, one track per kind of screen.
+// The full tour's place lives in settings.tutorialStep, so a refresh resumes it; "What's new" replays only the steps
+// this device hasn't seen (tour.ts). In the 3D office a step moves on by itself once you've done what it asks.
 
 type S = ReturnType<typeof useStore.getState>;
 
-interface Ctx {
-  ceo: string;
-  company: string;
-  repo: string | null; // first project's short name
+/** When a step is done, and the least time it shows before moving on. */
+const DONE: Record<string, { done: (s: S) => boolean; minMs?: number }> = {
+  look: { done: (s) => s.locked, minMs: 5000 },
+  phone: { done: (s) => s.overlay?.kind === 'phone' },
+  'phone-tour': { done: (s) => s.overlay?.kind !== 'phone', minMs: 2500 },
+  ceo: { done: (s) => (s.overlay?.kind === 'terminal' && s.overlay.agentId === CEO_ID) || (s.overlay?.kind === 'manager' && s.overlay.tab === 'ceo') },
+  hires: { done: (s) => s.requests.some((r) => r.status !== 'pending' && r.decidedBy === 'manager') },
+  upstairs: { done: (s) => s.floor > 0 },
+  whiteboard: { done: (s) => s.overlay?.kind === 'kanban' },
+  watch: { done: (s) => s.overlay?.kind === 'terminal' && s.overlay.agentId !== CEO_ID },
+  search: { done: () => useFinder.getState().search },
+  guide: { done: () => useFinder.getState().guide },
+  bell: { done: (s) => s.overlay?.kind === 'notices' },
+};
+
+const TRY_LABEL: Record<TryIt, string> = { search: 'Open search', guide: 'Open the guide', bell: 'Open the bell', plan: 'Start a /plan', console: 'Open the console', charter: 'Open a charter', costs: 'Show the costs' };
+
+/** Brings what a Try it opened into view, once it's drawn. */
+function reveal(target: string) {
+  setTimeout(() => document.querySelector(`[data-tour="${target}"]`)?.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' }), 400);
 }
 
-interface Step {
-  title: string;
-  body: (c: Ctx) => ReactNode;
-  done?: (s: S) => boolean;
-  minMs?: number; // show at least this long before a done() can move on
+function tryIt(t: TryIt) {
+  const s = useStore.getState();
+  if (document.pointerLockElement) document.exitPointerLock();
+  switch (t) {
+    case 'search':
+      return openSearch();
+    case 'guide':
+      return goTo({ kind: 'guide' });
+    case 'bell':
+      return s.openOverlay({ kind: 'notices' });
+    case 'plan': // fills the box, never sends
+      return goTo({ kind: 'ceo', text: matchCommands('plan')[0].template(s.repos[0]?.floor ?? 1) });
+    case 'console':
+      return goTo({ kind: 'section', section: 'floors' });
+    case 'charter':
+      goTo({ kind: 'section', section: 'charter' });
+      return reveal('charter');
+    case 'costs':
+      goTo({ kind: 'section', section: 'ops' });
+      return reveal('costs');
+  }
 }
 
-const STEPS: Step[] = [
-  {
-    title: 'Look around',
-    body: () => (
-      <>
-        Click the view to grab the mouse and look around, then walk with <MoveKeys />. Hold <Key action="run" /> to run. <kbd>Esc</kbd> gives you the mouse back. <Key action="overview" /> shows the whole floor
-        from above.
-      </>
-    ),
-    done: (s) => s.locked,
-    minMs: 5000,
-  },
-  {
-    title: 'Pull out your phone',
-    body: (c) => (
-      <>
-        Press <Key action="phone" />. Your phone is how you talk to {c.ceo} from anywhere in the building.
-      </>
-    ),
-    done: (s) => s.overlay?.kind === 'phone',
-  },
-  {
-    title: 'Your phone',
-    body: (c) => (
-      <>
-        💬 {c.ceo} texts you here, and you can text back: the + in the chat has starters like "Plan the next milestone". 👥 <b>Team</b> shows the CEO's team changes waiting for your OK. 📊 <b>Company</b> is
-        every project at a glance. Put it away with <Key action="phone" />.
-      </>
-    ),
-    done: (s) => s.overlay?.kind !== 'phone',
-    minMs: 2500,
-  },
-  {
-    title: 'Visit the CEO',
-    body: (c) => (
-      <>
-        {c.ceo}'s corner office is at the back right of the lobby, under the purple sign. Walk in and press <Key action="interact" /> or click the desk to see what {c.ceo} is up to.
-      </>
-    ),
-    done: (s) => (s.overlay?.kind === 'terminal' && s.overlay.agentId === CEO_ID) || (s.overlay?.kind === 'manager' && s.overlay.tab === 'ceo'),
-  },
-  {
-    title: 'New agents',
-    body: (c) => (
-      <>
-        When {c.ceo} wants a bigger team, each new agent waits on the green chairs along the east wall. Press <Key action="interact" /> or click one to see why, change their coding agent, model or effort if
-        you like, then hire or decline. It all works from your phone too.
-      </>
-    ),
-    done: (s) => s.requests.some((r) => r.status !== 'pending' && r.decidedBy === 'manager'),
-  },
-  {
-    title: 'Go upstairs',
-    body: (c) =>
-      c.repo ? (
-        <>
-          {c.repo} has its own floor. Walk into the elevator in the middle of the south wall and press <Key action="interact" /> on its panel, or press <Key action="interact" /> or click the directory beside it.
-        </>
-      ) : (
-        <>
-          Every project gets its own floor. Add one in your office (the glass room at the back left), then take the elevator in the middle of the south wall.
-        </>
-      ),
-    done: (s) => s.floor > 0,
-  },
-  {
-    title: 'The whiteboard',
-    body: () => (
-      <>
-        The whiteboard at the front of every floor is its Kanban board. Press <Key action="interact" /> or click it to hand out issues, send pull requests to QA and merge them.
-      </>
-    ),
-    done: (s) => s.overlay?.kind === 'kanban',
-  },
-  {
-    title: 'Watch the team',
-    body: () => (
-      <>
-        Walk up behind anyone to watch their screen, or press <Key action="interact" /> or click a desk for their full terminal. Every pull request is tested by an agent before you merge it.
-      </>
-    ),
-    done: (s) => s.overlay?.kind === 'terminal' && s.overlay.agentId !== CEO_ID,
-  },
-  {
-    title: 'Find anything',
-    body: () => (
-      <>
-        Press <kbd>Ctrl</kbd> <kbd>K</kbd> (or 🔍 at the top right) to search floors, agents, issues, pull requests and settings, or to ask the CEO to plan or research. Try it now.
-      </>
-    ),
-    done: () => useFinder.getState().search,
-  },
-  {
-    title: 'Get the most out of it',
-    body: () => (
-      <>
-        The ✅ at the top right is a checklist that ticks itself: charters, QA briefs, notifications, Telegram, a mandate for the CEO, an experiment. Each open item has a <b>Do it</b>. Every screen's ⓘ says
-        what you can do there.
-      </>
-    ),
-    done: () => useFinder.getState().guide,
-  },
-  {
-    title: 'Your office',
-    body: (c) => (
-      <>
-        Your glass office in the lobby (back left) has the manager's console: projects, the team, and the CEO's settings. Press <Key action="help" /> any time for help. Enjoy running {c.company}!
-      </>
-    ),
-  },
-];
+function StepText({ text }: { text: string }) {
+  const company = useStore((s) => s.settings.companyName) || 'the company';
+  const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'the CEO');
+  return (
+    <>
+      {textParts(text).map((p, i) =>
+        'key' in p ? <Key key={i} action={p.key as ActionId} /> : 'move' in p ? <MoveKeys key={i} /> : 'name' in p ? <span key={i}>{p.name === 'ceo' ? ceo : company}</span> : <span key={i}>{p.text}</span>,
+      )}
+    </>
+  );
+}
 
-export function Tutorial() {
+/** The first of `targets` on screen. */
+function findTarget(targets: readonly string[]): DOMRect | null {
+  for (const t of targets)
+    for (const el of document.querySelectorAll(`[data-tour="${t}"]`)) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight) return r;
+    }
+  return null;
+}
+
+/** A ring around the control a step is about, following it as the page moves; nothing when it isn't on screen. */
+function Spotlight({ targets }: { targets: readonly string[] }) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    const look = () =>
+      setRect((was) => {
+        const r = findTarget(targets);
+        return r && was && r.x === was.x && r.y === was.y && r.width === was.width && r.height === was.height ? was : r;
+      });
+    look();
+    const t = setInterval(look, 300);
+    window.addEventListener('resize', look);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('resize', look);
+    };
+  }, [targets]);
+  if (!rect) return null;
+  const pad = 4;
+  return <div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} />;
+}
+
+/** The tour on this screen: the full one while settings.tutorialStep says so, else a What's new replay. */
+export function Tutorial({ track }: { track: Track }) {
   const step = useStore((s) => s.settings.tutorialStep);
   const setupDone = useStore((s) => s.settings.setupDone);
   const started = useStore((s) => s.started);
-  const company = useStore((s) => s.settings.companyName);
-  const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'the CEO');
-  const repo = useStore((s) => s.repos[0]?.fullName.split('/')[1] ?? null);
+  const pocketTour = useTour((s) => s.pocketTour);
+  const replay = useTour((s) => s.replay);
   const [cheer, setCheer] = useState(false);
   const moving = useRef(false);
   const shownAt = useRef(Date.now());
+  useEffect(() => useTour.setState({ track }), [track]);
 
-  const active = started && setupDone && step >= 0 && step < STEPS.length;
+  const all = stepsFor(track);
+  const tour = setupDone && step >= 0 && step < all.length && (track === 'office' ? started : pocketTour);
+  const steps: TourStep[] = replay && !tour ? replay.ids.map((id) => TOUR.find((e) => e.id === id)).filter((e): e is TourStep => !!e && isStep(e)) : all;
+  const at = replay && !tour ? replay.at : step;
+  const active = tour || (!!replay && at < steps.length);
+
   const go = (to: number) => {
+    setCheer(false);
+    if (!tour) {
+      if (to >= steps.length) {
+        saveSeen(steps);
+        useTour.setState({ replay: null });
+      } else useTour.setState({ replay: { ids: replay!.ids, at: Math.max(0, to) } });
+      return;
+    }
     if (moving.current) return;
     moving.current = true;
+    if (to >= all.length) {
+      saveSeen(all);
+      useTour.setState({ pocketTour: false });
+    }
     void api
-      .updateSettings({ tutorialStep: to >= STEPS.length ? -1 : to })
+      .updateSettings({ tutorialStep: to >= all.length ? -1 : to })
       .catch(() => undefined)
       .finally(() => {
         moving.current = false;
-        setCheer(false);
       });
   };
 
   useEffect(() => {
     shownAt.current = Date.now();
     setCheer(false);
-  }, [step]);
+  }, [at, active]);
 
   // Move on by itself once the thing the step asks for has happened.
+  const id = active ? steps[at]?.id : undefined;
   useEffect(() => {
-    if (!active) return;
-    const s = STEPS[step];
-    if (!s.done) return;
+    const rule = id ? DONE[id] : undefined;
+    if (!rule) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const check = () => {
       if (timer || moving.current) return;
-      const st = useStore.getState();
-      if (!s.done!(st)) return;
-      const wait = Math.max(0, (s.minMs ?? 0) - (Date.now() - shownAt.current));
+      if (!rule.done(useStore.getState())) return;
+      const wait = Math.max(0, (rule.minMs ?? 0) - (Date.now() - shownAt.current));
       timer = setTimeout(() => {
-        if (!s.done!(useStore.getState())) {
+        if (!rule.done(useStore.getState())) {
           timer = null;
           return;
         }
         setCheer(true);
-        timer = setTimeout(() => go(step + 1), 900);
+        timer = setTimeout(() => go(at + 1), 900);
       }, wait);
     };
     check();
     const unsub = useStore.subscribe(check);
+    const unsubFinder = useFinder.subscribe(check);
     const poll = setInterval(check, 1000); // locked / minMs can flip without a store change we see
     return () => {
       unsub();
+      unsubFinder();
       clearInterval(poll);
       if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, step]);
+  }, [id, at]);
 
   if (!active) return null;
-  const s = STEPS[step];
-  const last = step === STEPS.length - 1;
+  const s = steps[at];
+  if (!s) return null;
+  const last = at === steps.length - 1;
+  const auto = tour && !!DONE[s.id];
   return (
-    <div className={`tour ${cheer ? 'tour-cheer' : ''}`}>
-      <div className="tour-head">
-        <span className="tour-count">
-          🧭 Tour · {step + 1}/{STEPS.length}
-        </span>
-        <span className="spacer" />
-        <button className="linkish small" onClick={() => go(STEPS.length)}>
-          Skip tour
-        </button>
-      </div>
-      <div className="tour-title">{cheer ? `✅ ${s.title}` : s.title}</div>
-      <div className="tour-body">{s.body({ ceo, company: company || 'the company', repo })}</div>
-      <div className="tour-nav">
-        {step > 0 && (
-          <button className="btn btn-small btn-ghost" onClick={() => go(step - 1)}>
-            ← Back
+    <>
+      {s.targets && <Spotlight targets={s.targets} />}
+      <section className={`tour tour-${track} ${cheer ? 'tour-cheer' : ''} ${reduceMotion() ? 'tour-still' : ''}`} aria-label={tour ? 'Tour' : "What's new"} aria-live="polite">
+        <div className="tour-head">
+          <span className="tour-count">
+            {tour ? '🧭 Tour' : "✨ What's new"} · {at + 1}/{steps.length}
+          </span>
+          <span className="spacer" />
+          <button className="linkish small tour-skip" onClick={() => go(steps.length)}>
+            {tour ? 'Skip tour' : 'Done'}
           </button>
-        )}
-        <span className="spacer" />
-        <button className="btn btn-small btn-good" onClick={() => go(step + 1)}>
-          {last ? 'Finish the tour' : s.done ? 'Skip this step' : 'Next →'}
+        </div>
+        <div className="tour-title">{cheer ? `✅ ${s.title}` : s.title}</div>
+        <div className="tour-body">
+          <StepText text={s.text} />
+        </div>
+        <div className="tour-dots" aria-hidden>
+          {steps.map((x, i) => (
+            <span key={x.id} className={`tour-dot ${i === at ? 'tour-dot-on' : i < at ? 'tour-dot-done' : ''}`} />
+          ))}
+        </div>
+        <div className="tour-nav">
+          {at > 0 && (
+            <button className="btn btn-small btn-ghost" onClick={() => go(at - 1)}>
+              ← Back
+            </button>
+          )}
+          <span className="spacer" />
+          {s.tryIt && (
+            <button className="btn btn-small" onClick={() => tryIt(s.tryIt!)}>
+              👆 {TRY_LABEL[s.tryIt]}
+            </button>
+          )}
+          <button className="btn btn-small btn-good" onClick={() => go(at + 1)}>
+            {last ? (tour ? 'Finish' : 'Done') : auto ? 'Skip step' : 'Next →'}
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/**
+ * The tour's way in: in pocket mode "Take the tour" while the office's tour isn't finished, and anywhere "N new things
+ * since you last looked" once it is and this device hasn't seen every step. `floating`: the 3D office's corner card.
+ */
+export function TourInvite({ track, floating = false }: { track: Track; floating?: boolean }) {
+  const step = useStore((s) => s.settings.tutorialStep);
+  const setupDone = useStore((s) => s.settings.setupDone);
+  const raw = useTour((s) => s.raw);
+  const busy = useTour((s) => !!s.replay || s.pocketTour);
+  const covered = useStore((s) => floating && (!!s.overlay || !s.started)); // the 3D card stays out of the panels' way
+  if (!setupDone || busy || covered) return null;
+  const all = stepsFor(track);
+  const tourLeft = step >= 0 && step < all.length;
+  // the 3D office starts its tour by itself
+  if (tourLeft && track === 'office') return null;
+  const fresh = tourLeft ? [] : newSince(track, seenNow(raw));
+  if (!tourLeft && !fresh.length) return null;
+  const later = () => {
+    if (tourLeft) void api.updateSettings({ tutorialStep: -1 }).catch(() => undefined);
+    saveSeen(tourLeft ? all : fresh);
+  };
+  return (
+    <section className={`pk-card tour-invite ${floating ? 'tour-invite-float' : ''}`} aria-label={tourLeft ? 'Take the tour' : "What's new"}>
+      <div className="grow">
+        <b>{tourLeft ? '🧭 Take the tour' : `✨ ${fresh.length} new thing${fresh.length === 1 ? '' : 's'} since you last looked`}</b>
+        <div className="muted small">{tourLeft ? `${all.length} short steps, each pointing at the real thing.` : fresh.map((s) => s.title).join(' · ')}</div>
+      </div>
+      <div className="tour-invite-nav">
+        <button className="btn btn-small btn-ghost" onClick={later}>
+          {tourLeft ? 'Not now' : 'Later'}
+        </button>
+        <button className="btn btn-small btn-good" onClick={() => (tourLeft ? useTour.setState({ pocketTour: true }) : openWhatsNew(fresh))}>
+          {tourLeft ? 'Start' : 'Show me'}
         </button>
       </div>
-    </div>
+    </section>
   );
 }

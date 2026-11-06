@@ -198,6 +198,27 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    name: 'pocket tour (#121)',
+    widths: [390, 1280],
+    open: async (page) => {
+      await page.request.patch('/api/settings', { data: { tutorialStep: 0 } });
+      const root = await pocket(page, 'company');
+      await root.getByRole('region', { name: 'Take the tour' }).getByRole('button', { name: 'Start' }).click();
+      return page.getByRole('region', { name: 'Tour' });
+    },
+    tabs: [],
+  },
+  {
+    name: '3D office tour (#121)',
+    widths: OFFICE,
+    open: async (page) => {
+      await page.request.patch('/api/settings', { data: { tutorialStep: 0 } });
+      await enterOffice(page);
+      return page.getByRole('region', { name: 'Tour' });
+    },
+    tabs: [],
+  },
+  {
     name: 'pocket notification centre',
     widths: PHONES,
     open: async (page) => {

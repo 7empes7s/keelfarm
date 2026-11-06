@@ -1,0 +1,85 @@
+/* ui/Tutorial.tsx (#121): the tour card's targets and dots, the spotlight ring, pocket mode's placement and the invite. */
+.tour :is(.btn, .tour-skip),
+.tour-invite .btn {
+  min-height: var(--ds-target);
+}
+.tour-skip {
+  min-width: var(--ds-target);
+}
+.tour-still {
+  animation: none;
+}
+.tour-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.tour-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ds-outline);
+  opacity: 0.25;
+}
+.tour-dot-done {
+  opacity: 0.6;
+}
+.tour-dot-on {
+  opacity: 1;
+  background: var(--accent);
+}
+/* the ring around the control a step is about: above everything, never in the way of a tap */
+.tour-ring {
+  position: fixed;
+  z-index: var(--ds-z-toast);
+  pointer-events: none;
+  border: 3px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 0 0 4px rgba(255, 138, 91, 0.3);
+}
+.tour-ring-pulse {
+  animation: tour-ring 1.6s ease-in-out infinite;
+}
+@keyframes tour-ring {
+  50% {
+    box-shadow: 0 0 0 9px rgba(255, 138, 91, 0.12);
+  }
+}
+/* pocket mode: over its panels and sheets (a Try it opens one), clear of the tab bar or beside the rail */
+.pocket .tour {
+  z-index: calc(var(--ds-z-menu) + 1);
+  bottom: calc(84px + var(--ds-safe-bottom));
+}
+.pocket.pk-railed .tour {
+  left: 108px;
+  bottom: 16px;
+  width: min(390px, calc(100vw - 124px));
+}
+.tour-invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tour-invite-nav {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.tour-invite-float {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 20;
+  width: min(390px, calc(100vw - 32px));
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-radius: 18px;
+  padding: 10px 14px;
+}
+@media (max-width: 760px) {
+  .tour-invite-float {
+    bottom: calc(96px + var(--ds-safe-bottom));
+  }
+}
