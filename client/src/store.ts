@@ -30,7 +30,7 @@ import { gongForMerge } from './world/gongRunner';
 import { ROOF } from './world/layout';
 import { emitReward } from './world/decor/rewards';
 import type { SnackId } from './world/fridge';
-import type { GroupId, SectionId } from './ui/consoleNav';
+import type { GroupId, SectionId } from './ui/consoleNavRules';
 
 export type Agent = Omit<AgentView, 'log'>;
 
@@ -56,7 +56,7 @@ export type Overlay =
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
 
-/** A console section, or a top tab (its remembered section): ui/consoleNav.ts. */
+/** A console section, or a top tab (its remembered section): ui/consoleNavRules.ts. */
 export type ManagerTab = SectionId | GroupId;
 
 export interface Focus {

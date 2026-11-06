@@ -113,6 +113,7 @@ export interface OfficeCall {
   tool: string; // office tool name, e.g. file_issue
   ok: boolean;
   out: string | null;
+  args?: Record<string, unknown>; // its input, for the reply's action cards (shared/ceoActions.ts)
 }
 
 // The office tools that only read: a stopped job's reply leaves them out of what it did.

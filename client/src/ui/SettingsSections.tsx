@@ -1,6 +1,6 @@
 // The console's Settings sections that are the office's own settings (#102): agents' defaults, the CEO's settings, how
 // agents run, the company, and About this office (the environment, kept out of the way). Each one is a section of its
-// own in the side menu (consoleNav.ts); the other sections are their own components.
+// own in the side menu (consoleNavRules.ts); the other sections are their own components.
 import { api } from '../api';
 import { useStore } from '../store';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';

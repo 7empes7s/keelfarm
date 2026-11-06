@@ -1,9 +1,9 @@
-// The manager's console (#102): five top tabs (consoleNav.ts's groups), a side menu of the open tab's sections with a
+// The manager's console (#102): five top tabs (consoleNavRules.ts's groups), a side menu of the open tab's sections with a
 // search over every setting at its top, and one section beside it. Pocket mode draws the same map as a list you tap
 // into (PocketConsole.tsx); both keep the open section in the address (#settings/cloud-agents) and remember it.
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { pendingRequests, useStore, type ManagerTab } from '../store';
-import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionsIn, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNav';
+import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionsIn, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
@@ -238,7 +238,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
   );
 }
 
-/** The 3D office's console. tab: a section or one of the old tab names (consoleNav.ts `resolve`). */
+/** The 3D office's console. tab: a section or one of the old tab names (consoleNavRules.ts `resolve`). */
 export function ManagerConsole({ initialTab, initialRepo, card, history }: { initialTab?: ManagerTab; initialRepo?: string; card?: string; history?: HistoryFocus }) {
   const [section, setSection] = useState<Section>(() => opening(initialTab, location.hash, 'office', loadRemembered()));
   useSectionAddress(section);

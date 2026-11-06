@@ -1,10 +1,10 @@
 // Pocket mode's ⚙️: the manager's console on a phone (#102). The same tabs and sections as the 3D office's console
-// (ui/consoleNav.ts), as a list you tap into with a back button, iOS Settings style, and the search over every
+// (ui/consoleNavRules.ts), as a list you tap into with a back button, iOS Settings style, and the search over every
 // setting on top; on a desktop (#104) the 3D office's top tabs and side menu instead. Loaded when first opened; nothing
 // here loads 3D (the look editor's preview loads on its own).
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleView';
-import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNav';
+import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
+import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 
 /** A section, or 'menu': the list of them. */

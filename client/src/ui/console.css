@@ -1,4 +1,4 @@
-/* The manager's console's layout (ConsoleView.tsx, #102): five top tabs that fit in one row, a side menu of the open
+/* The manager's console's layout (ConsoleNav.tsx, #102): five top tabs that fit in one row, a side menu of the open
    tab's sections (search on top), and the section beside it, scrolling on its own. Pocket mode (PocketConsole.tsx)
    shows the side menu as a list you tap into, and a section under a back bar pinned to the panel's top. */
 

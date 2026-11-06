@@ -126,3 +126,25 @@ describe('suggestionsFor', () => {
     expect(suggestionsFor([ceo(1, ['Yes']), { id: 2, from: 'manager', text: 'Yes', at: 2 }])).toBeNull();
   });
 });
+
+describe('idea cards (#108)', () => {
+  it('lifts one ```idea block out: its kind, title and the message Accept sends', () => {
+    const p = parseCeoMessage('Done.\n\n```idea objective\nAdd an objective: no cut-off screens\nAdd an objective to floor 2: no screen cut off at 390 px.\n```');
+    expect(p.text).toBe('Done.');
+    expect(p.idea).toEqual({ kind: 'objective', title: 'Add an objective: no cut-off screens', message: 'Add an objective to floor 2: no screen cut off at 390 px.' });
+  });
+
+  it('sends the title when there is no message, and keeps a second idea in the text', () => {
+    const p = parseCeoMessage('```idea research\nResearch: offline sync\n```\n\n```idea team\nGrow floor 1\n```');
+    expect(p.idea).toEqual({ kind: 'research', title: 'Research: offline sync', message: 'Research: offline sync' });
+    expect(p.text).toContain('```idea team');
+  });
+
+  it('leaves a broken block in the text as written', () => {
+    for (const raw of ['```idea\nNo kind\n```', '```idea wishes\nUnknown kind\n```', '```idea plan\n\n```', `\`\`\`idea plan\n${'x'.repeat(101)}\n\`\`\``]) {
+      const p = parseCeoMessage(raw);
+      expect(p.idea).toBeUndefined();
+      expect(p.text).toBe(raw);
+    }
+  });
+});

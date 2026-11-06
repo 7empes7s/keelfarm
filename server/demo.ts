@@ -1460,6 +1460,33 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         const out = await use('propose_charter', { floor: f.floor, reason: 'You asked about the charter: finish the first objectives before starting new ones.', focus: ids.length ? `${ids.slice(0, 2).join(', ')}, until they are met` : 'The core flows first' });
         return out.startsWith('Refused') ? `I couldn't propose it: ${refused(out)}` : `I proposed a new focus for floor ${f.floor}'s charter. Approve or edit it in the Charter tab: nothing changes until you do.`;
       }
+      // "Plan the next milestone for floor 1": an issue and a bigger team through the real tools, so the reply shows
+      // its action cards (#108), with the plan as an artifact and an idea card for the charter.
+      if (/\b(plan|milestone)\b/i.test(text)) {
+        const f = s.floors.find((x) => new RegExp(`floor ${x.floor}\\b`, 'i').test(text)) ?? s.floors[0];
+        if (!f) return 'There are no floors yet: add a project first, and I will plan its first milestone.';
+        const ids = objectiveIds(f.charter);
+        const filed = await use('file_issue', { floor: f.floor, title: 'Polish: phone layout and empty states', body: `Make every screen work at 390px and add friendly empty states.${ids.length ? `\n\nObjective: ${ids[0]}` : ''}` });
+        const team = plannedSize(f.team) < f.team.max ? await scale(s, f, { size: plannedSize(f.team) + 1, reason: 'One more agent so the milestone lands this week.' }) : '';
+        const n = filed.match(/#(\d+)/)?.[1];
+        return [
+          filed.startsWith('Refused') ? `I couldn't file it: ${refused(filed)}` : `Planned the next milestone on floor ${f.floor}: #${n} first. ${team}`,
+          '',
+          '```artifact title="Milestone plan"',
+          `## Floor ${f.floor}: next milestone`,
+          '',
+          '| Step | Issue | Who |',
+          '| --- | --- | --- |',
+          `| Phone polish | #${n ?? '?'} | the team |`,
+          '| QA and merge | as PRs land | the office |',
+          '```',
+          '',
+          '```idea objective',
+          `Add an objective to floor ${f.floor}: no screen cut off at 390 px`,
+          `Add an objective to floor ${f.floor}'s charter: no screen is cut off at 390 px, checked by the layout spec.`,
+          '```',
+        ].join('\n');
+      }
       // Asked for a bigger team: one more agent where the most work waits, through the real tool.
       if (/\b(hire|hiring|grow|team|bigger)\b/i.test(text)) {
         if (!s.floors.length) return 'There are no floors yet: add a project first, and I will size its team.';
@@ -1511,6 +1538,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         ...(next
           ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
           : []),
+        ...(nextFloor ? ['```idea research', `Research how other teams test phone layouts before floor ${nextFloor.floor} builds more`, `Research: how other teams test phone layouts, for floor ${nextFloor.floor}`, '```'] : []),
       ].join('\n');
     },
   };
