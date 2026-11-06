@@ -128,7 +128,7 @@ export function useSectionAddress(section: Section | null) {
     remember(section);
     history.replaceState(history.state, '', hashFor(section));
   }, [section]);
-  useEffect(() => () => void history.replaceState(history.state, '', location.pathname + location.search), []);
+  useEffect(() => () => history.replaceState(history.state, '', location.pathname + location.search), []);
 }
 
 /** After a search: the setting it found, scrolled to and outlined in the section that just opened. Returns its setter. */
@@ -187,7 +187,9 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
   const badges = useBadges();
   const ids = useId();
   useSectionAddress(section);
-  useEffect(() => void pane.current?.scrollTo(0, 0), [section]);
+  useEffect(() => {
+    pane.current?.scrollTo(0, 0); // a block: Chrome's scrollTo can return a promise, which React would take for a cleanup
+  }, [section]);
   const openGroup = (g: GroupId) => setSection(opening(g, '', 'office', loadRemembered()));
   const sections = sectionsIn(section.group, 'office');
   return (

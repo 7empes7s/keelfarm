@@ -21,16 +21,30 @@ const PhotoPanel = lazy(() => import('./photo/PhotoPanel'));
 /** This long inside the office without the tab being killed, and the start counts as settled (officeBoot.ts). */
 const SETTLED_MS = 15_000;
 
+/** How long after entering a linked console section opens: opened sooner, while entering settles (the mouse grab and
+ * the first heavy frames), Chrome can leave its clicks landing on the wrong element. */
+const LINK_OPEN_MS = 2500;
+
+/** A link to a console section (#settings/cloud-agents) opens it once you're in. Returns its cancel. */
+function openLinkedSection() {
+  const link = parseHash(location.hash, 'office');
+  if (!link) return () => undefined;
+  const t = setTimeout(() => !useStore.getState().overlay && useStore.getState().openOverlay({ kind: 'manager', tab: link.id }), LINK_OPEN_MS); // unless you opened something meanwhile
+  return () => clearTimeout(t);
+}
+
 /** The start-up breadcrumb's steps: mounted, then entered, then settled. */
 function useBootSteps() {
   const started = useStore((s) => s.started);
   useEffect(() => {
     bootStep(started ? 'entering the office' : 'starting the 3D view');
     if (!started) return;
-    const link = parseHash(location.hash, 'office'); // a link to a console section (#settings/cloud-agents) opens it
-    if (link) useStore.getState().openOverlay({ kind: 'manager', tab: link.id });
+    const stopLink = openLinkedSection();
     const t = setTimeout(bootDone, SETTLED_MS);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      stopLink();
+    };
   }, [started]);
 }
 

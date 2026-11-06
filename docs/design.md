@@ -1,7 +1,7 @@
 # Design system
 
 Every 2D screen (panels, the console, pocket mode, the phone) follows this page. The manager's console
-(`client/src/ui/ManagerConsole.tsx` and pocket mode's `PocketConsole.tsx`) is the reference screen: copy it.
+(`client/src/ui/ConsoleNav.tsx` and its sections, and pocket mode's `PocketConsole.tsx`) is the reference screen: copy it.
 Tokens and shared styles are in `client/src/design.css`; components are in `client/src/ui/`.
 
 ## Direction

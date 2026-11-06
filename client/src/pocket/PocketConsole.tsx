@@ -16,7 +16,10 @@ export function PocketConsole({ section, pick, history }: { section: ConsoleSect
   const setFound = useFoundLabel(body);
   const badges = useBadges();
   useSectionAddress(open);
-  useLayoutEffect(() => void body.current?.closest('.panel-body')?.scrollTo(0, 0), [section]); // each screen opens at its top
+  // each screen opens at its top (a block: Chrome's scrollTo can return a promise, which React would take for a cleanup)
+  useLayoutEffect(() => {
+    body.current?.closest('.panel-body')?.scrollTo(0, 0);
+  }, [section]);
   if (open) {
     return (
       <div className="pk-console" ref={body}>
