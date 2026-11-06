@@ -2,6 +2,7 @@
 // batches bursts into one summary, the chat apps' webhook settings (checked, and hinted at without the secret), and
 // which agents have been stuck in an error long enough to mention. notifier.ts does the sending.
 import type { NotifyEvent, NotifyWebhook } from '../shared/types.ts';
+import { cleanTerminalText } from '../shared/terminalText.ts';
 import { HttpError } from './httpError.ts';
 
 /** Never more than one notification per event type in this long; what arrives meanwhile goes out as one summary. */
@@ -42,7 +43,7 @@ const PLURAL: Record<NotifyEvent, string> = {
 const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', merge: '🔀', test: '🔔' };
 
 export const clip = (s: string, max = BODY_MAX) => {
-  const t = s.replace(/\s+/g, ' ').trim();
+  const t = cleanTerminalText(s, Infinity).replace(/\s+/g, ' ');
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
 };
 

@@ -15,7 +15,7 @@ import { parseForwarded } from '../shared/chat.ts';
 import { keyName } from '../shared/termKeys.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
-import { takeLastUpdate, underLauncher, type OfficeHost } from './officeUpdate.ts';
+import { takeLastUpdate, underLauncher, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
@@ -948,6 +948,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     demoCharter,
+    demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
       dropDesk: (dir) => {
@@ -1025,6 +1026,13 @@ const demoOffice: OfficeHost = {
     return { from, to: lastFakeUpdate.to, ok: true, installed: true, built: true, at: Date.now() };
   },
 };
+
+/** A fresh demo office's chat: an update the preflight held back, with vitest's colour codes and rules in its output (#138). */
+function demoHeldUpdate(): LastUpdate {
+  const target = fakeSha();
+  const output = `\x1b[31mFAIL\x1b[39m server/swarm.test.ts > schedules work \x1b[2m${'─'.repeat(120)}[1/1]\x1b[22m\x1b[39m`;
+  return { from: DEMO_HEAD, to: DEMO_HEAD, target, ok: false, stage: 'preflight', error: `tests failed (npm test failed (exit 1): ${output})`, installed: false, built: false, at: Date.now() };
+}
 
 // ---------- the demo preview ----------
 

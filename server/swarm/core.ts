@@ -83,6 +83,7 @@ import {
 } from './model.ts';
 import { charterView } from '../../shared/charter.ts';
 import { charterInsights } from '../../shared/charterStats.ts';
+import { cleanTerminalText } from '../../shared/terminalText.ts';
 import { slugify } from './flavour.ts';
 import { SwarmContract } from './contract.ts';
 
@@ -633,7 +634,7 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected toast(level: 'info' | 'success' | 'error', text: string) {
-    this.broadcast({ type: 'toast', level, text });
+    this.broadcast({ type: 'toast', level, text: cleanTerminalText(text, 500) });
   }
 
   /** The Charter tab's numbers (#105) from the objective log, the cost ledger and the open issues; the view keeps them till the next. */

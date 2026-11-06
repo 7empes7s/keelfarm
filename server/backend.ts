@@ -15,7 +15,7 @@ import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
-import { realOffice, type OfficeHost } from './officeUpdate.ts';
+import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import { elevenLabs } from './elevenlabs.ts';
 import { httpTransport, type NotifyTransport } from './notifier.ts';
 import { telegramHttp, type TelegramApi } from './telegramBot.ts';
@@ -157,6 +157,8 @@ export interface Backend {
   seedCharterLog?(charter: CharterParts, ledger: CostRecord[], now: number): ObjectiveLog;
   /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
   demoCharter?(fullName: string): DemoCharter;
+  /** The demo only: an update the preflight held back (#138), so a fresh demo office's chat shows its card. */
+  demoHeldUpdate?(): LastUpdate;
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */

@@ -32,7 +32,7 @@ import { charterOf, MISSION_MAX, renderCharter } from '../../shared/charter.ts';
 import { CEO_ID } from '../../shared/types.ts';
 import { forwardText, nextDelivery } from '../../shared/chat.ts';
 import { researchJob, researchRef } from '../research.ts';
-import { makeArtifacts, parseCeoMessage } from '../../shared/chatParts.ts';
+import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
@@ -649,10 +649,10 @@ export abstract class SwarmCeo extends SwarmUpdate {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'steps' | 'actions' | 'question'> & { changes?: TeamChange[] } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'delivery' | 'telegram' | 'attachments' | 'used' | 'research' | 'steps' | 'actions' | 'question' | 'notice'> & { changes?: TeamChange[] } = {}) {
     const { changes, ...extra } = opts;
-    // The CEO's suggestion boxes and artifacts come out of the text (shared/chatParts.ts).
-    const parts = from === 'ceo' ? parseCeoMessage(text) : { text };
+    // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
+    const parts = parseMessage(from, text);
     const id = this.messageSeq++;
     const artifacts = makeArtifacts(id, parts.artifacts);
     const body = parts.text.trim().slice(0, 6000);

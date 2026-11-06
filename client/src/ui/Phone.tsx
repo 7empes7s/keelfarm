@@ -17,7 +17,7 @@ import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
 import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
-import { ActionCards, DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
+import { ActionCards, DaySeparator, IdeaCard, NoticeCard, Starters, WorkingStrip } from './ChatCards';
 import { continuesGroup } from './chatCardRules';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
@@ -382,7 +382,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
-  if (m?.from === 'office') return <div className="bubble-office">{m.text}</div>;
+  if (m?.from === 'office') return m.notice ? <NoticeCard text={m.text} notice={m.notice} /> : <div className="bubble-office">{m.text}</div>;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;

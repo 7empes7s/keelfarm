@@ -106,3 +106,33 @@ test('a quick prompt sends, and the top bar opens conversations, search, artifac
   await head.getByRole('button', { name: /^Files \(\d+\)$/ }).click();
   await expect(page.getByRole('dialog', { name: /^Files/ })).toBeVisible();
 });
+
+test('at 390px a notice of raw terminal output never scrolls the chat sideways, and an update shows as a card (#138)', async ({ page }) => {
+  // The office's own notices arrive cleaned; this one comes raw, straight into the websocket, to test the layout alone.
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    server.onMessage((data) => {
+      ws.send(data);
+      if (typeof data === 'string' && data.startsWith('{"type":"snapshot"')) {
+        const text = `⚠️ Update refused: tests failed (npm test failed (exit 1): \x1b[2m${'─'.repeat(500)}[1/1]\x1b[22m\x1b[39m ${'x'.repeat(500)})`;
+        ws.send(JSON.stringify({ type: 'message', message: { id: 990001, from: 'office', text, at: Date.now() } }));
+        ws.send(JSON.stringify({ type: 'message', message: { id: 990002, from: 'office', text: '⚠️ Update held back', at: Date.now(), notice: { details: 'y'.repeat(500), links: [] } } }));
+      }
+    });
+  });
+  await chat(page);
+  const log = page.locator('.chat-log');
+  await expect(log.getByText(/^⚠️ Update refused/)).toBeVisible();
+  await expect(log.getByText('⚠️ Update held back', { exact: true })).toBeVisible();
+  // The demo's own held-back update, cleaned on the server: a card with Details and links, no escape codes left.
+  const card = log.locator('.notice-card', { hasText: 'held back: the tests failed in the preflight' });
+  await expect(card).toBeVisible();
+  await card.getByText('Details').click();
+  await expect(card.locator('pre')).toContainText('[1/1]');
+  const shown = await card.innerText();
+  for (const code of ['\x1b', '␛', '[2m', '──']) expect(shown, `no ${JSON.stringify(code)} left`).not.toContain(code);
+  await expect(card.getByRole('link', { name: /^Commit / })).toBeVisible();
+  const sizes = await log.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth, page: document.documentElement.scrollWidth, width: innerWidth }));
+  expect(sizes.scroll).toBe(sizes.client);
+  expect(sizes.page).toBeLessThanOrEqual(sizes.width);
+});

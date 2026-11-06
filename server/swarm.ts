@@ -307,6 +307,8 @@ export class Swarm extends SwarmCeoTools {
     this.officeHead = await this.backend.office.head();
     const updated = await this.backend.office.takeLastUpdate().catch(() => null);
     if (updated) await this.reportUpdate(updated);
+    const held = seeded ? this.backend.demoHeldUpdate?.() : undefined;
+    if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
     setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
     setInterval(() => this.previews.sweepPrs(), 15_000);
