@@ -809,6 +809,8 @@ export type ServerEvent =
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string }
+  /** The office's heartbeat to every tab (shared/heartbeat.ts): never applied, it only says the socket is alive. */
+  | { type: 'beat' }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.
   | { type: 'visitors'; you: string; visitors: VisitorView[] }
   | ({ type: 'visitorPose'; id: string } & VisitorPose)

@@ -3,9 +3,14 @@ import { restartExpected, shouldReload } from './officeUpdate';
 import type { ClientEvent, ServerEvent } from '../../shared/types';
 import { currentWatch } from './watch';
 import { hitchWs } from './hitches';
+import { onResume, onTick, type SocketLook } from '../../shared/heartbeat';
 
 let retry = 0;
 let socket: WebSocket | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+// When the socket started connecting, and when it last opened or brought a message (shared/heartbeat.ts).
+let startedAt = 0;
+let heardAt = 0;
 let sentWatch = '';
 
 /** Tells the office what this tab shows (watch.ts) whenever that changes, so it sends only the lines it needs. */
@@ -65,16 +70,56 @@ function reloadForNewCommit(commit: string): boolean {
   return true;
 }
 
-export function connect() {
+const look = (): SocketLook => ({ readyState: socket?.readyState ?? WebSocket.CLOSED, startedAt, heardAt });
+
+/** The socket is gone (closed, or dropped by us as dead): the HUD says so, and the office's restart is looked for. */
+function lost() {
+  const s = useStore.getState();
+  s.setConnected(false);
+  // A drop while the office updates itself is the restart: say so, and look for it coming back sooner.
+  const restarting = s.restarting || restartExpected(s.officeUpdate);
+  if (restarting !== s.restarting) s.setRestarting(restarting);
+  return restarting;
+}
+
+/** Drops a socket that went quiet (a phone's background leaves it half-open, with no close) and connects again now. */
+function reconnectNow() {
+  const old = socket;
+  if (old) {
+    old.onopen = old.onmessage = old.onclose = null;
+    old.close();
+  }
+  socket = null;
+  clearTimeout(retryTimer);
+  lost();
+  retry = 0;
+  connect(); // the new socket's first message is a fresh snapshot
+}
+
+/** Back in the foreground (or a tapped notification): reconnect at once unless the socket is plainly alive (#93). */
+function resume() {
+  if (onResume(look(), Date.now()) === 'reconnect') reconnectNow();
+}
+
+function listen() {
   // subscribed here, not as the module loads: the store imports this module (through presence) before it exists
+  useStore.subscribe(sendWatch);
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && resume());
+  for (const ev of ['pageshow', 'online', 'focus', 'cubefarm:open']) window.addEventListener(ev, resume);
+  setInterval(() => onTick(look(), Date.now()) === 'reconnect' && reconnectNow(), 5_000);
+}
+
+export function connect() {
   if (!watching) {
     watching = true;
-    useStore.subscribe(sendWatch);
+    listen();
   }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
   socket = ws;
+  startedAt = Date.now();
   ws.onopen = () => {
+    heardAt = Date.now();
     retry = 0;
     sentWatch = '';
     opens++;
@@ -84,11 +129,13 @@ export function connect() {
   ws.onmessage = (e) => {
     const bytes = typeof e.data === 'string' ? e.data.length : 0;
     wsTraffic.in += bytes;
+    heardAt = Date.now();
     const from = performance.now();
     let type = 'other';
     try {
       const ev = JSON.parse(e.data) as ServerEvent;
       type = ev.type;
+      if (ev.type === 'beat') return;
       if (ev.type.startsWith('visitor')) wsTraffic.presence += e.data.length;
       if (ev.type === 'snapshot' && ev.data.officeCommit && reloadForNewCommit(ev.data.officeCommit)) return;
       // While the time-lapse plays it owns the office; it asks for a fresh snapshot when it stops. What isn't part of
@@ -107,11 +154,7 @@ export function connect() {
     hitchWs(type, bytes, performance.now() - from); // the hitch recorder: what each message cost to apply
   };
   ws.onclose = () => {
-    const s = useStore.getState();
-    s.setConnected(false);
-    // A drop while the office updates itself is the restart: say so, and look for it coming back sooner.
-    const restarting = s.restarting || restartExpected(s.officeUpdate);
-    if (restarting !== s.restarting) s.setRestarting(restarting);
-    setTimeout(connect, Math.min(restarting ? 2000 : 8000, 500 * 2 ** retry++));
+    const restarting = lost();
+    retryTimer = setTimeout(connect, Math.min(restarting ? 2000 : 8000, 500 * 2 ** retry++));
   };
 }
