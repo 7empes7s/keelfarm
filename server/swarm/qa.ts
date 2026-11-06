@@ -16,6 +16,8 @@ import { QA_RESUME_PROMPT, qaRetry } from '../qaRetry.ts';
 import { recordQa } from '../metrics.ts';
 import { clip } from '../notify.ts';
 import { followupEvents } from '../../shared/followups.ts';
+import { noteCheck } from '../../shared/charter.ts';
+import { citedRule } from '../../shared/charterStats.ts';
 import { parseReport, QA_SCHEMA, type QaReport } from '../qaReport.ts';
 import {
   type PersistedRepo,
@@ -287,6 +289,7 @@ export abstract class SwarmQa extends SwarmSessions {
       });
       const key = `${repo.id}#${rec.prNumber}`;
       recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round);
+      if (report.charterCheck) noteCheck(repo.charter.log, { at: Date.now(), pr: rec.prNumber, ...citedRule(report.charterCheck, repo.charter) }, Date.now()); // the Charter tab's standards and non-goals (#105)
       this.qaWaits.delete(key);
       // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
       // and the checks are recorded so a re-run of a red one can count as the fix.
