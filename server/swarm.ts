@@ -76,7 +76,7 @@ export { HttpError };
 const STOP_SETTLE_MS = 15_000;
 
 export class Swarm extends SwarmCeoTools {
-  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }));
+  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null);
 
   // ---------- lifecycle ----------
 
@@ -530,7 +530,8 @@ export class Swarm extends SwarmCeoTools {
     this.stopAgent(a.id);
     this.ceoChat.endJob();
     const calls = await this.ceoChat.settled(STOP_SETTLE_MS);
-    this.postMessage('ceo', stopReply(calls), undefined, steps.length ? { steps } : {});
+    const actions = this.ceoChat.turnActions(calls);
+    this.postMessage('ceo', stopReply(calls), undefined, { ...(steps.length && { steps }), ...(actions.length && { actions }) });
     this.markDelivery('all', 'replied');
   }
 

@@ -1,7 +1,7 @@
 # Design system
 
 Every 2D screen (panels, the console, pocket mode, the phone) follows this page. The manager's console
-(`client/src/ui/ConsoleShell.tsx` and its sections, and pocket mode's `PocketConsole.tsx`) is the reference screen: copy it.
+(`client/src/ui/ConsoleNav.tsx` and its sections, and pocket mode's `PocketConsole.tsx`) is the reference screen: copy it.
 Tokens and shared styles are in `client/src/design.css`; components are in `client/src/ui/`.
 
 ## Direction
@@ -61,7 +61,7 @@ fill uses `--ds-on-color`.
 
 The manager's console has five top tabs, and each one shows a side menu of its sections with one section beside it
 (on a phone, the side menu is a list you tap into, with a back button, iOS Settings style). The map is
-`client/src/ui/consoleNav.ts`, drawn by `ui/ConsoleShell.tsx` (the 3D office) and `pocket/PocketConsole.tsx` (phones):
+`client/src/ui/consoleNavRules.ts`, drawn by `ui/ConsoleNav.tsx` (the 3D office) and `pocket/PocketConsole.tsx` (phones):
 
 | Tab | Sections |
 | --- | --- |

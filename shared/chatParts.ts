@@ -1,8 +1,9 @@
-// The CEO's suggestion boxes and artifacts: fenced blocks in their final message that the office lifts out of the
-// bubble's text when it posts it (```suggestions, one option per line; ```artifact title="…", markdown). A block that
-// breaks the rules stays in the text as written, so nothing the CEO wrote is ever lost.
+// The CEO's suggestion boxes, idea cards and artifacts: fenced blocks in their final message that the office lifts out
+// of the bubble's text when it posts it (```suggestions, one option per line; ```idea <kind>, a title line then the
+// message Accept sends; ```artifact title="…", markdown). A block that breaks the rules stays in the text as written,
+// so nothing the CEO wrote is ever lost.
 
-import type { ChatArtifact, PhoneMessage } from './types.ts';
+import type { ChatArtifact, ChatIdea, PhoneMessage } from './types.ts';
 
 export const MAX_SUGGESTIONS = 4;
 export const SUGGESTION_CHARS = 60;
@@ -10,12 +11,16 @@ export const MAX_ARTIFACTS = 3;
 /** An artifact's markdown, at most (characters). A longer one stays in the text. */
 export const ARTIFACT_CHARS = 20_000;
 export const ARTIFACT_TITLE_CHARS = 80;
+const IDEA_KINDS: readonly ChatIdea['kind'][] = ['objective', 'focus', 'mandate', 'experiment', 'research', 'charter', 'team', 'plan'];
+const IDEA_TITLE_CHARS = 100;
+const IDEA_MESSAGE_CHARS = 400;
 /** How much artifact markdown the snapshot carries, newest first; older bodies are fetched when opened. */
 export const SNAPSHOT_ARTIFACT_CHARS = 60_000;
 
 export interface ParsedMessage {
   text: string;
   suggestions?: string[];
+  idea?: ChatIdea;
   artifacts?: { title: string; markdown: string }[];
 }
 
@@ -43,6 +48,15 @@ function suggestionsOf(body: string[]): string[] | null {
   return out;
 }
 
+/** An ```idea block: a known kind, a title line, and optionally the message Accept sends (else the title). */
+function ideaOf(info: string, body: string[]): ChatIdea | null {
+  const kind = info.match(/^idea\s+(\w+)$/i)?.[1].toLowerCase() as ChatIdea['kind'] | undefined;
+  const [title = '', ...rest] = body.map((l) => l.trim()).filter(Boolean);
+  const message = rest.join(' ') || title;
+  if (!kind || !IDEA_KINDS.includes(kind) || !title || title.length > IDEA_TITLE_CHARS || message.length > IDEA_MESSAGE_CHARS) return null;
+  return { kind, title, message };
+}
+
 function artifactOf(info: string, body: string[]): { title: string; markdown: string } | null {
   const t = info.match(/^artifact\s+title\s*=\s*(?:"([^"]*)"|'([^']*)'|“([^”]*)”)\s*$/i);
   const title = (t?.[1] ?? t?.[2] ?? t?.[3] ?? '').trim();
@@ -56,6 +70,7 @@ export function parseCeoMessage(raw: string): ParsedMessage {
   const lines = raw.replace(/\r\n?/g, '\n').split('\n');
   const keep: string[] = [];
   let suggestions: string[] | undefined;
+  let idea: ChatIdea | undefined;
   const artifacts: { title: string; markdown: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const f = lines[i].match(FENCE);
@@ -64,7 +79,7 @@ export function parseCeoMessage(raw: string): ParsedMessage {
       continue;
     }
     const info = f[3].trim();
-    const kind = /^suggestions$/i.test(info) ? 'suggestions' : /^artifact\b/i.test(info) ? 'artifact' : null;
+    const kind = /^suggestions$/i.test(info) ? 'suggestions' : /^artifact\b/i.test(info) ? 'artifact' : /^idea\b/i.test(info) ? 'idea' : null;
     const end = closing(lines, i + 1, f[2], kind === 'artifact');
     if (end < 0) {
       // unclosed: everything from here is text, as written
@@ -74,14 +89,16 @@ export function parseCeoMessage(raw: string): ParsedMessage {
     const body = lines.slice(i + 1, end);
     const s = kind === 'suggestions' && !suggestions ? suggestionsOf(body) : null;
     const a = kind === 'artifact' && artifacts.length < MAX_ARTIFACTS ? artifactOf(info, body) : null;
+    const d = kind === 'idea' && !idea ? ideaOf(info, body) : null;
     if (s) suggestions = s;
     else if (a) artifacts.push(a);
+    else if (d) idea = d;
     else keep.push(...lines.slice(i, end + 1));
     i = end;
   }
-  if (!suggestions && !artifacts.length) return { text: raw };
+  if (!suggestions && !idea && !artifacts.length) return { text: raw };
   const text = keep.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { text, ...(suggestions && { suggestions }), ...(artifacts.length && { artifacts }) };
+  return { text, ...(suggestions && { suggestions }), ...(idea && { idea }), ...(artifacts.length && { artifacts }) };
 }
 
 /** An artifact's first line as plain words, for its card. */
