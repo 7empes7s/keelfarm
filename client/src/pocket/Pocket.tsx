@@ -292,7 +292,7 @@ export default function Pocket() {
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);
   const connected = useStore((s) => s.connected);
-  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the header (#81) or the docked chat's
+  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the docked chat's header (#81)
   const switchKey = useKeyName('switchOffice');
   const layout = useLayout();
   const wide = layout !== 'compact';
@@ -416,7 +416,8 @@ export default function Pocket() {
     ['team', '👥', 'Team', 0],
     ['approvals', '✋', 'Approvals', waiting],
   ];
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={chatTools} />;
+  // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''}`}>
       <header className="pk-head">
@@ -438,8 +439,8 @@ export default function Pocket() {
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
-        {tab === 'chat' && !wide && <div className="pk-head-tools" ref={setChatTools} />}
-        <SearchButton className="pk-icon-btn" />
+        {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
+        {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
         {wide ? (
           <button className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>

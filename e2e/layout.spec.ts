@@ -158,6 +158,23 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
+  {
+    // the phone's chat with every button it can have (its own 🔍, 📄, 📎 and hands-free): the header keeps the name (#109)
+    name: 'pocket chat header',
+    widths: [360, 390, 430],
+    open: async (page) => {
+      await page.request.post('/api/files', { headers: { 'Content-Type': 'image/png', 'X-File-Name': 'f.png' }, data: png(40, 40) });
+      await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
+      const root = await pocket(page, 'chat');
+      await expect(root.getByRole('button', { name: /^Artifacts \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
+      await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible();
+      await expect(root.getByRole('button', { name: /search/i })).toHaveCount(1); // the chat's own, not two 🔍 side by side
+      const title = page.locator('.pk-head .pk-title');
+      expect(await title.evaluate((t) => t.scrollWidth <= t.clientWidth + 1), `the company name "${await title.innerText()}" is cut off`).toBe(true);
+      return root;
+    },
+    tabs: [],
+  },
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
