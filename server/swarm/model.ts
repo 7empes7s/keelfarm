@@ -13,6 +13,7 @@ import { cliLabel } from '../clis.ts';
 import type { LedgerState } from '../ledger.ts';
 import type { LabState } from '../experiments.ts';
 import type { AgentTerminal } from '../terminal.ts';
+import { cleanTerminalText } from '../../shared/terminalText.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
@@ -264,7 +265,7 @@ export const OPS_EVENTS = new Set<ServerEvent['type']>(['repo', 'repoRemoved', '
 export const OPS_TICK_MS = 30_000;
 // How often the watchdog looks for stuck work (watchdog.ts).
 export const WATCHDOG_MS = 60_000;
-export const oneLine = (err: unknown) => (err instanceof Error ? err.message : String(err)).split(/\r?\n/)[0].slice(0, 200);
+export const oneLine = (err: unknown) => cleanTerminalText(err instanceof Error ? err.message : String(err), Infinity).split('\n')[0].slice(0, 200);
 // While a cloud agent signs in, the office looks whether it's done this often (someone watching their terminal), else less.
 export const SIGN_IN_POLL_MS = 8_000;
 export const SIGN_IN_IDLE_POLL_MS = 60_000;
