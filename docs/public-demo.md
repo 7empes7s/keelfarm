@@ -126,6 +126,8 @@ The decisions (new sha? CI green? memory? already failed? healthy?) are `scripts
   mv /opt/cubefarm-demo /opt/cubefarm-demo-releases/$sha
   ln -s "$sha" /opt/cubefarm-demo-releases/current
   ln -s /opt/cubefarm-demo-releases/current /opt/cubefarm-demo
+  # its saved settings remember the old folder's parent (/opt) as projectsDir: start it with an empty state
+  systemctl stop cubefarm-demo && rm -rf /var/lib/private/cubefarm-demo/* && systemctl start cubefarm-demo
   cp ops/cubefarm-demo-update.service ops/cubefarm-demo-update.timer /etc/systemd/system/
   systemctl daemon-reload && systemctl enable --now cubefarm-demo-update.timer
   ```
