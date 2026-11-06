@@ -11,6 +11,7 @@ import { Menu } from '../ui/Menu';
 import { Resume } from '../ui/Phone';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
+import { EmptyState } from '../ui/EmptyState';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
   const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
@@ -123,7 +124,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
   if (items.length === 0) {
     return (
       <div className="pk-page">
-        <p className="pk-empty">Nothing waits on you. The team carries on, and your phone hears when that changes.</p>
+        <EmptyState kind="approvals" />
       </div>
     );
   }

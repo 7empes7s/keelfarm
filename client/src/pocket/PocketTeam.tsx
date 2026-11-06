@@ -8,17 +8,14 @@ import { agentLabel, signInFor } from '../ui/floorRows';
 import { clearDesk, letGo, stopAgent } from '../ui/dangerActions';
 import { Menu } from '../ui/Menu';
 import { MessageBox } from '../ui/MessageBox';
-import { badgeStatus } from '../ui/StatusPill';
+import { badgeStatus, StatusPill as Status } from '../ui/StatusPill';
+import { agentPhrase } from '../ui/statusPhrase';
 import { AgentRing } from '../ui/AgentRing';
 import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
+import { EmptyState } from '../ui/EmptyState';
 
-const STATUS_LABEL: Record<string, string> = { idle: 'free', preparing: 'setting up', working: 'working', done: 'done', error: 'needs help', stopped: 'stopped', 'waiting-ceo': 'waiting for CEO', 'waiting-you': 'waiting for you' };
-
-export function Status({ status }: { status: string }) {
-  return <span className={`status status-${status}`}>{STATUS_LABEL[status] ?? status}</span>;
-}
 
 /** Runs one REST call at a time per card; api() already toasts errors. */
 function useBusy() {
@@ -77,6 +74,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
         </span>
         <Status status={badgeStatus(agent)} />
       </button>
+      <div className="small muted pk-phrase">{agentPhrase(agent, { autoAssign: repo.autoAssign })}</div>
       {agent.lastError && !working && <div className="term-error small pk-error">⚠️ {agent.lastError}</div>}
       {agent.blocked && working && <div className="term-error small pk-error">⛔ Blocked: {agent.blocked}</div>}
       {agent.waiting && !working && <div className="small pk-sign-in">❓ {agent.waiting === 'ceo' ? 'Asked a question: waiting for the CEO.' : 'Waiting for your answer in the Chat tab.'}</div>}
@@ -192,7 +190,7 @@ export function Team({ focusRepo }: { focusRepo: string | null }) {
   return (
     <div className="pk-page">
       <CeoCard />
-      {repos.length === 0 && <p className="muted">No floors yet, so no team.</p>}
+      {repos.length === 0 && <EmptyState kind="projects" />}
       {repos.map((repo) => {
         const team = agentsOnRepo(agents, repo.id);
         return (
@@ -201,7 +199,7 @@ export function Team({ focusRepo }: { focusRepo: string | null }) {
               <span className="floor-badge">{repo.floor}</span> {repo.fullName.split('/')[1]}
               <span className="muted small"> · {team.length} {team.length === 1 ? 'agent' : 'agents'}</span>
             </h3>
-            {team.length === 0 && <p className="muted small">Nobody works here yet.</p>}
+            {team.length === 0 && <EmptyState kind="team" compact />}
             {team.map((a) => (
               <AgentCard key={a.id} agent={a} repo={repo} />
             ))}

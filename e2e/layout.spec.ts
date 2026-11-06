@@ -165,9 +165,45 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
+  {
+    // the phone's chat with every button it can have (its own 🔍, 📄, 📎 and hands-free), the header's name still whole (#109)
+    name: 'pocket chat header',
+    widths: [360, 390, 430],
+    open: async (page) => {
+      await page.request.post('/api/files', { headers: { 'Content-Type': 'image/png', 'X-File-Name': 'f.png' }, data: png(40, 40) });
+      await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
+      const root = await pocket(page, 'chat');
+      await expect(root.getByRole('button', { name: /^Artifacts \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
+      await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible();
+      await expect(root.getByRole('button', { name: /search/i })).toHaveCount(1); // the chat's own, not two 🔍 side by side
+      return root;
+    },
+    tabs: [],
+  },
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
+  {
+    name: 'search palette (#109)',
+    widths: PHONES,
+    open: async (page) => {
+      const root = await pocket(page, 'company');
+      await root.getByRole('button', { name: /Search everything/ }).click();
+      await page.getByRole('combobox', { name: 'Search everything' }).fill('floor');
+      return page.getByRole('dialog', { name: /Search everything/ });
+    },
+    tabs: [],
+  },
+  {
+    name: 'ⓘ sheet (#109)',
+    widths: PHONES,
+    open: async (page) => {
+      const root = await pocket(page, 'kanban');
+      await root.getByRole('button', { name: /What can I do on Kanban/ }).click();
+      return page.getByRole('dialog', { name: /Kanban/ });
+    },
+    tabs: [],
+  },
   {
     name: 'pocket notification centre',
     widths: PHONES,
@@ -274,6 +310,8 @@ async function layoutProblems(root: Locator): Promise<string[]> {
     const out: string[] = [];
     const vw = document.documentElement.clientWidth;
     if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
+    const title = document.querySelector('.pk-head .pk-title');
+    if (title && title.scrollWidth > title.clientWidth + 1) out.push(`the header's name "${title.textContent}" is cut off`);
     const name = (b: Element) => (b.getAttribute('aria-label') || (b as HTMLElement).innerText || b.getAttribute('title') || b.tagName).trim().slice(0, 40);
     // Wider than the viewport, unless it's inside a box that scrolls sideways on purpose (the tab strip, a data table).
     const scroller = (x: Element) => {

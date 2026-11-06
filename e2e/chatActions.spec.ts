@@ -83,13 +83,13 @@ test('Research this sends the typed text with the research prefix, once there is
   await expect(box(page)).toHaveValue('');
 });
 
-test('a quick prompt sends, and the top bar opens conversations, search, artifacts and files', async ({ page }) => {
+test('a quick prompt sends, and the chat bar opens conversations, search, artifacts and files', async ({ page }) => {
   await chat(page);
   await plus(page).click();
   await sheet(page).getByRole('button', { name: "What's everyone working on?" }).click();
   await expect.poll(async () => (await managerTexts(page)).at(-1)).toBe("What's everyone working on?");
 
-  const head = page.locator('.pk-head');
+  const head = page.locator('.chat-head');
   await head.getByRole('button', { name: 'Conversations and search' }).click();
   const conversations = page.getByRole('dialog', { name: 'Conversations' });
   await expect(conversations.getByRole('searchbox', { name: 'Search conversations' })).toBeVisible();

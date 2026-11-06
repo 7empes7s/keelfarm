@@ -4,10 +4,11 @@ import type { Agent } from '../store';
 import { ringStatus } from './agentWindow';
 import './agentWindow.css';
 
-export function AgentRing({ agent, size = 'md' }: { agent: Agent; size?: 'sm' | 'md' }) {
+/** `phrase`: what they're doing and what happens next (statusPhrase.ts), as its tooltip. */
+export function AgentRing({ agent, size = 'md', phrase }: { agent: Agent; size?: 'sm' | 'md'; phrase?: string }) {
   const r = ringStatus(agent);
   return (
-    <span className={`aw-ring aw-ring-${r.ring} aw-ring-${size}`} role="img" aria-label={`${agent.name}: ${r.label}`} title={r.label}>
+    <span className={`aw-ring aw-ring-${r.ring} aw-ring-${size}`} role="img" aria-label={`${agent.name}: ${r.label}`} title={phrase ?? r.label}>
       <span className="avatar" style={{ background: agent.color }}>
         {agent.name[0]}
       </span>

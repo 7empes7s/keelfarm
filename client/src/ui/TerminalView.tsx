@@ -19,6 +19,7 @@ import { closeOverlay, Panel } from './Panel';
 import { loadScreenshot } from '../screenshot';
 import { toolVerb } from '../world/draw';
 import { followAgent } from '../world/camera/rig';
+import { agentPhrase } from './statusPhrase';
 import { HistoryButton } from './HistoryTab';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
@@ -317,7 +318,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
 
   const title = (
     <div className="aw-head">
-      <AgentRing agent={agent} />
+      <AgentRing agent={agent} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
       <button type="button" className="aw-who" aria-expanded={details} aria-controls="aw-details" title={details ? 'Hide the details' : 'Task, profile and setup (or swipe up)'} {...swipe}>
         <span className="aw-name">
           {agent.name}

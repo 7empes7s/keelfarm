@@ -6,24 +6,25 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
 import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
+import { InfoButton } from '../ui/InfoButton';
 
 /** A section, or 'menu': the list of them. */
 export type ConsoleSection = SectionId | 'menu';
 
-type Props = { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus };
+type Props = { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus; repoId?: string };
 
 /** The console on a desktop: the menu opens at the section last shown. */
-function WideConsole({ section, pick, history }: Props) {
+function WideConsole({ section, pick, history, repoId }: Props) {
   const open = (section === 'menu' ? null : sectionById(section)) ?? opening(undefined, '', 'pocket', loadRemembered());
   useSectionAddress(open);
-  return <ConsoleSplit where="pocket" section={open} pick={(s) => pick(s.id)} focus={{ history }} />;
+  return <ConsoleSplit where="pocket" section={open} pick={(s) => pick(s.id)} focus={{ history, repoId }} />;
 }
 
 export function PocketConsole({ wide, ...props }: Props & { wide?: boolean }) {
   return wide ? <WideConsole {...props} /> : <PhoneConsole {...props} />;
 }
 
-function PhoneConsole({ section, pick, history }: Props) {
+function PhoneConsole({ section, pick, history, repoId }: Props) {
   const open = section === 'menu' ? null : (sectionById(section) ?? null);
   const [query, setQuery] = useState('');
   const body = useRef<HTMLDivElement>(null);
@@ -44,9 +45,10 @@ function PhoneConsole({ section, pick, history }: Props) {
           <h2 className="cn-title">
             <span aria-hidden>{open.icon}</span> {open.label}
           </h2>
+          <InfoButton screen={open.id} />
         </div>
         <div className="ds-stack-scope" role="region" aria-label={open.label}>
-          <SectionBody id={open.id} where="pocket" focus={{ history }} />
+          <SectionBody id={open.id} where="pocket" focus={{ history, repoId }} />
         </div>
       </div>
     );
