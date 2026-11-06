@@ -7,6 +7,7 @@ import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
 import { KanbanView } from '../ui/KanbanView';
+import { FloorBuilds } from '../ui/FloorBuilds';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
 import { setMode, useLayout, useMode } from './mode';
@@ -184,6 +185,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
               </div>
             ))}
           </div>
+          <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
             <span className="muted">
               👥 {team} · {busy} busy · 📋 {p.backlog} in backlog

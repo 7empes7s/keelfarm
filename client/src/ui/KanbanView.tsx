@@ -7,6 +7,7 @@ import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { HistoryButton } from './HistoryTab';
+import { FloorBuilds } from './FloorBuilds';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
@@ -240,6 +241,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       </div>
       {repo.syncError && <div className="term-error">⚠️ {repo.syncError}</div>}
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
+      <FloorBuilds repoId={repo.id} />
 
       <div className="kanban kanban-5">
         {column(
