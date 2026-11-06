@@ -34,6 +34,7 @@ const ACTS: Record<string, string> = {
   escalate: '🚩',
   set_mandate: '📜',
   propose_charter: '🧭',
+  resolve_decision: '✅',
   define_experiment: '🧪',
   set_floor_profile: '🏢',
   set_office_playbook: '📘',

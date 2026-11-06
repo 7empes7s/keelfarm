@@ -34,6 +34,7 @@ import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { logStreamed, writeReply } from './demoChat.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
@@ -1271,6 +1272,7 @@ interface DemoStatus {
   company: { scaling: string; officePlaybook: string | null }; // how team changes go, in words ("team changes apply straight away"); the office playbook
   floors: DemoFloor[];
   pendingChanges: unknown[];
+  openDecisions?: { id: string; question: string }[];
 }
 
 /** The objective ids in a floor's charter, in order. */
@@ -1473,6 +1475,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
       if (awake) return awake;
+      const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
+      if (resolved) return resolved;
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
       if (/\btelegram\b/i.test(text)) {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);

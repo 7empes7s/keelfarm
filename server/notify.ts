@@ -40,8 +40,9 @@ const PLURAL: Record<NotifyEvent, string> = {
   usage: 'usage changes',
   memory: 'memory alerts',
   merge: 'merges',
+  decisions: 'decision digests',
 };
-const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', merge: '🔀', test: '🔔' };
+const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', merge: '🔀', decisions: '🧭', test: '🔔' };
 
 export const clip = (s: string, max = BODY_MAX) => {
   const t = s.replace(/\s+/g, ' ').trim();

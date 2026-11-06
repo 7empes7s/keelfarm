@@ -158,6 +158,17 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
+  {
+    // the questions waiting on the manager, in the tray above the message box, open and collapsed (#114)
+    name: 'pocket chat decisions',
+    widths: POCKET,
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      await expect(root.getByRole('region', { name: 'Waiting on you' })).toBeVisible();
+      return root;
+    },
+    tabs: ['', { name: 'collapsed', go: (root) => root.getByRole('button', { name: /^Hide the/ }).click() }],
+  },
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
@@ -522,6 +533,24 @@ for (const mode of MODES) {
         expect(problems).toEqual([]);
       });
     }
+  });
+}
+
+// The open decisions' tray (#114) sits above the message box, and steps aside to one pill while the manager types.
+for (const width of [390, 1280]) {
+  test(`the decisions tray never covers the message box at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const root = await pocket(page, 'chat');
+    const tray = root.getByRole('region', { name: 'Waiting on you' });
+    await expect(tray).toBeVisible();
+    const above = async (what: Locator) => ((await what.boundingBox())!.y + (await what.boundingBox())!.height) <= (await root.locator('.chat-input').boundingBox())!.y + 1;
+    expect(await above(tray)).toBe(true);
+    await root.locator('.chat-input textarea').fill('About something else');
+    await expect(tray).toBeHidden();
+    const pill = root.getByRole('button', { name: /decisions? waiting$/ });
+    await expect(pill).toBeVisible();
+    expect(await above(pill)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
 

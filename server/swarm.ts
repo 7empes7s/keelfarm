@@ -69,6 +69,7 @@ import {
 import { lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
 import { SwarmCeoTools } from './swarm/ceoTools.ts';
+import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
 
@@ -142,6 +143,7 @@ export class Swarm extends SwarmCeoTools {
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
         questions: Array.isArray(loaded.questions) ? loaded.questions : [],
+        decisions: loadDecisions(loaded.decisions),
         progress: loadLedger(loaded.progress),
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
@@ -284,6 +286,7 @@ export class Swarm extends SwarmCeoTools {
       const p = this.backend.demoCharter?.(r.fullName).proposal;
       if (p) void this.officeTools().call('propose_charter', { floor: r.floor, ...p });
     }
+    if (seeded) this.seedDemoDecisions(); // and a question and a team change still waiting on the manager (#114)
     // Agents from before the ledger start their careers now.
     for (const a of this.state.agents) if (a.role !== 'ceo') applyLedger(this.state.progress, { kind: 'hired', agentId: a.id, at: Date.now() });
 
@@ -334,6 +337,7 @@ export class Swarm extends SwarmCeoTools {
     setInterval(() => void this.files.sweep(), SWEEP_MS).unref();
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
+    setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => this.watchdogTick(), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
     void this.backend

@@ -18,6 +18,7 @@ import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
+import { DecisionList, DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
@@ -284,6 +285,7 @@ function TeamChanges({ focusId }: { focusId?: string }) {
       {pending.map((r) => (
         <Resume key={r.id} req={r} highlight={r.id === focusId} />
       ))}
+      <DecisionList heading={(t) => <h3 className="phone-h">{t}</h3>} />
       {demo && (
         <div className="row wrap">
           <span className="muted small">Demo:</span>
@@ -800,6 +802,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           />
         )}
       </div>
+      <DecisionTray hide={offered?.id} typing={!!text.trim()} onPick={(d, option) => send(option, d.messageId)} onJump={jump} />
       {/* answers to a pending question stay inline; everything else is behind the + */}
       <div className="quick">
         {question !== null && !answered && (
