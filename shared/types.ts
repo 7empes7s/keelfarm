@@ -728,6 +728,7 @@ export interface WorldSnapshot {
   version?: string; // the cubefarm version the server runs (package.json)
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
+  publicDemo?: { resetHours: number }; // the demo for visitors (#95): what they can't change, and when it starts over
   usage: UsageView;
   health?: HealthView; // memory, load and sessions, for the health strip (#55); absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)

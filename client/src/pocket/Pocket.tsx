@@ -82,6 +82,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
   const requests = useStore((s) => s.requests);
   const ceoInfo = useStore((s) => s.ceo);
   const demo = useStore((s) => s.demo);
+  const publicDemo = useStore((s) => s.publicDemo);
   const version = useStore((s) => s.version);
   const ceo = agents[CEO_ID];
   const floors = useMemo(
@@ -168,7 +169,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
       <button className="btn pk-wide" onClick={openOffice}>
         🏢 Open the 3D office
       </button>
-      {demo && <div className="pk-center small muted">DEMO MODE: fake repos, fake agents</div>}
+      {demo && <div className="pk-center small muted">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO MODE: fake repos, fake agents'}</div>}
       {version && <div className="pk-center small muted">cubefarm {version}</div>}
     </div>
   );
@@ -242,6 +243,7 @@ export default function Pocket() {
   const waiting = useStore((s) => approvalsBadge(waitingOnYou(s.repos, s.qa, s.requests)));
   const ceoName = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const usage = useStore((s) => s.usage.state);
+  const publicDemo = useStore((s) => s.publicDemo);
   const connected = useStore((s) => s.connected);
   const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the header (#81)
 
@@ -315,6 +317,11 @@ export default function Pocket() {
         <b className="pk-title">{company || 'cubefarm'}</b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
         <span className="spacer" />
+        {publicDemo && tab !== 'chat' && (
+          <span className="chip" title={`Demo office: it resets every ${publicDemo.resetHours} h`}>
+            Demo · resets {publicDemo.resetHours} h
+          </span>
+        )}
         {usage !== 'normal' && (
           // On the Chat tab only its icon: the chat's buttons need the room.
           <span className="chip chip-warn" title={usage === 'paused' ? 'Paused by the usage limit' : 'Pacing new work'}>

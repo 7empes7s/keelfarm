@@ -114,6 +114,7 @@ interface State {
   ghReady: boolean;
   ghError?: string;
   demo: boolean;
+  publicDemo: { resetHours: number } | null; // the demo for visitors (#95)
   machinesRoot: string;
   settings: SwarmSettings;
   clis: CliView[]; // the coding-agent CLIs installed where the office runs
@@ -232,6 +233,7 @@ export const useStore = create<State>((set, get) => ({
   user: null,
   ghReady: true,
   demo: false,
+  publicDemo: null,
   machinesRoot: '',
   // Until the server's snapshot arrives; setupDone stays true so the wizard doesn't flash while loading.
   settings: {
@@ -357,6 +359,7 @@ export const useStore = create<State>((set, get) => ({
           ghReady: d.ghReady,
           ghError: d.ghError,
           demo: d.demo,
+          publicDemo: d.publicDemo ?? null,
           machinesRoot: d.machinesRoot,
           settings: d.settings,
           repos: d.repos.sort((a, b) => a.floor - b.floor),

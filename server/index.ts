@@ -1,15 +1,16 @@
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { AddressInfo, Socket } from 'node:net';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
 import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
 import type { ServerEvent } from '../shared/types.ts';
-import { DEMO, DEMO_SCALE, HOST, PORT, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
+import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
@@ -23,8 +24,17 @@ import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
 import { PresenceHub } from './presence.ts';
+import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 import { HttpError, Swarm } from './swarm.ts';
 import { historyFilter } from './history.ts';
+
+if (PUBLIC_DEMO) {
+  const why = publicDemoProblem({ demo: DEMO, loopback: isLoopback(HOST), home: process.env.SWARM_HOME, defaultHome: path.join(os.homedir(), '.cubefarm') });
+  if (why) {
+    console.error(`\n  ✖ ${why}\n`);
+    process.exit(1);
+  }
+}
 
 const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
 if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
@@ -35,6 +45,30 @@ if (PORT) setOfficeUrl(`http://${localAddress(HOST)}:${PORT}`);
 await swarm.init();
 
 const app = express();
+// The public demo (#95, server/publicDemo.ts): a rate limit per visitor, capped uploads and no host path in any answer.
+const scrub = PUBLIC_DEMO ? pathScrubber(scrubRoots([HOME_DIR, path.resolve(import.meta.dirname, '..'), DEFAULT_PROJECTS_DIR, process.cwd(), os.homedir(), os.tmpdir()])) : null;
+const ipOf = (req: http.IncomingMessage) => clientIp(req.socket.remoteAddress, req.headers['cf-connecting-ip']);
+const apiLimit = new RateLimiter(240, 8);
+const wsLimit = new RateLimiter(30, 0.5);
+if (scrub) {
+  app.use('/api', (req, res, next) => {
+    if (!apiLimit.take(ipOf(req))) return void res.status(429).json({ error: 'Slow down a little: too many clicks at once for the demo. Try again in a few seconds.' });
+    res.json = (body: unknown) => res.type('json').send(scrub(JSON.stringify(body) ?? ''));
+    if (req.method === 'POST' && routePath(req.path) === '/files') {
+      let name = '';
+      try {
+        name = decodeURIComponent(String(req.headers['x-file-name'] ?? ''));
+      } catch {
+        // a malformed name: judged by its type alone
+      }
+      const why = demoUploadProblem(name, String(req.headers['content-type'] ?? ''));
+      if (why) return void res.set('Connection', 'close').status(415).json({ error: why });
+      // Past the demo's total, the oldest files go.
+      res.on('finish', () => void Promise.all(filesOverCap(swarm.files.list()).map((id) => swarm.files.remove(id))).catch((err) => console.error(err)));
+    }
+    next();
+  });
+}
 // Previews through the office's own address, for browsers on other devices (server/previewGateway.ts). First: their
 // request bodies pass on untouched.
 const proxied = (port: number) => swarm.previewProxied(port);
@@ -45,8 +79,14 @@ app.post('/api/hooks/:token', express.json({ limit: '64mb' }), (req, res) => voi
 app.post('/api/mcp/:token', express.json({ limit: '4mb' }), (req, res, next) => void handleMcp(String(req.params.token), req, res).catch(next));
 app.all('/api/mcp/:token', (_req, res) => void res.status(405).set('Allow', 'POST').end());
 // The chat's files (server/fileRoutes.ts): uploads stream to disk, so before the JSON body parser.
-app.use(fileRoutes(swarm.files));
+app.use(fileRoutes(swarm.files, { max: PUBLIC_DEMO ? PUBLIC_DEMO_FILE_BYTES : undefined }));
 app.use(express.json({ limit: '1mb' }));
+if (PUBLIC_DEMO) {
+  app.use((req, _res, next) => {
+    const why = publicDemoBlock(req.method, req.originalUrl, req.body);
+    next(why ? new HttpError(403, why) : undefined);
+  });
+}
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 const route = (fn: Handler) => async (req: Request, res: Response, next: NextFunction) => {
@@ -403,7 +443,15 @@ const server = http.createServer(app);
 // Two sockets: /ws carries the office's state to every tab, /ws/term?agent=<id> one agent's terminal to whoever opened it.
 const wss = new WebSocketServer({ noServer: true });
 const terms = new WebSocketServer({ noServer: true });
-wss.on('connection', (ws) => {
+// The public demo's scrubber sees everything a tab is sent.
+const scrubbed = (ws: WebSocket) => {
+  if (!scrub) return ws;
+  const send = ws.send.bind(ws);
+  ws.send = ((data: unknown, ...rest: unknown[]) => (send as (...a: unknown[]) => void)(typeof data === 'string' ? scrub(data) : data, ...rest)) as typeof ws.send;
+  return ws;
+};
+wss.on('connection', (raw) => {
+  const ws = scrubbed(raw);
   swarm.addClient(ws);
   presence.attach(ws);
 });
@@ -412,12 +460,13 @@ const BEAT = JSON.stringify({ type: 'beat' } satisfies ServerEvent);
 setInterval(() => {
   for (const ws of wss.clients) if (ws.readyState === ws.OPEN) ws.send(BEAT);
 }, BEAT_MS).unref();
-terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 'http://localhost').searchParams.get('agent') ?? '', ws));
+terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 'http://localhost').searchParams.get('agent') ?? '', scrubbed(ws)));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
   const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : null;
   if (!target && upgradeGateway(req, socket as Socket, head, proxied)) return;
   if (!target) return void socket.destroy();
+  if (PUBLIC_DEMO && !wsLimit.take(ipOf(req))) return void socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
@@ -431,6 +480,7 @@ server.listen(PORT, HOST, () => {
     for (const url of networkUrls(HOST, port)) console.log(`     on your network: ${url}`);
     console.log(`     ⚠ listening on ${HOST}: anyone who can reach this machine can use the office and its agents, with no sign-in`);
   }
+  if (PUBLIC_DEMO) console.log(`     public demo: visitors change nothing that matters; resets every ${PUBLIC_DEMO_RESET_H} h and 30 min after the last visitor leaves`);
   console.log(`     state: ${STATE_FILE}`);
   console.log(`     workspaces: ${WORKSPACE_ROOT}`);
   console.log(`     agents' machines: ${DEMO ? '(pretend ones, in the demo)' : MACHINES_DIR}\n`);
@@ -450,9 +500,26 @@ const shutdown = (signal: string) => {
     .catch((err) => console.error(err))
     .finally(() => {
       clearTimeout(force);
+      // The public demo starts over: its home emptied, the service manager starts it fresh (ops/cubefarm-demo.service).
+      if (signal === 'reset') for (const f of fs.readdirSync(HOME_DIR)) fs.rmSync(path.join(HOME_DIR, f), { recursive: true, force: true, maxRetries: 3 });
       process.exit(0);
     });
 };
+if (PUBLIC_DEMO) {
+  const startedAt = Date.now();
+  let goneAt: number | null = null;
+  wss.on('connection', (ws) => {
+    goneAt = null;
+    ws.on('close', () => void (wss.clients.size === 0 && (goneAt = Date.now())));
+  });
+  setInterval(() => {
+    const why = resetDue({ now: Date.now(), startedAt, visitors: wss.clients.size, goneAt, everyMs: PUBLIC_DEMO_RESET_H * 3600_000 });
+    if (why) {
+      console.log(`\n  public demo: resetting (${why === 'idle' ? 'the last visitor left' : 'its schedule'})`);
+      shutdown('reset');
+    }
+  }, 60_000).unref();
+}
 process.once('SIGINT', () => shutdown('SIGINT'));
 process.once('SIGTERM', () => shutdown('SIGTERM'));
 process.once('SIGHUP', () => shutdown('SIGHUP')); // its terminal window closed (macOS, Linux; Windows' console too)

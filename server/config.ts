@@ -15,6 +15,8 @@ export const VERSION: string = JSON.parse(fs.readFileSync(path.resolve(import.me
 export const HOME_DIR = process.env.SWARM_HOME ?? path.join(os.homedir(), '.cubefarm');
 export const WORKSPACE_ROOT = path.join(HOME_DIR, 'workspaces');
 export const DEMO = process.argv.includes('--demo') || process.env.SWARM_DEMO === '1' || process.env.SWARM_DEMO === 'true';
+// The demo for visitors over a tunnel (#95, server/publicDemo.ts): nothing of this machine shows, and it resets itself.
+export const PUBLIC_DEMO = process.argv.includes('--public-demo') || process.env.SWARM_PUBLIC_DEMO === '1' || process.env.SWARM_PUBLIC_DEMO === 'true';
 
 /** A demo company bigger than the usual two floors, for scale tests: floors, and people on each (#228). */
 export interface DemoScale {
@@ -83,6 +85,9 @@ export function envMinutes(value: string | undefined, fallback: number): number 
   const n = Number(value);
   return value && Number.isFinite(n) && n > 0 ? n : fallback;
 }
+
+// The public demo starts over this often (hours, SWARM_PUBLIC_DEMO_RESET_H).
+export const PUBLIC_DEMO_RESET_H = envMinutes(process.env.SWARM_PUBLIC_DEMO_RESET_H, 6);
 
 // Floor previews run on this port + the floor number, PR previews 100 above it (docs/how-it-works.md). Moving it only
 // keeps a test office's previews clear of another office's.

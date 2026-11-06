@@ -13,6 +13,7 @@ export function StartScreen() {
   const loaded = useStore((s) => s.loaded);
   const connected = useStore((s) => s.connected);
   const demo = useStore((s) => s.demo);
+  const publicDemo = useStore((s) => s.publicDemo);
   const version = useStore((s) => s.version);
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
@@ -56,7 +57,7 @@ export function StartScreen() {
           <button className="linkish start-pocket" onClick={() => setMode('pocket')} title="The office without the 3D building: tabs for the company, the CEO chat, the board, the team and approvals">
             📱 Pocket mode, for phones and touch screens
           </button>
-          {demo && <span className="pill pill-demo">DEMO MODE: fake repos, fake agents</span>}
+          {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO MODE: fake repos, fake agents'}</span>}
           {version && <span className="small">cubefarm {version}</span>}
         </div>
       </div>
