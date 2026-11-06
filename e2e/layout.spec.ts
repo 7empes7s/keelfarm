@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { crc32, deflateSync } from 'node:zlib';
 import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
-import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNav';
+import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the

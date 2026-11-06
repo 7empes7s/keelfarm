@@ -14,7 +14,7 @@ import { Approvals } from './PocketApprovals';
 import { Team } from './PocketTeam';
 import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
-import { parseHash } from '../ui/consoleNav';
+import { parseHash } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import './pocket.css';
 
