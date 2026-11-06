@@ -28,6 +28,8 @@ const dialog = (page: Page, name: RegExp) => page.getByRole('dialog', { name });
 const PHONES = [360, 390, 430, 1280];
 // The 3D office boots WebGL: two widths are enough there; pocket mode is what phones get, and it's checked at all four.
 const OFFICE = [390, 1280];
+// Pocket mode's own tabs also at its medium layout and a big desktop (#104).
+const POCKET = [360, 390, 430, 900, 1280, 1920];
 
 /** Pocket mode on one of its tabs; the page is the screen. */
 async function pocket(page: Page, tab: string) {
@@ -141,11 +143,11 @@ const SCREENS: Screen[] = [
     },
     tabs: [...consoleSections('office'), wasteGroup('office')],
   },
-  { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
-  { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },
-  { name: 'pocket kanban', widths: PHONES, open: (page) => pocket(page, 'kanban'), tabs: [] },
-  { name: 'pocket team', widths: PHONES, open: (page) => pocket(page, 'team'), tabs: [] },
-  { name: 'pocket approvals', widths: PHONES, open: (page) => pocket(page, 'approvals'), tabs: [] },
+  { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
+  { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
+  { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
+  { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
+  { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
   {
     name: 'terminal view',
     widths: PHONES,
@@ -358,6 +360,30 @@ for (const screen of SCREENS) {
       expect(problems).toEqual([]);
     });
   }
+}
+
+// ---------- pocket mode on a desktop (#104) ----------
+
+for (const [width, height] of [
+  [900, 800],
+  [1280, 800],
+  [1920, 1080],
+]) {
+  test(`pocket mode at ${width}px has the rail, and the chat beside the pages when wide`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    const root = await pocket(page, 'company');
+    const rail = await root.locator('.pk-tabs').boundingBox();
+    expect(rail!.height).toBeGreaterThan(height / 2); // a rail down the side, not a bar at the bottom
+    await expect(root.locator('.pk-dock')).toHaveCount(width >= 1024 ? 1 : 0);
+    await page.keyboard.press('/');
+    await expect(root.locator('.pk-dock textarea')).toBeFocused();
+    await root.locator('.pk-dock textarea').press('3'); // typed, not a shortcut
+    await expect(root.locator('.pk-tab-on', { hasText: 'Company' })).toBeVisible();
+    await root.locator('.pk-dock textarea').blur();
+    await page.keyboard.press('3');
+    await expect(root.locator('.pk-tab-on', { hasText: 'Kanban' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
 }
 
 // ---------- pocket mode's viewport on an iPhone (#73) ----------

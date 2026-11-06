@@ -246,11 +246,13 @@ input.inline:focus {
 .pill-demo {
   background: #ffd166;
 }
-.pill-photo {
+.pill-photo,
+.pill-switch {
   color: var(--ink);
   cursor: pointer;
 }
-.pill-photo kbd {
+.pill-photo kbd,
+.pill-switch kbd {
   font-size: 0.7rem;
   border-bottom-width: 2px;
 }
