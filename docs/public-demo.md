@@ -93,9 +93,11 @@ It updates itself (#112): `cubefarm-demo-update.timer` runs `ops/cubefarm-demo-u
 shell, no AI session. Each tick, under a lock so runs never overlap:
 
 1. `git fetch` main into a bare mirror, `/opt/cubefarm-demo-releases/keelfarm.git`. Nothing new: done, silently.
-2. The new sha's CI: the newest push run of `ci.yml` on that exact commit, from GitHub's API with the host's token
-   (`GH_TOKEN` in `/etc/keel/gh.env`, keel-deploy's, read at run time and never printed; the repo is private, so the
-   anonymous API can't see it). Not finished yet: wait for the next tick. Red: skipped (a newer green main follows).
+2. Which commit: the newest on main after the running one whose CI passed (the newest push run of `ci.yml` on that
+   exact commit), from GitHub's API with the host's token (`GH_TOKEN` in `/etc/keel/gh.env`, keel-deploy's, read
+   at run time and never printed; the repo is private, so the anonymous API can't see it). Not the head alone:
+   merges often land faster than CI runs, and each push cancels the run before it. Nothing green yet: wait for the
+   next tick (the log says why: no run, running, red).
 3. `MemAvailable` under 2 GB: wait for the next tick instead of building.
 4. A fresh clone of the sha into `/opt/cubefarm-demo-releases/<sha>`, then `npm ci` and `npm run build` one after
    the other under `nice -n 19 ionice -c3`, with Node 22 (`/opt/node22/bin` first on `PATH`). A failed build
@@ -107,7 +109,7 @@ shell, no AI session. Each tick, under a lock so runs never overlap:
 6. A failed build or health check marks the sha in `/var/lib/cubefarm-demo-update/failed/` so it is never retried
    (delete that file to retry). Success keeps the newest 3 releases.
 
-The decisions (new sha? CI green? memory? already failed? healthy?) are `scripts/demoUpdateSteps.mjs`, tested in
+The decisions (which commit? CI green? memory? already failed? healthy?) are `scripts/demoUpdateSteps.mjs`, tested in
 `scripts/demoUpdateSteps.test.ts`. It never touches the live office (`/root/Projects/keelfarm`, `cubefarm.service`,
 4317/5317, `/root/.cubefarm`), and its unit has `cubefarm-demo.service`'s hardening, writing only to the releases.
 

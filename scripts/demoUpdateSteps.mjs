@@ -15,11 +15,21 @@ export function memAvailableKb(meminfo) {
 }
 
 /** The newest push or manual run of CI on the sha, from GitHub's `actions/workflows/ci.yml/runs` answer. */
-export function ciRun(runsJson) {
-  const runs = (runsJson?.workflow_runs ?? []).filter((r) => r.event === 'push' || r.event === 'workflow_dispatch');
+export function ciRun(runsJson, sha) {
+  const runs = (runsJson?.workflow_runs ?? []).filter((r) => r.head_sha === sha && (r.event === 'push' || r.event === 'workflow_dispatch'));
   runs.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const r = runs[0];
   return r ? { id: r.id, status: r.status, conclusion: r.conclusion } : null;
+}
+
+/**
+ * Which commit to go to: the newest of `newer` (main's commits after the running one, newest first) whose CI passed
+ * and whose update never failed. Merges often land faster than CI runs, and each push cancels the run before it, so
+ * waiting for the head alone could wait forever. With none green yet it's the head, so `decide` says why it waits.
+ */
+export function pickTarget({ current, newer, runsJson, failed }) {
+  const ok = newer.find((sha) => !failed.includes(sha) && ciRun(runsJson, sha)?.conclusion === 'success');
+  return ok ?? newer[0] ?? current;
 }
 
 /**
@@ -65,18 +75,23 @@ export function prunable(releases, { keep, protect }) {
 }
 
 // ---------- CLI ----------
-// decide <target> <current> <failed 0|1> <runs.json> <meminfo>  → prints "action\tkey\tmessage"
+// decide <current> <newer.txt> <runs.json> <failedDir> <meminfo> → prints "action\tkey\ttarget\tmessage"
 // health <rootStatus> <rootBody> <stateStatus> <stateBody>       → exit 0, or prints the problem and exits 1
 // status <result> <sha> <message>                                → prints the status file's JSON
 // prune <releasesDir> <keep> <protected sha…>                     → prints the release folders to delete
 
 function main([cmd, ...a]) {
   if (cmd === 'decide') {
-    const [target, current, failed, runsFile, meminfoFile] = a;
-    let ci = null;
-    try { ci = ciRun(JSON.parse(readFileSync(runsFile, 'utf8'))); } catch { /* no answer: wait */ }
-    const d = decide({ target, current, failed: failed === '1', ci, memKb: memAvailableKb(readFileSync(meminfoFile, 'utf8')) });
-    process.stdout.write(`${d.action}\t${d.key}\t${d.message}\n`);
+    const [current, newerFile, runsFile, failedDir, meminfoFile] = a;
+    const newer = readFileSync(newerFile, 'utf8').split(/\s+/).filter(Boolean);
+    let runsJson = null;
+    try { runsJson = JSON.parse(readFileSync(runsFile, 'utf8')); } catch { /* no answer: wait */ }
+    let failed = [];
+    try { failed = readdirSync(failedDir); } catch { /* none yet */ }
+    const target = pickTarget({ current, newer, runsJson, failed });
+    const memKb = memAvailableKb(readFileSync(meminfoFile, 'utf8'));
+    const d = decide({ target, current, failed: failed.includes(target), ci: ciRun(runsJson, target), memKb });
+    process.stdout.write(`${d.action}\t${d.key}\t${target}\t${d.message}\n`);
     return 0;
   }
   if (cmd === 'health') {

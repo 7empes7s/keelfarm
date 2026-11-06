@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The public demo's auto-update (docs/public-demo.md), run by cubefarm-demo-update.timer every 5 minutes.
 #
-# When main has a new commit whose CI run passed, and there is memory to spare, it builds that commit in a release
+# When main has a newer commit whose CI run passed, and there is memory to spare, it builds the newest such commit in a release
 # folder of its own (/opt/cubefarm-demo-releases/<sha>), points `current` at it, restarts cubefarm-demo and checks
 # its health. A failed build never touches the running demo; a failed health check points `current` back and
 # restarts the previous release. Either way the sha is marked failed and never retried. The decisions are in
@@ -48,27 +48,24 @@ if [ ! -L "$REL/current" ]; then
 fi
 [ -d "$MIRROR" ] || gitm init -q --bare
 gitm fetch -q "https://github.com/$REPO" +refs/heads/main:refs/heads/main
-TARGET=$(gitm rev-parse refs/heads/main)
+HEAD_SHA=$(gitm rev-parse refs/heads/main)
 CURRENT=$(readlink "$REL/current")
-[ "$TARGET" = "$CURRENT" ] && exit 0
+[ "$HEAD_SHA" = "$CURRENT" ] && exit 0
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-FAILED=0
-if [ -e "$STATE/failed/$TARGET" ]; then
-  FAILED=1
-else
-  curl -sf -m 30 -o "$TMP/runs.json" -H @- -H 'Accept: application/vnd.github+json' \
-    "https://api.github.com/repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$TARGET&per_page=20" \
-    <<< "Authorization: Bearer $GH_TOKEN" || true
-fi
-IFS=$'\t' read -r ACTION KEY MSG < <(node "$STEPS" decide "$TARGET" "$CURRENT" "$FAILED" "$TMP/runs.json" /proc/meminfo)
+# main's commits after the running one, newest first, and CI's latest runs on main.
+gitm rev-list --max-count=50 "$HEAD_SHA" "^$CURRENT" > "$TMP/newer.txt"
+curl -sf -m 30 -o "$TMP/runs.json" -H @- -H 'Accept: application/vnd.github+json' \
+  "https://api.github.com/repos/$REPO/actions/workflows/ci.yml/runs?branch=main&per_page=50" \
+  <<< "Authorization: Bearer $GH_TOKEN" || true
+IFS=$'\t' read -r ACTION KEY TARGET MSG < <(node "$STEPS" decide "$CURRENT" "$TMP/newer.txt" "$TMP/runs.json" "$STATE/failed" /proc/meminfo)
 case "$ACTION" in
   idle) exit 0 ;;
   wait) note_once "$TARGET" "$KEY" "$MSG" waiting; exit 0 ;;
   skip) note_once "$TARGET" "$KEY" "$MSG" skipped; exit 0 ;;
   update) ;;
-  *) log "ERROR: no decision for ${TARGET:0:7}"; exit 1 ;;
+  *) log "ERROR: no decision for ${HEAD_SHA:0:7}"; exit 1 ;;
 esac
 
 log "$MSG"
