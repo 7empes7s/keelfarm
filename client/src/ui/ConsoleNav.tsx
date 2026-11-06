@@ -24,6 +24,7 @@ import './console.css';
 
 // The time-lapse drives the 3D sky's clock, so it loads when its section opens: pocket mode never shows it.
 const TimeLapseTab = lazy(() => import('./TimeLapse').then((m) => ({ default: m.TimeLapseTab })));
+const MemoryMap = lazy(() => import('./MemoryMap').then((m) => ({ default: m.MemoryMap })));
 
 /** What to open a section at: a floor, Mission control's card, the History's filter. */
 export interface SectionFocus {
@@ -51,6 +52,12 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return <OpsTab card={focus.card} />;
     case 'charter':
       return <CharterTab initialRepo={focus.repoId} />;
+    case 'map':
+      return (
+        <Suspense fallback={<p className="muted">Loading…</p>}>
+          <MemoryMap />
+        </Suspense>
+      );
     case 'ceo':
       return <CeoTab />;
     case 'ceo-settings':
