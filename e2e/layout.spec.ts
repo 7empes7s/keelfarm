@@ -159,7 +159,7 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
-    // the phone's chat with every button it can have (its own 🔍, 📄, 📎 and hands-free): the header keeps the name (#109)
+    // the phone's chat with every button it can have (its own 🔍, 📄, 📎 and hands-free), the header's name still whole (#109)
     name: 'pocket chat header',
     widths: [360, 390, 430],
     open: async (page) => {
@@ -169,8 +169,6 @@ const SCREENS: Screen[] = [
       await expect(root.getByRole('button', { name: /^Artifacts \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
       await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible();
       await expect(root.getByRole('button', { name: /search/i })).toHaveCount(1); // the chat's own, not two 🔍 side by side
-      const title = page.locator('.pk-head .pk-title');
-      expect(await title.evaluate((t) => t.scrollWidth <= t.clientWidth + 1), `the company name "${await title.innerText()}" is cut off`).toBe(true);
       return root;
     },
     tabs: [],
@@ -304,6 +302,8 @@ async function layoutProblems(root: Locator): Promise<string[]> {
     const out: string[] = [];
     const vw = document.documentElement.clientWidth;
     if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
+    const title = document.querySelector('.pk-head .pk-title');
+    if (title && title.scrollWidth > title.clientWidth + 1) out.push(`the header's name "${title.textContent}" is cut off`);
     const name = (b: Element) => (b.getAttribute('aria-label') || (b as HTMLElement).innerText || b.getAttribute('title') || b.tagName).trim().slice(0, 40);
     // Wider than the viewport, unless it's inside a box that scrolls sideways on purpose (the tab strip, a data table).
     const scroller = (x: Element) => {
