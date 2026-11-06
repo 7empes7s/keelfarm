@@ -51,7 +51,7 @@ test('back from the background, a silently dead socket reconnects once and the n
   const sent = await page.request.post('/api/ceo/message', { data: { text } });
   expect(sent.ok()).toBe(true);
   await page.waitForTimeout(21_000); // longer than a resume trusts a silent socket (RESUME_STALE_MS)
-  await expect(page.getByText(text)).toHaveCount(0);
+  await expect(page.getByText(text, { exact: true })).toHaveCount(0);
 
   // Back: every resume event fires together, as on a phone; one reconnect brings the message.
   await page.evaluate(() => {
@@ -61,7 +61,7 @@ test('back from the background, a silently dead socket reconnects once and the n
     window.dispatchEvent(new Event('focus'));
     window.dispatchEvent(new Event('online'));
   });
-  await expect(page.getByText(text)).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(text, { exact: true })).toBeVisible({ timeout: 5_000 });
   await expect(page.locator('.pk-dot-on')).toBeVisible();
   expect(await page.evaluate(() => window.__wsOpened)).toBe(2);
 });
