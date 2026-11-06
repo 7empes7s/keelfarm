@@ -1827,24 +1827,32 @@ input.inline:focus {
   font-weight: 500;
   font-size: 0.92rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .kcard-title a {
   font-weight: 700;
 }
+/* name, status, then the buttons; a button that doesn't fit moves to the next row whole, never squeezed under its label */
 .kcard-foot {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
   margin-top: 6px;
+}
+.kcard-foot > :is(button, a, .agent-chip) {
+  flex: none;
+  white-space: nowrap;
+}
+.kcard-foot > .muted {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .kcard-foot select {
   width: auto;
   margin-left: auto;
   padding: 3px 6px;
   font-size: 0.82rem;
-}
-.kcard-foot-wrap {
-  flex-wrap: wrap;
 }
 
 /* ---------- a whiteboard card up close ---------- */
@@ -5218,9 +5226,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .kanban-embedded .kcol-body {
   overflow: visible;
-}
-.kanban-embedded .kcard-title {
-  overflow-wrap: anywhere;
 }
 
 /* ui/NotifySettings.tsx */
