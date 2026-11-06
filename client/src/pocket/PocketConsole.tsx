@@ -3,7 +3,7 @@
 // setting on top; on a desktop (#104) the 3D office's top tabs and side menu instead. Loaded when first opened; nothing
 // here loads 3D (the look editor's preview loads on its own).
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
+import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleShell';
 import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNav';
 import type { HistoryFocus } from '../ui/HistoryTab';
 
