@@ -66,7 +66,7 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 | Tab | Sections |
 | --- | --- |
 | 🏢 Work | Floors & repos, Issues (3D only; phones have the Kanban tab), Team |
-| 🛰️ Company | Mission control (with server health and the test lab), Charter |
+| 🛰️ Company | Mission control (with server health and the test lab), Charter, Memory map |
 | 🧠 CEO | The CEO (chat, mandates, team changes, project briefs), CEO settings, Tools & skills |
 | 📜 History | Sessions, Daily log, Time-lapse (3D only) |
 | ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
@@ -114,6 +114,16 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 - **Share bar** (`.costs-bar`): an 8 px pill, 1 px ink outline, segments in `--ds-series-1…4` in that order, with a
   legend of dots below when there's more than one; give it `role="img"` and an `aria-label` with the numbers.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
+
+## Finding things and learning the office (#109)
+
+- **Search everything** (`ui/SearchPalette.tsx`, index in `ui/searchIndex.ts`): Ctrl/Cmd+K, or 🔍 in pocket's header
+  and the HUD. A new kind of thing or action goes in `buildIndex`; settings come from the console's `find` lists.
+- **Empty lists teach**: never a bare "Nothing here". Use `<EmptyState kind=… />`; its words (what shows up, why it's
+  empty, the next action) are in `ui/emptyStates.ts`.
+- **ⓘ on every main screen** (`ui/InfoButton.tsx`): the words are in `ui/screenHelp.ts`; a new console section adds one.
+- **Statuses** are worded by `ui/statusPhrase.ts` (what now · what happens next), not per screen.
+- **The guide** (`ui/guide.ts`): a checklist read from the office's state; a new feature worth setting up adds an item.
 
 ## Rules
 

@@ -36,6 +36,7 @@ import { Games, type GameId } from './games/Games';
 import { HolidayStrip } from './HolidayStrip';
 import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
+import { useCeoDraft } from './goTo';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -533,6 +534,14 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const fileCount = useStore((s) => s.files.length);
   const drop = useDropZone(att.add);
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
+  // A message the search, the guide or an empty list prepared for the CEO (goTo.ts): in the box, ready to finish and send.
+  const draft = useCeoDraft((s) => s.text);
+  useEffect(() => {
+    if (draft === null) return;
+    setText(draft);
+    useCeoDraft.setState({ text: null });
+    setTimeout(() => form.current?.querySelector('textarea')?.focus(), 0);
+  }, [draft]);
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new

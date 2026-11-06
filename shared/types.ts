@@ -75,7 +75,11 @@ export interface PullInfo {
   issueCreatedAt?: string | null; // when the issue it closes was filed, as far as the office knows (the whiteboard's issue → merge time)
   /** GitHub's check runs on the head commit once all have finished: how long they took (first start to last finish) and when they finished. */
   checkRun?: { ms: number; doneAt: number } | null;
+  /** The paths it changes (up to PR_FILES_MAX), for the memory map's hot files and conflict risk (shared/memoryMap.ts). */
+  files?: string[];
 }
+
+export const PR_FILES_MAX = 30;
 
 export interface RepoView extends FloorPracticeView {
   id: string; // "owner/name"

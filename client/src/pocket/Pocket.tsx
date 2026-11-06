@@ -20,8 +20,14 @@ import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
 import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
-import { parseHash } from '../ui/consoleNavRules';
+import { parseHash, resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
+import { EmptyState } from '../ui/EmptyState';
+import { GuideCard } from '../ui/GuideCard';
+import { InfoButton } from '../ui/InfoButton';
+import { SearchButton, SearchPalette } from '../ui/SearchPalette';
+import { useFinder } from '../ui/goTo';
+import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import './pocket.css';
 
@@ -33,6 +39,7 @@ const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.C
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
 export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
+const HELP: Record<Exclude<PocketTab, 'chat'>, ScreenId> = { company: 'company', kanban: 'kanban', team: 'pocket-team', approvals: 'approvals' };
 const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'approvals'];
 
 /** The tab a link (a notification's ?tab=) asks for. */
@@ -139,9 +146,13 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
           <span>Approvals →</span>
         </button>
       )}
+      <GuideCard />
       <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
         <b className="small">🤖 Claude usage</b>
         <UsageBars />
+      </button>
+      <button className="btn pk-wide" onClick={() => settings('map')}>
+        🗺️ Memory map
       </button>
       {ceo && (
         <div className="pk-card pk-ceo">
@@ -159,7 +170,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
       )}
       </div>
       <div className="pk-company-floors">
-      {floors.length === 0 && <p className="muted">No projects yet.</p>}
+      {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
         ➕ Move in a project
       </button>
@@ -219,7 +230,12 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
 function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => void }) {
   const repos = useStore((s) => s.repos);
   const id = repos.some((r) => r.id === repoId) ? repoId! : repos[0]?.id;
-  if (!id) return <p className="muted pk-page">No projects yet.</p>;
+  if (!id)
+    return (
+      <div className="pk-page">
+        <EmptyState kind="projects" />
+      </div>
+    );
   return (
     <div className="pk-page">
       {repos.length > 1 && (
@@ -248,11 +264,11 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ section, pick, onClose, history, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; wide: boolean }) {
+function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {
   return (
     <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings ds-console">
       <Suspense fallback={<p className="muted">Loading…</p>}>
-        <PocketConsole section={section} pick={pick} history={history} wide={wide} />
+        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} wide={wide} />
       </Suspense>
     </Panel>
   );
@@ -271,7 +287,7 @@ export default function Pocket() {
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);
   const connected = useStore((s) => s.connected);
-  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the header (#81) or the docked chat's
+  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the docked chat's header (#81)
   const switchKey = useKeyName('switchOffice');
   const layout = useLayout();
   const wide = layout !== 'compact';
@@ -330,15 +346,24 @@ export default function Pocket() {
     setSettings(null);
     go('kanban', kanban);
   }, [kanban]);
-  // The History asked for from an agent's desk or a PR card opens in the console here.
+  // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
-  const wantsHistory = useStore((s) => (s.overlay?.kind === 'manager' && s.overlay.tab === 'history' ? s.overlay : null));
+  const [focusRepo, setFocusRepo] = useState<string | undefined>();
+  const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
   useEffect(() => {
-    if (!wantsHistory) return;
+    if (!wantsSection) return;
     useStore.getState().openOverlay(null);
-    setHistory(wantsHistory.history);
-    setSettings('history');
-  }, [wantsHistory]);
+    setHistory(wantsSection.history);
+    setFocusRepo(wantsSection.repoId);
+    setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
+  }, [wantsSection]);
+  // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
+  const guide = useFinder((s) => s.guide);
+  useEffect(() => {
+    if (!guide) return;
+    setSettings(null);
+    setTab('company');
+  }, [guide]);
   // While the chat is on screen, new CEO messages don't toast (the store reads this as the phone's chat being open).
   useEffect(() => {
     const s = useStore.getState();
@@ -386,7 +411,8 @@ export default function Pocket() {
     ['team', '👥', 'Team', 0],
     ['approvals', '✋', 'Approvals', waiting],
   ];
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={chatTools} />;
+  // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''}`}>
       <header className="pk-head">
@@ -402,14 +428,16 @@ export default function Pocket() {
           </span>
         )}
         {usage !== 'normal' && (
-          // On the Chat tab only its icon: the chat's buttons need the room.
+          // Only its icon: the header's buttons need the room (the Company tab's banner says it in words).
           <span className="chip chip-warn" title={usage === 'paused' ? 'Paused by the usage limit' : 'Pacing new work'}>
             {usage === 'paused' ? '⏸' : '🐢'}
-            <span className={tab === 'chat' ? 'sr-only' : undefined}>{usage === 'paused' ? ' paused' : ' pacing'}</span>
+            <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
-        {tab === 'chat' && !wide && <div className="pk-head-tools" ref={setChatTools} />}
+        {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
+        {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
+        {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
         {wide ? (
           <button className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>
@@ -471,7 +499,7 @@ export default function Pocket() {
             )}
           </main>
           {/* wide, the console covers the pages and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
-          <div className="pk-console-host">{settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} wide={wide} />}</div>
+          <div className="pk-console-host">{settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}</div>
           {/* after the console, so a terminal or app opened from it shows over it */}
           <div className="pk-pane">
             <Suspense fallback={null}>
@@ -493,6 +521,7 @@ export default function Pocket() {
           </aside>
         )}
       </div>
+      <SearchPalette where="pocket" />
     </div>
   );
 }

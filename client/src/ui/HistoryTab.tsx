@@ -3,6 +3,7 @@ import { api } from '../api';
 import { fmtUsd } from '../ops';
 import { useStore, type Overlay } from '../store';
 import { kindLabel, OUTCOME_LABELS, utcDay, workLabel, type HistoryDetail, type HistoryEntry, type HistoryOutcome, type HistoryUsage, type TranscriptItem } from '../../../shared/history';
+import { EmptyState } from './EmptyState';
 import './history.css';
 
 // The console's 📜 History (#49): every session the office ran and every PR it merged, from the session history, loaded
@@ -134,8 +135,9 @@ export function HistoryTab({ focus }: { focus?: HistoryFocus }) {
         )}
       </div>
       <p className="muted small" aria-live="polite">
-        {loading && !entries.length ? 'Reading the history…' : total ? `${total} session${total === 1 ? '' : 's'} · times in UTC` : 'No sessions match. Every session the office runs is written down here when it ends.'}
+        {loading && !entries.length ? 'Reading the history…' : total ? `${total} session${total === 1 ? '' : 's'} · times in UTC` : ''}
       </p>
+      {!loading && !total && <EmptyState kind="history" />}
       {days.map(([day, list]) => (
         <section key={day} aria-label={dayTitle(day)}>
           <h3 className="history-day">{dayTitle(day)}</h3>

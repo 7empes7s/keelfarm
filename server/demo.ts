@@ -32,6 +32,7 @@ import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
+import { demoPrFiles, pastPulls } from './demoMap.ts';
 import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -119,9 +120,10 @@ function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
   }, 12_000 + Math.random() * 10_000);
 }
 
-function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = []) {
+function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
   for (const [title, body] of titles) r.issues.push(issue(r.nextNumber++, title, body, fullName));
+  if (past) r.pulls.push(...pastPulls(fullName, () => r.nextNumber++)); // the memory map's history (#136)
   // What the floor shipped lately: the "What's new" cards' history (#129).
   for (const [i, title] of shipped.entries()) r.pulls.push(shippedPull(fullName, r.nextNumber++, title, (i + 1) * 5 * 3_600_000));
   repos.set(fullName, r);
@@ -157,12 +159,18 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
-], ['Confetti when the list is cleared', 'Undo for deleted todos']);
+], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
 seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
   ['OpenAPI spec', 'Publish an OpenAPI 3.1 document at /openapi.json.\n\nObjective: O2'],
-], ['Cache city lookups for an hour', 'Health check at /healthz']);
+], ['Cache city lookups for an hour', 'Health check at /healthz'], true);
+seed('demo-co/recipe-box', 'Recipes with a shopping list', [
+  ['Shopping list from a recipe', 'Add every ingredient of a recipe to the shopping list in src/list.ts.\n\nObjective: O1'],
+  ['Scale servings', 'Halve or double a recipe and its amounts follow. Touches src/recipe.ts.\n\nObjective: O1'],
+  ['Recipe page on a phone', 'Ingredients, then steps, at 375px.\n\nObjective: O2'],
+  ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
+], [], true);
 
 // ---------- the big company (--floors / --agents, #228) ----------
 
@@ -515,6 +523,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
         mergeState: 'CLEAN',
         failedChecks: [],
         pendingChecks: [],
+        files: demoPrFiles(fullName, repo.issues.find((i) => i.number === number), number),
       });
       runChecks(repo.pulls[0]);
       cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);

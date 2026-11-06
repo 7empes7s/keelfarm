@@ -9,6 +9,7 @@ export type SectionId =
   | 'team'
   | 'ops'
   | 'charter'
+  | 'map'
   | 'ceo'
   | 'ceo-settings'
   | 'tools'
@@ -60,6 +61,7 @@ export const SECTIONS: Section[] = [
   { id: 'team', group: 'work', icon: '👩‍💻', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
   { id: 'ops', group: 'company', icon: '🛰️', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Test lab'] },
   { id: 'charter', group: 'company', icon: '🎯', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
+  { id: 'map', group: 'company', icon: '🗺️', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
   { id: 'ceo', group: 'ceo', icon: '🧠', label: 'The CEO', find: ['Message the CEO', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
   { id: 'ceo-settings', group: 'ceo', icon: '🎛️', label: 'CEO settings', find: ['Team changes from the CEO', 'I approve each one', 'Apply straight away', 'Company review every', 'Research time budget', 'Follow-ups', 'Staying awake, waits and consults'] },
   { id: 'tools', group: 'ceo', icon: '🧰', label: 'Tools & skills', find: ['Plugins', 'Skills', 'MCP servers', 'Switches for', 'Lean sessions'] },

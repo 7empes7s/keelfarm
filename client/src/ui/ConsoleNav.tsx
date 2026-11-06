@@ -19,11 +19,13 @@ import { NotifySettings } from './NotifySettings';
 import { ThemeSettings } from './ThemeSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { Panel } from './Panel';
+import { InfoButton } from './InfoButton';
 import { setMode } from '../pocket/mode';
 import './console.css';
 
 // The time-lapse drives the 3D sky's clock, so it loads when its section opens: pocket mode never shows it.
 const TimeLapseTab = lazy(() => import('./TimeLapse').then((m) => ({ default: m.TimeLapseTab })));
+const MemoryMap = lazy(() => import('./MemoryMap').then((m) => ({ default: m.MemoryMap })));
 
 /** What to open a section at: a floor, Mission control's card, the History's filter. */
 export interface SectionFocus {
@@ -51,6 +53,12 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return <OpsTab card={focus.card} />;
     case 'charter':
       return <CharterTab initialRepo={focus.repoId} />;
+    case 'map':
+      return (
+        <Suspense fallback={<p className="muted">Loading…</p>}>
+          <MemoryMap />
+        </Suspense>
+      );
     case 'ceo':
       return <CeoTab />;
     case 'ceo-settings':
@@ -231,6 +239,9 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
           )}
         </nav>
         <div ref={pane} className="cn-pane tab-body ds-stack-scope" role="tabpanel" id={`${ids}-pane`} aria-label={section.label}>
+          <div className="cn-pane-info">
+            <InfoButton key={section.id} screen={section.id} />
+          </div>
           <SectionBody key={section.id} id={section.id} where={where} focus={focus} />
         </div>
       </div>
