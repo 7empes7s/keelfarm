@@ -1,0 +1,24 @@
+/* Add a project (ProjectPicker.tsx) in a narrow card (#91): short mode names, and buttons that keep their labels whole. */
+.picker {
+  container-type: inline-size;
+}
+.picker-short {
+  display: none;
+}
+/* a phone's card: the modes' short names, so none is clipped */
+@container (max-width: 480px) {
+  .picker-long {
+    display: none;
+  }
+  .picker-short {
+    display: inline;
+  }
+  .picker-tabs .picker-tab {
+    padding-inline: var(--ds-space-2);
+  }
+}
+/* a row's action keeps its label whole; the field or folder name beside it gives way */
+.picker-mode .row > .btn,
+.picker-mode .repo-row > .btn {
+  flex: none;
+}

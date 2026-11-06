@@ -433,3 +433,23 @@ for (const width of [360, 390, 430]) {
     expect(Math.abs(box.y + box.height - 844)).toBeLessThanOrEqual(1);
   });
 }
+
+// Settings' tab row stays pinned flush under the header while the tab scrolls: nothing shows above or beside it (#91).
+for (const width of [360, 390, 430]) {
+  test(`pocket Settings' tab row covers the scrolled content at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/?pocket=1');
+    await page.getByRole('button', { name: 'Settings and notifications' }).click();
+    const panel = dialog(page, /Settings/);
+    await expect(panel.getByRole('tab', { name: /Floors/ })).toBeVisible();
+    const gaps = await panel.evaluate((el) => {
+      const body = el.querySelector('.panel-body')!;
+      body.scrollTop = 400;
+      const view = body.getBoundingClientRect();
+      const row = el.querySelector('.pk-console-chips')!.getBoundingClientRect();
+      return { top: Math.round(row.top - view.top), left: Math.round(row.left - view.left), right: Math.round(view.right - row.right) };
+    });
+    expect(gaps).toEqual({ top: 0, left: 0, right: 0 });
+  });
+}

@@ -3,6 +3,7 @@ import { api, type FloorOptions } from '../api';
 import { useStore } from '../store';
 import type { GhRepoSummary, ProjectFolderView, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import './projectPicker.css';
 
 // Add a project to the office: one of your own folders, a GitHub repo, or something brand new.
 // Used by the setup wizard and by the Floors tab of the manager's console.
@@ -234,7 +235,7 @@ export function ProjectPicker({ onConnected, initial = 'folder' }: { onConnected
     setMission('');
     onConnected?.(repo);
   };
-  // The short label stands in for the long one when the card is narrow (a phone): styles.css .picker-tabs.
+  // The short label stands in for the long one when the card is narrow (a phone): projectPicker.css.
   const modes: [Mode, string, string, string][] = [
     ['folder', '📁', 'A folder on this computer', 'Folder'],
     ['github', '🐙', 'A GitHub repo', 'GitHub'],

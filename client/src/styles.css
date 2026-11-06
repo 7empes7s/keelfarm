@@ -2724,9 +2724,6 @@ input.inline:focus {
   flex-direction: column;
   gap: 8px;
 }
-.picker {
-  container-type: inline-size;
-}
 .picker-tabs {
   display: flex;
   gap: 6px;
@@ -2745,23 +2742,7 @@ input.inline:focus {
   background: var(--ds-surface-raised);
   color: var(--ds-text);
   cursor: pointer;
-  white-space: nowrap;
   text-align: center;
-}
-.picker-short {
-  display: none;
-}
-/* a phone's card: the modes' short names, so none is clipped */
-@container (max-width: 480px) {
-  .picker-long {
-    display: none;
-  }
-  .picker-short {
-    display: inline;
-  }
-  .picker-tab {
-    padding-inline: var(--ds-space-2);
-  }
 }
 .picker-tab-on {
   background: var(--accent);
