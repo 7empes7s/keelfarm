@@ -492,6 +492,26 @@ export interface NoteView {
   url: string; // in-app link, e.g. '/?tab=approvals'
 }
 
+/** The notification centre (#107, shared/notices.ts): what a notice is about, and the buttons it offers. */
+export type NoticeKind = 'merge' | 'qaPass' | 'qaFail' | 'needsYou' | 'ceo' | 'stuck' | 'usage' | 'error' | 'approval' | 'update';
+/** Each maps to an existing api call or panel in the client (ui/noticeActions.ts), never to a URL from the server. */
+export type NoticeAction = 'openPr' | 'openQa' | 'approve' | 'reply' | 'terminal' | 'retry' | 'approvals';
+type NoticeTarget = DistributiveOmit<Exclude<ChatRef, { kind: 'file' }>, 'start' | 'end'>;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+export interface NoticeView {
+  id: string; // a push or Telegram message about it carries the same id (?note=), so opening one marks it read
+  at: number;
+  kind: NoticeKind;
+  level: 'info' | 'success' | 'error';
+  title: string;
+  text: string;
+  floor?: number;
+  target?: NoticeTarget; // where tapping it jumps (the chat's refs, #26)
+  actions?: NoticeAction[]; // at most 2
+  requestId?: string; // the team change 'approve' approves
+  read: boolean;
+}
+
 /** Who reads phone messages aloud: nobody, the browser's own voice, or ElevenLabs (with the manager's key). */
 export type VoiceProvider = 'off' | 'browser' | 'elevenlabs';
 
@@ -739,6 +759,7 @@ export interface WorldSnapshot {
   ceo: CeoInfo;
   messages: PhoneMessage[];
   phoneReadAt: number; // CEO messages newer than this are unread
+  notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
   version?: string; // the cubefarm version the server runs (package.json)
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
@@ -823,7 +844,10 @@ export type ServerEvent =
   | { type: 'progress'; progress: ProgressView }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
-  | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string }
+  /** A plain toast, or with the notice fields a rich one that also joins the notification centre. */
+  | ({ type: 'toast'; level: 'info' | 'success' | 'error'; text: string } & Partial<Omit<NoticeView, 'level' | 'text'>>)
+  /** Notices marked read (in any tab, or by opening their push). */
+  | { type: 'noticesRead'; ids: string[] }
   /** The office's heartbeat to every tab (shared/heartbeat.ts): never applied, it only says the socket is alive. */
   | { type: 'beat' }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.

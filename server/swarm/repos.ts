@@ -430,7 +430,6 @@ export abstract class SwarmRepos extends SwarmCore {
     const repo = this.repo(repoId);
     const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === number) ?? (await this.backend.prDetails(repo.fullName, number));
     await this.backend.mergePull(repo.fullName, number, method);
-    this.toast('success', `Merged PR #${number} into ${repo.defaultBranch}`);
     this.notifyMerge(repo, number, pr.title);
     await this.closeResolvedIssues(repo, number, pr);
     await this.syncRepo(repo.id);

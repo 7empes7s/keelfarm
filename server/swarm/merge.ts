@@ -146,7 +146,6 @@ export abstract class SwarmMerge extends SwarmRepos {
       }
       return this.mergeNote(rec, `merge blocked: ${error}`);
     }
-    this.toast('success', `🔀 Merged PR #${pr.number} into ${repo.defaultBranch}: ${pr.title}`);
     this.notifyMerge(repo, pr.number, pr.title);
     this.logMerge(repo, pr.number, pr.title);
     await this.closeResolvedIssues(repo, pr.number, pr);

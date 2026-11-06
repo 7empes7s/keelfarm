@@ -1,0 +1,174 @@
+/* Notifications you can act on (#107): rich toasts, the bell and the notification centre (Notices.tsx). */
+.notice-toast {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-2) var(--ds-space-2) var(--ds-space-3);
+  width: min(400px, calc(100vw - 32px));
+  cursor: default;
+  touch-action: pan-y;
+  transition: transform var(--ds-dur-fast) var(--ds-ease);
+}
+.notice-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  width: 100%;
+  padding: 2px 36px 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.notice-row .notice-body {
+  padding-right: 0;
+}
+.notice-icon {
+  flex: none;
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+.notice-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.notice-title {
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.notice-text {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notice-floor {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: var(--ds-radius-pill);
+  border: 2px solid var(--ds-outline);
+  background: var(--accent);
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  padding-left: calc(1.25rem + var(--ds-space-2));
+}
+.notice-actions .btn {
+  min-height: var(--ds-target);
+}
+.notice-x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: var(--ds-radius-md);
+}
+.notice-x:hover,
+.notice-body:hover {
+  background: var(--ds-surface-hover);
+}
+.notice-more {
+  min-height: var(--ds-target);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  color: inherit;
+}
+.notice-bell {
+  position: relative;
+  cursor: pointer;
+}
+.pill.notice-bell {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  font: inherit;
+  pointer-events: auto;
+}
+/* pocket mode: under the header, full width (the chat's header has no room for the bell: the chat reads the CEO's) */
+.pocket .toast.notice-toast {
+  width: auto;
+  display: flex;
+  -webkit-line-clamp: unset;
+}
+
+/* ---------- the centre ---------- */
+.notice-centre .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.notice-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  align-items: center;
+}
+.notice-filters select {
+  min-height: var(--ds-target);
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.notice-filters .btn {
+  min-height: var(--ds-target);
+}
+.notice-group h3 {
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+}
+.notice-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.notice-row {
+  border: 2px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-1) var(--ds-space-2);
+  background: var(--ds-surface);
+}
+.notice-unread {
+  border-color: var(--ds-outline);
+  background: var(--ds-surface-raised);
+  box-shadow: inset 4px 0 0 var(--ds-accent);
+}
+.notice-row .notice-text {
+  white-space: normal;
+}
+.notice-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  padding-left: calc(1.25rem + var(--ds-space-2));
+}
+.notice-foot .notice-actions {
+  padding-left: 0;
+  margin-left: auto;
+}

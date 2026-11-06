@@ -42,7 +42,8 @@ export function resetViewport() {
   window.dispatchEvent(new Event(VIEWPORT_EVENT));
 }
 
-function standalone() {
+/** The home-screen app: no browser chrome, so no Back button of its own. */
+export function standalone() {
   return matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || (navigator as { standalone?: boolean }).standalone === true;
 }
 

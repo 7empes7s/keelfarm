@@ -330,16 +330,19 @@ export abstract class SwarmQa extends SwarmSessions {
       if (!pass && qaRounds >= 2) {
         this.followup(followupEvents.qaFailed(repo.id, this.floorName(repo), rec.prNumber, qaRounds, rec.round, clip(report.summary, 200)));
       }
-      this.toast(
-        pass ? 'success' : 'error',
-        pass
-          ? `✅ ${a.name} passed PR #${rec.prNumber}${repo.autoMerge ? "; it merges once GitHub's checks are green" : ': ready to merge'}`
+      this.notice({
+        kind: pass ? 'qaPass' : 'qaFail',
+        title: pass ? `${a.name} passed PR #${rec.prNumber}` : `${a.name} failed PR #${rec.prNumber}`,
+        text: pass
+          ? repo.autoMerge ? "It merges once GitHub's checks are green" : 'Ready to merge'
           : nextStatus === 'needs-human'
-            ? `❌ PR #${rec.prNumber} failed QA ${qaRounds} times${triaged ? `; ${this.ceo().name} takes a look before it comes to you` : ' and needs a human'}`
+            ? `It failed QA ${qaRounds} times${triaged ? `; ${this.ceo().name} takes a look before it comes to you` : ' and needs a human'}`
             : next === 'conflict'
-              ? `❌ ${a.name} failed PR #${rec.prNumber}, and it conflicts with ${repo.defaultBranch}; sending it back to merge and fix`
-              : `❌ ${a.name} failed PR #${rec.prNumber}; sending it back to the developer`,
-      );
+              ? `It conflicts with ${repo.defaultBranch} too; back to a developer to merge and fix`
+              : 'Back to the developer with the findings',
+        target: { kind: 'qa', repoId: repo.id, number: rec.prNumber },
+        actions: ['openQa', 'openPr'],
+      });
     }
   }
 
