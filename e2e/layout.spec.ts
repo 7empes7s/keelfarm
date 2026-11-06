@@ -163,7 +163,8 @@ const SCREENS: Screen[] = [
     widths: OFFICE,
     open: async (page) => {
       await office(page);
-      await page.getByRole('button', { name: /^Notifications/ }).dispatchEvent('click'); // the canvas would take a real click
+      await page.locator('.hud-status .notice-bell').click(); // a real click: it fails while anything covers the bell
+      await expect(page.locator('.notice-centre')).toBeVisible();
       return dialog(page, /Notifications/);
     },
     tabs: [],

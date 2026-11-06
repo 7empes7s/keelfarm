@@ -188,7 +188,9 @@ export function HUD() {
         <OverviewButton />
       </div>
 
+      {/* the bell first: when the row wraps, its last pills go under the workers list, never the bell */}
       <div className="hud-status">
+        <NoticeBell className="pill" />
         {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
         <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>{replaying ? '▶ replay' : connected ? '● live' : restarting ? '○ restarting' : '○ reconnecting'}</span>
         <span className="pill">
@@ -198,7 +200,6 @@ export function HUD() {
         {user && <span className="pill">🐙 {user}</span>}
         <PhotoButton />
         <SwitchButton />
-        <NoticeBell className="pill" />
       </div>
 
       <WorkersPanel />
