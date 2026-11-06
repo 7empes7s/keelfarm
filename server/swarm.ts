@@ -52,6 +52,7 @@ import type { AgentLook, CloudSettings, CeoChatView, HireRequestView, PhoneMessa
 import {
   type PersistedAgent,
   type Persisted,
+  type PersistedRepo,
   type Restart,
   DEFAULT_MODEL,
   EFFORTS,
@@ -344,7 +345,10 @@ export class Swarm extends SwarmCeoTools {
     await this.history.load();
     void this.sweepHistory();
     // A fresh demo office has a week of spending to look at.
-    if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
+    if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) {
+      void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
+      for (const r of this.state.repos) this.seedCharterLog(r); // and the Charter tab's numbers over it
+    }
     if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
@@ -723,6 +727,18 @@ export class Swarm extends SwarmCeoTools {
     this.updateSettings({ everyProject: { ...this.state.settings.everyProject, practices: { ...this.state.settings.everyProject.practices, ...v.settings.practices } } });
     this.postMessage('office', `📌 Every project now runs with ${describePractices(v.settings.practices!)}, from "${experiment.name}" (${v.name}). The evidence: ${summary}.`);
     return this.state.settings;
+  }
+
+  /** The demo's objective log over its made-up ledger (#105), next to what its syncs logged already. */
+  private seedCharterLog(r: PersistedRepo) {
+    const log = r.charter.log;
+    const sample = this.backend.seedCharterLog?.(r.charter, this.spend.ledger.all().filter((x) => x.repoId === r.id), Date.now());
+    if (!sample) return;
+    log.tags = { ...sample.tags, ...log.tags };
+    log.merged = [...log.merged, ...sample.merged.filter((m) => !log.merged.some((x) => x.pr === m.pr))].sort((a, b) => b.at - a.at);
+    log.checks = [...log.checks, ...sample.checks].sort((a, b) => b.at - a.at);
+    this.refreshInsights(r);
+    this.emitRepo(r);
   }
 
   /** The history's sweep (#49): past the retention goes, and finished days get their totals in the daily log. */

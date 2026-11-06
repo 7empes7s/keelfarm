@@ -98,6 +98,15 @@ const addProject = (mode: string): View => ({
   },
 });
 
+/** Charter, then its editor (#105). */
+const charterEditor: View = {
+  name: 'Charter editor',
+  go: async (root) => {
+    await pocketSection(root, 'Charter');
+    await root.getByRole('button', { name: '✏️ Edit', exact: true }).click();
+  },
+};
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -108,7 +117,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

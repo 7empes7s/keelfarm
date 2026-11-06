@@ -10,6 +10,8 @@ import {
   DRIFT_MS,
   emptyLog,
   loadRecord,
+  LOG_MS,
+  noteCheck,
   noteObjectives,
   objectiveRefusal,
   objectiveTag,
@@ -89,12 +91,18 @@ describe('migrating floors from before charters', () => {
     const brief = `Build a cozy island bakery game.\n\nThe player bakes, sells and decorates.  ${'More detail. '.repeat(250)}`.slice(0, 4000);
     const rec = loadRecord(undefined); // a floor saved before #48 has no charter
     expect(charterOf(brief, rec)).toEqual({ mission: brief, objectives: [], standards: [], nonGoals: [], focus: '' });
-    expect(rec).toMatchObject({ proposal: null, history: [], log: { tags: {}, merged: [] } });
+    expect(rec).toMatchObject({ proposal: null, history: [], log: { tags: {}, merged: [], checks: [] }, status: {} });
     expect(charterMarkdown(charterOf(brief, rec), 'acme/bakery')).toContain(brief.trim());
   });
 
+  it('drops statuses and checks it cannot read', () => {
+    const rec = loadRecord({ status: { O1: 'met', O2: 'meh', x: 'met' }, log: { checks: [{ at: 1, pr: 2, kind: 'odd', rule: '' }, { at: 1, pr: 3, kind: 'ok', rule: '' }] } });
+    expect(rec.status).toEqual({ O1: 'met' });
+    expect(rec.log.checks).toEqual([{ at: 1, pr: 3, kind: 'ok', rule: '' }]);
+  });
+
   it('reloads a saved record as it was', () => {
-    const rec = { ...charter(), proposal: { at: 5, by: 'Mimoun', reason: 'Tighter', charter: charter({ focus: 'O1' }) }, history: [{ at: 4, by: 'Sam', parts: ['focus'], note: 'edited' }], log: { tags: { '3': 'O1' }, merged: [{ pr: 9, title: 't', at: 1, objective: 'O1' }] } };
+    const rec = { ...charter(), proposal: { at: 5, by: 'Mimoun', reason: 'Tighter', charter: charter({ focus: 'O1' }) }, history: [{ at: 4, by: 'Sam', parts: ['focus'], note: 'edited' }], log: { tags: { '3': 'O1' }, merged: [{ pr: 9, title: 't', at: 1, objective: 'O1' }], checks: [{ at: 2, pr: 9, kind: 'standard' as const, rule: 'Nothing overflows at 375px' }] }, status: { O1: 'at-risk' as const } };
     const { mission: _, ...saved } = rec;
     expect(loadRecord(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
   });
@@ -142,5 +150,27 @@ describe('the drift view', () => {
       { objective: null, outcome: 'No objective', prs: [{ number: 12, title: 'PR 12' }, { number: 13, title: 'PR 13' }] },
     ]);
     expect(driftView(log, charter(), now + DRIFT_MS).flatMap((g) => g.prs)).toEqual([]);
+  });
+});
+
+describe('the objective log', () => {
+  const now = Date.parse('2026-11-05T12:00:00Z');
+  const day = 86_400_000;
+
+  it('keeps 30 days of merges for the insights, while the drift view still shows 7', () => {
+    const log = emptyLog();
+    const merged = (number: number, daysAgo: number) => ({ number, title: `PR ${number}`, state: 'MERGED' as const, mergedAt: new Date(now - daysAgo * day).toISOString(), closesIssues: [] });
+    noteObjectives(log, [], [merged(1, 2), merged(2, 20), merged(3, 31)], now);
+    expect(log.merged.map((m) => m.pr)).toEqual([1, 2]);
+    expect(driftView(log, charter(), now).flatMap((g) => g.prs.map((p) => p.number))).toEqual([1]);
+  });
+
+  it("keeps QA's charter checks newest first for 30 days", () => {
+    const log = emptyLog();
+    noteCheck(log, { at: now - 40 * day, pr: 1, kind: 'ok', rule: '' }, now - 40 * day);
+    noteCheck(log, { at: now - day, pr: 2, kind: 'standard', rule: 'x' }, now);
+    noteCheck(log, { at: now, pr: 3, kind: 'ok', rule: '' }, now);
+    expect(log.checks.map((c) => c.pr)).toEqual([3, 2]);
+    expect(now - LOG_MS).toBeLessThan(now - 29 * day);
   });
 });

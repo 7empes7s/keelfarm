@@ -88,3 +88,16 @@ describe("the CEO's issues name an objective", () => {
     await expect(internals.fileIssue({ floor: 1, title: 'Add a dark mode', body: 'The manager asked.\n\nObjective: O1' })).resolves.toMatch(/^Filed #\d+/);
   });
 });
+
+describe("an objective's status (#105)", () => {
+  it('is set by the manager, recorded in the history, and carried on the card', async () => {
+    const { swarm, id } = await office();
+    swarm.setCharter(id, demoCharter('demo-co/pixel-todo').charter);
+    const view = swarm.setObjectiveStatus(id, 'O2', 'at-risk');
+    expect(view.charter.history[0]).toMatchObject({ parts: ['status'], note: 'O2: at risk' });
+    expect(view.charter.insights?.objectives.find((o) => o.id === 'O2')?.status).toBe('at-risk');
+    expect(swarm.setObjectiveStatus(id, 'O2', null).charter.insights?.objectives.find((o) => o.id === 'O2')?.status).toBeNull();
+    expect(() => swarm.setObjectiveStatus(id, 'O9', 'met')).toThrow(/no objective O9/);
+    expect(() => swarm.setObjectiveStatus(id, 'O1', 'done')).toThrow(/on-track, at-risk, met/);
+  });
+});
