@@ -1,9 +1,9 @@
 // "What's new on this floor" (#129): a swipeable row of cards on a floor's board and its pocket Company card, one per
-// recent build (floorBuilds.ts), each opening its preview, or the builder's terminal while there's nothing to run.
+// recent build (floorBuildCards.ts), each opening its preview, or the builder's terminal while there's nothing to run.
 import { useMemo } from 'react';
 import { useStore } from '../store';
 import type { PreviewStatus } from '../../../shared/types';
-import { BUILD_LABEL, floorBuilds, type BuildCard, type BuildStatus } from './floorBuilds';
+import { BUILD_LABEL, floorBuilds, type BuildCard, type BuildStatus } from './floorBuildCards';
 import './floorBuilds.css';
 
 const GLYPH: Record<BuildStatus, string> = { live: '🟢', building: '🔨', qa: '🔍', fixing: '🔧', passed: '✅', failed: '❌', 'needs-you': '🙋', open: '🔀', merged: '🟣' };

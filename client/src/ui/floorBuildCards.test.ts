@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrPreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
-import { floorBuilds } from './floorBuilds';
+import { floorBuilds } from './floorBuildCards';
 
 const pull = (number: number, state: PullInfo['state'], at: string) =>
   ({ number, title: `PR ${number}`, state, createdAt: at, mergedAt: state === 'MERGED' ? at : null }) as PullInfo;
