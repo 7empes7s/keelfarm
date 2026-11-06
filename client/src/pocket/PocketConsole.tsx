@@ -1,79 +1,73 @@
-// Pocket mode's ⚙️: the manager's console on a phone. The same tabs as the 3D office's console (floors and adding a
-// project, the CEO, the team, every office setting, mission control), plus this device's notifications and
-// accessibility. Loaded when first opened; nothing here loads 3D (the look editor's preview loads on its own).
-import { useEffect, useRef } from 'react';
-import { CeoTab, FloorsTab, SettingsTab, TeamTab } from '../ui/ManagerConsole';
-import { OpsTab } from '../ui/MissionConsole';
-import { CharterTab } from '../ui/CharterTab';
-import { NotifySettings } from '../ui/NotifySettings';
-import { AccessibilitySettings } from '../ui/AccessibilitySettings';
-import { ToolsTab } from '../ui/ToolsSettings';
-import { HistoryTab, type HistoryFocus } from '../ui/HistoryTab';
-import { pendingRequests, useStore } from '../store';
-import { setMode } from './mode';
+// Pocket mode's ⚙️: the manager's console on a phone (#102). The same tabs and sections as the 3D office's console
+// (ui/consoleNav.ts), as a list you tap into with a back button, iOS Settings style, and the search over every
+// setting on top. Loaded when first opened; nothing here loads 3D (the look editor's preview loads on its own).
+import { useLayoutEffect, useRef, useState } from 'react';
+import { Badge, ConsoleSearch, SectionBody, useBadges, useFoundLabel, useSectionAddress } from '../ui/ConsoleNav';
+import { GROUPS, sectionById, sectionsIn, type SectionId } from '../ui/consoleNav';
+import type { HistoryFocus } from '../ui/HistoryTab';
 
-export type ConsoleSection = 'floors' | 'ceo' | 'charter' | 'team' | 'settings' | 'tools' | 'ops' | 'history' | 'device';
-
-function openOffice() {
-  useStore.getState().openOverlay(null);
-  setMode('office');
-}
+/** A section, or 'menu': the list of them. */
+export type ConsoleSection = SectionId | 'menu';
 
 export function PocketConsole({ section, pick, history }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus }) {
-  const pending = useStore((s) => pendingRequests(s.requests).length);
-  const alarms = useStore((s) => s.ops.alarms.length + s.doctor.length);
-  const proposals = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
-  // The sections scroll sideways on a phone: keep the open one in view.
-  const chips = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    chips.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [section]);
-  const sections: [ConsoleSection, string][] = [
-    ['floors', '🏢 Floors'],
-    ['ceo', `🧠 CEO${pending ? ` (${pending})` : ''}`],
-    ['charter', `🎯 Charter${proposals ? ` (${proposals})` : ''}`],
-    ['team', '👩‍💻 Team'],
-    ['settings', '⚙️ Office'],
-    ['tools', '🧰 Tools & skills'],
-    ['ops', `🛰️ Mission control${alarms ? ` (${alarms})` : ''}`],
-    ['history', '📜 History'],
-    ['device', '📱 This device'],
-  ];
-  return (
-    <div className="pk-console">
-      <div ref={chips} className="pk-chips pk-console-chips" role="tablist" aria-label="Settings">
-        {sections.map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={section === k} className={`pk-chip ${section === k ? 'pk-chip-on' : ''}`} onClick={() => pick(k)}>
-            {label}
+  const open = section === 'menu' ? null : (sectionById(section) ?? null);
+  const [query, setQuery] = useState('');
+  const body = useRef<HTMLDivElement>(null);
+  const setFound = useFoundLabel(body);
+  const badges = useBadges();
+  useSectionAddress(open);
+  useLayoutEffect(() => void body.current?.closest('.panel-body')?.scrollTo(0, 0), [section]); // each screen opens at its top
+  if (open) {
+    return (
+      <div className="pk-console" ref={body}>
+        <div className="cn-back-bar">
+          <button className="btn btn-ghost cn-back" onClick={() => pick('menu')} aria-label="Back to settings">
+            ‹ Settings
           </button>
+          <h2 className="cn-title">
+            <span aria-hidden>{open.icon}</span> {open.label}
+          </h2>
+        </div>
+        <div className="ds-stack-scope" role="region" aria-label={open.label}>
+          <SectionBody id={open.id} where="pocket" focus={{ history }} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="pk-console" ref={body}>
+      <ConsoleSearch
+        where="pocket"
+        query={query}
+        setQuery={setQuery}
+        go={(h) => {
+          setQuery('');
+          pick(h.section.id);
+          setFound(h.label === h.section.label ? null : h.label);
+        }}
+      />
+      {!query.trim() &&
+        GROUPS.map((g) => (
+          <section key={g.id} className="cn-list" aria-label={g.label}>
+            <h3 className="cn-list-head">
+              {g.icon} {g.label}
+            </h3>
+            <ul>
+              {sectionsIn(g.id, 'pocket').map((s) => (
+                <li key={s.id}>
+                  <button className="cn-item cn-row" onClick={() => pick(s.id)}>
+                    <span aria-hidden>{s.icon}</span>
+                    <span className="cn-item-text">{s.label}</span>
+                    <Badge n={badges[s.id]} />
+                    <span className="cn-chevron" aria-hidden>
+                      ›
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
         ))}
-      </div>
-      <div className="ds-stack-scope" role="tabpanel" aria-label={sections.find(([k]) => k === section)?.[1]}>
-        {section === 'floors' && <FloorsTab />}
-        {section === 'ceo' && <CeoTab />}
-        {section === 'charter' && <CharterTab />}
-        {section === 'team' && <TeamTab />}
-        {section === 'settings' && <SettingsTab pocket />}
-        {section === 'tools' && <ToolsTab />}
-        {section === 'ops' && <OpsTab />}
-        {section === 'history' && <HistoryTab key={JSON.stringify(history ?? {})} focus={history} />}
-        {section === 'device' && (
-          <>
-            <NotifySettings />
-            <AccessibilitySettings pocket />
-            <div className="card">
-              <h3>📱 Pocket mode</h3>
-              <p className="muted small">
-                This is the office without the 3D building, for phones and touch screens. It's picked on its own on small or touch screens; this device remembers what you last chose. To reach the office from
-                your phone safely, see <a href="https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md">docs/pocket.md</a>.
-              </p>
-              <button className="btn" onClick={openOffice}>
-                🏢 Open the 3D office
-              </button>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }

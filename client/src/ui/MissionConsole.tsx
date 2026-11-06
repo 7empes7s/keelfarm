@@ -9,6 +9,8 @@ import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
+import { HealthStrip } from './HealthStrip';
+import { TestLabCard } from './TestLab';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
@@ -341,6 +343,8 @@ export function OpsTab({ card }: { card?: string }) {
     <div className="tab-grid">
       <div>
         <UsageCard hot={card === 'usage'} />
+        <HealthStrip />
+        <TestLabCard />
         <h3 className="section">🚨 Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}</h3>
         {alarms.length === 0 && <p className="muted small">All clear. The beacon on the lobby's mission control wall spins when a PR needs you or an agent has been stuck on an error for 10 minutes.</p>}
         {alarms.map((a) => (

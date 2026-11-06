@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { crc32, deflateSync } from 'node:zlib';
 import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
+import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNav';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
@@ -64,11 +65,35 @@ const game = (name: string): View => ({
   },
 });
 
-/** Settings → Floors, then one of Add a project's modes (#91). */
+const starts = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+
+/** Pocket mode's Settings: back to the list if a section is open, then a section (#102). */
+async function pocketSection(root: Locator, label: string) {
+  const back = root.getByRole('button', { name: 'Back to settings' });
+  if (await back.isVisible()) await back.click();
+  await root.getByRole('button', { name: starts(label) }).click();
+  await expect(root.getByRole('region', { name: label })).toBeVisible();
+}
+
+/** The 3D office's console: a top tab, then a section in its side menu (#102). */
+async function officeSection(root: Locator, group: string, label: string) {
+  await root.locator('.cn-groups').getByRole('tab', { name: new RegExp(group) }).click();
+  const t = root.locator('.cn-menu').getByRole('tab', { name: starts(label) });
+  await t.click();
+  await expect(t).toHaveAttribute('aria-selected', 'true');
+}
+
+/** Every section of the console, as views. */
+const consoleSections = (where: Where): View[] =>
+  GROUPS.flatMap((g) =>
+    sectionsIn(g.id, where).map((s) => ({ name: `${g.label} › ${s.label}`, go: (root: Locator) => (where === 'pocket' ? pocketSection(root, s.label) : officeSection(root, g.label, s.label)) })),
+  );
+
+/** Settings → Floors & repos, then one of Add a project's modes (#91). */
 const addProject = (mode: string): View => ({
   name: `Add a project: ${mode}`,
   go: async (root) => {
-    await root.getByRole('tab', { name: /Floors/ }).click();
+    await pocketSection(root, 'Floors & repos');
     await root.getByRole('button', { name: mode }).click();
   },
 });
@@ -83,7 +108,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Charter', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device', addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -93,7 +118,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
+    tabs: consoleSections('office'),
   },
   { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },
@@ -428,27 +453,28 @@ for (const width of [360, 390, 430]) {
     await page.goto('/?pocket=1');
     await page.getByRole('button', { name: 'Settings and notifications' }).click();
     const panel = dialog(page, /Settings/);
-    await expect(panel.getByRole('tab', { name: /Floors/ })).toBeVisible();
+    await expect(panel.getByRole('button', { name: /^Floors & repos/ })).toBeVisible();
     await expect.poll(async () => (await panel.boundingBox())?.y).toBe(0);
     const box = (await panel.boundingBox())!;
     expect(Math.abs(box.y + box.height - 844)).toBeLessThanOrEqual(1);
   });
 }
 
-// Settings' tab row stays pinned flush under the header while the tab scrolls: nothing shows above or beside it (#91).
+// A Settings section's back bar stays pinned flush under the header while the section scrolls: nothing shows above or
+// beside it (#91, #102).
 for (const width of [360, 390, 430]) {
-  test(`pocket Settings' tab row covers the scrolled content at ${width}px`, async ({ page }) => {
+  test(`pocket Settings' back bar covers the scrolled content at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/?pocket=1');
     await page.getByRole('button', { name: 'Settings and notifications' }).click();
     const panel = dialog(page, /Settings/);
-    await expect(panel.getByRole('tab', { name: /Floors/ })).toBeVisible();
+    await pocketSection(panel, 'Floors & repos');
     const gaps = await panel.evaluate((el) => {
       const body = el.querySelector('.panel-body')!;
       body.scrollTop = 400;
       const view = body.getBoundingClientRect();
-      const row = el.querySelector('.pk-console-chips')!.getBoundingClientRect();
+      const row = el.querySelector('.cn-back-bar')!.getBoundingClientRect();
       return { top: Math.round(row.top - view.top), left: Math.round(row.left - view.left), right: Math.round(view.right - row.right) };
     });
     expect(gaps).toEqual({ top: 0, left: 0, right: 0 });

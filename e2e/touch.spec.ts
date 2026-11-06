@@ -201,7 +201,7 @@ for (const [i, spot] of SPOTS.entries()) {
 const WINDOWS = [
   { name: 'the phone', dialog: 'Your phone', tabs: [/Team/, /Company/], link: null },
   { name: 'help', dialog: 'How the office works', tabs: ['🎮 Controls', '📖 The office'], link: '❓ Help' },
-  { name: 'the console', dialog: /Manager's console/, tabs: ['📜 History', '📼 Time-lapse'], link: '🧑‍💼 Console' },
+  { name: 'the console', dialog: /Manager's console/, tabs: ['📜 History', /^Time-lapse/], link: '🧑‍💼 Console' },
 ] as const;
 
 async function open(page: Page, w: (typeof WINDOWS)[number]) {
@@ -224,7 +224,7 @@ for (const w of WINDOWS) {
       const dialog = await open(page, w);
       for (const name of w.tabs) {
         const tab = dialog.getByRole('tab', { name });
-        await tab.scrollIntoViewIfNeeded(); // the console's tab row scrolls sideways on a phone, as a swipe would
+        await tab.scrollIntoViewIfNeeded(); // a tab off screen, scrolled to as a swipe would
         await tapAt(page, tab, i);
         await expect(tab, `${String(name)} at the ${spot}`).toHaveAttribute('aria-selected', 'true');
       }

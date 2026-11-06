@@ -13,6 +13,7 @@ import { Tutorial } from './ui/Tutorial';
 import { HoldMenu } from './ui/HoldMenu';
 import { TouchStick } from './ui/TouchStick';
 import { useTouchPage } from './ui/touchMode';
+import { parseHash } from './ui/consoleNav';
 
 // Photo mode's panel loads the first time it's opened; the HUD and the tutorial hide while it's on.
 const PhotoPanel = lazy(() => import('./photo/PhotoPanel'));
@@ -26,6 +27,8 @@ function useBootSteps() {
   useEffect(() => {
     bootStep(started ? 'entering the office' : 'starting the 3D view');
     if (!started) return;
+    const link = parseHash(location.hash, 'office'); // a link to a console section (#settings/cloud-agents) opens it
+    if (link) useStore.getState().openOverlay({ kind: 'manager', tab: link.id });
     const t = setTimeout(bootDone, SETTLED_MS);
     return () => clearTimeout(t);
   }, [started]);
