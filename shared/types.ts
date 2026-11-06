@@ -9,6 +9,7 @@ import type { AgentStyle } from './looks.ts';
 import type { TaskKind } from './costs.ts';
 import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
+import type { ChatAction } from './ceoActions.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { AgentQuestion } from './questions.ts';
@@ -643,6 +644,8 @@ export interface PhoneMessage {
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
   steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
+  actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
+  idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
   edited?: number; // the manager's: when they last edited it
 }
 
@@ -670,6 +673,13 @@ export interface RefFileView {
   line: number | null;
   text: string;
   url: string; // the file on GitHub, at the line
+}
+
+/** A CEO message's ```idea block: a change to how the office works, which Accept sends as `message`. */
+export interface ChatIdea {
+  kind: 'objective' | 'focus' | 'mandate' | 'experiment' | 'research' | 'charter' | 'team' | 'plan';
+  title: string;
+  message: string;
 }
 
 /** A CEO message's artifact: a titled markdown document shown as a card. */

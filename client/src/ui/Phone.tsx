@@ -17,6 +17,8 @@ import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
 import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
+import { ActionCards, DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
+import { continuesGroup } from './chatCards';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
@@ -344,6 +346,7 @@ interface BubbleProps {
   onActions: (item: Item) => void;
   onArtifact: (messageId: number, artifactId: string) => void;
   onFile: (id: string) => void;
+  cont?: boolean; // follows a message from the same sender (#108): drawn as one group
 }
 
 
@@ -373,7 +376,7 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
   );
 }
 
-function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile }: BubbleProps) {
+function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile, cont }: BubbleProps) {
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
@@ -441,7 +444,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
     );
 
   return (
-    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''}`} data-msg={id} tabIndex={-1}>
+    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1}>
       {mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
       <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (
@@ -478,6 +481,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
           <FileCard key={f.id} file={f} onOpen={onFile} />
         ))}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
+        {!!m?.actions?.length && <ActionCards actions={m.actions} />}
         {m?.used && <UsedLine used={m.used} />}
         {!!m?.steps?.length && <StepsList steps={m.steps} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
@@ -529,6 +533,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
+  const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
   const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -608,7 +613,13 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
     el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion() ? 'auto' : 'smooth' });
     stick.current = true;
     setAtEnd(true);
+    setSeenTo(messages[messages.length - 1]?.id ?? -1);
   };
+  const fill = (t: string) => {
+    setText(t);
+    requestAnimationFrame(() => form.current?.querySelector('textarea')?.focus());
+  };
+  const unseen = messages.filter((m) => m.id > seenTo && m.from === 'ceo').length;
   const send = (t: string, to: number | null = replyTo, files: FileRef[] = []) => {
     if (!t.trim() && !files.length) return;
     setText('');
@@ -678,7 +689,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const shown = artifact && byId.get(artifact.messageId)?.artifacts?.find((a) => a.id === artifact.artifactId);
   const artifactCount = messages.reduce((n, m) => n + (m.artifacts?.length ?? 0), 0);
   const quotedNow = replyTo === null ? undefined : byId.get(replyTo);
-  const bubble = (item: Item, key: string | number) => {
+  const bubble = (item: Item, key: string | number, cont = false) => {
     const to = item.m ? item.m.replyTo : item.out.replyTo;
     return (
       <Bubble
@@ -694,6 +705,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         onActions={setMenu}
         onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
         onFile={setViewing}
+        cont={cont}
       />
     );
   };
@@ -701,7 +713,9 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   return refNav.wrap(
     <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
-        <Avatar name={ceo.name} color={ceo.color} size={28} />
+        <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
+          <Avatar name={ceo.name} color={ceo.color} size={28} />
+        </span>
         <div className="grow">
           <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
         </div>
@@ -717,7 +731,9 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
             const el = e.currentTarget;
             const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
             stick.current = end;
-            if (end !== atEnd) setAtEnd(end);
+            if (end === atEnd) return;
+            setAtEnd(end);
+            setSeenTo(messages[messages.length - 1]?.id ?? -1);
           }}
         >
           {messages.length === 0 && outbox.length === 0 && (
@@ -725,14 +741,15 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
               Say hi to {ceo.name}. Ask how things are going, hand over a project brief, or ask whether a team should grow. Replies land here, and the phone buzzes when {ceo.name} needs you.
             </p>
           )}
-          {messages.map((m) => (
+          {messages.map((m, i, all) => (
             <Fragment key={m.id}>
+              <DaySeparator prev={all[i - 1]?.at} at={m.at} />
               {m.id === firstUnread && (
                 <div className="chat-unread" role="separator">
                   New messages
                 </div>
               )}
-              {bubble({ m }, m.id)}{m.question && <QuestionChips m={m} sent={outbox.some((o) => o.replyTo === m.id)} onPick={(s) => send(s, m.id)} onWrite={() => reply(m.id)} />}
+              {bubble({ m }, m.id, continuesGroup(all[i - 1], m))}{m.question && <QuestionChips m={m} sent={outbox.some((o) => o.replyTo === m.id)} onPick={(s) => send(s, m.id)} onWrite={() => reply(m.id)} />}
               {m.id === offered?.id && (
                 <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
                   {offered.suggestions!.map((s) => (
@@ -742,14 +759,17 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
                   ))}
                 </div>
               )}
+              {m.idea && !outbox.some((o) => o.replyTo === m.id) && !messages.some((x) => x.replyTo === m.id) && (
+                <IdeaCard idea={m.idea} ceoName={ceo.name} onAccept={() => send(m.idea!.message, m.id)} onEdit={() => (setReplyTo(m.id), fill(m.idea!.message))} />
+              )}
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
           {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} />}
         </div>
         {!atEnd && (
-          <button type="button" className="chat-jump" onClick={toEnd} aria-label="Jump to the latest message">
-            ↓ Latest
+          <button type="button" className="chat-jump" onClick={toEnd} aria-label={unseen ? `${unseen} new messages: jump to the latest` : 'Jump to the latest message'}>
+            {unseen ? `${unseen} new ↓` : '↓ Latest'}
           </button>
         )}
         {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
@@ -792,6 +812,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
             </button>
           </>
         )}
+        {!text && question === null && !offered && editing === null && ceo.status !== 'working' && <Starters onPick={fill} />}
         {(ceo.status === 'error' || ceo.status === 'stopped') && last('manager') !== undefined && (
           <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
         )}
@@ -820,6 +841,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           ⏸ {heldBanner(info.held)}
         </div>
       )}
+      <WorkingStrip onStop={stop} />
       <AttachTray pending={att.pending} onRemove={att.remove} />
       {mention.picks}
       {slash.picks}

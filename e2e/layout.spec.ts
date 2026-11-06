@@ -106,6 +106,19 @@ const SCREENS: Screen[] = [
   },
   { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },
+  {
+    // a CEO reply's action cards, idea card and artifact (#108)
+    name: 'pocket chat cards',
+    widths: PHONES,
+    open: async (page) => {
+      await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
+      const root = await pocket(page, 'chat');
+      await expect(root.locator('.idea-card')).toBeVisible({ timeout: 90_000 });
+      await expect(root.locator('.action-card').first()).toBeVisible();
+      return root;
+    },
+    tabs: [],
+  },
   { name: 'pocket kanban', widths: PHONES, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: PHONES, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: PHONES, open: (page) => pocket(page, 'approvals'), tabs: [] },
