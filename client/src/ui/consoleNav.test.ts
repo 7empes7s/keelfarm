@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUPS, hashFor, opening, parseHash, resolve, search, SECTIONS, sectionsIn } from './consoleNav';
+import { GROUPS, hashFor, opening, parseHash, resolve, search, SECTIONS, sectionsIn, TEST_LAB_SECTION } from './consoleNav';
 
 describe('the console map', () => {
   it('has a handful of top tabs, each with sections, and unique section ids', () => {
@@ -40,5 +40,11 @@ describe('the console map', () => {
     expect(search('accessibility', 'office')[0]).toMatchObject({ label: 'Accessibility', section: { id: 'access' } });
     expect(search('  ', 'office')).toEqual([]);
     expect(search('Open the 3D office', 'office')).toEqual([]); // pocket mode's only
+  });
+});
+
+describe('the test lab screen', () => {
+  it('opens the section that holds the Test lab card', () => {
+    expect(TEST_LAB_SECTION).toBe(search('Test lab', 'office').find((h) => h.label === 'Test lab')?.section.id);
   });
 });

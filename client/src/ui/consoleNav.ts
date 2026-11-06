@@ -87,6 +87,9 @@ const shows = (s: Section, where: Where) => !s.only || s.only === where;
 
 export const sectionsIn = (group: GroupId, where: Where) => SECTIONS.filter((s) => s.group === group && shows(s, where));
 
+/** Where the lobby's test lab screen opens the console: the section with the Test lab card. */
+export const TEST_LAB_SECTION: SectionId = 'ops';
+
 export const sectionById = (id: string) => SECTIONS.find((s) => s.id === id);
 
 const isGroup = (id: string): id is GroupId => GROUPS.some((g) => g.id === id);
