@@ -457,7 +457,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
 
   protected notifyQuestion(q: AgentQuestion, again: boolean) {
     const title = `${q.agentName} ${again ? 'still waits for your answer' : 'asks you'}`;
-    this.notifier.notify('question', title, `${q.text}${q.recommendation ? ` (CEO's pick: ${q.recommendation})` : ''}`, `${q.agentName} (floor ${q.floor}): ${clip(q.text, 120)}`);
+    const text = `${q.text}${q.recommendation ? ` (CEO's pick: ${q.recommendation})` : ''}`;
+    this.notice({ kind: 'needsYou', title, text, target: { kind: 'agent', agentId: q.agentId }, actions: ['reply'] }, { event: 'question', line: `${q.agentName} (floor ${q.floor}): ${clip(q.text, 120)}` });
   }
 
   /** An answer typed into the agent's session as their next message; the question closes first. */

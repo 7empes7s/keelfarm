@@ -23,6 +23,7 @@ import { useRoof } from '../world/roof/roofState';
 import { RoofHud } from './RoofHud';
 import { SearchButton } from './SearchPalette';
 import { GuideButton } from './GuideCard';
+import { NoticeBell, NoticeToasts } from './Notices';
 import { usageChip } from '../ops';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
@@ -158,8 +159,6 @@ export function HUD() {
   const locked = useStore((s) => s.locked);
   const started = useStore((s) => s.started);
   const travel = useStore((s) => s.travel);
-  const toasts = useStore((s) => s.toasts);
-  const dismiss = useStore((s) => s.dismissToast);
   const centerDot = useA11y((s) => s.prefs.centerDot);
   const walked = useTouchStick((s) => s.walked);
   const looked = useTouchStick((s) => s.looked);
@@ -191,7 +190,9 @@ export function HUD() {
         <OverviewButton />
       </div>
 
+      {/* the bell first: when the row wraps, its last pills go under the workers list, never the bell */}
       <div className="hud-status">
+        <NoticeBell className="pill" />
         {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
         <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>{replaying ? '▶ replay' : connected ? '● live' : restarting ? '○ restarting' : '○ reconnecting'}</span>
         <span className="pill">
@@ -267,13 +268,7 @@ export function HUD() {
       <PresenceHud />
       <PhoneButton />
       <VoiceIndicator />
-      <div className="toasts">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.level}`} onClick={() => dismiss(t.id)}>
-            {t.text}
-          </div>
-        ))}
-      </div>
+      <NoticeToasts max={3} />
     </div>
   );
 }

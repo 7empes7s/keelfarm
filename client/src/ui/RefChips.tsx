@@ -30,7 +30,7 @@ export function takeChatScroll(): number | null {
 }
 
 /** Opens a panel, riding to `floor` first when you're elsewhere; closing it goes back to the phone it came from. */
-function openFrom(overlay: Overlay, floor?: number) {
+export function openFrom(overlay: Overlay, floor?: number) {
   const s = useStore.getState();
   const back = s.overlay?.kind === 'phone' ? s.overlay : null;
   const open = () => {

@@ -3,6 +3,7 @@
 // screen readers (dialogFocus.ts): focus moves in, stays in, and goes back when it closes.
 import { useEffect, useId, useRef, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { pushLayer } from './backStack';
 import { useDialogFocus } from './dialogFocus';
 
 // Closing a panel grabs the mouse again right away (world/lookLock.ts; "Grab the mouse when panels
@@ -10,6 +11,13 @@ import { useDialogFocus } from './dialogFocus';
 // ✕ or the backdrop can't act on whatever the crosshair lands on.
 export function closeOverlay() {
   useStore.getState().openOverlay(null);
+}
+
+/** While mounted, the back gesture and the browser's Back run `close` instead of leaving the app (backStack.ts). */
+export function useBackLayer(close: () => void) {
+  const latest = useRef(close);
+  useEffect(() => void (latest.current = close));
+  useEffect(() => pushLayer(() => latest.current()), []);
 }
 
 let pressedBackdrop: EventTarget | null = null;
@@ -41,6 +49,7 @@ export function Panel({
   const box = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useDialogFocus(box);
+  useBackLayer(onClose ?? closeOverlay);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

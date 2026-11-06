@@ -200,6 +200,26 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    name: 'pocket notification centre',
+    widths: PHONES,
+    open: async (page) => {
+      await (await pocket(page, 'company')).getByRole('button', { name: /^Notifications/ }).click();
+      return dialog(page, /Notifications/);
+    },
+    tabs: [],
+  },
+  {
+    name: 'notification centre',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page);
+      await page.locator('.hud-status .notice-bell').click(); // a real click: it fails while anything covers the bell
+      await expect(page.locator('.notice-centre')).toBeVisible();
+      return dialog(page, /Notifications/);
+    },
+    tabs: [],
+  },
+  {
     name: 'terminal view',
     widths: PHONES,
     open: async (page) => {

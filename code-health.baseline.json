@@ -35,7 +35,7 @@
       "typescript(no-misused-promises)": 2
     },
     "client/src/ui/TerminalView.tsx": {
-      "typescript(no-misused-promises)": 3
+      "typescript(no-misused-promises)": 2
     },
     "client/src/ui/acoustics.test.ts": {
       "eslint(no-unused-expressions)": 4
@@ -376,7 +376,6 @@
     "exports:client/src/world/gfx/pipeline.ts:GLOW_LAYER",
     "exports:client/src/world/gfx/pipeline.ts:NIGHT_GLOW_LAYER",
     "exports:client/src/world/gfx/quality.ts:TIERS",
-    "exports:client/src/world/gfx/quality.ts:tierIndex",
     "exports:client/src/world/gongRun.ts:gongFree",
     "exports:client/src/world/hiringState.ts:WELCOME_MS",
     "exports:client/src/world/jukeboxSongs.ts:SCALES",
@@ -532,7 +531,6 @@
     "exports:shared/usage.ts:barName",
     "exports:shared/usage.ts:pctTone",
     "types:client/src/replay.ts:ReplayPhase",
-    "types:client/src/store.ts:Toast",
     "types:client/src/ui/babbleRules.ts:Vowel",
     "types:client/src/ui/chatterLines.ts:ChatterKind",
     "types:client/src/ui/chatterLines.ts:GreetMood",
@@ -600,9 +598,7 @@
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
-    "server/ceo.ts": 801,
     "server/cliRunner.ts": 989,
-    "server/ceo.ts": 803,
     "server/demo.ts": 1844,
     "server/swarm/core.ts": 802,
     "server/workspace.ts": 909,

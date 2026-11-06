@@ -251,8 +251,8 @@ export abstract class SwarmScheduling extends SwarmQa {
     }
     if (usage.state !== was && usage.state !== 'normal') {
       const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'it resets';
-      if (usage.state === 'paused') this.notifier.notify('usage', "Claude's usage limit was reached", `The office starts no new work until ${until}; running sessions carry on.`);
-      else this.notifier.notify('usage', 'Pacing new work', `Claude warned that usage is high, so new issues start slowly until ${until}.`);
+      if (usage.state === 'paused') this.notice({ kind: 'usage', title: "Claude's usage limit was reached", text: `The office starts no new work until ${until}; running sessions carry on.` }, { event: 'usage' });
+      else this.notice({ kind: 'usage', title: 'Pacing new work', text: `Claude warned that usage is high, so new issues start slowly until ${until}.` }, { event: 'usage' });
     }
   }
 

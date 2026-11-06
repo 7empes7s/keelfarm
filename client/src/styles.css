@@ -384,6 +384,12 @@ input.inline:focus {
   justify-content: flex-end;
   max-width: 50vw;
 }
+/* a wide window: the row may take what the floor's card (520px at most) leaves, so the pills stay on one line above the workers list */
+@media (min-width: 1136px) {
+  .hud-status {
+    max-width: calc(100vw - 568px);
+  }
+}
 /* a narrow window: the status pills (right) and the chips (left) go under the floor's card, the workers list under them */
 @media (max-width: 600px) {
   .hud-status,
