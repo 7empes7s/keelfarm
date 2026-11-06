@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, RateLimiter, resetDue, scrubRoots } from './publicDemo.ts';
+import { clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, RateLimiter, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 
 describe('publicDemoProblem', () => {
   const ok = { demo: true, loopback: true, home: '/var/lib/cubefarm-demo', defaultHome: '/root/.cubefarm' };
@@ -38,6 +38,21 @@ describe('publicDemoBlock', () => {
     expect(publicDemoBlock('GET', '/api/folders?dir=%2Fdemo%2Fprojects%2Fshop', undefined)).toBeNull();
     expect(publicDemoBlock('GET', '/api/folders?dir=%2Fetc', undefined)).toMatch(/folders/);
     expect(publicDemoBlock('GET', '/api/folders?dir=%2Fdemo%2Fprojects%2F..%2F..%2Fetc', undefined)).toMatch(/folders/);
+  });
+  it('checks paths the way Express routes them: any case, trailing slashes', () => {
+    expect(publicDemoBlock('PATCH', '/api/settings/', { dailyLogDir: '/tmp' })).toMatch(/^Not in the demo/);
+    expect(publicDemoBlock('PATCH', '/API/Settings', { projectsDir: '/etc' })).toMatch(/^Not in the demo/);
+    for (const [m, p] of [
+      ['PUT', '/API/notify/webhooks/ntfy'],
+      ['PUT', '/Api/voice/key'],
+      ['PUT', '/api/Cloud/key/'],
+      ['POST', '/API/office/update'],
+    ]) {
+      expect(publicDemoBlock(m, p, {}), p).toMatch(/^Not in the demo/);
+    }
+    expect(publicDemoBlock('GET', '/api/folders/?dir=/etc', undefined)).toMatch(/folders/);
+    expect(publicDemoBlock('GET', '/api/Folders//?dir=/etc', undefined)).toMatch(/folders/);
+    expect(publicDemoBlock('POST', '/api/notify/Telegram/demo/', {})).toBeNull();
   });
 });
 
@@ -81,6 +96,10 @@ describe('clientIp', () => {
 });
 
 describe('uploads', () => {
+  it('finds the upload route in any spelling', () => {
+    for (const p of ['/files', '/Files', '/FILES/', '/files//']) expect(routePath(p), p).toBe('/files');
+    expect(routePath('/')).toBe('/');
+  });
   it('takes images, PDFs and text, not scripts or archives', () => {
     expect(demoUploadProblem('a.png', 'image/png')).toBeNull();
     expect(demoUploadProblem('a.pdf', '')).toBeNull();

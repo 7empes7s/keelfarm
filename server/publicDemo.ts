@@ -34,12 +34,15 @@ const OPEN_SETTINGS = new Set([
 /** Refused outright: keys, tokens, notification setup, the office's own update. The demo's own Telegram scene stays. */
 const CLOSED = [/^\/api\/notify\/(?!telegram\/demo$)/, /^\/api\/office\//, /^\/api\/voice\/key$/, /^\/api\/cloud\/(key|token)$/];
 
+/** A path as Express routes it (case-insensitive, trailing slashes ignored), so `/API/Settings/` is checked as `/api/settings`. */
+export const routePath = (p: string) => p.toLowerCase().replace(/\/+$/, '') || '/';
+
 const notInDemo = (what: string) => `Not in the demo: ${what} in your own office (npx cubefarm).`;
 
 /** Why the public demo refuses this request (a friendly 403), or null to let it through. */
 export function publicDemoBlock(method: string, url: string, body: unknown): string | null {
   const u = new URL(url, 'http://demo');
-  const p = u.pathname;
+  const p = routePath(u.pathname);
   if (method === 'PATCH' && p === '/api/settings') {
     const keys = body && typeof body === 'object' ? Object.keys(body) : [];
     return keys.some((k) => !OPEN_SETTINGS.has(k)) ? notInDemo('this setting only works') : null;

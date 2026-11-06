@@ -24,7 +24,7 @@ import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
 import { PresenceHub } from './presence.ts';
-import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, scrubRoots } from './publicDemo.ts';
+import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 import { HttpError, Swarm } from './swarm.ts';
 import { historyFilter } from './history.ts';
 
@@ -54,7 +54,7 @@ if (scrub) {
   app.use('/api', (req, res, next) => {
     if (!apiLimit.take(ipOf(req))) return void res.status(429).json({ error: 'Slow down a little: too many clicks at once for the demo. Try again in a few seconds.' });
     res.json = (body: unknown) => res.type('json').send(scrub(JSON.stringify(body) ?? ''));
-    if (req.method === 'POST' && req.path === '/files') {
+    if (req.method === 'POST' && routePath(req.path) === '/files') {
       let name = '';
       try {
         name = decodeURIComponent(String(req.headers['x-file-name'] ?? ''));
