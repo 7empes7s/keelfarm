@@ -82,6 +82,7 @@ import {
   type SignIn,
 } from './model.ts';
 import { charterView } from '../../shared/charter.ts';
+import { charterInsights } from '../../shared/charterStats.ts';
 import { slugify } from './flavour.ts';
 import { SwarmContract } from './contract.ts';
 
@@ -354,7 +355,7 @@ export abstract class SwarmCore extends SwarmContract {
       syncError: rt.syncError,
       previewConfig: r.preview,
       preview: this.previews.view(r),
-      charter: charterView(r.charter, Date.now()),
+      charter: charterView(r.charter, Date.now(), rt.insights ?? null),
       ...this.practiceView(r),
     };
   }
@@ -633,6 +634,23 @@ export abstract class SwarmCore extends SwarmContract {
 
   protected toast(level: 'info' | 'success' | 'error', text: string) {
     this.broadcast({ type: 'toast', level, text });
+  }
+
+  /** The Charter tab's numbers (#105) from the objective log, the cost ledger and the open issues; the view keeps them till the next. */
+  protected refreshInsights(r: PersistedRepo) {
+    const rt = this.repoRt.get(r.id);
+    if (!rt) return;
+    const busy = new Set([...this.state.agents.filter((a) => a.repoId === r.id && a.issueNumber !== null).map((a) => a.issueNumber!), ...rt.pulls.filter((p) => p.state === 'OPEN').flatMap((p) => p.closesIssues)]);
+    rt.insights = charterInsights({
+      log: r.charter.log,
+      charter: r.charter,
+      status: r.charter.status,
+      ledger: this.spend.ledger.all().filter((x) => x.repoId === r.id),
+      issues: rt.issues,
+      busy,
+      held: new Set(this.state.held.filter((h) => h.repoId === r.id).map((h) => h.issue)),
+      now: Date.now(),
+    });
   }
 
   protected emitRepo(r: PersistedRepo) {

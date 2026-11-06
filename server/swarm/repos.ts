@@ -7,7 +7,8 @@ import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
 import { floorOverrides } from '../../shared/practices.ts';
-import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, MISSION_MAX, newRecord, noteObjectives, withChange, type Charter } from '../../shared/charter.ts';
+import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveStatus, MISSION_MAX, newRecord, noteObjectives, withChange, withNote, type Charter } from '../../shared/charter.ts';
+import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import type { PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { type PersistedRepo, type FloorOptions, QA_SHOTS_DIR } from './model.ts';
@@ -193,6 +194,7 @@ export abstract class SwarmRepos extends SwarmCore {
     repo.charter.history = withChange(repo.charter.history, charterOf(repo.mission, repo.charter), next, by, clip(note, 240), Date.now());
     repo.mission = next.mission;
     Object.assign(repo.charter, { objectives: next.objectives, standards: next.standards, nonGoals: next.nonGoals, focus: next.focus });
+    this.refreshInsights(repo);
   }
 
   /** The manager's edit in the Charter screen. */
@@ -217,6 +219,23 @@ export abstract class SwarmRepos extends SwarmCore {
     }
     this.save();
     this.emitRepo(repo);
+    return this.repoView(repo);
+  }
+
+  /** The manager's word on an objective (#105): on track, at risk or met (null clears it), with a line in the history. */
+  setObjectiveStatus(id: string, objective: unknown, status: unknown): RepoView {
+    const repo = this.repo(id);
+    const o = repo.charter.objectives.find((x) => x.id === objective);
+    if (!o) throw new HttpError(404, `The charter has no objective ${String(objective).slice(0, 10)}.`);
+    if (status !== null && !isObjectiveStatus(status)) throw new HttpError(400, 'status is on-track, at-risk, met or null.');
+    if ((repo.charter.status[o.id] ?? null) !== status) {
+      if (status) repo.charter.status[o.id] = status;
+      else delete repo.charter.status[o.id];
+      repo.charter.history = withNote(repo.charter.history, { at: Date.now(), by: this.managerLabel(), parts: ['status'], note: `${o.id}: ${status ? STATUS_LABELS[status].toLowerCase() : 'no status'}` });
+      this.refreshInsights(repo);
+      this.save();
+      this.emitRepo(repo);
+    }
     return this.repoView(repo);
   }
 
@@ -339,6 +358,7 @@ export abstract class SwarmRepos extends SwarmCore {
       this.ledgerPulls(repo, rt.pulls); // while the QA records still say who wrote what
       this.cleanUpClosed(repo);
       this.recordSync(repo, rt.pulls);
+      this.refreshInsights(repo);
       this.reconcilePulls(repo, rt.pulls);
       this.rebaseConflicting(repo);
       void this.refreshPractices(repo);

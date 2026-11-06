@@ -28,6 +28,7 @@ import type { AgentTerminal } from './terminal.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
 import { sampleOffice } from './costSample.ts';
+import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
@@ -942,7 +943,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     telegram: demoTelegram(),
     cloud: demoCloud(),
     seedOps: (ids, at) => demoPastWeek(ids, at),
-    seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random),
+    seedCosts: (repos, agents, at) => sampleOffice(repos, agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
+    seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     demoCharter,

@@ -22,9 +22,9 @@ export interface SampleFloor {
 }
 
 /** The sample for an office: its floors, their agents and its CEO. */
-export function sampleOffice(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number, rand: () => number): CostRecord[] {
+export function sampleOffice(repos: { id: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number, rand: () => number, days = 7): CostRecord[] {
   const ceo = agents.find((a) => a.role === 'ceo') ?? { id: 'ceo', name: 'Morgan' };
-  return sampleCosts(repos.map((r) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id) })), ceo, now, rand);
+  return sampleCosts(repos.map((r) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id) })), ceo, now, rand, days);
 }
 
 export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: string }, now: number, rand: () => number, days = 7): CostRecord[] {

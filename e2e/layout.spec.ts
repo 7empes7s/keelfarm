@@ -73,6 +73,15 @@ const addProject = (mode: string): View => ({
   },
 });
 
+/** Charter, then its editor (#105). */
+const charterEditor: View = {
+  name: 'Charter editor',
+  go: async (root) => {
+    await root.getByRole('tab', { name: /Charter/ }).click();
+    await root.getByRole('button', { name: '✏️ Edit', exact: true }).click();
+  },
+};
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -83,7 +92,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['Floors', 'CEO', 'Charter', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device', addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['Floors', 'CEO', 'Charter', 'Team', 'Office', 'Tools & skills', 'Mission control', 'History', 'This device', charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -93,7 +102,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: ['Floors', 'Mission control', 'CEO', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
+    tabs: ['Floors', 'Mission control', 'CEO', 'Charter', 'Team', 'Issues', 'Settings', 'Tools & skills', 'History', 'Time-lapse', 'Accessibility'],
   },
   { name: 'pocket company', widths: PHONES, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: PHONES, open: (page) => pocket(page, 'chat'), tabs: [] },

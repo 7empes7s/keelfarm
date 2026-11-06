@@ -166,9 +166,10 @@ app.post(
 app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
 app.post('/api/repos/:repo/onboard', route((req) => swarm.onboardFloor(repoId(req))));
-// The floor's charter (#48): the manager's edit, their call on the CEO's proposal, and Export
+// The floor's charter (#48): the manager's edit, their call on the CEO's proposal, an objective's status (#105), and Export
 app.put('/api/repos/:repo/charter', route((req) => swarm.setCharter(repoId(req), req.body?.charter)));
 app.post('/api/repos/:repo/charter/proposal', route((req) => swarm.decideCharter(repoId(req), req.body?.approve === true, req.body?.charter ?? undefined)));
+app.put('/api/repos/:repo/charter/status', route((req) => swarm.setObjectiveStatus(repoId(req), req.body?.objective, req.body?.status ?? null)));
 app.post('/api/repos/:repo/charter/export', route((req) => swarm.exportCharter(repoId(req))));
 // The floor's app, for the preview monitor
 app.post(
