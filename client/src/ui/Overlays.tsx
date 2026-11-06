@@ -10,7 +10,7 @@ import { FloorList } from './FloorList';
 import { Key, MoveKeys } from './Key';
 import { Interview } from './Interview';
 import { KanbanView } from './KanbanView';
-import { ManagerConsole } from './ConsoleNav';
+import { ManagerConsole } from './ConsoleView';
 import { Panel } from './Panel';
 import { Phone } from './Phone';
 import { TerminalView } from './TerminalView';

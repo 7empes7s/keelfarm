@@ -1,6 +1,6 @@
 // The manager's console's map (#102): five top tabs, each a group of sections shown one at a time beside a side menu
 // (a list you tap into on a phone), deep links like #settings/cloud-agents, the last section each tab showed, and the
-// side menu's search over every setting's label. Pure; ConsoleNav.tsx draws it.
+// side menu's search over every setting's label. Pure; ConsoleView.tsx draws it.
 export type GroupId = 'work' | 'company' | 'ceo' | 'history' | 'settings';
 
 export type SectionId =

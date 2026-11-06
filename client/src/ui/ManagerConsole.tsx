@@ -21,7 +21,7 @@ import { FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
 
-// The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
+// The console's work sections (floors, the CEO, the team, issues); ConsoleView.tsx puts them in their tabs.
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
