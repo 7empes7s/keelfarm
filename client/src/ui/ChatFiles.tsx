@@ -2,7 +2,9 @@ import { useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode
 import { api } from '../api';
 import { useStore } from '../store';
 import { daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
-import { matchPicks, pickText, usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
+import { usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
+import { slashItems } from './chatCardRules';
+import './chatCards.css';
 import { Sheet } from './ChatArtifacts';
 import type { Pending } from './chatUpload';
 
@@ -254,6 +256,7 @@ export function useDropZone(onFiles: (files: File[]) => void) {
 /** The "/" picks for the message box: the list to show (or null) and its keys (arrows move, Enter or Tab pick). */
 export function useSlash(text: string, setText: (t: string) => void, focus: () => void) {
   const [at, setAt] = useState(0);
+  const floor = useStore((s) => s.repos.find((r) => r.floor === s.floor)?.floor ?? s.repos[0]?.floor ?? 1);
   const m = /^\/(\S*)$/.exec(text);
   const pick = (t: string | null) => {
     if (t) setText(t);
@@ -262,6 +265,7 @@ export function useSlash(text: string, setText: (t: string) => void, focus: () =
   const picks: ReactNode = m ? (
     <SlashPicks
       query={m[1]}
+      floor={floor}
       active={at}
       onPick={(t) => {
         pick(t);
@@ -279,7 +283,7 @@ export function useSlash(text: string, setText: (t: string) => void, focus: () =
     }
     if (e.key !== 'Tab' && (e.key !== 'Enter' || e.shiftKey)) return false;
     e.preventDefault();
-    void slashPick(m[1], at).then(pick);
+    void slashPick(m[1], at, floor).then(pick);
     return true;
   };
   return { picks, onKeyDown };
@@ -287,8 +291,8 @@ export function useSlash(text: string, setText: (t: string) => void, focus: () =
 
 let picks: Promise<QuickPicks> | null = null;
 
-/** The "/" list above the message box: the manager's skills and apps; picking one starts the message with it. */
-function SlashPicks({ query, active, onPick }: { query: string; active: number; onPick: (text: string) => void }) {
+/** The "/" list above the message box: the office's commands, then the manager's skills and apps; picking one starts the message with it. */
+function SlashPicks({ query, floor, active, onPick }: { query: string; floor: number; active: number; onPick: (text: string) => void }) {
   const [p, setP] = useState<QuickPicks | null>(null);
   useEffect(() => {
     picks ??= api.ceoPicks().catch(() => {
@@ -301,15 +305,16 @@ function SlashPicks({ query, active, onPick }: { query: string; active: number; 
       live = false;
     };
   }, []);
-  const list = p ? matchPicks(p, query) : [];
+  const list = slashItems(p, query, floor);
   return (
-    <ul className="slash-picks" role="listbox" aria-label="Skills and apps">
-      {!p && <li className="muted small">Loading…</li>}
-      {p && !list.length && <li className="muted small">No skill or app matches “{query}”.</li>}
+    <ul className="slash-picks" role="listbox" aria-label="Commands, skills and apps">
+      {!p && !list.length && <li className="muted small">Loading…</li>}
+      {p && !list.length && <li className="muted small">No command, skill or app matches “{query}”.</li>}
       {list.map((x, i) => (
-        <li key={`${x.kind}-${x.name}`} role="option" aria-selected={i === active % list.length}>
-          <button type="button" className={`slash-pick ${i === active % list.length ? 'slash-pick-on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(pickText(x.kind, x.name))}>
-            {x.kind === 'skill' ? '✨' : '🔌'} {x.name} <span className="muted small">{x.kind === 'skill' ? 'skill' : 'app'}</span>
+        <li key={x.key} role="option" aria-selected={i === active % list.length}>
+          <button type="button" className={`slash-pick ${i === active % list.length ? 'slash-pick-on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(x.text)}>
+            {x.icon} {x.name} <span className="muted small">{x.hint}</span>
+            {x.example && <span className="muted small slash-cmd-example">e.g. {x.example}</span>}
           </button>
         </li>
       ))}
@@ -317,9 +322,9 @@ function SlashPicks({ query, active, onPick }: { query: string; active: number; 
   );
 }
 
-/** What Enter or Tab picks in the "/" list, or null when it's empty or still loading. */
-async function slashPick(query: string, active: number): Promise<string | null> {
+/** What Enter or Tab picks in the "/" list, or null when it's empty. */
+async function slashPick(query: string, active: number, floor: number): Promise<string | null> {
   const p = await (picks ?? Promise.resolve(null));
-  const list = p ? matchPicks(p, query) : [];
-  return list.length ? pickText(list[active % list.length].kind, list[active % list.length].name) : null;
+  const list = slashItems(p, query, floor);
+  return list.length ? list[active % list.length].text : null;
 }

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { crc32, deflateSync } from 'node:zlib';
 import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
-import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNav';
+import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
@@ -133,6 +133,19 @@ const SCREENS: Screen[] = [
   },
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
+  {
+    // a CEO reply's action cards, idea card and artifact (#108)
+    name: 'pocket chat cards',
+    widths: POCKET,
+    open: async (page) => {
+      await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
+      const root = await pocket(page, 'chat');
+      await expect(root.locator('.idea-card')).toBeVisible({ timeout: 90_000 });
+      await expect(root.locator('.action-card').first()).toBeVisible();
+      return root;
+    },
+    tabs: [],
+  },
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },

@@ -70,6 +70,17 @@ export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (flo
   return { wrap, viewer, mode: pocket ? ('pocket' as const) : ('office' as const) };
 }
 
+/** Opens what an action card names (shared/ceoActions.ts), as its chip would; null when it's gone or outside a chat. */
+export function useRefOpen(): ((ref: ChatRef) => (() => void) | null) {
+  const nav = useContext(NavContext);
+  const world = useWorld();
+  const pocket = useMode((s) => s.mode) === 'pocket';
+  return (ref) => {
+    const j = nav && jumpFor(ref, pocket ? 'pocket' : 'office', world);
+    return j ? () => nav.go(j, { messageId: -1, index: -1 }) : null;
+  };
+}
+
 const HOVER_MS = 300;
 const HOLD_MS = 450;
 

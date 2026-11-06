@@ -4,6 +4,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { finishedSteps, foldStream, type CeoLive, type OfficeCall } from '../shared/ceoStream.ts';
+import { actionCards } from '../shared/ceoActions.ts';
 import { NOTES_VIEW_MAX } from '../shared/ceoMemory.ts';
 import type { LogEntry } from './agentRunner.ts';
 import type { PhoneMessage } from '../shared/types.ts';
@@ -14,15 +15,17 @@ const ID = /^c[a-z0-9]{1,24}$/;
 export class CeoChat {
   live: CeoLive | null = null;
   private calls: OfficeCall[] = [];
+  private turnFrom = 0; // the current turn's first office call
   private readonly inflight = new Set<Promise<unknown>>();
   private lastReply = '';
   private timer: NodeJS.Timeout | undefined;
 
-  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md. */
+  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id. */
   constructor(
     private readonly dir: string,
     private readonly notesFile: string,
     private readonly emitLive: (live: CeoLive | null) => void,
+    private readonly repoOf: (floor: number) => string | null = () => null,
   ) {}
 
   // ---------- the reply being written ----------
@@ -30,6 +33,7 @@ export class CeoChat {
   /** A CEO job starts: nothing live, no office calls yet. */
   startJob() {
     this.calls = [];
+    this.turnFrom = 0;
     this.lastReply = '';
     this.set(null);
   }
@@ -47,12 +51,19 @@ export class CeoChat {
     if (live !== this.live) this.set(live, true);
   }
 
-  /** A turn's reply went to the phone: the steps it keeps (for its message); nothing is live until the next one. */
-  finishTurn(text: string): Pick<PhoneMessage, 'steps'> {
+  /** A turn's reply went to the phone: the steps and action cards it keeps (for its message); nothing is live until the next one. */
+  finishTurn(text: string): Pick<PhoneMessage, 'steps' | 'actions'> {
     const steps = finishedSteps(this.live);
+    const actions = this.turnActions(this.calls);
+    this.turnFrom = this.calls.length;
     this.lastReply = text.trim();
     this.set(null);
-    return steps.length ? { steps } : {};
+    return { ...(steps.length && { steps }), ...(actions.length && { actions }) };
+  }
+
+  /** The cards for the current turn's calls among `calls` (this job's, e.g. from settled()). */
+  turnActions(calls: readonly OfficeCall[]) {
+    return actionCards(calls.slice(this.turnFrom), this.repoOf);
   }
 
   /** The job ended (or was stopped) with nothing more to say. */
@@ -83,7 +94,8 @@ export class CeoChat {
       if (typeof fn !== 'function') continue;
       const tool = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
       out[name] = async (...args: unknown[]) => {
-        const call: OfficeCall = { tool, ok: false, out: null };
+        const input = args[0];
+        const call: OfficeCall = { tool, ok: false, out: null, ...(typeof input === 'object' && input !== null ? { args: input as Record<string, unknown> } : {}) };
         this.calls.push(call);
         const p = (async () => (fn as (...a: unknown[]) => unknown)(...args))();
         this.inflight.add(p);
