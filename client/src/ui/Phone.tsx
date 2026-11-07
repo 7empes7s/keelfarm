@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
@@ -21,6 +21,7 @@ import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, NoticeCard, Starters, WorkingStrip } from './ChatCards';
 import { DecisionList, DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
+import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
@@ -46,6 +47,9 @@ import { pinchCancels } from './chatPinch';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
+
+// The CEO's charts, tables and dashboards (#146): their own chunk, loaded with the first message that has one.
+const ChatVisuals = lazy(() => import('./ChatVisuals'));
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
@@ -497,6 +501,11 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
         ))}
+        {!!m?.visuals?.length && (
+          <Suspense fallback={null}>
+            <ChatVisuals visuals={m.visuals} />
+          </Suspense>
+        )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
         {m?.used && <UsedLine used={m.used} />}
@@ -568,6 +577,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   useChatPinch(logWrap, useCallback(() => scroller.current, []));
   const form = useRef<HTMLFormElement>(null);
   const stick = useRef(true);
+  const lastTop = useRef(0);
   const opened = useRef(false);
 
   const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
@@ -760,7 +770,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           tabIndex={0}
           onScroll={(e) => {
             const el = e.currentTarget;
-            const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            const end = keepsFollowing(stick.current, el.scrollTop, lastTop.current, el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+            lastTop.current = el.scrollTop;
             stick.current = end;
             if (end === atEnd) return;
             setAtEnd(end);

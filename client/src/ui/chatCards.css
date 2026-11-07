@@ -160,7 +160,13 @@ html[data-reduce-motion] .action-confetti {
 .working-text {
   min-width: 0;
   line-height: var(--ds-leading-tight);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* one compact row while typing (#152): the keyboard leaves little room */
+html[data-typing] .working-next {
+  display: none;
 }
 .working-next {
   display: block;
@@ -291,4 +297,45 @@ html[data-reduce-motion] .action-confetti {
 }
 .chat-log code {
   word-break: break-word;
+}
+
+/* The composer stack under the log (#152): when the keyboard takes the room, the log gives it up first (down to a few
+   lines, so the newest message and "↓ Latest" stay in view), then the message box; nothing else is squeezed. */
+.phone-chat > :not(.chat-log-wrap, .chat-input) {
+  flex-shrink: 0;
+}
+.chat-input {
+  min-height: calc(var(--ds-target) + 18px);
+  /* the box's five lines (its font: 0.95rem, at least 16px on touch screens, design.css) and the padding */
+  max-height: calc(5 * 1.35 * 0.95rem + 38px);
+}
+@media (pointer: coarse) {
+  .chat-input {
+    max-height: calc(5 * 1.35 * max(16px, 1rem) + 38px);
+  }
+}
+/* about five lines, fewer when the keyboard leaves less room; then it scrolls */
+.chat-input textarea.msg-box {
+  max-height: 100%;
+}
+/* the attachments: one row of fixed-height chips, scrolled sideways in the tray, never the page */
+ul.attach-tray {
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.attach-tray > .attach-item {
+  height: 48px;
+  max-width: none;
+  padding: 0 0 0 6px;
+  white-space: nowrap;
+}
+/* an attachment's ✕: a 44px target around the small circle */
+.attach-item .chat-reply-x {
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 9px;
+  border: none;
+  background-clip: content-box;
+  background-color: var(--ds-surface-sunken);
 }

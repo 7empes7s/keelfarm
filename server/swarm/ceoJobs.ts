@@ -34,6 +34,7 @@ import { forwardText } from '../../shared/chat.ts';
 import { feedbackPrompt, replyTarget, turnEnding } from '../../shared/reactions.ts';
 import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
+import { withVisualsText } from '../../shared/chatVisuals.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
@@ -646,12 +647,12 @@ export abstract class SwarmCeo extends SwarmReactions {
     const body = parts.text.trim().slice(0, 6000);
     // The agents, floors, issues and files it names become chips (shared/chatRefs.ts).
     const refs = from === 'office' ? [] : parseRefs(body, this.refContext());
-    const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.idea && { idea: parts.idea }), ...(artifacts && { artifacts }), ...(refs.length && { refs }) };
+    const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.idea && { idea: parts.idea }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }), ...(refs.length && { refs }) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      void this.telegram.send(telegramChat(this.ceo().name, withVisualsText(m.text, m.visuals)), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }
@@ -662,7 +663,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     this.save();
     // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
     if (from === 'ceo' && !requestId && !m.question) {
-      const said = m.text || `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`;
+      const said = m.text || (m.visuals ? withVisualsText('', m.visuals) : `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`);
       this.notice({ kind: 'ceo', title: this.ceo().name, text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.ceo().name}: ${plainText(said, 100)}` });
     }
     return m;

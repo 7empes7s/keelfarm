@@ -102,6 +102,13 @@ export function parseRefs(text: string, ctx: RefContext): ChatRef[] {
   return found.sort((a, b) => a.start - b.start).slice(0, MAX_REFS);
 }
 
+/** The ref `text` is, whole (a table cell like "floor 3" or "#12"), or null when it is free text that only mentions one. */
+export function soleRef(text: string, ctx: RefContext): ChatRef | null {
+  const t = text.trim();
+  const [ref, more] = parseRefs(t, ctx);
+  return ref && !more && ref.start === 0 && ref.end === t.length ? ref : null;
+}
+
 /** Refs that fit `text` as given: in order, inside it, never overlapping (anything else is dropped). */
 function validRefs(text: string, refs: readonly ChatRef[] | undefined): { ref: ChatRef; index: number }[] {
   const out: { ref: ChatRef; index: number }[] = [];
