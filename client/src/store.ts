@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
@@ -127,6 +127,7 @@ interface State {
   machinesRoot: string;
   settings: SwarmSettings;
   clis: CliView[]; // the coding-agent CLIs installed where the office runs
+  models: ModelCatalogView; // their models to pick from (#198)
   repos: RepoView[];
   agents: Record<string, Agent>;
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
@@ -290,6 +291,7 @@ export const useStore = create<State>((set, get) => ({
     officePlaybook: '',
   },
   clis: [],
+  models: { entries: [], checkedAt: 0 },
   repos: [],
   agents: {},
   logs: {},
@@ -410,6 +412,7 @@ export const useStore = create<State>((set, get) => ({
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
           clis: d.clis ?? [],
+          models: d.models ?? { entries: [], checkedAt: 0 },
           voiceKeySet: d.voiceKeySet ?? false,
           voiceKeyHint: d.voiceKeyHint ?? '',
           voiceCache: d.voiceCache ?? { clips: 0, bytes: 0, saved: [] },
@@ -544,6 +547,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'clis':
         set({ clis: ev.clis });
+        break;
+      case 'models':
+        set({ models: ev.models });
         break;
       case 'request': {
         const prev = get().requests.find((r) => r.id === ev.request.id);

@@ -1,6 +1,6 @@
-// The manager's console's map (#102): five top tabs, each a group of sections shown one at a time beside a side menu
+// The manager's console's map (#102): five top tabs, each a group of sections shown one at a time under a row of their tabs
 // (a list you tap into on a phone), deep links like #settings/cloud-agents, the last section each tab showed, and the
-// side menu's search over every setting's label. Pure; ConsoleNav.tsx draws it.
+// search over every setting's label. Pure; ConsoleNav.tsx draws it.
 export type GroupId = 'work' | 'company' | 'ceo' | 'history' | 'settings';
 
 export type SectionId =
@@ -88,6 +88,22 @@ export type Where = 'office' | 'pocket';
 const shows = (s: Section, where: Where) => !s.only || s.only === where;
 
 export const sectionsIn = (group: GroupId, where: Where) => SECTIONS.filter((s) => s.group === group && shows(s, where));
+
+/** The sections row under the top tabs (#199): a group's sections, or none when it has only one. */
+export const sectionRow = (group: GroupId, where: Where) => {
+  const list = sectionsIn(group, where);
+  return list.length > 1 ? list : [];
+};
+
+/** Arrow keys in a row of tabs: the index a key moves to (wrapping; Home and End to the ends), or undefined for other keys. */
+export function stepTab(at: number, count: number, key: string): number | undefined {
+  if (count < 1) return undefined;
+  if (key === 'ArrowRight' || key === 'ArrowDown') return (at + 1) % count;
+  if (key === 'ArrowLeft' || key === 'ArrowUp') return (at - 1 + count) % count;
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  return undefined;
+}
 
 /** Where the lobby's test lab screen opens the console: the section with the Test lab card. */
 export const TEST_LAB_SECTION: SectionId = 'ops';

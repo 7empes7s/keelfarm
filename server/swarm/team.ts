@@ -5,6 +5,7 @@ import { nameList } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
 import { cliLabel, isCli } from '../clis.ts';
 import { plainText } from '../notify.ts';
+import { modelProblem } from '../../shared/models.ts';
 import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction, PhoneMessage, RepoView, WorldSnapshot } from '../../shared/types.ts';
 import { closeDecision, digestDue, fromCeoMessage, onManagerMessage, shownDecisions, snoozeDecision, syncDecisions, type Decision, type DecisionAbout, type DecisionSeed } from '../../shared/decisions.ts';
 import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS, BUSY, oneLine } from './model.ts';
@@ -183,6 +184,8 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     if (!reason) throw new Error('Say why: the manager reads the reason.');
     const cli: AgentCli | '' = isCli(x.cli) ? x.cli : '';
     if (cli && !this.cliReady(cli)) throw new Error(`${cliLabel(cli)} isn't installed here. Installed: ${this.clis.filter((c) => c.installed).map((c) => c.id).join(', ') || 'none'}.`);
+    const bad = modelProblem(x.model, this.state.settings.runtime === 'terminal' ? cli || this.state.settings.defaultCli : 'claude', this.models);
+    if (bad) throw new Error(bad);
     const max = this.state.settings.maxAgents;
     const team = this.teamNow(repo);
     const before = plannedSize(team);

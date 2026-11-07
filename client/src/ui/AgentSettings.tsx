@@ -3,7 +3,8 @@ import { api } from '../api';
 import { isBusy, useStore, type Agent } from '../store';
 import type { AgentCli, AgentPromptView, CliView, CloudMachineState, EffortLevel, MachineHost } from '../../../shared/types';
 import { ACCENT_COLORS, BUILDS, FACIAL_HAIR, GLASSES, HAIR_COLORS, HAIR_STYLES, HEADWEAR, OUTFITS, SKIN_TONES, type AgentStyle, type HairStyle, type Outfit } from '../../../shared/looks';
-import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
+import { CLAUDE_MODELS, effectiveModel, modelAfterCliChange } from '../../../shared/models';
+import { ModelMissing, ModelPicker } from './ModelPicker';
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { workerCli } from './floorRows';
 import { confirmDialog } from './Confirm';
@@ -65,11 +66,17 @@ export function NameInput({ agent, id, className = 'inline', style }: FieldProps
   );
 }
 
+/** Their coding agent; a model the new one doesn't have goes back to the default (#198). */
 export function CliSelect({ agent, id, style }: FieldProps) {
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
+  const models = useStore((s) => s.models);
+  const change = (cli: AgentCli | '') => {
+    const model = modelAfterCliChange(agent.model, cli || settings.defaultCli, models);
+    void save(agent.id, model === agent.model ? { cli } : { cli, model });
+  };
   return (
-    <select id={id} value={agent.cli} title="Their coding agent" aria-label={id ? undefined : 'Coding agent'} style={style} onChange={(e) => void save(agent.id, { cli: e.target.value as AgentCli | '' })}>
+    <select id={id} value={agent.cli} title="Their coding agent" aria-label={id ? undefined : 'Coding agent'} style={style} onChange={(e) => change(e.target.value as AgentCli | '')}>
       <option value="">{cliName(clis, settings.defaultCli)} (default)</option>
       <CliOptions clis={clis} />
     </select>
@@ -112,31 +119,12 @@ export function HostSelect({ agent, id, style }: FieldProps) {
   );
 }
 
-export function ModelInput({ agent, id, className = 'inline', style }: FieldProps) {
+/** Their model, picked from their coding agent's models (ModelPicker.tsx); saved as it's picked. */
+export function ModelInput({ agent, id }: FieldProps) {
   const settings = useStore((s) => s.settings);
-  const listId = useId();
   const cli = workerCli(agent, settings);
-  return (
-    <>
-      <input
-        id={id}
-        key={`m-${agent.model}-${cli}`}
-        className={className}
-        style={style}
-        list={listId}
-        defaultValue={agent.model}
-        placeholder={(agent.role === 'ceo' ? CLAUDE_MODELS[0] : effectiveModel('', cli, settings, CLAUDE_MODELS[0])) || 'agent default'}
-        title={agent.role === 'ceo' ? "The CEO's model" : "Their model ('' = the default for their coding agent)"}
-        aria-label={id ? undefined : 'Model'}
-        onBlur={(e) => e.target.value !== agent.model && void save(agent.id, { model: e.target.value })}
-      />
-      <datalist id={listId}>
-        {modelSuggestions(cli).map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
-    </>
-  );
+  const resolved = agent.role === 'ceo' ? CLAUDE_MODELS[0] : effectiveModel('', cli, settings, CLAUDE_MODELS[0]);
+  return <ModelPicker id={id} cli={cli} value={agent.model} resolvedDefault={resolved} label={agent.role === 'ceo' ? "The CEO's model" : 'Model'} onChange={(model) => void save(agent.id, { model })} />;
 }
 
 export function EffortSelect({ agent, id, style }: FieldProps) {
@@ -323,7 +311,8 @@ export function PromptPreview({ agent }: { agent: Agent }) {
 
 /** The ⚙️ Setup section of an agent's panel. The CEO always runs Claude Code, so they only get model and effort. */
 export function AgentSetup({ agent }: { agent: Agent }) {
-  const terminal = useStore((s) => s.settings.runtime === 'terminal');
+  const settings = useStore((s) => s.settings);
+  const terminal = settings.runtime === 'terminal';
   const id = useId();
   const ceo = agent.role === 'ceo';
   return (
@@ -364,8 +353,10 @@ export function AgentSetup({ agent }: { agent: Agent }) {
           </label>
         )}
         <label className="field" htmlFor={`${id}-model`}>
-          <span>Model</span>
-          <ModelInput agent={agent} id={`${id}-model`} className="" />
+          <span>
+            Model <ModelMissing model={agent.model} cli={workerCli(agent, settings)} />
+          </span>
+          <ModelInput agent={agent} id={`${id}-model`} />
         </label>
         <label className="field" htmlFor={`${id}-effort`}>
           <span>Effort</span>
@@ -375,7 +366,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
       <LookEditor agent={agent} />
       <AgentTools agent={agent} />
       <PromptPreview agent={agent} />
-      <p className="muted small">Name and model save when you leave them; the rest, and looks, as you pick them. Running sessions aren't restarted.</p>
+      <p className="muted small">The name saves when you leave it; the rest, and looks, as you pick them. Running sessions aren't restarted.</p>
     </section>
   );
 }
