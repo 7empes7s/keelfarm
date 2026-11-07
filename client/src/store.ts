@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
-import type { PastCareer } from '../../shared/careers';
+import { careerOfRow, type PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
@@ -378,7 +378,8 @@ export const useStore = create<State>((set, get) => ({
         const logs: Record<string, LogLine[]> = {};
         const screens: Record<string, number> = {};
         for (const { log, ...a } of d.agents) {
-          agents[a.id] = a;
+          const row = d.careers?.[a.id];
+          agents[a.id] = row ? { ...a, career: careerOfRow(row) } : a;
           logs[a.id] = log;
           if (a.screenshotAt) screens[a.id] = a.screenshotAt;
         }

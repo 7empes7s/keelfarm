@@ -112,6 +112,12 @@ export function legacyCareer(raw: Record<string, unknown>): CareerView {
   return out;
 }
 
+/** A career as a snapshot sends it (#291): its values in newCareer's key order, not 27 key names per person. */
+export type CareerRow = CareerView[keyof CareerView][];
+const CAREER_FIELDS = Object.keys(newCareer(0)) as (keyof CareerView)[];
+export const careerRow = (c: CareerView): CareerRow => CAREER_FIELDS.map((f) => c[f]);
+export const careerOfRow = (r: CareerRow): CareerView => legacyCareer(Object.fromEntries(CAREER_FIELDS.map((f, i) => [f, r[i]])));
+
 /** The week `at` falls in: weeks since the epoch, starting on Mondays (UTC). */
 export const weekOf = (at: number) => Math.floor((at - 4 * DAY_MS) / WEEK_MS);
 

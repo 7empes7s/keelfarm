@@ -53,6 +53,7 @@ import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
+import { careerRow, type CareerRow } from '../../shared/careers.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
@@ -569,6 +570,18 @@ export abstract class SwarmCore extends SwarmContract {
     };
   }
 
+  /** The snapshot a tab loads, careers as rows (#291) so a big company's fits server/scale.test.ts's budget. */
+  protected snapshotEvent() {
+    const s = this.snapshot();
+    const careers: Record<string, CareerRow> = {};
+    const agents = s.agents.map((a) => {
+      if (!a.career) return a;
+      careers[a.id] = careerRow(a.career);
+      return { ...a, career: null };
+    });
+    return { type: 'snapshot' as const, data: { ...s, agents, careers } };
+  }
+
   /** The short commit the office runs, or null when it isn't a git checkout. */
   officeCommit(): string | null {
     return this.officeHead?.slice(0, 7) ?? null;
@@ -589,11 +602,11 @@ export abstract class SwarmCore extends SwarmContract {
       // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
       // otherwise it's saying whether the manager is using it (#210) or what it shows (shared/watch.ts).
       if (isResync(raw)) {
-        this.send(ws, { type: 'snapshot', data: this.snapshot() });
+        this.send(ws, this.snapshotEvent());
         this.outbox.resync(ws);
       } else if (!this.notifier.attention.receive(ws, raw)) this.outbox.receive(ws, String(raw));
     });
-    this.send(ws, { type: 'snapshot', data: this.snapshot() });
+    this.send(ws, this.snapshotEvent());
   }
 
   /** The floor an agent's desk is on, for routing their terminal lines: 0 for the CEO in the lobby, null for none. */

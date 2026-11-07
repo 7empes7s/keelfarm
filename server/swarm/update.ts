@@ -29,7 +29,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   demoNewCommit() {
     if (!this.backend.demo || !this.officeHead) throw new HttpError(404, 'Only the demo office makes up office updates');
     this.officeHead = crypto.randomBytes(20).toString('hex');
-    this.outbox.resendAll(JSON.stringify({ type: 'snapshot', data: this.snapshot() }));
+    this.outbox.resendAll(JSON.stringify(this.snapshotEvent()));
     return { commit: this.officeHead.slice(0, 7) };
   }
 
