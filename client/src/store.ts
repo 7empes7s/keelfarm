@@ -18,7 +18,7 @@ import { emptyEveryProject } from '../../shared/practices';
 import { messageSpeech } from '../../shared/speech';
 import { addNotice, markRead, noticeOf, sticky } from '../../shared/notices';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
-import { applyChat, applyNewest, EMPTY_CHAT } from './ceoChat';
+import { applyChat, applyNewest, EMPTY_CHAT, markMessages } from './ceoChat';
 import type { FileView } from '../../shared/files';
 import type { Decision } from '../../shared/decisions';
 import { clearDesktopNotes, showDesktopNote } from './notifications';
@@ -409,8 +409,7 @@ export const useStore = create<State>((set, get) => ({
           previewStats: d.previewStats ?? { diskBytes: null, memMb: null, cleanedAt: null },
           requests: d.requests,
           ceo: d.ceo,
-          messages: d.messages,
-          chatOlder: d.messagesOlder ?? false,
+          messages: d.messages, chatOlder: d.messagesOlder ?? false,
           chat: d.chat ?? EMPTY_CHAT,
           files: d.files ?? [],
           phoneReadAt: d.phoneReadAt,
@@ -606,10 +605,8 @@ export const useStore = create<State>((set, get) => ({
         set({ files: ev.files });
         break;
       case 'delivery':
-        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
-        break;
       case 'status':
-        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, status: ev.status } : m)) });
+        set({ messages: markMessages(get().messages, ev) });
         break;
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });

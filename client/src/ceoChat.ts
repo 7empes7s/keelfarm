@@ -19,3 +19,9 @@ export function applyNewest(s: { messages: PhoneMessage[]; chatOlder: boolean },
   const page = withNewest(s.messages, m, s.chatOlder);
   return { messages: page.messages, chatOlder: page.older };
 }
+
+/** A `delivery` or `status` event: the messages it names get its new state. */
+export function markMessages(messages: PhoneMessage[], ev: Extract<ServerEvent, { type: 'delivery' | 'status' }>): PhoneMessage[] {
+  const patch = ev.type === 'delivery' ? { delivery: ev.delivery } : { status: ev.status };
+  return messages.map((m) => (ev.ids.includes(m.id) ? { ...m, ...patch } : m));
+}
