@@ -97,8 +97,8 @@ export function watchViewport() {
   window.addEventListener('orientationchange', () => setTimeout(reset, 300)); // iOS reports the new size late
   window.addEventListener('pageshow', reset);
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reset());
+  document.addEventListener('focusin', later); // data-typing
   // A field losing focus to something that isn't another field: the keyboard is going away.
-  document.addEventListener('focusin', later);
   document.addEventListener('focusout', (e) => {
     later();
     if (!(e.relatedTarget instanceof HTMLElement && e.relatedTarget.matches('input, textarea, select'))) setTimeout(reset, 250);
