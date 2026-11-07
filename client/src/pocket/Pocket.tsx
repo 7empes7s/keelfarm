@@ -2,7 +2,7 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Activity, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore, type Overlay } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip, restartExpected } from '../officeUpdate';
@@ -671,7 +671,8 @@ export default function Pocket() {
             ) : (
               <>
                 {tab === 'company' && <Company go={go} settings={setSettings} track={track} />}
-                {tab === 'chat' && !wide && chat}
+                {/* drawn while away (#145), as iOS keeps a tab: opening it only shows it */}
+                {!wide && <Activity mode={tab === 'chat' ? 'visible' : 'hidden'}>{chat}</Activity>}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
                 {tab === 'team' && <Team focusRepo={repoId} top={<MemoryBanner open={() => setSettings('ops')} />} />}
                 {tab === 'approvals' && <Approvals wide={layout === 'expanded'} />}

@@ -16,11 +16,13 @@ test('the 500-message chat opens fast, types smoothly and loads older pages with
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-  // Opening the chat (the 2 key, as a tab tap): from the press to its bubbles on screen.
+  // Opening the chat (the 2 key, as a tab tap): from the press to its bubbles on screen, painted (it may already be
+  // drawn, hidden, while away: only a visible bubble counts, then two frames so its layout and paint are in).
   const openMs = await page.evaluate(async () => {
     const t0 = performance.now();
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit2', key: '2' }));
-    while (!document.querySelector('.chat-log [data-msg]')) await new Promise(requestAnimationFrame);
+    while (!document.querySelector('.chat-log [data-msg]')?.checkVisibility()) await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
     return performance.now() - t0;
   });

@@ -90,8 +90,12 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
-  // The first message that was unread when the chat opened: the "New messages" divider goes above it.
-  const [firstUnread] = useState(() => firstUnreadId(messages, readAt, chatOlder));
+  // The first message that was unread when the chat opened: the "New messages" divider goes above it. Away (the
+  // phone's Chat tab stays drawn, hidden), it follows the unread for the next opening.
+  const [away, setAway] = useState(true);
+  const [firstUnread, setFirstUnread] = useState(() => firstUnreadId(messages, readAt, chatOlder));
+  const unreadNow = away ? firstUnreadId(messages, readAt, chatOlder) : firstUnread;
+  if (unreadNow !== firstUnread) setFirstUnread(unreadNow);
   // Opening draws the newest screenful first, the rest of the page two frames later (after a paint); all at once when
   // it must find a message or a scroll position at once.
   const [warm, setWarm] = useState(() => jumpTo !== null || hasChatScroll());
@@ -152,6 +156,15 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     document.addEventListener('visibilitychange', read);
     return () => document.removeEventListener('visibilitychange', read);
   }, [messages, readAt]);
+  // Shown again after being away: it opens afresh.
+  useLayoutEffect(() => {
+    setAway(false);
+    return () => {
+      setAway(true);
+      opened.current = false;
+      stick.current = true;
+    };
+  }, []);
   // Opening the chat shows the unread divider (or the end); after that it follows new messages only from the end.
   useLayoutEffect(() => {
     const el = scroller.current;

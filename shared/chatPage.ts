@@ -54,11 +54,6 @@ export const anchoredTop = (before: { top: number; height: number }, height: num
 /** Whether the list is close enough to its top to load the page before. */
 export const wantsOlder = (top: number, s: { older: boolean; loading: boolean }) => s.older && !s.loading && top < LOAD_OLDER_PX;
 
-/**
- * The CEO's first unread message, where the "New messages" divider goes when the chat opens: none while the unread
- * may begin on a page not loaded yet (no read CEO message before it and `older`), so the chat opens at the end
- * instead of at its top, which would pull in the page before.
- */
 /** The bubbles a chat draws on its first frame (#145): a screenful, so opening it is quick; the rest of the page a frame later. */
 export const FIRST_PAINT = 15;
 
@@ -70,6 +65,11 @@ export function firstPaintFrom(ids: readonly number[], unread: number | null, wa
   return at === -1 ? start : Math.min(start, at);
 }
 
+/**
+ * The CEO's first unread message, where the "New messages" divider goes when the chat opens: none while the unread
+ * may begin on a page not loaded yet (no read CEO message before it and `older`), so the chat opens at the end
+ * instead of at its top, which would pull in the page before.
+ */
 export function firstUnread(messages: readonly PhoneMessage[], readAt: number, older: boolean): number | null {
   const fromCeo = (m: PhoneMessage) => m.from === 'ceo' && !m.requestId;
   const i = messages.findIndex((m) => fromCeo(m) && m.at > readAt);
