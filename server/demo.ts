@@ -15,7 +15,7 @@ import { parseForwarded } from '../shared/chat.ts';
 import { keyName } from '../shared/termKeys.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
-import { takeLastUpdate, underLauncher, type OfficeHost } from './officeUpdate.ts';
+import { takeLastUpdate, underLauncher, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
@@ -32,6 +32,7 @@ import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
+import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, pastPulls } from './demoMap.ts';
 import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
@@ -980,10 +981,12 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
+    seedCareers: sampleCareers,
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     seedNotices: sampleNotices,
     demoCharter,
+    demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
       dropDesk: (dir) => {
@@ -1061,6 +1064,13 @@ const demoOffice: OfficeHost = {
     return { from, to: lastFakeUpdate.to, ok: true, installed: true, built: true, at: Date.now() };
   },
 };
+
+/** A fresh demo office's chat: an update the preflight held back, with vitest's colour codes and rules in its output (#138). */
+function demoHeldUpdate(): LastUpdate {
+  const target = fakeSha();
+  const output = `\x1b[31mFAIL\x1b[39m server/swarm.test.ts > schedules work \x1b[2m${'─'.repeat(120)}[1/1]\x1b[22m\x1b[39m`;
+  return { from: DEMO_HEAD, to: DEMO_HEAD, target, ok: false, stage: 'preflight', error: `tests failed (npm test failed (exit 1): ${output})`, installed: false, built: false, at: Date.now() };
+}
 
 // ---------- the demo preview ----------
 

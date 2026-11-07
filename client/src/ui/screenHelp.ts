@@ -70,6 +70,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Edit the charter, or approve the CEO’s proposal.', 'Add an objective with how you will know it is met.', 'Check drift: merged work by objective.'],
     docs: `${HOW}#how-an-issue-flows-through-the-office`,
   },
+  map: {
+    title: 'Memory map',
+    shows: 'The company and its projects as a graph: floors, agents, issues, pull requests and files, and how they connect.',
+    actions: ['Search the map for an agent, issue or file.', 'Open a node’s local graph to see what touches it.', 'Colour by floor or objective to spot drift.'],
+    docs: `${HOW}#how-an-issue-flows-through-the-office`,
+  },
   ceo: {
     title: 'The CEO',
     shows: 'The CEO’s chat, model and effort, standing mandates, team changes and each floor’s brief and QA brief.',

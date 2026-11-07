@@ -52,3 +52,11 @@ export function stepFont(size: number, by: 1 | -1): number {
 function clampFont(size: number) {
   return Math.min(TERM_FONT.max, Math.max(TERM_FONT.min, Math.round(size)));
 }
+
+/** The live terminal's status line, worded for a finger (tap) or a pointer (click) (#117). */
+export function liveStatus(s: { connected: boolean; live: boolean; focused: boolean; touch: boolean }): string {
+  if (!s.connected) return 'Reconnecting…';
+  if (!s.live) return 'Not running · a message below picks the session back up';
+  if (s.focused) return `Typing goes straight to the agent · Esc goes to them too; ${s.touch ? 'tap' : 'click'} outside to use the office keys`;
+  return `Live · ${s.touch ? 'tap' : 'click'} the terminal to type into it`;
+}

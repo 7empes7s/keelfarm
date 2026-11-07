@@ -11,6 +11,8 @@ export interface CareerView {
   merged: number;
   /** PRs that passed QA on their first round. */
   firstPass: number;
+  /** PRs whose first QA round they saw (passed or failed): firstPass's denominator. */
+  firstQa: number;
   /** QA rounds on their PRs that passed, and that failed. */
   qaPass: number;
   qaFail: number;
@@ -26,16 +28,20 @@ export interface CareerView {
   turns: number;
   /** The last few merged PRs, newest first. */
   recent: { n: number; title: string; at: number }[];
-  /** When their merges of the last week landed. */
+  /** When their merges of the last four weeks landed (the profile's sparkline; the week's counts filter it). */
   week: number[];
+  /** How long their last few builds took from the session's start to the PR (ms), newest first. */
+  toPr: number[];
 }
 
 export const RECENT_KEEP = 8;
 export const WEEK_MS = 7 * 24 * 3_600_000;
 export const DAY_MS = 24 * 3_600_000;
+/** The weeks of merge times a career keeps, for the profile's sparkline. */
+export const SPARK_WEEKS = 4;
 
 export function newCareer(since: number): CareerView {
-  return { since, opened: 0, merged: 0, firstPass: 0, qaPass: 0, qaFail: 0, fixRounds: 0, run: 0, best: 0, reviews: 0, costUsd: 0, turns: 0, recent: [], week: [] };
+  return { since, opened: 0, merged: 0, firstPass: 0, firstQa: 0, qaPass: 0, qaFail: 0, fixRounds: 0, run: 0, best: 0, reviews: 0, costUsd: 0, turns: 0, recent: [], week: [], toPr: [] };
 }
 
 /** QA rounds passed as a share of all QA rounds on their PRs (0-1), or null before any. */
@@ -85,6 +91,125 @@ export function mvpOfWeek<T extends { career: CareerView | null }>(people: T[], 
     if (!best || merges > best.merges || (merges === best.merges && p.career.merged > (best.who.career?.merged ?? 0))) best = { who: p, merges };
   }
   return best;
+}
+
+// ---------- the profile (#117) ----------
+
+/** PRs that passed QA on their first round, as a share of those whose first round they saw (0-1), or null before any. */
+export function firstRoundRate(c: CareerView): number | null {
+  const n = Math.max(c.firstQa, c.firstPass); // records from before firstQa counted only the passes
+  return n ? c.firstPass / n : null;
+}
+
+/** QA rounds per merged PR, or null before the first merge. */
+export const roundsPerMerge = (c: CareerView): number | null => (c.merged ? (c.qaPass + c.qaFail) / c.merged : null);
+
+/** The coding agents' estimated cost per merged PR, or null before the first merge. */
+export const costPerMerge = (c: CareerView): number | null => (c.merged ? c.costUsd / c.merged : null);
+
+/** The median time from a build's start to its PR (ms), or null before any. */
+export function medianToPr(c: CareerView): number | null {
+  if (!c.toPr.length) return null;
+  const xs = [...c.toPr].sort((a, b) => a - b);
+  const mid = xs.length >> 1;
+  return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+}
+
+/** Merges per week over the last `weeks` weeks before `now`, oldest first. */
+export function weeklyMerges(c: CareerView, now: number, weeks = SPARK_WEEKS): number[] {
+  const out = Array.from({ length: weeks }, () => 0);
+  for (const t of c.week) {
+    const ago = Math.floor((now - t) / WEEK_MS);
+    if (t <= now && ago < weeks) out[weeks - 1 - ago]++;
+  }
+  return out;
+}
+
+/** The profile's badges, earned from the record. */
+export function badges(c: CareerView): string[] {
+  const out: string[] = [];
+  if (c.firstPass >= STAR_PASSES) out.push(`⭐ ${STAR_PASSES} first-time passes`);
+  if (c.best >= 3) out.push(`🔥 ${c.best} in a row`);
+  if (c.merged >= 1 && c.fixRounds === 0) out.push('✨ Never needed a fix');
+  if (mostlyReviews(c)) out.push(`🔍 ${c.reviews} QA reviews`);
+  if (c.merged >= 25) out.push('🏆 25 merges');
+  return out;
+}
+
+/** A profile stat: its value (null before there's any) and whether a higher one is better. */
+interface StatDef {
+  key: string;
+  label: string;
+  value: (c: CareerView, now: number) => number | null;
+  show: (x: number) => string;
+  higher: boolean;
+  title: string;
+}
+
+const pctText = (x: number) => `${Math.round(x * 100)}%`;
+
+/** "42m", "3.5h", "2d". */
+export function durationText(ms: number): string {
+  const m = ms / 60_000;
+  if (m < 60) return `${Math.max(1, Math.round(m))}m`;
+  const h = m / 60;
+  return h < 24 ? `${Math.round(h * 10) / 10}h` : `${Math.round((h / 24) * 10) / 10}d`;
+}
+
+const PROFILE_STATS: StatDef[] = [
+  { key: 'merged', label: 'PRs merged', value: (c) => c.merged, show: String, higher: true, title: 'Pull requests of theirs that merged' },
+  { key: 'firstRound', label: 'First-round QA', value: (c) => firstRoundRate(c), show: pctText, higher: true, title: 'PRs that passed QA on their first round' },
+  { key: 'rounds', label: 'QA rounds / merge', value: (c) => roundsPerMerge(c), show: (x) => x.toFixed(1), higher: false, title: 'QA rounds their merged PRs took, on average' },
+  { key: 'toPr', label: 'Time to PR', value: (c) => medianToPr(c), show: durationText, higher: false, title: 'Median time from starting an issue to its pull request' },
+  { key: 'cost', label: 'Cost / merge', value: (c) => costPerMerge(c), show: (x) => `$${x.toFixed(2)}`, higher: false, title: 'Estimated, as the coding agents report it; subscription usage is billed by plan' },
+  { key: 'week', label: 'Merged this week', value: (c, now) => mergesThisWeek(c, now), show: String, higher: true, title: 'Merges in the last 7 days' },
+  { key: 'streak', label: 'Best streak', value: (c) => c.best, show: String, higher: true, title: 'PRs in a row that passed QA first time' },
+  { key: 'reviews', label: 'QA reviews', value: (c) => c.reviews, show: String, higher: true, title: "Other people's pull requests they tested" },
+];
+
+/** The mean of a stat over a floor's careers, skipping those without it yet; null when none has it. */
+function floorAverage(careers: CareerView[], stat: Pick<StatDef, 'value'>, now: number): number | null {
+  const xs = careers.map((c) => stat.value(c, now)).filter((x): x is number => x !== null);
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+}
+
+export type Verdict = 'better' | 'worse' | 'even';
+
+/** How a value compares with the floor's average: within 5% (or both 0) is even. Null without both. */
+export function compareToFloor(value: number | null, avg: number | null, higherIsBetter: boolean): Verdict | null {
+  if (value === null || avg === null) return null;
+  const gap = value - avg;
+  if (Math.abs(gap) <= Math.abs(avg) * 0.05 || gap === 0) return 'even';
+  return gap > 0 === higherIsBetter ? 'better' : 'worse';
+}
+
+export interface ProfileStat {
+  key: string;
+  label: string;
+  title: string;
+  /** The value as shown, '—' before there's any. */
+  text: string;
+  verdict: Verdict | null;
+  /** "↑ better than floor 1's 0.8", or '' with nothing to compare. */
+  vsFloor: string;
+}
+
+/** The profile's stat grid: each stat of `c`, compared with the average over `floor` (everyone on their floor, them included). */
+export function profileStats(c: CareerView, floor: CareerView[], floorNumber: number, now: number): ProfileStat[] {
+  return PROFILE_STATS.map((d) => {
+    const v = d.value(c, now);
+    const avg = floor.length > 1 ? floorAverage(floor, d, now) : null;
+    const verdict = compareToFloor(v, avg, d.higher);
+    const vsFloor = verdict === null ? '' : `${verdict === 'better' ? '↑ better than' : verdict === 'worse' ? '↓ under' : '= same as'} floor ${floorNumber}'s ${d.show(Math.round(avg! * 100) / 100)}`;
+    return { key: d.key, label: d.label, title: d.title, text: v === null ? '—' : d.show(v), verdict, vsFloor };
+  });
+}
+
+/** The team list's two or three key stats, as one short line ("3 merged this week · 80% first-round QA · $1.20 / merge"). */
+export function keyStats(c: CareerView, now: number): string {
+  const rate = firstRoundRate(c);
+  const cost = costPerMerge(c);
+  return [`${mergesThisWeek(c, now)} merged this week`, rate !== null && `${pctText(rate)} first-round QA`, cost !== null && `$${cost.toFixed(2)} / merge`].filter(Boolean).join(' · ');
 }
 
 // ---------- the desk ----------

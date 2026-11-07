@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DRAIN_TIMEOUT_MS, POSTPONE_MS, SETTLE_MAX_MS, drainDecision, settleAt, settleMinutes, lastUpdateMessage, parseLastUpdate, takeLastUpdate, underLauncher, type DrainInput } from './officeUpdate.ts';
+import { DRAIN_TIMEOUT_MS, POSTPONE_MS, SETTLE_MAX_MS, drainDecision, settleAt, settleMinutes, lastUpdateNotice, parseLastUpdate, takeLastUpdate, underLauncher, type DrainInput } from './officeUpdate.ts';
 
 const NOW = 1_000_000_000;
 const input = (over: Partial<DrainInput> = {}): DrainInput => ({
@@ -182,23 +182,34 @@ describe('underLauncher', () => {
 describe('last-update.json', () => {
   const ok = { from: 'abc1234aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', to: 'def5678bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ok: true, installed: true, built: true, at: 5 };
 
+  const msg = (u: Parameters<typeof lastUpdateNotice>[0], commits: number | null) => lastUpdateNotice(u, commits).text;
+
   it('words the phone message', () => {
-    expect(lastUpdateMessage(ok, 3)).toBe('⬆️ Updated the office from abc1234 to def5678 (3 commits)');
-    expect(lastUpdateMessage(ok, 1)).toBe('⬆️ Updated the office from abc1234 to def5678 (1 commit)');
-    expect(lastUpdateMessage(ok, null)).toBe('⬆️ Updated the office from abc1234 to def5678');
-    expect(lastUpdateMessage({ ...ok, ok: false, error: 'npm ci failed' }, null)).toBe('⚠️ Update failed and was rolled back: npm ci failed');
+    expect(msg(ok, 3)).toBe('⬆️ Updated the office from abc1234 to def5678 (3 commits)');
+    expect(msg(ok, 1)).toBe('⬆️ Updated the office from abc1234 to def5678 (1 commit)');
+    expect(msg(ok, null)).toBe('⬆️ Updated the office from abc1234 to def5678');
+    expect(msg({ ...ok, ok: false, error: 'npm ci failed' }, null)).toBe('⚠️ Update failed and was rolled back: npm ci failed.');
   });
 
   it('says which stage of a safe update failed', () => {
     const failed = { ...ok, to: ok.from, target: ok.to, ok: false };
-    expect(lastUpdateMessage({ ...failed, stage: 'preflight', error: 'tests failed (npm test failed (exit 1))' }, null)).toBe(
-      '⚠️ Update to def5678 refused: tests failed (npm test failed (exit 1)) in the preflight; still on abc1234',
-    );
-    expect(lastUpdateMessage({ ...failed, stage: 'probation', error: 'the office exited (1) during its probation' }, null)).toBe(
-      '⚠️ Update to def5678 rolled back: the office exited (1) during its probation; back on abc1234',
-    );
-    expect(lastUpdateMessage({ ...failed, stage: 'check', error: 'the office folder has local changes' }, null)).toBe('⚠️ Update refused: the office folder has local changes; still on abc1234');
-    expect(lastUpdateMessage({ ...ok, to: ok.from }, null)).toBe('The office is already up to date at abc1234');
+    expect(msg({ ...failed, stage: 'preflight', error: 'tests failed (npm test failed (exit 1))' }, null)).toBe('⚠️ Update to def5678 held back: the tests failed in the preflight. Still running abc1234.');
+    expect(msg({ ...failed, stage: 'probation', error: 'the office exited (1) during its probation' }, null)).toBe('⚠️ Update to def5678 rolled back: the office exited (1) during its probation. Back on abc1234.');
+    expect(msg({ ...failed, stage: 'check', error: 'the office folder has local changes' }, null)).toBe('⚠️ Update held back: the office folder has local changes. Still running abc1234.');
+    expect(msg({ ...ok, to: ok.from }, null)).toBe('The office is already up to date at abc1234');
+  });
+
+  it("shows a refused preflight as a card: the cleaned output as Details, links to both commits (#138)", () => {
+    const error = `tests failed (npm test failed (exit 1): \x1b[2m${'─'.repeat(300)}[1/1]\x1b[22m\x1b[39m)`;
+    const r = lastUpdateNotice({ ...ok, to: ok.from, target: ok.to, ok: false, stage: 'preflight', error }, null, 'acme/office');
+    expect(r.text).toBe('⚠️ Update to def5678 held back: the tests failed in the preflight. Still running abc1234.');
+    expect(r.notice.details).toBe('npm test failed (exit 1): —[1/1]');
+    expect(r.notice.links).toEqual([
+      { label: 'Commit def5678', url: `https://github.com/acme/office/commit/${ok.to}` },
+      { label: 'Running abc1234', url: `https://github.com/acme/office/commit/${ok.from}` },
+    ]);
+    expect(lastUpdateNotice(ok, 2, 'acme/office').notice).toEqual({ links: [{ label: 'Changes', url: `https://github.com/acme/office/compare/${ok.from}...${ok.to}` }] });
+    expect(lastUpdateNotice(ok, 2).notice).toEqual({});
   });
 
   it('ignores anything that is not a result', () => {
