@@ -7,7 +7,7 @@ import { enterOffice, expect, overflowProblems, startAt, test } from './helpers'
 // Nothing drags sideways (#149). The manager's own words are longer than the demo's: with a charter of unbroken paths
 // and URLs on every floor, no console section has anything past its edge (pocket mode and the 3D office), and on a
 // phone a sideways swipe on a section moves nothing, even with something too wide in it (the panels' safety net).
-// layout.spec.ts runs the same overflow check on every screen as the demo has it.
+// The per-screen layout specs run the same overflow check on every screen as the demo has it.
 
 const LONG = 'https://github.com/7empes7s/keelfarm/blob/main/client/src/ui/consoleSectionWithAVeryLongFileName.tsx';
 const LONG_CHARTER = {
@@ -43,6 +43,18 @@ async function openConsole(page: Page, where: Where) {
   await expect(page.getByText("Open the manager's console")).toBeVisible(); // aimed at the desk
   await page.keyboard.press('e');
   return page.getByRole('dialog', { name: /Manager's console/ });
+}
+
+/** The scroll boxes of panels and sheets (client/src/overflow.css's list). */
+const SCROLL_BOXES = '.panel-body, .tab-body, .sheet-body, .pk-main, .cn-side, .cn-pane, .aw-side, .aw-sheet .aw-details, .chat-sheet, .phone-scroll';
+
+/** Each visible panel or sheet scroll box in `root` (or `root` itself) whose content is wider than it. */
+function scrollBoxProblems(root: Locator) {
+  return root.evaluate((el, sel) => {
+    const boxes = [...(el.matches(sel) ? [el] : []), ...el.querySelectorAll(sel)].filter((b) => b.checkVisibility());
+    if (!boxes.length) return ['no panel or sheet scroll box found'];
+    return boxes.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => `${b.tagName.toLowerCase()}.${[...b.classList].join('.')} is ${b.scrollWidth}px wide inside ${b.clientWidth}px`);
+  }, SCROLL_BOXES);
 }
 
 async function openSection(root: Locator, group: string, label: string) {
@@ -93,7 +105,7 @@ for (const [where, widths] of [
               await openSection(root, g.label, s.label);
               await page.waitForTimeout(300); // lazy sections and settled layout
               const at = `${g.label} › ${s.label}`;
-              for (const p of await overflowProblems(root)) problems.push(`${at}: ${p}`);
+              for (const p of [...(await scrollBoxProblems(root)), ...(await overflowProblems(root))]) problems.push(`${at}: ${p}`);
               if (width >= 800) continue;
               const moved = await swipeSideways(page, root.locator('.panel-body').first());
               if (moved > 1) problems.push(`${at}: a sideways swipe moved the section ${Math.round(moved)}px`);
@@ -102,7 +114,7 @@ for (const [where, widths] of [
           if (where === 'pocket') {
             await openSection(root, 'Company', 'Charter');
             await root.getByRole('button', { name: '✏️ Edit', exact: true }).click();
-            for (const p of await overflowProblems(root)) problems.push(`Charter editor: ${p}`);
+            for (const p of [...(await scrollBoxProblems(root)), ...(await overflowProblems(root))]) problems.push(`Charter editor: ${p}`);
           }
           expect(problems).toEqual([]);
         } finally {
