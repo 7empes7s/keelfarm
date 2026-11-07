@@ -272,7 +272,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
     const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + memoryPrompt(this.state.ceo.remember);
+    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + memoryPrompt(this.state.ceo.remember) + this.takeChanges(job);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
     const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.startOnAccount(a,
@@ -347,7 +347,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     this.researchGuard.clear();
     const preempted = !!job && job === this.ceoPreempted;
     this.ceoPreempted = null;
-    if (preempted) this.state.ceo.queue.push(job);
+    if (this.settleChanges(preempted) && job) this.state.ceo.queue.push(job); // a preempted job hears its changes again
     else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
@@ -590,7 +590,7 @@ export abstract class SwarmCeo extends SwarmReactions {
 
   protected async triageRetryQa(x: { floor: number; pr: number }) {
     const { repo, rec } = await this.triageTarget(x);
-    await this.sendToQa(repo.id, rec.prNumber);
+    await this.sendToQa(repo.id, rec.prNumber, undefined, true);
     return `PR #${rec.prNumber} is queued for QA round ${rec.round}.`;
   }
 
@@ -616,7 +616,7 @@ export abstract class SwarmCeo extends SwarmReactions {
       this.setQa(rec, { status: 'passed', rerunSha: listed.headSha, rerunAt: Date.now(), pendingSince: null, mergeNote: 're-running a failed check' });
       return `Re-running ${runs} on PR #${rec.prNumber}. QA passed this commit, so it merges if they go green.`;
     }
-    await this.sendToQa(repo.id, rec.prNumber);
+    await this.sendToQa(repo.id, rec.prNumber, undefined, true);
     return `Re-running ${runs} on PR #${rec.prNumber}, and it is queued for QA round ${rec.round}.`;
   }
 

@@ -50,6 +50,7 @@ export const TOUR: TourEntry[] = [
 
   // pocket mode's tabs
   { id: 'pocket-tabs', tracks: POCKET, title: 'Five tabs', text: 'Company, the chat with {ceo}, Kanban, Team and Approvals; a badge says what waits on you.', targets: ['pocket-tabs'], added: 2 },
+  { id: 'chat-button', tracks: ['desk'], title: 'The chat, top right', text: "{ceo}'s avatar at the top right opens and closes the chat beside the pages, with a badge for unread messages and a dot while they work.", targets: ['chat'], added: 5 },
   { id: 'desk-keys', tracks: ['desk'], title: 'Keyboard first', text: 'Keys 1 to 5 open the tabs, / jumps to the chat beside them, and 🏢 3D office walks around the building.', targets: ['switch'], added: 2 },
 
   // every track (#102 to #109)

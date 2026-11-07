@@ -1,5 +1,6 @@
 // The snapshot and what goes out on /ws: the events that keep a tab's state up to date. Imported through shared/types.ts.
 import type { ChatItem } from '../agentChat.ts';
+import type { PastCareer } from '../careers.ts';
 import type { Decision } from '../decisions.ts';
 import type { LabView } from '../experiments.ts';
 import type { FileView } from '../files.ts';
@@ -13,7 +14,7 @@ import type { ToolInventory } from '../tooling.ts';
 import type { AgentView, CliView, CloudView, HireRequestView, LogLine, ModelCatalogView } from './agents.ts';
 import type { CeoChatView, CeoInfo, PhoneMessage, ServerDelivery, StatusReaction } from './chat.ts';
 import type { NoteView, NoticeView, NotifyChannelsView } from './notify.ts';
-import type { DoctorFinding, OfficeUpdateView, UsageCheckError, UsageReading, UsageView } from './office.ts';
+import type { DoctorFinding, ManagerChange, OfficeUpdateView, UsageCheckError, UsageReading, UsageView } from './office.ts';
 import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
@@ -59,10 +60,12 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   accounts?: AccountsView; // Settings → Providers & accounts (#247): no secrets
   progress: ProgressView; // coins, decorations and achievements (#210)
+  pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
   experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
+  managerChanges?: ManagerChange[]; // the manager's recent board actions and what the CEO did (#207); absent in a replay
   chat?: CeoChatView; // absent in a replay
   testLab?: TestLabView; // the test lab desk (#56): its queue, running jobs and recent results; absent in a replay
 }
@@ -125,10 +128,12 @@ export type ServerEvent =
   | { type: 'accounts'; accounts: AccountsView }
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
+  | { type: 'managerChanges'; changes: ManagerChange[] }
   /** A session (or merge) went into the history (#49): an open History screen shows it. */
   | { type: 'history'; entry: HistoryEntry }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
+  | { type: 'pastCareers'; past: PastCareer[] }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
   /** A plain toast, or with the notice fields a rich one that also joins the notification centre. */

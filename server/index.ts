@@ -248,6 +248,7 @@ app.get('/api/history/:id', route(async (req) => (await swarm.history.detail(Str
 app.post('/api/experiments', route((req) => swarm.lab.define(req.body, 'manager')));
 app.post('/api/experiments/:id', route((req) => swarm.lab.act(String(req.params.id), req.body?.action, req.body?.variant ?? null)));
 app.post('/api/experiments/:id/every-project', route((req) => swarm.adoptPractices(String(req.params.id), req.body?.variant)));
+app.get('/api/agents/:id/timeline', route((req) => swarm.careerTimeline(String(req.params.id))));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
   const shot = swarm.screenshot(String(req.params.id));

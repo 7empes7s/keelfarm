@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
@@ -41,7 +42,7 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal' } // view: opened on it (the CEO chat's @Agent opens their chat)
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); profile: with their Profile open (#205)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
@@ -162,6 +163,7 @@ interface State {
   voiceKeyHint: string; // its last 4 characters
   voiceCache: VoiceCacheView; // the voice's saved clips: Settings → Voice, and which messages the phone's ▶ replays
   progress: ProgressView; // coins, decorations and achievements (#210)
+  pastCareers: PastCareer[]; // careers of people let go (#205): the Team tab's Past agents
   voiceSpeaking: number | null; // the phone message being read aloud in this tab (ui/voiceMessages.ts)
   weather: WeatherView; // the real local weather's place and latest reading (Settings → Weather)
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
@@ -170,6 +172,7 @@ interface State {
   accounts: AccountsView; // Settings → Providers & accounts (#247): logins and keys (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
+  managerChanges: ManagerChange[]; // the manager's board actions and what the CEO did about them (#207)
   historySeq: number; // bumped by each new history entry (#49): an open History tab reloads its page
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
@@ -324,6 +327,7 @@ export const useStore = create<State>((set, get) => ({
   voiceKeyHint: '',
   voiceCache: { clips: 0, bytes: 0, saved: [] },
   progress: { floors: {}, achievements: [], coffees: 0, merges: 0 },
+  pastCareers: [],
   voiceSpeaking: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
@@ -339,6 +343,7 @@ export const useStore = create<State>((set, get) => ({
   accounts: { accounts: [] },
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
+  managerChanges: [],
   historySeq: 0,
   pong: {},
   restarting: false,
@@ -426,7 +431,9 @@ export const useStore = create<State>((set, get) => ({
           accounts: d.accounts ?? { accounts: [] },
           tooling: d.tooling ?? EMPTY_INVENTORY,
           experiments: d.experiments ?? emptyLabView(),
+          managerChanges: d.managerChanges ?? [],
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
+          pastCareers: d.pastCareers ?? [],
           pong: d.pong ?? {},
           restarting: false,
           floor: floorExists ? get().floor : 0,
@@ -666,6 +673,9 @@ export const useStore = create<State>((set, get) => ({
       case 'experiments':
         set({ experiments: ev.experiments });
         break;
+      case 'managerChanges':
+        set({ managerChanges: ev.changes });
+        break;
       case 'history':
         set({ historySeq: get().historySeq + 1 });
         break;
@@ -689,6 +699,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'progress':
         set({ progress: ev.progress });
+        break;
+      case 'pastCareers':
+        set({ pastCareers: ev.past });
         break;
       case 'reward':
         if (live) emitReward(ev.reward);

@@ -179,6 +179,7 @@ export interface AgentView {
   lastError: string | null;
   blocked?: string | null; // waiting on a prompt the office couldn't answer (server/unblock.ts): why
   waiting?: AgentQuestion['to'] | null; // waiting on an answer to their question (shared/questions.ts): from whom
+  reviewedBy?: string | null; // the CEO's name while it decides about a manager's change to their running work (#207)
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)

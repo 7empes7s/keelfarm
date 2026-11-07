@@ -148,6 +148,12 @@ describe('afterClose', () => {
     expect(afterClose(closed198, [{ ...guido, status: 'preparing' }], [rec('fixing', { devAgentId: 'guido' })], BUSY).stop).toEqual(['guido']);
   });
 
+  it("never stops the agents the manager's own close touched (#207): they and the PR's QA record wait for the CEO", () => {
+    expect(afterClose(issue192, [barbara, marple], [rec('queued')], BUSY, ['barbara'])).toEqual({ stop: [], clear: [], dropQa: false });
+    expect(afterClose(closed198, [guido], [rec('fixing', { devAgentId: 'guido' })], BUSY, ['guido'])).toEqual({ stop: [], clear: [], dropQa: false });
+    expect(afterClose(closed198, [{ ...guido, status: 'stopped' }], [rec('failed')], BUSY, ['guido'])).toEqual({ stop: [], clear: ['guido'], dropQa: true }); // the CEO stopped them
+  });
+
   it('stops a QA run on a closed PR', () => {
     expect(afterClose(closed198, [marple], [rec('testing')], BUSY)).toEqual({ stop: ['marple'], clear: [], dropQa: true });
   });

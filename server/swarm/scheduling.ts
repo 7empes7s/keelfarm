@@ -380,6 +380,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (!draining && !this.limited()) {
       this.maybeHeartbeat();
       this.maybeFollowup();
+      this.maybeChanges();
     }
     // Management first: the CEO's jobs are short and shape everyone else's work, and the manager's chat never waits.
     this.startCeoWork(draining);

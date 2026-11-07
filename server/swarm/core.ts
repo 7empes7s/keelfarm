@@ -31,7 +31,7 @@ import { Lab, loadLab } from '../experiments.ts';
 import { FloorPractice } from '../practiceState.ts';
 import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
-import { emptyLedger } from '../ledger.ts';
+import { emptyLedger, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
@@ -47,6 +47,7 @@ import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '..
 import { WeatherService } from '../weather.ts';
 import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
+import { emptyChanges } from '../../shared/managerChanges.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
@@ -139,7 +140,7 @@ export abstract class SwarmCore extends SwarmContract {
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), changes: emptyChanges(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
     messages: [],
     phoneReadAt: 0,
     notices: [],
@@ -266,10 +267,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => {
-      this.lab.session(line);
-      this.logSession(line, run);
-    });
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); });
     // The machine's daily log folder only for the real office: never from the demo or the tests.
     const machineDir = !backend.demo && !process.env.VITEST && existsSync(MACHINE_DAILY_DIR) ? MACHINE_DAILY_DIR : null;
     this.history = new SessionHistory({
@@ -561,10 +559,12 @@ export abstract class SwarmCore extends SwarmContract {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       publicDemo: PUBLIC_DEMO && this.backend.demo ? { resetHours: PUBLIC_DEMO_RESET_H } : undefined,
       progress: this.progressView(),
+      pastCareers: pastCareers(this.state.progress),
       pong: this.state.pong,
       files: this.files.list(),
       tooling: this.tooling,
       experiments: this.lab.view(),
+      managerChanges: this.state.ceo.changes.list,
     };
   }
 
