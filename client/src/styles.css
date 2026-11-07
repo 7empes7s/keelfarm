@@ -739,10 +739,9 @@ input.inline:focus {
   text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
   pointer-events: none;
 }
-/* The split screen's first-time hints on touch screens (#83): the top half looks, the bottom half walks. */
+/* The touch zones' first-time hints (#83, #123; TouchZoneHints.tsx places them). */
 .touch-zone-hint {
   position: absolute;
-  left: 50%;
   transform: translate(-50%, -50%);
   padding: 6px 14px;
   border: 2px dashed currentColor;
@@ -753,12 +752,6 @@ input.inline:focus {
   text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
   opacity: 0.8;
   pointer-events: none;
-}
-.touch-zone-look {
-  top: 25%;
-}
-.touch-zone-move {
-  top: 75%;
 }
 /* The camera's HUD (CameraHud.tsx): the overview button on the floor card, the views' toolbars and the follow banner. */
 .cam-btn {
@@ -1263,6 +1256,10 @@ input.inline:focus {
 .mouse-sens b {
   min-width: 3.4em;
   font-variant-numeric: tabular-nums;
+}
+.touch-seg .seg-btn {
+  min-width: 44px;
+  min-height: 44px;
 }
 .day-settings {
   margin-top: 10px;
@@ -6177,6 +6174,13 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
 }
 .touch-stick-run {
   border-color: rgba(255, 209, 102, 0.8);
+}
+/* Where the stick rests in the thumb zones (#123), above the home indicator: touch anywhere near it to walk. */
+.touch-ghost {
+  margin-top: calc(-1 * env(safe-area-inset-bottom, 0px));
+  opacity: 0.45;
+  border-style: dashed;
+  animation: none;
 }
 .touch-knob {
   width: 44px;

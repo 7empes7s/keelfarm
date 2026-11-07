@@ -13,6 +13,7 @@ import type { ChatAction } from './ceoActions.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { AgentQuestion } from './questions.ts';
+import type { Decision } from './decisions.ts';
 export type { AgentQuestion }; // its home is shared/questions.ts
 import type { CeoAwakeSettings, CeoSessionView } from './ceoAwake.ts';
 import type { LabView } from './experiments.ts';
@@ -424,7 +425,7 @@ export interface SwarmSettings {
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
-export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
+export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge' | 'decisions';
 
 /** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
 export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
@@ -767,6 +768,7 @@ export interface WorldSnapshot {
   messages: PhoneMessage[];
   phoneReadAt: number; // CEO messages newer than this are unread
   notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
+  decisions?: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts); absent in a replay
   version?: string; // the cubefarm version the server runs (package.json)
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
@@ -827,6 +829,7 @@ export type ServerEvent =
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
+  | { type: 'decisions'; decisions: Decision[] }
   /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
   | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }

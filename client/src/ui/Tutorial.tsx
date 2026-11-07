@@ -11,6 +11,7 @@ import { reduceMotion } from './a11y';
 import { newSince, stepsFor, textParts, TOUR, isStep, type TourStep, type Track, type TryIt } from './tourSteps';
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
 import './tour.css';
+import { isTouch, useTouchStick } from '../world/touch/touchState';
 
 // The tour (#121): a coach card with one sentence per step, a ring around the real control it's about, Back / Next /
 // Skip, progress dots and, where it's harmless, "Try it". Its steps are in tourSteps.ts, one track per kind of screen.
@@ -21,7 +22,7 @@ type S = ReturnType<typeof useStore.getState>;
 
 /** When a step is done, and the least time it shows before moving on. */
 const DONE: Record<string, { done: (s: S) => boolean; minMs?: number }> = {
-  look: { done: (s) => s.locked, minMs: 5000 },
+  look: { done: (s) => (isTouch ? useTouchStick.getState().walked && useTouchStick.getState().looked : s.locked), minMs: 5000 },
   phone: { done: (s) => s.overlay?.kind === 'phone' },
   'phone-tour': { done: (s) => s.overlay?.kind !== 'phone', minMs: 2500 },
   ceo: { done: (s) => (s.overlay?.kind === 'terminal' && s.overlay.agentId === CEO_ID) || (s.overlay?.kind === 'manager' && s.overlay.tab === 'ceo') },
@@ -202,7 +203,7 @@ export function Tutorial({ track }: { track: Track }) {
         </div>
         <div className="tour-title">{cheer ? `✅ ${s.title}` : s.title}</div>
         <div className="tour-body">
-          <StepText text={s.text} />
+          <StepText text={(isTouch && s.touchText) || s.text} />
         </div>
         <div className="tour-dots" aria-hidden>
           {steps.map((x, i) => (

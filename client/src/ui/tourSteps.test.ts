@@ -30,7 +30,7 @@ describe('the tour', () => {
     const ids = TOUR.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const s of steps) {
-      expect(s.text.replace(/\{[^}]+\}/g, 'x').split(/[.!?](\s|$)/).filter((x) => x?.trim()).length, s.id).toBeLessThanOrEqual(2);
+      for (const t of [s.text, s.touchText ?? '']) expect(t.replace(/\{[^}]+\}/g, 'x').split(/[.!?](\s|$)/).filter((x) => x?.trim()).length, s.id).toBeLessThanOrEqual(2);
       expect(s.added).toBeGreaterThanOrEqual(1);
       expect(s.tracks.length).toBeGreaterThan(0);
     }

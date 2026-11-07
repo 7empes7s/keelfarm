@@ -596,7 +596,7 @@
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
     "server/cliRunner.ts": 989,
-    "server/demo.ts": 1940,
+    "server/demo.ts": 1925,
     "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
     "shared/types.ts": 900

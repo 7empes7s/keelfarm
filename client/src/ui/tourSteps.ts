@@ -17,6 +17,8 @@ export interface TourStep {
   title: string;
   /** One sentence. `{ceo}` and `{company}` are names; `{key:<action>}` is the player's key for it; `{move}` the move keys. */
   text: string;
+  /** The text on a touch screen, when it differs. */
+  touchText?: string;
   /** `data-tour` ids of the control to spotlight, best first: the first one on screen gets the ring. */
   targets?: string[];
   tryIt?: TryIt;
@@ -37,7 +39,7 @@ const POCKET: Track[] = ['phone', 'desk'];
 
 export const TOUR: TourEntry[] = [
   // the 3D office's walk-through
-  { id: 'look', tracks: ['office'], title: 'Look around', text: 'Click the view to look around, walk with {move} and press {key:overview} for the whole floor from above; Esc gives the mouse back.', added: 1 },
+  { id: 'look', tracks: ['office'], title: 'Look around', text: 'Click the view to look around, walk with {move} and press {key:overview} for the whole floor from above; Esc gives the mouse back.', touchText: 'Drag near the ghost stick at the bottom to walk (far to run), drag in the other bottom corner to look and tap a desk, a person or the floor to walk there.', added: 1 },
   { id: 'phone', tracks: ['office'], title: 'Pull out your phone', text: 'Press {key:phone}: your phone is how you talk to {ceo} from anywhere in the building.', targets: ['phone'], added: 1 },
   { id: 'phone-tour', tracks: ['office'], title: 'Your phone', text: '💬 texts {ceo}, 👥 Team has the changes waiting for your OK and 📊 Company shows every project; put it away with {key:phone}.', added: 1 },
   { id: 'ceo', tracks: ['office'], title: 'Visit the CEO', text: "{ceo}'s corner office is at the back right of the lobby: walk in and press {key:interact} at the desk.", added: 1 },
