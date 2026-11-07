@@ -40,7 +40,7 @@ import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts'
 import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoKill, demoPortOwner, demoProc, holdDemoPort } from './demoLeftover.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
-import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoAwake, demoRound, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
@@ -1678,7 +1678,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      if (awake) return awake;
+      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0])); // "look into …": the step log (#150)
+      if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).

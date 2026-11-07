@@ -66,6 +66,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string; doc?: ChatArtifact; from?: string | null } | null>(null);
   const [viewing, setViewing] = useState<{ id: string; messageId?: number | null; from?: string | null } | null>(null);
   const [seg, setSeg] = useState<ChatSegment>('chat');
+  const [logOpen, setLogOpen] = useState(false); // the working strip's live step log (#150)
   const att = useAttachments(draftKey);
   const library = useThreadLibrary(messages);
   const drop = useDropZone(att.add);
@@ -352,7 +353,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} />}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} onOpenLog={() => setLogOpen(true)} />}
         </div>
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label={unseen ? `${unseen} new messages: jump to the latest` : 'Jump to the latest message'}>
@@ -411,7 +412,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
           <Icon name="pause" /> {heldBanner(info.held)}
         </div>
       )}
-      <WorkingStrip onStop={stop} />
+      <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
       <AttachTray pending={att.pending} onRemove={att.remove} onRetry={att.retry} />
       {mention.picks}
       {slash.picks}

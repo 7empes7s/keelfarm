@@ -32,7 +32,7 @@ import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
 import { conversationsView, currentConversation, editConversation, loadChats, openConversation, projectLine, searchConversations, startConversation, unfilled } from '../shared/conversations.ts';
 import { loadMemory, removeNote, saveNote, type MemoryNote } from '../shared/ceoMemory.ts';
-import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
+import { finishedLog, stopReply } from '../shared/ceoStream.ts';
 import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
@@ -76,7 +76,7 @@ export { HttpError };
 const STOP_SETTLE_MS = 15_000;
 
 export class Swarm extends SwarmVoices {
-  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null);
+  protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null);
 
   // ---------- lifecycle ----------
 
@@ -549,12 +549,12 @@ export class Swarm extends SwarmVoices {
   async stopCeo() {
     const a = this.ceo();
     if (!BUSY.includes(a.status)) throw new HttpError(409, `${a.name} isn't working on anything right now.`);
-    const steps = finishedSteps(this.ceoChat.live);
+    const log = finishedLog(this.ceoChat.live, Date.now());
     this.stopAgent(a.id);
     this.ceoChat.endJob();
     const calls = await this.ceoChat.settled(STOP_SETTLE_MS);
     const actions = this.ceoChat.turnActions(calls);
-    this.postMessage('ceo', stopReply(calls), undefined, { ...(steps.length && { steps }), ...(actions.length && { actions }) });
+    this.postMessage('ceo', stopReply(calls), undefined, { ...(log && { log }), ...(actions.length && { actions }) });
     this.markDelivery('all', 'replied');
   }
 

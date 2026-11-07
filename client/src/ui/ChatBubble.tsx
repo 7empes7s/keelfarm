@@ -12,7 +12,8 @@ import { Markdown } from './Markdown';
 import { ArtifactCard } from './ChatArtifacts';
 import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
-import { LongText, StepsList } from './ChatLive';
+import { LongText, StepsRow } from './ChatLive';
+import { replyLog } from './chatCardRules';
 import { ActionCards, NoticeCard, NoticePill } from './ChatCards';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
@@ -119,6 +120,7 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
   const at = m ? m.at : item.out!.at;
   const id = m?.id;
   const files: FileRef[] = (m ? m.attachments : item.out!.files) ?? [];
+  const log = m ? replyLog(m) : null;
 
   // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click). A second
   // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu.
@@ -222,11 +224,11 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
+        {m && log && <StepsRow log={log} actions={m.actions?.length ?? 0} used={m.used} linked={linked} onFloor={onFloor} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
-        {/* one compact meta row (#215): Used and Steps fold open across it, the time on its right */}
+        {/* one compact meta row (#215): Used (when there's no steps row to carry it) folds open across it, the time on its right */}
         <div className="bubble-meta">
-          {m?.used && <UsedLine used={m.used} />}
-          {!!m?.steps?.length && <StepsList steps={m.steps} />}
+          {!log && m?.used && <UsedLine used={m.used} />}
           <div className="bubble-time">
             {m && !mine && <ReplayButton m={m} />}
             {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}

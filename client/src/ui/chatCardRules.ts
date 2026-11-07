@@ -3,9 +3,10 @@
 // ChatCards.tsx draws them.
 
 import type { ActionRef } from '../../../shared/ceoActions';
-import type { LiveStep } from '../../../shared/ceoStream';
+import type { LiveStep, StepLog } from '../../../shared/ceoStream';
+import { shortDuration } from '../../../shared/ceoSteps';
 import { RESEARCH_PREFIX } from '../../../shared/chat';
-import { CEO_ID } from '../../../shared/types';
+import { CEO_ID, type PhoneMessage } from '../../../shared/types';
 import { matchPicks, pickText, type QuickPicks } from '../../../shared/used';
 import type { IconName } from './icons';
 import { agentFor, type RefWorld } from './chatRefs';
@@ -62,10 +63,37 @@ export function elapsed(ms: number): string {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
-/** What the strip says while the CEO is on a job: the step running (else the job), and the next job waiting. */
-export function workingLine(job: { label: string } | null, step: LiveStep | null, queue: readonly { label: string }[]): { now: string; next: string | null } | null {
+/** What the strip says while the CEO is on a job: the step running (else the job), its icon, and the next job waiting. */
+export function workingLine(job: { label: string } | null, step: LiveStep | null, queue: readonly { label: string }[]): { now: string; icon: string | null; next: string | null } | null {
   if (!job) return null;
-  return { now: step?.state === 'running' ? step.label : job.label, next: queue[0]?.label ?? null };
+  const running = step?.state === 'running';
+  return { now: running ? step.label : job.label, icon: running ? step.icon : null, next: queue[0]?.label ?? null };
+}
+
+// ---------- a reply's step log (#150) ----------
+
+/** A reply's step log: its own, else one made from the labels a reply kept before #150 (untimed); null when it took no steps. */
+export function replyLog(m: Pick<PhoneMessage, 'log' | 'steps'>): StepLog | null {
+  if (m.log?.steps.length) return m.log;
+  if (!m.steps?.length) return null;
+  const steps = m.steps.map((s): LiveStep => (s.startsWith('✗ ') ? { label: s.slice(2), icon: '•', state: 'failed', at: 0 } : { label: s, icon: '•', state: 'done', at: 0 }));
+  return { steps, count: steps.length, ms: 0 };
+}
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/** The reply's one-line steps row: "6 steps · 1 action · 42 s" (no time for an untimed one). */
+export function stepsSummary(log: StepLog | null, actions: number): string {
+  const parts = [plural(log?.count ?? 0, 'step')];
+  if (actions) parts.push(plural(actions, 'action'));
+  if (log?.ms) parts.push(shortDuration(log.ms));
+  return parts.join(' · ');
+}
+
+/** A step's time in the log: how long it took, or has been running (`now`); none for an untimed one. */
+export function stepTime(s: LiveStep, now: number): string {
+  if (s.ms !== undefined) return shortDuration(s.ms);
+  return s.state === 'running' && s.at ? shortDuration(now - s.at) : '';
 }
 
 // ---------- starters and "/" commands ----------
