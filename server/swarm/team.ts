@@ -330,12 +330,12 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     }
   }
 
-  /** resolve_decision: the CEO closes one the manager answered in words. */
-  protected resolveDecision(x: { id: string; outcome: string }) {
+  /** resolve_decision: the CEO closes one the manager answered in words, or one a newer question replaced. */
+  protected resolveDecision(x: { id: string; outcome: string; superseded?: boolean }) {
     const d = this.state.decisions.list.find((y) => y.id === x.id);
     if (!d) throw new Error(`No decision "${x.id}". Use an id from company_status's openDecisions.`);
     if (d.status !== 'open') return `"${d.question}" was already ${d.status}.`;
-    this.setDecisions(closeDecision(this.state.decisions.list, d.id, 'resolved', x.outcome, Date.now()));
-    return `Closed "${d.question}": ${plainText(x.outcome, 120)}.`;
+    this.setDecisions(closeDecision(this.state.decisions.list, d.id, x.superseded ? 'superseded' : 'resolved', x.outcome, Date.now()));
+    return `${x.superseded ? 'Superseded' : 'Closed'} "${d.question}": ${plainText(x.outcome, 120)}.`;
   }
 }

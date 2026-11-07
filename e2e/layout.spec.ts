@@ -4,6 +4,7 @@ import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
+import { buttonRowProblems } from './buttonRows';
 import { telegramViews } from './telegramViews';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
@@ -36,7 +37,7 @@ const POCKET = [360, 390, 430, 900, 1280, 1920];
 async function pocket(page: Page, tab: string) {
   await page.goto(`/?pocket=1&tab=${tab}`);
   const root = page.locator('.pocket');
-  await expect(root.locator('.pk-tab-on')).toBeVisible();
+  await expect(root.locator('.pk-tab-on').first()).toBeVisible(); // wide, the chat dock's tab is on too
   return root;
 }
 
@@ -112,17 +113,20 @@ const addProject = (mode: string): View => ({
   },
 });
 
-/** Mission control with the costs' first waste group (#106) or the Rounds card's first cause (#188) open. */
-const wasteGroup = (where: Where, rounds = false): View => ({
-  name: `Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`,
+/** A section with its first expandable row tapped open: Mission control's waste groups (#106), objectives' progress (#140). */
+const tapOpen = (name: string, group: string, section: string, row: string) => (where: Where): View => ({
+  name,
   go: async (root) => {
-    await (where === 'pocket' ? pocketSection(root, 'Mission control') : consoleSection(root, 'Company', 'Mission control'));
-    const group = root.locator(rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head').first();
-    await group.scrollIntoViewIfNeeded();
-    await group.click();
-    await expect(group).toHaveAttribute('aria-expanded', 'true');
+    await (where === 'pocket' ? pocketSection(root, section) : consoleSection(root, group, section));
+    const head = root.locator(row).first();
+    await head.scrollIntoViewIfNeeded();
+    await head.click();
+    await expect(head).toHaveAttribute('aria-expanded', 'true');
   },
 });
+const wasteGroup = (where: Where, rounds = false): View =>
+  tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
+const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
 
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
@@ -143,7 +147,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -433,6 +437,7 @@ async function layoutProblems(root: Locator): Promise<string[]> {
       return out;
     })),
   );
+  problems.push(...(await buttonRowProblems(root)));
   return problems;
 }
 

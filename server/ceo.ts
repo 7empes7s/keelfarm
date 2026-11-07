@@ -169,7 +169,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   proposeCharter(a: CharterProposalArgs): string;
-  resolveDecision(a: { id: string; outcome: string }): string;
+  resolveDecision(a: { id: string; outcome: string; superseded?: boolean }): string;
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
@@ -582,7 +582,7 @@ export function ceoSystemPrompt(o: {
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
     '- Nothing to say? react and end with no text. Several messages: reply to each.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
-    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each; optional first line `? <question>`), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
     '- Numbers, trends, comparisons: one ```chart, ```table or ```dashboard JSON block plus a one-line verdict. Prefer a live "source" to values: costs:7d[:byFloor|byDay|byKind|perMerge|wasteByCause], throughput:office|floor:N, backlog:office|floor:N, usage. Chart {"type":"bar|line|donut","title","unit":"usd","labels","series":[{"name","values"}],"refs"}; dashboard {"tiles":[{"label","source"}],"charts"}.',
     "- company_status's openDecisions wait in the manager's tray: bring one up only if it bears on this message or before acting on its topic, at most one per reply, none marked trayOnly, and don't re-ask it in text. Answered in words: resolve_decision.",
     '- "[manager edited message #N: …]": they changed a message you already took. Redo or adjust only what changed, and say so in a line.',

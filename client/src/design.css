@@ -121,10 +121,18 @@ html[data-reduce-motion] {
 
 /* ---------- buttons ---------- */
 
-.ds-btn {
+/* One base for everything that looks like a button, whatever its element (button, a, label, summary): content centred,
+   one line height, no underline. :where() keeps it at zero specificity, so a screen's own display or size still wins. */
+:where(.btn, .ds-btn) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--ds-space-1);
+  line-height: var(--ds-leading-tight);
+  text-align: center;
+  text-decoration: none;
+}
+.ds-btn {
   gap: var(--ds-space-2);
   min-width: var(--ds-target);
   min-height: var(--ds-target);
@@ -144,14 +152,14 @@ html[data-reduce-motion] {
     box-shadow var(--ds-dur-fast) var(--ds-ease),
     background var(--ds-dur-fast);
 }
-.ds-btn:hover:not(:disabled) {
+.ds-btn:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--ds-surface-hover);
 }
-.ds-btn:active:not(:disabled) {
+.ds-btn:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(2px);
   box-shadow: none;
 }
-.ds-btn:disabled {
+.ds-btn:is(:disabled, [aria-disabled='true']) {
   opacity: 0.45;
   cursor: not-allowed;
 }
