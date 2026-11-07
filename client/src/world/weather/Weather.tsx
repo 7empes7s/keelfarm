@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useRenderPaused } from '../../perf';
 import { useStore } from '../../store';
 import { markBloom } from '../gfx/bloomMarks';
+import { LAB_GFX } from '../gfx/device';
 import { setWeatherQuiet, startWeatherSounds, stopWeatherSounds } from '../../ui/weatherSfx';
 import { roofElevation, viewElevation } from '../layout';
 import { Precipitation } from './Precipitation';
@@ -22,7 +23,7 @@ export function Weather({ kind }: { kind: FloorKind }) {
   return (
     <>
       <WeatherClock />
-      {active && <WeatherScene kind={kind} />}
+      {active && !LAB_GFX && <WeatherScene kind={kind} />}
     </>
   );
 }

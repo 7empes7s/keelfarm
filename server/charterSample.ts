@@ -1,6 +1,7 @@
 // The demo's objective log (#105): the made-up cost ledger's issues and merges (costSample.ts) under the floor's
 // objectives, with QA's charter checks on its QA rounds, so every number on the Charter tab has something to show.
-// The last of three or more objectives only got work over two weeks ago: it shows as stalled. Pure and seeded.
+// The last of three or more objectives only got work over two weeks ago: it shows as stalled; the first got most of
+// this week's, so its drift row runs long (#240). Pure and seeded.
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { CheckNote } from '../shared/charterStats.ts';
 import type { CostRecord } from '../shared/costs.ts';
@@ -17,8 +18,8 @@ export function sampleLog(c: Pick<CharterParts, 'objectives' | 'standards' | 'no
   for (const r of ledger) if (r.type === 'session' && r.issue !== null) started.set(r.issue, Math.min(r.at, started.get(r.issue) ?? Infinity));
   for (const [issue, at] of started) {
     if (!ids.length || rand() < 0.12) continue; // filed without an objective
-    // earlier objectives get more of the work
-    const pick = live[Math.min(live.length - 1, Math.floor(rand() * rand() * live.length * 1.6))];
+    // earlier objectives get more of the work, the first most of this week's (the drift view's)
+    const pick = now - at <= 7 * DAY_MS && rand() < 0.3 ? live[0] : live[Math.min(live.length - 1, Math.floor(rand() * rand() * live.length * 1.6))];
     tags[String(issue)] = stale && now - at > 15 * DAY_MS && rand() < 0.4 ? stale : pick;
   }
   const merged = ledger.flatMap((r) => (r.type === 'merge' ? [{ pr: r.pr, title: TITLES[r.pr % TITLES.length], at: r.at, objective: r.issues.map((i) => tags[String(i)]).find(Boolean) ?? null }] : [])).sort((a, b) => b.at - a.at);

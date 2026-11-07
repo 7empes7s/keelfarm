@@ -8,7 +8,7 @@ import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
 import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
-import { qaInstructions } from '../qaPrompt.ts';
+import { fullQualityLine, qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
 import { failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from '../prompts.ts';
@@ -277,12 +277,16 @@ export abstract class SwarmQa extends SwarmSessions {
       fixInstructions: rec.fixInstructions,
       defaultBranch: repo.defaultBranch,
     });
+    // A PR that changes how the 3D office looks gets one full-quality pass in the lab (#301).
+    const lab = repo.browserTesting && this.usesTestLab(a, repo);
+    const files = lab ? await this.backend.prDiff(repo.fullName, pr.number, false).then((d) => d.files.map((f) => f.path), () => null) : null;
     const prompt = [
       `Please QA pull request #${pr.number}: ${pr.title}`,
       `URL: ${pr.url}`,
       `Author: ${dev ? (dev.id === a.id ? `you, in an earlier session` : dev.name) : 'a teammate'} · QA round ${rec.round}`,
       qa.checks,
       qa.retest,
+      fullQualityLine(files, lab),
       '',
       'PR description:',
       pr.body.trim() || '(empty)',
