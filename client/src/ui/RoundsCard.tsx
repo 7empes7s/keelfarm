@@ -23,7 +23,7 @@ const CAUSE_TONE: Record<RoundCause, string> = {
 const fmtRounds = (n: number | null) => (n === null ? '—' : n.toFixed(2));
 
 /** A trend, oldest first, with O2's target as a dashed line; days without a number are left out. */
-function TrendLine({ points, target, label }: { points: (number | null)[]; target: number; label: string }) {
+export function TrendLine({ points, target, label }: { points: (number | null)[]; target: number; label: string }) {
   const vals = points.flatMap((p, i) => (p === null ? [] : [[i, p] as const]));
   if (vals.length < 2) return null;
   const max = Math.max(target, ...vals.map(([, v]) => v));

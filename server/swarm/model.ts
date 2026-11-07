@@ -111,6 +111,8 @@ export interface PersistedAgent {
   ownLogin?: KeyTrouble; // a cloud agent off the office's API key, which stopped working: their CLI uses its own login (#258)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
   account?: string; // the account (id) or tag they're pinned to (#247, shared/accounts.ts); absent: the rotation
+  voiceId?: string; // their ElevenLabs voice (#320, shared/voices.ts); absent: none yet
+  voiceName?: string;
   declared?: string[] | null; // the files they declared for their current task (file leases, #24); cleared with the task
   status: AgentStatus;
   issueNumber: number | null;
@@ -154,6 +156,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
+  cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */

@@ -1,5 +1,6 @@
 // Where the Claude plan goes (#18): the kinds of task a session can be, what came of it, the cost ledger's view, and
 // which reasoning effort a session runs at. Pure, shared by the server (the ledger) and the client (the usage view).
+import type { ConflictStats } from './conflicts.ts';
 import type { RoundCause, RoundsView } from './rounds.ts';
 import type { StartupContext, StartupRow } from './startup.ts';
 import type { EffortLevel } from './types.ts';
@@ -75,6 +76,7 @@ export interface CostSession {
   tokens: number | null; // when the CLI reports them
   outcome: SessionOutcome;
   exp?: string; // `${experiment}/${variant}` while its issue is in a running experiment (shared/experiments.ts)
+  cheap?: boolean; // a conflict-only fix that ran on Settings' cheaper model (#256, shared/conflicts.ts)
   startup?: StartupContext; // what its first turn loaded (shared/startup.ts), when the CLI reported it
   account?: string; // the account it ran on (#247, shared/accounts.ts)
   /** A CLI session that reports its running total (#254): its id and that total when this run ended; `usd` is this run's part. */
@@ -190,6 +192,7 @@ export interface CostsView {
   kinds: CostKindRow[];
   startup: StartupRow[]; // what each kind of task loads before its first step (#50)
   rounds: RoundsView; // QA rounds per merge and by cause over 7 and 30 days, whatever `days` is (#188)
+  conflicts?: ConflictStats; // conflict rounds per merge and what cheap conflict fixes saved, over 7 days (#256)
   corrected?: { usd: number; before: number }; // what the #254 repair took off the CEO's lines in this view, up to `before`
 }
 

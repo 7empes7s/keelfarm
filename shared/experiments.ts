@@ -174,6 +174,7 @@ export function practiceStarters(now: number): Experiment[] {
     def('up-to-date', 'Up to date before merge vs current', 'Merging only PRs brought up to date with main and green on that result means fewer red mains and fewer follow-up fixes.', { upToDate: true }, 'Up to date'),
     def('file-leases', 'File leases vs current', 'Holding back issues whose files overlap work in flight means fewer conflict fixes and fewer QA rounds.', { leases: true }, 'Leases'),
     def('auto-rebase', 'Auto-rebase vs current', 'Updating conflicting PRs as soon as main moves, before QA, gets them merged sooner with fewer QA rounds.', { autoRebase: true }, 'Auto-rebase'),
+    def('busy-files', 'Conflict-aware scheduling vs current', 'Starting issues away from busy files and merging the hottest PR first means fewer conflict rounds and fewer QA rounds per merge.', { busyFiles: true }, 'Conflict-aware'),
     def('small-prs', 'Small-PR budget vs none', 'A 400-line soft budget gives smaller diffs, a higher first-round QA pass and better survival.', { diffBudget: 400 }, '400-line budget'),
   ];
 }

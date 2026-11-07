@@ -509,10 +509,14 @@ export abstract class SwarmSessions extends SwarmCloudCredit {
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
     const practice = this.practicePrompt(a, repo, how.cli);
-    const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
+    const rec = a.task === 'fix' ? this.prRecord(a) : undefined;
+    // A conflict-only fix on the cheaper model (#256): Claude Code only, and never over an experiment's own model.
+    const cheap = rec?.cheapFix && (how.cli ?? 'claude') === 'claude' && !lab.model && !lab.effort ? rec.cheapFix : null;
+    if (rec && rec.cheapFix && !cheap) rec.cheapFix = null;
+    const model = cheap ? cheap.model : lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
     const system = [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n');
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(this.prRecord(a)) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
+    const run = this.spend.start(a.id, { kind, effort: (cheap?.effort || lab.effort) ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, cheap: !!cheap, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(rec) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
     this.chatOf(a)?.session(); // its first prompt is their chat's task card
     const active = (entries: LogEntry[]) => {
