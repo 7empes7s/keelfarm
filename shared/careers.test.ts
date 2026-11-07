@@ -1,9 +1,56 @@
 import { describe, expect, it } from 'vitest';
-import { avgFixRounds, DAY_MS, deskItems, deskToy, knownFor, mvpOfWeek, newCareer, passRate, plantGrowth, rank, type CareerView } from './careers.ts';
+import { avgFixRounds, badges, compareToFloor, costPerMerge, DAY_MS, deskItems, deskToy, durationText, firstRoundRate, keyStats, knownFor, medianToPr, mvpOfWeek, newCareer, passRate, plantGrowth, profileStats, rank, roundsPerMerge, weeklyMerges, WEEK_MS, type CareerView } from './careers.ts';
 import { CATALOGUE, DECOR_SLOTS, priceOf, slotKind, stored } from './progress.ts';
 
 const NOW = Date.UTC(2026, 9, 4, 12);
 const career = (c: Partial<CareerView> = {}): CareerView => ({ ...newCareer(NOW), ...c });
+
+describe('the profile (#117)', () => {
+  it('rates first rounds, QA rounds, cost per merge and time to PR, waiting for data', () => {
+    expect([firstRoundRate(career()), roundsPerMerge(career()), costPerMerge(career()), medianToPr(career())]).toEqual([null, null, null, null]);
+    expect(firstRoundRate(career({ firstPass: 3, firstQa: 4 }))).toBe(0.75);
+    expect(firstRoundRate(career({ firstPass: 2 }))).toBe(1); // a record from before firstQa
+    expect(roundsPerMerge(career({ merged: 2, qaPass: 2, qaFail: 1 }))).toBe(1.5);
+    expect(costPerMerge(career({ merged: 4, costUsd: 6 }))).toBe(1.5);
+    expect(medianToPr(career({ toPr: [30, 10, 20] }))).toBe(20);
+    expect(medianToPr(career({ toPr: [40, 10, 20, 30] }))).toBe(25);
+    expect([durationText(5 * 60_000), durationText(90 * 60_000), durationText(2 * DAY_MS)]).toEqual(['5m', '1.5h', '2d']);
+  });
+
+  it('counts merges per week over four weeks, oldest first', () => {
+    const week = [NOW - 60_000, NOW - DAY_MS, NOW - WEEK_MS - DAY_MS, NOW - 3 * WEEK_MS - DAY_MS, NOW - 5 * WEEK_MS, NOW + DAY_MS];
+    expect(weeklyMerges(career({ week }), NOW)).toEqual([1, 0, 1, 2]);
+  });
+
+  it('compares with the floor: higher or lower is better per stat, within 5% is even', () => {
+    expect(compareToFloor(0.9, 0.75, true)).toBe('better');
+    expect(compareToFloor(0.9, 0.75, false)).toBe('worse');
+    expect(compareToFloor(0.76, 0.75, true)).toBe('even');
+    expect(compareToFloor(0, 0, true)).toBe('even');
+    expect(compareToFloor(null, 0.75, true)).toBeNull();
+    expect(compareToFloor(0.5, null, true)).toBeNull();
+  });
+
+  it("puts each stat beside the floor's average", () => {
+    const ada = career({ merged: 4, firstPass: 3, firstQa: 3, qaPass: 4, qaFail: 0, costUsd: 4 });
+    const bob = career({ merged: 2, firstPass: 1, firstQa: 2, qaPass: 2, qaFail: 2, costUsd: 6 });
+    const stats = Object.fromEntries(profileStats(ada, [ada, bob], 1, NOW).map((x) => [x.key, x]));
+    expect(stats.firstRound).toMatchObject({ text: '100%', verdict: 'better', vsFloor: "↑ better than floor 1's 75%" });
+    expect(stats.rounds).toMatchObject({ text: '1.0', verdict: 'better', vsFloor: "↑ better than floor 1's 1.5" });
+    expect(stats.cost).toMatchObject({ text: '$1.00', verdict: 'better' });
+    expect(Object.fromEntries(profileStats(bob, [ada, bob], 1, NOW).map((x) => [x.key, x])).cost).toMatchObject({ text: '$3.00', verdict: 'worse', vsFloor: "↓ under floor 1's $2.00" });
+    expect(stats.toPr).toMatchObject({ text: '—', verdict: null, vsFloor: '' });
+    // alone on the floor: nothing to compare with
+    expect(profileStats(ada, [ada], 1, NOW).every((x) => x.vsFloor === '')).toBe(true);
+  });
+
+  it('gives badges and the team list its key stats', () => {
+    expect(badges(career())).toEqual([]);
+    expect(badges(career({ firstPass: 10, best: 4, merged: 10 }))).toEqual(['⭐ 10 first-time passes', '🔥 4 in a row', '✨ Never needed a fix']);
+    expect(keyStats(career(), NOW)).toBe('0 merged this week');
+    expect(keyStats(career({ merged: 2, firstPass: 1, firstQa: 2, costUsd: 3, week: [NOW - DAY_MS] }), NOW)).toBe('1 merged this week · 50% first-round QA · $1.50 / merge');
+  });
+});
 
 describe('career stats', () => {
   it('pass rate and fix rounds wait for data', () => {

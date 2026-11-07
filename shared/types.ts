@@ -671,6 +671,13 @@ export interface PhoneMessage {
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
   edited?: number; // the manager's: when they last edited it
+  notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+}
+
+/** A system notice in the chat (#138), shown as a card headed by the message's text: the cleaned output behind it, and links to what it's about. */
+export interface ChatNotice {
+  details?: string;
+  links?: { label: string; url: string }[];
 }
 
 /** The CEO chat beyond its messages (#51): the reply being written, the conversations and the manager's pinned notes. */

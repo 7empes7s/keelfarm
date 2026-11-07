@@ -1,6 +1,7 @@
 // The office's own update: settling, draining, the hand-over to the launcher, the result after a restart.
 import { HttpError } from '../httpError.ts';
-import { drainDecision, lastUpdateMessage, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
+import { drainDecision, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
+import { cleanTerminalText } from '../../shared/terminalText.ts';
 import type { OfficeUpdateView } from '../../shared/types.ts';
 import { BUSY, oneLine, type PersistedAgent } from './model.ts';
 import { SwarmScheduling } from './scheduling.ts';
@@ -159,10 +160,16 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   /** One phone message about the last update (the launcher's last-update.json, or the demo's fake). */
   protected async reportUpdate(result: LastUpdate) {
     const commits = result.ok && result.to ? await this.backend.office.commitsBetween(result.from, result.to) : null;
-    const said = lastUpdateMessage(result, commits);
-    this.postMessage('office', said);
-    this.notice({ kind: 'update', level: result.ok ? 'success' : 'error', title: result.ok ? 'The office updated' : "The office's update failed", text: said });
-    Object.assign(this.officeUpdate, { failed: result.ok ? null : result.error || 'unknown error', failedBehind: null });
+    this.postUpdateNotice(result, commits);
+    Object.assign(this.officeUpdate, { failed: result.ok ? null : cleanTerminalText(result.error || '', 1000) || 'unknown error', failedBehind: null });
+  }
+
+  /** An update's result as a card in the chat, linking to the office's own repo when it's a floor. */
+  protected postUpdateNotice(result: LastUpdate, commits: number | null) {
+    const own = this.state.repos.find((r) => this.backend.office.isOwnFolder(this.backend.mainDir(r.fullName)));
+    const { text, notice } = lastUpdateNotice(result, commits, own?.fullName);
+    this.postMessage('office', text, undefined, { notice });
+    this.notice({ kind: 'update', level: result.ok ? 'success' : 'error', title: result.ok ? 'The office updated' : "The office's update failed", text });
   }
 
   /** The manager's Update now (drain now, even with automatic updates off) or Later (not for 2 hours, or until a newer commit). */

@@ -72,8 +72,8 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
   },
   map: {
     title: 'Memory map',
-    shows: 'The company and its projects as a graph: floors, agents, issues, pull requests and files, and how they link.',
-    actions: ['Search the map for an issue, a title or a name.', 'Tap a node for its local graph.', 'Colour by floor or kind, or replay how the map grew.'],
+    shows: 'The company and its projects as a graph: floors, agents, issues, pull requests and files, and how they connect.',
+    actions: ['Search the map for an agent, issue or file.', 'Open a node’s local graph to see what touches it.', 'Colour by floor or objective to spot drift.'],
     docs: `${HOW}#how-an-issue-flows-through-the-office`,
   },
   ceo: {
