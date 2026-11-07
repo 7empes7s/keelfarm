@@ -740,3 +740,10 @@ html[data-reduce-motion] {
     display: none;
   }
 }
+
+/* a chat link's destination (ui/jumpFlash.ts) */
+.jump-flash {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+  background-color: color-mix(in srgb, var(--ds-focus) 10%, var(--ds-surface-raised));
+}

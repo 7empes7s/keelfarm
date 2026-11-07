@@ -15,6 +15,7 @@ import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 import { EmptyState } from '../ui/EmptyState';
+import { flashInto } from '../ui/jumpFlash';
 
 
 /** Runs one REST call at a time per card; api() already toasts errors. */
@@ -182,11 +183,12 @@ function CeoCard() {
   );
 }
 
-export function Team({ focusRepo, top }: { focusRepo: string | null; top?: ReactNode }) {
+/** `flash`: bumped by a chat link to the focused floor's team (#151), which then scrolls there and lights up. */
+export function Team({ focusRepo, flash = 0, top }: { focusRepo: string | null; flash?: number; top?: ReactNode }) {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const focus = useRef<HTMLElement>(null);
-  useEffect(() => focus.current?.scrollIntoView({ block: 'start' }), []);
+  useEffect(() => (flash ? flashInto(focus.current) : focus.current?.scrollIntoView({ block: 'start' })), [flash]);
   return (
     <div className="pk-page">
       {top}

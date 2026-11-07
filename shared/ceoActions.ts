@@ -2,9 +2,14 @@
 // (an icon, the result in one line, and what a tap opens and the live status follows). Built from the job's recorded
 // calls (server/ceoChat.ts), so it costs the CEO nothing. Read-only tools stay in the "Steps" fold. Pure.
 import type { OfficeCall } from './ceoStream.ts';
+import type { RefSection } from './types.ts';
 
 /** What an action card opens, and whose live status it shows. */
-export type ActionRef = { kind: 'issue'; repoId: string; number: number } | { kind: 'floor'; repoId: string } | { kind: 'agent'; agentId: string };
+export type ActionRef =
+  | { kind: 'issue'; repoId: string; number: number }
+  | { kind: 'qa'; repoId: string; number: number }
+  | { kind: 'floor'; repoId: string; section?: RefSection }
+  | { kind: 'agent'; agentId: string; section?: 'team' };
 
 export interface ChatAction {
   tool: string; // the office tool, e.g. file_issue
@@ -45,18 +50,22 @@ const clip = (s: string) => {
   const t = s.split('\n')[0].replace(/\s+/g, ' ').trim();
   return t.length > TEXT_MAX ? `${t.slice(0, TEXT_MAX - 1).trimEnd()}…` : t;
 };
+// The part of the floor a tool's card lands on (#151); a tool not listed opens its issue, agent or floor.
+const SECTIONS: Partial<Record<string, RefSection>> = { scale_team: 'team', configure_agent: 'team', propose_charter: 'charter', set_floor_profile: 'brief' };
+
 const num = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null);
 
-/** What a call's card opens: its issue or PR, else its agent, else its floor. */
+/** What a call's card opens: its issue or PR (retry_qa: its QA report), else its agent, else its floor, at the tool's section. */
 function refOf(call: OfficeCall, repoOf: (floor: number) => string | null): ActionRef | undefined {
   const a = call.args ?? {};
   const floor = num(a.floor);
   const repoId = floor === null ? null : repoOf(floor);
+  const section = SECTIONS[call.tool];
   const filed = call.tool === 'file_issue' && call.ok ? num(Number(call.out?.match(/#(\d+)/)?.[1])) : null;
   const n = filed ?? num(a.number) ?? num(a.pr);
-  if (repoId && n) return { kind: 'issue', repoId, number: n };
-  if (typeof a.agent_id === 'string' && a.agent_id) return { kind: 'agent', agentId: a.agent_id };
-  if (repoId) return { kind: 'floor', repoId };
+  if (repoId && n) return { kind: call.tool === 'retry_qa' ? 'qa' : 'issue', repoId, number: n };
+  if (typeof a.agent_id === 'string' && a.agent_id) return { kind: 'agent', agentId: a.agent_id, ...(section === 'team' && { section }) };
+  if (repoId) return { kind: 'floor', repoId, ...(section && { section }) };
   return undefined;
 }
 

@@ -2,7 +2,7 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
@@ -32,6 +32,7 @@ import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
+import { pushLayer } from '../ui/backStack';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -368,13 +369,30 @@ export default function Pocket() {
   const [history, setHistory] = useState<HistoryFocus | undefined>();
   const [focusRepo, setFocusRepo] = useState<string | undefined>();
   const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
+  // A floor's team asked for (a chat link, #151) is the Team tab here, at that floor; from the Chat tab, with a Back to it.
+  const [teamJump, setTeamJump] = useState(0);
+  const [backToChat, setBackToChat] = useState(false);
+  const onChat = useRef(false);
+  onChat.current = tab === 'chat';
   useEffect(() => {
     if (!wantsSection) return;
+    useStore.setState({ back: null }); // a chat link's: the chat stays here, under the tab or the console
     useStore.getState().openOverlay(null);
+    if (wantsSection.tab === 'team' && wantsSection.repoId) {
+      setSettings(null);
+      setBackToChat(onChat.current);
+      setTeamJump((n) => n + 1);
+      return go('team', wantsSection.repoId);
+    }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
   }, [wantsSection]);
+  useEffect(() => {
+    if (!backToChat) return;
+    if (tab !== 'team') return setBackToChat(false);
+    return pushLayer(() => setTab('chat'));
+  }, [backToChat, tab]);
   // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
   const guide = useFinder((s) => s.guide);
   useEffect(() => {
@@ -512,7 +530,22 @@ export default function Pocket() {
                 {tab === 'company' && <Company go={go} settings={setSettings} track={track} />}
                 {tab === 'chat' && !wide && chat}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
-                {tab === 'team' && <Team focusRepo={repoId} top={<MemoryBanner open={() => setSettings('ops')} />} />}
+                {tab === 'team' && (
+                  <Team
+                    focusRepo={repoId}
+                    flash={teamJump}
+                    top={
+                      <>
+                        {backToChat && (
+                          <button className="btn btn-ghost cn-back" onClick={() => setTab('chat')} aria-label="Back to the chat">
+                            ‹ Chat
+                          </button>
+                        )}
+                        <MemoryBanner open={() => setSettings('ops')} />
+                      </>
+                    }
+                  />
+                )}
                 {tab === 'approvals' && <Approvals wide={layout === 'expanded'} />}
               </>
             )}

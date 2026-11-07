@@ -2,7 +2,7 @@
 // pocket mode, what it shows (icon and status, from the store's state), the "@" and "#" picks in the message box,
 // and the lines a file preview shows, lightly highlighted. RefChips.tsx draws them.
 
-import { CEO_ID, type AgentView, type ChatRef, type QaView, type RepoView } from '../../../shared/types';
+import { CEO_ID, type AgentView, type ChatRef, type QaView, type RefSection, type RepoView } from '../../../shared/types';
 import type { Overlay } from '../store';
 
 export interface RefWorld {
@@ -18,9 +18,13 @@ export type Jump =
   | { kind: 'file' }
   | { kind: 'url'; url: string };
 
+// The console's section for each part of a floor; pocket mode opens a team in its Team tab (Pocket.tsx).
+const SECTION_TAB = { team: 'team', charter: 'charter', brief: 'ceo' } as const satisfies Record<RefSection, string>;
+const sectionJump = (repoId: string, section: RefSection): Jump => ({ kind: 'overlay', overlay: { kind: 'manager', tab: SECTION_TAB[section], repoId } });
+
 const ghUrl = (fullName: string, n: number, pull: boolean) => `https://github.com/${fullName}/${pull ? 'pull' : 'issues'}/${n}`;
 
-/** The jump for a ref, or null when what it names is gone (an agent who left, a floor removed). */
+/** The jump for a ref, at its section when it has one, or null when what it names is gone (an agent who left, a floor removed). */
 export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): Jump | null {
   const floorOf = (repoId: string) => w.repos.find((r) => r.id === repoId)?.floor;
   const ride = (repoId: string) => {
@@ -29,11 +33,12 @@ export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): J
   };
   if (ref.kind === 'agent') {
     const a = w.agents[ref.agentId];
+    if (a && ref.section && w.repos.some((r) => r.id === a.repoId)) return sectionJump(a.repoId, ref.section);
     return a ? { kind: 'overlay', overlay: { kind: 'terminal', agentId: a.id }, ...ride(a.repoId) } : null;
   }
   const repo = w.repos.find((r) => r.id === ref.repoId);
   if (!repo) return null;
-  if (ref.kind === 'floor') return { kind: 'floor', floor: repo.floor, repoId: repo.id };
+  if (ref.kind === 'floor') return ref.section ? sectionJump(repo.id, ref.section) : { kind: 'floor', floor: repo.floor, repoId: repo.id };
   if (ref.kind === 'file') return { kind: 'file' };
   const n = ref.number;
   const pull = n === undefined ? undefined : repo.pulls.find((p) => p.number === n);

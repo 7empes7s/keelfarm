@@ -704,10 +704,13 @@ export interface CeoChatView {
   memory: MemoryNote[];
 }
 
+/** The part of a floor a ref lands on (#151): its team, its charter, or its brief (QA brief and playbook). */
+export type RefSection = 'team' | 'charter' | 'brief';
+
 /** Something in the office a chat message names; `start`/`end` are its span in the message's text. */
 export type ChatRef = { start: number; end: number } & (
-  | { kind: 'agent'; agentId: string; terminal?: true }
-  | { kind: 'floor'; repoId: string }
+  | { kind: 'agent'; agentId: string; terminal?: true; section?: 'team' } // section: their floor's team, not their terminal
+  | { kind: 'floor'; repoId: string; section?: RefSection }
   | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
   | { kind: 'file'; repoId: string; path: string; line?: number }
   | { kind: 'qa'; repoId: string; number: number }

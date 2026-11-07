@@ -47,9 +47,21 @@ describe('jumpFor', () => {
     expect(jumpFor(ref({ kind: 'preview', repoId: 'o/web', number: 14 }), 'pocket', world)).toEqual({ kind: 'url', url: 'https://github.com/o/web/pull/14' });
   });
 
+  // #151: a ref with a section lands on it, in the console's section (pocket mode shows a team in its Team tab).
+  it.each([
+    [{ kind: 'floor', repoId: 'o/web', section: 'team' }, 'team'],
+    [{ kind: 'agent', agentId: 'ada', section: 'team' }, 'team'],
+    [{ kind: 'floor', repoId: 'o/web', section: 'charter' }, 'charter'],
+    [{ kind: 'floor', repoId: 'o/web', section: 'brief' }, 'ceo'],
+  ])('lands %o on its section', (r, tab) => {
+    for (const mode of ['office', 'pocket'] as const) expect(jumpFor(ref(r), mode, world)).toEqual({ kind: 'overlay', overlay: { kind: 'manager', tab, repoId: 'o/web' } });
+  });
+
   it('has nowhere to go once the agent or floor is gone', () => {
     expect(jumpFor(ref({ kind: 'agent', agentId: 'zed' }), 'office', world)).toBeNull();
     expect(jumpFor(ref({ kind: 'floor', repoId: 'o/gone' }), 'office', world)).toBeNull();
+    expect(jumpFor(ref({ kind: 'agent', agentId: 'zed', section: 'team' }), 'pocket', world)).toBeNull();
+    expect(jumpFor(ref({ kind: 'floor', repoId: 'o/gone', section: 'team' }), 'pocket', world)).toBeNull();
   });
 });
 

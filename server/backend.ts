@@ -38,6 +38,7 @@ import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
 import type { CliView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, PullInfo } from '../shared/types.ts';
+import type { SampleFloor } from './chatSample.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
 export interface Backend {
@@ -167,7 +168,7 @@ export interface Backend {
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
   seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */
-  seedChat?(now: number): PhoneMessage[];
+  seedChat?(now: number, cards?: SampleFloor): PhoneMessage[];
   /** The demo only: a day of notifications of every kind (#107), when the notification centre is empty. */
   seedNotices?(repos: { id: string; floor: number }[], agents: { id: string; name: string; repoId: string; role: string }[], now: number): NoticeView[];
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */

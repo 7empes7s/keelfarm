@@ -114,7 +114,7 @@ describe('the CEO chat', () => {
     const reply = replies().find((m) => !m.requestId)!;
     expect(reply.actions?.map((a) => a.tool)).toEqual(['file_issue', 'scale_team']);
     expect(reply.actions?.[0]).toMatchObject({ icon: '📝', text: expect.stringMatching(/^Filed floor 1 #\d+ · Polish: phone layout/), ref: { kind: 'issue', repoId: 'demo-co/pixel-todo' } });
-    expect(reply.actions?.[1].ref).toEqual({ kind: 'floor', repoId: 'demo-co/pixel-todo' });
+    expect(reply.actions?.[1].ref).toEqual({ kind: 'floor', repoId: 'demo-co/pixel-todo', section: 'team' });
     expect(reply.steps).toContain('Reading company status'); // the reads stay in the steps, not on cards
     expect(reply.artifacts?.map((a) => a.title)).toEqual(['Milestone plan']);
     expect(reply.idea).toMatchObject({ kind: 'objective', message: expect.stringContaining("floor 1's charter") });
