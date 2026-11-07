@@ -106,12 +106,6 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Pick the daily log folder.', 'Set how many days of history to keep.', 'See how much the history takes on disk.'],
     docs: `${HOW}#where-things-live`,
   },
-  map: {
-    title: 'Memory map',
-    shows: 'The company and its projects as a graph: floors, agents, issues, pull requests and files, and how they link.',
-    actions: ['Search the map for a file, issue or agent.', 'Open a local graph around one node.', 'Replay how the map grew.'],
-    docs: `${HOW}#where-things-live`,
-  },
   timelapse: {
     title: 'Time-lapse',
     shows: 'A replay of any recorded day in the 3D office, and what happened since you were last here.',
