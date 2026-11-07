@@ -19,6 +19,8 @@ const IDEA_TITLE_CHARS = 100;
 const IDEA_MESSAGE_CHARS = 400;
 /** How much artifact markdown the snapshot carries, newest first; older bodies are fetched when opened. */
 export const SNAPSHOT_ARTIFACT_CHARS = 60_000;
+/** The CEO replies whose whole step log (#150) the snapshot carries, newest first; older ones keep their count and time. */
+const SNAPSHOT_LOGS = 3;
 
 export interface ParsedMessage {
   text: string;
@@ -145,11 +147,13 @@ export function makeArtifacts(messageId: number, parsed: ParsedMessage['artifact
   return parsed?.map((a, i) => ({ id: `${messageId}-${i + 1}`, title: a.title, lead: artifactLead(a.markdown), markdown: a.markdown }));
 }
 
-/** The messages for a snapshot: the newest artifacts keep their markdown up to `budget` characters, older ones only their card. */
-export function snapshotMessages(messages: readonly PhoneMessage[], budget = SNAPSHOT_ARTIFACT_CHARS): PhoneMessage[] {
+/** The messages for a snapshot: the newest artifacts keep their markdown up to `budget` characters, older ones only their
+ *  card; the newest `logs` step logs keep their steps, older ones their count and time (a big office's snapshot, scale.test.ts). */
+export function snapshotMessages(messages: readonly PhoneMessage[], budget = SNAPSHOT_ARTIFACT_CHARS, logs = SNAPSHOT_LOGS): PhoneMessage[] {
   let left = budget;
   const out = [...messages];
   for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i].log?.steps.length && logs-- <= 0) out[i] = { ...out[i], log: { ...out[i].log!, steps: [] } };
     const m = out[i];
     if (!m.artifacts?.length) continue;
     const artifacts = m.artifacts.map((a) => {

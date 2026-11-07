@@ -7,9 +7,9 @@ export interface LiveStep {
   label: string; // in plain words (shared/ceoSteps.ts): "Reading PR #122's changes on floor 3"
   icon: string;
   state: 'running' | 'done' | 'failed';
-  at: number; // when it started
+  at?: number; // when it started (a finished reply's log leaves it out: only a running step's time counts up)
   ms?: number; // how long it took, once it ended
-  note?: string; // its result in a line, or why it failed (masked)
+  note?: string; // its result in a line, or why it failed (masked); a finished reply's log keeps a failure's only
 }
 
 /** The CEO's reply in progress. */
@@ -36,7 +36,7 @@ const MAX_BLOCKS = 4;
 const BLOCK_MAX = 4000;
 
 const fresh = (now: number): CeoLive => ({ blocks: [], open: false, steps: [], stepCount: 0, since: now });
-const ended = (s: LiveStep, now: number, state: 'done' | 'failed' = 'done'): LiveStep => ({ ...s, state, ms: Math.max(0, now - s.at) });
+const ended = (s: LiveStep, now: number, state: 'done' | 'failed' = 'done'): LiveStep => ({ ...s, state, ms: Math.max(0, now - (s.at ?? now)) });
 
 /** The live reply with one more event folded in (a new object; `live` null: the first of a turn). `nameOf`: agents' names. */
 export function foldStream(live: CeoLive | null, ev: StreamEvent, now: number, nameOf?: NameOf): CeoLive {
@@ -68,10 +68,12 @@ export const liveText = (l: CeoLive) => l.blocks.join('\n\n');
 /** The step the live line shows: the one running, else the last. */
 export const currentStep = (l: CeoLive): LiveStep | null => l.steps.find((s) => s.state === 'running') ?? l.steps[l.steps.length - 1] ?? null;
 
-/** The step log a finished reply keeps: a step still running counts as done now; null when it took none. */
+/** The step log a finished reply keeps: a step still running counts as done now; null when it took none. Only what the
+ *  log shows stays (no start times, a failure's note only), since every reply carries it. */
 export function finishedLog(l: CeoLive | null, now: number): StepLog | null {
   if (!l?.steps.length) return null;
-  return { steps: l.steps.map((s) => (s.state === 'running' ? ended(s, now) : s)), count: l.stepCount, ms: Math.max(0, now - l.since) };
+  const kept = ({ at: _at, note, ...s }: LiveStep): LiveStep => ({ ...s, ...(s.state === 'failed' && note && { note }) });
+  return { steps: l.steps.map((s) => kept(s.state === 'running' ? ended(s, now) : s)), count: l.stepCount, ms: Math.max(0, now - l.since) };
 }
 
 /** One office tool call of a CEO job, as it ended (or still running: `out` null). */

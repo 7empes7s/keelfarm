@@ -127,6 +127,16 @@ describe('artifacts', () => {
     expect(all[0].artifacts?.[0].markdown).toHaveLength(50); // the saved messages are untouched
   });
 
+  it('keeps the newest step logs whole in the snapshot, older ones as their count and time (#150)', () => {
+    const step = { label: 'Checking the floors', icon: '🏢', state: 'done' as const, ms: 5 };
+    const msg = (id: number): PhoneMessage => ({ id, from: 'ceo', text: '', at: id, log: { steps: [step], count: 1, ms: 9 } });
+    const all = [msg(1), msg(2), { id: 3, from: 'manager', text: 'hi', at: 3 } as PhoneMessage, msg(4)];
+    const out = snapshotMessages(all, 0, 2);
+    expect(out.map((m) => m.log?.steps.length)).toEqual([0, 1, undefined, 1]);
+    expect(out[0].log).toEqual({ steps: [], count: 1, ms: 9 });
+    expect(all[0].log?.steps).toHaveLength(1); // the saved messages are untouched
+  });
+
   it('says attachments aloud by title, and names downloads', () => {
     expect(messageSpeech({ text: 'Done **today**.' })).toBe('Done today.');
     expect(messageSpeech({ text: 'Done.', artifacts: [{ id: '1-1', title: 'Plan', lead: '', markdown: '# Secret plan' }] })).toBe('Done. Plus an attachment: Plan.');

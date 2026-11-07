@@ -57,6 +57,8 @@ describe('the live reply (stream assembly)', () => {
       ['Reading example.com', 'failed', 1000],
       ["Sizing a team", 'done', 8000],
     ]);
+    expect(log.steps.every((s) => s.at === undefined)).toBe(true); // what the log doesn't show stays off every reply
+    expect(log.steps.map((s) => s.note)).toEqual(['404', undefined]);
     expect(finishedLog(null, 1)).toBeNull();
   });
 });

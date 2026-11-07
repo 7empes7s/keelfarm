@@ -104,6 +104,7 @@ const OFFICE: Record<string, [string, Words]> = {
   resolve_decision: ['✅', () => 'Settling a decision'],
   define_experiment: ['🧪', () => 'Setting up an experiment'],
   restart_agent: ['🔄', (t, n) => `Restarting ${who(t.agent, n)}`],
+  stop_agent: ['⏹️', (t, n) => `Stopping ${who(t.agent, n)}`],
   message_agent: ['💬', (t, n) => `Messaging ${who(t.agent, n)}`],
   answer_agent: ['💬', (t, n) => `Answering ${who(t.agent ?? t.rest.split(/[\s:]/)[0], n)}`],
   ask_manager_choice: ['❓', (t, n) => `Asking you to decide for ${who(t.agent ?? t.rest.split(/[\s:]/)[0], n)}`],

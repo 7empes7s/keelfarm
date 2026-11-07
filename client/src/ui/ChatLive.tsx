@@ -87,7 +87,7 @@ export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog
       {open && (
         <div className="steps-row-log">
           {log && <StepLogList steps={log.steps} now={0} linked={linked} onFloor={onFloor} />}
-          {log && log.count > log.steps.length && <p className="steps-row-foot muted">and {log.count - log.steps.length} earlier steps</p>}
+          {log && log.count > log.steps.length && <p className="steps-row-foot muted">{log.steps.length ? `and ${log.count - log.steps.length} earlier steps` : 'Only the newest replies keep each step after a reload'}</p>}
           {used && <p className="steps-row-foot muted">{usedLine(used)}</p>}
         </div>
       )}
