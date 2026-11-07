@@ -311,7 +311,7 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} profile={overlay.profile} />;
-  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
+  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
   return null;

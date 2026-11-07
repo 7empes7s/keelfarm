@@ -124,6 +124,8 @@ export interface PreviewView {
   logTail: string[]; // the last 40 lines of install / app output
   stopsAt?: number | null; // running with nobody watching: when it stops for being idle (null: it won't)
   heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop and restart are refused)
+  /** It didn't start because a program that isn't the office's holds its port (#225): which one, for "Use another port". */
+  portOwner?: { pid: number; command: string; startedAt: number | null } | null;
 }
 
 /**
