@@ -33,7 +33,8 @@ for (const width of [390, 1280]) {
       const body = el.querySelector<HTMLElement>('.panel-body')!;
       if (body.scrollWidth > body.clientWidth + 1) out.push(`the panel body scrolls sideways (${body.scrollWidth} > ${body.clientWidth})`);
       const title = el.querySelector<HTMLElement>('.panel-title')!;
-      if (title.scrollWidth > title.clientWidth + 1 || getComputedStyle(title).textOverflow === 'ellipsis') out.push(`the title "${title.textContent}" is cut off`);
+      // the demo's title fits either way: it must also wrap, or a longer one would end in "…"
+      if (title.scrollWidth > title.clientWidth + 1 || getComputedStyle(title).whiteSpace === 'nowrap') out.push(`the title "${title.textContent}" is cut off`);
       for (const x of el.querySelectorAll<HTMLElement>('.cardview-stat, .cardview-foot .btn, .cardview-sec > summary')) {
         const h = x.getBoundingClientRect().height;
         if (h < 43.5) out.push(`"${x.innerText.trim().slice(0, 40)}" is ${Math.round(h)}px tall`);
