@@ -1,0 +1,21 @@
+/* "+ Agent" (#243): the Team page's sheet; Settings → Team's row is .ds-fields in design.css. */
+.sheet.add-agent-panel {
+  width: min(420px, 100%);
+}
+@media (max-width: 600px) {
+  .sheet.add-agent-panel {
+    width: 100%;
+  }
+}
+.add-agent-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.add-agent-sheet .add-agent-go .btn {
+  width: 100%;
+}
+.add-agent-full {
+  margin: 0;
+  color: var(--ds-warn-text);
+}
