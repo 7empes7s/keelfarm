@@ -43,15 +43,13 @@ const big = async (buttons: Locator) => {
 for (const width of [390, 1280]) {
   test(`Mission control's cards and the back bar's ⓘ at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto('/?pocket=1');
-    await page.getByRole('button', { name: 'Settings and notifications' }).click();
+    await page.goto('/?pocket=1#settings/ops');
     const settings = page.getByRole('dialog', { name: /Settings/ });
     if (width < 900) {
-      await settings.getByRole('button', { name: /^Mission control/ }).click();
       const info = settings.locator('.cn-back-bar').getByRole('button', { name: /What can I do on/ });
       await expect(info).toHaveClass(/ds-btn-icon/);
       await big(info);
-    } else await settings.locator('.cn-menu').getByRole('tab', { name: /^Mission control/ }).click();
+    }
     await expect(settings.locator('#ops-card-usage.dp-card')).toBeVisible();
     await big(settings.locator('.dp-card .dp-buttons .ds-btn'));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
