@@ -26,7 +26,7 @@ const costs: CostsView = {
 const nums = (o: Partial<OpsNumbers> = {}): OpsNumbers => ({
   ready: 4, building: 2, inQa: 1, fixing: 1, toMerge: 0, needsYou: 1, triage: 0,
   mergedToday: 3, mergedHour: 1, spark: [0, 1, 2],
-  leadMs: 3_600_000, qaWaitMs: null, qaPass: 0.75, qaFirstPass: 0.5, qaRoundsPerMerge: 1.4,
+  leadMs: 3_600_000, qaWaitMs: null, qaPass: 0.75, qaFirstPass: 0.5, qaRoundsPerMerge: 1.4, qaLabErrors: 0,
   ciPass: 0.9, ciRuns: 10, ciMs: null, busy: 2, idle: 1, errors: 0, costToday: 1,
   ...o,
 });
