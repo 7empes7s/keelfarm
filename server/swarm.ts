@@ -132,6 +132,7 @@ export class Swarm extends SwarmCeoTools {
           qaChecks: q.qaChecks ?? null,
           stuckWhy: q.stuckWhy ?? null,
           triages: q.triages ?? 0,
+          labRetryRound: q.labRetryRound ?? null,
           escalated: q.escalated ?? q.status === 'needs-human', // stuck before triage existed: the manager was told
           mergeNote: null,
         })),
@@ -204,6 +205,8 @@ export class Swarm extends SwarmCeoTools {
     } catch {
       // first run
     }
+    if (this.backend.demoNoTour) Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
+    if (this.state.settings.testLab.enabled) void this.backend.testLab.warm().catch(() => false);
     await this.voice.init();
     await this.weather.init();
     await this.notifier.init();

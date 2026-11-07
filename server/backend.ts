@@ -164,6 +164,8 @@ export interface Backend {
   demoHeldUpdate?(): LastUpdate;
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
+  /** The demo opens without the setup wizard or the tour (config.ts demoNoTour), for QA's and tests' browsers. */
+  demoNoTour?: boolean;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
   seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */

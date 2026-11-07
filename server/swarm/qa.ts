@@ -7,7 +7,7 @@ import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
-import { conflictFixInstructions, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
 import { qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
@@ -78,6 +78,7 @@ export abstract class SwarmQa extends SwarmSessions {
         stuckWhy: null,
         triages: 0,
         escalated: false,
+        labRetryRound: null,
       };
       this.state.qa.push(rec);
       this.setQa(rec, {});
@@ -272,6 +273,20 @@ export abstract class SwarmQa extends SwarmSessions {
     }
 
     a.status = 'done';
+    if (report.verdict === 'lab-error') {
+      // The lab failed, not the code (#189): QA again by itself once, never a failed round or a developer's job.
+      this.spend.outcome(a.id, 'done');
+      this.appendLog(a, [{ kind: 'error', text: `🧪 Lab error on PR #${a.prNumber}: ${clip(report.summary, 160)} (not a failed round)` }]);
+      if (rec) {
+        const key = `${repo.id}#${rec.prNumber}`;
+        recordQa(this.state.ops, repo.id, false, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round, true);
+        this.qaWaits.delete(key);
+        const patch = { qaAgentId: null, summary: `Lab error: ${report.summary}`, labRetryRound: rec.round };
+        if (labErrorNext(rec) === 'retry') this.setQa(rec, { ...patch, status: 'queued' });
+        else this.stuck(rec, patch, `the test lab failed twice while testing it: ${clip(report.summary, 160)}`);
+      }
+      return;
+    }
     const pass = report.verdict === 'pass';
     this.spend.outcome(a.id, pass ? 'qa-pass' : 'qa-fail');
     if (rec) this.ledger({ kind: 'qa', repoId: repo.id, pr: rec.prNumber, round: rec.round, pass, tester: a.id, author: rec.devAgentId, at: Date.now() });

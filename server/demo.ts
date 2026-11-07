@@ -710,7 +710,7 @@ async function fakeTrim(stillIdle: () => boolean) {
 }
 
 /** The demo's fake world; `scale` (--floors / --agents) makes it the big company instead of the usual two floors. */
-export function createDemoBackend(scale: DemoScale | null = null): Backend {
+export function createDemoBackend(scale: DemoScale | null = null, noTour = false): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
   // Tie each fake session back to its repo via the desk directory name.
@@ -986,6 +986,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
     seedCareers: sampleCareers,
     demoTeam: (floor) => demoTeam(scale, floor),
+    demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
     seedChat: (now) => {
