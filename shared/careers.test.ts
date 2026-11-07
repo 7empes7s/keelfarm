@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avgFixRounds, badges, compareToFloor, costPerMerge, DAY_MS, deskItems, deskToy, durationText, firstRoundRate, highlights, keyStats, knownFor, legacyCareer, medianToPr, mvpOfWeek, newCareer, passRate, plantGrowth, profileStats, rank, roundsPerMerge, spendShare, tenureDays, wasteShare, addWeek, weekOf, weekOfRow, weeklySeries, WEEK_MS, workIdle, type CareerView } from './careers.ts';
+import { avgFixRounds, badges, careerOfRow, careerRow, compareToFloor, costPerMerge, DAY_MS, deskItems, deskToy, durationText, firstRoundRate, highlights, keyStats, knownFor, legacyCareer, medianToPr, mvpOfWeek, newCareer, packCareers, passRate, plantGrowth, profileStats, rank, roundsPerMerge, spendShare, tenureDays, wasteShare, addWeek, weekOf, weekOfRow, weeklySeries, WEEK_MS, workIdle, type CareerView } from './careers.ts';
 import { CATALOGUE, DECOR_SLOTS, priceOf, slotKind, stored } from './progress.ts';
 
 const NOW = Date.UTC(2026, 9, 4, 12);
@@ -113,6 +113,16 @@ describe('usage and cost (#205)', () => {
     const old = legacyCareer({ since: NOW - DAY_MS, merged: 7, costUsd: 3.5, recent: [{ n: 1, title: 'x', at: NOW }], bySpecialty: { dev: 1 }, hires: 'two' });
     expect(old).toEqual({ ...newCareer(NOW - DAY_MS), merged: 7, costUsd: 3.5, recent: [[1, 'x', NOW]] }); // merged PRs become rows
     expect(legacyCareer({ rig: ['claude', 'opus', 'high', NOW] }).rig).toEqual(['claude', 'opus', 'high', NOW]); // a replay keeps what they run
+  });
+
+  it('goes into a snapshot as a row of values and comes back whole (#291)', () => {
+    const c = career({ merged: 3, costUsd: 4.5, recent: [[7, 'Dark mode', NOW]], weeks: [[weekOf(NOW), 3, 4.5, 0, 5, 2, 1, 90]], rig: ['claude', 'opus', 'high', NOW] });
+    const row = careerRow(c);
+    expect(row.every((v) => typeof v !== 'object' || v === null || Array.isArray(v))).toBe(true);
+    expect(JSON.stringify(row).length).toBeLessThan(JSON.stringify(c).length / 2);
+    expect(careerOfRow(JSON.parse(JSON.stringify(row)))).toEqual(c);
+    const packed = packCareers({ agents: [{ id: 'a1', career: c }, { id: 'ceo', career: null }] });
+    expect(packed).toEqual({ agents: [{ id: 'a1', career: null }, { id: 'ceo', career: null }], careers: { a1: row } });
   });
 });
 

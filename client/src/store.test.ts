@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { careerRow, newCareer, type CareerView } from '../../shared/careers';
 import type { AgentView, IssueInfo, LogLine, OpsAlarm, PullInfo, QaStatus, QaView, RepoView, WorldSnapshot } from '../../shared/types';
 
 // The merge trigger, through the store's own apply(): sounds and the gong are mocked (they need a browser).
@@ -51,6 +52,16 @@ describe('the merge gong trigger', () => {
     off();
     expect(gongForMerge).toHaveBeenCalledTimes(1);
     expect(bursts).toEqual([{ repoId: 'acme/floor1', prNumber: 5, agentId: null }]);
+  });
+
+  it('turns a snapshot’s career rows back into careers (#291)', () => {
+    const career = { ...newCareer(1_000), merged: 2, recent: [[4, 'Dark mode', 2_000]] as CareerView['recent'] };
+    const ada = { id: 'a1', name: 'Ada', role: 'agent', repoId: 'acme/floor1', log: [], career: null } as Partial<AgentView>;
+    const ceo = { id: 'ceo', name: 'CEO', role: 'ceo', log: [], career: null } as Partial<AgentView>;
+    const s = snapshot([repo(1)], [ada, ceo]);
+    useStore.getState().apply({ ...s, data: { ...s.data, careers: { a1: careerRow(career) } } });
+    expect(useStore.getState().agents.a1.career).toEqual(career);
+    expect(useStore.getState().agents.ceo.career).toBeNull();
   });
 
   it('sends the PR’s author, one call per merge in order', () => {
