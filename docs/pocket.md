@@ -45,18 +45,20 @@ the 3D office's top bar switches to it, **🏢 3D office** in pocket mode's head
 Controls) does either from the keyboard. Each device remembers the last choice; `?pocket=1` / `?pocket=0` still win.
 
 The layout follows the window's width (in the UI scale's px): up to 760 px it's the phone's, with the tabs at the
-bottom. From 761 px a rail on the left takes their place, with ⚙️ at its foot and badges for the chat and approvals:
+bottom. From 761 px a rail on the left takes their place, with ⚙️ at its foot and a badge for approvals. The rail only
+navigates: the CEO's chat is a window, opened from the header's top right like 🔔 (#214), by the CEO's avatar with an
+unread badge and a dot while they work (pressed while it's open):
 
 - **1024 px and wider**: the rail with labels, and the CEO's chat docked on the right while you use the other tabs
-  (✕ hides it, 💬 on the rail brings it back; remembered). Company shows the floors as a grid of cards with usage and
+  (✕ or the avatar hides it, the avatar brings it back; remembered). Company shows the floors as a grid of cards with usage and
   the CEO beside them, the Kanban its whole board side by side, Team its agents as a grid, and Approvals a list of
   decisions beside the one picked. An agent's terminal, a floor's app or a card (from a tab or a chat chip) opens in a
   pane beside the page; ⚙️ opens the console over the pages, with its top tabs and side menu.
-- **761-1023 px**: the rail with icons only; 💬 opens the chat as a drawer over the pages, and terminals, apps and
+- **761-1023 px**: the rail with icons only; the avatar opens the chat as a drawer over the pages, and terminals, apps and
   the console cover the pages.
 
 Touch-only screens keep the phone's layout below 1024 px. Keys, never while typing in a field: **1**-**5** (or
-**Alt+1**-**5**) the tabs in the rail's order, **/** the chat's message box, **Esc** closes the open panel, then the
+**Alt+1**-**5**) the tabs in the phone's order (**2** is the chat), **/** the chat's message box, **Esc** closes the open panel, then the
 chat drawer.
 
 ### The tour and What's new
@@ -76,6 +78,7 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `look`, `phone`, `phone-tour`, `ceo`, `hires`, `upstairs`, `whiteboard`, `watch`, `office`: walking the building | | | ✓ |
 | `pocket-tabs`: the five tabs | ✓ | ✓ | |
 | `desk-keys`: 1-5, / and 🏢 3D office | | ✓ | |
+| `chat-button`: the chat opens from the header's avatar | | ✓ | |
 | `search`: 🔍 search everything | ✓ | ✓ | ✓ |
 | `guide`: the ✅ guide checklist | ✓ | ✓ | ✓ |
 | `bell`: 🔔 the notification centre | ✓ | ✓ | ✓ |

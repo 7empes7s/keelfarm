@@ -16,7 +16,7 @@ import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';
 import { useKeyName } from '../ui/controls';
-import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
+import { approvalsBadge, ceoChatHint, pipelineOf, POCKET_TABS, railTabs, waitingOnYou, type Pipeline, type PocketTab } from './pocketData';
 import { Approvals } from './PocketApprovals';
 import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
@@ -46,9 +46,8 @@ const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.C
 // The console's tabs, loaded when ⚙️ is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
-export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
 const HELP: Record<Exclude<PocketTab, 'chat'>, ScreenId> = { company: 'company', kanban: 'kanban', team: 'pocket-team', approvals: 'approvals' };
-const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'approvals'];
+const TABS: readonly PocketTab[] = POCKET_TABS;
 
 /** The tab a link (a notification's ?tab=) asks for. */
 function tabFrom(url: string | null | undefined): PocketTab | null {
@@ -56,7 +55,7 @@ function tabFrom(url: string | null | undefined): PocketTab | null {
   return TABS.includes(t as PocketTab) ? (t as PocketTab) : null;
 }
 
-/** Keys 1-5 (or Alt+1-5) open the tabs, in the order the bar or the rail shows them. */
+/** Keys 1-5 (or Alt+1-5) open the tabs, in the order the bar shows them (wide, 2 opens the chat from the header). */
 const TAB_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
 
 // The docked chat's open or hidden, remembered on this device (on wide screens; at medium widths it's a drawer).
@@ -278,6 +277,33 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 
 // ---------- the shell ----------
 
+/** Wide, the CEO chat is a window, opened from the header like 🔔 (#214): the CEO's avatar, unread badge and a working dot. */
+function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
+  const ceo = useStore((s) => s.agents[CEO_ID]);
+  const job = useStore((s) => s.ceo.job?.label);
+  const unread = useStore((s) => unreadMessages(s.messages, s.phoneReadAt));
+  const last = useStore((s) => s.messages.findLast((m) => m.from === 'ceo')?.text);
+  const name = ceo?.name ?? 'CEO';
+  const working = ceo?.status === 'working';
+  return (
+    <button
+      data-tour="chat"
+      className={`btn btn-small pk-switch pk-chat-btn ${open ? 'pk-chat-btn-on' : ''}`}
+      aria-pressed={open}
+      aria-label={`Chat with ${name}${unread && !open ? `, ${unread} unread` : ''}`}
+      title={ceoChatHint(name, working ? (job ?? 'Working') : 'Free', last, '/')}
+      onClick={toggle}
+    >
+      <span className="avatar pk-chat-avatar" style={{ background: ceo?.color }} aria-hidden>
+        {name[0]}
+        {working && <span className="pk-chat-working" />}
+      </span>
+      {name}
+      {unread > 0 && !open && <span className="badge badge-dot">{unread}</span>}
+    </button>
+  );
+}
+
 /** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
@@ -436,13 +462,13 @@ export default function Pocket() {
     return () => void (document.title = 'cubefarm');
   }, [company]);
 
-  const tabs: [PocketTab, string, string, number][] = [
-    ['company', '📊', 'Company', 0],
-    ['chat', '💬', ceoName, tab === 'chat' || (wide && dock) ? 0 : unread],
-    ['kanban', '📋', 'Kanban', 0],
-    ['team', '👥', 'Team', 0],
-    ['approvals', '✋', 'Approvals', waiting],
-  ];
+  const entries: Record<PocketTab, [string, string, number]> = {
+    company: ['📊', 'Company', 0],
+    chat: ['💬', ceoName, tab === 'chat' ? 0 : unread],
+    kanban: ['📋', 'Kanban', 0],
+    team: ['👥', 'Team', 0],
+    approvals: ['✋', 'Approvals', waiting],
+  };
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
   const chatMode = useChatMode();
   const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} />;
@@ -478,6 +504,7 @@ export default function Pocket() {
             💬 Chat {chatMode.on ? 'on' : 'off'}
           </button>
         )}
+        {wide && <ChatButton open={dock} toggle={() => setDock(!dock)} />}
         {wide ? (
           <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>
@@ -491,19 +518,17 @@ export default function Pocket() {
       <NoticeToasts max={2} />
       <div className="pk-body">
         <nav className="pk-tabs" aria-label="Pocket office" data-tour="pocket-tabs">
-          {tabs.map(([k, icon, label, badge], i) => {
-            // wide, the chat's entry shows and hides its pane
-            const docked = wide && k === 'chat';
-            const on = docked ? dock : tab === k;
+          {railTabs(layout).map((k) => {
+            const [icon, label, badge] = entries[k];
+            const on = tab === k;
             return (
               <button
                 key={k}
                 data-tour={k === 'chat' ? 'chat' : undefined}
                 className={`pk-tab ${on ? 'pk-tab-on' : ''}`}
-                aria-current={!docked && on ? 'page' : undefined}
-                aria-pressed={docked ? dock : undefined}
-                title={wide ? `${label} (${i + 1})` : undefined}
-                onClick={() => (docked ? setDock(!dock) : setTab(k))}
+                aria-current={on ? 'page' : undefined}
+                title={wide ? `${label} (${TABS.indexOf(k) + 1})` : undefined}
+                onClick={() => setTab(k)}
               >
                 <span className="pk-tab-icon">
                   {icon}
