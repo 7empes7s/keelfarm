@@ -342,7 +342,8 @@ export interface TestLabHost {
   /** The address of the requester's floor's app: their PR's preview (started on demand), else the floor's; held for agentId while they work. */
   previewUrl(repoId: string, pr: number | null, agentId: string): Promise<string>;
   /** A screenshot the lab took for an agent: their screen in the office shows it, and QA's evidence keeps it. */
-  shot(agentId: string, file: string): void;
+  /** page: the address the browser was sent to. */
+  shot(agentId: string, file: string, page: string): void;
   emit(view: TestLabView): void;
 }
 
@@ -486,7 +487,7 @@ export class TestLab {
           ok = !r.pageErrors.length && !r.consoleErrors.length;
           summary = `${r.shots.length} shots, ${r.consoleErrors.length + r.pageErrors.length} errors`;
           file = r.shots[0]?.file;
-          for (const s of r.shots) this.host.shot(j.who.agentId, s.file);
+          for (const s of r.shots) this.host.shot(j.who.agentId, s.file, url);
           text = shotReport(r);
         } else {
           const r = await runner.check({ ...base, viewport: input.viewport, steps: input.steps });
@@ -494,7 +495,7 @@ export class TestLab {
           ok = !failed.length;
           summary = ok ? `pass, ${r.steps.length} steps` : `${failed.length} of ${r.steps.length} steps failed`;
           file = failed.find((s) => s.shot)?.shot;
-          if (file) this.host.shot(j.who.agentId, file);
+          if (file) this.host.shot(j.who.agentId, file, url);
           text = checkReport(r);
         }
       }

@@ -91,7 +91,7 @@ export type ServerEvent =
   /** The latest line worth listing of agents it doesn't watch, for the workers list. */
   | { type: 'latest'; lines: Record<string, LogLine> }
   | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean } // chat items (#120) of the agent windows a tab has open; catchUp replaces
-  | { type: 'screen'; agentId: string; url: string | null; at: number }
+  | { type: 'screen'; agentId: string; url: string | null; at: number; earlier?: number[] } // earlier: the session's previous shots (#230's filmstrip, at most 5, /api/agents/:id/screen?at=)
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
   | { type: 'prPreview'; preview: PrPreviewView }

@@ -511,7 +511,7 @@ export abstract class SwarmCore extends SwarmContract {
       devAgentId: q.devAgentId,
       qaAgentId: q.qaAgentId,
       summary: q.summary,
-      checks: q.checks,
+      checks: q.checks, ...(q.status !== 'passed' && q.fixInstructions && { fixInstructions: q.fixInstructions }), // only while it's to do (scale.test.ts)
       commentUrl: q.commentUrl,
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
@@ -574,10 +574,10 @@ export abstract class SwarmCore extends SwarmContract {
     return this.officeHead?.slice(0, 7) ?? null;
   }
 
-  /** The agent's latest screenshot: null when it has none right now, undefined for an unknown agent. */
-  screenshot(agentId: string) {
+  /** The agent's latest screenshot (or this session's taken `at`, #230): null when it has none, undefined for an unknown agent. */
+  screenshot(agentId: string, at?: number) {
     const rt = this.agentRt.get(agentId);
-    return rt ? rt.screenshot : undefined;
+    return !rt ? undefined : at ? (rt.shots.find((s) => s.at === at) ?? null) : rt.screenshot;
   }
 
   // ---------- clients ----------

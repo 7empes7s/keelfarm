@@ -46,7 +46,7 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
           <h2 className="cn-title">
             <Icon name={open.icon} /> {open.label}
           </h2>
-          <InfoButton screen={open.id} />
+          <InfoButton screen={open.id} className="ds-btn ds-btn-icon" />
         </div>
         <div className="ds-stack-scope" role="region" aria-label={open.label}>
           <SectionBody id={open.id} where="pocket" focus={{ history, repoId }} />

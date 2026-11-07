@@ -10,6 +10,7 @@ import { AgentSetup } from './AgentSettings';
 import { AgentProfile } from './CareerCard';
 import { copyText } from './clipboard';
 import { canPickWork, taskLine, taskSteps } from './agentWindow';
+import { Actions, Chip, DetailsHeader, LinkButton, Section, Stat, StatStrip } from './DetailsPage';
 import { CloseButton, Icon } from './Icon';
 
 export type DetailsTab = 'now' | 'profile' | 'setup';
@@ -80,36 +81,7 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
   const copyBranch = (b: string) => void copyText(b).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? `Copied the branch ${b}` : "Couldn't reach the clipboard"));
   return (
     <div className="aw-now">
-      <section className="aw-card" aria-label="Their task">
-        <b className="aw-card-title">{taskLine(agent)}</b>
-        <div className="aw-chips">
-          {issueUrl && !idle && (
-            <a className="chip" href={issueUrl} target="_blank" rel="noreferrer">
-              Issue #{agent.issueNumber} <Icon name="external-link" />
-            </a>
-          )}
-          {agent.prUrl && !idle && (
-            <a className="chip chip-good" href={agent.prUrl} target="_blank" rel="noreferrer">
-              PR #{agent.prNumber} <Icon name="external-link" />
-            </a>
-          )}
-          {qa && !idle && (
-            <span className={`chip ${qa.status === 'passed' ? 'chip-good' : ''}`}>
-              QA {qa.status}
-              {qa.round > 1 ? ` · round ${qa.round}` : ''}
-            </span>
-          )}
-          {qa?.commentUrl && !idle && (
-            <a className="chip" href={qa.commentUrl} target="_blank" rel="noreferrer">
-              QA report <Icon name="external-link" />
-            </a>
-          )}
-          {agent.branch && (
-            <button type="button" className="chip aw-chip-btn" title={`Copy ${agent.branch}`} onClick={() => copyBranch(agent.branch!)}>
-              ⑂ branch · copy
-            </button>
-          )}
-        </div>
+      <DetailsHeader eyebrow={idle ? repo.fullName : `${agent.prNumber ? `PR #${agent.prNumber}` : `Issue #${agent.issueNumber ?? '?'}`} · ${repo.fullName}`} title={taskLine(agent)} chips={qa && !idle && <Chip tone={qa.status === 'passed' ? 'good' : qa.status === 'failed' ? 'bad' : 'plain'}>QA {qa.status}{qa.round > 1 ? ` · round ${qa.round}` : ''}</Chip>}>
         {steps.length > 0 && (
           <ol className="aw-steps" aria-label="This task's steps">
             {steps.map((s, i) => (
@@ -128,9 +100,9 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
             ))}
           </ol>
         )}
-      </section>
+      </DetailsHeader>
       {canPickWork(agent) && (
-        <section className="aw-card aw-pick" aria-label="Give them work">
+        <Section title="Give them work" className="aw-pick">
           <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Work to give them">
             <option value="">{choices.length ? 'Pick an issue to build or a PR to test…' : 'Nothing to pick up'}</option>
             {(['issue', 'qa'] as const).map((kind) => {
@@ -149,7 +121,7 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
             })}
           </select>
           <button
-            className="btn btn-good"
+            className="ds-btn"
             disabled={busy || !chosen}
             onClick={() =>
               chosen &&
@@ -170,42 +142,38 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
               </>
             )}
           </button>
-        </section>
+        </Section>
       )}
-      <div className="aw-chips" aria-label="How they work">
-        <span className="chip" title="Their coding agent">
-          <Icon name="keyboard" /> {cli}
-        </span>
-        <span className="chip" title="Their model">
-          <Icon name="brain" /> {model}
-        </span>
-        <span className="chip" title="How long the model thinks on each step">
-          <Icon name="zap" /> {effort} effort
-        </span>
-      </div>
-      <dl className="aw-facts">
-        {agent.startedAt && (
-          <div>
-            <dt>Started</dt>
-            <dd>{new Date(agent.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</dd>
-          </div>
-        )}
-        {elapsed && (
-          <div>
-            <dt>Time</dt>
-            <dd>{elapsed}</dd>
-          </div>
-        )}
-        <div>
-          <dt title="API-equivalent cost reported by the coding agent; subscription usage is billed by plan">Cost so far</dt>
-          <dd>{agent.costUsd > 0 ? `≈$${agent.costUsd.toFixed(2)}` : '—'}</dd>
+      <StatStrip>
+        {agent.startedAt && <Stat title="Started" value={new Date(agent.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />}
+        {elapsed && <Stat title="Time" value={elapsed} />}
+        <Stat title="Cost so far" value={agent.costUsd > 0 ? `≈$${agent.costUsd.toFixed(2)}` : '—'} note="API-equivalent" />
+        <Stat title="Turns" value={agent.turns} />
+      </StatStrip>
+      <Section title="How they work">
+        <div className="dp-chips">
+          <Chip>
+            <Icon name="keyboard" /> {cli}
+          </Chip>
+          <Chip>
+            <Icon name="brain" /> {model}
+          </Chip>
+          <Chip>
+            <Icon name="zap" /> {effort} effort
+          </Chip>
         </div>
-        <div>
-          <dt>Turns</dt>
-          <dd>{agent.turns}</dd>
-        </div>
-      </dl>
-      <div className="aw-chips">{actions}</div>
+      </Section>
+      <Actions>
+        {issueUrl && !idle && <LinkButton href={issueUrl}>Issue #{agent.issueNumber} <Icon name="external-link" /></LinkButton>}
+        {agent.prUrl && !idle && <LinkButton href={agent.prUrl}>PR #{agent.prNumber} <Icon name="external-link" /></LinkButton>}
+        {qa?.commentUrl && !idle && <LinkButton href={qa.commentUrl}>QA report <Icon name="external-link" /></LinkButton>}
+        {agent.branch && (
+          <button type="button" className="ds-btn" title={`Copy ${agent.branch}`} onClick={() => copyBranch(agent.branch!)}>
+            <Icon name="git-branch" /> Copy branch
+          </button>
+        )}
+        {actions}
+      </Actions>
       {live && <p className="muted small">{live}</p>}
       {browser}
     </div>

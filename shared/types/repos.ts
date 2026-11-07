@@ -196,6 +196,7 @@ export interface QaView {
   qaAgentId: string | null; // the agent testing it, or who last did
   summary: string | null; // latest QA summary
   checks: QaCheck[];
+  fixInstructions?: string | null; // what has to change, once QA failed it (the details page's verdict, #155)
   commentUrl: string | null; // the PR comment with the latest QA report
   mergeNote: string | null; // where auto-merge stands once QA passed, e.g. "waiting for checks: Vercel"
   ceoLooking: boolean; // needs-human, and the CEO has a triage job for it (queued or running) before the manager hears
