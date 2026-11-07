@@ -8,8 +8,19 @@ const SCREENS: Screen[] = [
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
-  // the demo's stuck PR (#155): its details page, opened from Approvals
-  { name: 'pocket PR details (#155)', widths: [360, 390, 430], open: async (page) => (await (await pocket(page, 'approvals')).getByRole('button', { name: /open the details$/ }).first().click(), dialog(page, /PR #/)), tabs: [] },
+  // the demo's stuck PR (#155): its details page, opened from its Kanban card
+  { name: 'pocket PR details (#155)', widths: [360, 390, 430], open: async (page) => (await (await pocket(page, 'kanban')).locator('.kcard', { hasText: 'sticky action bar' }).first().locator('button.linkish').click(), dialog(page, /PR #/)), tabs: [] },
+  {
+    name: 'approvals: a design proposal (#209)',
+    widths: POCKET,
+    open: async (page) => {
+      const root = await pocket(page, 'approvals');
+      await root.getByRole('button', { name: /Todo list: flat rows or cards/ }).click();
+      await expect(root.getByRole('region', { name: /Option B/ })).toBeVisible();
+      return root;
+    },
+    tabs: [],
+  },
   {
     name: 'search palette (#109)',
     widths: PHONES,
@@ -88,6 +99,19 @@ const SCREENS: Screen[] = [
 ];
 
 checkScreens(SCREENS);
+
+test('approvals: a PR low in the list opens at its top, Back returns to the list (#209)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await pocket(page, 'approvals');
+  const row = root.getByRole('button', { name: /Forecast in °F on request/ });
+  await row.scrollIntoViewIfNeeded();
+  const listTop = await root.locator('.pk-main').evaluate((el) => el.scrollTop);
+  await row.click();
+  await expect(root.getByRole('button', { name: '‹ Approvals' })).toBeInViewport();
+  await root.getByRole('button', { name: '‹ Approvals' }).click();
+  await expect(row).toBeInViewport();
+  expect(await root.locator('.pk-main').evaluate((el) => el.scrollTop)).toBe(listTop);
+});
 
 // ---------- pocket mode on a desktop (#104) ----------
 

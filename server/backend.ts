@@ -32,6 +32,7 @@ import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { DemoCharter } from './demoCharters.ts';
 import type { DemoQaReport } from './demoQa.ts';
+import type { ProposeDesignInput } from './designTool.ts';
 import type { CareerView, PastCareer } from '../shared/careers.ts';
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
@@ -183,8 +184,10 @@ export interface Backend {
   seedQaReport?(fullName: string): DemoQaReport | null;
   /** The demo only: an update the preflight held back (#138), so a fresh demo office's chat shows its card. */
   demoHeldUpdate?(): LastUpdate;
-  /** The demo only: open PRs a CI outage holds (#191), which a fresh demo office starts with as QA-passed and parked. */
-  demoParked?(): { fullName: string; prNumber: number }[];
+  /** The demo only: open PRs a CI outage holds (#191), which a fresh demo office starts with as QA-passed and parked; `stuck`: one that only needs the manager because CI is red (#209), with QA's summary. */
+  demoParked?(): { fullName: string; prNumber: number; stuck?: string }[];
+  /** The demo only: a design proposal (#209) a fresh demo office opens with, as propose_design's input. */
+  demoDesign?(): Promise<ProposeDesignInput>;
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo opens without the setup wizard or the tour (config.ts demoNoTour), for QA's and tests' browsers. */

@@ -655,12 +655,16 @@ export abstract class SwarmQa extends SwarmSessions {
   }
 
   /** The demo only: a QA-passed PR a CI outage holds, parked as the merge gate would. */
-  protected async seedParked(fullName: string, prNumber: number) {
+  protected async seedParked(fullName: string, prNumber: number, stuck?: string) {
     const repo = this.state.repos.find((r) => r.fullName === fullName);
     const pr = repo && this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber);
     if (!repo || !pr) return;
     this.queueQa(repo, prNumber, null, pr.closesIssues[0] ?? null);
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber)!;
+    if (stuck) {
+      const checks = [{ name: 'Endpoints in °F', result: 'pass' as const, details: '/forecast?units=f and /now?units=f' }, { name: 'npm test', result: 'pass' as const, details: '42 passed' }];
+      return this.setQa(rec, { status: 'needs-human', summary: stuck, checks, stuckWhy: 'CI failing after QA passed', escalated: true, alerted: true, stuckAt: Date.now() - 2 * 3_600_000 });
+    }
     this.setQa(rec, { status: 'passed', passedSha: pr.headSha, summary: 'All checks passed.' });
     await this.park(repo, rec, pr, NEVER_STARTED);
   }

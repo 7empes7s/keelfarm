@@ -124,6 +124,8 @@ export interface PreviewView {
   logTail: string[]; // the last 40 lines of install / app output
   stopsAt?: number | null; // running with nobody watching: when it stops for being idle (null: it won't)
   heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop and restart are refused)
+  /** It didn't start because a program that isn't the office's holds its port (#225): which one, for "Use another port". */
+  portOwner?: { pid: number; command: string; startedAt: number | null } | null;
 }
 
 /**
@@ -200,6 +202,9 @@ export interface QaView {
   ceoLooking: boolean; // needs-human, and the CEO has a triage job for it (queued or running) before the manager hears
   updatedAt: number;
   shots?: QaShotView[]; // QA's screenshots from the latest round (absent: none)
+  stuckAt?: number | null; // when it became needs-human: "asked 2 h ago" (#209, shared/approvals.ts stuckSince)
+  stuckWhy?: string | null; // why it last became needs-human, for the Approvals' decision card (#209)
+  ceoNote?: string | null; // the CEO's diagnosis when it handed a needs-human PR to the manager (escalate, #209)
 }
 
 /** A screenshot from QA's latest round on a PR, served at /api/repos/:repo/pulls/:n/qa-shots/:index. */
