@@ -1,0 +1,33 @@
+/* The app viewer's phone and tablet widths, loading skeleton and screenshot fallback (#129); the rest is in styles.css. */
+
+.app-stage-tablet .app-frame {
+  width: 774px; /* 768px of app inside the side borders */
+  max-width: 100%;
+  border-left: 3px solid var(--ds-outline);
+  border-right: 3px solid var(--ds-outline);
+}
+/* Over the frame until the app has loaded (#129): never a blank screen. */
+.app-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, var(--ds-surface-sunken) 30%, var(--ds-surface-raised) 50%, var(--ds-surface-sunken) 70%) 0 0 / 300% 100%;
+  animation: app-skeleton 1.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes app-skeleton {
+  to {
+    background-position: -150% 0;
+  }
+}
+.app-frame-shots {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  overflow-x: auto;
+}
+.app-frame-shots img {
+  display: block;
+  height: 72px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 6px;
+}

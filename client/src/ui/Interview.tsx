@@ -3,7 +3,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { Markdown } from './Markdown';
-import { backdropClose, closeOverlay } from './Panel';
+import { backdropClose, closeOverlay, useBackLayer } from './Panel';
 import { HireSetupFields, cliLabel, hireCli, hireOverrides, setupOf, type HireSetup } from './Phone';
 import { CLAUDE_MODELS, effectiveModel } from '../../../shared/models';
 
@@ -21,6 +21,7 @@ export function Interview({ requestId }: { requestId: string }) {
   const [edited, setSetup] = useState<HireSetup | null>(null); // null: the CEO's picks, untouched
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  useBackLayer(closeOverlay);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

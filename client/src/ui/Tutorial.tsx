@@ -3,6 +3,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { Key, MoveKeys } from './Key';
+import { useFinder } from './goTo';
 
 // The first-run tour: a coach card in the corner that moves on by itself as you try each thing,
 // with Next and Skip always there. Progress lives in settings.tutorialStep, so a refresh resumes it.
@@ -47,7 +48,8 @@ const STEPS: Step[] = [
     title: 'Your phone',
     body: (c) => (
       <>
-        💬 {c.ceo} texts you here, and you can text back. 👥 <b>Team</b> shows the CEO's team changes waiting for your OK. 📊 <b>Company</b> is every project at a glance. Put it away with <Key action="phone" />.
+        💬 {c.ceo} texts you here, and you can text back: the + in the chat has starters like "Plan the next milestone". 👥 <b>Team</b> shows the CEO's team changes waiting for your OK. 📊 <b>Company</b> is
+        every project at a glance. Put it away with <Key action="phone" />.
       </>
     ),
     done: (s) => s.overlay?.kind !== 'phone',
@@ -103,6 +105,25 @@ const STEPS: Step[] = [
       </>
     ),
     done: (s) => s.overlay?.kind === 'terminal' && s.overlay.agentId !== CEO_ID,
+  },
+  {
+    title: 'Find anything',
+    body: () => (
+      <>
+        Press <kbd>Ctrl</kbd> <kbd>K</kbd> (or 🔍 at the top right) to search floors, agents, issues, pull requests and settings, or to ask the CEO to plan or research. Try it now.
+      </>
+    ),
+    done: () => useFinder.getState().search,
+  },
+  {
+    title: 'Get the most out of it',
+    body: () => (
+      <>
+        The ✅ at the top right is a checklist that ticks itself: charters, QA briefs, notifications, Telegram, a mandate for the CEO, an experiment. Each open item has a <b>Do it</b>. Every screen's ⓘ says
+        what you can do there.
+      </>
+    ),
+    done: () => useFinder.getState().guide,
   },
   {
     title: 'Your office',

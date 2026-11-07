@@ -286,6 +286,8 @@ export class Swarm extends SwarmCeoTools {
     }
     // Agents from before the ledger start their careers now.
     for (const a of this.state.agents) if (a.role !== 'ceo') applyLedger(this.state.progress, { kind: 'hired', agentId: a.id, at: Date.now() });
+    // A fresh demo office's agents come with records of all kinds (#117).
+    if (seeded && this.backend.seedCareers) Object.assign(this.state.progress.careers, this.backend.seedCareers(this.state.agents.filter((a) => a.role !== 'ceo').map((a) => a.id), Date.now()));
 
     for (const r of this.state.repos) void this.cloneRepo(r.id);
     await Promise.all(this.state.repos.map((r) => this.syncRepo(r.id)));
@@ -300,6 +302,8 @@ export class Swarm extends SwarmCeoTools {
       this.previews.clearOrphans(this.state.repos),
     ]);
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
+    // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
+    if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
     void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
@@ -309,6 +313,8 @@ export class Swarm extends SwarmCeoTools {
     this.officeHead = await this.backend.office.head();
     const updated = await this.backend.office.takeLastUpdate().catch(() => null);
     if (updated) await this.reportUpdate(updated);
+    const held = seeded ? this.backend.demoHeldUpdate?.() : undefined;
+    if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
     setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
     setInterval(() => this.previews.sweepPrs(), 15_000);

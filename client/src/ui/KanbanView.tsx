@@ -7,6 +7,12 @@ import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { HistoryButton } from './HistoryTab';
+import { EmptyState } from './EmptyState';
+import { InfoButton } from './InfoButton';
+import type { EmptyKind } from './emptyStates';
+import type { Target } from './goTo';
+import { cardPhrase } from './statusPhrase';
+import { FloorBuilds } from './FloorBuilds';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
@@ -176,13 +182,24 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       </button>
     );
 
-  const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: string) => (
+  const nameOf = (id: string | null) => (id ? allAgents[id]?.name : undefined);
+  const ask = (text: string): Target => ({ kind: 'ceo', text: text.replace('{floor}', `floor ${repo.floor} (${repo.fullName})`) });
+  const emptyAction: Partial<Record<EmptyKind, { onAction?: () => void; target?: Target }>> = {
+    backlog: { onAction: () => setShowForm(true) },
+    progress: { target: ask('What should {floor} work on next?') },
+    merged: { target: ask('Which pull request on {floor} is closest to merging, and what does it need?') },
+  };
+  const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: EmptyKind) => (
     <div className={`kcol ${cls}`}>
       <div className="kcol-head">
         {title} <span className="count">{cards.length}</span>
       </div>
       <div className="kcol-body">
-        {cards.length === 0 && <div className="muted small kempty">{empty}</div>}
+        {cards.length === 0 && (
+          <div className="kempty">
+            <EmptyState kind={empty} compact {...emptyAction[empty]} />
+          </div>
+        )}
         {cards.map((c) => (
           <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
             <div className="kcard-title">
@@ -196,6 +213,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
               {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
             </div>
+            {c.prNumber != null && cls !== 'kcol-merged' && (
+              <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
+            )}
             {render(c)}
           </div>
         ))}
@@ -214,6 +234,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           <a className="small" href={repo.url} target="_blank" rel="noreferrer">
             GitHub ↗
           </a>
+          {!embedded && <InfoButton screen="kanban" />}
         </span>
       }
     >
@@ -240,6 +261,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       </div>
       {repo.syncError && <div className="term-error">⚠️ {repo.syncError}</div>}
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
+      <FloorBuilds repoId={repo.id} />
 
       <div className="kanban kanban-5">
         {column(
@@ -264,7 +286,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               </select>
             </div>
           ),
-          'No open issues. File one above!',
+          'backlog',
         )}
         {column(
           '🔨 In progress',
@@ -278,7 +300,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               {terminalButton(c)}
             </div>
           ),
-          'Nobody is coding right now.',
+          'progress',
         )}
         {column(
           '🔍 In QA',
@@ -314,7 +336,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               </div>
             );
           },
-          'Nothing waiting for testing.',
+          'qa',
         )}
         {column(
           '✅ Ready to merge',
@@ -340,7 +362,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               </div>
             );
           },
-          'No tested pull requests yet.',
+          'ready',
         )}
         {column(
           '🎉 Merged',
@@ -351,7 +373,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               <AgentChip agent={c.agent} card={c} />
             </div>
           ),
-          'Nothing merged yet.',
+          'merged',
         )}
       </div>
     </Frame>

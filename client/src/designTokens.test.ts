@@ -14,6 +14,7 @@ const CEILING: Record<string, number> = {
   'ui/costs.css': 2,
   'ui/chatRefs.css': 6,
   'ui/experiments.css': 14,
+  'ui/finder.css': 0,
 };
 
 /** Hex colours and rgb()/rgba() calls, comments left out. */

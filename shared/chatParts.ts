@@ -3,6 +3,7 @@
 // message Accept sends; ```artifact title="…", markdown). A block that breaks the rules stays in the text as written,
 // so nothing the CEO wrote is ever lost.
 
+import { cleanTerminalText } from './terminalText.ts';
 import type { ChatArtifact, ChatIdea, PhoneMessage } from './types.ts';
 
 export const MAX_SUGGESTIONS = 4;
@@ -64,6 +65,18 @@ function artifactOf(info: string, body: string[]): { title: string; markdown: st
   if (!title || !markdown || markdown.length > ARTIFACT_CHARS) return null;
   return { title: title.length > ARTIFACT_TITLE_CHARS ? `${title.slice(0, ARTIFACT_TITLE_CHARS - 1).trimEnd()}…` : title, markdown };
 }
+
+/**
+ * A new message's parts: the CEO's blocks lifted out (parseCeoMessage); the office's notes, which may quote a tool's
+ * output, without colour codes or unbreakable rules (#138); the manager's as written.
+ */
+export function parseMessage(from: PhoneMessage['from'], raw: string): ParsedMessage {
+  if (from === 'ceo') return parseCeoMessage(raw);
+  return { text: from === 'office' ? officeText(raw) : raw };
+}
+
+/** An office note as the chat shows it: also run when one renders, so notes stored before #138 come out clean too. */
+export const officeText = (raw: string) => cleanTerminalText(raw, 6000);
 
 /** Lifts the suggestion and artifact blocks out of a CEO message. A message without valid ones comes back as it was. */
 export function parseCeoMessage(raw: string): ParsedMessage {

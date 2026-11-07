@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import type { ChatAction } from '../../../shared/ceoActions';
 import { currentStep } from '../../../shared/ceoStream';
-import { CEO_ID, type ChatIdea } from '../../../shared/types';
+import { CEO_ID, type ChatIdea, type ChatNotice } from '../../../shared/types';
 import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
 import { useRefOpen } from './RefChips';
 import './chatCards.css';
@@ -76,6 +76,30 @@ export function IdeaCard({ idea, ceoName, onAccept, onEdit }: { idea: ChatIdea; 
 }
 
 /** While the CEO is on a job: the step it's on in plain words, for how long, Stop, and the job waiting next. */
+/** A system notice from the office (#138): its line, the output behind it under Details, and links to the commits. */
+export function NoticeCard({ text, notice }: { text: string; notice: ChatNotice }) {
+  return (
+    <div className="notice-card" role="note">
+      <p className="notice-card-title">{text}</p>
+      {notice.details && (
+        <details className="notice-card-details">
+          <summary>Details</summary>
+          <pre>{notice.details}</pre>
+        </details>
+      )}
+      {notice.links?.length ? (
+        <div className="notice-card-links">
+          {notice.links.map((l) => (
+            <a key={l.url} href={l.url} target="_blank" rel="noreferrer">
+              {l.label} ↗
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function WorkingStrip({ onStop }: { onStop: () => void }) {
   const info = useStore((s) => s.ceo);
   const live = useStore((s) => s.chat.live);

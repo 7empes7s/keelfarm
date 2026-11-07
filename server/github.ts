@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CommandError, gh, ghJson } from './exec.ts';
-import type { GhRepoSummary, IssueInfo, PullInfo } from '../shared/types.ts';
+import { PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
@@ -99,6 +99,7 @@ interface RawPull {
   deletions: number;
   headRefOid: string;
   mergeStateStatus: string;
+  files?: { path: string }[] | null;
   // check runs (GitHub Actions…) carry name/status/conclusion/detailsUrl and startedAt/completedAt; commit statuses (Vercel…) carry context/state/targetUrl
   statusCheckRollup:
     | { name?: string; context?: string; status?: string; conclusion?: string; state?: string; detailsUrl?: string; targetUrl?: string; startedAt?: string; completedAt?: string }[]
@@ -106,7 +107,7 @@ interface RawPull {
 }
 
 const PR_FIELDS =
-  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup';
+  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup,files';
 
 type Check = NonNullable<RawPull['statusCheckRollup']>[number];
 const BAD = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
@@ -155,6 +156,7 @@ function toPull(p: RawPull): PullInfo {
     failedChecks: (p.statusCheckRollup ?? []).filter(failed).map((c) => ({ name: checkName(c), url: c.detailsUrl || c.targetUrl || null })),
     pendingChecks: (p.statusCheckRollup ?? []).filter(pending).map(checkName),
     checkRun: checkRunOf(p.statusCheckRollup),
+    files: (p.files ?? []).slice(0, PR_FILES_MAX).map((f) => f.path),
   };
 }
 

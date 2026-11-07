@@ -7,10 +7,13 @@ import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../sh
 import { activeMods, consumeMods, keySequence, NO_MODS, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
 import { VIEWPORT_EVENT } from '../viewport';
-import { TERM_FONT } from './termLayout';
+import { liveStatus, TERM_FONT } from './termLayout';
 
 // An agent's real terminal: their CLI's screen streamed from the office (/ws/term), and what you type sent back to it.
 // Opening it late shows everything so far: the office keeps a copy of each agent's screen and scrollback.
+
+/** A finger, not a mouse: the status line says tap (#117). */
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 const THEME: ITheme = {
   background: '#1b1b29',
@@ -198,7 +201,7 @@ export function LiveTerminal({
     refit.current();
   }, [fontSize]);
 
-  const status = !connected ? 'Reconnecting…' : live ? (focused ? 'Typing goes straight to the agent · Esc goes to them too; click outside to use the office keys' : 'Live · click the terminal to type into it') : 'Not running · a message below picks the session back up';
+  const status = liveStatus({ connected, live, focused, touch: COARSE });
   useEffect(() => onStatus?.(status), [onStatus, status]);
 
   const press = (k: BarKey) => {
