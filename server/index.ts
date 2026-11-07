@@ -236,6 +236,7 @@ app.post('/api/agents/:id/assign', route((req) => swarm.assign(String(req.params
 app.post('/api/agents/:id/stop', route((req) => swarm.stopAgent(String(req.params.id))));
 app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.params.id))));
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
+app.post('/api/agents/:id/react', route((req) => swarm.react(String(req.params.id), req.body?.itemId, req.body?.reaction)));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 // The session history (#49): a page of entries, Settings' disk-usage line, and one entry with its transcript.

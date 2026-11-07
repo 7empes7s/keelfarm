@@ -28,6 +28,7 @@ import { usageChip } from '../ops';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
 import { switchOffice } from '../pocket/switchOffice';
+import { useChatMode } from './chatMode';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -112,6 +113,16 @@ function SwitchButton() {
   return (
     <button className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
       🗺️ 2D office <kbd>{key}</kbd>
+    </button>
+  );
+}
+
+/** Chat mode (#120): desks, Team and Kanban open an agent's chat instead of their terminal; this device remembers it. */
+function ChatModeButton() {
+  const { on, set } = useChatMode();
+  return (
+    <button className="pill pill-switch" aria-pressed={on} onClick={() => set(!on)} title={`Chat mode is ${on ? 'on' : 'off'}: desks open an agent's ${on ? 'chat, their steps in plain words' : 'terminal'}. Click to switch`}>
+      💬 Chat {on ? 'on' : 'off'}
     </button>
   );
 }
@@ -203,6 +214,7 @@ export function HUD() {
         <PhotoButton />
         <SearchButton />
         <GuideButton />
+        <ChatModeButton />
         <SwitchButton />
       </div>
 

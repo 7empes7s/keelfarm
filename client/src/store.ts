@@ -3,6 +3,7 @@ import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
 import { latestListed } from '../../shared/watch';
+import { mergeChat, type ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
@@ -38,7 +39,7 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string }
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal' } // view: opened on it (the CEO chat's @Agent opens their chat)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
@@ -127,6 +128,7 @@ interface State {
   agents: Record<string, Agent>;
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
   latest: Record<string, LogLine>; // everyone's latest line worth listing, for the workers list
+  agentChat: Record<string, ChatItem[]>; // chat items (#120) of the agents whose window is open
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
   peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
@@ -285,6 +287,7 @@ export const useStore = create<State>((set, get) => ({
   agents: {},
   logs: {},
   latest: {},
+  agentChat: {},
   workersOpen: false,
   peek: null,
   screens: {},
@@ -486,6 +489,12 @@ export const useStore = create<State>((set, get) => ({
       case 'latest':
         set({ latest: { ...get().latest, ...ev.lines } });
         break;
+      case 'agentChat': {
+        const chats = { ...get().agentChat };
+        for (const [id, items] of Object.entries(ev.chats)) chats[id] = mergeChat(ev.catchUp ? [] : (chats[id] ?? []), items);
+        set({ agentChat: chats });
+        break;
+      }
       case 'screen': {
         const a = get().agents[ev.agentId];
         set({

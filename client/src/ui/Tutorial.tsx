@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { Key, MoveKeys } from './Key';
 import { useFinder } from './goTo';
+import { useChatMode } from './chatMode';
 
 // The first-run tour: a coach card in the corner that moves on by itself as you try each thing,
 // with Next and Skip always there. Progress lives in settings.tutorialStep, so a refresh resumes it.
@@ -105,6 +106,27 @@ const STEPS: Step[] = [
       </>
     ),
     done: (s) => s.overlay?.kind === 'terminal' && s.overlay.agentId !== CEO_ID,
+  },
+  {
+    title: 'Their chat',
+    body: () => (
+      <>
+        An agent's window switches between 💬 <b>Chat</b> and ⌨ <b>Terminal</b>. Chat is their work as a conversation: what they say, their steps in plain words (tap one for the command, output or diff),
+        the pull request with QA's verdict. 💬 Chat at the top turns chat mode on for every desk.
+      </>
+    ),
+    done: () => useChatMode.getState().on,
+    minMs: 3000,
+  },
+  {
+    title: 'React to them',
+    body: () => (
+      <>
+        Hold a message or step in their chat (or hover it and press ☺) to react. 👍 carry on, 👎 rethink, 🤔 explain and ⚠️ stop and check reach them as a short note after their current step; ❤️ 🎉 👀
+        only show. Their 👀 ⏳ ✅ on your messages say they've seen it, are on it, and answered.
+      </>
+    ),
+    minMs: 4000,
   },
   {
     title: 'Find anything',

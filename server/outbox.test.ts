@@ -145,3 +145,23 @@ describe('terminal lines', () => {
     expect(o.stats.messages - before).toBe(1);
   });
 });
+
+describe('agent chat (#120)', () => {
+  it("goes only to tabs with that agent's window open: the latest version of each item, and a catch-up on opening", () => {
+    const item = (id: number, text: string) => ({ id, t: id, kind: 'step' as const, text });
+    const o = new Outbox({ agents: () => people, log: () => [], chat: (id) => (id === 'grace' ? [item(1, 'Read a.ts')] : []) });
+    const [floor2, panel] = [tab(), tab()];
+    o.add(floor2);
+    o.add(panel);
+    watch(floor2, o, 2);
+    watch(panel, o, 0, ['grace']);
+    expect(panel.got.filter((e) => e.type === 'agentChat')).toEqual([{ type: 'agentChat', catchUp: true, chats: { grace: [item(1, 'Read a.ts')] } }]);
+    panel.got.length = 0;
+    floor2.got.length = 0;
+    o.chat('grace', [item(2, 'Ran x')]);
+    o.chat('grace', [item(2, 'Ran x · done')]);
+    o.flush();
+    expect(panel.got).toEqual([{ type: 'agentChat', chats: { grace: [item(2, 'Ran x · done')] } }]);
+    expect(floor2.got).toEqual([]);
+  });
+});

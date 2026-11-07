@@ -16,8 +16,8 @@ const job = (kind: CeoJob['kind'], o: Partial<CeoJob> = {}): CeoJob => ({ kind, 
 
 /** Characters, roughly 4 per token. Today's sizes plus about 10%. */
 const PROMPTS: [string, string, number][] = [
-  ['issue (system)', devSystemPrompt(dev), 3450], // +100: the default office playbook (#50)
-  ['fix (system)', devSystemPrompt({ ...dev, fixing: { pr: 42, headRef: pr.headRefName } }), 3300], // +100: the default office playbook (#50)
+  ['issue (system)', devSystemPrompt(dev), 3560], // +100: the default office playbook (#50); +110: the reactions line (#120)
+  ['fix (system)', devSystemPrompt({ ...dev, fixing: { pr: 42, headRef: pr.headRefName } }), 3410], // +100: the default office playbook (#50); +110: the reactions line (#120)
   ['qa (system)', qaSystemPrompt({ agent, repo, port: 5839, cwd: '/desk/q', branch: qaBranch(42, 'margaret'), pr, officePlaybook }), 3550], // +100 for the BLOCKED line (#54), +250 for the default office playbook (#50)
   ['ceo (system)', ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: '/notes.md', sessionLimit: 4, maxAgents: 10, scaling: 'approve' }), 7900], // +150 for the waiting tools' line (#28), +280 for the idea cards (#108)
   ['ceo-review (job)', ceoJobPrompt(job('review'), null), 900],

@@ -43,4 +43,16 @@ describe("the CEO's transcript, as it is written", () => {
     tail.stop();
     expect(got).toEqual(['Reading the status.', 'Filing it now.']);
   });
+
+  it("passes an agent's steps on for their chat (#120), without text-only listeners", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tail-'));
+    dirs.push(dir);
+    const file = path.join(dir, 'session.jsonl');
+    const kinds: string[] = [];
+    const tail = new TranscriptTail(since, undefined, (ev) => kinds.push(...ev.map((e) => e.kind)));
+    fs.writeFileSync(file, said('1', 'Reading the status.'));
+    tail.watch(file);
+    tail.stop();
+    expect(kinds).toEqual(['text', 'tool']);
+  });
 });

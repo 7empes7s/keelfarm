@@ -1,6 +1,7 @@
 // The Swarm's persisted shapes, runtimes and constants, shared by its layers (server/swarm/*.ts).
 import path from 'node:path';
 import type { SessionHandle } from '../agentRunner.ts';
+import type { ChatLog } from '../../shared/agentChat.ts';
 import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
@@ -202,6 +203,7 @@ export interface AgentRuntime {
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
   blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
+  chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }
 
 export interface RepoRuntime {
