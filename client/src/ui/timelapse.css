@@ -99,7 +99,7 @@
 .replay {
   position: fixed;
   inset: 0;
-  z-index: 11;
+  z-index: calc(var(--ds-z-base) + 1);
   pointer-events: none;
 }
 .replay > :not(.replay-frame) {

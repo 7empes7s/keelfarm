@@ -147,14 +147,15 @@ describe('findPath', () => {
     const pairs = w.homes.map((h, i) => [h, w.spots[(i * 7) % w.spots.length]] as const);
     expect(pairs).toHaveLength(15);
     for (const [a, b] of pairs) findPath(w, a, b); // warm up
-    const runs: number[] = [];
-    for (let r = 0; r < 5; r++) {
+    // The best of 9 runs: a slower planner slows every run, while a loaded machine (the office's preflight shares it
+    // with every agent) only slows some; the median of 5 once took 18.5 ms there (#139).
+    let best = Infinity;
+    for (let r = 0; r < 9; r++) {
       const t = performance.now();
       for (const [a, b] of pairs) findPath(w, a, b);
-      runs.push(performance.now() - t);
+      best = Math.min(best, performance.now() - t);
     }
-    runs.sort((a, b) => a - b);
-    expect(runs[2]).toBeLessThan(8); // the median; a frame is 16.7 ms
+    expect(best).toBeLessThan(8); // a frame is 16.7 ms
   });
 });
 

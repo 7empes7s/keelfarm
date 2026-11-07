@@ -160,7 +160,13 @@ html[data-reduce-motion] .action-confetti {
 .working-text {
   min-width: 0;
   line-height: var(--ds-leading-tight);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* one compact row while typing (#152): the keyboard leaves little room */
+html[data-typing] .working-next {
+  display: none;
 }
 .working-next {
   display: block;
@@ -274,6 +280,40 @@ html[data-reduce-motion] .action-confetti {
   font-weight: var(--ds-weight-strong);
 }
 
+/* an office note (#193): one muted line, tap for the rest; the button around it is the 44px tap */
+.notice-pill {
+  display: flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  max-width: 92%;
+  min-width: 0;
+  min-height: var(--ds-target);
+  margin: -10px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.notice-pill > .bubble-office {
+  max-width: 100%;
+  color: var(--ds-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notice-pill-open > .bubble-office {
+  white-space: normal;
+  border-radius: var(--ds-radius-md);
+}
+.notice-pill:focus-visible {
+  outline: none;
+}
+.notice-pill:focus-visible > .bubble-office {
+  outline: 2px solid var(--ds-focus);
+}
+
 /* nothing in the chat is wider than it (#138): long unbroken strings wrap, code blocks scroll inside themselves */
 .chat-log {
   overflow-x: hidden;
@@ -329,4 +369,44 @@ html[data-reduce-motion] .action-confetti {
 }
 .chat-undo {
   padding-bottom: 6px;
+}
+/* The composer stack under the log (#152): when the keyboard takes the room, the log gives it up first (down to a few
+   lines, so the newest message and "↓ Latest" stay in view), then the message box; nothing else is squeezed. */
+.phone-chat > :not(.chat-log-wrap, .chat-input) {
+  flex-shrink: 0;
+}
+.chat-input {
+  min-height: calc(var(--ds-target) + 18px);
+  /* the box's five lines (its font: 0.95rem, at least 16px on touch screens, design.css) and the padding */
+  max-height: calc(5 * 1.35 * 0.95rem + 38px);
+}
+@media (pointer: coarse) {
+  .chat-input {
+    max-height: calc(5 * 1.35 * max(16px, 1rem) + 38px);
+  }
+}
+/* about five lines, fewer when the keyboard leaves less room; then it scrolls */
+.chat-input textarea.msg-box {
+  max-height: 100%;
+}
+/* the attachments: one row of fixed-height chips, scrolled sideways in the tray, never the page */
+ul.attach-tray {
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.attach-tray > .attach-item {
+  height: 48px;
+  max-width: none;
+  padding: 0 0 0 6px;
+  white-space: nowrap;
+}
+/* an attachment's ✕: a 44px target around the small circle */
+.attach-item .chat-reply-x {
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 9px;
+  border: none;
+  background-clip: content-box;
+  background-color: var(--ds-surface-sunken);
 }

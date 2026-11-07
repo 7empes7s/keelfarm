@@ -1,0 +1,78 @@
+/* Mission control → Rounds (ui/RoundsCard.tsx), on costs.css's stat cards, share bar and groups. */
+
+.rounds-seg {
+  display: flex;
+  gap: var(--ds-space-1);
+}
+.rounds-seg .btn[aria-pressed='true'] {
+  background: var(--ds-series-1);
+  color: var(--ds-on-color);
+}
+.rounds-spark line {
+  stroke: var(--ds-text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.rounds-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-4);
+  font-variant-numeric: tabular-nums;
+}
+.rounds-sub {
+  margin: var(--ds-space-3) 0 var(--ds-space-2);
+  font-size: var(--ds-text-md);
+}
+.rounds-bar {
+  height: var(--ds-space-4);
+}
+.rounds-dot {
+  display: inline-block;
+  width: var(--ds-space-3);
+  height: var(--ds-space-3);
+  margin-right: var(--ds-space-2);
+  border: 1px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  vertical-align: -1px;
+}
+.rounds-prs {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: var(--ds-space-2) 0 var(--ds-space-1) var(--ds-space-3);
+  padding: 0;
+  list-style: none;
+}
+.rounds-pr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-line-strong);
+  border-left: 5px solid var(--accent, var(--ds-outline));
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-link);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.rounds-pr:hover {
+  background: var(--ds-surface-hover);
+}
+a.rounds-pr:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+div.costs-stat {
+  cursor: default; /* the Rounds card's stats don't tap through, unlike the insight strip's */
+}
+div.costs-stat:hover {
+  background: var(--ds-surface-raised);
+}
+div.costs-stat:active {
+  transform: none;
+  box-shadow: var(--ds-shadow-2);
+}

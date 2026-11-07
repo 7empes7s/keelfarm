@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { gb, type MemorySettings } from '../../../shared/health';
+import { memoryLimit } from '../../../shared/progressBars';
+import { ProgressBar } from './ProgressBar';
 
 const RECENT_MS = 6 * 3_600_000; // a stop older than this is history, not news
 
@@ -12,9 +14,11 @@ export function HealthStrip() {
   const health = useStore((s) => s.health);
   const demo = useStore((s) => s.demo);
   const headroom = useStore((s) => s.settings.memory.headroomMb);
+  const openOverlay = useStore((s) => s.openOverlay);
   const [busy, setBusy] = useState(false);
   const m = health?.memory;
   if (!health || !m) return null;
+  const used = memoryLimit(m, headroom);
   const free = m.availableMb + m.swapFreeMb;
   const tone = health.held || free < headroom ? 'office-state-bad' : free < headroom * 2 ? 'office-state-busy' : 'office-state-ok';
   const stop = health.lastStop && Date.now() - health.lastStop.at < RECENT_MS ? health.lastStop : null;
@@ -41,6 +45,15 @@ export function HealthStrip() {
           <div className={`small office-state ${tone}`} role="status">
             {health.held ?? `${health.running} session${health.running === 1 ? '' : 's'} running${health.waiting ? `, ${health.waiting} waiting for memory to resume` : ''}`}
           </div>
+          <ProgressBar
+            label="Memory in use"
+            value={`${gb(m.totalMb - m.availableMb)} of ${gb(m.totalMb)}`}
+            pct={used.pct}
+            tone={used.tone}
+            aria={`Memory in use: ${Math.round(used.pct * 100)}%, ${gb(m.availableMb)} free, ${gb(headroom)} kept free`}
+            onClick={() => openOverlay({ kind: 'manager', tab: 'agents' })}
+            tap="Open the memory settings"
+          />
           {stop && (
             <div className="small muted">
               {new Date(stop.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {stop.agent}: {stop.why}

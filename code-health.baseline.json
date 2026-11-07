@@ -25,14 +25,14 @@
     "client/src/ui/Panel.tsx": {
       "eslint(no-unused-expressions)": 1
     },
-    "client/src/ui/Phone.tsx": {
-      "typescript(no-misused-promises)": 1
-    },
     "client/src/ui/ProjectPicker.tsx": {
       "typescript(no-misused-promises)": 3
     },
     "client/src/ui/SetupWizard.tsx": {
       "typescript(no-misused-promises)": 2
+    },
+    "client/src/ui/TeamChanges.tsx": {
+      "typescript(no-misused-promises)": 1
     },
     "client/src/ui/TerminalView.tsx": {
       "typescript(no-misused-promises)": 1
@@ -299,8 +299,8 @@
     "exports:client/src/ui/OutsideSettings.tsx:WEATHER_LABELS",
     "exports:client/src/ui/Overlays.tsx:SoundControls",
     "exports:client/src/ui/Overlays.tsx:closeOverlay",
-    "exports:client/src/ui/Phone.tsx:setupLine",
     "exports:client/src/ui/PongHud.tsx:pongStatus",
+    "exports:client/src/ui/TeamChanges.tsx:setupLine",
     "exports:client/src/ui/a11yPrefs.ts:REDUCE_MOTION",
     "exports:client/src/ui/babble.ts:BABBLE_PEAK",
     "exports:client/src/ui/babbleRules.ts:FORMANTS",
@@ -525,7 +525,6 @@
     "exports:shared/themes.ts:GREETINGS",
     "exports:shared/themes.ts:isThemeId",
     "exports:shared/usage.ts:STALE_MS",
-    "exports:shared/usage.ts:barName",
     "exports:shared/usage.ts:pctTone",
     "types:client/src/replay.ts:ReplayPhase",
     "types:client/src/ui/babbleRules.ts:Vowel",
@@ -579,15 +578,13 @@
     "types:server/watchdog.ts:ProblemKind",
     "types:shared/journal.ts:AgentPatch",
     "types:shared/journal.ts:MarkKind",
-    "types:shared/types.ts:AgentRuntime",
-    "types:shared/types.ts:CloudCredentialSource",
-    "types:shared/types.ts:PromptPart",
-    "types:shared/types.ts:PushDeviceView"
+    "types:shared/types/agents.ts:CloudCredentialSource",
+    "types:shared/types/agents.ts:PromptPart",
+    "types:shared/types/notify.ts:PushDeviceView"
   ],
   "sizes": {
-    "client/src/store.ts": 810,
-    "client/src/styles.css": 6034,
-    "client/src/ui/Phone.tsx": 1167,
+    "client/src/store.ts": 855,
+    "client/src/styles.css": 6341,
     "client/src/ui/sfx.ts": 838,
     "client/src/world/ErrandDirector.tsx": 851,
     "client/src/world/draw.ts": 911,
@@ -596,9 +593,8 @@
     "client/src/world/toys/dogBrain.ts": 1257,
     "server/ceo.ts": 802,
     "server/cliRunner.ts": 989,
-    "server/demo.ts": 1925,
+    "server/demo.ts": 2038,
     "server/swarm/core.ts": 843,
-    "server/workspace.ts": 909,
-    "shared/types.ts": 953
+    "server/workspace.ts": 909
   }
 }

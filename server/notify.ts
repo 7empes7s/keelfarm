@@ -1,12 +1,10 @@
-// Notifications, the pure part (docs/pocket.md): what a note says on each channel, the per-event rate limit that
-// batches bursts into one summary, the chat apps' webhook settings (checked, and hinted at without the secret), and
+// Notifications, the pure part (docs/pocket.md): what a note says on each channel, the threads that keep it to one
+// notification per event type, held back while the manager is in the app or reads it (#210), the chat apps' webhook settings (checked, and hinted at without the secret), and
 // which agents have been stuck in an error long enough to mention. notifier.ts does the sending.
-import type { NotifyEvent, NotifyWebhook } from '../shared/types.ts';
+import type { AttentionEvent, NotifyEvent, NotifyWebhook } from '../shared/types.ts';
 import { cleanTerminalText } from '../shared/terminalText.ts';
 import { HttpError } from './httpError.ts';
 
-/** Never more than one notification per event type in this long; what arrives meanwhile goes out as one summary. */
-export const NOTE_WINDOW_MS = 60_000;
 /** An agent in an error this long is worth a notification (once per error). */
 export const STUCK_ERROR_MS = 10 * 60_000;
 const BODY_MAX = 300;
@@ -23,6 +21,8 @@ export interface Note {
   changes?: TeamChange[];
   /** Its notice in the notification centre (#107): the links carry it, so opening one marks it read. */
   id?: string;
+  /** A thread's unread notes it stands for (group), when more than one. */
+  count?: number;
 }
 
 /** A team change waiting for the manager, as its buttons name it. */
@@ -76,46 +76,133 @@ export function noteLink(officeUrl: string, n: Pick<Note, 'id'>): string {
   return u.toString();
 }
 
-/** Several held notes of one event as a single summary (one note stays itself). `dropped`: more that weren't kept. */
-export function summarize(held: Note[], dropped = 0): Note {
-  if (held.length === 1 && !dropped) return held[0];
-  const event = held[0].event;
-  const total = held.length + dropped;
-  const shown = held.slice(0, SUMMARY_LINES);
+/**
+ * A thread's unread notes as one notification that replaces the last (#210): one note stays itself; a chat burst is
+ * "💬 Mimoun: 3 new messages" with the latest as its body, other events a count and their latest lines.
+ */
+export function group(notes: Note[], dropped = 0): Note {
+  const last = notes[notes.length - 1];
+  const count = notes.length + dropped;
+  if (count === 1) return last;
+  const id = last.id ? { id: last.id } : {};
+  if (last.event === 'ceoMessage') return { event: last.event, title: `${last.title}: ${count} new messages`, body: last.body, line: last.line, count, ...id };
+  const shown = notes.slice(-SUMMARY_LINES).reverse();
   const lines = shown.map((n) => `• ${n.line}`);
-  if (total > shown.length) lines.push(`…and ${total - shown.length} more`);
-  const label = event === 'test' ? 'tests' : PLURAL[event];
-  return { event, title: `${ICON[event]} ${total} more ${label}`, body: lines.join('\n'), line: `${total} more ${label}` };
+  if (count > shown.length) lines.push(`…and ${count - shown.length} more`);
+  const label = last.event === 'test' ? 'tests' : PLURAL[last.event];
+  return { event: last.event, title: `${ICON[last.event]} ${count} ${label}`, body: lines.join('\n'), line: `${count} ${label}`, count, ...id };
 }
 
-// ---------- rate limit ----------
+// ---------- quiet while in the app, and one notification per thread (#210) ----------
 
-/** Per event type: when its last notification went out, and what arrived since. */
-export type Gates = Partial<Record<string, { last: number; held: Note[]; dropped: number }>>;
-
-/** A new note: out at once if its event had nothing in the last minute, otherwise held for the summary. */
-export function offer(gates: Gates, n: Note, now: number): { gates: Gates; send: Note | null } {
-  const g = gates[n.event];
-  if (!g || (now - g.last >= NOTE_WINDOW_MS && g.held.length === 0)) return { gates: { ...gates, [n.event]: { last: now, held: [], dropped: 0 } }, send: n };
-  const full = g.held.length >= HELD_MAX;
-  return { gates: { ...gates, [n.event]: { ...g, held: full ? g.held : [...g.held, n], dropped: g.dropped + (full ? 1 : 0) } }, send: null };
+/** One open office tab, as it reports itself (ClientEvent 'attention'): on screen or not, and its last input. */
+export interface TabAttention {
+  visible: boolean;
+  at: number;
 }
 
-/** The summaries whose minute is up. */
-export function due(gates: Gates, now: number): { gates: Gates; send: Note[] } {
-  const send: Note[] = [];
-  const next: Gates = { ...gates };
-  for (const [event, g] of Object.entries(gates)) {
-    if (!g || g.held.length === 0 || now - g.last < NOTE_WINDOW_MS) continue;
-    send.push(summarize(g.held, g.dropped));
-    next[event] = { last: now, held: [], dropped: 0 };
+/** The manager is in the app when any tab, on any device, is on screen and was used this recently. */
+export const ACTIVE_MS = 60_000;
+/** Not in the app: a note waits this long, so reading it on a device meanwhile cancels it. */
+export const GRACE_MS = 15_000;
+/** At most one notification per thread this often while it's unread; the count updates in place. */
+export const THREAD_GAP_MS = 2 * 60_000;
+
+/** A tab's attention message on /ws (ClientEvent 'attention'), or null for anything else. */
+export function parseAttention(raw: unknown): AttentionEvent | null {
+  let m: { type?: unknown; visible?: unknown };
+  try {
+    m = JSON.parse(String(raw)) as typeof m;
+  } catch {
+    return null;
   }
-  return { gates: next, send };
+  return m?.type === 'attention' && typeof m.visible === 'boolean' ? { type: 'attention', visible: m.visible } : null;
 }
 
-/** When the next summary is due, or null when nothing is held. */
-export function nextDue(gates: Gates): number | null {
-  const times = Object.values(gates).flatMap((g) => (g && g.held.length ? [g.last + NOTE_WINDOW_MS] : []));
+/** Whether the manager is in the app on some device right now. */
+export function inApp(tabs: Iterable<TabAttention>, now: number): boolean {
+  for (const t of tabs) if (t.visible && now - t.at < ACTIVE_MS) return true;
+  return false;
+}
+
+/** A thread is an event type (its push tag): the unread notes, those not sent yet (`fresh`), when it's due and last went out. */
+interface Thread {
+  notes: Note[];
+  dropped: number;
+  fresh: number;
+  dueAt: number | null;
+  sentAt: number | null;
+}
+export type Threads = Partial<Record<string, Thread>>;
+
+/** What a step decided: notes to send now (grouped, standing for `sent` new notes), notes not sent as the manager was in the app, threads to clear on devices. */
+export interface Step {
+  threads: Threads;
+  send: Note[];
+  sent: number;
+  skipped: Note[];
+  clear: string[];
+}
+
+const EMPTY: Thread = { notes: [], dropped: 0, fresh: 0, dueAt: null, sentAt: null };
+
+/** The manager saw `thread` (in the app, or read it): it starts over, and a notification it left on devices is cleared. */
+function seen(step: Step, event: string, inAppNow: boolean) {
+  const t = step.threads[event];
+  if (!t) return;
+  if (inAppNow) step.skipped.push(...t.notes.slice(t.notes.length - Math.min(t.fresh, t.notes.length)));
+  if (t.sentAt !== null) step.clear.push(event);
+  step.threads = { ...step.threads, [event]: undefined };
+}
+
+/** A new note: dropped as seen while the manager is in the app, else held for the grace (or the thread's gap). */
+export function queue(threads: Threads, n: Note, now: number, present: boolean): Step {
+  const step: Step = { threads, send: [], sent: 0, skipped: [], clear: [] };
+  if (present) {
+    seen(step, n.event, true);
+    step.skipped.push(n);
+    return step;
+  }
+  const t = threads[n.event] ?? EMPTY;
+  const full = t.notes.length >= HELD_MAX;
+  const dueAt = t.dueAt ?? Math.max(now + GRACE_MS, t.sentAt === null ? 0 : t.sentAt + THREAD_GAP_MS);
+  step.threads = { ...threads, [n.event]: { ...t, notes: full ? [...t.notes.slice(1), n] : [...t.notes, n], dropped: t.dropped + (full ? 1 : 0), fresh: t.fresh + 1, dueAt } };
+  return step;
+}
+
+/** The threads whose wait is over: one grouped notification each, or nothing when the manager is in the app by now. */
+export function due(threads: Threads, now: number, present: boolean): Step {
+  const step: Step = { threads, send: [], sent: 0, skipped: [], clear: [] };
+  for (const [event, t] of Object.entries(threads)) {
+    if (!t || t.dueAt === null || t.dueAt > now) continue;
+    if (present) {
+      seen(step, event, true);
+      continue;
+    }
+    step.send.push(group(t.notes, t.dropped));
+    step.sent += t.fresh;
+    step.threads = { ...step.threads, [event]: { ...t, fresh: 0, dueAt: null, sentAt: now } };
+  }
+  return step;
+}
+
+/** The manager read these threads on some device: what waits is cancelled, and what was sent is cleared everywhere. */
+export function read(threads: Threads, events: readonly string[]): Step {
+  const step: Step = { threads, send: [], sent: 0, skipped: [], clear: [] };
+  for (const e of events) seen(step, e, false);
+  return step;
+}
+
+/** The manager read these notices (#107): a thread whose notes are all read is read. */
+export function readNotes(threads: Threads, ids: readonly string[]): Step {
+  const gone = new Set(ids);
+  const done = Object.entries(threads).flatMap(([e, t]) => (t && t.notes.length && t.notes.every((n) => n.id && gone.has(n.id)) ? [e] : []));
+  return read(threads, done);
+}
+
+/** When the next thread is due, or null when nothing waits. */
+export function nextDue(threads: Threads): number | null {
+  const times = Object.values(threads).flatMap((t) => (t && t.dueAt !== null ? [t.dueAt] : []));
   return times.length ? Math.min(...times) : null;
 }
 

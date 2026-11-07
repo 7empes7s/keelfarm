@@ -15,6 +15,7 @@ import { HttpError } from '../httpError.ts';
 import { IssueAges } from '../issueAges.ts';
 import { PR_LIMITS_VERSION } from '../prOwnership.ts';
 import { Previews } from '../previews.ts';
+import { DEFAULT_MAIN_PREVIEW_IDLE_MIN, DEFAULT_PREVIEW_RECENT_HOURS, mainKey, prKey } from '../prTheatre.ts';
 import { DEFAULT_PACING_SESSIONS } from '../pacing.ts';
 import { emptyHistory } from '../metrics.ts';
 import { DEFAULT_TRIM_IDLE_MIN } from '../deskTrim.ts';
@@ -30,7 +31,7 @@ import { Lab, loadLab } from '../experiments.ts';
 import { FloorPractice } from '../practiceState.ts';
 import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
-import { emptyLedger } from '../ledger.ts';
+import { emptyLedger, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
@@ -46,11 +47,11 @@ import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '..
 import { WeatherService } from '../weather.ts';
 import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
+import { emptyChanges } from '../../shared/managerChanges.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
-import { snapshotMessages } from '../../shared/chatParts.ts';
-import { pageBefore } from '../../shared/chatPage.ts';
+import { latestPage } from '../../shared/chatPage.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
@@ -59,9 +60,11 @@ import type {
   AgentActivity,
   AgentView,
   CliView,
+  ModelCatalogView,
   LogLine,
   MachineHost,
   NotifyEvent,
+  PreviewStatsView,
   QaView,
   RepoView,
   ServerEvent,
@@ -117,6 +120,8 @@ export abstract class SwarmCore extends SwarmContract {
       autoUpdate: true,
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
+      previewRecentHours: DEFAULT_PREVIEW_RECENT_HOURS,
+      mainPreviewIdleMin: DEFAULT_MAIN_PREVIEW_IDLE_MIN,
       dailyLogDir: '',
       historyDays: DEFAULT_HISTORY_DAYS,
       voice: { ...DEFAULT_VOICE },
@@ -128,17 +133,19 @@ export abstract class SwarmCore extends SwarmContract {
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
       everyProject: emptyEveryProject(),
+      statusReactions: false,
       officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), changes: emptyChanges(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
     messages: [],
     phoneReadAt: 0,
     notices: [],
     prLimits: PR_LIMITS_VERSION,
+    outageReleased: true,
     ops: emptyHistory(),
     held: [],
     progress: emptyLedger(),
@@ -174,6 +181,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected outbox = new Outbox({
     agents: () => this.state.agents.map((a) => ({ id: a.id, floor: this.floorOf(a) })),
     log: (id) => this.agentRt.get(id)?.log ?? [],
+    chat: (id) => this.agentRt.get(id)?.chat?.items ?? [],
     beforeFlush: (ids) => this.updateSigns(ids),
   });
   protected user: string | null = null;
@@ -197,6 +205,7 @@ export abstract class SwarmCore extends SwarmContract {
   };
   protected lastOfficeView = '';
   protected clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)
+  protected models: ModelCatalogView = { entries: [], checkedAt: 0 }; // their models (#198): the cache at startup, then read
   protected tooling: ToolInventory = { ...EMPTY_INVENTORY, items: officeItems() }; // Tools & skills (scanned at startup and on demand)
   /** Phone messages read aloud. The demo keeps its own key and clips, so it never touches the real ones. */
   readonly voice: Voice;
@@ -226,6 +235,9 @@ export abstract class SwarmCore extends SwarmContract {
     save: () => this.save(),
     retry: (id, why, requeue) => this.state.agents.filter((a) => a.id === id && a.status === 'stopped' && a.task).forEach((a) => this.recover([a], new Set(), new Set(requeue ? [a] : []), undefined, why)),
     schedule: () => this.schedule(),
+    previews: () => this.previews.running(),
+    stopPreview: (key) => this.previews.stopIdle(key),
+    previewMem: (memMb) => this.setPreviewStats({ memMb }),
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
@@ -255,10 +267,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => {
-      this.lab.session(line);
-      this.logSession(line, run);
-    });
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); });
     // The machine's daily log folder only for the real office: never from the demo or the tests.
     const machineDir = !backend.demo && !process.env.VITEST && existsSync(MACHINE_DAILY_DIR) ? MACHINE_DAILY_DIR : null;
     this.history = new SessionHistory({
@@ -275,6 +284,7 @@ export abstract class SwarmCore extends SwarmContract {
       api: backend.telegram,
       // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+      on: () => this.state.settings.notify.channels.telegram,
       message: async (text, id) => void (await this.messageCeo(text, undefined, 'telegram', [], id)),
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
@@ -294,6 +304,8 @@ export abstract class SwarmCore extends SwarmContract {
         send: (text, keyboard) => this.telegram.send(text, keyboard),
         view: () => this.telegram.view(),
       },
+      quiet: (messageIds) => this.markQuiet(messageIds),
+      cleared: (events) => this.broadcast({ type: 'notifyClear', events }),
     });
     this.cloud = new Cloud({
       // The demo's fake cloud keeps a file of its own: its tests run beside the notifier's, which share demo-secrets.json.
@@ -326,7 +338,30 @@ export abstract class SwarmCore extends SwarmContract {
       emitPr: (preview) => this.broadcast({ type: 'prPreview', preview }),
       prRemoved: (repoId, pr) => this.broadcast({ type: 'prPreviewRemoved', repoId, pr }),
       note: (text) => this.toast('info', text),
+      holder: (repoId, pr) => this.previewHolder(repoId, pr),
+      mainIdleMs: () => this.state.settings.mainPreviewIdleMin * 60_000,
+      floors: () => this.state.repos,
     });
+  }
+
+  // ---------- previews in use (#204) ----------
+
+  /** Preview key (prTheatre's prKey / mainKey) → the agent whose QA lab or fix session asked for it. */
+  protected previewHolds = new Map<string, { agentId: string; repoId: string; pr: number | null }>();
+  protected previewStats: PreviewStatsView = { diskBytes: null, memMb: null, cleanedAt: null };
+
+  /** The agent using a preview now: one whose lab asked for it, still on a QA or fix session on that floor. */
+  protected previewHolder(repoId: string, pr: number | null): string | null {
+    const id = this.previewHolds.get(pr ? prKey(repoId, pr) : mainKey(repoId))?.agentId;
+    const a = id ? this.state.agents.find((x) => x.id === id) : undefined;
+    return a && a.repoId === repoId && BUSY.includes(a.status) && (a.task === 'qa' || a.task === 'fix') ? a.name : null;
+  }
+
+  protected setPreviewStats(patch: Partial<PreviewStatsView>) {
+    const next = { ...this.previewStats, ...patch };
+    if (JSON.stringify(next) === JSON.stringify(this.previewStats)) return;
+    this.previewStats = next;
+    this.broadcast({ type: 'previewStats', stats: next });
   }
 
   // ---------- views ----------
@@ -350,6 +385,7 @@ export abstract class SwarmCore extends SwarmContract {
       summary: r.summary,
       qaBrief: r.qaBrief,
       playbook: r.playbook,
+      trustedAuthors: r.trustedAuthors ?? [],
       localPath: r.localPath,
       checkoutPath: this.backend.mainDir(r.fullName),
       cloneStatus: rt.cloneStatus,
@@ -362,6 +398,7 @@ export abstract class SwarmCore extends SwarmContract {
       previewConfig: r.preview,
       preview: this.previews.view(r),
       charter: charterView(r.charter, Date.now(), rt.insights ?? null),
+      ciOutage: r.ciOutage ? { reason: r.ciOutage.reason, since: r.ciOutage.since, parked: this.state.qa.filter((q) => q.repoId === r.id && q.ciOutage != null).map((q) => q.prNumber) } : null,
       ...this.practiceView(r),
     };
   }
@@ -482,12 +519,6 @@ export abstract class SwarmCore extends SwarmContract {
     };
   }
 
-  /** The chat's latest page, for a snapshot or another conversation opened (#145): older ones load on scroll. */
-  protected chatPage(): Pick<WorldSnapshot, 'messages' | 'messagesOlder'> {
-    const page = pageBefore(this.state.messages);
-    return { messages: snapshotMessages(page.messages), messagesOlder: page.older };
-  }
-
   snapshot(): WorldSnapshot {
     return {
       user: this.user,
@@ -501,10 +532,11 @@ export abstract class SwarmCore extends SwarmContract {
       agents: this.state.agents.map((a) => this.agentView(a, false)),
       qa: this.state.qa.map((q) => this.qaView(q)),
       prPreviews: this.previews.prViews(),
+      previewStats: this.previewStats,
       requests: this.state.requests,
       ceo: this.ceoInfo(),
       chat: this.chatView(),
-      ...this.chatPage(),
+      ...latestPage(this.state.messages),
       phoneReadAt: this.state.phoneReadAt,
       notices: this.state.notices,
       usage: this.usageNow(),
@@ -515,6 +547,7 @@ export abstract class SwarmCore extends SwarmContract {
       ops: this.opsNow(),
       doctor: this.doctorView(),
       clis: this.clis,
+      models: this.models,
       ...this.voice.keyView(),
       voiceCache: this.voice.cacheInfo(),
       weather: this.weather.current(),
@@ -526,10 +559,12 @@ export abstract class SwarmCore extends SwarmContract {
       officeUpdate: this.officeHead ? this.officeUpdateView() : undefined,
       publicDemo: PUBLIC_DEMO && this.backend.demo ? { resetHours: PUBLIC_DEMO_RESET_H } : undefined,
       progress: this.progressView(),
+      pastCareers: pastCareers(this.state.progress),
       pong: this.state.pong,
       files: this.files.list(),
       tooling: this.tooling,
       experiments: this.lab.view(),
+      managerChanges: this.state.ceo.changes.list,
     };
   }
 
@@ -551,11 +586,11 @@ export abstract class SwarmCore extends SwarmContract {
     ws.on('close', () => this.outbox.remove(ws));
     ws.on('message', (raw) => {
       // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
-      // otherwise it's saying what it shows (shared/watch.ts).
+      // otherwise it's saying whether the manager is using it (#210) or what it shows (shared/watch.ts).
       if (isResync(raw)) {
         this.send(ws, { type: 'snapshot', data: this.snapshot() });
         this.outbox.resync(ws);
-      } else this.outbox.receive(ws, String(raw));
+      } else if (!this.notifier.attention.receive(ws, raw)) this.outbox.receive(ws, String(raw));
     });
     this.send(ws, { type: 'snapshot', data: this.snapshot() });
   }
@@ -650,13 +685,13 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   /** A rich toast that joins the notification centre (#107); with `push`, the manager's devices hear of it with the same id. */
-  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4] }) {
+  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4]; message?: number }) {
     const at = Date.now(), t = input.target;
     const repoId = !t ? undefined : t.kind === 'agent' ? this.state.agents.find((a) => a.id === t.agentId)?.repoId : t.repoId;
     const n = makeNotice({ ...input, floor: input.floor ?? this.state.repos.find((r) => r.id === repoId)?.floor }, `${at.toString(36)}-${++this.noticeSeq}`, at);
     this.state.notices = addNotice(this.state.notices, n, at);
     this.broadcast({ type: 'toast', ...n });
-    if (push) this.notifier.notify(push.event, push.title ?? n.title, n.text, push.line, push.changes, n.id);
+    if (push) this.notifier.notify(push.event, push.title ?? n.title, n.text, push.line, push.changes, n.id, push.message);
     this.save();
   }
 

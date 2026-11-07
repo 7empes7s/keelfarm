@@ -47,7 +47,7 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 | `npm run test:e2e` | optional, local only: Playwright (`e2e/`, `playwright.config.ts`): builds (`E2E_SKIP_BUILD=1` reuses your `dist/`), boots a demo office on `E2E_PORT` (default 4399; set it to your reserved port) with a temp `SWARM_HOME`, and smoke-tests it headless in a local Google Chrome, else Playwright's Chromium. Stops at once if the browser is missing: never install it mid-task |
 | `node scripts/smoke-package.mjs` | after a build: packs the npm package, installs it into a temp folder and boots its demo |
 | `npm run bench -- --port <yours>` | after a build: the scale benchmark (`scripts/bench.mjs`): boots the big-company demo headless, visits the lobby and three floors, writes FPS, frame-time p95, CPU per frame, draw calls, triangles, heap, audio nodes and websocket traffic to a JSON report (`--help`) |
-| `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs) |
+| `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs); `--no-tour` opens it without the setup wizard or tour, for QA's browser |
 
 CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test → `lint`, for every PR
 and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`, on `ubuntu-latest` always and on `windows-latest`
@@ -142,6 +142,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `tooling.ts`: Settings → Tools & skills' inventory: what a Claude Code session here loads (`claude plugin list --json`,
   plugin folders, skills, MCP configs), read only, secrets masked. The switches (Everyone, the CEO, each agent) and how
   they become a session's `--disallowedTools` / `enabledPlugins` are pure, in `shared/tooling.ts`.
+- `accounts.ts`: Providers & accounts (#247, docs/accounts.md): the registry (`<SWARM_HOME>/accounts.json`, no secrets;
+  API keys in `secrets.json`), which account a session runs on and what it adds to its env (pure, `shared/accounts.ts`),
+  usage per login, sign-in terminals (`/ws/term?agent=account:<id>`); `accountCheck.ts` its Test, `demoAccounts.ts` the demo's.
 - `httpError.ts`: `HttpError(status, message)`.
 - `officeUpdate.ts`: the office's self-update: the drain decision, the launcher contract (IPC, `last-update.json`).
 - `pacing.ts`: pacing new work after Claude's usage warnings: the start/skip decision and the usage state.
@@ -182,13 +185,15 @@ stop, fast-forward, install/build, restart, roll back on failure, `<SWARM_HOME>/
 are in `scripts/officeSteps.mjs` (tested in `officeSteps.test.ts`).
 
 Shared (`shared/`, imported by both sides):
-- `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings).
+- `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings), one file per area in
+  `types/` (agents, repos, chat, notify, settings, events…, each under 400 lines), all re-exported from `types.ts`:
+  add a type to its area's file and import it from `shared/types`.
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
 - `chatPage.ts`: the CEO chat in pages (#145): the snapshot's latest page, older ones on scroll up (`client/src/ui/ChatPaging.tsx`), deleting and hiding messages.
 - `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
-- `memoryMap.ts`: the memory map (#136): the office as a graph (nodes, edges, weights, caps), its filters, local graph, search, insights and live changes; built in the tab from the snapshot (`client/src/ui/MemoryMap.tsx`, canvas and physics in `MapCanvas.tsx` / `mapForce.ts`).
+- `memoryMap.ts`: the memory map (#136): the office as a graph (nodes, edges, weights, caps), its filters, local graph, search, insights and live changes; built in the tab from the snapshot (`client/src/ui/MemoryMap.tsx`, canvas and physics in `MapCanvas.tsx` / `mapForce.ts`); the 3D office's map room (#137, a lazy `mapRoom` overlay from the CEO's map table) swaps the stage for `Constellation.tsx`, its 3D layout, LOD and effects pure in `skyLayout.ts`).
 - `looks.ts`: the look editor's options and `cleanStyle` (an agent's `style`, checked on the server).
 
 Client (`client/`, Vite root; React 19, R3F, drei, zustand):
@@ -207,7 +212,7 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   holiday themes (`themes/`: which one is on from `shared/themes.ts`, their data and decoration slots in `themes.ts`
   and `layout.ts`, each theme's scene in one lazy chunk loaded only while a theme is on; `?theme=` and `?date=` for QA).
 - `src/ui/`: HTML overlays: HUD, terminal (`LiveTerminal.tsx`: xterm.js on `/ws/term`), Kanban, manager's console,
-  phone (with its mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
+  phone (`Phone.tsx`; its chat in `Chat.tsx` / `ChatBubble.tsx`, team changes in `TeamChanges.tsx`, mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
   viewer, sounds (`sfx.ts`), key bindings (`keymap.ts`, pure; `controls.ts` keeps the player's own, and every
   shortcut asks it, never a hard-coded key).
 - Accessibility (Settings → Accessibility, `ui/a11y.ts`, saved per browser through pure `a11yPrefs.ts`): captions
@@ -261,12 +266,12 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   - `windowsHide: true` on spawns; npm on Windows goes through `cmd.exe`.
 - Agent prompts are paid for on every session: keep prompt text short and specific.
 - 2D UI follows docs/design.md: tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
-  `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to `e2e/layout.spec.ts`.
+  `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to their screen's file in `e2e/layout/` (under 300 lines each).
 
 ## Code health
 
 - `npm run lint` fails on findings the baseline doesn't have: a new lint finding in a file (per rule), a new unused
-  file/export/type/dependency (knip), a new file over 800 lines, or a file over 800 grown past its recorded size + 5%.
+  file/export/type/dependency (knip), a new file over 800 lines (300 in `e2e/layout/`, 400 in `shared/types/`), or a file over 800 grown past its recorded size + 5%.
   Fix it; don't silence it. Fixed old ones? `npm run lint:update` and commit `code-health.baseline.json`.
   `--accept` (record as is) only for renames or a stated exception. No formatter, no reformatting. CONTRIBUTING.md
   and docs/code-health.md have the details and the cleanup backlog.

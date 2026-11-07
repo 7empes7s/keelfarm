@@ -10,7 +10,7 @@ import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
 import type { ServerEvent } from '../shared/types.ts';
-import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
+import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
@@ -36,7 +36,7 @@ if (PUBLIC_DEMO) {
   }
 }
 
-const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
+const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE, DEMO_NO_TOUR) : realBackend);
 if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });
@@ -164,6 +164,7 @@ app.post(
   })),
 );
 app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n))));
+app.post('/api/repos/:repo/issues/:n/trust', route((req) => swarm.trustIssue(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
 app.post('/api/repos/:repo/onboard', route((req) => swarm.onboardFloor(repoId(req))));
 // The floor's charter (#48): the manager's edit, their call on the CEO's proposal, an objective's status (#105), and Export
@@ -236,6 +237,7 @@ app.post('/api/agents/:id/assign', route((req) => swarm.assign(String(req.params
 app.post('/api/agents/:id/stop', route((req) => swarm.stopAgent(String(req.params.id))));
 app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.params.id))));
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
+app.post('/api/agents/:id/react', route((req) => swarm.react(String(req.params.id), req.body?.itemId, req.body?.reaction)));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 // The session history (#49): a page of entries, Settings' disk-usage line, and one entry with its transcript.
@@ -246,6 +248,7 @@ app.get('/api/history/:id', route(async (req) => (await swarm.history.detail(Str
 app.post('/api/experiments', route((req) => swarm.lab.define(req.body, 'manager')));
 app.post('/api/experiments/:id', route((req) => swarm.lab.act(String(req.params.id), req.body?.action, req.body?.variant ?? null)));
 app.post('/api/experiments/:id/every-project', route((req) => swarm.adoptPractices(String(req.params.id), req.body?.variant)));
+app.get('/api/agents/:id/timeline', route((req) => swarm.careerTimeline(String(req.params.id))));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
   const shot = swarm.screenshot(String(req.params.id));
@@ -257,6 +260,7 @@ app.get('/api/agents/:id/screen', (req, res) => {
 
 app.patch('/api/settings', route((req) => swarm.updateSettings(req.body ?? {})));
 app.post('/api/tools/refresh', route(() => swarm.refreshTooling()));
+app.post('/api/models/refresh', route(() => swarm.refreshModels()));
 app.post('/api/tools/switch', route((req) => swarm.setToolSwitch(str(req.body?.scope), req.body?.id, req.body?.on)));
 
 // Phone messages read aloud (docs/voice.md). The key goes in and never comes back out.
@@ -284,6 +288,14 @@ app.put(
 app.post('/api/cloud/test', route(() => swarm.testCloud()));
 app.post('/api/cloud/orphans', route(() => swarm.deleteCloudOrphans()));
 app.post('/api/cloud/demo-expire', route(() => swarm.expireSignIns()));
+// Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
+app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
+app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
+app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
+app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
+app.post('/api/accounts/:id/test', route(async (req) => ({ note: await swarm.accounts.test(String(req.params.id)) })));
+app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id))));
+app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
 app.get('/api/voice/voices', route(() => swarm.voice.voices()));
 app.get(
   '/api/voice/messages/:id',
@@ -334,6 +346,7 @@ app.post('/api/notify/push/report', route((req) => swarm.notifier.report(req.bod
 app.post('/api/notify/ntfy/quick', route(() => swarm.notifier.quickNtfy()));
 app.put('/api/notify/telegram', route((req) => swarm.telegram.setToken(req.body?.token)));
 app.post('/api/notify/telegram/link', route(() => swarm.telegram.link()));
+app.post('/api/notify/telegram/retry', route(() => swarm.telegram.retryNow()));
 app.delete('/api/notify/telegram', route(() => swarm.telegram.remove()));
 app.post('/api/notify/telegram/demo', route((req) => swarm.telegramDemo(req.body ?? {})));
 // The office's own update: Update now / Later
@@ -373,7 +386,8 @@ app.post(
   route((req) => {
     const files: unknown = req.body.files ?? [];
     if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) throw new HttpError(400, 'files is a list of file ids');
-    return swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, undefined, files);
+    const clientId = typeof req.body.clientId === 'string' && /^[\w-]{1,64}$/.test(req.body.clientId) ? req.body.clientId : undefined;
+    return swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, undefined, files, undefined, clientId);
   }),
 );
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
@@ -414,6 +428,7 @@ app.post('/api/requests/:id/reject', route((req) => swarm.rejectRequest(String(r
 app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params.id), req.body?.action)));
 // The demo office only: the CEO grows (or shrinks) a floor's team on demand.
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
+app.post('/api/demo/new-commit', route(() => swarm.demoNewCommit()));
 
 // Office progression (#210): the lobby kiosk, a floor's decorations, the player's coffees, and the demo's coins and
 // tenure for QA.

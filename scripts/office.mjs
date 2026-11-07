@@ -20,8 +20,11 @@ import path from 'node:path';
 import readline from 'node:readline';
 import {
   BOOT_TIMEOUT_MS,
+  PREFLIGHT_TEST,
   PROBATION_MS,
+  TEST_RETRY_WAIT_MS,
   clientPort,
+  failedTests,
   isOfficeState,
   isUpdateCommand,
   officeUrl,
@@ -36,6 +39,8 @@ import {
   rollbackPlan,
   stepsFor,
   swarmHome,
+  testRetryArgs,
+  testsFailedError,
 } from './officeSteps.mjs';
 
 const HELP = `
@@ -219,7 +224,8 @@ function git(args, timeoutMs = 120_000) {
 
 /**
  * npm with its output shown here, in this folder or `cwd`. On Windows npm is a .cmd, so it goes through cmd.exe
- * (fixed arguments only). Stopped, process tree and all, after NPM_TIMEOUT_MS.
+ * (fixed arguments only). Stopped, process tree and all, after NPM_TIMEOUT_MS. A failure's error carries the end of
+ * stderr as `output` (Vitest's summary of failed tests is there).
  */
 function npm(args, { cwd = root, env = process.env } = {}) {
   return new Promise((resolve, reject) => {
@@ -228,6 +234,7 @@ function npm(args, { cwd = root, env = process.env } = {}) {
     const proc = spawn(cmd, cmdArgs, { cwd, env, stdio: ['ignore', 'inherit', 'pipe'], windowsHide: true, detached: !WIN });
     if (cwd !== root) trackPreflight(proc);
     let last = '';
+    let output = '';
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -235,6 +242,7 @@ function npm(args, { cwd = root, env = process.env } = {}) {
     }, NPM_TIMEOUT_MS);
     proc.stderr.on('data', (chunk) => {
       process.stderr.write(chunk);
+      output = (output + chunk).slice(-256 * 1024);
       const lines = String(chunk).split(/\r?\n/).filter((l) => l.trim());
       if (lines.length) last = lines[lines.length - 1].trim();
     });
@@ -246,7 +254,7 @@ function npm(args, { cwd = root, env = process.env } = {}) {
       clearTimeout(timer);
       if (code === 0) return resolve();
       const why = timedOut ? `timed out after ${NPM_TIMEOUT_MS / 60_000} min` : `exit ${code}`;
-      reject(new Error(`npm ${args.join(' ')} failed (${why})${last ? `: ${last}` : ''}`));
+      reject(Object.assign(new Error(`npm ${args.join(' ')} failed (${why})${last ? `: ${last}` : ''}`), { output }));
     });
   });
 }
@@ -434,7 +442,7 @@ async function preflight(sha) {
       await git(['worktree', 'add', '--detach', dir, sha]);
     },
     install: () => npm(['ci', '--no-audit', '--no-fund'], { cwd: dir, env }),
-    test: () => npm(['test'], { cwd: dir, env }),
+    test: () => preflightTests(dir, env),
     build: () => npm(['run', 'build'], { cwd: dir, env }),
     boot: () => bootProbe(dir, env),
   };
@@ -455,6 +463,25 @@ async function preflight(sha) {
   }
   const outcome = preflightOutcome(steps, results);
   if (!outcome.go) throw new Error(outcome.error);
+}
+
+/** The suite as PREFLIGHT_TEST runs it; failed tests get one more try after TEST_RETRY_WAIT_MS, then name the refusal. */
+async function preflightTests(dir, env) {
+  try {
+    return await npm(PREFLIGHT_TEST, { cwd: dir, env });
+  } catch (err) {
+    const failed = failedTests(err.output ?? '');
+    log(`Tests failed${failed.length ? ` (${failed.length})` : ''}: trying ${failed.length ? 'their files' : 'them'} again in ${TEST_RETRY_WAIT_MS / 1000} s`);
+    await sleep(TEST_RETRY_WAIT_MS);
+    if (shuttingDown) throw err;
+    try {
+      await npm(testRetryArgs(failed), { cwd: dir, env });
+      log(green('They passed on the retry'));
+    } catch (again) {
+      const still = failedTests(again.output ?? '');
+      throw new Error(testsFailedError(still.length ? still : failed, oneLine(again)));
+    }
+  }
 }
 
 async function removeStaging(dir) {

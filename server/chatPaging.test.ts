@@ -43,7 +43,7 @@ describe('the CEO chat in pages', () => {
     swarm.removeChatMessage(1);
     swarm.removeChatMessage(5);
     swarm.removeChatMessage(2);
-    expect(sent.filter((e) => e.type === 'messagesRemoved')).toEqual([1, 5, 2].map((id) => ({ type: 'messagesRemoved', ids: [id] })));
+    expect(sent.filter((e) => e.type === 'ceoChat' && e.removed)).toEqual([1, 5, 2].map((id) => ({ type: 'ceoChat', removed: [id] })));
     expect(state.messages.map((m) => m.id)).toEqual([2, 3, 4, 6, 7, 8]); // the CEO's stays, for the CEO
     expect(state.messages[0].hidden).toBe(true);
     expect(swarm.snapshot().messages.map((m) => m.id)).toEqual([3, 4, 6, 7, 8]);

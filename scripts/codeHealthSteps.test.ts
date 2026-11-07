@@ -46,6 +46,13 @@ describe('sizeLimit', () => {
     expect(sizeLimit('server/swarm.ts', { 'server/swarm.ts': 5534 })).toBe(5810);
     expect(sizeLimit('server/new.ts', { 'server/swarm.ts': 5534 })).toBe(NEW_FILE_MAX_LINES);
   });
+
+  it('holds the split folders to their own caps (#187)', () => {
+    expect(sizeLimit('e2e/layout/chat.spec.ts', {})).toBe(300);
+    expect(sizeLimit('e2e\\layout\\chat.spec.ts', {})).toBe(300);
+    expect(sizeLimit('shared/types/agents.ts', {})).toBe(400);
+    expect(compare({ lint: {}, knip: [], sizes: {} }, { lint: {}, knip: [], sizes: { 'e2e/layout/chat.spec.ts': 301 } }).regressions).toHaveLength(1);
+  });
 });
 
 describe('lintCounts', () => {

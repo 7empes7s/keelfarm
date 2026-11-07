@@ -8,8 +8,9 @@ import { ONE_TURN } from '../prompts.ts';
 import { resolveEffort } from '../../shared/costs.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
-import { fixGoesTo, pickTester, prepHeld } from '../handOut.ts';
+import { fixGoesTo, pickTester, prepHeld, runnerFor, runsHere } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
+import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
 import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
@@ -85,6 +86,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     return issues
       .filter(
         (i) =>
+          !i.untrusted &&
           !i.labels.some((l) => /^(swarm:skip|wontfix|question)$/i.test(l)) &&
           !this.issueTaken(repo, i.number) &&
           !this.isHeld(repo.id, i.number) &&
@@ -113,6 +115,7 @@ export abstract class SwarmScheduling extends SwarmQa {
             q.repoId === repo.id &&
             q.status === status &&
             stillOpen({ kind: 'pr', number: q.prNumber }, floor) &&
+            !this.outsidePull(repo.id, q.prNumber) &&
             !prepHeld(this.prepStrikes.get(prepKey(repo.id, q.prNumber, task)), now),
         )
         .sort((x, y) => x.updatedAt - y.updatedAt);
@@ -121,9 +124,11 @@ export abstract class SwarmScheduling extends SwarmQa {
     for (const rec of waiting('queued', 'qa')) {
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
       const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
-      const tester = pickTester(preferCli(free, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
-      if (!tester) continue;
-      if (!this.health.admit('qa', repo.id)) return false;
+      const pick = (pool: PersistedAgent[]) => pickTester(preferCli(pool, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
+      const picked = pick(free);
+      if (!picked) continue;
+      const tester = this.runner('qa', repo, picked, free, pick);
+      if (!tester) return false;
       void this.runQa(tester, repo, rec);
       return true;
     }
@@ -132,11 +137,18 @@ export abstract class SwarmScheduling extends SwarmQa {
       const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
       const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
       if (to === 'wait') continue; // the author gets it when their session ends
-      if (!this.health.admit('fix', repo.id)) return false;
-      void this.runFix(to === 'author' ? author! : (free.find((a) => !owed.has(a.id)) ?? free[0]), repo, rec);
+      const pick = (pool: PersistedAgent[]) => (to === 'author' && pool.includes(author!) ? author! : (pool.find((a) => !owed.has(a.id)) ?? pool[0] ?? null));
+      const fixer = this.runner('fix', repo, pick(free)!, free, pick);
+      if (!fixer) return false;
+      void this.runFix(fixer, repo, rec);
       return true;
     }
     return false;
+  }
+
+  /** Who of the floor's free agents runs work of `kind` that `picked` would get: a free Box agent (`pick`ed from them) when this computer is short of memory for a local one (#263). Null: it waits for memory. */
+  protected runner(kind: SessionKind, repo: PersistedRepo, picked: PersistedAgent, free: PersistedAgent[], pick: (pool: PersistedAgent[]) => PersistedAgent | null) {
+    return runnerFor(picked, () => pick(free.filter((a) => !runsHere(a))), () => !this.health.refusal(kind), () => this.health.admit(kind, repo.id));
   }
 
   /**
@@ -149,9 +161,11 @@ export abstract class SwarmScheduling extends SwarmQa {
       this.nextIssue(repo, false); // paced: the floor still shows what leases hold back
       return false;
     }
-    const agent = this.available(repo)[0];
-    const next = this.nextIssue(repo, !!agent);
-    if (!agent || !next || !this.health.admit('build', repo.id)) return false;
+    const free = this.available(repo);
+    const next = this.nextIssue(repo, free.length > 0);
+    if (!free[0] || !next) return false;
+    const agent = this.runner('build', repo, free[0], free, (pool) => pool[0] ?? null);
+    if (!agent) return false;
     // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
     void this.assign(agent.id, next.number).catch((err) => console.warn('auto-assign failed', err));
     return agent.status === 'preparing';
@@ -378,6 +392,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (!draining && !this.limited()) {
       this.maybeHeartbeat();
       this.maybeFollowup();
+      this.maybeChanges();
     }
     // Management first: the CEO's jobs are short and shape everyone else's work, and the manager's chat never waits.
     this.startCeoWork(draining);
@@ -459,7 +474,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       this.emitAgent(a);
       setTimeout(() => this.schedule(), 300);
     };
-    handle = this.backend.startSession(
+    handle = this.startOnAccount(a,
       {
         cwd,
         prompt: consultPrompt(c, repo.fullName, this.ceo().name),

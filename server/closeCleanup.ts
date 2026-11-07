@@ -176,15 +176,18 @@ function mergedEnd(a: Holder, c: Closure) {
  * What happens to the floor's agents and QA records when an issue or PR closes. Whoever works on a closed issue or an
  * unmerged closed PR stops; a merge stops nobody. Agents who only have it on their card are cleared, except one who
  * tested it, after a merge: their last run stays on their monitor until their next one. A PR's record leaves QA, unless it merged
- * while a QA run or fix is still going (that one leaves once it ends).
+ * while a QA run or fix is still going (that one leaves once it ends). spare: agents the manager's own close touched (#207):
+ * they keep working, and keep the PR in QA, until the CEO decides.
  */
-export function afterClose(c: Closure, agents: readonly Holder[], records: readonly HeldRecord[], busy: readonly string[]): CloseActions {
+export function afterClose(c: Closure, agents: readonly Holder[], records: readonly HeldRecord[], busy: readonly string[], spare: readonly string[] = []): CloseActions {
   const live = (a: Holder) => busy.includes(a.status);
   const stop: string[] = [];
   const clear: string[] = [];
+  let spareLive = false;
   for (const a of agents.filter((x) => holding(x) && onIt(x, c))) {
     if (live(a)) {
-      if (!mergedEnd(a, c)) stop.push(a.id);
+      if (spare.includes(a.id)) spareLive = true;
+      else if (!mergedEnd(a, c)) stop.push(a.id);
     } else if (!(c.kind === 'pr' && c.merged && a.task === 'qa')) clear.push(a.id);
   }
   const rec = c.kind === 'pr' ? records.find((r) => r.prNumber === c.number) : undefined;
@@ -196,7 +199,7 @@ export function afterClose(c: Closure, agents: readonly Holder[], records: reado
         a.prNumber === rec.prNumber &&
         ((rec.status === 'testing' && a.id === rec.qaAgentId && a.task === 'qa') || (rec.status === 'fixing' && a.id === rec.devAgentId && a.task === 'fix')),
     );
-  return { stop, clear, dropQa: !!rec && c.kind === 'pr' && (!c.merged || !running) };
+  return { stop, clear, dropQa: !!rec && c.kind === 'pr' && !spareLive && (!c.merged || !running) };
 }
 
 /**

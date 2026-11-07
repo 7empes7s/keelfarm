@@ -27,7 +27,7 @@ Project charter (keep every change inside it):
 Mission: Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
-You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
+You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions. Reactions arrive as [manager reacted 👍 to: "…"]: 👍 carry on, 👎 rethink, 🤔 explain, ⚠️ stop and check.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off and GitHub's checks pass, the office merges it by itself. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
 Your worktree: /desk/m
 Your branch: swarm/issue-7-margaret (already checked out, created from origin/main)
@@ -44,7 +44,7 @@ Workflow:
 8. End your final message with the pull request URL on its own line.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   devPlain: `Repository: acme/shop (default branch: main)
-You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
+You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions. Reactions arrive as [manager reacted 👍 to: "…"]: 👍 carry on, 👎 rethink, 🤔 explain, ⚠️ stop and check.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off, the manager merges it. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
 Your worktree: /desk/m
 Your branch: swarm/issue-7-margaret (already checked out, created from origin/main)
@@ -64,7 +64,7 @@ Project charter (keep every change inside it):
 Mission: Sell socks
 What QA checks on this project (from the CEO):
 Check the cart
-You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions.
+You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". If truly stuck (e.g. no credentials), end with "BLOCKED: <what is needed>". The manager may occasionally send you messages; follow their instructions. Reactions arrive as [manager reacted 👍 to: "…"]: 👍 carry on, 👎 rethink, 🤔 explain, ⚠️ stop and check.
 Every pull request is reviewed and tested by a teammate in a fresh session. Once QA signs off and GitHub's checks pass, the office merges it by itself. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.
 Your worktree: /desk/m
 You are fixing pull request #42. Its code is checked out on local branch swarm/issue-7-margaret; push fixes with: git push origin HEAD:swarm/issue-7-margaret. Do not open a new pull request.
@@ -101,7 +101,7 @@ How to test:
 5. You may write throwaway scripts to probe behaviour, but do not commit them.
 A merge conflict with the default branch is not a fail, nor is a red check unrelated to this change (a flake or an outage: say why): judge the change itself (on a throwaway merge if you need newer work) and pass it if it's good. The office sends conflicting PRs back for a merge fix, then you re-test, and re-runs a failed check before anyone fixes it.
 
-Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran and one caption per screenshot.`,
+Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran, one caption per screenshot naming its page and, on a fail, its cause.`,
   qaPlain: `Repository: acme/shop (default branch: main)
 
 You are Margaret, a software engineer on an autonomous agent team ("cubefarm"). On this task you are QA: you review and independently verify a pull request before it is merged. Nobody answers prompts; if truly stuck, end with "BLOCKED: <what is needed>". Your sign-off is the review: Be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, the issue's requirements not met, obvious regressions), not for style preferences.
@@ -119,7 +119,7 @@ How to test:
 5. You may write throwaway scripts to probe behaviour, but do not commit them.
 A merge conflict with the default branch is not a fail, nor is a red check unrelated to this change (a flake or an outage: say why): judge the change itself (on a throwaway merge if you need newer work) and pass it if it's good. The office sends conflicting PRs back for a merge fix, then you re-test, and re-runs a failed check before anyone fixes it.
 
-Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran and one caption per screenshot.`,
+Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran, one caption per screenshot naming its page and, on a fail, its cause.`,
 };
 
 describe('system prompts', () => {
@@ -217,8 +217,8 @@ describe('self-review and the playbook', () => {
 
   it('stay within their length budget without a playbook', () => {
     const { build, fix, test } = prompts();
-    expect(build.length).toBeLessThanOrEqual(3100);
-    expect(fix.length).toBeLessThanOrEqual(3100);
+    expect(build.length).toBeLessThanOrEqual(3210); // +110: the reactions line (#120)
+    expect(fix.length).toBeLessThanOrEqual(3210);
     expect(test.length).toBeLessThanOrEqual(3300);
   });
 });

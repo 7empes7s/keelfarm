@@ -6,11 +6,25 @@ import { CEO_REACTIONS, feedbackLine, isOpen, isReaction, nextStatus, react, rea
 import { nextDelivery } from '../../shared/chat.ts';
 import { pageBefore, removeMessage, type ChatPage } from '../../shared/chatPage.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
-import type { MessageReaction, PhoneMessage, ServerDelivery, StatusReaction } from '../../shared/types.ts';
+import type { MessageReaction, PhoneMessage, ServerDelivery, ServerEvent, StatusReaction } from '../../shared/types.ts';
 import { SwarmUpdate } from './update.ts';
 
 export abstract class SwarmReactions extends SwarmUpdate {
   protected ceoFeedback: string[] = []; // for the CEO's next job: the manager's 👍 / 👎 on its replies
+
+  /** Read on one device: the notifications are cancelled or cleared on every other (#210). */
+  protected override observe(ev: ServerEvent) {
+    super.observe(ev);
+    if (ev.type === 'noticesRead') this.notifier.readNotices(ev.ids);
+    else if (ev.type === 'phoneRead') this.notifier.readTab('chat');
+  }
+
+  /** CEO messages whose notification wasn't sent, as the manager was in the app: their bubbles say so (#210). */
+  protected markQuiet(messageIds: number[]) {
+    const quiet = this.state.messages.filter((m) => messageIds.includes(m.id) && !m.quiet);
+    for (const m of quiet) this.broadcast({ type: 'ceoChat', message: Object.assign(m, { quiet: true }) });
+    if (quiet.length) this.save();
+  }
 
   /** Moves the manager's messages along (shared/chat.ts nextDelivery; read: their status too) and tells the phones which ones moved. */
   protected markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
@@ -30,8 +44,9 @@ export abstract class SwarmReactions extends SwarmUpdate {
     this.save();
   }
 
-  /** Moves the status reaction of the manager's messages (`open`: those the CEO has in hand; shared/reactions.ts) and tells the phones and Telegram. */
+  /** Moves the status reaction of the manager's messages (`open`: those the CEO has in hand; shared/reactions.ts) and tells the phones and Telegram. Off unless Settings → Status reactions (#193). */
   protected markStatus(ids: readonly number[] | 'open', ev: StatusEvent) {
+    if (!this.state.settings.statusReactions) return;
     const moved = new Map<StatusReaction, PhoneMessage[]>();
     for (const m of this.state.messages) {
       if (m.from !== 'manager' || (ids === 'open' ? !isOpen(m) : !ids.includes(m.id))) continue;
@@ -106,7 +121,7 @@ export abstract class SwarmReactions extends SwarmUpdate {
     const next = removeMessage(this.state.messages, id);
     if (!next) throw new HttpError(404, 'That message is no longer in this conversation.');
     this.state.messages = next;
-    this.broadcast({ type: 'messagesRemoved', ids: [id] });
+    this.broadcast({ type: 'ceoChat', removed: [id] });
     this.save();
   }
 }

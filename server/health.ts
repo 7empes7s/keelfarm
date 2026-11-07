@@ -5,7 +5,9 @@
 // killed that way, by the OS or by its terminal keeper dying resumes once memory is back, up to twice, and then its work
 // goes back to the queue. Elsewhere only admission runs (os.freemem). Waits show as a quiet note in the office; the
 // manager's devices ring only after a long wait, with stops grouped, at most hourly, and at once when work is requeued
-// (#115). Pure rules first, then the readings, then OfficeHealth, which the Swarm drives.
+// (#115). The office's previews are measured too (#204): under memory pressure an idle one (nobody watching, no agent
+// using it) stops before any agent session is stopped or refused. Pure rules first, then the readings, then
+// OfficeHealth, which the Swarm drives.
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -74,6 +76,23 @@ export function memoryVictim(x: { memory: MemoryReading; headroomMb: number; ses
   const biggest = [...x.sessions].sort((p, q) => q.rssMb - p.rssMb)[0];
   if (!biggest || free >= x.headroomMb / 2) return null;
   return { id: biggest.id, why: `the server was running out of memory (${gb(free)} left) and its processes used the most (${gb(biggest.rssMb)})` };
+}
+
+/** The preview to stop for memory: the biggest one nobody watches and no agent uses; null when none is idle. */
+export function idlePreview(previews: { key: string; rssMb: number; idle: boolean }[]): string | null {
+  return [...previews].filter((p) => p.idle).sort((a, b) => b.rssMb - a.rssMb)[0]?.key ?? null;
+}
+
+/**
+ * What to stop for memory: a session over the ceiling stays that session's problem; when memory is about to run out, an
+ * idle preview goes before the biggest session. Null: nothing has to go.
+ */
+export function memoryRelief(x: Parameters<typeof memoryVictim>[0] & { previews: { key: string; rssMb: number; idle: boolean }[] }): { preview: string } | { session: { id: string; why: string } } | null {
+  const over = x.sessionMaxMb > 0 && x.sessions.some((s) => s.rssMb > x.sessionMaxMb);
+  const preview = idlePreview(x.previews);
+  if (!over && preview && x.memory.availableMb + x.memory.swapFreeMb < x.headroomMb / 2) return { preview };
+  const session = memoryVictim(x);
+  return session ? { session } : null;
 }
 
 /** Ping about work waiting for memory? Only once it has waited `delayMs`, once per wait, and at most once an hour. */
@@ -202,6 +221,12 @@ export interface HealthHost {
   /** A killed session's agent, still stopped on their task: resume it, or (requeue) put it back in the queue. */
   retry(agentId: string, why: string, requeue: boolean): void;
   schedule(): void;
+  /** The previews being set up or running, their desk folders, and whether they're idle (nobody watching, no agent on it). */
+  previews?(): { key: string; dir: string; idle: boolean }[];
+  /** Stop an idle preview to free memory. */
+  stopPreview?(key: string): void;
+  /** What the previews' processes use now, MB (null: not measured). */
+  previewMem?(mb: number | null): void;
 }
 
 export class OfficeHealth {
@@ -219,6 +244,7 @@ export class OfficeHealth {
   private lastStop: HealthView['lastStop'] = null;
   private lastKey = '';
   private ticking = false;
+  private previewRss = new Map<string, number>(); // preview key → what its processes use, MB
 
   constructor(private host: HealthHost) {}
 
@@ -234,10 +260,17 @@ export class OfficeHealth {
   admit(kind: SessionKind, floor?: string): boolean {
     const why = this.refusal(kind);
     if (!why) return true;
+    this.freePreview(); // the memory it frees shows at the next reading, which retries the held work
     this.held.set(floor ? `${kind}:${floor}` : kind, kind);
     this.wait = { why, since: this.wait?.since ?? Date.now(), told: this.wait?.told ?? false };
     this.emit();
     return false;
+  }
+
+  /** Before work waits for memory: stop the biggest idle preview, if any. */
+  private freePreview() {
+    const key = idlePreview((this.host.previews?.() ?? []).map((p) => ({ ...p, rssMb: this.previewRss.get(p.key) ?? 0 })));
+    if (key) this.host.stopPreview?.(key);
   }
 
   /** A start the manager or the CEO asked for: refused, with the reason, when it doesn't fit. */
@@ -298,7 +331,10 @@ export class OfficeHealth {
       const memory = await this.host.probe().memory();
       this.memory = memory;
       const sessions = this.host.sessions();
-      const usage = await this.host.probe().usage(sessions.flatMap((s) => (s.dir ? [s.dir] : [])));
+      const previews = this.host.previews?.() ?? [];
+      const usage = await this.host.probe().usage([...sessions.flatMap((s) => (s.dir ? [s.dir] : [])), ...previews.map((p) => p.dir)]);
+      this.previewRss = new Map(previews.flatMap((p) => (usage.has(p.dir) ? [[p.key, usage.get(p.dir)!.rssMb] as const] : [])));
+      this.host.previewMem?.(this.previewRss.size ? Math.round([...this.previewRss.values()].reduce((n, mb) => n + mb, 0)) : null);
       const measured: { id: string; rssMb: number; pids: number[] }[] = [];
       for (const s of sessions) {
         const u = s.dir ? usage.get(s.dir) : undefined;
@@ -308,7 +344,9 @@ export class OfficeHealth {
         if (s.kind !== 'ceo' && !this.stopping.has(s.id) && u.pids.length) measured.push({ id: s.id, ...u });
       }
       const set = this.host.settings();
-      const victim = memoryVictim({ memory, headroomMb: set.headroomMb, sessionMaxMb: set.sessionMaxMb, sessions: measured });
+      const relief = memoryRelief({ memory, headroomMb: set.headroomMb, sessionMaxMb: set.sessionMaxMb, sessions: measured, previews: previews.map((p) => ({ ...p, rssMb: this.previewRss.get(p.key) ?? 0 })) });
+      if (relief && 'preview' in relief) this.host.stopPreview?.(relief.preview);
+      const victim = relief && 'session' in relief ? relief.session : null;
       if (victim) {
         this.stopping.set(victim.id, victim.why);
         this.host.log(victim.id, `⚠ Stopping this session: ${victim.why}.`);

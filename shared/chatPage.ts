@@ -2,6 +2,7 @@
 // scrolls up, the scroll held where it was. And removing a message: the manager's and the office's are deleted, the
 // CEO's hidden from the manager. Pure, for the server, the store and the tests.
 import type { PhoneMessage } from './types.ts';
+import { snapshotMessages } from './chatParts.ts';
 
 /** Messages per page: what the chat opens on, and what each scroll to the top adds. */
 export const CHAT_PAGE = 40;
@@ -27,6 +28,12 @@ export function pageBefore(messages: readonly PhoneMessage[], before = Infinity,
   const n = Math.max(1, Math.min(CHAT_PAGE_MAX, Math.floor(limit) || CHAT_PAGE));
   const earlier = visibleMessages(messages).filter((m) => m.id < before);
   return { messages: earlier.slice(-n), older: earlier.length > n };
+}
+
+/** The chat's latest page as a phone gets it, for a snapshot or another conversation opened: older ones load on scroll. */
+export function latestPage(messages: readonly PhoneMessage[]): { messages: PhoneMessage[]; messagesOlder: boolean } {
+  const page = pageBefore(messages);
+  return { messages: snapshotMessages(page.messages), messagesOlder: page.older };
 }
 
 /** An older page joined onto what a tab has: by id, oldest first, never twice. */
