@@ -116,6 +116,38 @@ describe('Accounts', () => {
     term.dispose();
   });
 
+  it('a sign-in whose CLI ends the moment Enter arrives logs the code by shape and is not told it ended (#302)', async () => {
+    // Like the demo's fake CLI: Enter finishes the login at once, inside the write.
+    const { accounts } = await office({
+      signIn: (o, exited) => {
+        o.term.write('Paste code here if prompted > ');
+        o.term.bind({
+          write: (d) => {
+            if (!d.includes('\r')) return;
+            o.term.write('\r\nLogin successful.\r\n');
+            o.term.bind(null);
+            exited(0);
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.signIn(id);
+    const term = accounts.terminal(id)!;
+    const viewer = Object.assign(new EventEmitter(), { readyState: 1, OPEN: 1, send: () => undefined, close: () => undefined });
+    term.attach(viewer as unknown as WebSocket);
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: string) => void logs.push(m));
+    viewer.emit('message', JSON.stringify({ t: 'input', data: 'abc123#state456\r' }));
+    spy.mockRestore();
+    expect(logs).toEqual([`account ${id}: sign-in code sent (15 characters, with #state)`]);
+    await term.flush();
+    expect(term.tail(5).join('\n')).not.toMatch(/This sign-in has ended/);
+    term.dispose();
+  });
+
   it('keeps an API key out of the registry, the views and events; the session gets it through apiKeyHelper only', async () => {
     const { accounts, home, events } = await office();
     await expect(accounts.add({ cli: 'claude', kind: 'api-key', key: 'nope' })).rejects.toThrow(/sk-ant-/);

@@ -1,5 +1,5 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Anthropic API key, an OpenAI
-// key), a Test that never leaves the computer, and sign-ins drawn as the CLIs' own (demo.ts's demoSignIn).
+// key), a Test that never leaves the computer, and sign-ins drawn as the CLIs' own (demoSignIn.ts).
 import type { AccountsBackend } from './backend.ts';
 import type { AccountsDeps } from './accounts.ts';
 import type { ProviderAccount, UsageReading } from '../shared/types.ts';

@@ -78,6 +78,7 @@ for (const phone of [false, true]) {
       await press(key(sheet, 'Enter'));
       await expect(sheet.locator('.xterm-rows')).toContainText('Login successful');
       await expect(sheet.getByRole('status')).toHaveText('Signed in.');
+      await expect(sheet.locator('.xterm-rows')).not.toContainText('This sign-in has ended');
     });
   });
 }
