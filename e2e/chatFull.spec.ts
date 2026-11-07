@@ -1,6 +1,6 @@
 import { expect, test } from './helpers';
 
-// The CEO chat full screen (#201): ⛶ covers the rail and pages (or hides a phone's tab bar), and Esc or Back puts the
+// The CEO chat full screen (#201): ⛶ covers the pages beside the rail (#242; or hides a phone's tab bar), and Esc or Back puts the
 // same layout back, the chat's scroll where it was.
 for (const width of [390, 1280]) {
   test(`the chat full screen comes and goes at ${width}px`, async ({ page }) => {
@@ -13,8 +13,10 @@ for (const width of [390, 1280]) {
     const top = await chat.evaluate((el) => el.scrollTop);
     for (const leave of [() => page.keyboard.press('Escape'), () => page.goBack()]) {
       await root.getByRole('button', { name: 'Full screen', exact: true }).click();
-      await expect(root.locator('.pk-tabs')).toBeHidden();
-      if (width > 1000) expect((await root.locator('.pk-dock').boundingBox())!.width).toBeGreaterThan(width * 0.9);
+      if (width > 1000) {
+        await expect(root.locator('.pk-tabs')).toBeVisible();
+        expect((await root.locator('.pk-dock').boundingBox())!.width).toBeGreaterThan(width * 0.85);
+      } else await expect(root.locator('.pk-tabs')).toBeHidden();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await chat.blur();
       await leave();
