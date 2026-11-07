@@ -99,6 +99,8 @@ export function group(notes: Note[], dropped = 0): Note {
 export interface TabAttention {
   visible: boolean;
   at: number;
+  /** In a voice call with the CEO (#287): nothing goes out, the CEO says what matters. */
+  call?: boolean;
 }
 
 /** The manager is in the app when any tab, on any device, is on screen and was used this recently. */
@@ -110,14 +112,18 @@ export const THREAD_GAP_MS = 2 * 60_000;
 
 /** A tab's attention message on /ws (ClientEvent 'attention'), or null for anything else. */
 export function parseAttention(raw: unknown): AttentionEvent | null {
-  let m: { type?: unknown; visible?: unknown };
+  let m: { type?: unknown; visible?: unknown; call?: unknown };
   try {
     m = JSON.parse(String(raw)) as typeof m;
   } catch {
     return null;
   }
-  return m?.type === 'attention' && typeof m.visible === 'boolean' ? { type: 'attention', visible: m.visible } : null;
+  if (m?.type !== 'attention' || typeof m.visible !== 'boolean') return null;
+  return { type: 'attention', visible: m.visible, ...(m.call === true && { call: true as const }) };
 }
+
+/** Whether some tab is in a voice call: quiet then even when hidden (the phone locked mid-call) or quiet-in-app is off. */
+export const inCall = (tabs: Iterable<TabAttention>) => [...tabs].some((t) => t.call);
 
 /** Whether the manager is in the app on some device right now. */
 export function inApp(tabs: Iterable<TabAttention>, now: number): boolean {

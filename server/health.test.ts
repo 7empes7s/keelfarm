@@ -297,7 +297,7 @@ describe('a demo office short of memory', () => {
     expect(x.startIssueWork(repo)).toBe(false);
     expect(busy()).toBe(0);
     expect(swarm.snapshot().health?.held).toMatch(/^Waiting for memory: 0\.9 GB free, a build session needs/);
-    expect(heldNote(swarm.snapshot().health?.heldWork)).toBe('⏳ 1 task waiting for memory · 0.9 GB free, 3.0 GB needed');
+    expect(heldNote(swarm.snapshot().health?.heldWork)).toBe('⏳ 1 task waiting for memory · 0.9 GB free, 3.0 GB needed · the test browser is using 0.6 GB');
     await swarm.health.simulate(false);
     expect(swarm.snapshot().health?.held).toBeNull();
     expect(swarm.snapshot().health?.heldWork).toBeNull();

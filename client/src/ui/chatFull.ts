@@ -37,6 +37,15 @@ export const useChatFull = create<{ on: boolean; set: (on: boolean) => void; tog
   toggle: () => get().set(!get().on),
 }));
 
+/** Whether navigating leaves full screen: wide, the rail stays beside the full chat and a tap on it shows its page (#242);
+ *  on a phone the tab bar is hidden while full, and leaving the Chat tab already shows the page. */
+export const navLeavesFull = (railed: boolean, on: boolean) => railed && on;
+
+/** The rail (or a link) took the manager to a page: leave full screen when that page would be under the chat. */
+export function leaveFullFor(railed: boolean) {
+  if (navLeavesFull(railed, useChatFull.getState().on)) useChatFull.getState().set(false);
+}
+
 /** Whether this browser lets a page go full screen (iPhones don't). */
 export const canGoFullscreen = () => typeof document !== 'undefined' && !!document.fullscreenEnabled;
 

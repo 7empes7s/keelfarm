@@ -12,6 +12,7 @@ import { Menu } from './Menu';
 import { keyLabel } from './keymap';
 import { useControls } from './controls';
 import { XLabel } from './HoverCard';
+import { startCall } from './voiceCallEngine';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
 // prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; text size; hands-free; full
@@ -125,6 +126,10 @@ export function ChatTools({ ceoName, files, onChats, onFiles, into, full = true 
       <button type="button" className="chat-tool xbtn" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
         Aa
         <XLabel text="Text size" />
+      </button>
+      <button type="button" className="chat-tool xbtn" aria-label={`Call ${ceoName}`} title={`A voice call with ${ceoName}: just talk, talk over to interrupt. It goes on whatever you open.`} onClick={startCall}>
+        <Icon name="phone" />
+        <XLabel text="Call" />
       </button>
       <HandsFreeToggle ceoName={ceoName} />
       {full && (

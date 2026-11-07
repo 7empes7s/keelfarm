@@ -1,6 +1,7 @@
 // The CEO chat on the Swarm's side (#51): the reply being written (folded from the session's text and steps, sent a
 // few times a second at most), the current job's office calls for a Stop's reply, the saved threads of the other
 // conversations, and the CEO's notes file for the memory screen. Kept out of swarm.ts like ceoFiles.ts.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -17,6 +18,7 @@ import type { PhoneMessage } from '../shared/types.ts';
 
 const EMIT_MS = 250;
 const ID = /^c[a-z0-9]{1,24}$/;
+const current = new AsyncLocalStorage<OfficeCall>(); // the office call a handler runs in, for noteMessage
 
 /** A demo thread (server/demoThreads.ts): its project, its messages (one may carry a made-up image) and its flags. */
 export interface DemoThread {
@@ -34,12 +36,13 @@ export class CeoChat {
   private lastReply = '';
   private timer: NodeJS.Timeout | undefined;
 
-  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id. */
+  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id; `agentOf`: an agent's id from an id or name. */
   constructor(
     private readonly dir: string,
     private readonly notesFile: string,
     private readonly emitLive: (live: CeoLive | null) => void,
     private readonly repoOf: (floor: number) => string | null = () => null,
+    private readonly agentOf: (ref: string) => string | null = () => null,
   ) {}
 
   // ---------- the reply being written ----------
@@ -77,7 +80,7 @@ export class CeoChat {
 
   /** The cards for the current turn's calls among `calls` (this job's, e.g. from settled()). */
   turnActions(calls: readonly OfficeCall[]) {
-    return actionCards(calls.slice(this.turnFrom), this.repoOf);
+    return actionCards(calls.slice(this.turnFrom), this.repoOf, this.agentOf);
   }
 
   /** The job ended (or was stopped) with nothing more to say. */
@@ -111,7 +114,7 @@ export class CeoChat {
         const input = args[0];
         const call: OfficeCall = { tool, ok: false, out: null, ...(typeof input === 'object' && input !== null ? { args: input as Record<string, unknown> } : {}) };
         this.calls.push(call);
-        const p = (async () => (fn as (...a: unknown[]) => unknown)(...args))();
+        const p = current.run(call, async () => (fn as (...a: unknown[]) => unknown)(...args));
         this.inflight.add(p);
         try {
           const r = await p;
@@ -126,6 +129,12 @@ export class CeoChat {
       };
     }
     return out as T;
+  }
+
+  /** Inside an office call (message_agent, answer_agent): the agent chat item it posted, which its card opens. Elsewhere nothing. */
+  noteMessage(id: number) {
+    const call = current.getStore();
+    if (call) call.messageId = id;
   }
 
   /** The current job's calls once those still running have finished (or `ms` passed). */

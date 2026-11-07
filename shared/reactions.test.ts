@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { feedbackLine, feedbackPrompt, nextStatus, react, reactionCounts, reactTarget, replyTarget, statusLabel, telegramReaction, turnEnding, type StatusEvent } from './reactions.ts';
+import { feedbackLine, feedbackPrompt, nextStatus, react, reactionCounts, reactionWho, reactTarget, replyTarget, statusLabel, telegramReaction, turnEnding, type StatusEvent } from './reactions.ts';
 import type { PhoneMessage, StatusReaction } from './types.ts';
 
 const msg = (id: number, from: PhoneMessage['from'], extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id, from, text: `message ${id}`, at: id, ...extra });
@@ -83,6 +83,22 @@ describe('reactions', () => {
     for (const e of ['🎉', '🙏', '😂']) r = react(r, 'manager', e);
     expect(r.filter((x) => x.by === 'manager').map((x) => x.emoji)).toEqual(['❤️', '🎉', '🙏', '😂']);
     expect(reactionCounts([...react(undefined, 'ceo', '👍'), { by: 'manager', emoji: '👍' }])).toEqual([{ emoji: '👍', count: 2, mine: true, ceo: true }]);
+  });
+
+  it('groups reactions into one pill per emoji, the most-used first, and says who added each (#215)', () => {
+    const r = [
+      { by: 'manager' as const, emoji: '❤️' },
+      { by: 'manager' as const, emoji: '👍' },
+      { by: 'ceo' as const, emoji: '👍' },
+    ];
+    expect(reactionCounts(r)).toEqual([
+      { emoji: '👍', count: 2, mine: true, ceo: true },
+      { emoji: '❤️', count: 1, mine: true, ceo: false },
+    ]);
+    const [both, mine] = reactionCounts(r);
+    expect(reactionWho(both, 'Mimoun')).toBe('You and Mimoun');
+    expect(reactionWho(mine, 'Mimoun')).toBe('You');
+    expect(reactionWho({ mine: false, ceo: true }, 'Mimoun')).toBe('Mimoun');
   });
 
   it("turns the manager's 👍 / 👎 on a CEO reply into light feedback for its next job", () => {

@@ -18,12 +18,13 @@ interface Props {
   id?: string;
   label?: string; // the accessible name, when no <label> points at `id`
   disabled?: boolean;
+  defaultLabel?: string; // what '' is called, instead of "Default (…)"
 }
 
-export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label = 'Model', disabled }: Props) {
+export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label = 'Model', disabled, defaultLabel }: Props) {
   const catalog = useStore((s) => s.models);
   const pocket = useMode((s) => s.mode) === 'pocket';
-  const options = pickerOptions(cli, catalog, resolvedDefault);
+  const options = pickerOptions(cli, catalog, resolvedDefault).map((o) => (o.value === '' && defaultLabel ? { ...o, label: defaultLabel } : o));
   const listed = options.some((o) => o.value === value.trim() && o.value !== OTHER_MODEL);
   const [typing, setTyping] = useState(false);
   const [sheet, setSheet] = useState(false);
