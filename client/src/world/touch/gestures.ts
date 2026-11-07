@@ -2,7 +2,8 @@
 // A tap is a quick press that barely moves: the primary action, aimed at the tap point. A press held still arms the
 // hold menu, which opens when the finger lifts. Tap and hold work anywhere. A press that moves past the slop is a drag,
 // and the half of the screen it landed in decides what it does (#83): the bottom half walks (the joystick centred
-// where the finger landed), the top half looks around. A finger keeps its role until it lifts.
+// where the finger landed), the top half looks around (thumbs.ts has #123's thumb zones, which feed the same roles).
+// A finger keeps its role until it lifts. Two looking fingers pinch instead.
 
 /** Every threshold in one place. Distances are CSS pixels (pointer events' units). */
 export const GESTURE = {
@@ -56,7 +57,9 @@ export type GestureEvent =
   /** The joystick: centre (cx, cy), finger at (x, y). */
   | { type: 'stick'; cx: number; cy: number; x: number; y: number }
   | { type: 'stickEnd' }
-  | { type: 'look'; dx: number; dy: number };
+  | { type: 'look'; dx: number; dy: number }
+  /** Two looking fingers moved apart (scale > 1) or together. */
+  | { type: 'pinch'; scale: number };
 
 export const createGestures = (dpr = 1): Gestures => ({ fingers: new Map(), slop: slopFor(dpr) });
 
@@ -89,8 +92,11 @@ export function fingerMove(g: Gestures, id: number, x: number, y: number): Gestu
   if (!f) return [];
   const dx = x - f.x;
   const dy = y - f.y;
+  const other = f.role === 'look' ? [...g.fingers.values()].find((o) => o !== f && o.role === 'look') : undefined;
+  const before = other ? Math.hypot(f.x - other.x, f.y - other.y) : 0;
   f.x = x;
   f.y = y;
+  if (other) return before > 0 && (dx || dy) ? [{ type: 'pinch', scale: Math.hypot(x - other.x, y - other.y) / before }] : [];
   if (f.role === 'look') return dx || dy ? [{ type: 'look', dx, dy }] : [];
   if (f.role === 'stick') return [stickOf(f)];
   if (Math.hypot(x - f.x0, y - f.y0) <= g.slop) return [];
