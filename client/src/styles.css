@@ -90,15 +90,15 @@ code {
   transition: transform 0.06s, box-shadow 0.06s;
   white-space: nowrap;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled, [aria-disabled='true']) {
   transform: translateY(-1px);
   box-shadow: 0 4px 0 var(--ds-shadow-color);
 }
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(2px);
   box-shadow: 0 1px 0 var(--ds-shadow-color);
 }
-.btn:disabled {
+.btn:is(:disabled, [aria-disabled='true']) {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -133,11 +133,6 @@ code {
   color: var(--ds-on-color);
   box-shadow: 0 5px 0 var(--ds-shadow-color);
 }
-a.btn {
-  display: inline-block;
-  text-decoration: none;
-}
-
 button {
   font-family: var(--font);
 }
@@ -1974,7 +1969,7 @@ input.inline:focus {
   flex: 0 2 auto;
   font-weight: 500;
   color: var(--ink);
-  opacity: 0.75;
+  opacity: 0.8; /* 4.5:1 on the floor's colour */
 }
 .app-title .status {
   flex: none;

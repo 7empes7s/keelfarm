@@ -85,7 +85,10 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 - **Panel / sheet** (`ui/Panel.tsx`): title (truncates), ✕ 44 px, body scrolls. Full-screen sheet ≤ 600 px.
   `className="ds-console"` adds the console's tabs, cards and headings.
 - **Buttons**: `.btn` (primary actions: `.btn-good`; destructive confirm: `.btn-bad`; quiet: `.btn-ghost`) and
-  `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44.
+  `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44. Both share one base in design.css
+  (`:where(.btn, .ds-btn)`: inline-flex, centred, one line height, no underline), so a link, label or summary styled
+  as a button looks and lines up like a `<button>`. A link that can't be followed yet stays a link: no `href`,
+  `aria-disabled="true"`, the disabled look; never swap it for a `<button disabled>` twin.
 - **Overflow menu** (`ui/Menu.tsx`): `<Menu label="More for Ada" title="Ada" items={[…]} />`. A popover on wide
   screens, a bottom sheet with a title and Cancel on phones. Arrow keys, Home/End, Esc (focus back to ⋯), Tab leaves,
   outside tap or scroll closes. Items with `danger: true` go last, under a separator, in red; end their label with "…"
@@ -147,7 +150,8 @@ Don't:
 
 `e2e/layout.spec.ts` opens each screen in `SCREENS` at its widths in light and dark, walks its tabs and fails on:
 sideways page scroll or an element wider than the viewport (outside a scroller), a button that can't be scrolled
-into view or is covered (`elementFromPoint`), a button under 44×44, a destructive button outside a menu, a ⋯ menu
+into view or is covered (`elementFromPoint`), a button under 44×44, anything styled `.btn`/`.ds-btn` under 44 px
+tall, with its label off centre or a different height from the buttons beside it, a destructive button outside a menu, a ⋯ menu
 whose danger items aren't last and separated or whose Esc closes more than the menu, and any axe WCAG 2.1 AA
 violation. Run it alone with your reserved port:
 
