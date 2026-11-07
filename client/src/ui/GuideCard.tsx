@@ -77,7 +77,7 @@ export function GuideCard() {
   const p = guideProgress(items);
   if ((hidden || p.done === p.total) && !asked) return null;
   return (
-    <section className="pk-card gm-card" aria-label="Get the most out of the office">
+    <section data-tour="guide" className="pk-card gm-card" aria-label="Get the most out of the office">
       <div className="gm-head">
         <b className="grow">✅ Get the most out of the office</b>
         <Progress items={items} />
@@ -110,7 +110,7 @@ export function GuideButton() {
   const p = guideProgress(items);
   if (p.done === p.total) return null;
   return (
-    <button className="pill pill-guide" onClick={() => go({ kind: 'guide' })} title="Get the most out of the office" aria-label={`Guide: ${p.done} of ${p.total} done`}>
+    <button data-tour="guide" className="pill pill-guide" onClick={() => go({ kind: 'guide' })} title="Get the most out of the office" aria-label={`Guide: ${p.done} of ${p.total} done`}>
       ✅ {p.done}/{p.total}
     </button>
   );

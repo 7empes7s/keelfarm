@@ -31,3 +31,126 @@
   border: 2px solid var(--ds-outline);
   border-radius: 6px;
 }
+
+/* ---------- the desktop view on a phone (#131) ---------- */
+
+.app-main {
+  position: relative; /* the rotate hint sits over the preview */
+}
+.app-rotate {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-5) var(--ds-space-4);
+  text-align: center;
+  background: var(--ds-surface-raised);
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+}
+.app-rotate p {
+  margin: 0;
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-tight);
+}
+.app-rotate .btn {
+  min-height: var(--ds-target);
+}
+.app-rotate-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  animation: app-rotate 2.4s ease-in-out infinite;
+}
+@keyframes app-rotate {
+  0%,
+  25% {
+    transform: rotate(0);
+  }
+  55%,
+  90% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+/* Edge to edge: the panel covers the office (its tabs and header too), clear of the notch and the home bar. */
+.overlay:has(> .panel-app-immersive) {
+  padding: 0;
+  background: #000;
+}
+.panel.panel-app-immersive {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: var(--app-height, 100dvh);
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #000;
+}
+.panel-app-immersive .panel-head,
+.panel-app-immersive .channels,
+.panel-app-immersive .app-toolbar,
+.panel-app-immersive .qa-side {
+  display: none;
+}
+.panel-app-immersive .panel-body {
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.panel-app-immersive .app-stage {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+.panel-app-immersive .app-stage .app-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--fit-w, 100%);
+  max-width: none;
+  height: var(--fit-h, 100%);
+  border: 0;
+  transform: scale(var(--fit-scale, 1));
+  transform-origin: 0 0;
+}
+.app-float {
+  position: fixed;
+  z-index: 5;
+  top: max(var(--ds-space-2), env(safe-area-inset-top));
+  left: max(var(--ds-space-2), env(safe-area-inset-left));
+  right: max(var(--ds-space-2), env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.app-float > * {
+  pointer-events: auto;
+}
+.app-float .btn,
+.app-float .ds-menu-wrap > .ds-btn {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  background: rgba(21, 21, 31, 0.6);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+.app-float-hidden {
+  opacity: 0.15;
+}

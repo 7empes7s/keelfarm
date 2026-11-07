@@ -382,6 +382,7 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
+app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
 app.post('/api/ceo/conversations', route(() => swarm.newConversation()));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));

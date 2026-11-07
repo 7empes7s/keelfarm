@@ -7,7 +7,9 @@ import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSyn
 import { sendToCeo } from './chatSend';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
-import { Panel } from './Panel';
+import { closeOverlay, Panel } from './Panel';
+import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
+import type { Width } from './desktopRules';
 import { tuneChannel, useChannel, useWatch } from './theatre';
 import './appViewer.css';
 
@@ -29,7 +31,6 @@ const STEPS: { status: PreviewStatus; label: string }[] = [
   { status: 'starting', label: 'Start the app' },
 ];
 
-type Width = 'desktop' | 'tablet' | 'phone';
 const WIDTHS: [Width, string][] = [
   ['phone', '📱 Phone'],
   ['tablet', '▭ Tablet'],
@@ -39,19 +40,9 @@ const WIDTHS: [Width, string][] = [
 // The last width picked, so reopening the viewer keeps it.
 let lastWidth: Width = 'desktop';
 
-// A phone's screen: the viewer's controls go in a ⋯ menu and compare shows one side at a time (#129).
-const NARROW = '(max-width: 600px)';
+// A phone's screen, either way up: the viewer's controls go in a ⋯ menu and compare shows one side at a time (#129).
+const NARROW = '(max-width: 600px), (max-height: 500px) and (pointer: coarse)';
 const narrowNow = () => typeof matchMedia === 'function' && matchMedia(NARROW).matches;
-function useNarrow() {
-  const [narrow, setNarrow] = useState(narrowNow);
-  useEffect(() => {
-    const m = matchMedia(NARROW);
-    const on = () => setNarrow(m.matches);
-    m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
-  }, []);
-  return narrow;
-}
 
 // A cross-origin frame never tells us it was refused, so this only catches frames that don't load at all.
 const SLOW_LOAD_MS = 12_000;
@@ -590,7 +581,9 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   const channel = useChannel(repoId);
   const [width, setWidth] = useState(lastWidth);
   const [compare, setCompare] = useState(lastCompare);
-  const narrow = useNarrow();
+  const narrow = useMedia(NARROW);
+  const view = useDesktopView(width, narrow);
+  const fit = useDesktopFit(view.immersive);
   const [showQa, setShowQa] = useState(qa || (lastQa && !narrowNow())); // on a phone QA's report takes room: only when asked
   const [side, setSide] = useState<Side>('pr'); // compare on a phone: the side on screen
   const [busy, setBusy] = useState(false);
@@ -640,6 +633,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   const pickWidth = (w: typeof width) => {
     lastWidth = w;
     setWidth(w);
+    if (w === 'desktop') view.pickedDesktop();
   };
   const active = ACTIVE.includes(current.status);
   const label = channel == null ? repo.defaultBranch : `PR #${channel}`;
@@ -669,6 +663,21 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
       ▶ Start
     </button>
   );
+  const more = (
+    <Menu
+      label="More for the app"
+      title={`${name} · ${label}`}
+      items={[
+        { label: 'Open in browser ↗', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
+        { label: '⟳ Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
+        active && { label: '↻ Restart', onSelect: () => void (channel == null ? startMain() : startPr(true)) },
+        view.forced ? { label: '⛶ Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: '⛶ Full screen', onSelect: view.enterFull },
+        ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) }))),
+        prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
+        prView && { label: showQa ? '📋 Hide the QA report' : '📋 QA report', onSelect: toggleQa },
+      ]}
+    />
+  );
   // On a phone: one button, compare's side, and the rest in ⋯.
   const narrowBar = (
     <div className="app-toolbar" role="toolbar" aria-label="App controls">
@@ -684,25 +693,14 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
         </div>
       )}
       <span className="spacer" />
-      <Menu
-        label="More for the app"
-        title={`${name} · ${label}`}
-        items={[
-          { label: 'Open in browser ↗', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
-          { label: '⟳ Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
-          active && { label: '↻ Restart', onSelect: () => void (channel == null ? startMain() : startPr(true)) },
-          ...WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) })),
-          prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
-          prView && { label: showQa ? '📋 Hide the QA report' : '📋 QA report', onSelect: toggleQa },
-        ]}
-      />
+      {!view.immersive && more}
     </div>
   );
 
   return (
     <Panel
       wide
-      className="panel-app"
+      className={`panel-app ${view.immersive ? 'panel-app-immersive' : ''}`}
       accent={repo.color}
       title={
         <span className="app-title">
@@ -754,8 +752,10 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
         </div>}
       </div>
 
+      {view.immersive && <FloatingBar forced={view.forced} onBack={view.leaveFull} onClose={closeOverlay} menu={more} />}
       <div className="app-body">
-        <div className="app-main">
+        <div className="app-main" ref={fit.ref} style={fit.style}>
+          {view.hint && <RotateHint onDismiss={view.dismissHint} onFull={view.enterFull} />}
           {comparing && narrow ? (
             side === 'main' ? (
               <PreviewStage repo={repo} preview={main} label={repo.defaultBranch} src={main.url && reachable(main.url, location)} width={width} reloads={reloads} busy={busy} onStart={() => void startMain()} />

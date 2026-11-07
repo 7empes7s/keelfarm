@@ -27,7 +27,7 @@ export function HealthStrip() {
       .finally(() => setBusy(false));
   };
   return (
-    <div className="card office-card">
+    <div className="card office-card" id="ops-card-health">
       <div className="row wrap">
         <span className="floor-badge office-badge" aria-hidden>
           🩺
@@ -59,7 +59,7 @@ export function HealthStrip() {
   );
 }
 
-/** Settings → Office: the headroom kept free and the most one session may use. */
+/** Settings → Office: the headroom kept free, the most one session may use, and when a wait pings the manager. */
 export function MemoryFields({ memory, set }: { memory: MemorySettings; set: (p: { memory: MemorySettings }) => void }) {
   const field = (key: 'headroomMb' | 'sessionMaxMb', label: string, min: number, none: string) => (
     <label className="field">
@@ -82,9 +82,23 @@ export function MemoryFields({ memory, set }: { memory: MemorySettings; set: (p:
     <>
       {field('headroomMb', 'Memory kept free (GB)', 0, '0')}
       {field('sessionMaxMb', 'Most memory per session (GB)', 0.5, 'No limit')}
+      <label className="field">
+        <span>Ping me when work waits for memory (min)</span>
+        <input
+          key={memory.alertAfterMin}
+          type="number"
+          min={1}
+          step={1}
+          defaultValue={memory.alertAfterMin}
+          onBlur={(e) => {
+            const min = Math.round(Number(e.target.value));
+            if (min >= 1 && min !== memory.alertAfterMin) set({ memory: { ...memory, alertAfterMin: min } });
+          }}
+        />
+      </label>
       <p className="muted small">
         New sessions wait while starting one would leave less than this free (memory and swap), and on Linux a session whose processes grow past its most is stopped and resumed later. Leave the most empty
-        for no limit; the CEO always gets to work.
+        for no limit; the CEO always gets to work. A wait shows in the office at once; your devices ring only when it lasts this long, at most once an hour.
       </p>
     </>
   );

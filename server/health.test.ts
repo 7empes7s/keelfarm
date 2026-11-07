@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_MEMORY, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
+import { DEFAULT_MEMORY, heldNote, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
 import { createDemoBackend } from './demo.ts';
-import { admission, checkRestart, KILL_RETRIES, killRetry, learnEstimate, memoryVictim, OfficeHealth, reservedMb, sessionKilled, type LiveSession } from './health.ts';
+import { admission, checkRestart, heldMessage, heldPing, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
 import { Swarm } from './swarm.ts';
 
 // The office never takes its computer down (#55): sessions start only when memory allows, sessions killed for memory
@@ -47,9 +47,47 @@ describe('estimates', () => {
 
   it('come from settings, which keep only sane numbers', () => {
     const s = memorySettings(DEFAULT_MEMORY, { headroomMb: '2048', sessionMaxMb: 100, estimates: { build: 3000, qa: 'x', nope: 5 } });
-    expect(s).toEqual({ headroomMb: 2048, sessionMaxMb: 512, estimates: { build: 3000 } });
+    expect(s).toEqual({ headroomMb: 2048, sessionMaxMb: 512, estimates: { build: 3000 }, alertAfterMin: 15 });
     expect(memorySettings(s, { sessionMaxMb: 0 }).sessionMaxMb).toBe(0);
     expect(memorySettings(s, { headroomMb: 'lots' }).headroomMb).toBe(2048);
+    expect(memorySettings(s, { alertAfterMin: 30 }).alertAfterMin).toBe(30);
+    expect(memorySettings({ headroomMb: 1, sessionMaxMb: 0, estimates: {} } as unknown as MemorySettings, {}).alertAfterMin).toBe(15); // a state saved before #115
+  });
+});
+
+describe('memory pings (#115)', () => {
+  const MIN = 60_000;
+  const ping = (waitedMin: number, lastPingAt: number | null = null, told = false) => heldPing({ since: 0, told, now: waitedMin * MIN, delayMs: 15 * MIN, lastPingAt });
+
+  it('never ring for a wait under the threshold, ring once after it, and at most once an hour', () => {
+    expect(ping(1)).toBe(false);
+    expect(ping(14.9)).toBe(false);
+    expect(ping(15)).toBe(true);
+    expect(ping(40, null, true)).toBe(false); // that wait was told
+    expect(ping(15, 15 * MIN - MEMORY_PING_GAP_MS + MIN)).toBe(false); // another wait pinged under an hour ago
+    expect(ping(15, 15 * MIN - MEMORY_PING_GAP_MS)).toBe(true);
+  });
+
+  it('say what waits, that there is nothing to do, and what helps', () => {
+    const m = heldMessage({ tasks: 2, freeMb: 3277, needMb: 3584 }, 15 * MIN);
+    expect(m.title).toBe('Work has waited 15 min for memory');
+    expect(m.body).toMatch(/^2 tasks wait: 3\.2 GB free, 3\.5 GB needed\. Nothing to do: .*fewer agents on a floor.*Memory kept free/);
+    expect(heldNote({ tasks: 2, freeMb: 3277, needMb: 3584 })).toBe('⏳ 2 tasks waiting for memory · 3.2 GB free, 3.5 GB needed');
+    expect(heldNote({ tasks: 1, freeMb: 900, needMb: 3072 })).toMatch(/^⏳ 1 task waiting/);
+    expect(heldNote(null)).toBeNull();
+  });
+
+  it('group stopped sessions into one digest an hour', () => {
+    expect(stopDigest([], 0, null)).toBeNull();
+    expect(stopDigest(['Ada'], 0, null)?.title).toBe("Ada's session was stopped to free memory and will resume");
+    const two = stopDigest(['Ada', 'Bo'], MEMORY_PING_GAP_MS, 0);
+    expect(two?.title).toBe('2 sessions were stopped to free memory and will resume');
+    expect(two?.body).toMatch(/^Ada, Bo\. Nothing to do: they resume by themselves/);
+    expect(stopDigest(['Ada', 'Bo'], MEMORY_PING_GAP_MS - 1, 0)).toBeNull();
+  });
+
+  it('say when work went back to the queue', () => {
+    expect(requeueMessage('Ada', 'Their session was killed', 'Resumed 2 times already, so the work goes back to the queue.')).toMatchObject({ title: "Ada's work went back to the queue", body: expect.stringMatching(/progress is lost/) });
   });
 });
 
@@ -80,13 +118,13 @@ describe('OfficeHealth', () => {
     const memory = { now: mem(available) };
     const sessions: LiveSession[] = [];
     const usage = new Map<string, { rssMb: number; pids: number[] }>();
-    const out = { lines: [] as string[], alerts: [] as string[], retried: [] as [string, boolean][], killed: [] as number[], views: [] as HealthView[] };
+    const out = { lines: [] as string[], alerts: [] as string[], bodies: [] as string[], retried: [] as [string, boolean][], killed: [] as number[], views: [] as HealthView[] };
     const health = new OfficeHealth({
       probe: () => ({ memory: async () => memory.now, usage: async () => usage, kill: (pids) => out.killed.push(...pids) }),
       settings: () => settings,
       sessions: () => sessions,
       log: (_, text) => out.lines.push(text),
-      alert: (title) => out.alerts.push(title),
+      alert: (title, body) => (out.alerts.push(title), out.bodies.push(body)),
       emit: (v) => out.views.push(v),
       save: () => undefined,
       retry: (id, _, requeue) => out.retried.push([id, requeue]),
@@ -111,7 +149,8 @@ describe('OfficeHealth', () => {
     expect(health.ended(ada, 'build', killed, true, true)).toMatch(/goes back to the queue/);
     await health.tick();
     expect(out.retried.at(-1)).toEqual(['a1', true]);
-    expect(out.alerts).toContain("Ada's session was stopped");
+    // Two resumes in one digest (the second within the hour waits for the next); the requeue rang at once.
+    expect(out.alerts).toEqual(["Ada's session was stopped to free memory and will resume", "Ada's work went back to the queue"]);
     // A session that ends as usual starts the count again.
     expect(health.ended(ada, 'build', [], true, true)).toBeNull();
     expect(health.ended(ada, 'build', killed, true, true)).toMatch(new RegExp(`retry 1 of ${KILL_RETRIES}`));
@@ -136,25 +175,78 @@ describe('OfficeHealth', () => {
     expect(settings.estimates.build).toBe(2268); // halfway from 1.5 GB to its 2.9 GB peak
   });
 
-  it('holds new work while memory is short, rings once it has waited a minute, and lets it go once memory is back', async () => {
+  it('holds new work while memory is short with a note, rings once after 15 minutes and not again within the hour', async () => {
+    const { health, memory, out } = rig(2000);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = Date.now();
+    const at = (ms: number) => vi.setSystemTime(t0 + ms);
+    try {
+      await health.tick();
+      expect(health.admit('build', 'r1')).toBe(false);
+      expect(health.admit('qa', 'r2')).toBe(false);
+      expect(health.view().held).toMatch(/^Waiting for memory/);
+      expect(health.view().heldWork).toEqual({ tasks: 2, freeMb: 2000, needMb: 3072 });
+      expect(health.admit('ceo')).toBe(true);
+      expect(() => health.ensure('qa')).toThrow(/Waiting for memory/);
+      at(14 * 60_000);
+      await health.tick();
+      expect(out.alerts).toEqual([]); // the note shows in the office; no ping yet
+      at(15 * 60_000);
+      await health.tick();
+      await health.tick();
+      expect(out.alerts).toEqual(['Work has waited 15 min for memory']);
+      expect(out.bodies[0]).toMatch(/^2 tasks wait: 2\.0 GB free, 3\.0 GB needed\. Nothing to do/);
+      memory.now = mem(9000);
+      await health.tick();
+      expect(health.view()).toMatchObject({ held: null, heldWork: null });
+      expect(health.admit('build')).toBe(true);
+      // Another long wait within the hour: no second ping; after the hour, one.
+      memory.now = mem(2000);
+      await health.tick();
+      at(20 * 60_000);
+      expect(health.admit('build', 'r1')).toBe(false);
+      at(40 * 60_000);
+      await health.tick();
+      expect(out.alerts).toHaveLength(1);
+      at(75 * 60_000);
+      await health.tick();
+      expect(out.alerts).toEqual(['Work has waited 15 min for memory', 'Work has waited 55 min for memory']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never rings for a short wait that clears by itself', async () => {
     const { health, memory, out } = rig(2000);
     await health.tick();
-    expect(health.admit('build')).toBe(false);
-    expect(health.view().held).toMatch(/^Waiting for memory/);
-    expect(health.admit('ceo')).toBe(true);
-    expect(() => health.ensure('qa')).toThrow(/Waiting for memory/);
-    await health.tick();
-    expect(out.alerts).toEqual([]); // a wait of a tick or two is how sessions stagger
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(Date.now() + 61_000);
-    await health.tick();
-    await health.tick();
-    vi.useRealTimers();
-    expect(out.alerts).toEqual(['Work waits for memory']);
+    expect(health.admit('build', 'r1')).toBe(false);
     memory.now = mem(9000);
     await health.tick();
-    expect(health.view().held).toBeNull();
-    expect(health.admit('build')).toBe(true);
+    expect(health.view().heldWork).toBeNull();
+    expect(out.alerts).toEqual([]);
+  });
+
+  it('groups stopped sessions into one digest an hour, and rings at once when work goes back to the queue', async () => {
+    const { health, out } = rig(9000);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = Date.now();
+    try {
+      health.ended(ada, 'build', killed, true, true);
+      health.ended({ id: 'b1', name: 'Bo' }, 'qa', killed, true, true);
+      await health.tick();
+      expect(out.alerts).toEqual(['2 sessions were stopped to free memory and will resume']);
+      health.ended({ id: 'c1', name: 'Cy' }, 'build', killed, true, true);
+      vi.setSystemTime(t0 + 30 * 60_000);
+      await health.tick();
+      expect(out.alerts).toHaveLength(1); // within the hour: it waits for the next digest
+      health.ended({ id: 'd1', name: 'Di' }, 'build', killed, true, false); // can't resume: back to the queue
+      expect(out.alerts.at(-1)).toBe("Di's work went back to the queue");
+      vi.setSystemTime(t0 + 61 * 60_000);
+      await health.tick();
+      expect(out.alerts.at(-1)).toBe("Cy's session was stopped to free memory and will resume");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -188,8 +280,10 @@ describe('a demo office short of memory', () => {
     expect(x.startIssueWork(repo)).toBe(false);
     expect(busy()).toBe(0);
     expect(swarm.snapshot().health?.held).toMatch(/^Waiting for memory: 0\.9 GB free, a build session needs/);
+    expect(heldNote(swarm.snapshot().health?.heldWork)).toBe('⏳ 1 task waiting for memory · 0.9 GB free, 3.0 GB needed');
     await swarm.health.simulate(false);
     expect(swarm.snapshot().health?.held).toBeNull();
+    expect(swarm.snapshot().health?.heldWork).toBeNull();
     if (!busy()) x.startIssueWork(repo); // the release may already have started it
     expect(busy()).toBe(1);
   });

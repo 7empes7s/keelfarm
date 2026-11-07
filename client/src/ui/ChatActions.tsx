@@ -5,8 +5,9 @@ import { excerpt, type OutgoingMessage } from '../../../shared/chat';
 import { retrySend } from './chatSend';
 import { copyText } from './clipboard';
 import { useDialogFocus } from './dialogFocus';
+import { ReactionBar } from './ChatReactions';
 
-// The actions on one chat message (ui/Phone.tsx): Reply, Copy, Retry a failed send, and the chat's own (#51).
+// The actions on one chat message (ui/Phone.tsx): reactions on the CEO's (#118), Reply, Copy, Retry a failed send, and the chat's own (#51).
 
 /** A message the chat can act on: from the office (`m`), or still in this tab's outbox (`out`). */
 export type Item = { m: PhoneMessage; out?: undefined } | { m?: undefined; out: OutgoingMessage };
@@ -48,6 +49,7 @@ export function MessageActions({ item, ceoName, more, onReply, onClose }: { item
           Message actions · from {from}
         </div>
         <div className="chat-menu-quote">{excerpt(text, 120)}</div>
+        {item.m?.from === 'ceo' && <ReactionBar m={item.m} onDone={onClose} />}
         <div className="chat-menu-actions">
           {item.m && (
             <button type="button" className="btn btn-small" onClick={act(() => onReply(item.m!.id))}>

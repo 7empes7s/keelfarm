@@ -25,6 +25,7 @@ import { SearchButton } from './SearchPalette';
 import { GuideButton } from './GuideCard';
 import { NoticeBell, NoticeToasts } from './Notices';
 import { usageChip } from '../ops';
+import { heldNote } from '../../../shared/health';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchLook, useTouchStick } from '../world/touch/touchState';
 import { TouchZoneHints } from './TouchZoneHints';
@@ -58,6 +59,19 @@ function UsageChip() {
   );
 }
 
+/** While work waits for memory (#115): a quiet note, no sound; opens Mission control at the server's health. */
+function MemoryChip() {
+  const text = useStore((s) => heldNote(s.health?.heldWork));
+  const overlay = useStore((s) => s.overlay);
+  const openOverlay = useStore((s) => s.openOverlay);
+  if (!text || overlay?.kind === 'manager') return null;
+  return (
+    <button className="office-chip memory-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'ops', card: 'health' })} title="Work waits for memory and starts by itself. Open Mission control">
+      {text}
+    </button>
+  );
+}
+
 /** The office doctor's findings (server/watchdog.ts); opens them in Mission control. */
 function DoctorChip() {
   const count = useStore((s) => s.doctor.length);
@@ -82,7 +96,7 @@ function PhoneButton() {
   if (!started || overlay?.kind === 'phone') return null;
   const busy = ceo?.status === 'working';
   return (
-    <button className={`phone-btn ${badge ? 'phone-btn-ring' : ''}`} onClick={() => openOverlay({ kind: 'phone' })} title={`Your phone (${key})`}>
+    <button data-tour="phone" className={`phone-btn ${badge ? 'phone-btn-ring' : ''}`} onClick={() => openOverlay({ kind: 'phone' })} title={`Your phone (${key})`}>
       <span className="phone-btn-icon">📱</span>
       {badge > 0 && <span className="badge phone-btn-badge">{badge}</span>}
       <span className="phone-btn-label">
@@ -111,7 +125,7 @@ function PhotoButton() {
 function SwitchButton() {
   const key = useKeyName('switchOffice');
   return (
-    <button className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
+    <button data-tour="switch" className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
       🗺️ 2D office <kbd>{key}</kbd>
     </button>
   );
@@ -212,6 +226,7 @@ export function HUD() {
       <div className="hud-chips">
         <OfficeUpdateChip />
         <UsageChip />
+        <MemoryChip />
         <DoctorChip />
       </div>
 
