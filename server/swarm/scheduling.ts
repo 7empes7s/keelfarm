@@ -85,6 +85,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     return issues
       .filter(
         (i) =>
+          !i.untrusted &&
           !i.labels.some((l) => /^(swarm:skip|wontfix|question)$/i.test(l)) &&
           !this.issueTaken(repo, i.number) &&
           !this.isHeld(repo.id, i.number) &&
@@ -113,6 +114,7 @@ export abstract class SwarmScheduling extends SwarmQa {
             q.repoId === repo.id &&
             q.status === status &&
             stillOpen({ kind: 'pr', number: q.prNumber }, floor) &&
+            !this.outsidePull(repo.id, q.prNumber) &&
             !prepHeld(this.prepStrikes.get(prepKey(repo.id, q.prNumber, task)), now),
         )
         .sort((x, y) => x.updatedAt - y.updatedAt);

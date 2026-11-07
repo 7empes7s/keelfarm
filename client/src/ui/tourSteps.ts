@@ -61,6 +61,7 @@ export const TOUR: TourEntry[] = [
   { id: 'charter', tracks: ALL, title: 'Charters', text: "A floor's Charter leads with its numbers for each objective; editing is tucked away.", targets: ['charter', 'console'], tryIt: 'charter', added: 2 },
   { id: 'costs', tracks: ALL, title: 'Where the plan goes', text: "Mission control's costs: insights first, the priciest issues as cards and waste grouped by cause.", targets: ['costs', 'console'], tryIt: 'costs', added: 2 },
   { id: 'info', tracks: POCKET, title: 'What can I do here?', text: "Every screen's ⓘ says what you can do there, and brings back What's new.", targets: ['info'], added: 2 },
+  { id: 'agent-chat', tracks: ALL, title: 'Their chat', text: "An agent's window shows 💬 Chat or ⌨ Terminal, and 💬 Chat turns chat mode on for every desk; hold a message or step to react, and 👍 👎 🤔 ⚠️ reach them after their current step.", added: 3 },
   { id: 'switch', tracks: ['office'], title: 'The 2D office', text: 'Press {key:switchOffice} for the office as pages, with the chat beside them: quicker for getting work done.', targets: ['switch'], added: 2 },
 
   // features still to come: their PRs replace these hooks with steps
@@ -68,7 +69,6 @@ export const TOUR: TourEntry[] = [
   { id: 'agent-window', hook: 117 },
   { id: 'open-decisions', hook: 114 },
   { id: 'reactions', hook: 118 },
-  { id: 'agent-chat', hook: 120 },
 
   { id: 'office', tracks: ['office'], title: 'Your office', text: "Your glass office at the back left of the lobby has the manager's console; press {key:help} for help. Enjoy running {company}!", added: 1 },
 ];

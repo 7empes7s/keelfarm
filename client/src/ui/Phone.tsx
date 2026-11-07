@@ -10,6 +10,7 @@ import { HolidayStrip } from './HolidayStrip';
 import { Chat } from './Chat';
 import { LobbyNudge, TeamChanges } from './TeamChanges';
 import { clock } from './phoneParts';
+import { useMode } from '../pocket/mode';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -96,6 +97,7 @@ function useCompany() {
 function Shortcuts() {
   const openOverlay = useStore((s) => s.openOverlay);
   const repoId = useStore((s) => s.repos.find((r) => r.floor === s.floor)?.id);
+  const office = useMode((s) => s.mode === 'office'); // the map room is 3D: pocket mode has the 2D map
   return (
     <nav className="phone-links" aria-label="Open a panel">
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager' })}>
@@ -109,6 +111,11 @@ function Shortcuts() {
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
         👥 Floor list
       </button>
+      {office && (
+        <button className="btn btn-small" onClick={() => openOverlay({ kind: 'mapRoom' })}>
+          🌌 Map room
+        </button>
+      )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
         ❓ Help
       </button>

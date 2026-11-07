@@ -275,6 +275,20 @@ function FloorBrief({ repo }: { repo: RepoView }) {
           onBlur={(e) => e.target.value !== repo.playbook && void attempt(() => api.updateRepo(repo.id, { playbook: e.target.value }))}
         />
       </details>
+      <details className="small">
+        <summary>Trusted authors{repo.trustedAuthors?.length ? ` (${repo.trustedAuthors.length})` : ''}</summary>
+        <p className="muted">Agents build only issues and PRs from the owner, the office's GitHub user, collaborators with write access and these logins.</p>
+        <input
+          key={(repo.trustedAuthors ?? []).join(' ')}
+          defaultValue={(repo.trustedAuthors ?? []).join(', ')}
+          placeholder="GitHub logins, e.g. alice, bob"
+          aria-label="Trusted authors"
+          onBlur={(e) => {
+            const list = e.target.value.split(/[\s,]+/).filter(Boolean);
+            if (list.join(' ') !== (repo.trustedAuthors ?? []).join(' ')) void attempt(() => api.updateRepo(repo.id, { trustedAuthors: list }));
+          }}
+        />
+      </details>
     </div>
   );
 }

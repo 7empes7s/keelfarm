@@ -47,7 +47,7 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 | `npm run test:e2e` | optional, local only: Playwright (`e2e/`, `playwright.config.ts`): builds (`E2E_SKIP_BUILD=1` reuses your `dist/`), boots a demo office on `E2E_PORT` (default 4399; set it to your reserved port) with a temp `SWARM_HOME`, and smoke-tests it headless in a local Google Chrome, else Playwright's Chromium. Stops at once if the browser is missing: never install it mid-task |
 | `node scripts/smoke-package.mjs` | after a build: packs the npm package, installs it into a temp folder and boots its demo |
 | `npm run bench -- --port <yours>` | after a build: the scale benchmark (`scripts/bench.mjs`): boots the big-company demo headless, visits the lobby and three floors, writes FPS, frame-time p95, CPU per frame, draw calls, triangles, heap, audio nodes and websocket traffic to a JSON report (`--help`) |
-| `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs) |
+| `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs); `--no-tour` opens it without the setup wizard or tour, for QA's browser |
 
 CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test → `lint`, for every PR
 and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`, on `ubuntu-latest` always and on `windows-latest`
@@ -189,7 +189,7 @@ Shared (`shared/`, imported by both sides):
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
 - `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
-- `memoryMap.ts`: the memory map (#136): the office as a graph (nodes, edges, weights, caps), its filters, local graph, search, insights and live changes; built in the tab from the snapshot (`client/src/ui/MemoryMap.tsx`, canvas and physics in `MapCanvas.tsx` / `mapForce.ts`).
+- `memoryMap.ts`: the memory map (#136): the office as a graph (nodes, edges, weights, caps), its filters, local graph, search, insights and live changes; built in the tab from the snapshot (`client/src/ui/MemoryMap.tsx`, canvas and physics in `MapCanvas.tsx` / `mapForce.ts`); the 3D office's map room (#137, a lazy `mapRoom` overlay from the CEO's map table) swaps the stage for `Constellation.tsx`, its 3D layout, LOD and effects pure in `skyLayout.ts`).
 - `looks.ts`: the look editor's options and `cleanStyle` (an agent's `style`, checked on the server).
 
 Client (`client/`, Vite root; React 19, R3F, drei, zustand):

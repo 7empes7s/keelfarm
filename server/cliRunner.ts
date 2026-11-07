@@ -514,7 +514,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
   let promptTimer: NodeJS.Timeout | undefined;
-  const tail = opts.stream && cli === 'claude' && !inBox ? new TranscriptTail(started, (t) => callbacks.text?.(t, true)) : null; // the CEO's text as it writes it
+  // The CEO's text as it writes it; everyone else's chat (#120).
+  const tail = cli === 'claude' && !inBox ? (opts.stream ? new TranscriptTail(started, (t) => callbacks.text?.(t, true)) : new TranscriptTail(started, undefined, (ev) => cb.chat?.(ev))) : null;
 
   const cb: SessionCallbacks = { ...callbacks };
   const log = (entries: LogEntry[]) => entries.length && cb.log(entries);

@@ -5,6 +5,7 @@
 
 import { charterOf, emptyCharter, renderCharter, type CharterParts } from '../shared/charter.ts';
 import type { AgentPromptView } from '../shared/types.ts';
+import { REACTION_PROMPT } from '../shared/reactions.ts';
 
 export interface PromptAgent {
   name: string;
@@ -111,7 +112,7 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
   return [
     floorContext(repo, officePlaybook),
     '',
-    `You are ${a.name}, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". ${BLOCKED_LINE} The manager may occasionally send you messages; follow their instructions.`,
+    `You are ${a.name}, a software engineer on an autonomous agent team ("cubefarm"). Several teammates work in parallel on other issues of the same repository, each in their own git worktree. Nobody answers questions or prompts: decide yourself and note choices in the PR under "Decisions I made". ${BLOCKED_LINE} The manager may occasionally send you messages; follow their instructions. ${REACTION_PROMPT}`,
     `Every pull request is reviewed and tested by a teammate in a fresh session. ${repo.autoMerge ? "Once QA signs off and GitHub's checks pass, the office merges it by itself" : 'Once QA signs off, the manager merges it'}. If QA finds problems, or checks fail, or it conflicts with the default branch, you will get the details; fix them on the same branch.`,
     '',
     `Your worktree: ${cwd}`,

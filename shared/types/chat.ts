@@ -3,6 +3,7 @@ import type { ChatAction } from '../ceoActions.ts';
 import type { CeoSessionView } from '../ceoAwake.ts';
 import type { MemoryNote } from '../ceoMemory.ts';
 import type { CeoLive } from '../ceoStream.ts';
+import type { ChatVisual } from '../chatVisuals.ts';
 import type { Conversation } from '../conversations.ts';
 import type { FileRef } from '../files.ts';
 import type { AgentQuestion } from '../questions.ts';
@@ -29,6 +30,7 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+  visuals?: ChatVisual[]; // the CEO's charts, tables and dashboards (#146, shared/chatVisuals.ts)
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)

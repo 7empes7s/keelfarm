@@ -1,5 +1,6 @@
 import type { Where } from '../../client/src/ui/consoleNavRules';
 import { expect, test } from '../helpers';
+import { telegramViews } from '../telegramViews';
 import { checkScreens, consoleSections, dialog, office, OFFICE, officeSection, pocketSection, type Screen, type View } from './helpers';
 
 // Settings, the console and their sections: pocket mode's Settings and the 3D office's manager's console (#102).
@@ -44,7 +45,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

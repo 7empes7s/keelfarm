@@ -83,6 +83,7 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `console`: the console's tabs, side menus and search | ✓ | ✓ | ✓ |
 | `charter`: the charter page and its numbers | ✓ | ✓ | ✓ |
 | `costs`: Mission control's cost insights and cards | ✓ | ✓ | ✓ |
+| `agent-chat`: an agent's chat, chat mode and reactions | ✓ | ✓ | ✓ |
 | `info`: every screen's ⓘ | ✓ | ✓ | |
 | `switch`: the 2D office | | | ✓ |
 

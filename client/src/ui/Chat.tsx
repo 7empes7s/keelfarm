@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID, type PhoneMessage } from '../../../shared/types';
@@ -17,6 +17,7 @@ import { LiveBubble } from './ChatLive';
 import { DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
 import { DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
+import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
@@ -28,6 +29,7 @@ import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
 import { useCeoDraft } from './goTo';
 import { hasVersionsSheet } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
+import { ChatTextPill, useChatPinch } from './ChatZoom';
 import { Bubble } from './ChatBubble';
 import { attempt, Avatar } from './phoneParts';
 
@@ -75,8 +77,11 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
   const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
   const scroller = useRef<HTMLDivElement>(null);
+  const [logWrap, setLogWrap] = useState<HTMLDivElement | null>(null);
+  useChatPinch(logWrap, useCallback(() => scroller.current, []));
   const form = useRef<HTMLFormElement>(null);
   const stick = useRef(true);
+  const lastTop = useRef(0);
   const opened = useRef(false);
 
   const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
@@ -260,7 +265,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         </div>
         <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} />
       </div>
-      <div className="chat-log-wrap">
+      <div className="chat-log-wrap" ref={setLogWrap}>
+        <ChatTextPill />
         <div
           className="chat-log"
           ref={scroller}
@@ -268,7 +274,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           tabIndex={0}
           onScroll={(e) => {
             const el = e.currentTarget;
-            const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            const end = keepsFollowing(stick.current, el.scrollTop, lastTop.current, el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+            lastTop.current = el.scrollTop;
             stick.current = end;
             if (end === atEnd) return;
             setAtEnd(end);
