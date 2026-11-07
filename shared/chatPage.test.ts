@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchoredTop, CHAT_KEEP, CHAT_PAGE, CHAT_PAGE_MAX, LOAD_OLDER_PX, pageBefore, removal, removeMessage, wantsOlder, withNewest, withOlder } from './chatPage.ts';
+import { anchoredTop, CHAT_KEEP, CHAT_PAGE, CHAT_PAGE_MAX, firstUnread, LOAD_OLDER_PX, pageBefore, removal, removeMessage, wantsOlder, withNewest, withOlder } from './chatPage.ts';
 import type { PhoneMessage } from './types.ts';
 
 const m = (id: number, from: PhoneMessage['from'] = 'manager', extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id, from, text: `#${id}`, at: id, ...extra });
@@ -63,6 +63,14 @@ describe('scrolling up for older pages', () => {
     expect(wantsOlder(LOAD_OLDER_PX + 1, { older: true, loading: false })).toBe(false);
     expect(wantsOlder(0, { older: true, loading: true })).toBe(false);
     expect(wantsOlder(0, { older: false, loading: false })).toBe(false);
+  });
+
+  it('opens on the unread divider only when the unread start on the loaded page', () => {
+    const page = thread(500).slice(-CHAT_PAGE); // ids 461..500, the CEO's on even ids
+    expect(firstUnread(page, 470, true)).toBe(472);
+    expect(firstUnread(page, 0, true)).toBeNull(); // all unread: they begin on an older page
+    expect(firstUnread(page, 0, false)).toBe(462);
+    expect(firstUnread(page, 500, true)).toBeNull();
   });
 });
 

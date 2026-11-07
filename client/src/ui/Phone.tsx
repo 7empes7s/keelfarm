@@ -41,6 +41,7 @@ import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { BubbleTools, DeliveryTick, ReplayButton } from './ChatBubbleParts';
 import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
+import { firstUnread as firstUnreadId } from '../../../shared/chatPage';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -513,7 +514,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
-  const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
+  const [firstUnread] = useState(() => firstUnreadId(messages, readAt, chatOlder));
   const scroller = useRef<HTMLDivElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const stick = useRef(true);

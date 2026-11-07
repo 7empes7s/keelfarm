@@ -47,6 +47,18 @@ export const anchoredTop = (before: { top: number; height: number }, height: num
 /** Whether the list is close enough to its top to load the page before. */
 export const wantsOlder = (top: number, s: { older: boolean; loading: boolean }) => s.older && !s.loading && top < LOAD_OLDER_PX;
 
+/**
+ * The CEO's first unread message, where the "New messages" divider goes when the chat opens: none while the unread
+ * may begin on a page not loaded yet (no read CEO message before it and `older`), so the chat opens at the end
+ * instead of at its top, which would pull in the page before.
+ */
+export function firstUnread(messages: readonly PhoneMessage[], readAt: number, older: boolean): number | null {
+  const fromCeo = (m: PhoneMessage) => m.from === 'ceo' && !m.requestId;
+  const i = messages.findIndex((m) => fromCeo(m) && m.at > readAt);
+  if (i < 0 || (older && !messages.slice(0, i).some(fromCeo))) return null;
+  return messages[i].id;
+}
+
 /** What removing a message does: the manager's own and the office's notices are deleted, the CEO's only hidden. */
 export function removal(m: Pick<PhoneMessage, 'from'>): 'delete' | 'hide' {
   return m.from === 'ceo' ? 'hide' : 'delete';

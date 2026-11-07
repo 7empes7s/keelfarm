@@ -9,6 +9,10 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 test('the 500-message chat opens fast, types smoothly and loads older pages without a jump', async ({ page }) => {
   await page.goto('/?pocket=1&tab=company');
   await expect(page.locator('.pocket .pk-tab-on')).toBeVisible();
+  const pages: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/api/ceo/messages?')) pages.push(r.url());
+  });
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
@@ -21,12 +25,16 @@ test('the 500-message chat opens fast, types smoothly and loads older pages with
     return performance.now() - t0;
   });
   const log = page.locator('.chat-log');
-  expect(await log.locator('[data-msg]').count()).toBeLessThanOrEqual(CHAT_PAGE);
+  // The latest page (plus what arrived live since), and no older page fetched on opening.
+  expect(await log.locator('[data-msg]').count()).toBeLessThan(CHAT_PAGE + 10);
+  await page.waitForTimeout(500);
+  expect(pages, 'older pages fetched on opening').toEqual([]);
   expect(openMs, 'opening the chat').toBeLessThan(500);
 
   // Typing with the reply bar open: the slowest key's interaction stays under 200 ms.
-  await log.locator('.bubble-row').last().hover();
-  await log.locator('.bubble-row').last().getByRole('button', { name: 'Reply to this message' }).click();
+  // A touch screen hides the hover buttons until they have focus (hold or swipe there): the keyboard's way in.
+  await log.locator('.bubble-row').last().getByRole('button', { name: 'Reply to this message' }).focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.chat-reply')).toBeVisible();
   await page.evaluate(() => {
     const w = window as unknown as { slowest: number };
