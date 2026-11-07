@@ -10,7 +10,7 @@ export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
   { id: 'hire', label: 'A team change waits for my decision' },
   { id: 'agentError', label: 'Someone is stuck in an error for over 10 minutes' },
   { id: 'usage', label: "Claude's usage limit pauses or paces the office" },
-  { id: 'memory', label: 'Work waits for memory, or a session was stopped for it' },
+  { id: 'memory', label: 'Work has waited long for memory (hourly at most), or lost its session to it' },
   { id: 'merge', label: 'Every merge' },
   { id: 'decisions', label: 'A daily digest of decisions waiting on me' },
 ];

@@ -54,6 +54,13 @@ describe('Telegram in the office', () => {
     (swarm as unknown as Internals).postMessage('ceo', 'Mirrored.');
     expect(swarm.snapshot().messages.at(-1)?.telegram).toBe('out');
 
+    // The CEO corrects its mirrored message (#125): struck through on the phone, edited in place on Telegram.
+    await until(() => sent().some((l) => l.includes('Mirrored.')));
+    expect(await tools.call('edit_message', { text: 'Mirrored, edited.', reason: 'typo' })).toMatch(/^Edited #\d+/);
+    expect(swarm.snapshot().messages.at(-1)).toMatchObject({ text: 'Mirrored, edited.', versions: [{ text: 'Mirrored.', reason: 'typo' }], edited: expect.any(Number) });
+    await until(() => logs.some((l) => /^✈️ demo Telegram would edit message \d+: .*Mirrored, edited\./.test(l)));
+    expect(await tools.call('edit_message', { id: 99_999, text: 'x' })).toMatch(/^Refused: #99999 isn't one of your messages here\. Your latest: #\d+/);
+
     expect(await tools.call('send_telegram', { text: 'The plan: ship it.' })).toBe("Sent to the manager's Telegram.");
     await until(() => sent().some((l) => l.includes('The plan: ship it.')));
     expect(JSON.stringify(swarm.snapshot())).not.toContain('SECRET');

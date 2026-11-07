@@ -674,8 +674,16 @@ export interface PhoneMessage {
   steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
-  edited?: number; // the manager's: when they last edited it
+  edited?: number; // when its sender last edited it (#125: anyone's, shared/messageEdits.ts)
+  versions?: MessageVersion[]; // its earlier texts, oldest first (at most MESSAGE_VERSIONS_MAX with the current one)
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+}
+
+/** An earlier text of an edited message: when it was written, and why its sender replaced it (the CEO's edit_message). */
+export interface MessageVersion {
+  text: string;
+  at: number;
+  reason?: string;
 }
 
 /** A system notice in the chat (#138), shown as a card headed by the message's text: the cleaned output behind it, and links to what it's about. */

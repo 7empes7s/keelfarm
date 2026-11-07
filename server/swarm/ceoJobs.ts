@@ -663,7 +663,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined).then((why) => {
+      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined, id).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }
@@ -680,7 +680,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     return m;
   }
 
-  private refContext(): RefContext {
+  protected refContext(): RefContext {
     return {
       floors: this.state.repos.map((r) => ({ floor: r.floor, repoId: r.id })),
       agents: this.state.agents.filter((a) => a.role !== 'ceo').map((a) => ({ id: a.id, name: a.name })),

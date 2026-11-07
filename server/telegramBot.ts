@@ -215,13 +215,15 @@ export class TelegramBot {
     return this.view();
   }
 
-  /** A message to the manager's chat, split at Telegram's limit (buttons under the last piece). Null when it arrived, else why not. */
-  async send(text: string, keyboard?: TgButton[][]): Promise<string | null> {
+  /** A message to the manager's chat, split at Telegram's limit (buttons under the last piece). Null when it arrived, else why not. `key`: the phone message it copies, for editSent. */
+  async send(text: string, keyboard?: TgButton[][], key?: number): Promise<string | null> {
     const s = this.secrets;
     if (!s || s.chatId === undefined) return 'Telegram isn\'t linked';
     if (!this.deps.on()) return 'Telegram is off in Settings';
     const parts = splitMessage(text);
     let why: string | null = null;
+    const pieces: { id: number; text: string }[] = [];
+    if (key !== undefined) this.remember(key, pieces);
     for (const [i, part] of parts.entries()) {
       const buttons = i === parts.length - 1 && keyboard?.length ? keyboard : undefined;
       try {
@@ -233,6 +235,7 @@ export class TelegramBot {
         })) as { message_id?: unknown } | null;
         const id = Number(r?.message_id) || 0;
         this.lastSentId = id;
+        pieces.push({ id, text: part });
         if (buttons) this.lastButtons = { messageId: id, rows: buttons };
       } catch (err) {
         why = err instanceof TelegramCallError ? err.message : "couldn't reach Telegram";
@@ -243,6 +246,33 @@ export class TelegramBot {
     if (why) this.deps.log(`telegram: a message didn't go out: ${why}`);
     this.deps.changed();
     return why;
+  }
+
+  /** What each of the latest phone messages went out as here (#125), for editSent; this run of the office only. */
+  private sent = new Map<number, { id: number; text: string }[]>();
+  private remember(key: number, pieces: { id: number; text: string }[]) {
+    this.sent.set(key, pieces);
+    if (this.sent.size > 50) this.sent.delete(this.sent.keys().next().value!);
+  }
+
+  /** The copy of phone message `key` edited in place (editMessageText), piece by piece; pieces past the old ones go out new. Null when done, else why not. */
+  async editSent(key: number, text: string): Promise<string | null> {
+    const s = this.secrets;
+    const pieces = this.sent.get(key);
+    if (!s || s.chatId === undefined || !pieces?.length) return 'its Telegram copy is from before the office restarted';
+    const parts = splitMessage(text);
+    try {
+      for (const [i, p] of pieces.entries()) {
+        const next = parts[i] ?? '…';
+        if (next === p.text) continue; // Telegram refuses an edit that changes nothing
+        const buttons = this.lastButtons?.messageId === p.id ? { reply_markup: { inline_keyboard: this.lastButtons.rows } } : {};
+        await this.deps.api.call(s.token, 'editMessageText', { chat_id: s.chatId, message_id: p.id, text: next, link_preview_options: { is_disabled: true }, ...buttons });
+        p.text = next;
+      }
+    } catch (err) {
+      return err instanceof TelegramCallError ? err.message : "couldn't reach Telegram";
+    }
+    return parts.length > pieces.length ? this.send(parts.slice(pieces.length).join('\n')) : null;
   }
 
   /** Stops the long poll (shutdown, or the token is removed). */
