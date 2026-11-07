@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanRefPath, parseRefs, refParts, refsLine, refsMarkdown, type RefContext } from './chatRefs.ts';
+import { cleanRefPath, parseRefs, refParts, refsLine, refsMarkdown, soleRef, type RefContext } from './chatRefs.ts';
 
 const files = new Set(['o/web:portal/lib/insights.ts', 'o/web:docs/my notes.md', 'o/api:README.md']);
 const ctx: RefContext = {
@@ -98,5 +98,20 @@ describe('rendering refs', () => {
   it('spells them out for the CEO', () => {
     expect(refsLine(text, refs)).toBe('(Refs: @Ada = agent a1; floor 1 #3 = o/web#3)');
     expect(refsLine('hi', [])).toBe('');
+  });
+});
+
+describe('soleRef', () => {
+  it('reads a cell that is a ref', () => {
+    expect(soleRef('floor 3', ctx)).toMatchObject({ kind: 'floor', repoId: 'o/api' });
+    expect(soleRef(' #12 ', { ...ctx, floors: [ctx.floors[0]] })).toMatchObject({ kind: 'issue', repoId: 'o/web', number: 12 });
+    expect(soleRef('floor 3 #12', ctx)).toMatchObject({ kind: 'issue', repoId: 'o/api', number: 12 });
+  });
+
+  it('keeps free text that only mentions a floor as text', () => {
+    expect(soleRef('Slow builds on floor 3', ctx)).toBeNull();
+    expect(soleRef('floor 3 and floor 1', ctx)).toBeNull();
+    expect(soleRef('Retry #12 later', { ...ctx, floors: [ctx.floors[0]] })).toBeNull();
+    expect(soleRef('floor 9', ctx)).toBeNull();
   });
 });

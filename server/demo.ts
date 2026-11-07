@@ -1301,6 +1301,26 @@ export function answerReply({ quote, reply }: { quote: string; reply: string }):
   return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
 }
 
+/** The demo CEO's answer to "where did the money go?": a dashboard of live sources, so it shows the demo's own costs. */
+export function demoMoneyAnswer(): string {
+  const dashboard = {
+    title: 'This week’s spend',
+    tiles: [
+      { label: 'Spend', source: 'costs:7d:total' },
+      { label: 'Per merge', source: 'costs:7d:costPerMerge' },
+      { label: 'Waste', source: 'costs:7d:waste' },
+      { label: 'Merges', source: 'costs:7d:merges' },
+    ],
+    charts: [
+      { type: 'bar', title: 'By floor', source: 'costs:7d:byFloor' },
+      { type: 'donut', title: 'By kind of work', source: 'costs:7d:byKind' },
+    ],
+  };
+  const trend = { type: 'line', title: 'Cost per merge, day by day', source: 'costs:7d:perMerge' };
+  const waste = { title: 'Waste by cause', columns: ['Cause'], source: 'costs:7d:wasteByCause' };
+  return ["Here's where this week's money went: by floor, by kind of work, the waste and the cost per merge. Tap a floor to open it.", '', '```dashboard', JSON.stringify(dashboard), '```', '', '```chart', JSON.stringify(trend), '```', '', '```table', JSON.stringify(waste), '```'].join('\n');
+}
+
 /** A floor in company_status, as far as the demo CEO reads it. */
 export interface DemoFloor {
   floor: number;
@@ -1525,6 +1545,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (awake) return awake;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
+      // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
+      if (/\b(money|spend|spent|spending|costs?)\b/i.test(text)) return demoMoneyAnswer();
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
       if (/\btelegram\b/i.test(text)) {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
