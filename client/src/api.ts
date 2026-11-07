@@ -135,6 +135,7 @@ export const api = {
   setTaskEffort: (kind: TaskKind, effort: EffortLevel | '') => call('PATCH', '/api/settings', { taskEffort: { [kind]: effort } }),
   /** Tools & skills: scan the manager's Claude Code setup again. */
   refreshTools: () => call('POST', '/api/tools/refresh'),
+  refreshModels: () => call('POST', '/api/models/refresh'),
   /** One switch for 'everyone', 'ceo' or an agent's id; on null follows Everyone. */
   switchTool: (scope: string, id: string, on: boolean | null) => call('POST', '/api/tools/switch', { scope, id, on }),
   updateOffice: async (action: 'now' | 'later') => {

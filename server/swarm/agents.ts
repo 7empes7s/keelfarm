@@ -6,6 +6,8 @@ import { redact } from '../cloud.ts';
 import { HttpError } from '../httpError.ts';
 import { issueTaken } from '../issueClaims.ts';
 import { cliLabel, isCli } from '../clis.ts';
+import { MODELS_FILE } from '../config.ts';
+import { CATALOG_MS, loadCatalog, saveCatalog } from '../modelCatalog.ts';
 import { machineName } from '../machines.ts';
 import type { SessionKind } from '../health.ts';
 import { apply as applyLedger } from '../ledger.ts';
@@ -667,6 +669,25 @@ export abstract class SwarmAgents extends SwarmMerge {
     }
     this.broadcast({ type: 'tooling', tooling: this.tooling });
     return this.tooling;
+  }
+
+  /** The model catalog at startup: the cached one at once, then read again now and every day (#198). */
+  protected async startModels() {
+    this.models = (await loadCatalog(MODELS_FILE)) ?? this.models;
+    void this.refreshModels();
+    setInterval(() => void this.refreshModels(), CATALOG_MS);
+  }
+
+  /** Read the coding agents' models again (server/modelCatalog.ts) and cache them; one read at a time. */
+  async refreshModels() {
+    if (this.models.refreshing) return this.models;
+    this.models = { ...this.models, refreshing: true };
+    this.broadcast({ type: 'models', models: this.models });
+    const read = await this.backend.modelCatalog().catch(() => null);
+    this.models = read ?? { ...this.models, refreshing: false };
+    this.broadcast({ type: 'models', models: this.models });
+    if (read) void saveCatalog(MODELS_FILE, read).catch((err) => console.warn('could not save the model catalog', err));
+    return this.models;
   }
 
   /** One Tools & skills switch: scope 'everyone', 'ceo', a role profile ('build', 'qa') or an agent's id; on null follows the scope above. */
