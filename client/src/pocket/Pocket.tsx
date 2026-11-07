@@ -456,7 +456,7 @@ export default function Pocket() {
   const reopen = (p: PanelEntry) => (p.slot === 'main' ? setSettings(p.value as ConsoleSection) : useStore.getState().openOverlay(p.value as Overlay));
   // The rail and links to a page bring the page to the front: the console closes, and a pane covering the page too.
   const show = (t: PocketTab) => {
-    leaveFullFor(wide);
+    if (full) leaveFullFor(wide);
     setTab(t);
     setSettings(null);
     const p = paneHost.current;
@@ -464,7 +464,7 @@ export default function Pocket() {
   };
   // The rail's Console toggles it; from the full chat it shows it (#242).
   const railConsole = () => {
-    leaveFullFor(wide);
+    if (full) leaveFullFor(wide);
     if (!settings) setSettings('menu');
     else if (top?.slot === 'main' && !full) setSettings(null);
     else panels.focus('console');
