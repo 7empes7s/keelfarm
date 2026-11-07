@@ -44,6 +44,18 @@ async function openConsole(page: Page, where: Where) {
   return page.getByRole('dialog', { name: /Manager's console/ });
 }
 
+/** The scroll boxes of panels and sheets (client/src/overflow.css's list). */
+const SCROLL_BOXES = '.panel-body, .tab-body, .sheet-body, .pk-main, .cn-side, .cn-pane, .aw-side, .aw-sheet .aw-details, .chat-sheet, .phone-scroll';
+
+/** Each visible panel or sheet scroll box in `root` (or `root` itself) whose content is wider than it. */
+function scrollBoxProblems(root: Locator) {
+  return root.evaluate((el, sel) => {
+    const boxes = [...(el.matches(sel) ? [el] : []), ...el.querySelectorAll(sel)].filter((b) => b.checkVisibility());
+    if (!boxes.length) return ['no panel or sheet scroll box found'];
+    return boxes.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => `${b.tagName.toLowerCase()}.${[...b.classList].join('.')} is ${b.scrollWidth}px wide inside ${b.clientWidth}px`);
+  }, SCROLL_BOXES);
+}
+
 const starts = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
 
 /** Opens a section: a top tab then its side menu, or on a phone pocket mode's list (back to it first). */
@@ -104,7 +116,7 @@ for (const [where, widths] of [
               await openSection(root, g.label, s.label);
               await page.waitForTimeout(300); // lazy sections and settled layout
               const at = `${g.label} › ${s.label}`;
-              for (const p of await overflowProblems(root)) problems.push(`${at}: ${p}`);
+              for (const p of [...(await scrollBoxProblems(root)), ...(await overflowProblems(root))]) problems.push(`${at}: ${p}`);
               if (width >= 800) continue;
               const moved = await swipeSideways(page, root.locator('.panel-body').first());
               if (moved > 1) problems.push(`${at}: a sideways swipe moved the section ${Math.round(moved)}px`);
@@ -113,7 +125,7 @@ for (const [where, widths] of [
           if (where === 'pocket') {
             await openSection(root, 'Company', 'Charter');
             await root.getByRole('button', { name: '✏️ Edit', exact: true }).click();
-            for (const p of await overflowProblems(root)) problems.push(`Charter editor: ${p}`);
+            for (const p of [...(await scrollBoxProblems(root)), ...(await overflowProblems(root))]) problems.push(`Charter editor: ${p}`);
           }
           expect(problems).toEqual([]);
         } finally {
