@@ -80,7 +80,8 @@ export function demoLabRunner(): LabRunner {
 /** A fake build or QA session on the test lab asks it for screenshots a few seconds in, the way a real one would. */
 export function withLab(opts: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
   const lab = opts.office;
-  if (!lab || (opts.task !== 'issue' && opts.task !== 'qa')) return cb;
+  // Builds of odd issues skip it: their screenshot is one without an address (demo.ts issueScript, #230).
+  if (!lab || (opts.task !== 'issue' && opts.task !== 'qa') || (opts.task === 'issue' && Number(opts.prompt.match(/#(\d+):/)?.[1] ?? 0) % 2)) return cb;
   setTimeout(() => {
     cb.log([{ kind: 'tool', tool: 'mcp__office__lab_screenshot', text: '⏺ 🧪 lab_screenshot 390, 1280' }]);
     void lab.call('lab_screenshot', { preview: false, url: 'http://localhost:5173/', viewports: [390, 1280] }).then((r) => cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0]}` }]));

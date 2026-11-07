@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CEILING: Record<string, number> = {
-  'styles.css': 300,
+  'styles.css': 291,
   'pocket/pocket.css': 0,
   'ui/games/games.css': 10,
   'ui/timelapse.css': 13,
@@ -15,6 +15,7 @@ const CEILING: Record<string, number> = {
   'ui/chatRefs.css': 6,
   'ui/experiments.css': 14,
   'ui/finder.css': 0,
+  'ui/details.css': 0,
 };
 
 /** Hex colours and rgb()/rgba() calls, comments left out. */

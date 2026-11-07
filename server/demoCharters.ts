@@ -43,9 +43,15 @@ const CHARTERS: Record<string, DemoCharter> = {
         { id: 'O2', outcome: 'Self-describing', measure: 'openapi.json matches every endpoint' },
         { id: 'O3', outcome: 'Fair to everyone', measure: 'anonymous callers are rate limited with 429 and Retry-After' },
       ],
-      standards: ['Bad input is a 400 with a message, an unknown city a 404', 'openapi.yaml changes with every endpoint change', 'The upstream weather client is mocked in tests'],
-      nonGoals: ['A web front end', 'Paid plans or API keys'],
-      focus: 'O1, O3',
+      // long unbroken paths, URLs and branch names, as real charters have them: no screen may drag sideways (#149)
+      standards: [
+        'Bad input is a 400 with a message, an unknown city a 404',
+        'openapi.yaml changes with every endpoint change',
+        'The upstream weather client is mocked in tests (src/upstream/__mocks__/openWeatherMapForecastClient.ts)',
+        'Errors follow https://datatracker.ietf.org/doc/html/rfc9457#name-members-of-a-problem-details-object',
+      ],
+      nonGoals: ['A web front end', 'Paid plans or API keys', 'Rewriting ~/.config/weather-api/providers/openweathermap.credentials.json'],
+      focus: 'O1, O3 (swarm/issue-42-forecast-by-city-name-with-five-day-rate-limited-cache)',
     },
   },
 };

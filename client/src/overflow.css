@@ -1,0 +1,41 @@
+/* Nothing in a panel or sheet moves sideways (#149). Long words (paths, URLs, branch names) break, buttons wrap, and
+   the boxes that scroll up and down clip sideways, so a finger can't drag one off to the right even if something gets
+   too wide; e2e/overflow.spec.ts and layout.spec.ts still find the overflow itself. Tables, code and chip strips
+   scroll sideways in boxes of their own. Loaded after styles.css and design.css, over each box's own overflow. */
+
+.panel,
+.sheet,
+.pocket {
+  overflow-wrap: break-word;
+}
+.panel .btn,
+.sheet .btn,
+.pocket .btn {
+  white-space: normal;
+}
+/* .panel itself stays overflow: hidden: clipped, it would stop being a scroll container and grow to its content */
+.panel-body,
+.tab-body,
+.sheet-body,
+.pk-main,
+.cn-side,
+.cn-pane,
+.aw-side,
+.aw-sheet .aw-details,
+.chat-sheet,
+.phone-scroll {
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+}
+
+/* a chat bubble shrinks beside its hover tools, never pushing the row past the log */
+.bubble-row > .bubble {
+  min-width: 0;
+}
+.bubble-tools {
+  flex: none;
+}
+/* the look preview's canvas is its style's size: the border goes outside it */
+.look-preview {
+  box-sizing: content-box;
+}

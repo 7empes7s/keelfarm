@@ -478,8 +478,8 @@ function CompareView({
 let lastCompare = false;
 
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). */
-export function AppViewer({ repoId, pr, qa, merged }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } }) {
+/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). `path`: at that page (#230). */
+export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
   const qaRecords = useStore((s) => s.qa);
@@ -501,6 +501,12 @@ export function AppViewer({ repoId, pr, qa, merged }: { repoId: string; pr?: num
   }, [repoId, pr, merged]);
   useWatch(repoId, channel);
   const changes = usePrChanges(repo, channel, qa);
+  // An agent's browser address (#230): a PR opens at that page; main does below (`at`).
+  const { openPage } = changes;
+  useEffect(() => {
+    if (path && channel != null && channel === pr) openPage(path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening, not each time openPage is made anew
+  }, [path, channel, pr]);
 
   // Start with focus on the toolbar, so Esc closes the panel until the app itself is clicked.
   useEffect(() => {
@@ -559,7 +565,7 @@ export function AppViewer({ repoId, pr, qa, merged }: { repoId: string; pr?: num
     setCompare(!compare);
   };
   const toggleQa = () => changes.setOpen(!changes.open);
-  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : url); // a PR (or a merged one, on main) opens at the page to look at
+  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : path && pr == null ? atPath(url, path) : url); // a PR (or a merged one, on main) opens at the page to look at
   const held = !!current.heldBy;
   const heldWhy = held ? `@${current.heldBy} is testing in this` : undefined;
   const startStop = active ? (
