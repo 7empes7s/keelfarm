@@ -48,6 +48,12 @@ button.reaction::after {
 button.reaction {
   cursor: pointer;
 }
+/* beats styles.css's 48px thumb targets on touch screens: the ::after above already gives the 44px tap */
+html[data-touch] .reactions button.reaction {
+  min-height: 0;
+  min-width: 28px;
+  font-size: 14px;
+}
 .reaction-mine {
   background: #dfe6ff;
 }
