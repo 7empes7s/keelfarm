@@ -423,7 +423,10 @@ async function layoutProblems(root: Locator): Promise<string[]> {
           if (!hit || (hit !== x && !x.contains(hit))) out.push(`"${name}" is covered by ${hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : 'nothing'}`);
         }
         // a chat ref chip is a tag inside a sentence (WCAG 2.5.8's inline exception); its own checks are below (#100)
-        if (!x.matches('.ref-chip') && (box.width < 43.5 || box.height < 43.5)) out.push(`"${name}" is ${Math.round(box.width)}x${Math.round(box.height)}px, under 44x44`);
+        // a tapback badge is a small pill whose ::after takes the 44px tap (#193)
+        if (x.matches('.reaction')) {
+          if (box.height > 28) out.push(`tapback "${name}" is ${Math.round(box.height)}px tall, over 28`);
+        } else if (!x.matches('.ref-chip') && (box.width < 43.5 || box.height < 43.5)) out.push(`"${name}" is ${Math.round(box.width)}x${Math.round(box.height)}px, under 44x44`);
         if (x.scrollWidth > x.clientWidth + 1) out.push(`"${name}"'s label is clipped (${x.scrollWidth} > ${x.clientWidth}px)`);
       }
       return out;
