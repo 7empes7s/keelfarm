@@ -157,6 +157,9 @@ const SCREENS: Screen[] = [
   },
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
+  // ⛶ (#201): the chat full screen, then back to normal
+  { name: 'pocket chat full screen', widths: [390, 1280], open: async (page) => (await pocket(page, 'chat')).getByRole('button', { name: 'Full screen', exact: true }).click().then(() => page.locator('.pocket')),
+    tabs: ['', { name: 'normal', go: (root) => root.getByRole('button', { name: 'Leave full screen' }).click() }] },
   {
     // a CEO reply's action cards, idea card and artifact (#108), at the chat's smallest, normal and biggest text (#135)
     name: 'pocket chat cards',

@@ -44,6 +44,7 @@ import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { ChatTextPill, isPinching, lastPinchAt, useChatPinch } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
+import { togglesFull, useChatFull, useChatFullBack } from './chatFull';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -535,7 +536,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
  * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
  */
-export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null }) {
+export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean }) {
   const messages = useStore((s) => s.messages);
   const outbox = useStore((s) => s.chatOutbox);
   const readAt = useStore((s) => s.phoneReadAt);
@@ -591,6 +592,20 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   };
   const refNav = useRefNav(scroller, openFloor);
   const mention = useMentions(text, setText, () => form.current?.querySelector('textarea')?.focus());
+  const full = useChatFull((s) => s.on);
+  const box = useRef<HTMLDivElement>(null);
+  // F (Help → Controls) toggles full screen while the chat has focus and nobody is typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if (!togglesFull(e, isKey('chatFull', e.code), !!el && !!box.current?.contains(el), typing)) return;
+      e.preventDefault();
+      useChatFull.getState().toggle();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Reading the thread marks it read.
   useEffect(() => {
@@ -751,7 +766,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   };
 
   return refNav.wrap(
-    <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
+    <div ref={box} className={`phone-chat ${full ? 'chat-full' : ''} ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
         <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
           <Avatar name={ceo.name} color={ceo.color} size={28} />
@@ -759,7 +774,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         <div className="grow">
           <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
         </div>
-        <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} />
+        <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} full={fullButton} />
       </div>
       <div className="chat-log-wrap" ref={setLogWrap}>
         <ChatTextPill />
@@ -1144,6 +1159,9 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   const box = useRef<HTMLDivElement>(null);
   useDialogFocus(box);
   useBackLayer(closeOverlay);
+  // The chat full screen (#201): over the whole office, which stops drawing behind it (store.ts coversView).
+  const full = useChatFull((s) => s.on) && tab === 'chat';
+  useChatFullBack(full);
   const requests = useStore((s) => s.requests);
   const messages = useStore((s) => s.messages);
   const readAt = useStore((s) => s.phoneReadAt);
@@ -1157,15 +1175,18 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   // Keep the overlay's tab in sync so new messages know whether the chat is on screen (during a game it isn't,
   // so the CEO's texts still pop up).
   useEffect(() => {
-    openOverlay({ kind: 'phone', tab, requestId });
+    openOverlay({ kind: 'phone', tab, requestId, full });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, full]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
       if (e.defaultPrevented) return; // handled inside: a reply or a message's actions closed
-      if (e.key === 'Escape' || (!typing && isKey('phone', e.code))) {
+      if (e.key === 'Escape' && useChatFull.getState().on && where.current.tab === 'chat') {
+        e.preventDefault();
+        useChatFull.getState().set(false); // Esc leaves full screen first, then puts the phone away
+      } else if (e.key === 'Escape' || (!typing && isKey('phone', e.code))) {
         e.preventDefault();
         closeOverlay();
       }
@@ -1183,8 +1204,8 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
     ['games', '🎮', 'Games', 0],
   ];
   return (
-    <div className="overlay phone-overlay" {...backdropClose(closeOverlay)}>
-      <div className="phone ds-screen" ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
+    <div className={`overlay phone-overlay ${full ? 'phone-overlay-full' : ''}`} {...backdropClose(closeOverlay)}>
+      <div className={`phone ds-screen ${full ? 'phone-full' : ''}`} ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
         <button className="phone-x" onClick={closeOverlay} aria-label="Close">✕</button>
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>

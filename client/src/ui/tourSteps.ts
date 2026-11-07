@@ -62,6 +62,7 @@ export const TOUR: TourEntry[] = [
   { id: 'costs', tracks: ALL, title: 'Where the plan goes', text: "Mission control's costs: insights first, the priciest issues as cards and waste grouped by cause.", targets: ['costs', 'console'], tryIt: 'costs', added: 2 },
   { id: 'info', tracks: POCKET, title: 'What can I do here?', text: "Every screen's ⓘ says what you can do there, and brings back What's new.", targets: ['info'], added: 2 },
   { id: 'agent-chat', tracks: ALL, title: 'Their chat', text: "An agent's window shows 💬 Chat or ⌨ Terminal, and 💬 Chat turns chat mode on for every desk; hold a message or step to react, and 👍 👎 🤔 ⚠️ reach them after their current step.", added: 3 },
+  { id: 'chat-full', tracks: ALL, title: 'Full screen chat', text: "⛶ in the chat's header (or {key:chatFull} in the chat) gives {ceo} the whole window for long replies; Esc or Back puts everything back.", touchText: "⛶ in the chat's header gives {ceo} the whole screen, tab bar and all; ⛶ again or Back puts it back.", targets: ['chat-full', 'chat', 'phone'], added: 4 },
   { id: 'switch', tracks: ['office'], title: 'The 2D office', text: 'Press {key:switchOffice} for the office as pages, with the chat beside them: quicker for getting work done.', targets: ['switch'], added: 2 },
 
   // features still to come: their PRs replace these hooks with steps
