@@ -1,0 +1,49 @@
+/* Paste in the terminal (#278): the sign-in terminal's highlighted Paste key, and the paste sheet (PasteSheet.tsx). */
+.term-key.term-key-primary {
+  background: var(--term-key-on);
+  color: var(--ds-on-color);
+}
+.paste-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--ds-scrim);
+}
+.paste-sheet {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3) max(var(--ds-space-4), var(--ds-safe-right)) calc(var(--ds-space-4) + var(--ds-safe-bottom)) max(var(--ds-space-4), var(--ds-safe-left));
+  background: var(--ds-surface);
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-bottom: none;
+  border-radius: var(--ds-radius-xl) var(--ds-radius-xl) 0 0;
+  box-shadow: var(--ds-shadow-float);
+}
+.paste-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.paste-sheet p {
+  margin: 0;
+}
+.paste-sheet-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: calc(var(--ds-target) * 2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  font: 16px 'JetBrains Mono', Consolas, monospace; /* 16px: iOS doesn't zoom */
+  resize: vertical;
+}
+.paste-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+}
