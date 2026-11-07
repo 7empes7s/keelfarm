@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { defaultA11y, normalizeA11yPrefs, parseA11yPrefs, reducesMotion, showsShapes, type A11yPrefs } from './a11yPrefs';
+import { systemText } from './chatPinch';
 import { paletteVars, PALETTE_VAR_NAMES, type StatusLook } from './statusLook';
 
 const KEY = 'cubefarm:a11y';
@@ -13,11 +14,31 @@ const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
 /** A touch screen starts with a bigger UI scale (a11yPrefs.ts defaultA11y). */
 const touch = typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
 
+/** The phone's own text size (iOS Dynamic Type), read once: where the chat's text size starts (#135). */
+function systemBodyPx(): number | null {
+  try {
+    const probe = document.createElement('span');
+    probe.style.font = '-apple-system-body';
+    if (!probe.style.font) return null; // not an Apple browser
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    document.body.append(probe);
+    const px = parseFloat(getComputedStyle(probe).fontSize);
+    probe.remove();
+    return px;
+  } catch {
+    return null;
+  }
+}
+
+const chatTextStart = typeof document === 'undefined' || !document.body ? 100 : systemText(systemBodyPx());
+const defaults = () => defaultA11y(touch, chatTextStart);
+
 function load(): A11yPrefs {
   try {
-    return parseA11yPrefs(localStorage.getItem(KEY), touch);
+    return parseA11yPrefs(localStorage.getItem(KEY), touch, chatTextStart);
   } catch {
-    return defaultA11y(touch);
+    return defaults();
   }
 }
 
@@ -44,7 +65,7 @@ export const statusLook = (p: A11yPrefs = getA11y()): StatusLook => ({ palette: 
 
 /** Changes some settings and saves them in this browser. */
 export function setA11y(patch: Partial<A11yPrefs>) {
-  const prefs = normalizeA11yPrefs({ ...getA11y(), ...patch }, defaultA11y(touch));
+  const prefs = normalizeA11yPrefs({ ...getA11y(), ...patch }, defaults());
   try {
     localStorage.setItem(KEY, JSON.stringify(prefs));
   } catch {
@@ -53,7 +74,7 @@ export function setA11y(patch: Partial<A11yPrefs>) {
   useA11y.setState({ prefs });
 }
 
-export const resetA11y = () => setA11y(defaultA11y(touch));
+export const resetA11y = () => setA11y(defaults());
 
 // ---------- the page ----------
 
@@ -75,6 +96,14 @@ function applyToPage({ prefs, systemReduced }: A11yState) {
   flag('data-ui-scale', prefs.uiScale !== 100);
   if (prefs.uiScale === 100) root.style.removeProperty('--ui-scale');
   else root.style.setProperty('--ui-scale', String(prefs.uiScale / 100));
+  setChatTextVar(prefs.chatText);
+}
+
+/** The chat's text size on the page; a live pinch sets it every frame and saves it with setA11y when the fingers lift. */
+export function setChatTextVar(percent: number) {
+  const root = document.documentElement;
+  if (percent === 100) root.style.removeProperty('--chat-text');
+  else root.style.setProperty('--chat-text', String(percent / 100));
 }
 
 if (typeof window !== 'undefined') {
@@ -87,7 +116,7 @@ if (typeof window !== 'undefined') {
   }
   // Another tab changed the settings.
   window.addEventListener('storage', (e) => {
-    if (e.key === KEY) useA11y.setState({ prefs: parseA11yPrefs(e.newValue, touch) });
+    if (e.key === KEY) useA11y.setState({ prefs: parseA11yPrefs(e.newValue, touch, chatTextStart) });
   });
   Object.defineProperty(window, '__swarmA11y', {
     configurable: true,

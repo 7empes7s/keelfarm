@@ -13,6 +13,7 @@ import type { EmptyKind } from './emptyStates';
 import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
+import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
 
 /** Who has the card; "QA" while they're testing it. */
@@ -276,6 +277,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         </button>
       </div>
       {repo.syncError && <div className="term-error">⚠️ {repo.syncError}</div>}
+      <CiOutageBanner repo={repo} />
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
       <FloorBuilds repoId={repo.id} />
 

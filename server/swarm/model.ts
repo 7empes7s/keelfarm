@@ -1,6 +1,7 @@
 // The Swarm's persisted shapes, runtimes and constants, shared by its layers (server/swarm/*.ts).
 import path from 'node:path';
 import type { SessionHandle } from '../agentRunner.ts';
+import type { ChatLog } from '../../shared/agentChat.ts';
 import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
@@ -74,6 +75,15 @@ export interface PersistedRepo {
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
+  ciOutage?: CiOutageState | null; // GitHub won't run its checks (#191)
+}
+
+/** A floor's CI outage (#191): why, since when, the last probe re-run, and when a run was last seen really starting. */
+interface CiOutageState {
+  reason: string;
+  since: number;
+  probeAt: number | null;
+  back: number | null;
 }
 
 export interface PersistedAgent {
@@ -135,7 +145,9 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
+  labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
+  ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */
@@ -177,6 +189,7 @@ export interface Persisted {
   phoneReadAt: number;
   notices: NoticeView[]; // the notification centre (shared/notices.ts)
   prLimits: number; // the PR budgets (PR_LIMITS_VERSION) needs-human records were judged by
+  outageReleased: boolean; // PRs a CI outage made needs-human before #191 went back to the merge gate
   ops: OpsHistory; // mission control's rolling week of merges, QA verdicts, check runs and costs
   held: HeldIssue[];
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
@@ -205,6 +218,7 @@ export interface AgentRuntime {
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
   blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
+  chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }
 
 export interface RepoRuntime {

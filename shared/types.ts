@@ -10,6 +10,7 @@ import type { TaskKind } from './costs.ts';
 import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ChatAction } from './ceoActions.ts';
+import type { ChatVisual } from './chatVisuals.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { AgentQuestion } from './questions.ts';
@@ -25,6 +26,7 @@ import type { Conversation } from './conversations.ts';
 import type { MemoryNote } from './ceoMemory.ts';
 import type { TestLabSettings, TestLabView } from './testLab.ts';
 import type { EveryProject, FloorPracticeView } from './practices.ts';
+import type { ChatItem } from './agentChat.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -77,7 +79,7 @@ export interface PullInfo {
   checks: 'pending' | 'passing' | 'failing' | 'none';
   headSha: string;
   mergeState: string; // GitHub's mergeStateStatus: CLEAN | BEHIND | BLOCKED | DIRTY | UNSTABLE | DRAFT | UNKNOWN …
-  failedChecks: { name: string; url: string | null }[];
+  failedChecks: { name: string; url: string | null; neverStarted?: boolean }[]; // neverStarted: GitHub ended it within seconds without running it (an outage, #191)
   pendingChecks: string[];
   issueCreatedAt?: string | null; // when the issue it closes was filed, as far as the office knows (the whiteboard's issue → merge time)
   /** GitHub's check runs on the head commit once all have finished: how long they took (first start to last finish) and when they finished. */
@@ -122,6 +124,14 @@ export interface RepoView extends FloorPracticeView {
   previewConfig: PreviewConfig;
   preview: PreviewView;
   charter: CharterView; // the rest of the floor's charter (#48); `mission` above is its mission
+  ciOutage?: CiOutageView | null; // GitHub won't run the floor's checks: QA-passed PRs wait for it, not for fixes (#191)
+}
+
+/** A floor's CI outage (#191): why, since when, and the QA-passed PRs parked until CI runs again. */
+interface CiOutageView {
+  reason: string;
+  since: number;
+  parked: number[];
 }
 
 /**
@@ -483,8 +493,11 @@ export interface TelegramView {
   linked: boolean; // the manager pressed Start in their chat
   chat: string; // that chat's first name, for "Linked to …"
   linking: boolean; // a Start link is waiting to be pressed
-  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages
+  on: boolean; // Settings' Telegram switch: off, nothing is read, retried or sent; the token and chat are kept
+  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages ('off' while there's no token or the switch is off)
   error: string; // why the last read failed, while retrying
+  okAt: number | null; // when reading last worked
+  advice: string; // what to check after repeated failures
   last: NotifyHealth | null; // its last send
 }
 
@@ -675,6 +688,7 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+  visuals?: ChatVisual[]; // the CEO's charts, tables and dashboards (#146, shared/chatVisuals.ts)
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
@@ -842,6 +856,7 @@ export type ServerEvent =
   | { type: 'logs'; tails: Record<string, LogLine[]>; catchUp?: boolean }
   /** The latest line worth listing of agents it doesn't watch, for the workers list. */
   | { type: 'latest'; lines: Record<string, LogLine> }
+  | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean } // chat items (#120) of the agent windows a tab has open; catchUp replaces
   | { type: 'screen'; agentId: string; url: string | null; at: number }
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }

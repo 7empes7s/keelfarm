@@ -65,6 +65,8 @@ export interface Backend {
   failedRunLog(fullName: string, runId: string): Promise<string>;
   /** Re-run the failed jobs of these GitHub Actions runs. */
   rerunFailedJobs(fullName: string, runIds: number[]): Promise<void>;
+  /** The annotations' messages on these failed checks' jobs (from their log URLs), e.g. GitHub saying why it wouldn't run them (#191). */
+  checkAnnotations(fullName: string, urls: string[]): Promise<string[]>;
   closePull(fullName: string, number: number): Promise<void>;
   prForBranch(fullName: string, branch: string): Promise<{ number: number; url: string } | null>;
   prDetails(fullName: string, number: number): Promise<github.PrDetails>;
@@ -164,8 +166,12 @@ export interface Backend {
   demoCharter?(fullName: string): DemoCharter;
   /** The demo only: an update the preflight held back (#138), so a fresh demo office's chat shows its card. */
   demoHeldUpdate?(): LastUpdate;
+  /** The demo only: open PRs a CI outage holds (#191), which a fresh demo office starts with as QA-passed and parked. */
+  demoParked?(): { fullName: string; prNumber: number }[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
+  /** The demo opens without the setup wizard or the tour (config.ts demoNoTour), for QA's and tests' browsers. */
+  demoNoTour?: boolean;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
   seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */
@@ -245,6 +251,7 @@ export const realBackend: Backend = {
   fileHistory: (fullName) => workspace.fileHistory(fullName),
   failedRunLog: github.failedRunLog,
   rerunFailedJobs: github.rerunFailedJobs,
+  checkAnnotations: github.checkAnnotations,
   closePull: github.closePull,
   prForBranch: github.prForBranch,
   prDetails: github.prDetails,

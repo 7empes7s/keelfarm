@@ -180,6 +180,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
             qaPassRate: nums?.qaPass ?? null,
             qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
             qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
+            qaLabErrors: nums?.qaLabErrors ?? 0,
           },
           spend: floorSpend(this.spend.ledger.all(), r.id, Date.now()),
           capacity: {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LogEntry, SessionOptions, SessionResult } from './agentRunner.ts';
 import { demoPrompts } from './demoPrompts.ts';
-import { answerReply, createDemoBackend, demoGrow, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { answerReply, createDemoBackend, demoMoneyAnswer, demoGrow, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
 import { demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { parseRefs } from '../shared/chatRefs.ts';
 import { demoPastWeek } from './opsSample.ts';
@@ -51,6 +51,8 @@ describe("the demo's mission control", () => {
     expect(v.floors[0].ciMs).toBeGreaterThan(2 * 60_000);
     expect(v.floors[0].qaRoundsPerMerge).toBeGreaterThanOrEqual(1);
     expect(v.floors[0].qaFirstPass).toBeLessThan(1);
+    expect(h.qa.filter((q) => q[6]).length).toBe(1); // one lab-error round (#189)
+    expect(v.floors[0].qaLabErrors).toBe(1);
     expect(v.total.leadMs).toBeGreaterThan(20 * 60_000);
     expect(v.ceoCostToday).toBeGreaterThan(0);
     expect(v.total.spark.some((n) => n > 0)).toBe(true);
@@ -182,5 +184,15 @@ describe("the demo CEO's office refs", () => {
       hasFile: (repo, path) => demoRepoFile(repo, path) !== null,
     });
     expect(refs.map((r) => (r.kind === 'agent' && r.terminal ? 'terminal' : r.kind === 'preview' && r.number ? 'pr-preview' : r.kind))).toEqual(['floor', 'agent', 'terminal', 'issue', 'file', 'issue', 'qa', 'pr-preview', 'preview']);
+  });
+});
+
+describe('the demo CEO on money (#146)', () => {
+  it("parses the demo CEO's money answer into a live dashboard, a trend chart and a table", () => {
+    const p = parseCeoMessage(demoMoneyAnswer());
+    expect(p.visuals?.map((v) => v.kind)).toEqual(['dashboard', 'chart', 'table']);
+    const d = p.visuals![0];
+    expect(d.kind === 'dashboard' && d.tiles.map((t) => t.source)).toEqual(['costs:7d:total', 'costs:7d:costPerMerge', 'costs:7d:waste', 'costs:7d:merges']);
+    expect(p.text).not.toContain('{');
   });
 });

@@ -10,7 +10,7 @@ import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
 import type { ServerEvent } from '../shared/types.ts';
-import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
+import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
@@ -36,7 +36,7 @@ if (PUBLIC_DEMO) {
   }
 }
 
-const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
+const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE, DEMO_NO_TOUR) : realBackend);
 if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });
@@ -237,6 +237,7 @@ app.post('/api/agents/:id/assign', route((req) => swarm.assign(String(req.params
 app.post('/api/agents/:id/stop', route((req) => swarm.stopAgent(String(req.params.id))));
 app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.params.id))));
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
+app.post('/api/agents/:id/react', route((req) => swarm.react(String(req.params.id), req.body?.itemId, req.body?.reaction)));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 // The session history (#49): a page of entries, Settings' disk-usage line, and one entry with its transcript.
@@ -335,6 +336,7 @@ app.post('/api/notify/push/report', route((req) => swarm.notifier.report(req.bod
 app.post('/api/notify/ntfy/quick', route(() => swarm.notifier.quickNtfy()));
 app.put('/api/notify/telegram', route((req) => swarm.telegram.setToken(req.body?.token)));
 app.post('/api/notify/telegram/link', route(() => swarm.telegram.link()));
+app.post('/api/notify/telegram/retry', route(() => swarm.telegram.retryNow()));
 app.delete('/api/notify/telegram', route(() => swarm.telegram.remove()));
 app.post('/api/notify/telegram/demo', route((req) => swarm.telegramDemo(req.body ?? {})));
 // The office's own update: Update now / Later

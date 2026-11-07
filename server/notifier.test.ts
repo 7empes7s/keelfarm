@@ -205,6 +205,21 @@ describe('the notifier', () => {
     // Telegram is the manager's own bot now (telegramBot.ts), not a webhook.
     await expect(n.test('telegram')).rejects.toThrow(/Link your Telegram chat first/);
   });
+
+  it('sends nothing to Telegram while its switch is off, not even a test (#126)', async () => {
+    const dir = tmpDir();
+    const sent: string[] = [];
+    const telegram = { linked: () => true, mirrors: () => false, send: async (text: string) => (sent.push(text), null), view: () => ({ set: true, bot: 'b', linked: true, chat: 'Ana', linking: false, on: false, polling: 'off' as const, error: '', okAt: null, advice: '', last: null }) };
+    let settings = notifySettings(DEFAULT_NOTIFY, { channels: { telegram: false } });
+    const n = new Notifier({ transport: { post: async () => 200 }, secretsFile: path.join(dir, 'secrets.json'), pushFile: path.join(dir, 'push.json'), settings: () => settings, broadcast: () => undefined, channelsChanged: () => undefined, log: () => undefined, telegram });
+    n.notify('hire', 'A new agent waits for floor 1', 'Ada');
+    await settle();
+    expect(sent).toEqual([]);
+    await expect(n.test('telegram')).rejects.toThrow(/Telegram is off/);
+    settings = notifySettings(DEFAULT_NOTIFY, { channels: { telegram: true } });
+    await n.test('telegram');
+    expect(sent).toHaveLength(1);
+  });
 });
 
 describe('push devices', () => {

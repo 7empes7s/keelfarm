@@ -4,6 +4,7 @@ import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
+import { telegramViews } from './telegramViews';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
 // viewport, every button on screen, unobstructed and at least 44px, no destructive action one tap away, and axe clean.
@@ -138,7 +139,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -153,7 +154,7 @@ const SCREENS: Screen[] = [
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
   {
-    // a CEO reply's action cards, idea card and artifact (#108)
+    // a CEO reply's action cards, idea card and artifact (#108), at the chat's smallest, normal and biggest text (#135)
     name: 'pocket chat cards',
     widths: POCKET,
     open: async (page) => {
@@ -163,7 +164,9 @@ const SCREENS: Screen[] = [
       await expect(root.locator('.action-card').first()).toBeVisible();
       return root;
     },
-    tabs: [],
+    tabs: [80, 100, 200].map((v) => ({
+      name: `text ${v}%`, go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
+    })),
   },
   {
     // the questions waiting on the manager, in the tray above the message box, open and collapsed (#114)
@@ -268,6 +271,29 @@ const SCREENS: Screen[] = [
     tabs: ['', ...(['Now', 'Profile', 'Setup'] as const).map((t) => ({ name: `details › ${t}`, go: (root: Locator) => agentTab(root, t) }))],
   },
   {
+    // their chat (#120): the conversation, a group of steps opened, then the terminal again
+    name: 'agent chat',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'team');
+      await root.getByRole('button', { name: 'Terminal', exact: true }).first().click();
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Chat', exact: true }).click();
+      return d;
+    },
+    tabs: [
+      '',
+      {
+        name: 'a step open',
+        go: async (root) => {
+          const step = root.locator('.ac-steps > summary').first(); // an agent who hasn't started yet has none
+          if (await step.count()) await step.click();
+        },
+      },
+      { name: 'terminal', go: (root) => root.getByRole('button', { name: 'Terminal', exact: true }).click() },
+    ],
+  },
+  {
     name: 'app viewer',
     widths: PHONES,
     open: async (page) => {
@@ -324,6 +350,7 @@ const SCREENS: Screen[] = [
   { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /GitHub/, ON_FLOOR_1), tabs: [] },
   { name: 'floor list', widths: OFFICE, open: (page) => fromPhone(page, /Floor list/, /Floor|Lobby/), tabs: [] },
   { name: 'help', widths: OFFICE, open: (page) => fromPhone(page, /Help/, /How the office works/), tabs: ['The office', 'Controls'] },
+  { name: 'map room (#137)', widths: OFFICE, open: (page) => fromPhone(page, /Map room/, /Map room/), tabs: [] },
   {
     name: 'catalogue',
     widths: OFFICE,
@@ -563,8 +590,10 @@ async function chatProblems(page: Page, when: string): Promise<string[]> {
     probe.remove();
     const headPad = parseFloat(getComputedStyle(document.querySelector('.pk-head')!).paddingTop);
     const problems: string[] = [];
-    if (Math.abs(input.bottom - tabs.top) > 1) problems.push(`${Math.round(tabs.top - input.bottom)}px between the message box and the tabs`);
-    if (tabs.bottom > innerHeight + 1 || tabs.bottom < innerHeight - 1) problems.push(`the tabs end at ${Math.round(tabs.bottom)}, the screen at ${innerHeight}`);
+    const floor = tabs.height ? tabs.top : innerHeight; // typing, the tab bar steps aside (#152): the box sits on the bottom
+    if (!tabs.height && !document.documentElement.hasAttribute('data-typing')) problems.push('the tabs are hidden');
+    if (Math.abs(input.bottom - floor) > 1) problems.push(`${Math.round(floor - input.bottom)}px between the message box and the ${tabs.height ? 'tabs' : 'screen bottom'}`);
+    if (tabs.height && (tabs.bottom > innerHeight + 1 || tabs.bottom < innerHeight - 1)) problems.push(`the tabs end at ${Math.round(tabs.bottom)}, the screen at ${innerHeight}`);
     if (log.height <= innerHeight / 2) problems.push(`the conversation is ${Math.round(log.height)}px of ${innerHeight}`);
     if (newest.bottom > log.bottom + 1 || newest.bottom < log.top) problems.push('the newest message is out of view');
     if (Math.abs(headPad - Math.max(8, safeTop)) > 0.5) problems.push(`the header's top padding is ${headPad}px for a ${safeTop}px safe area`);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_MERGE_FIXES, mergeStep } from './mergeGate.ts';
-import { conflictFixInstructions, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
 
 const CONFLICTING: QaPull = { mergeable: 'CONFLICTING', mergeState: 'DIRTY' };
 const MERGEABLE: QaPull = { mergeable: 'MERGEABLE', mergeState: 'CLEAN' };
@@ -89,5 +89,13 @@ describe('conflictFixInstructions', () => {
       'Make the toolbar wrap.\n\nIt also conflicts with main: bring it up to date (git fetch origin && git merge origin/main) and resolve the conflicts so both this change and the newly merged work keep working.',
     );
     expect(conflictFixInstructions('', 'trunk')).toMatch(/^It also conflicts with trunk: .*git merge origin\/trunk/);
+  });
+});
+
+describe('labErrorNext (#189)', () => {
+  it('sends a lab error back to QA by itself once per round, then to triage', () => {
+    expect(labErrorNext({ round: 2, labRetryRound: null })).toBe('retry');
+    expect(labErrorNext({ round: 2, labRetryRound: 2 })).toBe('stuck');
+    expect(labErrorNext({ round: 3, labRetryRound: 2 })).toBe('retry'); // a new round (fixes pushed) gets its own retry
   });
 });

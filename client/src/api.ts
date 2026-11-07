@@ -126,6 +126,7 @@ export const api = {
   stop: (id: string) => call('POST', `/api/agents/${id}/stop`),
   reset: (id: string) => call('POST', `/api/agents/${id}/reset`),
   message: (id: string, text: string) => call('POST', `/api/agents/${id}/message`, { text }),
+  react: (id: string, itemId: number, reaction: string) => call<{ sent: boolean; note: boolean }>('POST', `/api/agents/${id}/react`, { itemId, reaction }),
   /** Start a cloud agent's sign-in again in their terminal (docs/cloud.md). */
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
@@ -223,9 +224,10 @@ export const api = {
   // The manager's Telegram bot. No toasts: the settings show why a token was refused.
   setTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/notify/telegram', { token }, false),
   telegramLink: () => call<{ startUrl: string }>('POST', '/api/notify/telegram/link', {}, false),
+  retryTelegram: () => call<TelegramView>('POST', '/api/notify/telegram/retry', {}),
   removeTelegram: () => call<TelegramView>('DELETE', '/api/notify/telegram'),
   /** The demo only: the fake manager on Telegram presses Start, writes, replies, or presses a team change's button. */
-  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
+  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline' | 'outage' | 'online', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
   // office progression (#210)
   buyDecor: (repoId: string, item: DecorItem) => call<ProgressView>('POST', `${r(repoId)}/decor/buy`, { item }),
   placeDecor: (repoId: string, body: { item: DecorItem; slot: string | null; from: string | null }) => call<ProgressView>('POST', `${r(repoId)}/decor/place`, body),

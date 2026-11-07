@@ -1,8 +1,10 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  PREFLIGHT_TEST,
   PROBATION_MS,
   clientPort,
+  failedTests,
   isOfficeState,
   isUpdateCommand,
   officeUrl,
@@ -17,6 +19,8 @@ import {
   rollbackPlan,
   stepsFor,
   swarmHome,
+  testRetryArgs,
+  testsFailedError,
 } from './officeSteps.mjs';
 
 describe('parseOfficeArgs', () => {
@@ -151,6 +155,39 @@ describe('preflight', () => {
   it('aborts when a step never ran', () => {
     expect(preflightOutcome(start, passed(['install', 'test', 'build']))).toEqual({ go: false, error: 'the boot check never ran' });
     expect(preflightOutcome(start, []).go).toBe(false);
+  });
+
+  // What the preflight's npm test wrote to stderr when it refused 2d99aaf on Mulinux (#139), colours and all.
+  const refused = [
+    '\x1b[31m⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\x1b[39m',
+    '\x1b[41m\x1b[1m FAIL \x1b[22m\x1b[49m client/src/world/walkways.test.ts\x1b[2m > \x1b[22mfindPath\x1b[2m > \x1b[22mplans a whole floor (15 walks) in well under a frame',
+    '\x1b[31mAssertionError: expected 18.542081000000053 to be less than 8\x1b[39m',
+    '\x1b[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯\x1b[39m',
+  ].join('\n');
+
+  it('runs the tests on two workers, within what the shared box can spare', () => {
+    expect(PREFLIGHT_TEST).toEqual(['test', '--', '--maxWorkers=2']);
+  });
+
+  it("reads the failed tests from Vitest's output, without its colours", () => {
+    expect(failedTests(refused)).toEqual([{ file: 'client/src/world/walkways.test.ts', name: 'findPath > plans a whole floor (15 walks) in well under a frame' }]);
+    expect(failedTests(' FAIL  server/a.test.ts [ server/a.test.ts ]\n FAIL  server/a.test.ts [ server/a.test.ts ]')).toEqual([{ file: 'server/a.test.ts', name: '' }]);
+    expect(failedTests('Test Files  293 passed (293)')).toEqual([]);
+  });
+
+  it('retries only the failed files, else the whole suite', () => {
+    const failed = [...failedTests(refused), { file: 'client/src/world/walkways.test.ts', name: 'other' }, { file: 'server/b.test.ts', name: 'x' }];
+    expect(testRetryArgs(failed)).toEqual([...PREFLIGHT_TEST, 'client/src/world/walkways.test.ts', 'server/b.test.ts']);
+    expect(testRetryArgs([])).toEqual(PREFLIGHT_TEST);
+  });
+
+  it('names the tests that failed twice in plain words', () => {
+    const error = testsFailedError(failedTests(refused), 'npm test failed (exit 1)');
+    expect(error).toBe('walkways.test.ts: findPath > plans a whole floor (15 walks) in well under a frame failed twice');
+    expect(preflightOutcome(start, [{ step: 'install', ok: true }, { step: 'test', ok: false, error }]).error).toBe(`tests failed (${error})`);
+    const many = ['a', 'b', 'c', 'd', 'e'].map((f) => ({ file: `server/${f}.test.ts`, name: '' }));
+    expect(testsFailedError(many, '')).toBe('a.test.ts; b.test.ts; c.test.ts and 2 more failed twice');
+    expect(testsFailedError([], 'npm test failed (exit 1)')).toBe('npm test failed (exit 1), and again on the retry');
   });
 
   it("recognises the office's state", () => {

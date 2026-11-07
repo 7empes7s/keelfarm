@@ -138,6 +138,7 @@ export abstract class SwarmCore extends SwarmContract {
     phoneReadAt: 0,
     notices: [],
     prLimits: PR_LIMITS_VERSION,
+    outageReleased: true,
     ops: emptyHistory(),
     held: [],
     progress: emptyLedger(),
@@ -173,6 +174,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected outbox = new Outbox({
     agents: () => this.state.agents.map((a) => ({ id: a.id, floor: this.floorOf(a) })),
     log: (id) => this.agentRt.get(id)?.log ?? [],
+    chat: (id) => this.agentRt.get(id)?.chat?.items ?? [],
     beforeFlush: (ids) => this.updateSigns(ids),
   });
   protected user: string | null = null;
@@ -274,6 +276,7 @@ export abstract class SwarmCore extends SwarmContract {
       api: backend.telegram,
       // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+      on: () => this.state.settings.notify.channels.telegram,
       message: async (text, id) => void (await this.messageCeo(text, undefined, 'telegram', [], id)),
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
@@ -362,6 +365,7 @@ export abstract class SwarmCore extends SwarmContract {
       previewConfig: r.preview,
       preview: this.previews.view(r),
       charter: charterView(r.charter, Date.now(), rt.insights ?? null),
+      ciOutage: r.ciOutage ? { reason: r.ciOutage.reason, since: r.ciOutage.since, parked: this.state.qa.filter((q) => q.repoId === r.id && q.ciOutage != null).map((q) => q.prNumber) } : null,
       ...this.practiceView(r),
     };
   }

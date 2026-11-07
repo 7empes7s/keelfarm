@@ -10,6 +10,7 @@ import { MemoryFields } from './HealthStrip';
 import { TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { AwakeSettings, FollowupSettings } from './CeoFollowups';
+import { useChatMode } from './chatMode';
 import { openWhatsNew, useTour } from './tour';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
@@ -144,6 +145,7 @@ export function CeoSettings() {
 
 export function RuntimeSettings() {
   const runtime = useStore((s) => s.settings.runtime);
+  const chat = useChatMode();
   return (
     <div className="card">
       <h3>⌨️ How agents run</h3>
@@ -163,6 +165,12 @@ export function RuntimeSettings() {
         Agents work like your own coding agents in a terminal, with your skills, MCP servers and settings, and don't stop to ask. The office's workflow (branches, pull requests, QA reporting
         back) is in their instructions.
       </p>
+      <label className="toggle block">
+        <input type="checkbox" checked={chat.on} onChange={(e) => chat.set(e.target.checked)} />
+        <span>
+          <b>Chat mode</b> (this device): desks, Team and Kanban open an agent's chat, their steps in plain words, instead of their terminal. Each window's Chat | Terminal switch changes it too.
+        </span>
+      </label>
     </div>
   );
 }

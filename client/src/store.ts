@@ -4,6 +4,7 @@ import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoC
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
+import { mergeChat, type ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
@@ -40,7 +41,7 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string }
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal' } // view: opened on it (the CEO chat's @Agent opens their chat)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
@@ -55,7 +56,8 @@ export type Overlay =
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
   | { kind: 'floorList' }
-  | { kind: 'notices' }; // the notification centre (ui/Notices.tsx)
+  | { kind: 'notices' } // the notification centre (ui/Notices.tsx)
+  | { kind: 'mapRoom' }; // the memory map as a 3D constellation (ui/MapRoom.tsx, #137)
 
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
@@ -129,6 +131,7 @@ interface State {
   agents: Record<string, Agent>;
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
   latest: Record<string, LogLine>; // everyone's latest line worth listing, for the workers list
+  agentChat: Record<string, ChatItem[]>; // chat items (#120) of the agents whose window is open
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
   peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
@@ -288,6 +291,7 @@ export const useStore = create<State>((set, get) => ({
   agents: {},
   logs: {},
   latest: {},
+  agentChat: {},
   workersOpen: false,
   peek: null,
   screens: {},
@@ -321,7 +325,7 @@ export const useStore = create<State>((set, get) => ({
     pushDevices: 0,
     devices: [],
     desktop: null,
-    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null },
+    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null },
   },
   cloud: EMPTY_CLOUD,
   tooling: EMPTY_INVENTORY,
@@ -491,6 +495,12 @@ export const useStore = create<State>((set, get) => ({
       case 'latest':
         set({ latest: { ...get().latest, ...ev.lines } });
         break;
+      case 'agentChat': {
+        const chats = { ...get().agentChat };
+        for (const [id, items] of Object.entries(ev.chats)) chats[id] = mergeChat(ev.catchUp ? [] : (chats[id] ?? []), items);
+        set({ agentChat: chats });
+        break;
+      }
       case 'screen': {
         const a = get().agents[ev.agentId];
         set({
@@ -728,10 +738,10 @@ export const agentsOnRepo = (agents: Record<string, Agent>, repoId: string) =>
     .sort((a, b) => a.desk - b.desk);
 
 /**
- * Panels that hide the whole office (the wide ones: Kanban, terminals and the manager's console), so the
+ * Panels that hide the whole office (the wide ones: Kanban, terminals, the manager's console and the map room), so the
  * 3D view can stop drawing behind them. The phone, help, elevator panel and confirm dialogs are see-through.
  */
-export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager';
+export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager' || o?.kind === 'mapRoom';
 
 /**
  * Whether the 3D view stops drawing under this panel: a full-screen one anywhere, and any panel on a touch screen
