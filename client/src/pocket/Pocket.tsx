@@ -30,6 +30,7 @@ import { SearchButton, SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
+import { useChatMode } from '../ui/chatMode';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
@@ -276,7 +277,7 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 /** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
-  if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} />;
+  if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} />;
   if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
@@ -432,6 +433,7 @@ export default function Pocket() {
     ['approvals', '✋', 'Approvals', waiting],
   ];
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
+  const chatMode = useChatMode();
   const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''}`}>
@@ -458,6 +460,11 @@ export default function Pocket() {
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
+        {wide && (
+          <button className="btn btn-small pk-switch" aria-pressed={chatMode.on} onClick={() => chatMode.set(!chatMode.on)} title={`Chat mode (#120): agents' windows open on their ${chatMode.on ? 'chat' : 'terminal'}. Click to switch`}>
+            💬 Chat {chatMode.on ? 'on' : 'off'}
+          </button>
+        )}
         {wide ? (
           <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>

@@ -180,6 +180,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
             qaPassRate: nums?.qaPass ?? null,
             qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
             qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
+            qaLabErrors: nums?.qaLabErrors ?? 0,
           },
           spend: floorSpend(this.spend.ledger.all(), r.id, Date.now()),
           capacity: {
@@ -200,12 +201,13 @@ export abstract class SwarmCeoTools extends SwarmTeam {
             waitsFor: blockers(i.body, open),
             inProgress: this.issueTaken(r, i.number),
             ...(this.isHeld(r.id, i.number) ? { waitsForManager: 'its PR was closed; only the manager hands it out again' } : {}),
+            ...(i.untrusted ? { waitsForManager: `untrusted author @${i.author ?? 'ghost'}; never built until the manager trusts it` } : {}),
           })),
           pullRequests: rt.pulls
             .filter((p) => p.state === 'OPEN')
             .map((p) => {
               const q = this.state.qa.find((x) => x.repoId === r.id && x.prNumber === p.number);
-              return { number: p.number, title: p.title, qa: q ? `${q.status}${q.round > 1 ? ` (round ${q.round})` : ''}` : 'not tested', merge: q?.mergeNote ?? null, checks: p.checks };
+              return { number: p.number, title: p.title, qa: p.untrusted ? 'from outside: the manager reviews it on GitHub' : q ? `${q.status}${q.round > 1 ? ` (round ${q.round})` : ''}` : 'not tested', merge: q?.mergeNote ?? null, checks: p.checks };
             }),
           mergedRecently: rt.pulls.filter((p) => p.state === 'MERGED').map((p) => `#${p.number} ${p.title}`),
           questions: this.state.questions.filter((q) => q.repoId === r.id).map((q) => ({ agent: q.agentId, name: q.agentName, issue: q.issue, pr: q.pr, question: q.text, options: q.options, waitingFor: q.to === 'ceo' ? 'you' : 'the manager' })),

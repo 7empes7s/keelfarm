@@ -47,6 +47,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** The logins of collaborators with write access, for trust (#185). */
+  writers(fullName: string): Promise<string[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
   /** OPEN or CLOSED; null when there is no such issue. */
   issueState(fullName: string, number: number): Promise<'OPEN' | 'CLOSED' | null>;
@@ -168,6 +170,8 @@ export interface Backend {
   demoParked?(): { fullName: string; prNumber: number }[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
+  /** The demo opens without the setup wizard or the tour (config.ts demoNoTour), for QA's and tests' browsers. */
+  demoNoTour?: boolean;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
   seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */
@@ -235,6 +239,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  writers: github.writers,
   createIssue: github.createIssue,
   exportCharter: github.exportCharter,
   issueState: github.issueState,

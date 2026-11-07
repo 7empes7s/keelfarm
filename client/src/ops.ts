@@ -20,6 +20,7 @@ export const EMPTY_NUMBERS: OpsNumbers = {
   qaPass: null,
   qaFirstPass: null,
   qaRoundsPerMerge: null,
+  qaLabErrors: 0,
   ciPass: null,
   ciRuns: 0,
   ciMs: null,

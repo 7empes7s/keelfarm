@@ -52,7 +52,7 @@ export abstract class SwarmMerge extends SwarmRepos {
       await this.outageReruns(repo, rt);
       for (const rec of this.state.qa.filter((q) => q.repoId === repo.id && q.status === 'passed' && q.ciOutage == null)) {
         const pr = rt.pulls.find((p) => p.number === rec.prNumber && p.state === 'OPEN');
-        if (!pr || !pr.headRefName.startsWith('swarm/')) continue; // people's own PRs are theirs to merge
+        if (!pr || pr.untrusted || !pr.headRefName.startsWith('swarm/')) continue; // people's own PRs are theirs to merge, outsiders' too (#185)
         // Only act on PR data fetched after the record last changed (a fix may have just pushed).
         if ((rt.fetchedAt ?? 0) < rec.updatedAt) continue;
         try {

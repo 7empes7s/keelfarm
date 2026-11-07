@@ -68,6 +68,29 @@ describe('Telegram in the office', () => {
     await swarm.telegram.stop();
   });
 
+  it('switched off: CEO messages are not mirrored or marked "sent to Telegram", send_telegram refuses (#126)', async () => {
+    const { swarm, sent } = await office();
+    const tools = (swarm as unknown as { officeTools(): { call(n: string, a: unknown): Promise<string> } }).officeTools();
+    await swarm.telegram.setToken(TOKEN);
+    swarm.telegramDemo({ kind: 'start' });
+    await until(() => swarm.snapshot().notifyChannels.telegram.linked);
+    const notify = swarm.snapshot().settings.notify;
+    swarm.updateSettings({ notify: { ...notify, telegramMirror: true, channels: { ...notify.channels, telegram: false } } });
+    expect(swarm.snapshot().notifyChannels.telegram).toMatchObject({ on: false, polling: 'off', linked: true });
+    const before = sent().length;
+    (swarm as unknown as Internals).postMessage('ceo', 'Not for Telegram.');
+    expect(swarm.snapshot().messages.at(-1)?.telegram).toBeUndefined();
+    expect(await tools.call('send_telegram', { text: 'x' })).toMatch(/^Refused: The manager switched Telegram off/);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(sent().length).toBe(before);
+    swarm.updateSettings({ notify: { ...notify, telegramMirror: true, channels: { ...notify.channels, telegram: true } } });
+    (swarm as unknown as Internals).postMessage('ceo', 'Back on.');
+    expect(swarm.snapshot().messages.at(-1)?.telegram).toBe('out');
+    await until(() => sent().some((l) => l.includes('Back on.')));
+    swarm.updateSettings({ notify });
+    await swarm.telegram.stop();
+  });
+
   it("approves a team change from its message's button, through the lobby's own path", async () => {
     const { swarm, sent } = await office();
     await swarm.telegram.setToken(TOKEN);
