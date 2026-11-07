@@ -512,6 +512,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   overflow-x: auto;
 }
 .pk-layout-expanded .kanban-embedded .kanban-5 {
+  --kc-open: minmax(200px, 1fr);
   grid-template-columns: repeat(5, minmax(200px, 1fr));
 }
 
