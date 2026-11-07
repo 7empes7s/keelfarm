@@ -445,6 +445,44 @@ describe('prepareDesk', { timeout: 60_000 }, () => {
   });
 });
 
+describe('half-made desks (#197)', { timeout: 60_000 }, () => {
+  /** What a `git worktree add` killed half-way leaves: the entry locked "initializing", its folder gone. */
+  async function interrupt(desk: string) {
+    const gitdir = path.resolve(desk, (await fs.readFile(path.join(desk, '.git'), 'utf8')).replace('gitdir:', '').trim());
+    await fs.writeFile(path.join(gitdir, 'locked'), 'initializing');
+    await fs.rm(desk, { recursive: true, force: true, maxRetries: 3 });
+  }
+  const branchOf = (cwd: string) => git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd });
+
+  it('clears its own locked entry and starts again on the same branch', async () => {
+    const r = await makeRepos();
+    const desk = await prepareDesk(r.fullName, { defaultBranch: 'main' }, 'preview-pr-1', 'swarm-preview-pr-1');
+    await interrupt(desk);
+    const notes: string[] = [];
+    expect(await prepareDesk(r.fullName, { defaultBranch: 'main' }, 'preview-pr-1', 'swarm-preview-pr-1', (t) => notes.push(t))).toBe(desk);
+    expect(await branchOf(desk)).toBe('swarm-preview-pr-1');
+    expect(await head(desk)).toBe(await originMain(r.dir));
+    expect(notes).toEqual(['Cleared a half-made desk left by an interrupted start.']);
+  });
+
+  it('frees a branch held by a half-made desk next to it, never one outside the desks folder', async () => {
+    const r = await makeRepos();
+    const phantom = await prepareDesk(r.fullName, { defaultBranch: 'main' }, 'preview-pr-2', 'swarm-preview-pr-1');
+    await interrupt(phantom);
+    const notes: string[] = [];
+    const desk = await prepareDesk(r.fullName, { defaultBranch: 'main' }, 'preview-pr-1', 'swarm-preview-pr-1', (t) => notes.push(t));
+    expect(await branchOf(desk)).toBe('swarm-preview-pr-1');
+    expect(notes).toEqual(['Cleared a half-made desk left by an interrupted start.']);
+
+    // The same leftover outside desks/ is someone else's: left as it is, and this desk works detached.
+    const elsewhere = path.join(ROOT, `elsewhere ${path.basename(r.fullName)}`);
+    await git(['worktree', 'add', '-q', '-b', 'mine', elsewhere, 'origin/main'], { cwd: r.dir });
+    await interrupt(elsewhere);
+    expect(await branchOf(await prepareDesk(r.fullName, { defaultBranch: 'main' }, 'preview-pr-1', 'mine'))).toBe('HEAD');
+    expect(parseWorktrees(await git(['worktree', 'list', '--porcelain'], { cwd: r.dir })).some((w) => w.branch === 'mine' && w.locked)).toBe(true);
+  });
+});
+
 describe('branchHolder', () => {
   const wt = (p: string, branch: string | null) => ({ path: path.resolve(p), branch, locked: false });
   it('names the other worktree that has the branch, never the desk itself', () => {

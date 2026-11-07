@@ -382,8 +382,24 @@ async function setUpWorktree(main: string, wt: string, fullName: string, base: D
   await git(['worktree', 'prune'], { cwd: main });
   // Real paths on both sides, or a desk can take itself for the holder (8.3 names, /var vs /private/var on macOS).
   const real = (p: string) => fs.realpath(p).catch(() => p);
-  const worktrees = await Promise.all(parseWorktrees(await git(['worktree', 'list', '--porcelain'], { cwd: main })).map(async (w) => ({ ...w, path: await real(w.path) })));
-  const holder = branchHolder(worktrees, branch, await real(wt));
+  const listWorktrees = async () => Promise.all(parseWorktrees(await git(['worktree', 'list', '--porcelain'], { cwd: main })).map(async (w) => ({ ...w, path: await real(w.path) })));
+  let worktrees = await listWorktrees();
+  const realWt = await real(wt);
+  // A `git worktree add` killed half-way (a restart, an OOM kill) leaves its entry locked ("initializing"), which prune
+  // never clears, so its branch stays checked out in a folder that doesn't exist. Free a branch held that way by a
+  // desk next to this one; never a worktree whose folder exists, nor one outside this desks folder.
+  const desks = [path.dirname(wt), path.dirname(realWt)];
+  let halfMade = false;
+  for (const w of worktrees.slice(1)) {
+    if (w.branch !== branch || samePath(w.path, realWt) || !desks.some((d) => samePath(path.dirname(w.path), d)) || (await exists(w.path))) continue;
+    await dropWorktree(main, w.path);
+    halfMade = true;
+  }
+  if (halfMade) {
+    worktrees = await listWorktrees();
+    note?.(HALF_MADE);
+  }
+  const holder = branchHolder(worktrees, branch, realWt);
   const local = holder ? null : branch;
   if (holder) note?.(`${branch} is checked out at ${holder}, so this desk works on it as a detached HEAD at ${ref}; push with git push origin HEAD:${branch}.`);
 
@@ -411,6 +427,11 @@ async function setUpWorktree(main: string, wt: string, fullName: string, base: D
     }
   }
 
+  // This desk's own entry, locked by an interrupted add: unlocked and removed, or add refuses its branch or folder.
+  if (worktrees.some((w) => w.locked && samePath(w.path, realWt))) {
+    await dropWorktree(main, wt);
+    if (!halfMade) note?.(HALF_MADE);
+  }
   if (await exists(wt)) {
     await git(['worktree', 'remove', '--force', wt], { cwd: main }).catch(() => undefined);
     await clearDeskFolder(wt);
@@ -419,6 +440,15 @@ async function setUpWorktree(main: string, wt: string, fullName: string, base: D
   await fs.mkdir(path.dirname(wt), { recursive: true });
   await git(['worktree', 'add', ...(local ? ['-B', local] : ['--detach']), wt, ref], { cwd: main });
   return wt;
+}
+
+const HALF_MADE = 'Cleared a half-made desk left by an interrupted start.';
+
+/** Unlock and remove the worktree entry at `wt` (errors ignored: a missing folder is left to the prune that follows). */
+async function dropWorktree(main: string, wt: string) {
+  await git(['worktree', 'unlock', wt], { cwd: main }).catch(() => undefined);
+  await git(['worktree', 'remove', '--force', '--force', wt], { cwd: main }).catch(() => undefined);
+  await git(['worktree', 'prune'], { cwd: main });
 }
 
 /** The other worktree (not `desk`) that has `branch` checked out, if any. */
