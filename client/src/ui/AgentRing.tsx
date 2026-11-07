@@ -2,6 +2,7 @@
 // (working, testing, fixing, free, needing help, waiting), never colour alone. The agent window and the team lists use it.
 import type { Agent } from '../store';
 import { ringStatus } from './agentWindow';
+import { Icon } from './Icon';
 import './agentWindow.css';
 
 /** `phrase`: what they're doing and what happens next (statusPhrase.ts), as its tooltip. */
@@ -13,7 +14,7 @@ export function AgentRing({ agent, size = 'md', phrase }: { agent: Agent; size?:
         {agent.name[0]}
       </span>
       <span className="aw-ring-icon" aria-hidden="true">
-        {r.icon}
+        <Icon name={r.icon} />
       </span>
     </span>
   );

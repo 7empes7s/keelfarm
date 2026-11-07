@@ -9,6 +9,7 @@ import { addressBar, clampPan, clampZoom, isBrowsing, previewTarget, shotCaption
 import { touchDistance } from './chatPinch';
 import { useBackLayer } from './Panel';
 import { isTopDialog, useDialogFocus } from './dialogFocus';
+import { CloseButton, Icon } from './Icon';
 import './browser.css';
 
 const shotUrl = (agentId: string, at: number) => `/api/agents/${agentId}/screen?at=${at}`;
@@ -40,7 +41,7 @@ export function BrowserCard({ agent, img }: { agent: Agent; img: HTMLImageElemen
   return (
     <figure className="bc" aria-label={`${agent.name}'s browser`}>
       <div className="bc-bar">
-        <span aria-hidden>{address.secure ? '🔒' : '🌐'}</span>
+        <Icon name={address.secure ? 'lock' : 'globe'} />
         {address.previewPath ? (
           <button type="button" className="bc-url bc-link" title={`Open ${address.previewPath} in the floor's preview`} onClick={openPreview}>
             {address.text}
@@ -135,9 +136,7 @@ function ShotViewer({ src, caption, onClose }: { src: string; caption: string; o
             Fit
           </button>
         )}
-        <button type="button" className="panel-x" aria-label="Close" onClick={onClose}>
-          ✕
-        </button>
+        <CloseButton onClick={onClose} />
       </div>
       <div
         ref={stage}

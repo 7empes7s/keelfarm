@@ -1,5 +1,5 @@
 // Pocket mode's Team tab: everyone with their status, and the terminal panel's actions without the terminal: message,
-// ■ Stop, assigning an issue (or a PR to test); ↺ Clear desk and Let go in its ⋯. The terminal itself is one tap away.
+// Stop, assigning an issue (or a PR to test); Clear desk and Let go in its overflow menu. The terminal itself is one tap away.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent } from '../store';
@@ -18,6 +18,7 @@ import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 import { EmptyState } from '../ui/EmptyState';
+import { Icon } from '../ui/Icon';
 import { useDraft } from '../drafts';
 
 
@@ -82,19 +83,35 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
         <Status status={badgeStatus(agent)} />
       </button>
       <div className="small muted pk-phrase">{agentPhrase(agent, { autoAssign: repo.autoAssign })}</div>
-      {agent.lastError && !working && <div className="term-error small pk-error">⚠️ {agent.lastError}</div>}
-      {agent.blocked && working && <div className="term-error small pk-error">⛔ Blocked: {agent.blocked}</div>}
-      {agent.waiting && !working && <div className="small pk-sign-in">❓ {agent.waiting === 'ceo' ? 'Asked a question: waiting for the CEO.' : 'Waiting for your answer in the Chat tab.'}</div>}
-      {signIn && <div className="small pk-sign-in">🔑 Waiting for you to sign {signIn} in, in their terminal.</div>}
+      {agent.lastError && !working && (
+        <div className="term-error small pk-error">
+          <Icon name="triangle-alert" /> {agent.lastError}
+        </div>
+      )}
+      {agent.blocked && working && (
+        <div className="term-error small pk-error">
+          <Icon name="ban" /> Blocked: {agent.blocked}
+        </div>
+      )}
+      {agent.waiting && !working && (
+        <div className="small pk-sign-in">
+          <Icon name="circle-help" /> {agent.waiting === 'ceo' ? 'Asked a question: waiting for the CEO.' : 'Waiting for your answer in the Chat tab.'}
+        </div>
+      )}
+      {signIn && (
+        <div className="small pk-sign-in">
+          <Icon name="key-round" /> Waiting for you to sign {signIn} in, in their terminal.
+        </div>
+      )}
       <div className="pk-actions">
         {signIn && (
           <button className="btn btn-small btn-good" onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
-            🔑 Sign in
+            <Icon name="key-round" /> Sign in
           </button>
         )}
         {can.stop && (
           <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => stopAgent(agent))}>
-            ■ Stop…
+            <Icon name="square" /> Stop…
           </button>
         )}
         {can.assign && (
@@ -103,7 +120,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
               <option value="">{choices.length ? 'Pick an issue or a PR…' : 'Nothing to pick up'}</option>
               {choices.map((c) => (
                 <option key={c.key} value={c.key}>
-                  {c.kind === 'qa' ? '🔍 PR ' : ''}#{c.number} {c.title}
+                  {c.kind === 'qa' ? 'PR ' : ''}#{c.number} {c.title}
                 </option>
               ))}
             </select>
@@ -114,13 +131,21 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
                 chosen && void run(() => (chosen.kind === 'qa' ? api.sendToQa(repo.id, chosen.number, agent.id) : api.assign(agent.id, chosen.number))).then((ok) => ok && setPick(''))
               }
             >
-              {chosen?.kind === 'qa' ? '🔍 Test' : '▶ Start'}
+              {chosen?.kind === 'qa' ? (
+                <>
+                  <Icon name="search" /> Test
+                </>
+              ) : (
+                <>
+                  <Icon name="play" /> Start
+                </>
+              )}
             </button>
           </>
         )}
         {can.message && (
           <button className={`btn btn-small ${writing ? 'btn-ghost' : ''}`} aria-expanded={writing} onClick={() => setWriting(!writing)}>
-            💬 Message
+            <Icon name="message-circle" /> Message
           </button>
         )}
         <button className="btn btn-small btn-ghost" onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
@@ -131,7 +156,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
           title={agent.name}
           className="pk-more"
           items={[
-            can.clear && { label: '↺ Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
+            can.clear && { label: 'Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
             { label: `Let ${agent.name} go…`, hint: 'Their worktree is removed', danger: true, disabled: busy, onSelect: () => void letGo(agent) },
           ]}
         />
@@ -181,7 +206,7 @@ function CeoCard() {
       {working && (
         <div className="pk-actions">
           <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => api.stop(ceo.id))}>
-            ■ Stop
+            <Icon name="square" /> Stop
           </button>
         </div>
       )}

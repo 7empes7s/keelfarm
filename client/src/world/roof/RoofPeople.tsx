@@ -117,7 +117,7 @@ export function RoofPeople() {
   useRoofOp('visit', (arg) => {
     const [id, secs] = arg.split(':');
     const ok = comeUp(useStore.getState().agents[id], secs ? Number(secs) : undefined);
-    if (!ok) useStore.getState().pushToast('info', '🛗 No room on the roof for them just now (or they are busy)');
+    if (!ok) useStore.getState().pushToast('info', 'No room on the roof for them just now (or they are busy)');
   });
   useRoofReport('visitors', () =>
     [...walkers.values()].map((w) => ({ id: w.id, name: useStore.getState().agents[w.id]?.name ?? w.id, kind: w.kind, chair: w.chair, stage: w.stage, seated: bodyState(w.id)?.stage === 'seated' })),

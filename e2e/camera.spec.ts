@@ -39,9 +39,9 @@ test('Tab flies up to the overview, a click on someone opens their panel, and Ta
   const at = (await call(page, '__swarmCamera', 'person', people[0].id)) as { x: number; y: number } | null;
   expect(at, 'the person is on screen').not.toBeNull();
   await page.mouse.click(at!.x, at!.y, { delay: 80 });
-  await expect(page.getByRole('button', { name: '🎥 Follow' })).toBeVisible(); // their panel
+  await expect(page.getByRole('button', { name: 'Follow', exact: true })).toBeVisible(); // their panel
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: '🎥 Follow' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Follow', exact: true })).toBeHidden();
   expect((await camera(page)).mode).toBe('overview'); // Esc closed the panel, not the overview
   await page.keyboard.press('Tab');
   await expect.poll(async () => (await camera(page)).owns, { timeout: 60_000 }).toBe(false);
@@ -59,7 +59,7 @@ test('Tab twice shows every floor, and a click on one goes there', async ({ page
     for (const e of taps) window.dispatchEvent(e);
   });
   await settled(page, 'building');
-  await expect(page.getByText('🏢 The building')).toBeVisible();
+  await expect(page.getByText('The building')).toBeVisible();
   // floor 2's slice, against the south face: y is relative to the floor you're on
   const at = (await call(page, '__swarmCamera', 'screenOf', 0, 4.2 + 1.8, 12.33)) as { x: number; y: number } | null;
   expect(at).not.toBeNull();
@@ -131,7 +131,7 @@ test('interact rebound to F works, shows everywhere and survives a reload', asyn
   await startAt(page, spot);
   await enterOffice(page);
   await page.keyboard.press('h');
-  await page.getByRole('button', { name: '🎮 Controls' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('button', { name: /^Use, pick up, sip: key E/ }).click();
   await page.keyboard.press('f');
   await expect(page.getByText(/F is now Use, pick up, sip/)).toBeVisible();

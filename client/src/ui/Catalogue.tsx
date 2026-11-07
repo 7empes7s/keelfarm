@@ -6,6 +6,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { carry, decorName, kaching } from '../world/decor/actions';
 import { SLOT_NAMES } from '../world/decor/decor';
+import { Icon } from './Icon';
 import { Key } from './Key';
 import { Panel } from './Overlays';
 
@@ -30,7 +31,7 @@ export function Catalogue({ repoId }: { repoId?: string }) {
     try {
       await api.buyDecor(repo.id, item);
       kaching();
-      useStore.getState().pushToast('success', `🛍️ ${decorName(item)} bought for floor ${repo.floor}: it's in the 📦 decor box by their elevator`);
+      useStore.getState().pushToast('success', `${decorName(item)} bought for floor ${repo.floor}: it's in the decor box by their elevator`);
     } catch {
       // api toasted it
     } finally {
@@ -38,7 +39,15 @@ export function Catalogue({ repoId }: { repoId?: string }) {
     }
   };
   return (
-    <Panel title="🛍️ Decoration catalogue" accent={repo?.color} className="catalogue">
+    <Panel
+      title={
+        <span>
+          <Icon name="shopping-bag" /> Decoration catalogue
+        </span>
+      }
+      accent={repo?.color}
+      className="catalogue"
+    >
       {!repo ? (
         <p className="muted">Connect a repo first: floors earn coins when their PRs merge, and spend them here.</p>
       ) : (
@@ -46,12 +55,14 @@ export function Catalogue({ repoId }: { repoId?: string }) {
           <div className="tabs catalogue-floors">
             {repos.map((r) => (
               <button key={r.id} className={`tab ${r.id === repo.id ? 'tab-on' : ''}`} onClick={() => setPick(r.id)} style={{ ['--accent' as string]: r.color }}>
-                <span className="floor-badge">{r.floor}</span> {r.fullName.split('/')[1]} · 🪙 {floors[r.id]?.coins ?? 0}
+                <span className="floor-badge">{r.floor}</span> {r.fullName.split('/')[1]} · <Icon name="coins" /> {floors[r.id]?.coins ?? 0}
               </button>
             ))}
           </div>
           <div className="catalogue-purse">
-            <b className="catalogue-coins">🪙 {floor.coins}</b>
+            <b className="catalogue-coins">
+              <Icon name="coins" /> {floor.coins}
+            </b>
             <span className="muted small">
               {floor.merges} merge{floor.merges === 1 ? '' : 's'} · {floor.earned} earned. A merge pays {COINS.merge}, plus {COINS.firstQa} if QA passed it first time, {COINS.greenCi} for green checks first time and{' '}
               {COINS.streak} for the third merge in an hour.
@@ -72,14 +83,22 @@ export function Catalogue({ repoId }: { repoId?: string }) {
                     {owned ? `${owned} owned · ${stored(floor, c.id)} in the box` : <span className="muted">{c.kind === 'wall' ? 'hangs on a wall' : c.kind === 'rug' ? 'lies on the floor' : c.kind === 'big' ? 'needs a big spot' : 'fits a corner'}</span>}
                   </div>
                   <button className="btn btn-small btn-good" disabled={full || poor || busy !== null} onClick={() => void buy(c.id)} title={full ? 'Every spot for this kind of decoration on this floor is spoken for' : poor ? 'Not enough coins yet' : undefined}>
-                    {busy === c.id ? '…' : full ? 'No room' : `🪙 ${price}`}
+                    {busy === c.id ? (
+                      '…'
+                    ) : full ? (
+                      'No room'
+                    ) : (
+                      <>
+                        <Icon name="coins" /> {price}
+                      </>
+                    )}
                   </button>
                 </div>
               );
             })}
           </div>
           <p className="muted small">
-            Bought decorations wait in the floor's 📦 decor box, next to its elevator. Take one out, walk to a glowing spot and press <Key action="interact" />: it snaps in. <Key action="interact" /> on a placed decoration picks it up again; <Key action="drop" /> puts it back where it was.
+            Bought decorations wait in the floor's <Icon name="package" /> decor box, next to its elevator. Take one out, walk to a glowing spot and press <Key action="interact" />: it snaps in. <Key action="interact" /> on a placed decoration picks it up again; <Key action="drop" /> puts it back where it was.
           </p>
         </>
       )}
@@ -105,10 +124,20 @@ export function DecorBoxPanel({ repoId }: { repoId: string }) {
     }
   };
   return (
-    <Panel title={`📦 Decor box · floor ${repo.floor}`} accent={repo.color} className="decor-box">
+    <Panel
+      title={
+        <span>
+          <Icon name="package" /> Decor box · floor {repo.floor}
+        </span>
+      }
+      accent={repo.color}
+      className="decor-box"
+    >
       <h3>In the box</h3>
       {inBox.length === 0 ? (
-        <p className="muted small">Nothing in the box. Buy decorations with this floor's coins (🪙 {floor.coins}) at the catalogue kiosk in the lobby.</p>
+        <p className="muted small">
+          Nothing in the box. Buy decorations with this floor's coins (<Icon name="coins" /> {floor.coins}) at the catalogue kiosk in the lobby.
+        </p>
       ) : (
         <div className="decor-list">
           {inBox.map((c) => (

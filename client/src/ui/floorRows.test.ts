@@ -57,9 +57,9 @@ describe('floorRows', () => {
       [],
     );
     expect(rows.map((r) => [r.name, r.agent, r.status, r.icon, r.doing])).toEqual([
-      ['Ada', 'Claude Code', 'Working', '▶', 'Issue #3: Fix login'],
-      ['Linus', 'Claude Code', 'Needs help', '✕', 'Issue #4'],
-      ['Marple', 'Codex', 'Working', '▶', 'Testing PR #9'],
+      ['Ada', 'Claude Code', 'Working', 'play', 'Issue #3: Fix login'],
+      ['Linus', 'Claude Code', 'Needs help', 'x', 'Issue #4'],
+      ['Marple', 'Codex', 'Working', 'play', 'Testing PR #9'],
     ]);
     expect(rows[1].kind).toBe('bad');
   });

@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useStore, type Agent } from '../store';
 import { costLabel, groupItems, itemState, type Profile, type ToolItem, type ToolRole, type ToolSwitches } from '../../../shared/tooling';
+import { Icon } from './Icon';
 
 // Settings → Tools & skills (and each agent's ⚙️ Setup): what a Claude Code session on the office's computer loads
 // (server/tooling.ts), and switches for Everyone, a role profile (builders and fixers, QA), the CEO or one agent. The
@@ -54,7 +55,7 @@ function ToolRow({ item, role, layers, scope, pluginOff }: { item: ToolItem; rol
         {pluginOff && !st.lock && <span className="chip">off with its plugin</span>}
         {st.from === 'own' && (
           <button className="chip tool-reset" title="Follow Everyone's switch again" onClick={() => void attempt(() => api.switchTool(scope, item.id, null))}>
-            ↺ {RESET[scope] ?? 'their own'}
+            <Icon name="rotate-ccw" /> {RESET[scope] ?? 'their own'}
           </button>
         )}
         {st.from === 'everyone' && own && <span className="chip">as Everyone</span>}
@@ -139,7 +140,9 @@ export function ToolsTab() {
   const floor = (a: Agent) => repos.find((r) => r.id === a.repoId)?.floor;
   return (
     <div className="card tools-card">
-      <h3>🧰 Tools &amp; skills</h3>
+      <h3>
+        <Icon name="toolbox" /> Tools &amp; skills
+      </h3>
       <label className="field" htmlFor={`${id}-scope`}>
         <span>Switches for</span>
         <select id={`${id}-scope`} value={scope} onChange={(e) => setScope(e.target.value)}>
@@ -191,7 +194,7 @@ export function AgentTools({ agent }: { agent: Agent }) {
   return (
     <details className="agent-tools">
       <summary>
-        🧰 Tools &amp; skills <span className="muted small">{n ? `(${n} of their own)` : '(as Everyone)'}</span>
+        <Icon name="toolbox" /> Tools &amp; skills <span className="muted small">{n ? `(${n} of their own)` : '(as Everyone)'}</span>
       </summary>
       <ToolsList scope={agent.role === 'ceo' ? 'ceo' : agent.id} />
     </details>

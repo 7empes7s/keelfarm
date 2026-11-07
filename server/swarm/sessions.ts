@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
 import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
+import { agentPortEnv } from '../portLanes.ts';
 import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
 import { CloudError } from '../box.ts';
@@ -178,7 +179,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       if (this.repoRt.get(repo.id)?.cloneStatus !== 'ready') await this.cloneRepo(repo.id);
       const note = (text: string) => this.appendLog(a, [{ kind: 'system', text }]);
       const cwd = await setUpDesk(this.agentRt.get(a.id)?.terminal, {
-        release: () => this.releaseDesk(a, repo),
+        release: () => this.releaseDesk(a, repo).then(() => undefined),
         prepare: () => this.machinesFor(a).prepareDesk(this.machineOf(a), repo.fullName, { defaultBranch: repo.defaultBranch, pr: base.pr }, branch, note),
       });
       this.deskAlerts.delete(a.id);
@@ -533,7 +534,8 @@ export abstract class SwarmSessions extends SwarmAgents {
         additionalDirectories: linked ?? (a.host === 'box' ? [] : this.linkedRepos(repo).map((r) => this.backend.mainDir(r.fullName))),
         role: a.role,
         task: a.task,
-        env: this.machineEnv(a),
+        // On this computer a demo office the agent starts takes their own ports, never the live office's (#227).
+        env: a.host === 'box' ? this.machineEnv(a) : { ...agentPortEnv(this.port(a)), ...this.machineEnv(a) },
         outputSchema,
         ...(box ? { box } : {}),
         // An agent's CLI stays at its prompt after building or fixing, for the manager and for follow-ups; after QA it
@@ -626,8 +628,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, result.costUsd, a.endedAt);
     this.ledger({ kind: 'session', agentId: a.id, key: `${a.id}:${a.startedAt}:${a.endedAt}`, costUsd: result.costUsd, turns: result.turns }, false); // emitted below
-    // Dev servers the agent forgot to stop would otherwise keep its port and lock its desk folder.
-    void this.releaseDesk(a, repo).catch(() => undefined);
+    // Dev servers (or a demo office) the agent forgot to stop would otherwise keep its ports and lock its desk folder.
+    void this.releaseDesk(a, repo)
+      .then((busy) => {
+        if (busy.length) this.appendLog(a, [{ kind: 'system', text: `⚠ Port${busy.length > 1 ? 's' : ''} ${busy.join(', ')} still in use after the session's clean-up.` }]);
+      })
+      .catch(() => undefined);
     if (result.interrupted) this.interrupted(a);
     const killed = this.health.ended(a, sessionKind(a), result.errors, !this.dropping.has(a.id) && a.status !== 'stopped', resumesAfterRestart(a, false, this.backend.demo));
     const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' || !!killed };

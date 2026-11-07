@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FLOOR_SEATS } from '../shared/types.ts';
+import { DEMO_PREVIEW_PORT } from './portLanes.ts';
 
 export const PORT = Number(process.env.SWARM_PORT ?? 4317);
 // The office can start agents that run commands on this machine, so it listens on loopback unless the manager asks for
@@ -97,8 +98,8 @@ export function envMinutes(value: string | undefined, fallback: number): number 
 export const PUBLIC_DEMO_RESET_H = envMinutes(process.env.SWARM_PUBLIC_DEMO_RESET_H, 6);
 
 // Floor previews run on this port + the floor number, PR previews 100 above it (docs/how-it-works.md). Moving it only
-// keeps a test office's previews clear of another office's.
-export const PREVIEW_PORT = envPort(process.env.SWARM_PREVIEW_PORT, 6300);
+// keeps a test office's previews clear of another office's; a demo office starts clear of the live one's (#227).
+export const PREVIEW_PORT = envPort(process.env.SWARM_PREVIEW_PORT, DEMO ? DEMO_PREVIEW_PORT : 6300);
 // A PR preview nobody has had on screen for this long stops.
 export const PR_PREVIEW_IDLE_MS = envMinutes(process.env.SWARM_PR_PREVIEW_IDLE_MIN, 20) * 60_000;
 

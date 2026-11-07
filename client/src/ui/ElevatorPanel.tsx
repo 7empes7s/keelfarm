@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useStore } from '../store';
 import { ROOF } from '../world/layout';
+import { Icon } from './Icon';
 import { Panel } from './Overlays';
 
 export function ElevatorPanel() {
@@ -21,7 +22,13 @@ export function ElevatorPanel() {
 
   const floors = [...repos].sort((a, b) => b.floor - a.floor);
   return (
-    <Panel title="🛗 Elevator">
+    <Panel
+      title={
+        <>
+          <Icon name="arrow-up-down" /> Elevator
+        </>
+      }
+    >
       <div className="elevator">
         {/* the roof: always the top stop, however many floors there are */}
         <button className={`floor-btn ${floor === ROOF ? 'floor-btn-here' : ''}`} style={{ ['--accent' as string]: '#7cc6fe' }} onClick={() => goToFloor(ROOF)}>

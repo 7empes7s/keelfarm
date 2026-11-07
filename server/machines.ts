@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
+import { sweepOrphans } from './procSweep.ts';
 import * as workspace from './workspace.ts';
 import type { DeskBase, DeskTrim, OfficeProcesses } from './workspace.ts';
 
@@ -15,8 +16,10 @@ export interface MachineProvider {
   prepareDesk(machine: string, fullName: string, base: DeskBase, branch: string, note?: (text: string) => void): Promise<string>;
   /** What every session on the machine runs with, on top of the office's environment. */
   env(machine: string): Record<string, string>;
-  /** Stop what the agent left running: on their port, or started in their worktree. */
-  release(machine: string, fullName: string, port: number): Promise<void>;
+  /** Stop what the agent left running: on their ports, or started in their worktree. Resolves to the ports still held after. */
+  release(machine: string, fullName: string, port: number): Promise<number[]>;
+  /** Stop processes left in machines' worktrees that no live session owns (`live`: machines with one), or in `idle` folders; a line per process. */
+  orphans(live: string[], idle: string[]): Promise<string[]>;
   /** Free disk space on an idle worktree (node_modules, build output); null when there's none or it's busy. */
   trimDesk(machine: string, fullName: string, stillIdle: () => boolean): Promise<DeskTrim | null>;
   /** Delete finished swarm/qa branches in the agent's clone that nothing in `keep` names; returns how many went. */
@@ -45,6 +48,7 @@ export function localMachines(keep: () => OfficeProcesses): MachineProvider {
       return { TMP: tmp, TEMP: tmp, TMPDIR: tmp };
     },
     release: (machine, fullName, port) => workspace.releaseMachine(machine, fullName, port, keep()),
+    orphans: (live, idle) => sweepOrphans(workspace.MACHINES_DIR, live, idle, keep().pids),
     trimDesk: (machine, fullName, stillIdle) => workspace.trimMachineDesk(machine, fullName, stillIdle),
     sweep: (machine, fullName, keepBranches) => workspace.sweepMachine(machine, fullName, keepBranches),
     remove: (machine) => workspace.removeMachine(machine),

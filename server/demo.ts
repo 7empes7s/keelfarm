@@ -1059,7 +1059,8 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
         return dir;
       },
       env: () => ({}),
-      release: async () => undefined,
+      release: async () => [],
+      orphans: async () => [],
       trimDesk: (_machine, _fullName, stillIdle) => fakeTrim(stillIdle),
       sweep: async () => 0,
       remove: async () => ({ removed: true, patches: [] }),

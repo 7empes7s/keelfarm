@@ -4,6 +4,7 @@
 // The rules are pure, in desktopRules.ts.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { pushLayer } from './backStack';
+import { CloseButton, Icon } from './Icon';
 import { desktopFit, realFullscreen, showRotateHint, viewerLayout, type Width } from './desktopRules';
 import { platformOf } from './notifySteps';
 
@@ -133,7 +134,7 @@ export function RotateHint({ onDismiss, onFull }: { onDismiss: () => void; onFul
   return (
     <div className="app-rotate" role="status">
       <span className="app-rotate-icon" aria-hidden>
-        📱
+        <Icon name="smartphone" />
       </span>
       <p>Turn your phone sideways for the desktop view</p>
       <div className="row">
@@ -185,12 +186,10 @@ export function FloatingBar({ forced, onBack, onClose, menu }: { forced: boolean
     >
       {forced ? (
         <button className="btn btn-small app-float-btn" onClick={onBack} aria-label="Leave full screen">
-          ‹ Back
+          <Icon name="chevron-left" /> Back
         </button>
       ) : (
-        <button className="btn btn-small app-float-btn" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
+        <CloseButton onClick={onClose} />
       )}
       <span className="spacer" />
       {menu}
