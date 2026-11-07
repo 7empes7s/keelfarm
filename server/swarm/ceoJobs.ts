@@ -322,7 +322,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        finished: (result) => this.onCeoFinished(a, result),
+        finished: (result) => this.onCeoFinished(a, this.spend.perTurn(a.id, this.spend.sid(a.id), result)), // its kept session reports a running total (#254)
       },
     );
     if (job.kind === 'research') this.researchGuard.start(this.state.settings.researchMin, job.topic ?? '', () => rt.session, (note) => { Object.assign(a, { status: 'stopped' as AgentStatus, lastError: note }); this.postMessage('office', `⏱ ${a.name}: ${note}`); });
