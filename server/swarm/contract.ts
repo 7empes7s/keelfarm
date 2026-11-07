@@ -2,6 +2,8 @@
 // The layers (server/swarm/*.ts) each extend the one before; `Swarm` (swarm.ts) is the top, and the façade.
 import type { Swarm } from '../swarm.ts';
 import type { CeoChat } from '../ceoChat.ts';
+import type { VoiceKeyView } from '../voice.ts';
+import type { PersistedAgent } from './model.ts';
 
 export abstract class SwarmContract {
   protected abstract ceoChat: CeoChat; // the CEO chat's live reply, office calls and threads (swarm.ts)
@@ -56,6 +58,11 @@ export abstract class SwarmContract {
 
   // reactions.ts (protected there)
   protected abstract markQuiet(messageIds: number[]): void;
+
+  // voices.ts (protected there)
+  protected abstract voiceKeyChanged(view: VoiceKeyView): void;
+  protected abstract voiceEveryone(): Promise<void>;
+  protected abstract setAgentVoice(a: PersistedAgent, patch: { voiceId?: unknown; voiceName?: unknown }): void;
 
   // ceoJobs.ts
   protected abstract ceo(...a: Parameters<Swarm['ceo']>): ReturnType<Swarm['ceo']>;

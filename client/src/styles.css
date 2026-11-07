@@ -2502,6 +2502,33 @@ input.inline:focus {
 .voice-labels {
   display: block;
 }
+.voice-row .ds-btn-icon {
+  flex: none;
+}
+.voice-fav-on {
+  color: var(--ds-warn-text);
+}
+.voice-fav-on .ds-icon {
+  fill: currentColor;
+}
+.voice-search {
+  width: 100%;
+}
+.profile-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.profile-voice h4 {
+  margin: 0;
+}
+.voice-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ---------- setup wizard ---------- */
 

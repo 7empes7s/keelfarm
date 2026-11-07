@@ -20,6 +20,7 @@ import { HOME_DIR, type DemoScale } from './config.ts';
 import { takeLastUpdate, underLauncher, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
+import { DEMO_V4_VOICES } from './demoVoices.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
 import { demoTelegram } from './demoTelegram.ts';
@@ -1863,11 +1864,11 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
 
 /**
  * A short two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, a little longer for longer text, and
- * pitched by the voice, so a replayed clip is audibly the one made in the voice of its day.
+ * pitched by the voice, so a replayed clip is audibly the one made in the voice of its day, and shorter when faster.
  */
-export function demoChime(chars: number, voiceId = ''): Buffer {
+export function demoChime(chars: number, voiceId = '', speed = 1): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 400, 2);
+  const seconds = Math.min(0.4 + chars / 400, 2) / speed;
   const n = Math.round(rate * seconds);
   const wav = Buffer.alloc(44 + n);
   wav.write('RIFF', 0);
@@ -1893,6 +1894,7 @@ export function demoChime(chars: number, voiceId = ''): Buffer {
 }
 
 const demoVoices = [
+  ...DEMO_V4_VOICES,
   { id: 'demoVoiceAvery00001', name: 'Avery', category: 'premade', labels: { accent: 'american', gender: 'female', age: 'middle aged', description: 'calm', use_case: 'conversational' }, previewUrl: null },
   { id: 'demoVoiceBasil00002', name: 'Basil', category: 'premade', labels: { accent: 'british', gender: 'male', age: 'middle aged', description: 'warm', use_case: 'narration' }, previewUrl: null },
   { id: 'demoVoiceCleo000003', name: 'Cleo', category: 'premade', labels: { accent: 'australian', gender: 'female', age: 'young', description: 'friendly', use_case: 'conversational' }, previewUrl: null },
@@ -1901,15 +1903,15 @@ const demoVoices = [
 /** What the demo's Speech to Text hears in any recording (docs/voice.md). */
 export const DEMO_TRANSCRIPT = "What's everyone working on?";
 
-/** No network: any key works except one containing "bad", three voices, a chime for every message, and one fixed transcript. */
+/** No network: any key works except one containing "bad", nine voices (six of them v4), a chime for every message, and one fixed transcript. */
 const demoVoice: VoiceApi = {
   checkKey: async (key) => {
     if (/bad/i.test(key)) throw new VoiceApiError(401, '401: invalid_api_key (demo)');
   },
   listVoices: async () => demoVoices,
-  synthesize: async (_key, { text, voiceId }) => {
+  synthesize: async (_key, { text, voiceId, speed }) => {
     await new Promise((r) => setTimeout(r, 300));
-    return demoChime(text.length, voiceId);
+    return demoChime(text.length, voiceId, speed);
   },
   transcribe: async () => {
     await new Promise((r) => setTimeout(r, 400));

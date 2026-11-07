@@ -99,7 +99,7 @@ let warned = false;
 /** Reads a live message with the voice in the settings, or replays one (`replay`) the way the phone's ▶ chose. */
 async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
   const { settings, voiceKeySet } = useStore.getState();
-  const { voiceName } = settings.voice;
+  const { voiceName, speed } = settings.voice;
   const provider = replay ? (replay === 'clip' ? 'elevenlabs' : 'browser') : settings.voice.provider;
   if (provider === 'off') return; // turned off while it waited
   const now: { rec: SpokenRecord | null; unduckMusic?: () => void } = { rec: null };
@@ -116,7 +116,7 @@ async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
     now.unduckMusic = holdMusicDuck();
   };
   try {
-    if (provider === 'browser') await speak(words, voiceName, () => began(null), (i) => speechWord(m.id, i));
+    if (provider === 'browser') await speak(words, voiceName, speed, () => began(null), (i) => speechWord(m.id, i));
     else if (replay) await playClip(m.id, began, true);
     else if (!voiceKeySet) throw new Error('no ElevenLabs key is saved');
     else await playClip(m.id, began);
@@ -210,8 +210,8 @@ async function browserVoices(synth: SpeechSynthesis): Promise<SpeechSynthesisVoi
   return synth.getVoices();
 }
 
-/** Says `text` in the voice called `voiceName` (the browser's default when it's gone), telling `word` where it is. Rejects when it can't. */
-async function speak(text: string, voiceName: string, began: () => void, word: (charIndex: number) => void) {
+/** Says `text` in the voice called `voiceName` (the browser's default when it's gone) at `rate`, telling `word` where it is. Rejects when it can't. */
+async function speak(text: string, voiceName: string, rate: number, began: () => void, word: (charIndex: number) => void) {
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') throw new Error("this browser can't speak");
   if (!text) return;
@@ -222,6 +222,7 @@ async function speak(text: string, voiceName: string, began: () => void, word: (
     u.lang = v.lang;
   }
   u.volume = level();
+  u.rate = rate;
   await new Promise<void>((resolve, reject) => {
     // An utterance's volume is fixed once it starts, so muting stops it instead; a stuck engine gets a deadline.
     const unsubscribe = subscribeAudio(() => getAudioPrefs().muted && stop());

@@ -8,12 +8,13 @@ import path from 'node:path';
 import { SAMPLE_LINE, messageSpeech, standupLine, type DayPart } from '../shared/speech.ts';
 import { clampKeepDays, KEEP_DAYS_DEFAULT } from '../shared/voiceClips.ts';
 import { clipProblem, clipType } from '../shared/clipLimits.ts';
+import { clampSpeed, cleanFavourites, pickVoice, SPEED_DEFAULT, VOICE_ID, voicePool } from '../shared/voices.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 
-/** ElevenLabs' fastest, cheapest model (~75 ms, half the price per character of Multilingual v2). */
-export const DEFAULT_VOICE_MODEL = 'eleven_flash_v2_5';
+/** Eleven v4 Turbo: expressive and real-time, and as cheap as Flash. A new office's model; a saved one is kept. */
+export const DEFAULT_VOICE_MODEL = 'eleven_v4_turbo';
 export const VOICES_TTL_MS = 10 * 60_000;
 export const SYNTH_TIMEOUT_MS = 20_000;
 /** ElevenLabs' Speech to Text model (Scribe v2). */
@@ -59,9 +60,10 @@ export const DEFAULT_VOICE: VoiceSettings = {
   model: DEFAULT_VOICE_MODEL,
   speakOffice: false,
   keepDays: KEEP_DAYS_DEFAULT,
+  speed: SPEED_DEFAULT,
+  favourites: [],
 };
 
-const VOICE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MODEL_ID = /^[a-z0-9_.-]{1,64}$/;
 
 /** Voice settings from a saved state or a PATCH /api/settings, field by field; anything invalid keeps `base`. */
@@ -75,6 +77,8 @@ export function voiceSettings(base: VoiceSettings, patch: unknown): VoiceSetting
   if (typeof p.model === 'string' && MODEL_ID.test(p.model.trim())) out.model = p.model.trim();
   if (typeof p.speakOffice === 'boolean') out.speakOffice = p.speakOffice;
   out.keepDays = clampKeepDays(p.keepDays ?? out.keepDays);
+  out.speed = clampSpeed(p.speed ?? out.speed);
+  out.favourites = cleanFavourites(p.favourites ?? out.favourites);
   return out;
 }
 
@@ -156,6 +160,27 @@ export function speaks(m: PhoneMessage, s: VoiceSettings): boolean {
   return m.from === 'ceo' || (m.from === 'office' && s.speakOffice);
 }
 
+/** One clip to make: the voice, the model, the speed (0.7–1.2) and the words. */
+export interface SynthRequest {
+  voiceId: string;
+  model: string;
+  speed: number;
+  text: string;
+}
+
+/**
+ * POST /v1/text-to-speech's body, the speed in voice_settings ("available for all voices and all models", ElevenLabs'
+ * help centre; its Eleven v4 page says v4 has no Speed slider, so a v4 voice may keep its own pace).
+ */
+export function synthBody({ model, speed, text }: SynthRequest): { text: string; model_id: string; voice_settings: { speed: number } } {
+  return { text, model_id: model, voice_settings: { speed: clampSpeed(speed) } };
+}
+
+/** A clip's cache name: the voice, model, speed and words, so a change to any of them never plays stale audio. */
+export function clipHash({ voiceId, model, speed, text }: SynthRequest): string {
+  return crypto.createHash('sha256').update(`${voiceId}\n${model}\n${clampSpeed(speed)}\n${text}`).digest('hex').slice(0, 12);
+}
+
 /** An ElevenLabs call that failed; status 0 when it never answered. */
 export class VoiceApiError extends Error {
   constructor(
@@ -170,7 +195,7 @@ export class VoiceApiError extends Error {
 export interface VoiceApi {
   checkKey(key: string): Promise<void>;
   listVoices(key: string): Promise<Omit<VoiceOption, 'recommended'>[]>;
-  synthesize(key: string, req: { voiceId: string; model: string; text: string }, signal: AbortSignal): Promise<Buffer>;
+  synthesize(key: string, req: SynthRequest, signal: AbortSignal): Promise<Buffer>;
   /** Speech to Text: the words in `audio` (a clipType() type). */
   transcribe(key: string, req: { audio: Buffer; type: string }, signal: AbortSignal): Promise<string>;
 }
@@ -276,10 +301,22 @@ export class Voice {
         const own = mine.find((v) => v.id === r.id);
         return own ? { ...own, labels: fill(own.labels, r.labels), recommended: true } : r;
       }),
-      ...mine.filter((v) => !recommended.has(v.id)).map((v) => ({ ...v, recommended: false })).sort((a, b) => a.name.localeCompare(b.name)),
+      ...mine.filter((v) => !recommended.has(v.id)).map((v) => ({ ...v, recommended: false })).sort((a, b) => Number(!!b.v4) - Number(!!a.v4) || a.name.localeCompare(b.name)),
     ];
     if (this.key === key) this.voicesCache = { at: now, list };
     return list;
+  }
+
+  /**
+   * A voice for a new agent (or Shuffle's next one), distinct on their floor where it can be: only while ElevenLabs
+   * speaks and a key works; null otherwise or when the list can't be had.
+   */
+  async pickFor(seed: string, used: string[], not = ''): Promise<{ voiceId: string; voiceName: string } | null> {
+    const s = this.deps.settings();
+    if (s.provider !== 'elevenlabs' || !this.key || this.rejected) return null;
+    const list = await this.voices().catch(() => [] as VoiceOption[]);
+    const id = pickVoice(voicePool(list, s.favourites), used, seed, not);
+    return id ? { voiceId: id, voiceName: list.find((v) => v.id === id)?.name ?? '' } : null;
   }
 
   /** GET /api/voice/messages/:id: a phone message as mp3, made once and cached. */
@@ -293,7 +330,7 @@ export class Voice {
     if (first) return first; // made before, perhaps in another voice: a message keeps the clip it was first read with
     const text = messageSpeech(m);
     if (!text) throw new HttpError(404, `Message ${id} has nothing to say aloud`);
-    return this.audio(String(m.id), s.voiceId, s.model, text, m);
+    return this.audio(String(m.id), { voiceId: s.voiceId, model: s.model, speed: s.speed, text }, m);
   }
 
   /**
@@ -366,21 +403,20 @@ export class Voice {
   /** GET /api/voice/sample: the settings' Test button, in `voiceId` (default: the chosen voice). */
   async sampleAudio(voiceId?: string): Promise<Buffer> {
     const s = this.deps.settings();
-    return this.audio('sample', voiceId || s.voiceId, s.model, SAMPLE_LINE);
+    return this.audio('sample', { voiceId: voiceId || s.voiceId, model: s.model, speed: s.speed, text: SAMPLE_LINE });
   }
 
   /** GET /api/voice/standup: the CEO's line at a stand-up in the 3D office, made once per wording and cached. */
   async standupAudio(count: number, part: DayPart): Promise<Buffer> {
     const s = this.deps.settings();
     if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
-    return this.audio('standup', s.voiceId, s.model, standupLine(count, part));
+    return this.audio('standup', { voiceId: s.voiceId, model: s.model, speed: s.speed, text: standupLine(count, part) });
   }
 
-  private async audio(name: string, voiceId: string, model: string, text: string, m?: PhoneMessage): Promise<Buffer> {
-    if (!VOICE_ID.test(voiceId)) throw new HttpError(400, 'Pick an ElevenLabs voice first.');
-    // The voice, model and words are in the file name, so a new voice or a reused message id never plays stale audio.
-    const hash = crypto.createHash('sha256').update(`${voiceId}\n${model}\n${text}`).digest('hex').slice(0, 12);
-    const file = path.join(this.deps.cacheDir, `${name}-${hash}.mp3`);
+  private async audio(name: string, req: SynthRequest, m?: PhoneMessage): Promise<Buffer> {
+    if (!VOICE_ID.test(req.voiceId)) throw new HttpError(400, 'Pick an ElevenLabs voice first.');
+    // The voice, model, speed and words are in the file name, so a change or a reused message id never plays stale audio.
+    const file = path.join(this.deps.cacheDir, `${name}-${clipHash(req)}.mp3`);
     const cached = await fs.readFile(file).catch(() => null);
     if (cached) {
       if (m) await this.record(m, [path.basename(file)]);
@@ -389,7 +425,7 @@ export class Voice {
     this.requireKey();
     const busy = this.making.get(file);
     if (busy) return busy;
-    const made = this.oneAtATime(() => this.synthesize(file, { voiceId, model, text }, m)).finally(() => this.making.delete(file));
+    const made = this.oneAtATime(() => this.synthesize(file, req, m)).finally(() => this.making.delete(file));
     this.making.set(file, made);
     return made;
   }
@@ -400,7 +436,7 @@ export class Voice {
     return run;
   }
 
-  private async synthesize(file: string, req: { voiceId: string; model: string; text: string }, m?: PhoneMessage): Promise<Buffer> {
+  private async synthesize(file: string, req: SynthRequest, m?: PhoneMessage): Promise<Buffer> {
     this.requireKey(); // the key may have been rejected or removed while this waited its turn
     const key = this.key;
     const audio = await this.deps.api.synthesize(key, req, AbortSignal.timeout(SYNTH_TIMEOUT_MS)).catch((err) => this.failed(err, key, 'speak the message'));
