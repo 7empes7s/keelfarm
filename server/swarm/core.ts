@@ -267,11 +267,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => {
-      this.lab.session(line);
-      this.logSession(line, run);
-      this.careerWork(line);
-    });
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); });
     // The machine's daily log folder only for the real office: never from the demo or the tests.
     const machineDir = !backend.demo && !process.env.VITEST && existsSync(MACHINE_DAILY_DIR) ? MACHINE_DAILY_DIR : null;
     this.history = new SessionHistory({
