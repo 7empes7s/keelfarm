@@ -182,7 +182,9 @@ stop, fast-forward, install/build, restart, roll back on failure, `<SWARM_HOME>/
 are in `scripts/officeSteps.mjs` (tested in `officeSteps.test.ts`).
 
 Shared (`shared/`, imported by both sides):
-- `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings).
+- `types.ts`: the REST/websocket contract (`WorldSnapshot`, `ServerEvent`, views, settings), one file per area in
+  `types/` (agents, repos, chat, notify, settings, events…, each under 400 lines), all re-exported from `types.ts`:
+  add a type to its area's file and import it from `shared/types`.
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
 - `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
@@ -206,7 +208,7 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   holiday themes (`themes/`: which one is on from `shared/themes.ts`, their data and decoration slots in `themes.ts`
   and `layout.ts`, each theme's scene in one lazy chunk loaded only while a theme is on; `?theme=` and `?date=` for QA).
 - `src/ui/`: HTML overlays: HUD, terminal (`LiveTerminal.tsx`: xterm.js on `/ws/term`), Kanban, manager's console,
-  phone (with its mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
+  phone (`Phone.tsx`; its chat in `Chat.tsx` / `ChatBubble.tsx`, team changes in `TeamChanges.tsx`, mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
   viewer, sounds (`sfx.ts`), key bindings (`keymap.ts`, pure; `controls.ts` keeps the player's own, and every
   shortcut asks it, never a hard-coded key).
 - Accessibility (Settings → Accessibility, `ui/a11y.ts`, saved per browser through pure `a11yPrefs.ts`): captions
@@ -260,12 +262,12 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   - `windowsHide: true` on spawns; npm on Windows goes through `cmd.exe`.
 - Agent prompts are paid for on every session: keep prompt text short and specific.
 - 2D UI follows docs/design.md: tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
-  `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to `e2e/layout.spec.ts`.
+  `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to their screen's file in `e2e/layout/` (under 300 lines each).
 
 ## Code health
 
 - `npm run lint` fails on findings the baseline doesn't have: a new lint finding in a file (per rule), a new unused
-  file/export/type/dependency (knip), a new file over 800 lines, or a file over 800 grown past its recorded size + 5%.
+  file/export/type/dependency (knip), a new file over 800 lines (300 in `e2e/layout/`, 400 in `shared/types/`), or a file over 800 grown past its recorded size + 5%.
   Fix it; don't silence it. Fixed old ones? `npm run lint:update` and commit `code-health.baseline.json`.
   `--accept` (record as is) only for renames or a stated exception. No formatter, no reformatting. CONTRIBUTING.md
   and docs/code-health.md have the details and the cleanup backlog.

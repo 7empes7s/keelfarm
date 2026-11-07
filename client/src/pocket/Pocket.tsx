@@ -9,7 +9,7 @@ import { officeUpdateChip } from '../officeUpdate';
 import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { Panel } from '../ui/Panel';
-import { Chat } from '../ui/Phone';
+import { Chat } from '../ui/Chat';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';

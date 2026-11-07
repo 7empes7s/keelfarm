@@ -15,7 +15,7 @@ import { IssueForm } from './KanbanView';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { Menu } from './Menu';
-import { Resume } from './Phone';
+import { Resume } from './TeamChanges';
 import { ProjectPicker } from './ProjectPicker';
 import { badgeStatus, StatusPill } from './StatusPill';
 import { agentPhrase } from './statusPhrase';

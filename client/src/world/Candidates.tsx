@@ -4,7 +4,7 @@ import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import type { HireRequestView } from '../../../shared/types';
 import { useStore, type Agent } from '../store';
-import { cliLabel, hireCli } from '../ui/Phone';
+import { cliLabel, hireCli } from '../ui/TeamChanges';
 import { WALK_SPEED } from './body';
 import { playerAt } from './camera/rig';
 import { Character } from './Character';
