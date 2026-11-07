@@ -31,21 +31,48 @@ calling ElevenLabs until you enter a new key.
 
 ## Model and cost
 
-The default model is **`eleven_flash_v2_5`** (Flash v2.5): ElevenLabs' lowest-latency model (~75 ms before network
-time), 32 languages, and half the price per character of Multilingual v2. Other models you can set:
+Settings → Voice → **Model** shows each model with its API price per 1,000 characters. A new office starts on
+**`eleven_v4_turbo`**; an office set up before keeps the model it saved (Flash v2.5 was the old default).
 
-| Model | Why |
-| --- | --- |
-| `eleven_flash_v2_5` (default) | fastest and cheapest; plenty for short updates |
-| `eleven_v4_turbo` | newer and more expressive, still real-time (~100 ms) |
-| `eleven_multilingual_v2`, `eleven_v4` | highest quality; slower and pricier |
+| Model | Price / 1,000 chars | Why |
+| --- | --- | --- |
+| `eleven_v4_turbo` (new offices) | $0.04 | Eleven v4's real-time model (~100–150 ms): expressive, inline audio tags such as `[laughs]`, `[sighs]`, `[whispers]` |
+| `eleven_v4` | $0.08 | the richest delivery, up to 10,000 characters a request; slower |
+| `eleven_flash_v2_5` | $0.04 | fastest (~75 ms), plain; plenty for short updates |
+| `eleven_multilingual_v2` | $0.08 | older high-quality model |
 
-What a message costs: on ElevenLabs' API pricing, Flash costs about **$0.04 per 1,000 characters** (Multilingual v2
-and v3: $0.08). A typical CEO update is 300–800 characters of speech once markdown, emoji and links are stripped,
+Eleven v4 and v4 Turbo launched on 28 September 2026 ([blog](https://elevenlabs.io/blog/eleven-v4),
+[models](https://elevenlabs.io/docs/models)); v4 prices from [OpenRouter](https://openrouter.ai/elevenlabs/eleven-v4).
+
+What a message costs: Flash and v4 Turbo cost about **$0.04 per 1,000 characters** (Multilingual v2 and v4: $0.08). A typical CEO update is 300–800 characters of speech once markdown, emoji and links are stripped,
 so about **1–3 cents**; the office never speaks more than about 1,500 characters of one message (about 6 cents). On a
 subscription plan the same text uses credits from your monthly allowance instead. Each message is synthesized once and
 cached (`<SWARM_HOME>/voice/`, at most 200 clips, kept 7 days by default), so replaying it is free. The settings' **Test** button
 speaks one short line (about 60 characters) and caches it too.
+
+## Speed
+
+Settings → Voice → **Speed**: 0.7× to 1.2× in steps of 0.05, 1× by default. ElevenLabs gets it as
+`voice_settings.speed` on every clip ("available for all voices and all models",
+[help centre](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/can-i-change-the-pace-of-the-voice.md));
+note that ElevenLabs' [Eleven v4 page](https://elevenlabs.io/docs/overview/capabilities/text-to-speech/eleven-v4) says
+v4 has no Speed slider, so a v4 voice may keep its own pace. The speed is part of a clip's cache name, so a new speed
+makes new clips. The browser's voice uses the same number as its rate.
+
+## Favourites, the newest voices and a voice for every agent
+
+Every voice picker (Settings → Voice, and each profile: agent window → Profile) has a search, a star on each voice and
+a preview. Starred voices (`settings.voice.favourites`, ids only, at most 50) come first everywhere, then the
+**Eleven v4** voices, then the shortlist below, then the rest. The office knows a v4 voice from ElevenLabs' own
+metadata in the voice list (a voice whose `high_quality_base_model_ids` or `verified_languages` name an `eleven_v4`
+model), rather than a hard-coded list of the 21 voices v4 shipped with: ElevenLabs' docs don't publish their ids.
+
+Each agent has a voice of their own (`voiceId` / `voiceName` on the agent). A new agent gets one by themselves, from
+the favourites, else the v4 voices, else the shortlist, one nobody on their floor has while there are enough; so does
+everyone still without one when a key is saved or ElevenLabs is turned on. Change it in their profile, or tap
+**Shuffle** for another. The CEO's profile shows the office voice (`settings.voice.voiceId`): it is the one that reads
+messages aloud and talks in voice mode, so changing it there or in Settings → Voice changes both. The pickers show
+only while ElevenLabs is on with a key; otherwise the profile says so, with a button to Settings → Voice.
 
 ## Shortlisted voices
 
@@ -53,7 +80,7 @@ ElevenLabs' old Default voices (Rachel, Sarah, George, …) **expire on 31 Decem
 March 2026 never had them. The shortlist is therefore taken from the new voices ElevenLabs recommends as their
 replacements, which stay usable for good. They're in the Voice Library and can be used by id without saving them; save
 one to **My Voices** to see it on elevenlabs.io too. The office marks these `recommended` in the voice list and shows
-them first, followed by the voices on your account.
+them as **Recommended**, after your favourites and the v4 voices and before the rest of your account's voices.
 
 | Voice | Id | Why it suits a calm, friendly CEO |
 | --- | --- | --- |
@@ -230,7 +257,8 @@ for after the call so nothing talks over the CEO.
 | Route | What it does |
 | --- | --- |
 | `PUT /api/voice/key` `{ key }` | checks and saves the key; `""` removes it. 400 if ElevenLabs rejects it |
-| `GET /api/voice/voices` | `[{ id, name, category, labels: { accent, gender, age, description, use_case }, previewUrl, recommended }]`, cached 10 minutes; 409 without a key |
+| `GET /api/voice/voices` | `[{ id, name, category, labels: { accent, gender, age, description, use_case }, previewUrl, recommended, v4? }]`, cached 10 minutes; 409 without a key |
+| `PATCH /api/agents/:id` `{ voiceId, voiceName }` | an agent's voice; `""` clears it. 400 for the CEO (theirs is `settings.voice`) or a bad id |
 | `GET /api/voice/messages/:id` | `audio/mpeg` for a CEO message (or an office note with Speak office notes on); 404 when the voice isn't ElevenLabs or there's no such message, 502 when ElevenLabs fails |
 | `GET /api/voice/messages/:id?cached=1&part=N` | the phone's ▶: part N of the message's saved clips (`X-Voice-Parts` says how many), or 404 when none is saved. Never calls ElevenLabs |
 | `DELETE /api/voice/cache` | deletes every saved clip |
@@ -239,12 +267,12 @@ for after the call so nothing talks over the CEO.
 | `GET /api/voice/standup?n=3&part=morning` | the CEO's line at a stand-up in the 3D office ("Morning team, three new features today!"; `part` is `morning`, `afternoon` or `evening`), made once per wording and cached; 404 when the voice isn't ElevenLabs |
 
 Settings travel in `settings.voice` (`PATCH /api/settings`): `{ provider: 'off' | 'browser' | 'elevenlabs', voiceId,
-voiceName, model, speakOffice, keepDays }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
+voiceName, model, speakOffice, keepDays, speed, favourites }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
 'elevenlabs', autoSend, handsFree }`. The snapshot has `voiceKeySet`, `voiceKeyHint` and `voiceCache`
 (`{ clips, bytes, saved }`, `saved` being the message ids the ▶ can replay); a `voiceKey` event follows every key change
 and a `voiceCache` event every change to the cache. A phone message's `voice` says who read it when it arrived. One clip is made at a time (20 s timeout); requests for a clip that's being made share that call.
 
 The demo office (`--demo`) fakes all of it with no network: any key except one containing "bad" is accepted, there are
-three voices, and every message is a short generated chime (a WAV), pitched by the voice, cached and replayed like a
+nine voices (six of them v4, from `server/demoVoices.ts`), every message is a short generated chime (a WAV), pitched by the voice, cached and replayed like a
 real clip. Its Speech to Text hears "What's everyone working on?" in any recording. The server logs `voice: made a new
 clip …` for every clip it makes and `voice: transcribed a 2.4 s clip (30 KB)` for every transcription (never the words).

@@ -7,6 +7,7 @@ import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceSettings } from
 import { HttpError } from './httpError.ts';
 import {
   cacheToPrune,
+  clipHash,
   clipsFor,
   DEFAULT_LISTEN,
   DEFAULT_VOICE,
@@ -17,6 +18,7 @@ import {
   RECOMMENDED_VOICES,
   savedMessages,
   speaks,
+  synthBody,
   Voice,
   VoiceApiError,
   voiceSettings,
@@ -115,9 +117,41 @@ describe('voiceSettings', () => {
     expect(voiceSettings(DEFAULT_VOICE, undefined)).toEqual(DEFAULT_VOICE);
   });
 
+  it('clamps the speed to 0.7–1.2 in steps of 0.05, and keeps only valid favourite ids, once each', () => {
+    expect(DEFAULT_VOICE).toMatchObject({ speed: 1, favourites: [] });
+    expect(voiceSettings(DEFAULT_VOICE, { speed: 2 }).speed).toBe(1.2);
+    expect(voiceSettings(DEFAULT_VOICE, { speed: 0.1 }).speed).toBe(0.7);
+    expect(voiceSettings(DEFAULT_VOICE, { speed: 0.93 }).speed).toBe(0.95);
+    expect(voiceSettings({ ...DEFAULT_VOICE, speed: 0.8 }, { speed: 'fast' }).speed).toBe(1);
+    expect(voiceSettings(DEFAULT_VOICE, { favourites: ['abc', 'abc', 'bad id!', 42, 'xyz'] }).favourites).toEqual(['abc', 'xyz']);
+    expect(voiceSettings({ ...DEFAULT_VOICE, favourites: ['abc'] }, { favourites: 'abc' }).favourites).toEqual([]);
+    // an office saved before #320 starts at 1× with no favourites, and keeps its model
+    const old = { provider: 'elevenlabs', voiceId: 'v', voiceName: 'V', model: 'eleven_flash_v2_5', speakOffice: false, keepDays: 7 };
+    expect(voiceSettings(DEFAULT_VOICE, old)).toMatchObject({ speed: 1, favourites: [], model: 'eleven_flash_v2_5' });
+  });
+
+  it('starts new offices on Eleven v4 Turbo', () => {
+    expect(DEFAULT_VOICE.model).toBe('eleven_v4_turbo');
+  });
+
   it('starts off, with the office quiet', () => {
     expect(DEFAULT_VOICE.provider).toBe('off');
     expect(DEFAULT_VOICE.speakOffice).toBe(false);
+  });
+});
+
+describe('synthesis', () => {
+  const req = { voiceId: 'v1', model: 'eleven_v4_turbo', speed: 0.85, text: 'Hello' };
+  it('sends the speed as voice_settings.speed, clamped', () => {
+    expect(synthBody(req)).toEqual({ text: 'Hello', model_id: 'eleven_v4_turbo', voice_settings: { speed: 0.85 } });
+    expect(synthBody({ ...req, speed: 3 }).voice_settings.speed).toBe(1.2);
+  });
+
+  it('caches a clip per speed, as per voice, model and words', () => {
+    expect(clipHash(req)).toBe(clipHash({ ...req }));
+    expect(clipHash({ ...req, speed: 1 })).not.toBe(clipHash(req));
+    expect(clipHash({ ...req, voiceId: 'v2' })).not.toBe(clipHash(req));
+    expect(clipHash({ ...req, model: 'eleven_v4' })).not.toBe(clipHash(req));
   });
 });
 
@@ -155,6 +189,7 @@ describe('Voice', () => {
   let release: (() => void) | null;
   let views: VoiceCacheView[];
   let clock: number;
+  let speeds: number[];
   const messages: PhoneMessage[] = [
     { id: 1, from: 'ceo', text: 'Floor 2 shipped #12 🎉', at: 0 },
     { id: 2, from: 'manager', text: 'thanks', at: 0 },
@@ -170,8 +205,9 @@ describe('Voice', () => {
       if (failWith) throw new VoiceApiError(failWith, `${failWith}`);
       return [{ id: 'own1', name: 'Mine', category: 'cloned', labels: { accent: '', gender: '', age: '', description: '', use_case: '' }, previewUrl: 'https://x/p.mp3' }];
     },
-    synthesize: async (_key, { text }) => {
+    synthesize: async (_key, { text, speed }) => {
       calls.synth++;
+      speeds.push(speed);
       if (release) await new Promise<void>((r) => (release = r));
       if (failWith) throw new VoiceApiError(failWith, `${failWith}: nope`);
       return Buffer.from(`mp3:${text}`);
@@ -210,6 +246,7 @@ describe('Voice', () => {
     release = null;
     views = [];
     clock = Date.now();
+    speeds = [];
   });
   afterEach(() => fs.rm(dir, { recursive: true, force: true, maxRetries: 3 }));
 
@@ -246,6 +283,31 @@ describe('Voice', () => {
     expect(list.at(-1)).toMatchObject({ id: 'own1', recommended: false });
     await v.voices();
     expect(calls.list).toBe(1);
+  });
+
+  it('speaks at the chosen speed, and a new speed makes a new clip', async () => {
+    const v = make();
+    await v.setKey('sk_good');
+    settings = { ...settings, speed: 0.8 };
+    await v.sampleAudio();
+    await v.sampleAudio();
+    settings = { ...settings, speed: 1.1 };
+    await v.sampleAudio();
+    expect(speeds).toEqual([0.8, 1.1]);
+  });
+
+  it("picks a new agent's voice from the favourites, else the v4 voices, never one already on the floor", async () => {
+    const v = make();
+    expect(await v.pickFor('a1', [])).toBeNull(); // no key
+    await v.setKey('sk_good');
+    settings = { ...settings, provider: 'browser' };
+    expect(await v.pickFor('a1', [])).toBeNull(); // ElevenLabs isn't speaking
+    settings = { ...settings, provider: 'elevenlabs', favourites: ['own1', RECOMMENDED_VOICES[2].id] };
+    const first = await v.pickFor('a1', []);
+    expect(['own1', RECOMMENDED_VOICES[2].id]).toContain(first?.voiceId);
+    const second = await v.pickFor('a1', [first!.voiceId]);
+    expect(second?.voiceId).not.toBe(first?.voiceId);
+    expect(second?.voiceName).toBeTruthy();
   });
 
   it('speaks CEO messages once, cached, and 404s for the rest', async () => {

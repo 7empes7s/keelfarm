@@ -109,6 +109,8 @@ export interface PersistedAgent {
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
   account?: string; // the account (id) or tag they're pinned to (#247, shared/accounts.ts); absent: the rotation
+  voiceId?: string; // their ElevenLabs voice (#320, shared/voices.ts); absent: none yet
+  voiceName?: string;
   declared?: string[] | null; // the files they declared for their current task (file leases, #24); cleared with the task
   status: AgentStatus;
   issueNumber: number | null;

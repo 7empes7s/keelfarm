@@ -1,22 +1,22 @@
 // The Settings tab's Voice section: who reads messages aloud, the ElevenLabs key (write-only), the voice, and a Test;
 // then talking instead of typing: who turns speech into text, auto-send and hands-free. The key lives on the server;
 // the browser only ever sees its last 4 characters.
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { SAMPLE_LINE } from '../../../shared/speech';
 import { cacheLabel, clampKeepDays, KEEP_DAYS_MAX, KEEP_DAYS_MIN } from '../../../shared/voiceClips';
-import { CEO_ID, type ListenProvider, type ListenSettings, type VoiceOption, type VoiceProvider, type VoiceSettings as Voice } from '../../../shared/types';
+import { CEO_ID, type ListenProvider, type ListenSettings, type VoiceProvider, type VoiceSettings as Voice } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { micCaps, setHandsFree } from './mic';
 import { cantListen } from './micText';
-import { getAudioPrefs } from './sfx';
-import { keyName } from './controls';
 import { Key } from './Key';
-import { browserVoices, searchVoices, voiceLabels, type BrowserVoice } from './voicePicker';
+import { browserVoices, type BrowserVoice } from './voicePicker';
 import { playClip, speakLine, stopVoice } from './voicePlayback';
+import { hintMuted, useVoiceList, VoicePicker, type Playing } from './VoiceChooser';
+import { clampSpeed, modelPrice, SPEED_MAX, SPEED_MIN, SPEED_STEP, speedLabel, VOICE_MODELS } from '../../../shared/voices';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/voice.md';
 
@@ -33,13 +33,6 @@ const LISTENERS: [ListenProvider, string, string][] = [
 ];
 
 type Save = (patch: Partial<Voice>) => void;
-
-/** What's playing: a voice's preview (its id), the Test line, or nothing. */
-type Playing = string | null;
-
-function hintMuted() {
-  if (getAudioPrefs().muted) useStore.getState().pushToast('info', `Sound is off: press ${keyName('mute')} to hear it`);
-}
 
 /** The browser's voices, which arrive asynchronously; null where the browser can't speak. */
 function useBrowserVoices(): BrowserVoice[] | null {
@@ -149,103 +142,56 @@ function ElevenLabsKey() {
   );
 }
 
-function VoiceRow({ v, chosen, playing, onChoose, onPreview }: { v: VoiceOption; chosen: boolean; playing: boolean; onChoose: () => void; onPreview: () => void }) {
-  const labels = voiceLabels(v);
+function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; save: Save; playing: Playing; setPlaying: (p: Playing) => void }) {
+  const list = useVoiceList();
+  const model = VOICE_MODELS.find((m) => m.id === voice.model);
   return (
-    <div className={`voice-row ${chosen ? 'voice-row-on' : ''}`}>
-      <label className="toggle grow">
-        <input type="radio" name="elevenlabs-voice" checked={chosen} onChange={onChoose} />
+    <>
+      <div className="field">
         <span>
-          <b>{v.name}</b>
-          {v.labels?.description && <span className="muted"> · {v.labels.description}</span>}
-          {labels && <span className="muted small voice-labels">{labels}</span>}
+          Voice{voice.voiceName && <span className="muted"> · {voice.voiceName}</span>} <span className="muted small">(the CEO's, also in their profile)</span>
         </span>
+      </div>
+      <VoicePicker list={list} chosen={voice.voiceId} onChoose={(v) => save({ voiceId: v.id, voiceName: v.name })} name="elevenlabs-voice" playing={playing} setPlaying={setPlaying} />
+      <label className="field">
+        <span>Model</span>
+        <select value={voice.model} onChange={(e) => save({ model: e.target.value })}>
+          {!VOICE_MODELS.some((m) => m.id === voice.model) && <option value={voice.model}>{voice.model}</option>}
+          {VOICE_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label} · {modelPrice(m)}
+            </option>
+          ))}
+        </select>
+        {model && <span className="muted small">{model.note}</span>}
       </label>
-      <button
-        type="button"
-        className="btn btn-small btn-ghost"
-        aria-label={playing ? `Stop the preview of ${v.name}` : `Preview ${v.name}`}
-        title={v.previewUrl ? undefined : 'Says the test line in this voice'}
-        onClick={onPreview}
-      >
-        {playing ? (
-          <>
-            <Icon name="square" /> Stop
-          </>
-        ) : (
-          <>
-            <Icon name="play" /> Preview
-          </>
-        )}
-      </button>
-    </div>
+    </>
   );
 }
 
-function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; save: Save; playing: Playing; setPlaying: (p: Playing) => void }) {
-  const hint = useStore((s) => s.voiceKeyHint);
-  const [list, setList] = useState<VoiceOption[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [query, setQuery] = useState('');
-  const listRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let live = true;
-    setList(null);
-    setFailed(false);
-    api.voices().then(
-      (l) => live && setList(l),
-      () => live && setFailed(true),
-    );
-    return () => {
-      live = false;
-    };
-  }, [hint]);
-  // Show the chosen voice when the list arrives, even when it's far down.
-  useEffect(() => {
-    const el = listRef.current;
-    const row = el?.querySelector<HTMLElement>('.voice-row-on');
-    if (el && row) el.scrollTop = row.offsetTop - el.clientHeight / 2 + row.offsetHeight / 2;
-  }, [list]);
-  const preview = async (v: VoiceOption) => {
-    if (playing === v.id) return stopVoice();
-    hintMuted();
-    setPlaying(v.id);
-    try {
-      // Library voices may have no preview of their own: then it's the test line, made once and cached.
-      const ok = await playClip(v.previewUrl ?? (await api.voiceSample(v.id)));
-      if (!ok) useStore.getState().pushToast('error', `Couldn't play ${v.name}'s preview`);
-    } catch {
-      // api already toasted the error
-    } finally {
-      setPlaying(null);
-    }
-  };
-  if (failed) return <p className="muted small">Couldn't load the voices.</p>;
-  if (!list) return <p className="muted small">Loading the voices…</p>;
-  const { recommended, others } = searchVoices(list, query);
-  const row = (v: VoiceOption) => (
-    <VoiceRow key={v.id} v={v} chosen={voice.voiceId === v.id} playing={playing === v.id} onChoose={() => save({ voiceId: v.id, voiceName: v.name })} onPreview={() => void preview(v)} />
-  );
+/** Speech speed, 0.7–1.2: ElevenLabs' voice_settings.speed, or the browser voice's rate. Saved when let go. */
+function Speed({ voice, save }: { voice: Voice; save: Save }) {
+  const [speed, setSpeed] = useState(voice.speed);
+  useEffect(() => setSpeed(voice.speed), [voice.speed]);
+  const commit = () => speed !== voice.speed && save({ speed });
   return (
-    <>
-      <label className="field">
-        <span>
-          Voice{voice.voiceName && <span className="muted"> · {voice.voiceName}</span>}
-        </span>
-        <input type="search" aria-label="Search voices" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, accent, age…" />
-      </label>
-      <div ref={listRef} className="voice-list" role="radiogroup" aria-label="ElevenLabs voices">
-        {recommended.length > 0 && (
-          <div className="voice-group">
-            <Icon name="star" /> Recommended
-          </div>
-        )}
-        {recommended.map(row)}
-        {others.length > 0 && <div className="voice-group">All voices</div>}
-        {others.map(row)}
-        {recommended.length + others.length === 0 && <div className="muted small">No voice matches “{query}”.</div>}
-      </div>
-    </>
+    <label className="field">
+      <span>
+        Speed <b>{speedLabel(speed)}</b>
+      </span>
+      <input
+        type="range"
+        min={SPEED_MIN}
+        max={SPEED_MAX}
+        step={SPEED_STEP}
+        value={speed}
+        onChange={(e) => setSpeed(clampSpeed(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+        aria-valuetext={speedLabel(speed)}
+      />
+    </label>
   );
 }
 
@@ -341,7 +287,7 @@ export function VoiceSettings() {
     hintMuted();
     setPlaying('test');
     try {
-      const ok = eleven ? await playClip(await api.voiceSample(voice.voiceId)) : await speakLine(SAMPLE_LINE, voice.voiceName);
+      const ok = eleven ? await playClip(await api.voiceSample(voice.voiceId)) : await speakLine(SAMPLE_LINE, voice.voiceName, voice.speed);
       if (!ok) useStore.getState().pushToast('error', eleven ? "Couldn't play the test" : "The browser couldn't speak the test line");
     } catch {
       // api already toasted the error
@@ -389,6 +335,7 @@ export function VoiceSettings() {
       {voice.provider === 'browser' && <BrowserVoices voice={voice} save={save} />}
       {voice.provider !== 'off' && (
         <>
+          <Speed voice={voice} save={save} />
           <label className="toggle">
             <input type="checkbox" checked={voice.speakOffice} onChange={(e) => save({ speakOffice: e.target.checked })} /> Also speak office alerts
           </label>

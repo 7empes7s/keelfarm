@@ -115,7 +115,7 @@ function sayStandupLine(count: number, hour: number, done: (how: string) => void
   if (v.provider === 'off') return done('off');
   if (voiceSpeaking !== null) return done('busy'); // a message is being read aloud: never talk over it
   if (v.provider === 'browser') {
-    void speakLine(standupLine(count, part), v.voiceName).then((ok) => done(ok ? 'browser' : 'browser failed'));
+    void speakLine(standupLine(count, part), v.voiceName, v.speed).then((ok) => done(ok ? 'browser' : 'browser failed'));
     return;
   }
   if (!voiceKeySet) return done('no key');

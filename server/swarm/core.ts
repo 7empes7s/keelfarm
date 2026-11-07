@@ -264,7 +264,7 @@ export abstract class SwarmCore extends SwarmContract {
       listen: () => this.state.settings.listen,
       messages: () => this.state.messages,
       officeNote: (text) => this.postMessage('office', text),
-      keyChanged: (view) => this.broadcast({ type: 'voiceKey', ...view }),
+      keyChanged: (view) => this.voiceKeyChanged(view),
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
@@ -489,7 +489,7 @@ export abstract class SwarmCore extends SwarmContract {
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
-      ...(a.role !== 'ceo' ? { tools: a.tools ?? {} } : {}), // always sent: a patch can't drop a field
+      ...(a.role !== 'ceo' ? { tools: a.tools ?? {}, voiceId: a.voiceId ?? '', voiceName: a.voiceName ?? '' } : {}), // always sent: a patch can't drop a field
     };
   }
 
