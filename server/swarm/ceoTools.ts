@@ -38,7 +38,8 @@ import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefu
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
 import { modelAfterCliChange, modelProblem } from '../../shared/models.ts';
 import { isCli } from '../clis.ts';
-import type { AgentView, HireRequestView, PhoneMessage } from '../../shared/types.ts';
+import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../../shared/types.ts';
+import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
@@ -79,6 +80,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
+      stopAgent: acts((a) => this.ceoStopAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
       answerAgent: acts((a) => this.answerAgent(a)),
       askManagerChoice: acts((a) => this.askManagerChoice(a)),
@@ -465,13 +467,64 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
   }
 
+  // ---------- the manager's changes (#207, shared/managerChanges.ts) ----------
+
+  /** stop_agent: the CEO ends a running session, e.g. on an issue or PR the manager closed. */
+  protected ceoStopAgent(x: { agent_id: string; reason: string }) {
+    const a = this.agentByRef(x.agent_id);
+    if (a.role === 'ceo') throw new Error('That is you: end your job instead.');
+    if (!BUSY.includes(a.status)) throw new Error(`${a.name} isn't running a session (${a.status}): nothing to stop.`);
+    this.stopAgent(a.id, `${this.ceo().name} (CEO): ${clip(x.reason, 200)}`);
+    this.verdict(a, 'stopped');
+    return `Stopped ${a.name}. Their desk is cleared if their issue or PR is closed.`;
+  }
+
+  /** What the CEO did about an agent a manager's change touched, for their card and Mission control. */
+  protected verdict(a: PersistedAgent, v: CeoVerdict) {
+    if (!markVerdict(this.state.ceo.changes, a.id, v)) return;
+    this.emitChanges([a.id]);
+    this.save();
+  }
+
+  /** Wake the CEO once a burst of changes that touched running work has settled. */
+  protected maybeChanges() {
+    if (changesDue(this.state.ceo.changes, Date.now())) {
+      this.state.ceo.changes.wakeAt = null;
+      this.enqueueCeo({ kind: 'changes', at: Date.now() });
+    }
+  }
+
+  protected ceoChanges: string[] = []; // the changes in the running CEO job's prompt
+
+  /** The changes the CEO hasn't heard of, as a block for the job starting now (shared/managerChanges.ts takeUntold). */
+  protected takeChanges(job: { kind: string }): string {
+    const changes = takeUntold(this.state.ceo.changes, job.kind === 'changes');
+    this.ceoChanges = changes.map((c) => c.id);
+    if (changes.length) this.emitChanges();
+    return changesBlock(changes, (c, id) => {
+      const a = this.state.agents.find((x) => x.id === id);
+      return !a ? id : BUSY.includes(a.status) && stillOn(c, a) ? `${a.name} (${a.id}, ${this.agentDoing(a)})` : `${a.name} (${a.id}, finished it already)`;
+    });
+  }
+
+  /** The CEO's job ended: what it didn't act on was let finish. A preempted job hears its changes again. Returns `preempted`. */
+  protected settleChanges(preempted: boolean): boolean {
+    const ids = this.ceoChanges.splice(0);
+    const list = this.state.ceo.changes.list.filter((c) => ids.includes(c.id));
+    if (preempted) for (const c of list) c.told = false;
+    else if (!settle(this.state.ceo.changes, ids)) return preempted;
+    this.emitChanges(list.flatMap((c) => c.affects));
+    return preempted;
+  }
+
   // ---------- agents' questions (#36, shared/questions.ts) ----------
 
-  /** An agent waiting on an answer shows who they wait for (their card, badge and ❓ sign). */
+  /** An agent waiting on an answer shows who they wait for (their card, badge and ❓ sign); one a manager's change touched, that the CEO decides. */
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
     const v = super.agentView(a, withLog);
     const waiting = waitingOn(this.state.questions, a.id);
-    return { ...v, waiting, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
+    const reviewedBy = BUSY.includes(a.status) && reviewing(this.state.ceo.changes, a) ? this.ceo().name : null;
+    return { ...v, waiting, reviewedBy, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
   }
 
   protected clearTask(a: PersistedAgent) {
@@ -568,6 +621,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const running = !!this.agentRt.get(a.id)?.session;
     if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
+    this.verdict(a, 'redirected');
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }
 

@@ -99,8 +99,11 @@ export abstract class SwarmContract {
   protected abstract dropQuestion(...a: Parameters<Swarm['dropQuestion']>): ReturnType<Swarm['dropQuestion']>;
   protected abstract floorRepo(...a: Parameters<Swarm['floorRepo']>): ReturnType<Swarm['floorRepo']>;
   protected abstract managerAnswer(...a: Parameters<Swarm['managerAnswer']>): ReturnType<Swarm['managerAnswer']>;
+  protected abstract maybeChanges(...a: Parameters<Swarm['maybeChanges']>): ReturnType<Swarm['maybeChanges']>;
   protected abstract notifyQuestion(...a: Parameters<Swarm['notifyQuestion']>): ReturnType<Swarm['notifyQuestion']>;
   protected abstract officeTools(...a: Parameters<Swarm['officeTools']>): ReturnType<Swarm['officeTools']>;
+  protected abstract settleChanges(...a: Parameters<Swarm['settleChanges']>): ReturnType<Swarm['settleChanges']>;
+  protected abstract takeChanges(...a: Parameters<Swarm['takeChanges']>): ReturnType<Swarm['takeChanges']>;
 
   // sessions.ts
   protected abstract closeTestLab(...a: Parameters<Swarm['closeTestLab']>): ReturnType<Swarm['closeTestLab']>;

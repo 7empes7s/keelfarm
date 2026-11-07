@@ -22,6 +22,7 @@ import { CHECKS_ALERT_MS, failedRunIds, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeSt
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { rebaseHandOffs } from '../../shared/practices.ts';
+import { spared } from '../../shared/managerChanges.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
 import type { LogLine, PullInfo } from '../../shared/types.ts';
 import {
@@ -431,7 +432,7 @@ export abstract class SwarmMerge extends SwarmRepos {
   }
 
   protected applyClosure(repo: PersistedRepo, c: Closure): string[] {
-    const plan = afterClose(c, this.holders(repo), this.state.qa.filter((q) => q.repoId === repo.id), BUSY);
+    const plan = afterClose(c, this.holders(repo), this.state.qa.filter((q) => q.repoId === repo.id), BUSY, spared(this.state.ceo.changes.list, repo.id, c));
     const agent = (id: string) => this.state.agents.find((a) => a.id === id)!;
     const why = closedWhy(c);
     const stopped = plan.stop.map(agent);

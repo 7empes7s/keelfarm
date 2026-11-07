@@ -88,8 +88,8 @@ export abstract class SwarmQa extends SwarmSessions {
     setTimeout(() => this.schedule(), 200);
   }
 
-  /** Manager's "send to QA" for any open PR (including ones opened by people); with `agentId`, that free agent tests it now. */
-  async sendToQa(repoId: string, prNumber: number, agentId?: string) {
+  /** Manager's "send to QA" for any open PR (including ones opened by people); with `agentId`, that free agent tests it now. byCeo: the CEO's triage, not a manager change. */
+  async sendToQa(repoId: string, prNumber: number, agentId?: string, byCeo = false) {
     const repo = this.repo(repoId);
     const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber && p.state === 'OPEN');
     if (!pr) throw new HttpError(404, `PR #${prNumber} is not open on ${repo.fullName}`);
@@ -111,6 +111,7 @@ export abstract class SwarmQa extends SwarmSessions {
     if (tester) this.ensureSlot('qa');
     this.clearPrepStrikes(repo.id, prNumber);
     this.queueQa(repo, prNumber, dev ?? null, pr.closesIssues[0] ?? null);
+    if (!byCeo) this.managerChange(repo, 're-qa', { pr: prNumber }, `sent PR #${prNumber} to QA again`, this.runningOn(repo, { pr: prNumber, branch: pr.headRefName }));
     const queued = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber && q.status === 'queued');
     if (tester && queued) {
       void this.runQa(tester, repo, queued); // marks it testing at once, before the scheduler's next pass
@@ -132,6 +133,7 @@ export abstract class SwarmQa extends SwarmSessions {
     const patch = sendBackPatch(prNumber, pr, rec, repo.defaultBranch, note, from);
     this.clearPrepStrikes(repo.id, prNumber);
     this.setQa(rec!, { ...patch, preQa: null });
+    if (!from) this.managerChange(repo, 'send-back', { pr: prNumber }, `sent PR #${prNumber} back to a developer${note ? `: "${clip(note, 80)}"` : ''}`, this.runningOn(repo, { pr: prNumber, branch: listed?.headRefName }));
     setTimeout(() => this.schedule(), 200);
     this.toast('info', `PR #${prNumber} goes back to a developer${patch.fixReason === 'conflict' ? ' to resolve its conflicts' : ''}`);
   }

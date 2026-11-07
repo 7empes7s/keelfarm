@@ -22,6 +22,7 @@ export interface AgentLike {
   prNumber: number | null;
   blocked?: string | null;
   waiting?: 'ceo' | 'manager' | null;
+  reviewedBy?: string | null;
   needsSignIn?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function agentPhrase(a: AgentLike, o: { autoAssign?: boolean } = {}): str
   const working = a.status === 'working' || a.status === 'preparing';
   if (a.needsSignIn) return 'Waiting for you to sign their coding agent in · open their terminal';
   if (a.blocked && working) return 'Stuck on a prompt · the office tells you if it lasts 5 minutes';
+  if (a.reviewedBy && working) return `${a.reviewedBy} is reviewing your change · they decide if this work goes on`;
   if (a.waiting && !working) return a.waiting === 'ceo' ? 'Asked a question · the CEO answers, then they carry on' : 'Asked you a question · answer in the chat and they carry on';
   const pr = a.prNumber != null ? `PR #${a.prNumber}` : 'a PR';
   switch (a.status) {
