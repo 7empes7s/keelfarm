@@ -285,6 +285,24 @@ export interface CliView {
   integrated: boolean;
 }
 
+/** One model a coding agent can run (#198), from its live list or the office's built-in one (shared/models.ts). */
+export interface ModelEntry {
+  id: string; // what the agent is started with
+  label: string; // "Opus 5.5"
+  cli: AgentCli;
+  source: 'live' | 'built-in';
+  checkedAt: number;
+  alias?: boolean; // Claude Code's opus / sonnet / haiku: they float to the newest model
+  isDefault?: boolean; // what the agent picks when it's given none
+}
+
+/** The model catalog: every coding agent's models, cached in the state dir, refreshed at boot, daily and on demand. */
+export interface ModelCatalogView {
+  entries: ModelEntry[];
+  checkedAt: number; // 0: never
+  refreshing?: boolean;
+}
+
 /** Messages on an agent's terminal socket (/ws/term?agent=<id>), server to browser. */
 export type TermServerMessage =
   | { t: 'snapshot'; data: string; cols: number; rows: number; live: boolean } // the screen and scrollback so far
@@ -688,6 +706,7 @@ export interface PhoneMessage {
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
+  ask?: string; // the CEO's: the question those replies answer, when it named one (a `? …` first line, #183)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   visuals?: ChatVisual[]; // the CEO's charts, tables and dashboards (#146, shared/chatVisuals.ts)
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
@@ -822,6 +841,7 @@ export interface WorldSnapshot {
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
+  models?: ModelCatalogView; // the coding agents' models to pick from (#198); absent in a replay
   voiceKeySet: boolean; // an ElevenLabs key is saved (the key itself never leaves the server)
   voiceKeyHint: string; // its last 4 characters, '' when none
   voiceCache: VoiceCacheView;
@@ -885,6 +905,7 @@ export type ServerEvent =
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }
+  | { type: 'models'; models: ModelCatalogView }
   | { type: 'voiceKey'; voiceKeySet: boolean; voiceKeyHint: string }
   | { type: 'voiceCache'; voiceCache: VoiceCacheView }
   | { type: 'weather'; weather: WeatherView }

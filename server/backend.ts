@@ -13,6 +13,7 @@ import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
+import { readCatalog } from './modelCatalog.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
@@ -37,7 +38,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, PullInfo } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, PullInfo } from '../shared/types.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
 export interface Backend {
@@ -132,6 +133,8 @@ export interface Backend {
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
+  /** The coding agents' models, read from their live lists now (server/modelCatalog.ts): never throws. */
+  modelCatalog(): Promise<ModelCatalogView>;
   /** Claude's subscription usage read directly, while no session reports it (#89): no model tokens, never throws. */
   usageCheck(): Promise<UsageCheck>;
   /** The default branch's commits and the issues filed since `since`: what says whether merged PRs survived (#23). */
@@ -293,6 +296,7 @@ export const realBackend: Backend = {
   detectClis,
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
+  modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
   survivalSignals: github.survivalSignals,
   previews: realPreviews,

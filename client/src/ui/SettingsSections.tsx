@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
 import { CLAUDE_MODELS } from '../../../shared/models';
+import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
 import { MemoryFields } from './HealthStrip';
 import { TestLabFields } from './TestLab';
@@ -15,6 +16,21 @@ import { openWhatsNew, useTour } from './tour';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
 const set = (p: SettingsPatch) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
+
+/** Where the model lists come from, when they were checked, and a Refresh (#198). */
+function CatalogStatus() {
+  const models = useStore((s) => s.models);
+  const live = models.entries.find((e) => e.cli === 'claude')?.source === 'live';
+  const when = models.checkedAt ? new Date(models.checkedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'never';
+  return (
+    <div className="row wrap small">
+      <span className="grow muted">{models.refreshing ? 'Checking the coding agents’ models…' : `Claude models: ${live ? 'live list' : 'built-in list'}, checked ${when}`}</span>
+      <button className="btn btn-small" disabled={models.refreshing} onClick={() => void api.refreshModels().catch(() => undefined)}>
+        Refresh
+      </button>
+    </div>
+  );
+}
 
 export function AgentsSettings() {
   const settings = useStore((s) => s.settings);
@@ -32,21 +48,11 @@ export function AgentsSettings() {
           </select>
         </label>
       )}
-      <label className="field">
+      <label className="field" htmlFor="default-model">
         <span>Default model{terminal ? ` for ${cliName(clis, settings.defaultCli)}` : ''}</span>
-        <input
-          key={`${settings.defaultCli}:${settings.defaultModel}`}
-          list={defaultCli === 'claude' ? 'models-s' : undefined}
-          defaultValue={settings.defaultModel}
-          placeholder="the agent's own default"
-          onBlur={(e) => e.target.value !== settings.defaultModel && set({ defaultModel: e.target.value })}
-        />
-        <datalist id="models-s">
-          {CLAUDE_MODELS.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
+        <ModelPicker id="default-model" cli={defaultCli} value={settings.defaultModel} resolvedDefault={defaultCli === 'claude' ? CLAUDE_MODELS[0] : ''} onChange={(defaultModel) => set({ defaultModel })} />
       </label>
+      <CatalogStatus />
       <label className="field">
         <span>Default effort</span>
         <select value={settings.defaultEffort} onChange={(e) => set({ defaultEffort: e.target.value as EffortLevel })}>

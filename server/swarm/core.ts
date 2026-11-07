@@ -58,6 +58,7 @@ import type {
   AgentActivity,
   AgentView,
   CliView,
+  ModelCatalogView,
   LogLine,
   MachineHost,
   NotifyEvent,
@@ -199,6 +200,7 @@ export abstract class SwarmCore extends SwarmContract {
   };
   protected lastOfficeView = '';
   protected clis: CliView[] = []; // coding-agent CLIs found on this machine (detected at startup)
+  protected models: ModelCatalogView = { entries: [], checkedAt: 0 }; // their models (#198): the cache at startup, then read
   protected tooling: ToolInventory = { ...EMPTY_INVENTORY, items: officeItems() }; // Tools & skills (scanned at startup and on demand)
   /** Phone messages read aloud. The demo keeps its own key and clips, so it never touches the real ones. */
   readonly voice: Voice;
@@ -514,6 +516,7 @@ export abstract class SwarmCore extends SwarmContract {
       ops: this.opsNow(),
       doctor: this.doctorView(),
       clis: this.clis,
+      models: this.models,
       ...this.voice.keyView(),
       voiceCache: this.voice.cacheInfo(),
       weather: this.weather.current(),

@@ -8,6 +8,7 @@ import { AgentChat } from './AgentChat';
 import { AgentDetails, type DetailsTab } from './AgentDetails';
 import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMode';
 import { AgentRing } from './AgentRing';
+import { TaskRing } from './TaskProgress';
 import { canPickWork, sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
 import { clearDesk, letGo, stopAgent } from './dangerActions';
 import { LiveTerminal } from './LiveTerminal';
@@ -332,6 +333,7 @@ export function TerminalView({ agentId, view }: { agentId: string; view?: AgentP
   const title = (
     <div className="aw-head">
       <AgentRing agent={agent} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
+      <TaskRing agent={agent} link />
       <button type="button" className="aw-who" aria-expanded={details} aria-controls="aw-details" title={details ? 'Hide the details' : 'Task, profile and setup (or swipe up)'} {...swipe}>
         <span className="aw-name">
           {agent.name}

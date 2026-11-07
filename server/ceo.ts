@@ -169,7 +169,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   proposeCharter(a: CharterProposalArgs): string;
-  resolveDecision(a: { id: string; outcome: string }): string;
+  resolveDecision(a: { id: string; outcome: string; superseded?: boolean }): string;
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
@@ -292,7 +292,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
         size: z.number().int().min(1).max(FLOOR_SEATS).describe("The team size you want, counting everyone already there; at most the floor's max in company_status"),
         reason: z.string().min(1).max(600).describe("Why, from the floor's throughput. The manager reads this."),
         cli: CLI.optional().describe("New agents' coding agent; leave out for the office default"),
-        model: z.string().optional().describe("New agents' model; leave out for the default"),
+        model: z.string().optional().describe("New agents' model id (one of their coding agent's); leave out for the default"),
         effort: EFFORT.optional().describe("New agents' reasoning effort; leave out for the default"),
       },
       (a) => run(() => h.scaleTeam(a)),
@@ -303,7 +303,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       {
         agent_id: z.string(),
         cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
-        model: z.string().optional().describe('"" for the default'),
+        model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
         // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.
         tools_off: TOOL_REFS.describe('Plugins, skills, MCP servers or tools to switch off for them, when the manager asks'),
@@ -582,7 +582,7 @@ export function ceoSystemPrompt(o: {
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
     '- Reply only with something to say, else react or end silently; never answer system notices. Several: answer each.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
-    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each; optional first line `? <question>`), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
     '- Numbers, trends, comparisons: one ```chart, ```table or ```dashboard JSON block plus a one-line verdict. Prefer a live "source" to values: costs:7d[:byFloor|byDay|byKind|perMerge|wasteByCause], throughput:office|floor:N, backlog:office|floor:N, usage. Chart {"type":"bar|line|donut","title","unit":"usd","labels","series":[{"name","values"}],"refs"}; dashboard {"tiles":[{"label","source"}],"charts"}.',
     "- company_status's openDecisions wait in the manager's tray: bring one up only if it bears on this message or before acting on its topic, at most one per reply, none marked trayOnly, and don't re-ask it in text. Answered in words: resolve_decision.",
     '- "[manager edited message #N: …]": they changed a message you already took. Redo or adjust only what changed, and say so in a line.',

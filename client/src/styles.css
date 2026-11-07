@@ -90,15 +90,15 @@ code {
   transition: transform 0.06s, box-shadow 0.06s;
   white-space: nowrap;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled, [aria-disabled='true']) {
   transform: translateY(-1px);
   box-shadow: 0 4px 0 var(--ds-shadow-color);
 }
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(2px);
   box-shadow: 0 1px 0 var(--ds-shadow-color);
 }
-.btn:disabled {
+.btn:is(:disabled, [aria-disabled='true']) {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -133,11 +133,6 @@ code {
   color: var(--ds-on-color);
   box-shadow: 0 5px 0 var(--ds-shadow-color);
 }
-a.btn {
-  display: inline-block;
-  text-decoration: none;
-}
-
 button {
   font-family: var(--font);
 }
@@ -1975,7 +1970,7 @@ input.inline:focus {
   flex: 0 2 auto;
   font-weight: 500;
   color: var(--ink);
-  opacity: 0.75;
+  opacity: 0.8; /* 4.5:1 on the floor's colour */
 }
 .app-title .status {
   flex: none;
@@ -2099,22 +2094,9 @@ input.inline:focus {
   animation: spin 2.4s linear infinite;
 }
 .app-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  inline-size: 100%;
+  max-inline-size: 24rem;
   text-align: left;
-  font-weight: 500;
-  color: var(--muted);
-}
-.app-steps li {
-  padding: 2px 0;
-}
-.app-step-done {
-  color: #1b873a;
-}
-.app-step-now {
-  color: var(--ink);
-  font-weight: 700;
 }
 .app-log {
   width: 100%;
@@ -4667,29 +4649,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .usage-pill-bad {
   background: #ffc2d1;
 }
-.usage-gauge {
-  height: 14px;
-  border: 2px solid var(--ds-outline);
-  border-radius: 999px;
-  background: var(--ds-surface-sunken);
-  overflow: hidden;
-}
-.usage-gauge > div {
-  height: 100%;
-}
 .usage-bars {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.usage-gauge-good > div {
-  background: var(--good);
-}
-.usage-gauge-warn > div {
-  background: var(--warn);
-}
-.usage-gauge-bad > div {
-  background: var(--bad);
 }
 /* The card the console was opened at (an alarm, or the usage meter). */
 .ops-card-hot {

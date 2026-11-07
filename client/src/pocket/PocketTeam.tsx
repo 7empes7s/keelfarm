@@ -11,6 +11,7 @@ import { MessageBox } from '../ui/MessageBox';
 import { badgeStatus, StatusPill as Status } from '../ui/StatusPill';
 import { agentPhrase } from '../ui/statusPhrase';
 import { AgentRing } from '../ui/AgentRing';
+import { TaskRing } from '../ui/TaskProgress';
 import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
@@ -72,6 +73,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
           </span>
           {agent.career && <span className="aw-stats-line">{keyStats(agent.career, Date.now())}</span>}
         </span>
+        <TaskRing agent={agent} />
         <Status status={badgeStatus(agent)} />
       </button>
       <div className="small muted pk-phrase">{agentPhrase(agent, { autoAssign: repo.autoAssign })}</div>
