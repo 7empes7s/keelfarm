@@ -7,12 +7,14 @@ import { slashItems } from './chatCardRules';
 import './chatCards.css';
 import { Sheet } from './ChatArtifacts';
 import type { Pending } from './chatUpload';
+import { CloseButton, Icon } from './Icon';
+import type { IconName } from './icons';
 
 // Files in the CEO chat (shared/files.ts): cards in the bubbles (a thumbnail for images, a chip for the rest), the
 // full-size viewer, the tray of files being attached, the Files list, "Used" under a CEO reply and the "/" picks.
 
-const ICONS: Record<FileKind, string> = { image: '🖼', video: '🎬', pdf: '📕', document: '📝', slides: '📊', sheet: '📈', text: '📄', archive: '🗜' };
-const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => ICONS[fileKind(f.name, f.type) ?? 'text'];
+export const FILE_ICONS: Record<FileKind, IconName> = { image: 'image', video: 'video', pdf: 'book-open', document: 'notebook-pen', slides: 'chart-column', sheet: 'trending-up', text: 'file-text', archive: 'archive' };
+const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => FILE_ICONS[fileKind(f.name, f.type) ?? 'text'];
 const url = (id: string, download = false) => `/api/files/${id}${download ? '?download' : ''}`;
 /** Images the browser can draw (HEIC is kept as it is and shown as a chip). */
 const drawable = (type: string) => type.startsWith('image/') && inlineType(type) && !/hei[cf]/.test(type);
@@ -38,7 +40,7 @@ function KeepButton({ f }: { f: FileView }) {
       title={f.keep ? 'Kept: never deleted. Tap to let it go after its 30 days.' : `Deleted in ${daysLeft(f, Date.now())} days unless kept`}
       onClick={() => void api.keepFile(f.id, !f.keep)}
     >
-      📌 {f.keep ? 'Kept' : 'Keep'}
+      <Icon name="pin" /> {f.keep ? 'Kept' : 'Keep'}
     </button>
   );
 }
@@ -49,7 +51,7 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
   if (!f)
     return (
       <div className="file-card file-gone" aria-label={`${file.name}: expired`}>
-        <span aria-hidden>{fileIcon(file)}</span> <span className="grow file-name">{file.name}</span> <span className="small">expired</span>
+        <span aria-hidden><Icon name={fileIcon(file)} /></span> <span className="grow file-name">{file.name}</span> <span className="small">expired</span>
       </div>
     );
   if (drawable(f.type))
@@ -63,26 +65,31 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
   return (
     <div className="file-card">
       <span className="file-icon" aria-hidden>
-        {fileIcon(f)}
+        <Icon name={fileIcon(f)} />
       </span>
       <span className="grow file-body">
         <b className="file-name">{f.name}</b>
         <span className="small muted">
           {formatSize(f.size)}
-          {f.keep ? ' · 📌 kept' : ''}
+          {f.keep && (
+            <>
+              {' '}
+              · <Icon name="pin" /> kept
+            </>
+          )}
         </span>
       </span>
       {preview && (
         <button type="button" className="btn btn-small" onClick={() => onOpen(f.id)} aria-label={`Preview ${f.name}`}>
-          👁
+          <Icon name="eye" />
         </button>
       )}
       <a className="btn btn-small" href={url(f.id, true)} download={f.name} aria-label={`Download ${f.name}`}>
-        ⬇
+        <Icon name="download" />
       </a>
       {!preview && (
         <button type="button" className="btn btn-small" onClick={() => onOpen(f.id)} aria-label={`More about ${f.name}`}>
-          ⋯
+          <Icon name="ellipsis" />
         </button>
       )}
     </div>
@@ -100,7 +107,7 @@ export function FileViewer({ id, onClose, onOpenInThread }: { id: string; onClos
   const k = fileKind(f.name, f.type);
   const left = daysLeft(f, Date.now());
   return (
-    <Sheet label={`${fileIcon(f)} ${f.name}`} onClose={onClose} className="file-viewer">
+    <Sheet label={<><Icon name={fileIcon(f)} /> {f.name}</>} onClose={onClose} className="file-viewer">
       <div className="artifact-body file-view-body">
         {drawable(f.type) ? (
           // a tap zooms to full size (scroll to pan), another fits it again
@@ -120,17 +127,17 @@ export function FileViewer({ id, onClose, onOpenInThread }: { id: string; onClos
       </div>
       <div className="artifact-actions">
         <a className="btn btn-small btn-good" href={url(f.id, true)} download={f.name}>
-          ⬇ Download
+          <Icon name="download" /> Download
         </a>
         {canShare() && (
           <button type="button" className="btn btn-small" onClick={() => void share(f)}>
-            📤 Share
+            <Icon name="upload" /> Share
           </button>
         )}
         <KeepButton f={f} />
         {onOpenInThread && (
           <button type="button" className="btn btn-small" onClick={() => (onClose(), onOpenInThread())}>
-            💬 Open in thread
+            <Icon name="message-circle" /> Open in thread
           </button>
         )}
       </div>
@@ -155,10 +162,12 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
     <Sheet label={`Files (${files.length})`} onClose={onClose} className="files-list">
       <div className="artifact-body">
         <p className="small muted">
-          {formatSize(total)} on the office server. Files are deleted 30 days after upload unless kept (📌).
+          {formatSize(total)} on the office server. Files are deleted 30 days after upload unless kept (<Icon name="pin" />).
         </p>
         {files.length === 0 ? (
-          <p className="muted">No files yet. Attach one with 📎, or ask the CEO for a document.</p>
+          <p className="muted">
+            No files yet. Attach one with <Icon name="paperclip" />, or ask the CEO for a document.
+          </p>
         ) : (
           <ul className="files-items">
             {files.map((f) => {
@@ -166,10 +175,19 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
               return (
                 <li key={f.id} className="files-item">
                   <button type="button" className="files-open" onClick={() => onOpen(f.id)}>
-                    <span aria-hidden>{fileIcon(f)}</span> <b className="file-name">{f.name}</b>
+                    <span aria-hidden><Icon name={fileIcon(f)} /></span> <b className="file-name">{f.name}</b>
                   </button>
                   <span className="small muted">
-                    {formatSize(f.size)} · {ago(f.at, now)} · {f.keep ? '📌 kept' : left ? `deletes in ${left} day${left === 1 ? '' : 's'}` : 'deletes today'}
+                    {formatSize(f.size)} · {ago(f.at, now)} ·{' '}
+                    {f.keep ? (
+                      <>
+                        <Icon name="pin" /> kept
+                      </>
+                    ) : left ? (
+                      `deletes in ${left} day${left === 1 ? '' : 's'}`
+                    ) : (
+                      'deletes today'
+                    )}
                   </span>
                   <span className="files-actions">
                     <KeepButton f={f} />
@@ -179,7 +197,7 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
                       </button>
                     ) : (
                       <button type="button" className="btn btn-small" onClick={() => setSure(f.id)}>
-                        🗑 Delete now
+                        <Icon name="trash-2" /> Delete now
                       </button>
                     )}
                   </span>
@@ -200,18 +218,18 @@ export function AttachTray({ pending, onRemove }: { pending: readonly Pending[];
     <ul className="attach-tray" aria-label="Files to send">
       {pending.map((p) => (
         <li key={p.key} className={`attach-item ${p.error ? 'attach-failed' : ''}`} title={p.error ?? p.name}>
-          {p.preview ? <img src={p.preview} alt="" className="attach-thumb" /> : <span aria-hidden>{fileIcon(p)}</span>}
+          {p.preview ? <img src={p.preview} alt="" className="attach-thumb" /> : <span aria-hidden><Icon name={fileIcon(p)} /></span>}
           <span className="attach-name">{p.name}</span>
           {p.error ? (
-            <span className="small attach-error">⚠ {p.error}</span>
+            <span className="small attach-error">
+              <Icon name="triangle-alert" /> {p.error}
+            </span>
           ) : !p.ref ? (
             <progress className="attach-progress" max={1} value={p.progress} aria-label={`Uploading ${p.name}`} />
           ) : (
             <span className="small muted">{formatSize(p.size)}</span>
           )}
-          <button type="button" className="chat-reply-x" aria-label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)} />
         </li>
       ))}
     </ul>
@@ -225,16 +243,18 @@ export function UsedLine({ used }: { used: UsedView }) {
       <summary>{usedLine(used)}</summary>
       <ul>
         {used.skills.map((s) => (
-          <li key={`s-${s}`}>✨ {s} skill</li>
+          <li key={`s-${s}`}>
+            <Icon name="sparkles" /> {s} skill
+          </li>
         ))}
         {used.connectors.map((c) => (
           <li key={`c-${c.name}`}>
-            🔌 {c.name} · {c.tools} call{c.tools === 1 ? '' : 's'}
+            <Icon name="plug" /> {c.name} · {c.tools} call{c.tools === 1 ? '' : 's'}
           </li>
         ))}
         {used.tools.map((t) => (
           <li key={`t-${t.name}`}>
-            🛠 {t.name} × {t.count}
+            <Icon name="wrench" /> {t.name} × {t.count}
           </li>
         ))}
       </ul>
@@ -322,7 +342,7 @@ function SlashPicks({ query, floor, active, onPick }: { query: string; floor: nu
       {list.map((x, i) => (
         <li key={x.key} role="option" aria-selected={i === active % list.length}>
           <button type="button" className={`slash-pick ${i === active % list.length ? 'slash-pick-on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(x.text)}>
-            {x.icon} {x.name} <span className="muted small">{x.hint}</span>
+            <Icon name={x.icon} /> {x.name} <span className="muted small">{x.hint}</span>
             {x.example && <span className="muted small slash-cmd-example">e.g. {x.example}</span>}
           </button>
         </li>

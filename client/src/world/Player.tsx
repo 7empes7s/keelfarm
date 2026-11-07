@@ -161,7 +161,7 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
     // A click is easier to make by accident than E, so adding an agent by click asks first.
     if (document.pointerLockElement) document.exitPointerLock();
     void confirmDialog({
-      icon: '🪑',
+      icon: 'armchair',
       title: 'Add an agent at this desk?',
       confirm: 'Add',
     }).then((ok) => {
@@ -178,7 +178,7 @@ function interact() {
   const s = useStore.getState();
   const act = eAction(s.held, s.focus?.action.kind ?? null);
   if (act === 'sip') sipCoffee();
-  else if (act === 'empty') s.pushToast('info', s.held?.kind === 'mug' ? "☕ It's empty: refill it at the machine" : 'All gone');
+  else if (act === 'empty') s.pushToast('info', s.held?.kind === 'mug' ? "It's empty: refill it at the machine" : 'All gone');
   else if (s.focus) runFocusAction(s.focus);
 }
 
@@ -345,7 +345,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       const b = bindings();
       if (isBound(b, 'mute', e.code) && !e.repeat && !isConfirmOpen()) {
         toggleMute();
-        s.pushToast('info', getAudioPrefs().muted ? `🔇 Sound off (${keyName('mute')} to turn it back on)` : '🔊 Sound on');
+        s.pushToast('info', getAudioPrefs().muted ? `Sound off (${keyName('mute')} to turn it back on)` : 'Sound on');
       }
       if (s.overlay || !s.started || isConfirmOpen() || photoActive()) return;
       keys.current.add(e.code);
@@ -419,7 +419,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     window.addEventListener('blur', onBlur);
     const stopLookLock = watchLookLock(requestLook, hushMouse);
     const stopPads = watchPads((on, id) =>
-      useStore.getState().pushToast('info', on ? `🎮 ${padName(id)} connected: left stick walks, right stick looks, A uses, Start for the phone` : `🎮 ${padName(id)} disconnected`),
+      useStore.getState().pushToast('info', on ? `${padName(id)} connected: left stick walks, right stick looks, A uses, Start for the phone` : `${padName(id)} disconnected`),
     );
     return () => {
       stopLookLock();

@@ -5,8 +5,9 @@ import { useStore } from '../store';
 import { changeStats } from '../../../shared/managerChanges';
 import { CEO_ID, type ManagerChange } from '../../../shared/types';
 import { ProgressBar } from './ProgressBar';
+import { Icon } from './Icon';
 
-const VERDICT: Record<NonNullable<ManagerChange['verdict']>, string> = { stopped: '■ stopped', redirected: '↪ redirected', 'let-finish': '✓ let finish' };
+const VERDICT: Record<NonNullable<ManagerChange['verdict']>, string> = { stopped: 'stopped', redirected: 'redirected', 'let-finish': 'let finish' };
 
 function verdictOf(c: ManagerChange, ceo: string): string {
   if (!c.affects.length) return 'no running work touched';
@@ -24,7 +25,11 @@ export function ManagerChangesCard() {
   return (
     <div className="card office-card" id="ops-card-changes">
       <ProgressBar
-        label="✋ Your changes today"
+        label={
+          <>
+            <Icon name="hand" /> Your changes today
+          </>
+        }
         value={`${s.today} · ${s.touched} touched running work`}
         parts={[
           { key: 'stopped', label: 'Stopped', value: s.stopped },

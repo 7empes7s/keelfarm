@@ -6,14 +6,14 @@ import type { PhoneMessage } from '../../../shared/types';
 import type { Conversation } from '../../../shared/conversations';
 import { fileKind, formatSize, inlineType } from '../../../shared/files';
 import { filterLibrary, LIBRARY_FILTERS, libraryCounts, libraryItems, type LibraryFilter, type LibraryItem } from '../../../shared/library';
-import { FilesList } from './ChatFiles';
+import { FILE_ICONS, FilesList } from './ChatFiles';
+import { Icon } from './Icon';
 
 // The chat's Files & artifacts (#132): the thread's (or its project's, or the whole office's) artifacts and files as
 // cards with an icon or thumbnail, title, date and size, filtered All / Artifacts / Images / Documents. The open
 // thread's are built here from its messages; the others come from the office a page at a time.
 
 type Scope = 'thread' | 'project' | 'all';
-const ICON: Record<string, string> = { artifact: '📄', image: '🖼', video: '🎬', pdf: '📕', document: '📝', slides: '📊', sheet: '📈', text: '📄', archive: '🗜' };
 
 /** The open thread's artifacts and attachments (its 📎 count is their number). */
 export function useThreadLibrary(messages: readonly PhoneMessage[]) {
@@ -26,12 +26,14 @@ const when = (at: number) => new Date(at).toLocaleString([], { month: 'short', d
 function Card({ item, onOpen }: { item: LibraryItem; onOpen: () => void }) {
   const f = item.file;
   const thumb = f && f.type.startsWith('image/') && inlineType(f.type) && !/hei[cf]/.test(f.type);
-  const icon = item.kind === 'artifact' ? ICON.artifact : ICON[(f && fileKind(f.name, f.type)) ?? 'document'];
+  const icon = item.kind === 'artifact' ? 'file-text' : FILE_ICONS[(f && fileKind(f.name, f.type)) ?? 'document'];
   const size = item.size === null ? 'Artifact' : formatSize(item.size);
   return (
     <li>
       <button type="button" className="lib-card" onClick={onOpen} aria-label={`${item.title}, ${size}, ${when(item.at)}: open`}>
-        {thumb ? <img className="lib-thumb" src={`/api/files/${f.id}`} alt="" loading="lazy" /> : <span className="lib-icon" aria-hidden>{icon}</span>}
+        {thumb ? <img className="lib-thumb" src={`/api/files/${f.id}`} alt="" loading="lazy" /> : <span className="lib-icon" aria-hidden>
+            <Icon name={icon} />
+          </span>}
         <span className="lib-text">
           <b className="lib-title">{item.title}</b>
           {item.lead && <span className="lib-lead small">{item.lead}</span>}
@@ -115,7 +117,7 @@ export function ChatLibrary({ messages, thread, onArtifact, onFile }: Props) {
           </button>
         )}
         <button type="button" className="btn conv-new" onClick={() => setStored(true)}>
-          🗂 Stored files ({files.length}): keep or delete
+          <Icon name="archive" /> Stored files ({files.length}): keep or delete
         </button>
       </div>
       {stored && (

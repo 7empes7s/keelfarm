@@ -5,6 +5,8 @@ import { randomSeed } from './rng';
 import { newSnake, step, stepMs, turn, type Pt, type SnakeEnd, type SnakeState } from './snake';
 import { blip } from './sounds';
 import { bestScore, recordScore } from './storage';
+import { Icon } from '../Icon';
+import type { IconName } from '../icons';
 
 // Cable Snake on the phone: a blue network cable with googly eyes crawling over the office carpet, eating bugs and
 // the odd coffee, around four desks.
@@ -196,24 +198,24 @@ export function Snake({ onBack }: { onBack: () => void }) {
     else if (s.status === 'over') messageCard(ctx, W, H, ENDS[g.over ?? 'self'], [`Score ${g.score} · ${g.body.length} long`, s.newBest ? '🏆 New best!' : `Best ${s.best}`, 'Space or tap to play again'], g.over === 'won' ? '#8fd14f' : '#f25f5c');
   };
 
-  const pad = (d: Arrow, glyph: string, label: string) => (
+  const pad = (d: Arrow, icon: IconName, label: string) => (
     <PadButton label={label} className={`game-pad-${d}`} onPress={() => steer(d)}>
-      {glyph}
+      <Icon name={icon} />
     </PadButton>
   );
   return (
     <div className="game">
       <GameHeader title="Cable Snake" color={SNAKE_COLOR} onBack={onBack}>
-        <button type="button" className="game-mini" tabIndex={-1} onPointerDown={(e) => e.preventDefault()} onClick={() => (status === 'playing' ? pause() : start())} title={status === 'playing' ? 'Pause (Space)' : 'Play (Space)'}>
-          {status === 'playing' ? '⏸' : '▶'}
+        <button type="button" className="game-mini" tabIndex={-1} onPointerDown={(e) => e.preventDefault()} onClick={() => (status === 'playing' ? pause() : start())} aria-label={status === 'playing' ? 'Pause' : 'Play'} title={status === 'playing' ? 'Pause (Space)' : 'Play (Space)'}>
+          <Icon name={status === 'playing' ? 'pause' : 'play'} />
         </button>
       </GameHeader>
       <GameCanvas width={W} height={H} frame={frame} label="Cable Snake board" onPointer={onPointer} />
       <div className="game-dpad">
-        {pad('up', '▲', 'Up')}
-        {pad('left', '◀', 'Left')}
-        {pad('right', '▶', 'Right')}
-        {pad('down', '▼', 'Down')}
+        {pad('up', 'arrow-up', 'Up')}
+        {pad('left', 'arrow-left', 'Left')}
+        {pad('right', 'arrow-right', 'Right')}
+        {pad('down', 'arrow-down', 'Down')}
       </div>
       <div className="game-keys">
         <kbd>←</kbd>

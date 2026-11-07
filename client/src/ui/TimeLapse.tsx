@@ -5,6 +5,8 @@ import { currentPresence, replayDay, seekReplay, setReplaySpeed, startReplay, st
 import { SPEEDS, sinceLastHere, timelineAt } from '../replayClock';
 import { dayKey, type JournalDayView, type JournalMark } from '../../../shared/journal';
 import { isConfirmOpen } from './Confirm';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import './timelapse.css';
 
 // The time-lapse's controls: the manager's console tab (pick a day or "since I was last here", and a speed) and,
@@ -12,7 +14,7 @@ import './timelapse.css';
 
 const hhmm = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const dayLabel = (t: number) => new Date(t).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
-const MARK_ICON: Record<JournalMark['kind'], string> = { merge: '🎉', 'needs-human': '🔴', issue: '🆕' };
+const MARK_ICON: Record<JournalMark['kind'], IconName> = { merge: 'party-popper', 'needs-human': 'circle-alert', issue: 'notebook-pen' };
 const SPEED_NOTE: Record<number, string> = { 30: 'an hour in 2 minutes', 120: 'an hour in 30 seconds', 600: 'an hour in 6 seconds' };
 
 function ago(ms: number) {
@@ -34,7 +36,7 @@ function Marks({ marks, from, to }: { marks: JournalMark[]; from: number; to: nu
     <>
       {marks.slice(0, 400).map((m, i) => (
         <span key={`${m.kind}-${m.repoId}-${m.n}-${i}`} className={`tl-mark tl-mark-${m.kind}`} style={{ left: `${timelineAt(m.t, from, to) * 100}%` }} title={`${hhmm(m.t)} · ${m.label}`}>
-          {MARK_ICON[m.kind]}
+          <Icon name={MARK_ICON[m.kind]} />
         </span>
       ))}
     </>
@@ -52,11 +54,11 @@ function DayRow({ day, speed }: { day: JournalDayView; speed: number }) {
             {hhmm(day.from)}–{hhmm(day.to)} · {size(day.bytes)}
           </span>
           <div className="small">
-            🎉 {count(day.marks, 'merge')} merged · 🔴 {count(day.marks, 'needs-human')} needed you · 🆕 {count(day.marks, 'issue')} new issues
+            <Icon name="party-popper" /> {count(day.marks, 'merge')} merged · <Icon name="circle-alert" /> {count(day.marks, 'needs-human')} needed you · <Icon name="notebook-pen" /> {count(day.marks, 'issue')} new issues
           </div>
         </div>
         <button className="btn btn-small btn-good" onClick={() => void replayDay(day, speed)}>
-          ▶ Replay
+          <Icon name="play" /> Replay
         </button>
       </div>
       <div className="tl-track tl-track-mini" aria-hidden>
@@ -97,7 +99,9 @@ export function TimeLapseTab() {
   return (
     <div className="tab-grid">
       <div>
-        <h3 className="section">📼 Time-lapse</h3>
+        <h3 className="section">
+          <Icon name="film" /> Time-lapse
+        </h3>
         <p className="muted small">Watch the office's day again, right here in the 3D office: people at work and on their errands, stickies moving on the whiteboard, every merge's gong and confetti.</p>
         <div className="card tl-since">
           <div className="row">
@@ -110,7 +114,7 @@ export function TimeLapseTab() {
               </div>
             </div>
             <button className="btn btn-good" disabled={!away} onClick={() => away && void startReplay({ ...away, label: 'since you were last here', speed, marks: days ? days.flatMap((d) => d.marks).filter((m) => m.t >= away.from && m.t <= away.to) : undefined })}>
-              ▶ Catch up
+              <Icon name="play" /> Catch up
             </button>
           </div>
         </div>
@@ -131,13 +135,13 @@ export function TimeLapseTab() {
         </div>
         <h3>While it plays</h3>
         <p className="small">
-          The office shows the recorded moment instead of the live one, down to the sky and the clocks. Assigning, messaging and merging are off. Drag along the timeline to jump: 🎉 merges, 🔴 PRs that needed you, 🆕 new issues.{' '}
-          <kbd>Esc</kbd> frees the mouse, and <kbd>Esc</kbd> again goes straight back to the live office.
+          The office shows the recorded moment instead of the live one, down to the sky and the clocks. Assigning, messaging and merging are off. Drag along the timeline to jump: <Icon name="party-popper" /> merges, <Icon name="circle-alert" /> PRs that needed
+          you, <Icon name="notebook-pen" /> new issues. <kbd>Esc</kbd> frees the mouse, and <kbd>Esc</kbd> again goes straight back to the live office.
         </p>
         <p className="muted small">The journal keeps 7 days (at most about 200 MB) in the office's folder. Terminal output, settings and keys are never written to it.</p>
         {demo && (
           <button className="btn btn-small" disabled={making} onClick={sample} title="Writes a made-up working day on these floors as yesterday's journal">
-            🧪 {making ? 'Making…' : 'Make a sample day (yesterday)'}
+            <Icon name="flask-conical" /> {making ? 'Making…' : 'Make a sample day (yesterday)'}
           </button>
         )}
       </div>
@@ -224,14 +228,14 @@ export function ReplayBar() {
     <div className="replay">
       <div className="replay-frame" aria-hidden />
       <div className="replay-badge" role="status" aria-live="polite">
-        ▶ REPLAY · {hhmm(v.time)}
+        <Icon name="play" /> REPLAY · {hhmm(v.time)}
         <span className="replay-sub">
           {dayLabel(v.time)} · {v.speed}×{v.label ? ` · ${v.label}` : ''}
         </span>
       </div>
       <div className="replay-bar">
         <button className="btn btn-small replay-play" onClick={toggleReplay} disabled={loading} aria-label={v.phase === 'playing' ? 'Pause' : 'Play'} title={v.phase === 'ended' ? 'Play it again' : 'Play / pause'}>
-          {v.phase === 'playing' ? '⏸' : v.phase === 'ended' ? '↺' : '▶'}
+          <Icon name={v.phase === 'playing' ? 'pause' : v.phase === 'ended' ? 'rotate-ccw' : 'play'} />
         </button>
         <span className="replay-time small">{hhmm(v.from)}</span>
         <Scrubber />
@@ -244,11 +248,19 @@ export function ReplayBar() {
           ))}
         </div>
         <button className="btn btn-small" onClick={stopReplay} title="Back to the live office">
-          ⏹ Live <kbd>Esc</kbd>
+          <Icon name="square" /> Live <kbd>Esc</kbd>
         </button>
         {(loading || v.phase === 'error' || v.phase === 'ended') && (
           <div className={`replay-note small ${v.phase === 'error' ? 'replay-note-bad' : ''}`}>
-            {loading ? 'Loading the journal…' : v.phase === 'error' ? `Couldn't load the journal: ${v.error}` : 'That was the whole stretch. ↺ plays it again, Esc goes back to live.'}
+            {loading ? (
+              'Loading the journal…'
+            ) : v.phase === 'error' ? (
+              `Couldn't load the journal: ${v.error}`
+            ) : (
+              <>
+                That was the whole stretch. <Icon name="rotate-ccw" /> plays it again, Esc goes back to live.
+              </>
+            )}
           </div>
         )}
       </div>

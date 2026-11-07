@@ -310,7 +310,7 @@ export class Swarm extends SwarmCeoTools {
         if (!repo || back.some((c) => c.agentId === a.id)) return undefined;
         return this.releaseDesk(a, repo).catch(() => undefined);
       }),
-      this.previews.clearOrphans(this.state.repos),
+      this.previews.clearOrphans(this.state.repos).then(() => this.sweepOrphans(true)),
     ]);
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
@@ -353,7 +353,7 @@ export class Swarm extends SwarmCeoTools {
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
-    setInterval(() => this.watchdogTick(), WATCHDOG_MS);
+    setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
     void this.backend
       .detectClis()

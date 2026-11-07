@@ -7,7 +7,8 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { hasChrome } from './browser.ts';
-import { installDesk, killTree } from './deps.ts';
+import { endGroup, installDesk, killTree } from './deps.ts';
+import { LAB_PREVIEW_PORT } from './portLanes.ts';
 import { git } from './exec.ts';
 import { prepareDesk } from './workspace.ts';
 import { BROWSER_INSTALL_MIN_MB, browsersPath, labFile, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
@@ -266,7 +267,8 @@ export function createLabRunner(): LabRunner {
       const started = Date.now();
       const env: Record<string, string> = {};
       for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !/^(ANTHROPIC_|CLAUDE|SWARM_)/i.test(k)) env[k] = v;
-      Object.assign(env, { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PLAYWRIGHT_BROWSERS_PATH: BROWSERS });
+      // A demo office the run boots (an e2e suite) keeps its previews in the lab's block, off the live office's (#227).
+      Object.assign(env, { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PLAYWRIGHT_BROWSERS_PATH: BROWSERS, SWARM_PREVIEW_PORT: String(LAB_PREVIEW_PORT) });
       const [cmd, ...args] = o.argv;
       // Arguments are plain words (testLab.ts labCommand), so joining them for cmd.exe needs no quoting.
       const child =
@@ -304,6 +306,7 @@ export function createLabRunner(): LabRunner {
         const end = (code: number | null) => {
           clearTimeout(timer);
           clearTimeout(quiet);
+          endGroup(child);
           if (partial) tail.push(partial);
           resolve({ code, ms: Date.now() - started, tail: tail.slice(-TAIL), timedOut, silent, artifacts: artifacts(o.dir) });
         };

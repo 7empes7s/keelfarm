@@ -91,7 +91,7 @@ describe('putting a carried sticky down', () => {
   });
 
   it('warns, as the office will, about a busy agent or an issue that waits for another', () => {
-    expect(dropTarget(issue, desk(linus), agents, issues)).toMatchObject({ kind: 'assign', warn: 'Linus is already working on #4', label: '⚠️ Linus is already working on #4' });
+    expect(dropTarget(issue, desk(linus), agents, issues)).toMatchObject({ kind: 'assign', warn: 'Linus is already working on #4', label: 'Linus is already working on #4' });
     expect(dropTarget(issue, desk(marple), agents, issues)).toMatchObject({ kind: 'assign', warn: 'Marple is already testing PR #7' });
     expect(dropTarget({ number: 13, pr: false }, desk(ada), agents, issues)).toMatchObject({ kind: 'assign', warn: '#13 waits for #12: it can start once that is closed' });
   });

@@ -8,6 +8,7 @@ import { inCatalog, OTHER_MODEL, pickerOptions } from '../../../shared/models';
 import type { AgentCli } from '../../../shared/types';
 import { Sheet } from './Sheet';
 import './modelPicker.css';
+import { Icon } from './Icon';
 
 interface Props {
   cli: AgentCli;
@@ -75,7 +76,7 @@ export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label =
                 <input type="radio" name={`${inputId}-pick`} checked={o.value === selected} onChange={() => pick(o.value)} />
                 <span className="model-option-text">{o.label}</span>
                 <span className="model-option-check" aria-hidden="true">
-                  {o.value === selected ? '✓' : ''}
+                  {o.value === selected ? <Icon name="check" /> : ''}
                 </span>
               </label>
             ))}

@@ -3,14 +3,15 @@
 // more precise place (the CEO message naming the floor).
 import { EMPTY, type EmptyKind } from './emptyStates';
 import { go, type Target } from './goTo';
+import { Icon } from './Icon';
 import './finder.css';
 
 export function EmptyState({ kind, why, onAction, target, compact }: { kind: EmptyKind; why?: string; onAction?: () => void; target?: Target; compact?: boolean }) {
   const e = EMPTY[kind];
   return (
     <div className={`empty-state ${compact ? 'empty-state-compact' : ''}`} data-empty={kind}>
-      <span className="empty-state-icon" aria-hidden>
-        {e.icon}
+      <span className="empty-state-icon">
+        <Icon name={e.icon} />
       </span>
       <div className="empty-state-text">
         <b>{e.what}</b>

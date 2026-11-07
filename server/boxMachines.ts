@@ -215,9 +215,14 @@ export class BoxMachines implements MachineProvider {
     return {};
   }
 
-  async release(machine: string, fullName: string, port: number): Promise<void> {
+  async release(machine: string, fullName: string, port: number): Promise<number[]> {
     const id = await this.running(machine);
     if (id) await this.api().run(id, releaseScript(port, fullName), { timeoutMs: 60_000 }).catch(() => undefined);
+    return [];
+  }
+
+  async orphans(): Promise<string[]> {
+    return []; // a Box's processes are its own, on no port of this computer
   }
 
   async trimDesk(): Promise<null> {

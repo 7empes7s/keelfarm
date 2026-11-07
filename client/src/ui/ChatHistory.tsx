@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import './threads.css';
 import { groupThreads, inScope, unreadThread, type Conversation, type ConversationHit, type ThreadScope } from '../../../shared/conversations';
 import { Sheet } from './ChatArtifacts';
+import { Icon } from './Icon';
 import { CeoMemory } from './CeoMemory';
 import { Menu } from './Menu';
 
@@ -42,7 +43,7 @@ function Row({ c, current, unread, snippet, floorOf, onOpen }: { c: Conversation
         <span className="thread-top">
           {unread && <span className="thread-unread" aria-label="Unread" />}
           <b className="conv-title">
-            {c.pinned && <span aria-label="Pinned">📌 </span>}
+            {c.pinned && <span aria-label="Pinned"><Icon name="pin" /> </span>}
             {c.title}
           </b>
           <span className="muted small thread-when">{when(c.updatedAt, Date.now())}</span>
@@ -51,7 +52,12 @@ function Row({ c, current, unread, snippet, floorOf, onOpen }: { c: Conversation
           {floors.length ? floors.map((f) => <span key={f} className="thread-floor">{floorOf(f)}</span>) : <span className="thread-floor">Company</span>}
           <span>
             {c.count} message{c.count === 1 ? '' : 's'}
-            {c.files ? ` · 📎 ${c.files}` : ''}
+            {c.files ? (
+              <>
+                {' · '}
+                <Icon name="paperclip" /> {c.files}
+              </>
+            ) : null}
           </span>
         </span>
         {snippet && <span className="small conv-snippet">{snippet}</span>}
@@ -61,9 +67,9 @@ function Row({ c, current, unread, snippet, floorOf, onOpen }: { c: Conversation
         title={c.title}
         className="thread-more"
         items={[
-          { label: '✏️ Rename', onSelect: () => (setTitle(c.title), setRenaming(true)) },
-          { label: c.pinned ? 'Unpin' : '📌 Pin', hint: c.pinned ? undefined : 'Kept at the top, and never dropped', onSelect: () => edit({ pinned: !c.pinned }) },
-          { label: c.archived ? 'Unarchive' : '🗄 Archive', hint: c.archived ? undefined : 'Out of the list, still searchable', onSelect: () => edit({ archived: !c.archived }) },
+          { label: 'Rename', onSelect: () => (setTitle(c.title), setRenaming(true)) },
+          { label: c.pinned ? 'Unpin' : 'Pin', hint: c.pinned ? undefined : 'Kept at the top, and never dropped', onSelect: () => edit({ pinned: !c.pinned }) },
+          { label: c.archived ? 'Unarchive' : 'Archive', hint: c.archived ? undefined : 'Out of the list, still searchable', onSelect: () => edit({ archived: !c.archived }) },
         ]}
       />
     </li>
@@ -146,11 +152,19 @@ function Threads({ ceoName, onDone, onMemory }: { ceoName: string; onDone: () =>
       )}
       {!hits && (archived || archivedCount > 0) && (
         <button type="button" className="btn conv-new" aria-pressed={archived} onClick={() => (setArchived(!archived), setShown(PAGE))}>
-          {archived ? '← Back to the threads' : `🗄 Archived (${archivedCount})`}
+          {archived ? (
+            <>
+              <Icon name="chevron-left" /> Back to the threads
+            </>
+          ) : (
+            <>
+              <Icon name="archive" /> Archived ({archivedCount})
+            </>
+          )}
         </button>
       )}
       <button type="button" className="btn conv-new" onClick={onMemory}>
-        🧠 What {ceoName} remembers
+        <Icon name="brain" /> What {ceoName} remembers
       </button>
     </div>
   );

@@ -26,6 +26,7 @@ import {
 } from './photoMode';
 import { clockTime, formatBytes, SCALES, shotSize } from './shots';
 import { useDayTime } from '../world/sky/useDayTime';
+import { Icon } from '../ui/Icon';
 import { Key, MoveKeys } from '../ui/Key';
 import './photo.css';
 
@@ -69,7 +70,7 @@ function Recording() {
     <div className="photo-rec" role="status">
       <span className="photo-rec-dot" /> REC {fmt(secs)} / {fmt(rec.limit)}
       <button className="btn btn-small" onClick={() => void toggleRecording()}>
-        ■ Stop <kbd>V</kbd>
+        <Icon name="square" /> Stop <kbd>V</kbd>
       </button>
     </div>
   );
@@ -94,15 +95,25 @@ function Gallery() {
             <li key={i.id} title={i.name}>
               <Thumb item={i} />
               <div className="photo-gallery-meta">
-                <span>{i.kind === 'shot' ? `📸 ${i.width}×${i.height}` : `${i.kind === 'replay' ? '⏪' : '🎬'} ${Math.round(i.seconds ?? 0)} s`}</span>
+                <span>
+                  {i.kind === 'shot' ? (
+                    <>
+                      <Icon name="camera" /> {i.width}×{i.height}
+                    </>
+                  ) : (
+                    <>
+                      <Icon name={i.kind === 'replay' ? 'rewind' : 'clapperboard'} /> {Math.round(i.seconds ?? 0)} s
+                    </>
+                  )}
+                </span>
                 <span className="muted">{formatBytes(i.bytes)}</span>
               </div>
               <div className="photo-gallery-actions">
                 <button className="btn btn-ghost btn-small" onClick={() => saveItem(i)} aria-label={`Download ${i.name}`}>
-                  ⬇
+                  <Icon name="download" />
                 </button>
                 <button className="btn btn-ghost btn-small" onClick={() => removeFromGallery(i.id)} aria-label={`Delete ${i.name}`}>
-                  🗑
+                  <Icon name="trash-2" />
                 </button>
               </div>
             </li>
@@ -144,12 +155,12 @@ export default function PhotoPanel() {
       <Recording />
       {!s.panel ? (
         <button className="photo-show" onClick={() => update({ panel: true })}>
-          📷 <kbd>H</kbd> show the panel
+          <Icon name="camera" /> <kbd>H</kbd> show the panel
         </button>
       ) : (
         <aside className="photo-panel" aria-label="Photo mode">
           <header className="photo-head">
-            <b>📷 Photo mode</b>
+            <b><Icon name="camera" /> Photo mode</b>
             <button className="btn btn-small" onClick={leave} title="Back to the office (or Esc with the mouse free)">
               Leave <Key action="photo" />
             </button>
@@ -162,7 +173,7 @@ export default function PhotoPanel() {
 
           <section className="photo-section">
             <label className="toggle">
-              <input type="checkbox" checked={frozen} onChange={(e) => setFrozen(e.target.checked)} /> ❄ Freeze the office <kbd>F</kbd>
+              <input type="checkbox" checked={frozen} onChange={(e) => setFrozen(e.target.checked)} /> <Icon name="snowflake" /> Freeze the office <kbd>F</kbd>
             </label>
             <p className="muted small">{frozen ? 'Everyone holds still; the work carries on and catches up when you thaw.' : 'Live: people, toys and the sky move. Good for clips.'}</p>
           </section>
@@ -238,16 +249,16 @@ export default function PhotoPanel() {
             <input type="range" min={0} max={1} step={0.002} value={t} onChange={(e) => setDaytime(Number(e.target.value))} aria-label="Time of day" aria-valuetext={clockTime(t)} />
             <div className="row wrap">
               <button className="btn btn-ghost btn-small" onClick={() => setDaytime(GOLDEN_HOUR)}>
-                🌇 Golden hour
+                <Icon name="sunset" /> Golden hour
               </button>
               <button className="btn btn-ghost btn-small" onClick={() => setDaytime(0.5)}>
-                ☀️ Noon
+                <Icon name="sun" /> Noon
               </button>
               <button className="btn btn-ghost btn-small" onClick={() => setDaytime(0.79)}>
-                🌆 Blue hour
+                <Icon name="moon-star" /> Blue hour
               </button>
               <button className="btn btn-ghost btn-small" onClick={() => setDaytime(null)} disabled={s.daytime === null}>
-                ↺ As it is
+                <Icon name="rotate-ccw" /> As it is
               </button>
             </div>
           </section>
@@ -265,7 +276,7 @@ export default function PhotoPanel() {
               </span>
             </div>
             <button className="btn photo-big" disabled={!!s.busy} onClick={() => void takeShot()}>
-              📸 {s.busy === 'Developing…' ? 'Developing…' : 'Take the shot'} <kbd>Enter</kbd>
+              <Icon name="camera" /> {s.busy === 'Developing…' ? 'Developing…' : 'Take the shot'} <kbd>Enter</kbd>
             </button>
             <p className="muted small">Saves a PNG to your downloads and copies it.</p>
           </section>
@@ -298,7 +309,18 @@ export default function PhotoPanel() {
               </select>
             </label>
             <button className={`btn photo-big ${s.recording ? 'photo-recording' : ''}`} disabled={!s.recording && !!s.busy} onClick={() => void toggleRecording()}>
-              {s.recording ? '■ Stop recording' : s.busy === 'Saving the clip…' ? 'Saving the clip…' : '⏺ Record'} <kbd>V</kbd>
+              {s.recording ? (
+                <>
+                  <Icon name="square" /> Stop recording
+                </>
+              ) : s.busy === 'Saving the clip…' ? (
+                'Saving the clip…'
+              ) : (
+                <>
+                  <Icon name="circle-dot" /> Record
+                </>
+              )}{' '}
+              <kbd>V</kbd>
             </button>
             <p className="muted small">A WebM with the office's sound, up to a minute{frozen ? ' (frozen: a still scene, unless the camera moves)' : ''}.</p>
           </section>

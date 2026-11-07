@@ -7,6 +7,7 @@ import { artifactFileName } from '../../../shared/chatParts';
 import { Markdown } from './Markdown';
 import { useDialogFocus } from './dialogFocus';
 import { copyText } from './clipboard';
+import { CloseButton, Icon } from './Icon';
 import { ChatTextPill, useChatPinch } from './ChatZoom';
 
 // The CEO's artifacts in the phone chat (shared/chatParts.ts): a card in the bubble, the document full-screen on a
@@ -19,7 +20,7 @@ export function ArtifactCard({ artifact, onOpen }: { artifact: ChatArtifact; onO
   return (
     <button type="button" className="artifact-card" onClick={onOpen} aria-label={`Open the attachment ${artifact.title}`}>
       <span className="artifact-card-icon" aria-hidden>
-        📄
+        <Icon name="file-text" />
       </span>
       <span className="grow artifact-card-body">
         <b className="artifact-card-title">{artifact.title}</b>
@@ -53,7 +54,7 @@ async function share(title: string, markdown: string) {
   }
 }
 
-export function Sheet({ label, onClose, className, children }: { label: string; onClose: () => void; className?: string; children: ReactNode }) {
+export function Sheet({ label, onClose, className, children }: { label: ReactNode; onClose: () => void; className?: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useDialogFocus(ref);
@@ -83,9 +84,7 @@ export function Sheet({ label, onClose, className, children }: { label: string; 
           <b id={titleId} className="grow artifact-title">
             {label}
           </b>
-          <button type="button" className="chat-reply-x" aria-label="Close" title="Close (Esc)" onClick={onClose}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label="Close" title="Close (Esc)" onClick={onClose} />
         </div>
         <ChatTextPill />
         {children}
@@ -123,7 +122,7 @@ export function ArtifactView({ messageId, artifact, linked, onFloor, onReplyAbou
   }, [messageId, artifact.id, artifact.markdown]);
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   return (
-    <Sheet label={`📄 ${artifact.title}`} onClose={onClose}>
+    <Sheet label={<><Icon name="file-text" /> {artifact.title}</>} onClose={onClose}>
       <div className="artifact-body">
         {markdown !== null ? (
           <Markdown className="artifact-md" text={linked(markdown)} onFloor={onFloor} />
@@ -133,19 +132,19 @@ export function ArtifactView({ messageId, artifact, linked, onFloor, onReplyAbou
       </div>
       <div className="artifact-actions">
         <button type="button" className="btn btn-small" disabled={markdown === null} onClick={() => markdown !== null && void copyText(markdown).then((ok) => toast(ok, 'Copied as markdown', "Couldn't reach the clipboard"))}>
-          📋 Copy
+          <Icon name="clipboard-list" /> Copy
         </button>
         {canShare && (
           <button type="button" className="btn btn-small" disabled={markdown === null} onClick={() => markdown !== null && void share(artifact.title, markdown)}>
-            📤 Share
+            <Icon name="upload" /> Share
           </button>
         )}
         <button type="button" className="btn btn-small" disabled={markdown === null} onClick={() => markdown !== null && download(artifact.title, markdown)}>
-          ⬇ Download .md
+          <Icon name="download" /> Download .md
         </button>
         {onOpenInThread && (
           <button type="button" className="btn btn-small" onClick={() => (onClose(), onOpenInThread())}>
-            💬 Open in thread
+            <Icon name="message-circle" /> Open in thread
           </button>
         )}
         {onReplyAbout && (
@@ -157,7 +156,7 @@ export function ArtifactView({ messageId, artifact, linked, onFloor, onReplyAbou
               onReplyAbout(messageId, artifact.title);
             }}
           >
-            ↩ Reply about this
+            <Icon name="reply" /> Reply about this
           </button>
         )}
       </div>
