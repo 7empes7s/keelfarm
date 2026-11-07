@@ -9,6 +9,8 @@ export const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', 
 export const NEW_FILE_MAX_LINES = 800;
 /** A file in the baseline (over NEW_FILE_MAX_LINES when it was recorded) may grow this much past its recorded size. */
 export const GROWTH_ALLOWANCE = 0.05;
+/** Folders split up so parallel PRs stop colliding (#187): each file in them stays under its own, smaller cap. */
+export const FOLDER_MAX_LINES = { 'e2e/layout/': 300, 'shared/types/': 400 };
 
 /** Plain code-unit order, the same on every machine (localeCompare isn't). */
 const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -30,9 +32,12 @@ export function isSourceFile(file) {
   return SOURCE_DIRS.some((d) => f.startsWith(`${d}/`)) && SOURCE_EXTENSIONS.some((e) => f.endsWith(e));
 }
 
-/** The most lines `file` may have: its recorded size plus the allowance, or the new-file cap. */
+/** The most lines `file` may have: its folder's cap, else its recorded size plus the allowance, or the new-file cap. */
 export function sizeLimit(file, sizes) {
-  const recorded = sizes[normalizePath(file)];
+  const f = normalizePath(file);
+  const folder = Object.keys(FOLDER_MAX_LINES).find((d) => f.startsWith(d));
+  if (folder) return FOLDER_MAX_LINES[folder];
+  const recorded = sizes[f];
   return recorded == null ? NEW_FILE_MAX_LINES : Math.floor(recorded * (1 + GROWTH_ALLOWANCE));
 }
 

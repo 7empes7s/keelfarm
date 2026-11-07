@@ -40,7 +40,7 @@
 /* the ring around the control a step is about: above everything, never in the way of a tap */
 .tour-ring {
   position: fixed;
-  z-index: var(--ds-z-toast);
+  z-index: var(--ds-z-tour);
   pointer-events: none;
   border: 3px solid var(--ds-focus); /* not the accent: the pocket header is that colour */
   border-radius: 12px;
@@ -59,7 +59,7 @@ html[data-ui-scale] .pocket .tour {
   zoom: 1; /* inside the (already scaled) pocket: once is enough */
 }
 .pocket .tour {
-  z-index: calc(var(--ds-z-menu) + 1);
+  z-index: var(--ds-z-tour);
   bottom: calc(84px + var(--ds-safe-bottom));
 }
 .pocket.pk-railed .tour {
@@ -82,7 +82,7 @@ html[data-ui-scale] .pocket .tour {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  z-index: 20;
+  z-index: calc(var(--ds-z-base) + 10);
   width: min(390px, calc(100vw - 32px));
   background: var(--paper);
   border: 3px solid var(--ds-outline);

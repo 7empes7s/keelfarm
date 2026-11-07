@@ -6,8 +6,8 @@ const charter = (objectives: number) => ({ objectives: Array.from({ length: obje
 function office(over: Partial<GuideInput> = {}): GuideInput {
   return {
     repos: [{ id: 'a/one', floor: 1, qaBrief: '', charter: charter(0) }],
-    settings: { notify: { events: {} as never, channels: { desktop: true, push: true, ntfy: false, telegram: false }, officeUrl: '', telegramMirror: false }, ceoMandates: [] },
-    notifyChannels: { pushDevices: 0, webhooks: { ntfy: { set: false, hint: '', last: null } }, telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null } },
+    settings: { notify: { events: {} as never, channels: { desktop: true, push: true, ntfy: false, telegram: false }, officeUrl: '', telegramMirror: false, quietInApp: true }, ceoMandates: [] },
+    notifyChannels: { pushDevices: 0, webhooks: { ntfy: { set: false, hint: '', last: null } }, telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null } },
     experiments: { experiments: [] },
     messages: [],
     installed: false,

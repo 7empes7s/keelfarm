@@ -1,0 +1,139 @@
+/* An issue or PR card up close (#206, CardView.tsx): the whole title, the status strip's tappable cards, the body's
+   sections as disclosure cards, the history timeline. Sizes to its content; on a wide screen a side panel. */
+
+.cardview .panel-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.cardview-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: var(--ds-space-2);
+}
+.cardview-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+:is(button, a).cardview-stat {
+  cursor: pointer;
+}
+:is(button, a).cardview-stat:hover,
+:is(button, a).cardview-stat:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.cardview-stat-warn {
+  border-color: var(--ds-warn-fill);
+  border-width: var(--ds-border);
+}
+.cardview-stat-bad {
+  border-color: var(--ds-bad-fill);
+  border-width: var(--ds-border);
+}
+.cardview-stat-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: var(--ds-text-lg);
+}
+.cardview-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ds-radius-pill);
+  border: var(--ds-border) solid var(--ds-outline);
+  display: grid;
+  place-items: center;
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-sm);
+  font-weight: 700;
+}
+.cardview-stat-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+.cardview-stat-text > span {
+  color: var(--ds-text-muted);
+}
+
+.cardview-status-progress,
+.cardview-status-qa {
+  background: var(--ds-warn-fill);
+}
+.cardview-status-ready,
+.cardview-status-merged {
+  background: var(--ds-good-fill);
+}
+
+.cardview .cardview-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  overflow-wrap: anywhere;
+}
+.cardview-readall {
+  align-self: flex-end;
+}
+.cardview-sec + .cardview-sec,
+.cardview-body > :not(.cardview-readall) + .cardview-sec {
+  border-top: 1.5px solid var(--ds-line-strong);
+}
+.cardview-sec > summary {
+  font-size: var(--ds-text-md);
+}
+
+.cardview-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+}
+.cardview-timeline li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-2);
+}
+.cardview-timeline .grow {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+.cardview-tl-good .grow {
+  font-weight: 600;
+}
+.cardview-tl-bad .grow {
+  color: var(--bad);
+}
+
+.cardview-keys {
+  margin-left: auto;
+}
+
+/* a side panel on a wide screen, full height at the right */
+@media (min-width: 900px) {
+  .overlay:has(> .cardview) {
+    place-items: stretch end;
+  }
+  .overlay > .cardview {
+    width: min(560px, 100%);
+    max-height: none;
+  }
+}

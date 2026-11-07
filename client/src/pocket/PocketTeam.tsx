@@ -11,10 +11,14 @@ import { MessageBox } from '../ui/MessageBox';
 import { badgeStatus, StatusPill as Status } from '../ui/StatusPill';
 import { agentPhrase } from '../ui/statusPhrase';
 import { AgentRing } from '../ui/AgentRing';
+import { HoverCard } from '../ui/HoverCard';
+import { AgentPeek } from '../ui/Peeks';
+import { TaskRing } from '../ui/TaskProgress';
 import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 import { EmptyState } from '../ui/EmptyState';
+import { useDraft } from '../drafts';
 
 
 /** Runs one REST call at a time per card; api() already toasts errors. */
@@ -44,7 +48,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
   const [busy, run] = useBusy();
   const [pick, setPick] = useState('');
   const [writing, setWriting] = useState(false);
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`agent:${agent.id}`); // kept through a reload (#216)
   const can = agentActions(agent);
   const choices = assignChoices(cols);
   const chosen = choices.find((c) => c.key === pick);
@@ -61,7 +65,9 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
   return (
     <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : ''}`}>
       <button type="button" className="pk-agent-head pk-agent-open" title={`Open ${agent.name}'s window`} onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
-        <AgentRing agent={agent} />
+        <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
+          <AgentRing agent={agent} />
+        </HoverCard>
         <span className="grow">
           <span>
             <b>{agent.name}</b> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
@@ -72,6 +78,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
           </span>
           {agent.career && <span className="aw-stats-line">{keyStats(agent.career, Date.now())}</span>}
         </span>
+        <TaskRing agent={agent} />
         <Status status={badgeStatus(agent)} />
       </button>
       <div className="small muted pk-phrase">{agentPhrase(agent, { autoAssign: repo.autoAssign })}</div>

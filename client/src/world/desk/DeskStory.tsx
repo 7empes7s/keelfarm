@@ -246,7 +246,7 @@ function storyKey(agents: Agent[]) {
     .filter((a) => a.role !== 'ceo')
     .map((a) => {
       const c = a.career;
-      return `${a.id}:${a.desk}:${c ? `${c.since}:${c.merged}:${c.reviews}:${c.firstPass}:${c.recent.map((r) => r.n).join('.')}` : '-'}`;
+      return `${a.id}:${a.desk}:${c ? `${c.since}:${c.merged}:${c.reviews}:${c.firstPass}:${c.recent.map(([n]) => n).join('.')}` : '-'}`;
     })
     .join('|');
 }

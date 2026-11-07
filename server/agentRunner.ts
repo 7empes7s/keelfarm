@@ -13,7 +13,8 @@ import { browserProblem, playwrightMcp } from './browser.ts';
 import { CEO_DISALLOWED, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 import { VERSION } from './config.ts';
 import { consultRefusal } from './consult.ts';
-import { nonInteractiveEnv } from './unblock.ts';
+import { keyHelperCommand, nonInteractiveEnv } from './unblock.ts';
+import { transcriptEvents, type TranscriptEvent } from '../shared/agentChat.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
 // The CEO runs through here too, with the office tools instead of a shell.
@@ -31,6 +32,8 @@ export interface SessionOptions {
   task?: AgentTask | null;
   /** The agent's machine's environment (its temp folder), on top of the office's. */
   env?: Record<string, string>;
+  /** Claude Code reads its API key from this variable of `env` through apiKeyHelper (an API key account, #247). */
+  apiKeyEnv?: string;
   /** JSON schema for a structured final answer (QA reports). */
   outputSchema?: Record<string, unknown>;
   resumeSessionId?: string;
@@ -89,6 +92,8 @@ export interface SessionCallbacks {
   turn?(text: string): void;
   /** A text block of the reply being written (opts.stream); done: it won't grow any more. */
   text?(text: string, done: boolean): void;
+  /** What the agent's chat shows (#120): the session's prompt, text, tool calls and results, from its transcript. */
+  chat?(events: TranscriptEvent[]): void;
   /** Claude turned the session away for the subscription's usage limit (epoch ms when it resets, if known). */
   limited?(resetsAt: number | null): void;
   /** Claude warned that the subscription's usage is getting high (not while on overage). */
@@ -272,7 +277,7 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `📈 scale_team floor ${String(input.floor ?? '?')} → ${String(input.size ?? '?')}${input.reason ? `: ${clip(String(input.reason), 90)}` : ''}`;
     case 'configure_agent': {
       const list = (k: string, how: string) => (Array.isArray(input[k]) && input[k].length ? [`${how} ${input[k].join(', ')}`] : []);
-      const set = [...[input.cli, input.model, input.effort].filter((x) => typeof x === 'string' && x !== ''), ...list('tools_off', 'off:'), ...list('tools_on', 'on:'), ...list('tools_reset', 'reset:')];
+      const set = [...[input.cli, input.model, input.effort, input.account].filter((x) => typeof x === 'string' && x !== ''), ...list('tools_off', 'off:'), ...list('tools_on', 'on:'), ...list('tools_reset', 'reset:')];
       return `⚙️ configure_agent ${String(input.agent_id ?? '')}${set.length ? `: ${set.join(' · ')}` : ''}`;
     }
     case 'file_issue':
@@ -387,8 +392,10 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
   let lastCost = 0;
   let lastTurns = 0;
   const toolNames = new Map<string, string>();
+  const chatSeen = new Set<string>();
 
   input.push(opts.prompt);
+  if (!opts.stream) cb.chat?.([{ kind: 'prompt', t: Date.now(), text: opts.prompt }]);
 
   // Each agent must be a clean Claude Code instance on the subscription Claude Code is logged into.
   // Drop API keys (they would switch billing to the API) and any CLAUDE_* / ANTHROPIC_* variables
@@ -423,7 +430,10 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
     // The manager's own setup (settings, skills, plugins, MCP servers, connectors), plus the office's servers below.
     settingSources: ['user', 'project', 'local'],
     // Plugins the manager switched off for this session: flag settings win over theirs, and their files stay as they are.
-    ...(plugins.length ? { settings: { enabledPlugins: Object.fromEntries(plugins.map((p) => [p, false])) } } : {}),
+    // An API key account's key comes through apiKeyHelper (#247).
+    ...(plugins.length || opts.apiKeyEnv
+      ? { settings: { ...(plugins.length ? { enabledPlugins: Object.fromEntries(plugins.map((p) => [p, false])) } : {}), ...(opts.apiKeyEnv ? { apiKeyHelper: keyHelperCommand(opts.apiKeyEnv) } : {}) } }
+      : {}),
     systemPrompt: { type: 'preset', preset: 'claude_code', append: opts.systemAppend },
     mcpServers,
     disallowedTools,
@@ -463,6 +473,8 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
       abort.abort();
       return;
     }
+    // The SDK's messages are the transcript's lines (#120).
+    if (!opts.stream && (msg.type === 'assistant' || msg.type === 'user') && !msg.parent_tool_use_id) cb.chat?.(transcriptEvents(JSON.stringify(msg), 0, chatSeen));
     switch (msg.type) {
       case 'system': {
         if (msg.subtype === 'init') {
