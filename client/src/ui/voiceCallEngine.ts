@@ -63,8 +63,8 @@ const EFFECTS: Record<CallEffect, () => void> = {
     setCallEars(EARS);
     setCallQuiet(true);
     markBusy(TARGET, 'call', true);
-    useCall.setState({ heard: '' });
-    if (useStore.getState().overlay?.kind === 'phone') useStore.getState().openOverlay(null); // the chat tucks away behind the call
+    useCall.setState({ heard: '', chatTucked: useStore.getState().chatDocked }); // a docked chat tucks away behind the call
+    if (useStore.getState().overlay?.kind === 'phone') useStore.getState().openOverlay(null); // and so does the phone's
     listenChime(true);
     report(sendWs, false, true);
     setTimeout(() => dispatchCall({ type: 'connected', tapToTalk: micReason() }), CHIME_MS);
@@ -83,6 +83,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
     markBusy(TARGET, 'call', false);
     listenChime(false);
     report(sendWs, false, true);
+    useCall.setState({ chatTucked: false });
     useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' }); // the chat comes back, with the call's turns in it
   },
 };

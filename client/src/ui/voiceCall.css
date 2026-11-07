@@ -132,6 +132,11 @@
 .vcall-key-on:hover:not(:disabled) {
   background: var(--ds-text);
 }
+.vcall-key.vcall-end,
+.vcall-key.vcall-end:hover:not(:disabled) {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
 .vcall-end .ds-icon {
   transform: rotate(135deg);
 }

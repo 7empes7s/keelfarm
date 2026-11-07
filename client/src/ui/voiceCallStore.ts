@@ -14,9 +14,11 @@ export interface CallView {
   captions: boolean;
   /** The CEO's voice at full volume (on) or quieter, like a phone's earpiece (off). */
   speaker: boolean;
+  /** Pocket mode's docked chat (desktop) is hidden behind the call, until it ends or you open the chat. */
+  chatTucked: boolean;
 }
 
-export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', minimised: false, captions: true, speaker: true }));
+export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', minimised: false, captions: true, speaker: true, chatTucked: false }));
 
 let onStep: ((step: CallStep, ev: CallEvent) => void) | null = null;
 

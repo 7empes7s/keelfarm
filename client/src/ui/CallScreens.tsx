@@ -86,7 +86,7 @@ function Keys({ small }: { small?: boolean }) {
         </div>
       ))}
       <div className="vcall-key-cell">
-        <button type="button" className="ds-btn ds-btn-icon btn-bad vcall-key vcall-end" aria-label="End call" data-key="end" onClick={endCall}>
+        <button type="button" className="ds-btn ds-btn-icon vcall-key vcall-end" aria-label="End call" data-key="end" onClick={endCall}>
           <Icon name="phone" />
         </button>
         <span className="vcall-key-label">End</span>
@@ -134,6 +134,7 @@ function Orb({ call, initial, size }: { call: Call; initial: string; size: 'big'
 
 function openChat() {
   setMinimised(true);
+  useCall.setState({ chatTucked: false });
   useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' });
 }
 

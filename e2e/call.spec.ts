@@ -46,8 +46,13 @@ for (const width of [390, 1280]) {
     await page.goto('/?pocket=1&tab=chat');
     await page.waitForFunction(() => '__swarmMic' in window);
     await page.evaluate(() => (window as unknown as CallWindow).__swarmMic.fake());
+    const dock = page.locator('.pk-dock');
+    if (width >= 640) await expect(dock).toBeVisible();
     await page.getByRole('button', { name: /^Call / }).first().click();
     await expect.poll(() => phase(page)).toBe('listening');
+    if (width >= 640) await expect(dock).toBeHidden(); // the docked chat tucks away behind the call card
+    const bg = (key: string) => page.locator(`[data-key="${key}"]`).evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(await bg('end')).not.toBe(await bg('mute')); // End is red
     const { id } = await call(page);
     const since = await now(page);
     const toasts = page.locator('.toasts .toast');
@@ -109,6 +114,7 @@ for (const width of [390, 1280]) {
     await expect(page.locator('.vcall-screen, .vcall-card, .vcall-pill')).toHaveCount(0);
     await expect(toasts.first()).toBeVisible();
     await expect(page.locator('.chat-log')).toBeVisible(); // End brings the chat back
+    if (width >= 640) await expect(dock).toBeVisible();
   });
 }
 
