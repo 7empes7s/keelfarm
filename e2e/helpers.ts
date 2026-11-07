@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { colourStats, decodePng } from './png';
 import { TOUR } from '../client/src/ui/tourSteps';
 
@@ -85,4 +85,34 @@ export async function canvasColours(page: Page) {
   if (!box) throw new Error('the canvas has no size');
   const png = await page.screenshot({ clip: box, caret: 'initial', style: 'body * { visibility: hidden !important; } canvas { visibility: visible !important; }' });
   return colourStats(decodePng(png));
+}
+
+/** Content past the right edge of the box it scrolls or clips in (#149): a finger drags such a panel sideways (the
+ * panels' overflow-x: clip only stops the drag; this still finds the overflow). Only tables, code, tab strips, toolbars
+ * and chip strips may scroll sideways in a box of their own. Names the box and its widest child. */
+export async function overflowProblems(root: Locator): Promise<string[]> {
+  return root.evaluate((el) => {
+    const out: string[] = [];
+    const vw = document.documentElement.clientWidth;
+    if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
+    const sel = (x: Element) => x.tagName.toLowerCase() + [...x.classList].slice(0, 3).map((c) => `.${c}`).join('');
+    const ownScroller = (c: Element, box: Element) => {
+      for (let p = c.parentElement; p && p !== box; p = p.parentElement) if (getComputedStyle(p).overflowX !== 'visible') return true;
+      return false;
+    };
+    const SIDEWAYS = 'table, pre, code, [role="tablist"]:not([aria-orientation="vertical"])';
+    for (const x of [el, ...el.querySelectorAll('*')]) {
+      if (x.scrollWidth <= x.clientWidth + 1 || x.clientWidth < 2 || !x.checkVisibility()) continue; // < 2: screen-reader text
+      const css = getComputedStyle(x);
+      if (css.overflowX === 'visible' || css.textOverflow === 'ellipsis' || x.matches(`input, textarea, select, canvas, .xterm *, ${SIDEWAYS}`) || x.closest('[role="toolbar"]')) continue;
+      // a strip of chips that scrolls sideways and not up and down (quick replies, decisions): sideways is its job
+      if ((css.overflowX === 'auto' || css.overflowX === 'scroll') && x.scrollHeight <= x.clientHeight + 1) continue;
+      const edge = x.getBoundingClientRect().right - parseFloat(css.borderRightWidth);
+      const past = [...x.querySelectorAll('*')].filter((c) => c.getBoundingClientRect().right > edge + 1 && c.checkVisibility() && !ownScroller(c, x));
+      if (past.length && past.every((c) => c.closest(SIDEWAYS) && x.contains(c.closest(SIDEWAYS)))) continue;
+      const widest = past.reduce<Element | null>((a, c) => (!a || c.getBoundingClientRect().right > a.getBoundingClientRect().right ? c : a), null);
+      out.push(`${sel(x)} scrolls sideways (${x.scrollWidth} > ${x.clientWidth}px)${widest ? `: ${sel(widest)} ends ${Math.round(widest.getBoundingClientRect().right - edge)}px past it` : ''}`);
+    }
+    return out;
+  });
 }
