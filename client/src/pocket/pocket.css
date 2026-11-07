@@ -148,6 +148,10 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
 .pk-tabs {
   order: 1;
 }
+/* typing on the phone (viewport.ts): the keyboard has the bottom, so the tab bar steps aside until it closes (#152) */
+html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
+  display: none;
+}
 
 .pk-railed .pk-body {
   position: relative;

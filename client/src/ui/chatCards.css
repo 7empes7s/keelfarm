@@ -160,7 +160,13 @@ html[data-reduce-motion] .action-confetti {
 .working-text {
   min-width: 0;
   line-height: var(--ds-leading-tight);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* one compact row while typing (#152): the keyboard leaves little room */
+html[data-typing] .working-next {
+  display: none;
 }
 .working-next {
   display: block;

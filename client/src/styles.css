@@ -3280,10 +3280,15 @@ input.inline:focus {
   color: var(--ds-warn-text);
   font-weight: 600;
 }
+/* the composer stack under the log (#152): when the keyboard takes the room, the log gives it up first (down to a
+   few lines, so the newest message and "↓ Latest" stay in view), then the message box; nothing else is squeezed */
+.phone-chat > :not(.chat-log-wrap, .chat-input) {
+  flex-shrink: 0;
+}
 /* the log, its "jump to latest" button and the message actions sit in one box */
 .chat-log-wrap {
   flex: 1;
-  min-height: 0;
+  min-height: 72px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3747,15 +3752,19 @@ input.inline:focus {
   margin: 0;
   padding: 6px 10px 0;
   list-style: none;
-  overflow-x: auto;
+  overflow-x: auto; /* one row, scrolled sideways in here, never the page (#152) */
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
 .attach-item {
   display: flex;
   flex: none;
   align-items: center;
   gap: 5px;
-  max-width: 220px;
-  padding: 3px 4px 3px 6px;
+  height: 48px;
+  padding: 0 0 0 6px;
+  white-space: nowrap;
   border: 2px solid var(--ds-outline);
   border-radius: 10px;
   background: var(--ds-surface-raised);
@@ -3776,6 +3785,15 @@ input.inline:focus {
   white-space: nowrap;
   min-width: 0;
   max-width: 100px;
+}
+.attach-item .chat-reply-x {
+  /* a 44px target around the small circle */
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 9px;
+  border: none;
+  background-clip: content-box;
+  background-color: var(--ds-surface-sunken);
 }
 .attach-progress {
   width: 48px;
@@ -4139,6 +4157,11 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   gap: 6px;
   padding: 8px 10px 10px;
   background: var(--ds-surface-raised);
+  min-height: calc(var(--ds-target) + 18px);
+}
+/* about five lines, fewer when the keyboard leaves less room (#152); then it scrolls */
+.chat-input textarea.msg-box {
+  max-height: min(calc(5 * 1.35em + 20px), 100%);
 }
 /* one row at any width: the +, the box, the mic and Send (or Stop) */
 .chat-input > :not(.msg-box) {
