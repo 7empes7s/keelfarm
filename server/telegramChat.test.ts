@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ChatVisual } from '../shared/chatVisuals.ts';
 import type { FileRef } from '../shared/files.ts';
 import { createDemoBackend } from './demo.ts';
 import { GRACE_MS } from './notify.ts';
@@ -8,7 +9,7 @@ import { Swarm } from './swarm.ts';
 // gets the CEO's reply there, and decides a team change with the message's buttons.
 type Internals = {
   ensureCeo(interrupted: unknown[]): void;
-  postMessage(from: 'ceo', text: string, requestId?: string, opts?: { attachments?: FileRef[] }): void;
+  postMessage(from: 'ceo', text: string, requestId?: string, opts?: { attachments?: FileRef[]; visuals?: ChatVisual[] }): void;
 };
 
 const TOKEN = '123456789:AAEdemoSECRETtokenSECRETtoken42424242';

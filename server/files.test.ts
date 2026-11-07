@@ -96,6 +96,12 @@ describe('the store', () => {
     expect((await spare.addStream(Readable.from([Buffer.from('hello')]), { name: 'a.txt', type: '', from: 'manager', length: 5 })).size).toBe(5);
   });
 
+  it('refuses a write when the disk probe fails instead of assuming unlimited space', async () => {
+    const store = new FileStore(dir, undefined, async () => { throw new Error('disk probe unavailable'); });
+    await expect(store.addStream(Readable.from(['hello']), { name: 'a.txt', type: '', from: 'manager', length: 5 })).rejects.toMatchObject({ status: 503, message: expect.stringMatching(/check free disk space/) });
+    expect(await fs.readdir(dir)).toEqual([]);
+  });
+
   it('refuses an upload over the limit and leaves nothing behind', async () => {
     const store = new FileStore(dir, undefined, roomy);
     await expect(store.addStream(Readable.from([Buffer.alloc(10)]), { name: 'a.txt', type: '', from: 'manager' }, 5)).rejects.toMatchObject({ status: 413 });

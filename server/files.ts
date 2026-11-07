@@ -67,7 +67,9 @@ export class FileStore {
   /** 507 when taking `incoming` bytes would leave the disk under MIN_FREE_BYTES free. */
   private async checkDisk(incoming: number) {
     await fs.mkdir(this.root, { recursive: true, mode: 0o700 });
-    const free = await this.freeBytes(this.root).catch(() => Infinity); // no probe here: ENOSPC still stops the write
+    const free = await this.freeBytes(this.root).catch(() => {
+      throw new HttpError(503, "Couldn't check free disk space. Try the upload again.");
+    });
     const why = diskProblem(free, incoming);
     if (why) throw new HttpError(507, why);
   }

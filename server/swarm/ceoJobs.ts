@@ -13,7 +13,7 @@ import { recordCost } from '../metrics.ts';
 import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
 import { speaks } from '../voice.ts';
-import { teamKeyboard, telegramChat } from '../telegram.ts';
+import { teamKeyboard, telegramChat, telegramMessage } from '../telegram.ts';
 import { blockedNotice } from '../unblock.ts';
 import { clip, plainText, stuckAgents, type TeamChange } from '../notify.ts';
 import { redact as scrub } from '../../shared/journal.ts';
@@ -38,7 +38,6 @@ import { withVisualsText } from '../../shared/chatVisuals.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
-import { fileLinks } from '../../shared/files.ts';
 import { ceoSessionStep } from '../ceoWaits.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
@@ -661,8 +660,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      const files = fileLinks(m.attachments ?? [], this.state.settings.notify.officeUrl); // links: Telegram takes no file over 50 MB
-      void this.telegram.send(telegramChat(this.ceo().name, [withVisualsText(m.text, m.visuals), files].filter(Boolean).join('\n')), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      void this.telegram.send(telegramMessage(this.ceo().name, m, this.state.settings.notify.officeUrl), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }
