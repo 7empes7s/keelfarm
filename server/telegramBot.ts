@@ -126,11 +126,11 @@ export class TelegramBot {
   refresh() {
     if (telegramPolls(!!this.secrets, this.deps.on())) {
       if (!this.polling) this.start();
-      return;
+    } else {
+      void this.stop();
+      this.failures = 0;
+      this.pollError = '';
     }
-    void this.stop();
-    this.failures = 0;
-    this.pollError = '';
     this.deps.changed();
   }
 

@@ -215,6 +215,7 @@ function bot(switchOn = { on: true }) {
   const messages: string[] = [];
   const decided: string[] = [];
   const logs: string[] = [];
+  const changes = { n: 0 };
   const b = new TelegramBot({
     api: fake.api,
     secretsFile,
@@ -225,10 +226,10 @@ function bot(switchOn = { on: true }) {
       decided.push(`${verdict}:${id}`);
       return 'Done';
     },
-    changed: () => undefined,
+    changed: () => void changes.n++,
     log: (l) => logs.push(l),
   });
-  return { b, fake, secretsFile, messages, decided, logs };
+  return { b, fake, secretsFile, messages, decided, logs, changes };
 }
 
 describe('the Telegram bot', () => {
@@ -310,7 +311,7 @@ describe('the Telegram bot', () => {
 
   it('switched off: stops reading and retrying, sends nothing, keeps the chat; on again resumes without relinking (#126)', async () => {
     const switchOn = { on: true };
-    const { b, fake } = bot(switchOn);
+    const { b, fake, changes } = bot(switchOn);
     const { startUrl: url } = await b.setToken(TOKEN);
     fake.push({ ...text(42, `/start ${new URL(url).searchParams.get('start')}`), update_id: 1 });
     await until(() => b.linked());
@@ -333,7 +334,9 @@ describe('the Telegram bot', () => {
 
     fake.failNext(0);
     switchOn.on = true;
+    const changesBefore = changes.n;
     b.refresh();
+    expect(changes.n).toBeGreaterThan(changesBefore); // open tabs hear it's on again
     await until(() => polls() > before.polls);
     expect(b.view()).toMatchObject({ on: true, polling: 'ok', linked: true });
     expect(await b.send('back')).toBeNull();
