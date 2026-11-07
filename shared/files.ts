@@ -137,7 +137,7 @@ export const thumbnailable = (f: Pick<FileRef, 'type' | 'size'>) => f.type.start
 export function fileLinks(files: readonly Pick<FileRef, 'id' | 'name' | 'size'>[], officeUrl: string): string {
   return files
     .map((f) => {
-      const where = officeUrl ? new URL(`/api/files/${f.id}?download`, officeUrl).href : "in the office's Files";
+      const where = officeUrl ? new URL(`api/files/${f.id}?download`, officeUrl.replace(/\/*$/, '/')).href : "in the office's Files";
       return `📎 ${f.name} (${formatSize(f.size)}): ${where}`;
     })
     .join('\n');

@@ -211,7 +211,7 @@ export function AttachTray({ pending, onRemove, onRetry }: { pending: readonly P
           {p.error ? (
             <>
               <span className="small attach-error">⚠ {p.error}</span>
-              <button type="button" className="chat-reply-x" aria-label={`Retry the upload of ${p.name}`} onClick={() => onRetry(p.key)}>
+              <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon attach-btn" aria-label={`Retry the upload of ${p.name}`} onClick={() => onRetry(p.key)}>
                 ↻
               </button>
             </>
@@ -223,7 +223,7 @@ export function AttachTray({ pending, onRemove, onRetry }: { pending: readonly P
           ) : (
             <span className="small muted">{formatSize(p.size)}</span>
           )}
-          <button type="button" className="chat-reply-x" aria-label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)}>
+          <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon attach-btn" aria-label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)}>
             ✕
           </button>
         </li>

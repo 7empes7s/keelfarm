@@ -133,5 +133,8 @@ describe('big files (#148)', () => {
     expect(fileLinks([f], 'http://office.tail1234.ts.net:4317/')).toBe('📎 demo.mp4 (450 MB): http://office.tail1234.ts.net:4317/api/files/0123456789abcdef01234567?download');
     expect(fileLinks([f], '')).toBe("📎 demo.mp4 (450 MB): in the office's Files");
     expect(fileLinks([], 'http://x/')).toBe('');
+    // an office behind a path prefix keeps it, with or without the trailing slash
+    expect(fileLinks([f], 'https://host/office')).toBe('📎 demo.mp4 (450 MB): https://host/office/api/files/0123456789abcdef01234567?download');
+    expect(fileLinks([f], 'https://host/office/')).toBe('📎 demo.mp4 (450 MB): https://host/office/api/files/0123456789abcdef01234567?download');
   });
 });
