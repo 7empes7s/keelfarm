@@ -82,12 +82,13 @@ describe('listenRules', () => {
     expect(listenRules('hold', true).noSpeechMs).toBeNull();
   });
 
-  it('a tap and the hands-free phone end on quiet and give up on nothing', () => {
-    for (const mode of ['tap', 'handsfree'] as const) expect(listenRules(mode, false)).toEqual({ silenceMs: SILENCE_MS, noSpeechMs: NO_SPEECH_MS, maxMs: CLIP_MAX_MS });
+  it('a tap, the hands-free phone and a call turn end on quiet and give up on nothing', () => {
+    for (const mode of ['tap', 'handsfree', 'call'] as const) expect(listenRules(mode, false)).toEqual({ silenceMs: SILENCE_MS, noSpeechMs: NO_SPEECH_MS, maxMs: CLIP_MAX_MS });
   });
 
   it('sends by itself hands-free, or with auto-send on', () => {
     expect(sendsWhenDone('handsfree', false)).toBe(true);
+    expect(sendsWhenDone('call', false)).toBe(true);
     expect(sendsWhenDone('tap', false)).toBe(false);
     expect(sendsWhenDone('hold', false)).toBe(false);
     expect(sendsWhenDone('hold', true)).toBe(true);

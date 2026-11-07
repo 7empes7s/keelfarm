@@ -1,0 +1,292 @@
+/* The voice call's screens (ui/CallScreens.tsx): the phone's call screen and pill, the desktop's orb and call card. */
+
+/* ---------- the orb: the CEO's face, with a ring that says who's talking ---------- */
+
+.vcall-orb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+  font-weight: var(--ds-weight-strong);
+  box-shadow: var(--ds-shadow-2);
+}
+.vcall-orb-big {
+  width: calc(var(--ds-target) * 3);
+  height: calc(var(--ds-target) * 3);
+  font-size: calc(var(--ds-text-xl) * 2.5);
+}
+.vcall-orb-small {
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border-width: var(--ds-border);
+  font-size: var(--ds-text-lg);
+}
+.vcall-orb[data-state='speaking'] {
+  animation: vcall-ring calc(var(--ds-dur-slow) * 5) var(--ds-ease) infinite;
+}
+.vcall-orb[data-state='listening'] {
+  box-shadow:
+    var(--ds-shadow-2),
+    0 0 0 var(--ds-space-1) var(--ds-good-fill);
+}
+.vcall-orb[data-state='thinking'] {
+  animation: vcall-breathe calc(var(--ds-dur-slow) * 6) var(--ds-ease) infinite;
+}
+.vcall-orb[data-state='paused'],
+.vcall-orb[data-state='connecting'] {
+  opacity: 0.7;
+}
+@keyframes vcall-ring {
+  0%,
+  100% {
+    box-shadow:
+      var(--ds-shadow-2),
+      0 0 0 0 color-mix(in srgb, var(--ds-accent) 60%, transparent);
+  }
+  50% {
+    box-shadow:
+      var(--ds-shadow-2),
+      0 0 0 var(--ds-space-3) color-mix(in srgb, var(--ds-accent) 25%, transparent);
+  }
+}
+@keyframes vcall-breathe {
+  50% {
+    transform: scale(0.94);
+  }
+}
+
+.vcall-name {
+  margin: 0;
+  font-size: var(--ds-text-xl);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.vcall-status {
+  margin: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.vcall-clock {
+  font-variant-numeric: tabular-nums;
+}
+.vcall-captions {
+  margin: 0;
+  max-width: 100%;
+  min-height: calc(var(--ds-text-md) * 3 * var(--ds-leading));
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.vcall-tap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.vcall-why {
+  margin: 0;
+  color: var(--ds-warn-text);
+  font-size: var(--ds-text-sm);
+  text-align: center;
+}
+
+/* ---------- the controls ---------- */
+
+.vcall-keys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-4) var(--ds-space-2);
+  justify-items: center;
+}
+.vcall-keys-small {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--ds-space-1);
+}
+.vcall-key-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.vcall-key {
+  position: relative;
+  width: calc(var(--ds-target) + var(--ds-space-5));
+  height: calc(var(--ds-target) + var(--ds-space-5));
+  border-radius: var(--ds-radius-pill);
+  --ds-icon: var(--ds-icon-lg);
+}
+.vcall-keys-small .vcall-key {
+  width: var(--ds-target);
+  height: var(--ds-target);
+  --ds-icon: var(--ds-icon-md);
+}
+.vcall-key-on {
+  background: var(--ds-text);
+  color: var(--ds-surface-raised);
+}
+.vcall-key-on:hover:not(:disabled) {
+  background: var(--ds-text);
+}
+.vcall-end .ds-icon {
+  transform: rotate(135deg);
+}
+/* Mute's slash over the mic */
+.vcall-slash {
+  position: absolute;
+  width: var(--ds-border-strong);
+  height: 60%;
+  border-radius: var(--ds-radius-pill);
+  background: currentColor;
+  transform: rotate(-45deg);
+}
+.vcall-key-label {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  white-space: nowrap;
+}
+
+/* ---------- the phone: the call screen ---------- */
+
+.vcall-screen {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-z-sheet);
+  display: flex;
+  flex-direction: column;
+  height: var(--app-height, 100dvh);
+  padding: calc(var(--ds-safe-top) + var(--ds-space-2)) calc(var(--ds-safe-right) + var(--ds-space-4)) calc(var(--ds-safe-bottom) + var(--ds-space-6)) calc(var(--ds-safe-left) + var(--ds-space-4));
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  overflow: hidden auto;
+}
+.vcall-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.vcall-middle {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-3);
+  min-height: 0;
+  padding: var(--ds-space-4) 0;
+}
+
+/* the pill at the top, while the app is in use */
+.vcall-pill {
+  position: fixed;
+  top: calc(var(--ds-safe-top) + var(--ds-space-2));
+  left: 50%;
+  z-index: var(--ds-z-popover);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  max-width: calc(100vw - var(--ds-space-8));
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-4);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+  box-shadow: var(--ds-shadow-float);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+.vcall-pill-name,
+.vcall-pill-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vcall-pill-status {
+  min-width: 0;
+  font-weight: 400;
+}
+
+/* ---------- the desktop: the orb and its card ---------- */
+
+.vcall-float {
+  position: fixed;
+  z-index: var(--ds-z-sheet);
+}
+/* corners clear of the panels' headers, so the orb never covers a ✕ */
+.vcall-br {
+  right: calc(var(--ds-safe-right) + var(--ds-space-4));
+  bottom: calc(var(--ds-safe-bottom) + var(--ds-space-4));
+}
+.vcall-bl {
+  left: calc(var(--ds-safe-left) + var(--ds-space-4));
+  bottom: calc(var(--ds-safe-bottom) + var(--ds-space-4));
+}
+.vcall-tr {
+  right: calc(var(--ds-safe-right) + var(--ds-space-4));
+  top: calc(var(--ds-safe-top) + var(--ds-target) * 2);
+}
+.vcall-tl {
+  left: calc(var(--ds-safe-left) + var(--ds-space-4));
+  top: calc(var(--ds-safe-top) + var(--ds-target) * 2);
+}
+.vcall-float[data-dragging] {
+  opacity: 0.85;
+}
+.vcall-bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-xl);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-float);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  cursor: grab;
+  touch-action: none;
+}
+.vcall-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  width: min(360px, calc(100vw - var(--ds-space-8)));
+  padding: var(--ds-space-3);
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-float);
+}
+.vcall-card .vcall-captions {
+  min-height: calc(var(--ds-text-sm) * 2 * var(--ds-leading));
+  font-size: var(--ds-text-sm);
+  text-align: left;
+}
+.vcall-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  cursor: grab;
+  touch-action: none;
+}
+.vcall-card-who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.vcall-card-who .vcall-name {
+  font-size: var(--ds-text-md);
+}

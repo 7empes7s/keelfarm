@@ -132,7 +132,8 @@ leaving it in the box; letting go of a hold sends it too.
 touching anything: when the CEO's reply has been read aloud, a soft chime plays and the phone listens for up to 8 s with
 a pulsing 🎙️. Say something and it's sent once you stop; say nothing and it closes (with a falling chime). **Esc** or
 **M** closes it straight away. It needs the CEO's voice on, the phone open on the chat in the tab you're looking at, and
-an empty message box; it never asks for the microphone on its own (turning it on asks, from that click).
+an empty message box; it never asks for the microphone on its own (turning it on asks, from that click). For a
+conversation that goes on whatever is on screen, on a desktop too, call the CEO instead ([Calling the CEO](#calling-the-ceo)).
 
 Manners: the browser asks for the microphone the first time you press the 🎙️ (or turn hands-free on), and a refusal
 is explained in one line. The mic is only ever on while you hold the button or V, or while the pulsing 🎙️ shows
@@ -146,6 +147,82 @@ browser's voice pauses), the office's cues (merge, QA, errors) wait until it clo
 hears (with ElevenLabs, `say()` marks speech for the silence detector). The rules are pure and tested:
 `client/src/ui/micSilence.ts` (when you've stopped talking), `handsFree.ts`, `micKeys.ts`, `micText.ts` and
 `shared/clipLimits.ts`.
+
+## Calling the CEO
+
+**Call** (the 📞 in the CEO chat's toolbar) starts a voice call with the CEO, on a phone, a desktop or in pocket mode.
+You just talk; the CEO answers aloud; you talk again. Talking while the CEO speaks interrupts it. The call goes on
+whatever you open: panels, sheets, Settings, other pages, the chat closed, the 3D/pocket switch.
+
+- **Phone and home-screen app:** a call screen like a phone call: the CEO's orb (a ring while it talks, green while
+  it listens), the name, a call timer, live captions, and **Mute**, **Speaker**, **Pause**, **Skip**, **Captions** and
+  a red **End**. ⌄ folds it into a pill at the top while you use the app; tap the pill to come back. 💬 opens the chat
+  without ending the call.
+- **Desktop and tablet:** the chat tucks away and a CEO orb follows you across every page. Drag it to any corner (the
+  top ones sit below the panels' headers, so it never covers a ✕). Click it for the call card with the same controls
+  and **Open chat**.
+- **Keys** (not while typing or in a terminal): **Space** pauses or resumes (or talks, in tap-to-talk), **→** skips
+  to the next sentence, **M** mutes the mic (not the office), **Esc** ends the call when no panel or sheet is open.
+- **Mute** turns the mic off; the CEO still talks. **Pause** stops the CEO's voice where it is and turns the mic off;
+  **Resume** carries on from there (the browser's voice starts that sentence again). **Skip** moves to the next
+  sentence. **Speaker** off reads at about a third of the volume, like a phone's earpiece. **End** hangs up and brings
+  the chat back, with every turn of the call in it.
+- **Turns:** the mic listens all through the call (with echo cancellation), with the same rules as hands-free (about
+  1.2 s of quiet ends your turn) but no chime each time. Talking over the CEO for about 0.3 s stops its voice at once
+  and becomes your next message; a cough, a short noise or "mm-hm" doesn't.
+- **Away:** leaving the tab or locking the phone puts the call on hold: the mic closes (it never records in the
+  background) and opens again when you're back. Closing the tab ends the call. The office's new client never loads
+  during a call (#216): it waits for **End**.
+- **Quiet during a call:** the office's cues, the merge gong, toasts, desktop notifications and Web Push / chat-app
+  notifications (on every device) wait. Each is still in the notifications list, and the toasts show when the call
+  ends. Only the CEO's voice reaches you, so urgent things come from the CEO.
+- **Voices:** the CEO speaks in the voice from Settings → Voice; with Speak messages off, a call still speaks, in the
+  browser's voice. It listens with Talk instead of type's provider, or the browser's recognition when that's off.
+- **No mic:** when the mic is refused or the browser can't listen, the call says why in one line and falls back to
+  tap-to-talk: a **Talk** button (or Space) for each turn.
+
+Nothing else changed: the 🎧 hands-free switch, hold/tap/V to talk, saved clips, ▶ replay and the dips work as
+before, and with no call on nothing opens the mic or starts reading by itself unless those settings say so.
+
+`window.__swarmCall` is the call's probe: `id` (the session, the same for the whole call), `phase` (`idle`,
+`connecting`, `listening`, `thinking`, `speaking`, `ended`), `state` (also `muted`, `paused`, `away`, `tapToTalk`,
+`reply`, `held` notifications, `heard`, `minimised`), `position()` (the reply being read: `{ id, sentence, ms }`),
+`start()` and `end()`. The demo office calls with the fake mic (`__swarmMic.fake()` and `say()`) and the demo's
+voice; its clips last about as long as reading the message would (up to 6 s), so there's time to pause, skip and
+talk over them. The rules are pure and tested: `client/src/ui/voiceCall.ts` (the session's state machine, barge-in,
+sentences); `voiceCallEngine.ts` runs it and `CallScreens.tsx` draws it.
+
+## How a voice call behaves
+
+What the call is modelled on: ChatGPT Voice, Claude's voice mode and ElevenLabs' conversational agents, from their
+public help pages (read in November 2026; OpenAI's pages were read through search extracts, as they refuse automated
+fetches).
+
+| | ChatGPT Voice | Claude voice mode | ElevenLabs | The office |
+| --- | --- | --- | --- | --- |
+| Entering and leaving | the Voice icon; the exit icon ends it [1] | the sound-wave button; it stays in voice mode until **Stop** [3] | the app starts and ends a session | **Call** in the chat; only **End** (or closing the tab) ends it |
+| Where it shows | inside the chat by default, or a separate full-screen orb (Settings → Voice → Separate Mode) [2] | in the chat | the app's own | a call screen on phones, an orb and card on desktops; the chat stays one tap away |
+| Turn-taking | listens and speaks at once; how it decides you're done isn't documented [2] | "listens continuously and responds to natural pauses"; push-to-talk as an option [3] | eagerness: eager, normal or patient; "take turn after silence" 1-30 s [5] | ~1.2 s of quiet ends your turn (micSilence's hands-free rules); tap-to-talk without a mic |
+| Interrupting | speak while it talks; noise or other voices can interrupt by mistake [1] | "just start talking. Claude will stop and listen" [3] | speaking mid-response cancels the reply [4]; interruptions can be turned off [5] | ~0.3 s of real speech stops the voice; noise and "mm-hm" don't |
+| Mute | a mic button bottom-left [1] | not documented | not documented | **Mute** or M: mic off, the call and the CEO's voice go on |
+| Switching apps, locking | goes on in the background if Background Conversations is on; Live Activity on the lock screen [1] | not documented | not documented | the call stays on across every screen; a hidden tab or locked phone stops listening and resumes on return |
+| Notifications during a call | not documented | not documented | not documented | held: in the list, toasts after the call, no pushes; the CEO says what matters |
+| Pause, skip | not documented | not documented | a "skip turn" tool lets the agent wait when you ask for a second [6] | **Pause**/**Resume** where it was, **Skip** a sentence |
+| Captions, transcript | a transcript lands in the chat afterwards [7] | transcripts saved in the chat history [3] | not documented | live captions on the call screen; every turn is a chat message |
+
+Choices that follow from it: the call never depends on what's on screen (both apps keep a voice session going outside
+the chat); barge-in needs a few hundred ms of speech that isn't a backchannel, because OpenAI warns that noise
+interrupts by mistake [1]; nothing listens in a background tab, since a browser tab can't show a lock-screen indicator
+the way ChatGPT's Live Activity does [1]; and as none of them say what happens to notifications, the office keeps them
+for after the call so nothing talks over the CEO.
+
+1. OpenAI, Voice Mode FAQ: https://help.openai.com/en/articles/8400625-voice-mode-faq
+2. OpenAI, ChatGPT release notes (voice in the chat, Nov 2025; GPT-Live-1, Jul 2026): https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+3. Anthropic, Use voice mode: https://support.claude.com/en/articles/11101966-use-voice-mode
+4. ElevenLabs, Speech Engine: https://elevenlabs.io/docs/overview/capabilities/speech-engine
+5. ElevenLabs, Conversation flow (turn eagerness, interruptions, timeouts): https://elevenlabs.io/docs/eleven-agents/customization/conversation-flow
+6. ElevenLabs, Skip turn: https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/skip-turn
+7. OpenAI, ChatGPT Voice: https://help.openai.com/en/articles/20001274-chatgpt-voice
 
 ## API
 
