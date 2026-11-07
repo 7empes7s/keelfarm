@@ -7,6 +7,7 @@ import { Key } from './Key';
 import { SetupWizard } from './SetupWizard';
 import { unlockAudio } from './sfx';
 import { announce } from './announce';
+import { Icon } from './Icon';
 
 export function StartScreen() {
   const started = useStore((s) => s.started);
@@ -38,16 +39,20 @@ export function StartScreen() {
   return (
     <div className="start">
       <div className="start-card ds-screen">
-        <div className="start-logo">✻</div>
+        <div className="start-logo">
+          <Icon name="asterisk" />
+        </div>
         <h1>{settings.companyName || 'cubefarm'}</h1>
         <p className="start-tag">{settings.managerName ? `Welcome back, ${settings.managerName}.` : 'A cartoon office where a team of AI coding agents works through your GitHub issues.'}</p>
         <ul className="start-list">
           <li>
-            🏢 {repos.length} project{repos.length === 1 ? '' : 's'}, {staff} {staff === 1 ? 'person' : 'people'} on staff{ceo ? `, and ${ceo.name} in the corner office` : ''}.
+            <Icon name="building-2" /> {repos.length} project{repos.length === 1 ? '' : 's'}, {staff} {staff === 1 ? 'person' : 'people'} on staff{ceo ? `, and ${ceo.name} in the corner office` : ''}.
           </li>
-          <li>{waiting ? `📱 ${waiting} thing${waiting === 1 ? '' : 's'} waiting on your phone. Press ${phoneKey} once you're in.` : `📱 Press ${phoneKey} anywhere for your phone.`}</li>
           <li>
-            💻 Walk up behind anyone to watch their screen, or press <Key action="interact" /> (or click) on things to use them. <Key action="help" /> for help.
+            <Icon name="smartphone" /> {waiting ? `${waiting} thing${waiting === 1 ? '' : 's'} waiting on your phone. Press ${phoneKey} once you're in.` : `Press ${phoneKey} anywhere for your phone.`}
+          </li>
+          <li>
+            <Icon name="laptop" /> Walk up behind anyone to watch their screen, or press <Key action="interact" /> (or click) on things to use them. <Key action="help" /> for help.
           </li>
         </ul>
         <button className="btn btn-big" onClick={enter} disabled={!loaded}>
@@ -55,7 +60,7 @@ export function StartScreen() {
         </button>
         <div className="start-meta">
           <button className="linkish start-pocket" onClick={() => setMode('pocket')} title="The office without the 3D building: tabs for the company, the CEO chat, the board, the team and approvals">
-            📱 Pocket mode, for phones and touch screens
+            <Icon name="smartphone" /> Pocket mode, for phones and touch screens
           </button>
           {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO MODE: fake repos, fake agents'}</span>}
           {version && <span className="small">cubefarm {version}</span>}

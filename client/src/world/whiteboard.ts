@@ -95,11 +95,11 @@ export function dropTarget(s: Carried, focus: Pick<Focus, 'action'> | null, agen
   const who = agents.find((x) => x.id === a.agentId);
   if (!who || who.role === 'ceo') return { kind: 'none' };
   const already = busy(who) ? `${who.name} is already ${doing(who)}` : null;
-  if (s.pr) return { kind: 'qa', agentId: who.id, label: already ? `⚠️ ${already}` : `Give ${what} to ${who.name} to test`, warn: already };
+  if (s.pr) return { kind: 'qa', agentId: who.id, label: already ?? `Give ${what} to ${who.name} to test`, warn: already };
   const issue = issues.find((i) => i.number === s.number);
   const waits = issue ? blockers(issue.body, new Set(issues.map((i) => i.number))) : [];
   const warn = already ?? (waits.length ? waitsMessage(s.number, waits) : null);
-  return { kind: 'assign', agentId: who.id, label: warn ? `⚠️ ${warn}` : `Give #${s.number} to ${who.name}`, warn };
+  return { kind: 'assign', agentId: who.id, label: warn ?? `Give #${s.number} to ${who.name}`, warn };
 }
 
 // ---------- dependency strings ----------

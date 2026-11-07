@@ -5,6 +5,7 @@ import { watchPads } from '../world/gamepad';
 import { useLookPrefs } from '../world/look';
 import { requestLook } from '../world/Player';
 import { keyName } from './controls';
+import { Icon } from './Icon';
 import { Key, MoveKeys } from './Key';
 
 // The camera's HUD: the overview button (on the floor card), the overview's and the building's toolbars (turn, the
@@ -31,7 +32,7 @@ export function OverviewButton() {
         enterOverview();
       }}
     >
-      🗺️ <Key action="overview" />
+      <Icon name="map" /> <Key action="overview" />
     </button>
   );
 }
@@ -50,9 +51,9 @@ export function CameraHud() {
   if (mode === 'follow') {
     return (
       <div className="cam-follow" role="status">
-        🎥 Following <b>{following}</b> · <MoveKeys joined /> or <kbd>Esc</kbd> to take over
+        <Icon name="video" /> Following <b>{following}</b> · <MoveKeys joined /> or <kbd>Esc</kbd> to take over
         <button className="btn btn-small" onClick={back}>
-          ✕ Stop
+          <Icon name="x" /> Stop
         </button>
       </div>
     );
@@ -64,26 +65,36 @@ export function CameraHud() {
     <>
       {pad && <div className="crosshair cam-reticle" />}
       <div className="cam-bar" role="toolbar" aria-label={mode === 'overview' ? 'Overview' : 'Building'}>
-        <span className="cam-title">{mode === 'overview' ? '🗺️ Overview' : '🏢 The building'}</span>
+        <span className="cam-title">
+          {mode === 'overview' ? (
+            <>
+              <Icon name="map" /> Overview
+            </>
+          ) : (
+            <>
+              <Icon name="building-2" /> The building
+            </>
+          )}
+        </span>
         {mode === 'overview' ? (
           <>
             <button className="btn btn-small" onClick={() => rotateView(-1)} title="Turn the view left">
-              ⟲ <Key action="rotateLeft" />
+              <Icon name="rotate-ccw" /> <Key action="rotateLeft" />
             </button>
             <button className="btn btn-small" onClick={() => rotateView(1)} title="Turn the view right">
-              ⟳ <Key action="rotateRight" />
+              <Icon name="rotate-cw" /> <Key action="rotateRight" />
             </button>
             <button className="btn btn-small" onClick={() => enterBuilding()} title={`Every floor at once (${keyName('overview')} twice)`}>
-              🏢 Building
+              <Icon name="building-2" /> Building
             </button>
           </>
         ) : (
           <button className="btn btn-small" onClick={() => visitFloor(floor)} title="Back down to the overview of this floor">
-            🗺️ This floor
+            <Icon name="map" /> This floor
           </button>
         )}
         <button className="btn btn-small btn-good" onClick={back} title="Fly back to where you were standing">
-          ✕ Back <Key action="overview" />
+          <Icon name="x" /> Back <Key action="overview" />
         </button>
       </div>
       <div className="cam-tip">{hover ? `Click: ${hover}` : tip}</div>

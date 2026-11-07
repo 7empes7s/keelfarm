@@ -18,7 +18,7 @@ import type { HealthView } from '../../shared/health';
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
   if (method !== 'GET' && useStore.getState().replaying) {
-    useStore.getState().pushToast('info', '▶ Replaying: live actions are off. Press Esc to go back to the live office.');
+    useStore.getState().pushToast('info', 'Replaying: live actions are off. Press Esc to go back to the live office.');
     throw new Error('The time-lapse is playing');
   }
   const res = await fetch(url, {

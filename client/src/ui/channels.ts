@@ -2,21 +2,22 @@
 // preview) or one of its open PRs, each PR running in a preview of its own.
 
 import type { AgentView, PreviewStatus, PreviewView, PrPreviewView, PullInfo, QaStatus, QaView } from '../../../shared/types';
+import type { IconName } from './icons';
 
 /** What a floor's screen shows: its main preview (null) or an open PR's. */
 export type Channel = number | null;
 
-export const QA_BADGE: Record<QaStatus, string> = {
-  queued: '⏳ QA queued',
-  testing: '🔍 QA testing',
-  passed: '✅ QA passed',
-  failed: '❌ QA failed',
-  fixing: '🔧 being fixed',
-  'needs-human': '🙋 needs you',
+export const QA_BADGE: Record<QaStatus, { icon: IconName; text: string }> = {
+  queued: { icon: 'hourglass', text: 'QA queued' },
+  testing: { icon: 'search', text: 'QA testing' },
+  passed: { icon: 'circle-check', text: 'QA passed' },
+  failed: { icon: 'circle-x', text: 'QA failed' },
+  fixing: { icon: 'wrench', text: 'being fixed' },
+  'needs-human': { icon: 'hand', text: 'needs you' },
 };
 
 /** A PR's QA state in a few words, '' when QA hasn't seen it. */
-export const qaBadge = (qa?: Pick<QaView, 'status'> | null) => (qa ? QA_BADGE[qa.status] : '');
+export const qaBadge = (qa?: Pick<QaView, 'status'> | null) => (qa ? QA_BADGE[qa.status].text : '');
 
 /** Shorten to max characters with an ellipsis. */
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);

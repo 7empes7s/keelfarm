@@ -44,6 +44,10 @@
   flex: none;
   padding: 0;
   min-width: var(--ds-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
 }
 .term-keys-toggle[aria-pressed='true'] {
   background: var(--ink);
