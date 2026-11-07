@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { impactOf, impactScore, prDecision, prWhy, span, stuckSince, waitLine, whySummary } from './approvals.ts';
+import { impactOf, impactScore, mergeConfirmText, prDecision, prWhy, span, stuckSince, waitLine, whySummary } from './approvals.ts';
 import type { QaCheck } from './types.ts';
 
 const H = 3_600_000;
@@ -105,5 +105,33 @@ describe('the decision', () => {
     expect(prDecision('ready', 1, false).recommend).toBe('merge');
     expect(prDecision('qa', 1, true).recommend).toBe('retry');
     expect(prDecision('qa', 3, true)).toMatchObject({ recommend: 'sendBack', text: expect.stringContaining('3 rounds') });
+  });
+});
+
+describe('the Merge confirmation', () => {
+  const repo = { defaultBranch: 'main', floor: 3 };
+  const p = (failed: { name: string; neverStarted?: boolean }[]) => ({ number: 12, title: 'Fix it', failedChecks: failed.map((f) => ({ url: null, ...f })) });
+
+  it('a CI-only PR: says QA passed, names the red checks and that the floor goes live', () => {
+    const t = mergeConfirmText('checks', qa('passed'), p([{ name: 'CI / windows' }]), repo);
+    expect(t.body).not.toContain('not passed QA');
+    expect(t.body).toContain('passed QA');
+    expect(t.body).toContain('Red: CI / windows.');
+    expect(t.body).toContain("floor 3's main goes live with it.");
+    expect(t.warn).toBe(true);
+    expect(mergeConfirmText('outage', qa('needs-human', ['pass']), p([{ name: 'CI / ubuntu', neverStarted: true }]), repo).body).toContain('passed QA; only CI is red. Red: CI / ubuntu (never ran).');
+  });
+
+  it('a QA-failed PR: says it has not passed QA, with its red checks and that the floor goes live', () => {
+    const t = mergeConfirmText('qa', qa('needs-human', ['fail']), p([{ name: 'CI / ubuntu' }]), repo);
+    expect(t.title).toBe('Merge PR #12 without QA?');
+    expect(t.body).toBe("“Fix it” has not passed QA. Red: CI / ubuntu. It will be squash-merged into main anyway, and floor 3's main goes live with it.");
+    expect(mergeConfirmText('qa', qa('needs-human', ['fail']), p([]), repo).body).not.toContain('Red:');
+  });
+
+  it('ready to merge stays the plain confirmation', () => {
+    const t = mergeConfirmText('ready', qa('passed'), p([]), repo);
+    expect(t).toMatchObject({ warn: false, confirm: 'Squash & merge' });
+    expect(t.body).toContain("floor 3's main goes live with it.");
   });
 });

@@ -6,7 +6,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import type { PullInfo, QaView, RepoView } from '../../../shared/types';
 import type { Decision } from '../../../shared/decisions';
-import { impactOf, prDecision, waitLine, WHY_LABELS, type ApprovalWhy, type PrAction } from '../../../shared/approvals';
+import { impactOf, mergeConfirmText, prDecision, waitLine, WHY_LABELS, type ApprovalWhy, type PrAction } from '../../../shared/approvals';
 import { designAnswer, optionLetter } from '../../../shared/designs';
 import { confirmDialog } from '../ui/Confirm';
 import { Menu } from '../ui/Menu';
@@ -73,11 +73,8 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
     merge: {
       label: ready ? 'Approve & merge' : 'Merge anyway',
       run: async () => {
-        const ok = await confirmDialog(
-          ready
-            ? { icon: '🎉', title: `Merge PR #${pr.number}?`, body: `“${pr.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}, and floor ${repo.floor}'s main goes live with it.`, confirm: 'Squash & merge' }
-            : { tone: 'warn', title: `Merge PR #${pr.number} without QA?`, body: `“${pr.title}” has not passed QA. It will be squash-merged into ${repo.defaultBranch} anyway.`, confirm: 'Merge anyway' },
-        );
+        const t = mergeConfirmText(why, qa, pr, repo);
+        const ok = await confirmDialog(t.warn ? { tone: 'warn', title: t.title, body: t.body, confirm: t.confirm } : { icon: '🎉', title: t.title, body: t.body, confirm: t.confirm });
         if (ok) await act(() => api.mergePull(repo.id, pr.number));
       },
     },

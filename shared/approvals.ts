@@ -87,6 +87,30 @@ export function prDecision(why: ApprovalWhy, round: number, autoMerge: boolean):
   }
 }
 
+/** "CI / windows, lint (never ran)": the red checks by name. */
+const redChecks = (failed: PullInfo['failedChecks']) => failed.map((c) => (c.neverStarted ? `${c.name} (never ran)` : c.name)).join(', ');
+
+/**
+ * The Merge confirmation's words from the PR's real state: QA passed (or found nothing and only CI is red) or not, the
+ * red checks by name, and that the floor's main goes live with it.
+ */
+export function mergeConfirmText(
+  why: ApprovalWhy,
+  qa: Pick<QaView, 'status' | 'checks'>,
+  pr: Pick<PullInfo, 'number' | 'title' | 'failedChecks'>,
+  repo: { defaultBranch: string; floor: number },
+): { title: string; body: string; confirm: string; warn: boolean } {
+  const live = `floor ${repo.floor}'s main goes live with it.`;
+  if (why === 'ready') return { title: `Merge PR #${pr.number}?`, body: `“${pr.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}, and ${live}`, confirm: 'Squash & merge', warn: false };
+  const red = redChecks(pr.failedChecks ?? []);
+  const redLine = red ? ` Red: ${red}.` : '';
+  const qaPassed = qa.status === 'passed' || why === 'checks' || (why === 'outage' && !qa.checks.some((c) => c.result === 'fail'));
+  const anyway = `It will be squash-merged into ${repo.defaultBranch} anyway, and ${live}`;
+  return qaPassed
+    ? { title: `Merge PR #${pr.number} with CI red?`, body: `“${pr.title}” passed QA; only CI is red.${redLine} ${anyway}`, confirm: 'Merge anyway', warn: true }
+    : { title: `Merge PR #${pr.number} without QA?`, body: `“${pr.title}” has not passed QA.${redLine} ${anyway}`, confirm: 'Merge anyway', warn: true };
+}
+
 // ---------- impact ----------
 
 type Area = 'client' | 'server' | 'shared' | 'scripts' | 'tests' | 'docs' | 'other';
