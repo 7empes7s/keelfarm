@@ -516,8 +516,7 @@ export abstract class SwarmCore extends SwarmContract {
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
       updatedAt: q.updatedAt,
-      shots: q.shots ?? [],
-      ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }),
+      shots: q.shots ?? [], ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }),
     };
   }
 
@@ -730,8 +729,7 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected setQa(rec: QaRecord, patch: Partial<QaRecord>) {
-    const told = rec.status === 'needs-human' && rec.escalated;
-    const was = rec.status;
+    const was = rec.status, told = was === 'needs-human' && rec.escalated;
     Object.assign(rec, patch, { updatedAt: Date.now() });
     rec.stuckAt = stuckSince(was, rec.status, rec.stuckAt, rec.updatedAt, patch.stuckAt);
     if (!this.state.qa.includes(rec)) return; // it left QA (its PR closed) while a session on it was still wrapping up

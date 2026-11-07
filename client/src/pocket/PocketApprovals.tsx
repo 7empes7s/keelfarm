@@ -2,7 +2,7 @@
 // why it needs them (QA blocked, only CI, a CI outage, a product or design decision, a team or charter change), with
 // when it was asked, the counts on top and oldest-first or impact order. A phone opens one as a page with Back; a
 // desktop (#104) shows the list beside the one picked. The detail pages are in ApprovalDetail.tsx.
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import type { PullInfo, QaView, RepoView } from '../../../shared/types';
 import { Resume } from '../ui/TeamChanges';
@@ -165,11 +165,20 @@ function Row({ item, now, on, onOpen }: { item: Item; now: number; on: boolean; 
   );
 }
 
+/** The pocket's scrolling element, shared by the list and its detail pages. */
+const SCROLLER = '.pk-main';
+
 /** A phone's detail page: Back on top, and the back gesture closes it, not the app. */
 function Page({ onBack, children }: { onBack: () => void; children: ReactNode }) {
   useBackLayer(onBack);
+  const page = useRef<HTMLDivElement>(null);
+  // it opens at its top, not at the list's scroll offset (a block: Chrome's scrollTo can return a promise, which React
+  // would take for a cleanup)
+  useLayoutEffect(() => {
+    page.current?.closest(SCROLLER)?.scrollTo(0, 0);
+  }, []);
   return (
-    <div className="pk-page apr-page">
+    <div className="pk-page apr-page" ref={page}>
       <button className="btn btn-small btn-ghost apr-back" onClick={onBack}>
         ‹ Approvals
       </button>
@@ -183,6 +192,18 @@ export function Approvals({ wide }: { wide?: boolean }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [by, setBy] = useState<'oldest' | 'impact'>('oldest');
   const items = sortItems(useItems(now), by);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listTop = useRef<number | null>(null);
+  // Back returns to where the list was
+  useLayoutEffect(() => {
+    if (picked !== null || listTop.current === null) return;
+    listRef.current?.closest(SCROLLER)?.scrollTo(0, listTop.current);
+    listTop.current = null;
+  }, [picked]);
+  const pick = (key: string) => {
+    if (!wide) listTop.current = listRef.current?.closest(SCROLLER)?.scrollTop ?? null;
+    setPicked(key);
+  };
   const log = <DecisionLog heading={(t) => <h3 className="pk-h">{t}</h3>} />;
   if (items.length === 0) {
     return (
@@ -196,7 +217,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
   if (!wide && open) return <Page onBack={() => setPicked(null)}>{open.detail}</Page>;
   const heading = (d: Item, i: number) => (i === 0 || items[i - 1].why !== d.why ? WHY_LABELS[d.why] : null);
   const list = (
-    <div className="apr-list-col">
+    <div className="apr-list-col" ref={listRef}>
       <Summary items={items} />
       <div className="apr-sort" role="group" aria-label="Sort">
         {(['oldest', 'impact'] as const).map((k) => (
@@ -213,10 +234,11 @@ export function Approvals({ wide }: { wide?: boolean }) {
               {h && (
                 <li className="pk-h apr-group">
                   {h.icon} {h.label}
+                  {d.why === 'charter' && <span className="muted small"> (edit them in ⚙️ → Charter)</span>}
                 </li>
               )}
               <li>
-                <Row item={d} now={now} on={wide === true && d === open} onOpen={() => setPicked(d.key)} />
+                <Row item={d} now={now} on={wide === true && d === open} onOpen={() => pick(d.key)} />
               </li>
             </Fragment>
           );

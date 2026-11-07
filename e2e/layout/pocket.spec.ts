@@ -98,6 +98,19 @@ const SCREENS: Screen[] = [
 
 checkScreens(SCREENS);
 
+test('approvals: a PR low in the list opens at its top, Back returns to the list (#209)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await pocket(page, 'approvals');
+  const row = root.getByRole('button', { name: /Forecast in °F on request/ });
+  await row.scrollIntoViewIfNeeded();
+  const listTop = await root.locator('.pk-main').evaluate((el) => el.scrollTop);
+  await row.click();
+  await expect(root.getByRole('button', { name: '‹ Approvals' })).toBeInViewport();
+  await root.getByRole('button', { name: '‹ Approvals' }).click();
+  await expect(row).toBeInViewport();
+  expect(await root.locator('.pk-main').evaluate((el) => el.scrollTop)).toBe(listTop);
+});
+
 // ---------- pocket mode on a desktop (#104) ----------
 
 for (const [width, height] of [
