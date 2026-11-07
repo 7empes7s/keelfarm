@@ -308,12 +308,12 @@ export class Swarm extends SwarmCeoTools {
         if (!repo || back.some((c) => c.agentId === a.id)) return undefined;
         return this.releaseDesk(a, repo).catch(() => undefined);
       }),
-      this.previews.clearOrphans(this.state.repos),
+      this.previews.clearOrphans(this.state.repos).then(() => this.sweepOrphans(true)),
     ]);
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
     if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
-    for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber); // a CI outage's banner (#191)
+    for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber, p.stuck); // a CI outage's banner (#191)
     void this.cleanPreviews();
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
@@ -351,7 +351,7 @@ export class Swarm extends SwarmCeoTools {
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
     setInterval(() => this.notifyStuck(), 60_000);
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
-    setInterval(() => this.watchdogTick(), WATCHDOG_MS);
+    setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
     void this.backend
       .detectClis()

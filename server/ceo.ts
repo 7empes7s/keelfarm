@@ -7,6 +7,7 @@ import { followupPrompt } from './followupPrompt.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
 import { PROPOSE_CHARTER, PROPOSE_CHARTER_TEXT, type CharterProposalArgs } from './charterTool.ts';
 import { RESOLVE_DECISION, RESOLVE_DECISION_TEXT } from './decisionTool.ts';
+import { PROPOSE_DESIGN, PROPOSE_DESIGN_TEXT, type ProposeDesignInput } from './designTool.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
@@ -170,6 +171,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   proposeCharter(a: CharterProposalArgs): string;
   resolveDecision(a: { id: string; outcome: string; superseded?: boolean }): string;
+  proposeDesign(a: ProposeDesignInput): Promise<string>;
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
@@ -398,6 +400,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool('propose_charter', PROPOSE_CHARTER_TEXT, PROPOSE_CHARTER, (a) => run(() => h.proposeCharter(a))),
     tool('resolve_decision', RESOLVE_DECISION_TEXT, RESOLVE_DECISION, (a) => run(() => h.resolveDecision(a))),
+    tool('propose_design', PROPOSE_DESIGN_TEXT, PROPOSE_DESIGN, (a) => run(() => h.proposeDesign(a))),
     tool(
       'define_experiment',
       "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
