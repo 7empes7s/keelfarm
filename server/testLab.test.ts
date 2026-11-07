@@ -147,16 +147,20 @@ const shot = (url: string) => ({ kind: 'screenshot' as const, url, viewports: [3
 function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null) {
   const views: TestLabView[] = [];
   const shots: string[] = [];
+  const pages: string[] = [];
   const host: TestLabHost = {
     runner: () => runner,
     settings: () => DEFAULT_TEST_LAB,
     refusal,
     forbidden: () => [path.join(os.tmpdir(), 'office')],
     previewUrl: async (repoId, pr) => `http://localhost:6300/${repoId}/${pr}`,
-    shot: (_a, file) => shots.push(file),
+    shot: (_a, file, page) => {
+      shots.push(file);
+      pages.push(page);
+    },
     emit: (v) => views.push(v),
   };
-  return { lab: new TestLab(host), views, shots };
+  return { lab: new TestLab(host), views, shots, pages };
 }
 
 describe('TestLab', () => {
@@ -165,7 +169,7 @@ describe('TestLab', () => {
   it('runs one browser job at a time: six agents at three viewports share the one browser in turn', async () => {
     const log: string[] = [];
     const runner = fakeRunner(log, -1);
-    const { lab: l, views } = lab(runner);
+    const { lab: l, views, pages } = lab(runner);
     const asks = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) => l.submit(who(id, `r${i % 3}`, i % 3), shot(`http://localhost:${5000 + i}/`)));
     await Promise.resolve();
     expect(l.view().running).toHaveLength(1);
@@ -176,6 +180,7 @@ describe('TestLab', () => {
     }
     const reports = await Promise.all(asks);
     expect(reports[0]).toMatch(/^3 screenshots/);
+    expect(new Set(pages)).toEqual(new Set(Array.from({ length: 6 }, (_, i) => `http://localhost:${5000 + i}/`))); // each shot says its page (#230)
     // Never two at once: every start follows the previous end.
     const order = log.map((x) => x.split(' ')[0]);
     expect(order).toEqual(Array.from({ length: 6 }, () => ['start', 'end']).flat());

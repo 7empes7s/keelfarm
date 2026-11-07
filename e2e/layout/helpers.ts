@@ -3,7 +3,7 @@ import { crc32, deflateSync } from 'node:zlib';
 import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../../client/src/ui/consoleNavRules';
-import { enterOffice, expect, type SavedView, startAt, test } from '../helpers';
+import { enterOffice, expect, overflowProblems, type SavedView, startAt, test } from '../helpers';
 import { buttonRowProblems } from '../buttonRows';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
@@ -161,6 +161,7 @@ async function layoutProblems(root: Locator): Promise<string[]> {
       return out;
     })),
   );
+  problems.push(...(await overflowProblems(root)));
   problems.push(...(await buttonRowProblems(root)));
   return problems;
 }

@@ -543,6 +543,11 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
           if (block.type !== 'tool_result') continue;
           const name = toolNames.get(block.tool_use_id) ?? '';
           const text = resultText(block.content);
+          // The page first, so a screenshot in the same result is recorded with its address (#230).
+          if (name.startsWith('mcp__playwright__')) {
+            const url = text.match(/Page URL:\s*(\S+)/);
+            if (url) cb.browserUrl(url[1]);
+          }
           let images = 0;
           if (Array.isArray(block.content)) {
             for (const part of block.content) {
@@ -554,10 +559,6 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
           }
           const saved = name === 'mcp__playwright__browser_take_screenshot' && !images ? screenshotFile(opts.cwd, text) : null;
           if (saved) cb.screenshot(saved.data, saved.mime);
-          if (name.startsWith('mcp__playwright__')) {
-            const url = text.match(/Page URL:\s*(\S+)/);
-            if (url) cb.browserUrl(url[1]);
-          }
           if (name === 'TodoWrite') continue;
           if (block.is_error) out.push({ kind: 'error', text: `  ⎿ ${clip(tidyPaths(opts.cwd, text).split('\n')[0] || 'Error', 200)}` });
           else out.push(...summariseResult(opts.cwd, name, text));

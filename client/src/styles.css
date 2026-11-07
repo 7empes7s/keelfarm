@@ -1057,6 +1057,22 @@ input.inline:focus {
   align-items: flex-end;
   max-width: min(420px, calc(100vw - 32px));
   z-index: var(--ds-z-toast);
+  /* a fixed width, so where useToastSpot.ts puts it (#230) never changes its size; only the toasts take taps */
+  width: min(420px, calc(100vw / var(--ui-scale, 1) - 24px));
+  pointer-events: none;
+}
+.hud > .toasts {
+  pointer-events: none;
+}
+.toasts > * {
+  pointer-events: auto;
+}
+/* two lines at most; the whole text is its tooltip, a click dismisses it */
+.toast:not(.notice-toast, .notice-more) {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .toast {
   background: var(--paper);
@@ -1664,36 +1680,6 @@ input.inline:focus {
     opacity: 0.55;
   }
 }
-.browser {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-}
-.browser-bar {
-  background: var(--ds-surface-sunken);
-  border: 3px solid var(--ds-outline);
-  border-bottom: none;
-  border-radius: 14px 14px 0 0;
-  padding: 6px 12px;
-  font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.browser-view {
-  flex: 1;
-  min-height: 0;
-  border: 3px solid var(--ds-outline);
-  border-radius: 0 0 14px 14px;
-  background: var(--ds-surface-raised);
-  overflow: auto;
-  margin-top: -6px;
-}
-.browser-view img {
-  display: block;
-  width: 100%;
-}
 .term-input {
   display: flex;
   align-items: flex-end;
@@ -1840,91 +1826,6 @@ input.inline:focus {
   margin-left: auto;
   padding: 3px 6px;
   font-size: 0.82rem;
-}
-
-/* ---------- a whiteboard card up close ---------- */
-
-.cardview {
-  width: min(600px, 100%);
-}
-.cardview .panel-body {
-  gap: 12px;
-}
-.cardview-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.cardview-tags .pill {
-  font-size: 0.82rem;
-}
-.cardview-warn {
-  background: #ffe8b8;
-}
-.cardview-bad {
-  background: #ffc2d1;
-}
-.cardview-good {
-  background: #b9fbc0;
-}
-.cardview-label {
-  background: var(--ds-surface-sunken);
-}
-.cardview-who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-.cardview-h {
-  margin: 0 0 4px;
-  font-size: 1rem;
-}
-.cardview-body {
-  background: var(--ds-surface-raised);
-  border: 2.5px solid var(--ds-outline);
-  border-radius: 12px;
-  padding: 10px 12px;
-  box-shadow: 0 3px 0 rgba(31, 29, 43, 0.8);
-  font-size: 0.92rem;
-}
-.cardview-pr {
-  display: grid;
-  gap: 10px;
-}
-.cardview-section {
-  background: var(--ds-surface-raised);
-  border: 2px solid #d4d8e3;
-  border-radius: 12px;
-  padding: 10px 12px;
-}
-.cardview-summary {
-  font-size: 0.9rem;
-}
-.cardview-checks {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 3px;
-  font-size: 0.86rem;
-}
-.cardview-check b {
-  display: inline-block;
-  width: 1.2em;
-}
-.cardview-check-pass b {
-  color: var(--good);
-}
-.cardview-check-fail b,
-.cardview-bad-text {
-  color: var(--bad);
-}
-.cardview-foot {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 /* ---------- app viewer overlay ---------- */
@@ -4633,22 +4534,13 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   background: #fdf1c7;
 }
 .usage-card {
-  border-left: 12px solid var(--good);
+  border-left: 6px solid var(--good);
 }
 .usage-card.usage-warn {
   border-left-color: var(--warn);
 }
 .usage-card.usage-bad {
   border-left-color: var(--bad);
-}
-.usage-pill-good {
-  background: #b9fbc0;
-}
-.usage-pill-warn {
-  background: #ffe8a3;
-}
-.usage-pill-bad {
-  background: #ffc2d1;
 }
 .usage-bars {
   display: flex;
@@ -4664,9 +4556,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   50% {
     box-shadow: 0 0 0 9px rgba(239, 71, 111, 0.35);
   }
-}
-.alarm-card b {
-  overflow-wrap: anywhere;
 }
 .ops-table-wrap {
   overflow-x: auto;
@@ -4950,6 +4839,8 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   align-items: flex-start;
 }
 .pk-pr-head .grow {
+  display: grid;
+  gap: var(--ds-space-2);
   overflow-wrap: anywhere;
 }
 .pk-floor {
@@ -5108,16 +4999,13 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
-.pk-pr-summary {
-  margin: 6px 0 2px;
-  overflow-wrap: anywhere;
-}
 .pk-empty {
   padding: 24px 12px;
   text-align: center;
   color: var(--muted);
 }
-/* at the top, two at most and two lines each, so they never cover the tabs or a message box */
+/* two at most and two lines each, full width on a phone; useToastSpot.ts places them clear of headers, tab rows and the
+   composer (#230) */
 .pocket .toasts {
   top: calc(66px + var(--ds-safe-top));
   bottom: auto;

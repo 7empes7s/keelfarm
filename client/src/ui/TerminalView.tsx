@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { api } from '../api';
 import { isBusy, kanbanFor, agentsOnRepo, useStore } from '../store';
 import { AgentChat } from './AgentChat';
+import { BrowserCard } from './BrowserCard';
 import { AgentDetails, type DetailsTab } from './AgentDetails';
 import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMode';
 import { AgentRing } from './AgentRing';
@@ -132,9 +133,8 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
   const [, tick] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  // The browser pane shows the last screenshot that loaded, never a broken image. The loaded <img> itself goes in
-  // the pane, so showing it never asks the server again.
-  const shotView = useRef<HTMLDivElement>(null);
+  // The browser card shows the last screenshot that loaded, never a broken image. The loaded <img> itself goes in
+  // the card, so showing it never asks the server again.
   const [shot, setShot] = useState<{ agentId: string; img: HTMLImageElement } | null>(null);
   const shotTime = agent?.hasScreenshot ? (shotAt ?? agent.screenshotAt) : null;
 
@@ -150,9 +150,6 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
       }),
     [agentId, shotTime],
   );
-  useEffect(() => {
-    shotView.current?.replaceChildren(...(shot?.agentId === agentId ? [shot.img] : []));
-  }, [shot, agentId, agent?.hasScreenshot, details, tab]);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
@@ -240,15 +237,7 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
     </>
   );
 
-  const browser = agent.hasScreenshot && (
-    <div className="browser">
-      <div className="browser-bar">
-        <Icon name="lock" /> {agent.browserUrl ?? 'about:blank'}
-      </div>
-      <div className="browser-view" ref={shotView} tabIndex={0} role="region" aria-label="Their browser" />
-      <div className="muted small">Latest Playwright screenshot{agent.screenshotAt ? ` · ${new Date(agent.screenshotAt).toLocaleTimeString()}` : ''}</div>
-    </div>
-  );
+  const browser = agent.hasScreenshot && <BrowserCard agent={agent} img={shot?.agentId === agentId ? shot.img : null} />;
   const split = pane === 'chat' ? (
     <AgentChat agent={agent} repo={repo} onTerminal={() => choose('terminal')} onSend={send} onStop={() => void stop()} />
   ) : (
@@ -317,9 +306,9 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
 
   const actions = (
     <>
-      <HistoryButton focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
+      <HistoryButton className="ds-btn" focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
       {office && (
-        <button className="btn btn-small btn-ghost" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
+        <button className="ds-btn" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
           <Icon name="video" /> Follow
         </button>
       )}
