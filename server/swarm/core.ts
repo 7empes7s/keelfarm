@@ -50,6 +50,7 @@ import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
+import { pageBefore } from '../../shared/chatPage.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
@@ -481,6 +482,12 @@ export abstract class SwarmCore extends SwarmContract {
     };
   }
 
+  /** The chat's latest page, for a snapshot or another conversation opened (#145): older ones load on scroll. */
+  protected chatPage(): Pick<WorldSnapshot, 'messages' | 'messagesOlder'> {
+    const page = pageBefore(this.state.messages);
+    return { messages: snapshotMessages(page.messages), messagesOlder: page.older };
+  }
+
   snapshot(): WorldSnapshot {
     return {
       user: this.user,
@@ -497,7 +504,7 @@ export abstract class SwarmCore extends SwarmContract {
       requests: this.state.requests,
       ceo: this.ceoInfo(),
       chat: this.chatView(),
-      messages: snapshotMessages(this.state.messages.slice(-100)),
+      ...this.chatPage(),
       phoneReadAt: this.state.phoneReadAt,
       notices: this.state.notices,
       usage: this.usageNow(),

@@ -40,7 +40,8 @@ import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
-import { sampleChat } from './chatSample.ts';
+import { pastChat, sampleChat } from './chatSample.ts';
+import { CHAT_KEEP } from '../shared/chatPage.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
@@ -989,8 +990,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedLab: sampleLab,
     seedNotices: sampleNotices,
     seedChat: (now) => {
-      const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
-      return [...edits, ...sampleChat(now, edits.length + 1)];
+      const recent = demoEditedChat(now).length + sampleChat(now).length;
+      const past = pastChat(now, CHAT_KEEP - recent); // a full thread (#145): it opens on the latest page
+      const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: past.length + i + 1 }));
+      return [...past, ...edits, ...sampleChat(now, past.length + edits.length + 1)];
     },
     demoCharter,
     demoHeldUpdate,

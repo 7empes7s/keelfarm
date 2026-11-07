@@ -110,11 +110,14 @@ export function Markdown({ text, className, onFloor, renderRef }: { text: string
     }),
     [hasFloor, hasRef],
   );
-  return (
-    <div className={className ? `md ${className}` : 'md'}>
+  // Parsed once per text (#145): a re-render with the same words (a keystroke in the chat's box) reuses the tree.
+  const tree = useMemo(
+    () => (
       <ReactMarkdown remarkPlugins={remarkPlugins} components={withFloors} urlTransform={safeUrl}>
         {text}
       </ReactMarkdown>
-    </div>
+    ),
+    [text, withFloors],
   );
+  return <div className={className ? `md ${className}` : 'md'}>{tree}</div>;
 }

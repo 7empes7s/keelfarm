@@ -38,7 +38,6 @@ import { forwardText } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
-import { snapshotMessages } from '../shared/chatParts.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { cleanStyle } from '../shared/looks.ts';
@@ -594,7 +593,8 @@ export class Swarm extends SwarmCeoTools {
     this.state.messages = messages;
     Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
-    this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
+    const page = this.chatPage();
+    this.broadcast({ type: 'ceoChat', messages: page.messages, older: page.messagesOlder, ...this.chatView() });
     this.save();
   }
 

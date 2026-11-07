@@ -1,8 +1,8 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
+import { excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
 import { officeText, suggestionsFor } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
 import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
@@ -14,7 +14,7 @@ import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { Markdown } from './Markdown';
 import { QuestionChips } from './QuestionChips';
 import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
-import { MessageActions, who, type Item } from './ChatActions';
+import { itemOf, MessageActions, who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
@@ -35,11 +35,12 @@ import { isKey } from './controls';
 import { Key } from './Key';
 import { Games, type GameId } from './games/Games';
 import { HolidayStrip } from './HolidayStrip';
-import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
 import { useCeoDraft } from './goTo';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
+import { BubbleTools, DeliveryTick, ReplayButton } from './ChatBubbleParts';
+import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -315,27 +316,6 @@ function TeamChanges({ focusId }: { focusId?: string }) {
 
 // ---------- chat ----------
 
-/** Replays a CEO message from its saved clip (or the browser's voice); stops it while it plays. */
-function ReplayButton({ m }: { m: PhoneMessage }) {
-  const saved = useStore((s) => s.voiceCache.saved.includes(m.id));
-  const playing = useStore((s) => s.voiceSpeaking === m.id);
-  const kind = replayKind(m, saved, typeof speechSynthesis !== 'undefined');
-  if (!kind) return null;
-  const gone = kind === 'gone';
-  return (
-    <button
-      type="button"
-      className={`bubble-play ${playing ? 'bubble-play-on' : ''}`}
-      disabled={gone && !playing}
-      title={gone ? 'Audio no longer saved' : undefined}
-      aria-label={playing ? 'Stop this message' : 'Play this message'}
-      onClick={() => void import('./voiceMessages').then((v) => (playing ? v.stopSpeaking() : kind !== 'gone' && v.replayMessage(m, kind)))}
-    >
-      {playing ? '⏹' : '▶'}
-    </button>
-  );
-}
-
 const SWIPE_PX = 60;
 const LONG_PRESS_MS = 500;
 
@@ -343,7 +323,7 @@ const LONG_PRESS_MS = 500;
 interface BubbleProps {
   item: Item;
   ceoName: string;
-  quoted: PhoneMessage | null | undefined; // undefined: not a reply; null: its original is no longer saved
+  quoted: PhoneMessage | null | 'earlier' | undefined; // undefined: not a reply; null: its original is no longer saved; earlier: not loaded yet
   highlight: boolean;
   linked: (text: string) => string;
   onFloor: (floor: number) => void;
@@ -356,44 +336,13 @@ interface BubbleProps {
 }
 
 
-function DeliveryTick({ d }: { d: Delivery }) {
-  const icon = { sending: '🕓', sent: '✓', read: '✓✓', replied: '↩', failed: '⚠' }[d];
-  return (
-    <span className={`bubble-tick bubble-tick-${d}`} title={DELIVERY_LABEL[d]}>
-      <span aria-hidden>{icon}</span>
-      <span className="sr-only">{DELIVERY_LABEL[d]}</span>
-    </span>
-  );
-}
-
-/** The hover (and keyboard) buttons by a bubble: Reply, and the actions menu. */
-function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined; item: Item; onReply: (id: number) => void; onActions: (item: Item) => void }) {
-  return (
-    <div className="bubble-tools">
-      {id !== undefined && (
-        <button type="button" className="bubble-tool" aria-label="Reply to this message" title="Reply" onClick={() => onReply(id)}>
-          ↩
-        </button>
-      )}
-      {item.m?.from === 'ceo' && (
-        <button type="button" className="bubble-tool" aria-label="React to this message" aria-haspopup="dialog" title="React" onClick={() => onActions(item)}>
-          ☺
-        </button>
-      )}
-      <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
-        ⋯
-      </button>
-    </div>
-  );
-}
-
-function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile, cont }: BubbleProps) {
+// Memoised (#145): a keystroke or another message's event leaves the bubble as it is.
+const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile, cont }: BubbleProps) {
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
-  if (m?.from === 'office') return m.notice ? <NoticeCard text={officeText(m.text)} notice={m.notice} /> : <div className="bubble-office">{officeText(m.text)}</div>;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
@@ -439,9 +388,16 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
     },
   };
 
+  // An office note: hold or right-click it for its actions (Delete).
+  if (m?.from === 'office')
+    return (
+      <div className="bubble-row-office" data-msg={id} {...gestures}>
+        {m.notice ? <NoticeCard text={officeText(m.text)} notice={m.notice} /> : <div className="bubble-office">{officeText(m.text)}</div>}
+      </div>
+    );
   const quote =
-    quoted === undefined ? null : quoted === null ? (
-      <div className="bubble-quote bubble-quote-gone">↩ The original message is no longer saved</div>
+    quoted === undefined ? null : quoted === null || quoted === 'earlier' ? (
+      <div className="bubble-quote bubble-quote-gone">{quoted ? '↩ An earlier message' : '↩ The original message is no longer saved'}</div>
     ) : (
       <button
         type="button"
@@ -514,7 +470,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
       {!mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
     </div>
   );
-}
+});
 
 /**
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
@@ -522,6 +478,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
  */
 export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null }) {
   const messages = useStore((s) => s.messages);
+  const chatOlder = useStore((s) => s.chatOlder);
   const outbox = useStore((s) => s.chatOutbox);
   const readAt = useStore((s) => s.phoneReadAt);
   const ceo = useStore((s) => s.agents[CEO_ID]);
@@ -562,8 +519,15 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const stick = useRef(true);
   const opened = useRef(false);
 
-  const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
-  const linked = useMemo(() => (t: string) => linkCeoText(t, floors), [floors]);
+  // By value: a floor's other changes (issues, agents) leave the memoised bubbles alone.
+  const floorsKey = JSON.stringify(repos.map((r): FloorRef => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })));
+  const linked = useMemo(() => ((floors: FloorRef[]) => (t: string) => linkCeoText(t, floors))(JSON.parse(floorsKey)), [floorsKey]);
+  // The bubbles' handlers, the same functions every render; `on` has this render's.
+  const on = useRef<{ floor: (n: number) => void; quote: (id: number) => void; reply: (id: number) => void }>(null);
+  const stable = useMemo(() => ({ floor: (n: number) => on.current?.floor(n), quote: (id: number) => on.current?.quote(id), reply: (id: number) => on.current?.reply(id), artifact: (messageId: number, artifactId: string) => setArtifact({ messageId, artifactId }) }), []);
+  const pages = useOlderPages(scroller, { first: messages[0]?.id, older: chatOlder, fetch: fetchChatPage, apply: applyChatPage });
+  const removals = useRemovals();
+  const listed = useMemo(() => messages.filter((m) => !removals.hidden.some((x) => x.id === m.id)), [messages, removals.hidden]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const openFloor = (n: number) => {
     const repo = repos.find((r) => r.floor === n);
@@ -676,17 +640,20 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
     el.focus({ preventScroll: true });
     setFlash(id);
   };
+  on.current = { floor: openFloor, quote: jump, reply };
   const replying = ceo.status === 'working' && info.job?.kind === 'chat';
   const stop = () => void attempt(api.ceoStop);
   const last = (from: PhoneMessage['from']) => [...messages].reverse().find((x) => x.from === from)?.id;
   const actionsFor = (item: Item) => {
     const m = item.m;
-    if (!m || m.from === 'office') return [];
+    if (!m) return [];
+    if (m.from === 'office') return [removals.action(m)];
     return [
       ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? '✏️ Edit and resend' : '✏️ Edit', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
       ...(hasVersionsSheet(m) ? [{ label: `🕘 Versions (${(m.versions?.length ?? 0) + 1})`, run: () => setVersions(m) }] : []),
       ...(m.id === last('ceo') ? [{ label: '⟳ Retry', run: () => void attempt(api.ceoRetry) }] : []),
       { label: '📌 Remember this', run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (🧠 to see or edit)`)) },
+      removals.action(m),
     ];
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
@@ -716,16 +683,16 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
     return (
       <Bubble
         key={key}
-        item={item}
+        item={itemOf(item)}
         ceoName={ceo.name}
-        quoted={to === undefined ? undefined : (byId.get(to) ?? null)}
+        quoted={to === undefined ? undefined : (byId.get(to) ?? (chatOlder && to < messages[0].id ? 'earlier' : null))}
         highlight={item.m !== undefined && flash === item.m.id}
         linked={linked}
-        onFloor={openFloor}
-        onQuote={jump}
-        onReply={reply}
+        onFloor={stable.floor}
+        onQuote={stable.quote}
+        onReply={stable.reply}
         onActions={setMenu}
-        onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
+        onArtifact={stable.artifact}
         onFile={setViewing}
         cont={cont}
       />
@@ -751,6 +718,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           tabIndex={0}
           onScroll={(e) => {
             const el = e.currentTarget;
+            pages.onScroll(el);
             const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
             stick.current = end;
             if (end === atEnd) return;
@@ -763,7 +731,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
               Say hi to {ceo.name}. Ask how things are going, hand over a project brief, or ask whether a team should grow. Replies land here, and the phone buzzes when {ceo.name} needs you.
             </p>
           )}
-          {messages.map((m, i, all) => (
+          {listed.map((m, i, all) => (
             <Fragment key={m.id}>
               <DaySeparator prev={all[i - 1]?.at} at={m.at} />
               {m.id === firstUnread && (
@@ -787,8 +755,9 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} />}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={stable.floor} />}
         </div>
+        <OlderSpinner loading={pages.loading} />
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label={unseen ? `${unseen} new messages: jump to the latest` : 'Jump to the latest message'}>
             {unseen ? `${unseen} new ↓` : '↓ Latest'}
@@ -841,6 +810,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
         )}
       </div>
+      {removals.bar}
       {editing !== null && (
         <div className="chat-reply">
           <b className="grow small">✏️ Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}</b>

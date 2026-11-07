@@ -13,7 +13,9 @@ describe('the store folding a ceoChat event', () => {
   });
 
   it('replaces the thread when another conversation opens, or one edited message', () => {
-    expect(applyChat(s, { type: 'ceoChat', messages: [], current: 'c2' })).toEqual({ chat: { ...s.chat, current: 'c2' }, messages: [] });
+    expect(applyChat(s, { type: 'ceoChat', messages: [], current: 'c2' })).toEqual({ chat: { ...s.chat, current: 'c2' }, messages: [], chatOlder: false });
+    // #145: its latest page, and whether it has older ones to load (never part of the chat view).
+    expect(applyChat(s, { type: 'ceoChat', messages: [m(41, 'Hi')], older: true })).toEqual({ chat: s.chat, messages: [m(41, 'Hi')], chatOlder: true });
     expect(applyChat(s, { type: 'ceoChat', message: { ...m(2, 'Plan it by Friday'), edited: 5 } }).messages).toEqual([m(1, 'Hi'), { ...m(2, 'Plan it by Friday'), edited: 5 }]);
   });
 });

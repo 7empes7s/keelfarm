@@ -677,6 +677,7 @@ export interface PhoneMessage {
   reactions?: MessageReaction[]; // the manager's and the CEO's, oldest first
   tg?: number; // its Telegram message id, for one the manager sent from there
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+  hidden?: true; // the CEO's, hidden by the manager (#145): kept for the CEO, never sent to a phone (shared/chatPage.ts)
 }
 
 /** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */
@@ -780,7 +781,8 @@ export interface WorldSnapshot {
   prPreviews: PrPreviewView[];
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's latest page (shared/chatPage.ts); older ones: GET /api/ceo/messages?before=
+  messagesOlder?: boolean; // the thread has earlier messages than these
   phoneReadAt: number; // CEO messages newer than this are unread
   notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
   decisions?: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts); absent in a replay
@@ -848,7 +850,9 @@ export type ServerEvent =
   | { type: 'phoneRead'; at: number }
   | { type: 'decisions'; decisions: Decision[] }
   /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
-  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
+  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; older?: boolean; message?: PhoneMessage } & Partial<CeoChatView>)
+  /** Messages the manager removed (#145): deleted, or the CEO's hidden. */
+  | { type: 'messagesRemoved'; ids: number[] }
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }

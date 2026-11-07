@@ -2,7 +2,7 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
@@ -393,25 +393,28 @@ export default function Pocket() {
     useStore.setState({ chatDocked: wide && dock });
     return () => useStore.setState({ chatDocked: false });
   }, [wide, dock]);
-  // The keyboard (#104): 1-5 the tabs, / the chat's box, Esc the chat drawer; never while typing in a field.
+  // The keyboard (#104): 1-5 the tabs, / the chat's box, Esc the chat drawer; never while typing in a field. One
+  // listener for the page's life (#145: not one per render, while typing), reading this render's state.
+  const keys = useRef<(e: KeyboardEvent) => void>(null);
+  keys.current = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.repeat || e.defaultPrevented || typingIn(e.target) || isConfirmOpen()) return;
+    const n = TAB_KEYS.indexOf(e.code);
+    if (n >= 0) {
+      e.preventDefault();
+      if (TABS[n] === 'chat') openChat();
+      else setTab(TABS[n]);
+    } else if (e.key === '/' && !e.altKey) {
+      e.preventDefault();
+      openChat();
+    } else if (e.key === 'Escape' && layout === 'medium' && dock && !settings && !useStore.getState().overlay) {
+      setDock(false);
+    }
+  };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.repeat || e.defaultPrevented || typingIn(e.target) || isConfirmOpen()) return;
-      const n = TAB_KEYS.indexOf(e.code);
-      if (n >= 0) {
-        e.preventDefault();
-        if (TABS[n] === 'chat') openChat();
-        else setTab(TABS[n]);
-      } else if (e.key === '/' && !e.altKey) {
-        e.preventDefault();
-        openChat();
-      } else if (e.key === 'Escape' && layout === 'medium' && dock && !settings && !useStore.getState().overlay) {
-        setDock(false);
-      }
-    };
+    const onKey = (e: KeyboardEvent) => keys.current?.(e);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, []);
   // pocket.css's icons and look apply to the whole page while pocket mode is on (dialogs and toasts included).
   useEffect(() => {
     document.documentElement.classList.add('pocket-mode');

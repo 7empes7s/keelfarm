@@ -16,6 +16,7 @@ import { messageSpeech } from '../../shared/speech';
 import { addNotice, markRead, noticeOf, sticky } from '../../shared/notices';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { applyChat, EMPTY_CHAT } from './ceoChat';
+import { withNewest } from '../../shared/chatPage';
 import type { FileView } from '../../shared/files';
 import type { Decision } from '../../shared/decisions';
 import { showDesktopNote } from './notifications';
@@ -135,7 +136,8 @@ interface State {
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's pages loaded so far (shared/chatPage.ts)
+  chatOlder: boolean; // the thread has earlier messages than these
   chat: CeoChatView; // the live reply, conversations and pinned notes (#51)
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
@@ -295,6 +297,7 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
+  chatOlder: false,
   chat: EMPTY_CHAT,
   files: [],
   chatOutbox: [],
@@ -384,6 +387,7 @@ export const useStore = create<State>((set, get) => ({
           requests: d.requests,
           ceo: d.ceo,
           messages: d.messages,
+          chatOlder: d.messagesOlder ?? false,
           chat: d.chat ?? EMPTY_CHAT,
           files: d.files ?? [],
           phoneReadAt: d.phoneReadAt,
@@ -538,7 +542,8 @@ export const useStore = create<State>((set, get) => ({
         set({ ceo: ev.ceo });
         break;
       case 'message': {
-        set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
+        const page = withNewest(get().messages, ev.message, get().chatOlder);
+        set({ messages: page.messages, chatOlder: page.older, chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
@@ -557,6 +562,9 @@ export const useStore = create<State>((set, get) => ({
       }
       case 'ceoChat':
         set(applyChat(get(), ev));
+        break;
+      case 'messagesRemoved':
+        set({ messages: get().messages.filter((m) => !ev.ids.includes(m.id)) });
         break;
       case 'files':
         set({ files: ev.files });

@@ -1,5 +1,6 @@
 // The demo's chat with the CEO (#118): a made-up thread showing every status reaction (✅ ⚠️ ⏳ 👀 🕓), a job that
 // ended with only the CEO's reaction, two messages in a row each answered with its own quote, and the manager's reactions.
+// Before it, a long history (#145): the chat opens on its latest page and loads the rest as the manager scrolls up.
 import type { PhoneMessage } from '../shared/types.ts';
 
 /** Ids from `first`; it starts after #125's edited chat (20 minutes ago). */
@@ -22,4 +23,25 @@ export function sampleChat(now: number, first = 1): PhoneMessage[] {
     msg('manager', 'Is floor 2 on budget this week?', 2, { delivery: 'read', status: 'seen' }),
     msg('manager', "Then draft next week's plan", 1, { delivery: 'sent', status: 'queued' }),
   ];
+}
+
+const PAST: [PhoneMessage['from'], string][] = [
+  ['manager', 'Morning! Anything I should know about?'],
+  ['ceo', 'Morning. Floor 1 merged **2 pull requests** overnight and QA passed the login fix. Nothing needs you yet.'],
+  ['manager', "What's next on floor 2?"],
+  ['ceo', 'Floor 2 is on the search page next:\n- the filters bar\n- the empty state\n- paging the results'],
+  ['office', 'The office updated itself and is back on main.'],
+  ['manager', 'Can you keep an eye on the preview?'],
+  ['ceo', "Will do: I'll tell you if it stops answering."],
+  ['manager', 'thanks 👍'],
+];
+
+/** `count` messages over the days before today, oldest first, ids from 1: the long history before the sample. */
+export function pastChat(now: number, count: number): PhoneMessage[] {
+  const day = 86_400_000;
+  const start = now - 3 * day;
+  return Array.from({ length: count }, (_, i) => {
+    const [from, text] = PAST[i % PAST.length];
+    return { id: i + 1, from, text, at: start + Math.round((i * 2 * day) / count), ...(from === 'manager' && { delivery: 'replied' as const }) };
+  });
 }
