@@ -15,6 +15,8 @@ describe('status phrases', () => {
     expect(agentPhrase({ ...agent, status: 'done', task: 'issue', prNumber: 5 })).toBe('Opened PR #5 · QA tests it next');
     expect(agentPhrase({ ...agent, status: 'error' })).toContain('Needs help');
     expect(agentPhrase({ ...agent, status: 'working', blocked: 'a prompt' })).toContain('Stuck on a prompt');
+    expect(agentPhrase({ ...agent, status: 'working', reviewedBy: 'Mimoun' })).toBe('Mimoun is reviewing your change · they decide if this work goes on'); // #207
+    expect(agentPhrase({ ...agent, status: 'done', reviewedBy: 'Mimoun' })).not.toContain('reviewing');
     expect(agentPhrase({ ...agent, status: 'done', waiting: 'manager' })).toContain('answer in the chat');
   });
 

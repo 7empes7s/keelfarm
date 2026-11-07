@@ -50,3 +50,36 @@ describe('the service worker', () => {
     expect(handles('https://fonts.googleapis.com/css2?family=Fredoka')).toBe(false);
   });
 });
+
+/** Runs the worker's push handler with these office windows open; returns the notifications it shows and closes. */
+async function push(data: object, windows: { visibilityState: string; focused: boolean }[], showing: string[] = []) {
+  const handlers: Record<string, (e: unknown) => void> = {};
+  const shown: { title: string; tag: string }[] = [];
+  const closed: string[] = [];
+  const registration = {
+    showNotification: async (title: string, o: { tag: string }) => void shown.push({ title, tag: o.tag }),
+    getNotifications: async ({ tag }: { tag: string }) => showing.filter((t) => t === tag).map((t) => ({ close: () => closed.push(t) })),
+  };
+  const self = { addEventListener: (type: string, fn: (e: unknown) => void) => (handlers[type] = fn), location: { origin: 'https://office.example' }, registration, clients: { matchAll: async () => windows } };
+  vm.runInNewContext(serviceWorkerSource('v1'), { self, URL, caches: {}, fetch: () => undefined, Response: {} });
+  let done: Promise<unknown> = Promise.resolve();
+  handlers.push({ data: { json: () => data }, waitUntil: (p: Promise<unknown>) => (done = p) });
+  await done;
+  return { shown, closed };
+}
+
+describe('push in the service worker (#210)', () => {
+  const note = { title: '💬 Mimoun: 3 new messages', body: 'Latest', tag: 'cubefarm-ceoMessage', url: '/?tab=chat' };
+
+  it('shows a push with its thread tag, unless an office window here is on screen and focused', async () => {
+    expect((await push(note, [])).shown).toEqual([{ title: note.title, tag: 'cubefarm-ceoMessage' }]);
+    expect((await push(note, [{ visibilityState: 'hidden', focused: false }])).shown).toHaveLength(1);
+    expect((await push(note, [{ visibilityState: 'visible', focused: false }])).shown).toHaveLength(1);
+    expect((await push(note, [{ visibilityState: 'hidden', focused: false }, { visibilityState: 'visible', focused: true }])).shown).toEqual([]);
+  });
+
+  it("closes a thread's notification when it was read on another device, and shows nothing for it", async () => {
+    const r = await push({ type: 'clear', tag: 'cubefarm-ceoMessage' }, [], ['cubefarm-ceoMessage', 'cubefarm-merge']);
+    expect(r).toEqual({ shown: [], closed: ['cubefarm-ceoMessage'] });
+  });
+});

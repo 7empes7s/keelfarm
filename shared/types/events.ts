@@ -14,7 +14,7 @@ import type { ToolInventory } from '../tooling.ts';
 import type { AgentView, CliView, CloudView, HireRequestView, LogLine, ModelCatalogView } from './agents.ts';
 import type { CeoChatView, CeoInfo, PhoneMessage, ServerDelivery, StatusReaction } from './chat.ts';
 import type { NoteView, NoticeView, NotifyChannelsView } from './notify.ts';
-import type { DoctorFinding, OfficeUpdateView, UsageCheckError, UsageReading, UsageView } from './office.ts';
+import type { DoctorFinding, ManagerChange, OfficeUpdateView, UsageCheckError, UsageReading, UsageView } from './office.ts';
 import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
@@ -63,6 +63,7 @@ export interface WorldSnapshot {
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
   experiments?: LabView; // the lab's experiments, their results and the running ones' issues (shared/experiments.ts)
+  managerChanges?: ManagerChange[]; // the manager's recent board actions and what the CEO did (#207); absent in a replay
   chat?: CeoChatView; // absent in a replay
   testLab?: TestLabView; // the test lab desk (#56): its queue, running jobs and recent results; absent in a replay
 }
@@ -124,6 +125,7 @@ export type ServerEvent =
   | { type: 'cloud'; cloud: CloudView }
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
+  | { type: 'managerChanges'; changes: ManagerChange[] }
   /** A session (or merge) went into the history (#49): an open History screen shows it. */
   | { type: 'history'; entry: HistoryEntry }
   | { type: 'notify'; note: NoteView }
@@ -135,6 +137,8 @@ export type ServerEvent =
   | ({ type: 'toast'; level: 'info' | 'success' | 'error'; text: string } & Partial<Omit<NoticeView, 'level' | 'text'>>)
   /** Notices marked read (in any tab, or by opening their push). */
   | { type: 'noticesRead'; ids: string[] }
+  /** Notifications read or seen on some device (#210): the tabs close theirs, by their threads' events. */
+  | { type: 'notifyClear'; events: string[] }
   /** The office's heartbeat to every tab (shared/heartbeat.ts): never applied, it only says the socket is alive. */
   | { type: 'beat' }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.

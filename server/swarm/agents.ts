@@ -522,7 +522,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     this.broadcast({ type: 'agentRemoved', agentId: id });
   }
 
-  stopAgent(id: string) {
+  /** ■ Stop: ends the session at once. why: who stopped it and why, when not the manager (the CEO's stop_agent). */
+  stopAgent(id: string, why?: string) {
     const a = this.agent(id);
     if (this.consulting(a)) {
       // a consult leaves their saved status alone: stopping it ends the session, and the CEO hears they couldn't answer
@@ -532,8 +533,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     }
     if (!BUSY.includes(a.status)) return;
     a.status = 'stopped';
-    a.lastError = 'Stopped by manager';
-    this.appendLog(a, [{ kind: 'manager', text: '■ Manager stopped this session.' }]);
+    a.lastError = why ? `Stopped by ${why}` : 'Stopped by manager';
+    this.appendLog(a, [{ kind: 'manager', text: why ? `■ Stopped by ${why}.` : '■ Manager stopped this session.' }]);
     const sign = this.signIns.get(id);
     if (sign) sign.held = null; // the task waiting for their sign-in stays stopped
     this.agentRt.get(id)?.session?.stop();
