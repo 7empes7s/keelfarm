@@ -129,9 +129,6 @@ html[data-reduce-motion] {
   text-decoration: none;
 }
 .ds-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: var(--ds-space-2);
   min-width: var(--ds-target);
   min-height: var(--ds-target);
