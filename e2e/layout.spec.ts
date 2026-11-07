@@ -590,8 +590,10 @@ async function chatProblems(page: Page, when: string): Promise<string[]> {
     probe.remove();
     const headPad = parseFloat(getComputedStyle(document.querySelector('.pk-head')!).paddingTop);
     const problems: string[] = [];
-    if (Math.abs(input.bottom - tabs.top) > 1) problems.push(`${Math.round(tabs.top - input.bottom)}px between the message box and the tabs`);
-    if (tabs.bottom > innerHeight + 1 || tabs.bottom < innerHeight - 1) problems.push(`the tabs end at ${Math.round(tabs.bottom)}, the screen at ${innerHeight}`);
+    const floor = tabs.height ? tabs.top : innerHeight; // typing, the tab bar steps aside (#152): the box sits on the bottom
+    if (!tabs.height && !document.documentElement.hasAttribute('data-typing')) problems.push('the tabs are hidden');
+    if (Math.abs(input.bottom - floor) > 1) problems.push(`${Math.round(floor - input.bottom)}px between the message box and the ${tabs.height ? 'tabs' : 'screen bottom'}`);
+    if (tabs.height && (tabs.bottom > innerHeight + 1 || tabs.bottom < innerHeight - 1)) problems.push(`the tabs end at ${Math.round(tabs.bottom)}, the screen at ${innerHeight}`);
     if (log.height <= innerHeight / 2) problems.push(`the conversation is ${Math.round(log.height)}px of ${innerHeight}`);
     if (newest.bottom > log.bottom + 1 || newest.bottom < log.top) problems.push('the newest message is out of view');
     if (Math.abs(headPad - Math.max(8, safeTop)) > 0.5) problems.push(`the header's top padding is ${headPad}px for a ${safeTop}px safe area`);

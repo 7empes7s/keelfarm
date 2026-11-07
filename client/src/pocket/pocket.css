@@ -148,6 +148,21 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
 .pk-tabs {
   order: 1;
 }
+/* typing on the phone (viewport.ts): the keyboard has the bottom, so the tab bar and the decisions tray step aside until
+   it closes (#152) */
+html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
+  display: none;
+}
+/* a short chat (a small phone with the keyboard up): the header's presence line gives its room to the conversation and
+   the composer; the working strip says what the CEO is doing */
+.pk-main-chat {
+  container: pk-chat / size;
+}
+@container pk-chat (max-height: 340px) {
+  .phone-chat > .chat-head {
+    display: none;
+  }
+}
 
 .pk-railed .pk-body {
   position: relative;

@@ -3283,7 +3283,7 @@ input.inline:focus {
 /* the log, its "jump to latest" button and the message actions sit in one box */
 .chat-log-wrap {
   flex: 1;
-  min-height: 0;
+  min-height: 72px;
   position: relative;
   display: flex;
   flex-direction: column;
