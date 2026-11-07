@@ -108,7 +108,7 @@ describe('careers', () => {
     run(s, open(4), qa(4, true));
     const ada = s.careers.ada;
     expect(ada).toMatchObject({ since: at(9), opened: 4, merged: 3, firstPass: 3, qaPass: 4, qaFail: 1, fixRounds: 1, run: 1, best: 2 });
-    expect(ada.recent.map((r) => r.n)).toEqual([3, 2, 1]);
+    expect(ada.recent.map(([n]) => n)).toEqual([3, 2, 1]);
     expect(s.careers.marple.reviews).toBe(5);
   });
 
@@ -131,7 +131,7 @@ describe('careers', () => {
     const s = emptyLedger();
     run(s, { kind: 'hired', agentId: 'ada', at: NOON - 50 * DAY_MS });
     for (let n = 1; n <= 10; n++) run(s, open(n), merge(n, NOON - (10 - n) * 4 * DAY_MS));
-    expect(s.careers.ada.recent.map((r) => r.n)).toEqual([10, 9, 8, 7, 6, 5, 4, 3]);
+    expect(s.careers.ada.recent.map(([n]) => n)).toEqual([10, 9, 8, 7, 6, 5, 4, 3]);
     expect(s.careers.ada.week).toHaveLength(2);
     expect(s.careers.ada.weeks.reduce((n, r) => n + weekOfRow(r).merged, 0)).toBe(10);
   });
@@ -321,9 +321,10 @@ describe('the state file', () => {
 
   it('loads careers saved before #205: numbers kept, merges in their weeks, past careers empty; and fills in sessions from the cost ledger', () => {
     const merges = [NOON - DAY_MS, NOON - 8 * DAY_MS];
-    const old = loadLedger({ careers: { ada: { since: NOON - 20 * DAY_MS, merged: 9, opened: 10, costUsd: 12.5, turns: 400, week: merges } } });
+    const old = loadLedger({ careers: { ada: { since: NOON - 20 * DAY_MS, merged: 9, opened: 10, costUsd: 12.5, turns: 400, week: merges, recent: [{ n: 7, title: 'Old', at: NOON }, { title: 'no number' }] } } });
     expect(old.past).toEqual({});
     expect(old.careers.ada).toMatchObject({ merged: 9, opened: 10, costUsd: 12.5, turns: 400, hires: 1, served: 0, sessions: 0, rig: null });
+    expect(old.careers.ada.recent).toEqual([[7, 'Old', NOON]]);
     expect(old.careers.ada.weeks.map((r) => [r[0], weekOfRow(r).merged])).toEqual(
       [...new Set(merges.map(weekOf))].sort((a, b) => a - b).map((w) => [w, merges.filter((t) => weekOf(t) === w).length]),
     );

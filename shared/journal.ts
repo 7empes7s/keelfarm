@@ -218,7 +218,7 @@ export function compactRepo(r: RepoView, secrets: readonly string[] = []): RepoV
 const compactCareer = (c: CareerView, secrets: readonly string[]): CareerView => ({
   ...c,
   costUsd: Math.round(c.costUsd * 100) / 100,
-  recent: c.recent.slice(0, 8).map((r) => ({ n: r.n, title: text(r.title, 100, secrets), at: r.at })),
+  recent: c.recent.slice(0, 8).map(([n, title, at]) => [n, text(title, 100, secrets), at]),
 });
 
 /** An agent as the journal keeps it: what they're on and the tool in hand, never their errors or screens. */

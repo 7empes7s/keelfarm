@@ -111,7 +111,7 @@ describe('usage and cost (#205)', () => {
 
   it('reads an older career with its numbers kept and the new fields empty', () => {
     const old = legacyCareer({ since: NOW - DAY_MS, merged: 7, costUsd: 3.5, recent: [{ n: 1, title: 'x', at: NOW }], bySpecialty: { dev: 1 }, hires: 'two' });
-    expect(old).toEqual({ ...newCareer(NOW - DAY_MS), merged: 7, costUsd: 3.5, recent: [{ n: 1, title: 'x', at: NOW }] });
+    expect(old).toEqual({ ...newCareer(NOW - DAY_MS), merged: 7, costUsd: 3.5, recent: [[1, 'x', NOW]] }); // merged PRs become rows
     expect(legacyCareer({ rig: ['claude', 'opus', 'high', NOW] }).rig).toEqual(['claude', 'opus', 'high', NOW]); // a replay keeps what they run
   });
 });
@@ -157,7 +157,7 @@ describe('career stats', () => {
 
 describe('the desk', () => {
   it('shows a plaque per recent merge, a +N for the rest and the star at ten first-time passes', () => {
-    const recent = Array.from({ length: 8 }, (_, i) => ({ n: 40 - i, title: '', at: NOW }));
+    const recent = Array.from({ length: 8 }, (_, i): [number, string, number] => [40 - i, '', NOW]);
     const items = deskItems(career({ merged: 11, firstPass: 10, recent }), 'ada', NOW);
     expect(items.plaques).toEqual([40, 39, 38, 37, 36, 35, 34, 33]);
     expect(items.more).toBe(3);

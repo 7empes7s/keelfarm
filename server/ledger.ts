@@ -419,7 +419,7 @@ function merged(s: LedgerState, ev: Extract<LedgerEvent, { kind: 'merged' }>, ou
   if (c) {
     c.merged++;
     c.fixRounds += t.fixRounds;
-    c.recent = [{ n: ev.pr, title, at: ev.at }, ...c.recent].slice(0, RECENT_KEEP);
+    c.recent = [[ev.pr, title, ev.at] as [number, string, number], ...c.recent].slice(0, RECENT_KEEP);
     c.week = [...c.week.filter((x) => x > ev.at - WEEK_MS), ev.at].slice(-200);
     addWeek(c, ev.at, { merged: 1 });
     if (t.started && ev.at > t.started) c.toMerge = [ev.at - t.started, ...c.toMerge].slice(0, RECENT_KEEP);
@@ -577,9 +577,8 @@ export function loadLedger(raw: unknown): LedgerState {
 function loadCareer(x: Record<string, unknown>): CareerView {
   const c = legacyCareer(x);
   c.recent = c.recent
-    .map(obj)
-    .filter((m) => typeof m.n === 'number')
-    .map((m) => ({ n: m.n as number, title: typeof m.title === 'string' ? m.title : '', at: num(m.at) }))
+    .filter(([n]) => typeof n === 'number')
+    .map(([n, title, at]): [number, string, number] => [n, typeof title === 'string' ? title : '', num(at)])
     .slice(0, RECENT_KEEP);
   c.week = c.week.filter((t): t is number => typeof t === 'number');
   c.toPr = c.toPr.filter((t): t is number => typeof t === 'number' && t > 0).slice(0, RECENT_KEEP);

@@ -26,8 +26,8 @@ export interface CareerView {
   /** The coding agents' own estimate, over every session. */
   costUsd: number;
   turns: number;
-  /** The last few merged PRs, newest first. */
-  recent: { n: number; title: string; at: number }[];
+  /** The last few merged PRs, newest first; rows, to keep the snapshot small (#205). */
+  recent: [n: number, title: string, at: number][];
   /** When their merges of the last 7 days landed (the MVP of the week and the week's count). */
   week: number[];
   /** How long their last few builds took from the session's start to the PR (ms), newest first. */
@@ -106,6 +106,9 @@ export function legacyCareer(raw: Record<string, unknown>): CareerView {
     const v = raw[k];
     if (Array.isArray(d) ? Array.isArray(v) : d === null ? Array.isArray(v) : typeof v === typeof d && v !== null && !Array.isArray(v)) into[k] = v;
   }
+  // merged PRs were objects before #205
+  const row = (r: { n?: number; title?: string; at?: number } | null) => [r?.n, r?.title, r?.at];
+  out.recent = out.recent.map((r) => (Array.isArray(r) ? r : row(r)) as CareerView['recent'][number]);
   return out;
 }
 
@@ -417,7 +420,7 @@ export const plantGrowth = (days: number) => Math.min(1.6, 0.7 + 0.13 * Math.max
 
 export function deskItems(c: CareerView, agentId: string, now: number): DeskItems {
   const days = tenureDays(c, now);
-  const plaques = c.recent.slice(0, PLAQUES).map((r) => r.n);
+  const plaques = c.recent.slice(0, PLAQUES).map(([n]) => n);
   return {
     plaques,
     more: Math.max(0, c.merged - plaques.length),

@@ -91,17 +91,17 @@ function CareerCard({ agent, compact = false }: { agent: Agent; compact?: boolea
       {c.recent.length > 0 && (
         <div className="career-recent">
           {!compact && <div className="muted small">Last merged</div>}
-          {c.recent.slice(0, compact ? 1 : LAST).map((r) => (
-            <div key={r.n} className="career-pr">
+          {c.recent.slice(0, compact ? 1 : LAST).map(([n, title, at]) => (
+            <div key={n} className="career-pr">
               {compact && <span className="muted">Last merged </span>}
               {repo ? (
-                <a href={`https://github.com/${repo.fullName}/pull/${r.n}`} target="_blank" rel="noreferrer">
-                  #{r.n}
+                <a href={`https://github.com/${repo.fullName}/pull/${n}`} target="_blank" rel="noreferrer">
+                  #{n}
                 </a>
               ) : (
-                <b>#{r.n}</b>
+                <b>#{n}</b>
               )}{' '}
-              <span className="career-pr-title">{r.title || 'untitled'}</span> <span className="muted">{ago(r.at, now)}</span>
+              <span className="career-pr-title">{title || 'untitled'}</span> <span className="muted">{ago(at, now)}</span>
             </div>
           ))}
         </div>
@@ -156,16 +156,16 @@ export function AgentProfile({ agent }: { agent: Agent }) {
       {c.recent.length > 0 && (
         <div className="career-recent">
           <div className="muted small">Last merged</div>
-          {c.recent.slice(0, LAST).map((r) => (
-            <div key={r.n} className="career-pr">
+          {c.recent.slice(0, LAST).map(([n, title, at]) => (
+            <div key={n} className="career-pr">
               {repo ? (
-                <a href={`https://github.com/${repo.fullName}/pull/${r.n}`} target="_blank" rel="noreferrer">
-                  #{r.n}
+                <a href={`https://github.com/${repo.fullName}/pull/${n}`} target="_blank" rel="noreferrer">
+                  #{n}
                 </a>
               ) : (
-                <b>#{r.n}</b>
+                <b>#{n}</b>
               )}{' '}
-              <span className="career-pr-title">{r.title || 'untitled'}</span> <span className="muted">{ago(r.at, now)}</span>
+              <span className="career-pr-title">{title || 'untitled'}</span> <span className="muted">{ago(at, now)}</span>
             </div>
           ))}
         </div>

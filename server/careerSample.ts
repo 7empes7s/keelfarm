@@ -56,7 +56,7 @@ export function sampleCareers(agentIds: string[], now: number): Record<string, C
     const recent = [...merges]
       .reverse()
       .slice(0, 5)
-      .map((at, k) => ({ n: 100 + i * 5 + (4 - k), title: TITLES[(i + k) % TITLES.length], at }));
+      .map((at, k): [number, string, number] => [100 + i * 5 + (4 - k), TITLES[(i + k) % TITLES.length], at]);
     const tenure = (s.days + (s.served ?? 0)) * DAY_MS;
     const workMs = Math.round((tenure / DAY_MS) * s.busy * HOUR * 0.7);
     const sessions = Math.max(1, s.opened * 3 + s.reviews);
