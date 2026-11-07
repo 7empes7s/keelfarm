@@ -2826,6 +2826,7 @@ input.inline:focus {
 .tour-nav {
   display: flex;
   align-items: center;
+  gap: 6px;
   margin-top: 8px;
 }
 

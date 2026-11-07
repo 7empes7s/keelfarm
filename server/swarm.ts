@@ -280,7 +280,9 @@ export class Swarm extends SwarmCeoTools {
       }
       // Mission control opens on a week that already happened.
       this.state.ops = this.backend.seedOps?.(this.state.repos.map((r) => r.id), Date.now()) ?? this.state.ops;
-      for (const m of this.backend.seedChat?.(Date.now()) ?? []) this.state.messages.push({ ...m, id: this.messageSeq++ }); // edits of every kind (#125)
+      const base = this.messageSeq - 1; // edits of every kind (#125), reactions and quoted replies (#118)
+      for (const m of this.backend.seedChat?.(Date.now()) ?? []) this.state.messages.push({ ...m, id: m.id + base, ...(m.replyTo && { replyTo: m.replyTo + base }) });
+      this.messageSeq = Math.max(this.messageSeq, ...this.state.messages.map((m) => m.id + 1));
       if (this.backend.seedThreads) this.messageSeq = await this.ceoChat.seed(this.state.ceo.chats, this.state.messages, this.backend.seedThreads(this.state.repos, Date.now()), this.files, this.messageSeq); // threads across floors (#132)
     }
     for (const r of this.state.repos) this.ensureAgent(r);
@@ -601,8 +603,7 @@ export class Swarm extends SwarmCeoTools {
   /** POST /api/ceo/conversations: a new conversation, with a fresh CEO session, in a floor's project (`repoId`) or the Company's; the CEO's notes carry over. */
   async newConversation(repoId: unknown = null) {
     this.chatFree();
-    const s = this.state.ceo.chats;
-    const project = typeof repoId === 'string' ? repoId : null;
+    const s = this.state.ceo.chats, project = typeof repoId === 'string' ? repoId : null;
     if (project && !this.state.repos.some((r) => r.id === project)) throw new HttpError(400, 'That floor is no longer in the office.');
     if (this.state.messages.length) {
       await this.ceoChat.saveThread(s.current, this.state.messages);

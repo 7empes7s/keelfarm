@@ -91,7 +91,8 @@ export function watchViewport() {
   document.addEventListener(
     'touchmove',
     (e) => {
-      if (blocksPinch(e.touches.length, e.target instanceof Element && e.target.closest('.xterm') !== null)) e.preventDefault();
+      // A terminal zooms its own text; the preview's desktop view (#131) is the page's to zoom.
+      if (blocksPinch(e.touches.length, e.target instanceof Element && e.target.closest('.xterm, .panel-app-immersive') !== null)) e.preventDefault();
     },
     { passive: false },
   );

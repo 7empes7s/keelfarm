@@ -15,6 +15,7 @@ import { Markdown } from './Markdown';
 import { QuestionChips } from './QuestionChips';
 import { ArtifactCard, ArtifactView } from './ChatArtifacts';
 import { MessageActions, who, type Item } from './ChatActions';
+import { Reactions } from './ChatReactions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, NoticeCard, Starters, WorkingStrip } from './ChatCards';
@@ -376,6 +377,11 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
           ↩
         </button>
       )}
+      {item.m?.from === 'ceo' && (
+        <button type="button" className="bubble-tool" aria-label="React to this message" aria-haspopup="dialog" title="React" onClick={() => onActions(item)}>
+          ☺
+        </button>
+      )}
       <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
         ⋯
       </button>
@@ -500,6 +506,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>
+        {m && <Reactions m={m} ceoName={ceoName} />}
         {delivery === 'failed' && (
           <button type="button" className="bubble-retry" onClick={() => retrySend(item.out!.key)}>
             ⚠ Failed, tap to retry

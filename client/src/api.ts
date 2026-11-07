@@ -161,6 +161,7 @@ export const api = {
   ceoStop: () => call('POST', '/api/ceo/stop'),
   ceoRetry: () => call('POST', '/api/ceo/retry'),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
+  reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
   newConversation: (repoId: string | null = null) => call<{ id: string }>('POST', '/api/ceo/conversations', { repoId }),
   openConversation: (id: string) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/open`),
   editConversation: (id: string, patch: ConversationPatch) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/edit`, patch),
