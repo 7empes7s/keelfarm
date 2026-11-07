@@ -86,6 +86,8 @@ export interface PullInfo {
   checkRun?: { ms: number; doneAt: number } | null;
   /** The paths it changes (up to PR_FILES_MAX), for the memory map's hot files and conflict risk (shared/memoryMap.ts). */
   files?: string[];
+  /** Its body's first paragraph as plain text (shared/prSummary.ts), for the app viewer's "What this PR changes" (#203). */
+  summary?: string;
   author?: string | null;
   isCrossRepository?: boolean;
   /** From a fork or an untrusted author: never QA'd, fixed, previewed or merged by the office (set by the sync, #185). */

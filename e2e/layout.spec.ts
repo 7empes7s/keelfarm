@@ -307,6 +307,12 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
+  { name: "app viewer, a PR's changes sheet (#203)", widths: PHONES, tabs: [], open: async (page) => {
+    const run = (await pocket(page, 'kanban')).getByTitle(/^Run PR #\d+ beside/).first();
+    test.skip(!(await run.count()), 'no open PR on this floor yet');
+    await run.click();
+    return page.getByRole('dialog');
+  } },
   {
     name: 'app viewer, Desktop on a phone (#131)',
     widths: [360, 390, 430],

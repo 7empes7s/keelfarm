@@ -2279,23 +2279,6 @@ input.inline:focus {
   color: #1b873a;
   font-weight: 600;
 }
-.qa-side {
-  flex: 0 0 300px;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  background: var(--ds-surface-raised);
-  border: 3px solid var(--ds-outline);
-  border-radius: 14px;
-}
-.qa-side-title {
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
 .qa-side-meta,
 .qa-side-status {
   display: flex;
@@ -2378,10 +2361,6 @@ input.inline:focus {
 @media (max-width: 900px) {
   .app-body {
     flex-direction: column;
-  }
-  .qa-side {
-    flex: 0 0 auto;
-    max-height: 40%;
   }
   .compare-sides {
     grid-template-columns: 1fr;
