@@ -100,12 +100,14 @@ export async function loadUpdate(moment: UpdateMoment, hiddenMs = 0): Promise<bo
     return false;
   }
   loading = true;
+  await drafts.flush();
+  // Read after the flush, once the navigation's effects ran; pocket mode's chat overlay is its tab, not a panel.
+  const overlay = useStore.getState().overlay;
   try {
-    sessionStorage.setItem(RESUME_KEY, JSON.stringify({ overlay: s.overlay, tab: tabNow } satisfies Resume));
+    sessionStorage.setItem(RESUME_KEY, JSON.stringify({ overlay: tabNow && overlay?.kind === 'phone' ? null : overlay, tab: tabNow } satisfies Resume));
   } catch {
     // private mode: the new version opens where it starts
   }
-  await drafts.flush();
   await takeOverWorker();
   location.reload();
   return true;
