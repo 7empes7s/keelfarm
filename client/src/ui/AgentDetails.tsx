@@ -10,6 +10,7 @@ import { AgentSetup } from './AgentSettings';
 import { AgentProfile } from './CareerCard';
 import { copyText } from './clipboard';
 import { canPickWork, taskLine, taskSteps } from './agentWindow';
+import { CloseButton } from './Icon';
 
 export type DetailsTab = 'now' | 'profile' | 'setup';
 
@@ -52,9 +53,7 @@ export function AgentDetails(p: Props) {
           </button>
         ))}
         <span className="spacer" />
-        <button type="button" className="aw-icon aw-details-x" aria-label="Close the details" onClick={p.onClose}>
-          ✕
-        </button>
+        <CloseButton className="aw-details-x" label="Close the details" onClick={p.onClose} />
       </div>
       <div className="aw-tab-body" role="tabpanel" aria-label={TABS.find(([id]) => id === p.tab)![1]}>
         {p.tab === 'now' && <NowTab {...p} />}

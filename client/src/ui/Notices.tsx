@@ -11,6 +11,7 @@ import { noticeJump, noticeStep, type NoticeStep } from './noticeNav';
 import { openFrom } from './RefChips';
 import { Panel } from './Panel';
 import './notices.css';
+import { CloseButton } from './Icon';
 
 const SWIPE_PX = 80;
 
@@ -169,9 +170,7 @@ function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
     >
       <NoticeBody n={n} pocket={pocket} after={dismiss} />
       <NoticeButtons n={n} pocket={pocket} after={dismiss} />
-      <button type="button" className="notice-x" aria-label="Dismiss" onClick={dismiss}>
-        ✕
-      </button>
+      <CloseButton className="notice-x" label="Dismiss" onClick={dismiss} />
     </div>
   );
 }

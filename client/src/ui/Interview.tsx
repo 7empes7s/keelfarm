@@ -6,6 +6,7 @@ import { Markdown } from './Markdown';
 import { backdropClose, closeOverlay, useBackLayer } from './Panel';
 import { HireSetupFields, cliLabel, hireCli, hireOverrides, setupOf, type HireSetup } from './Phone';
 import { CLAUDE_MODELS, effectiveModel } from '../../../shared/models';
+import { CloseButton } from './Icon';
 
 // A team change face to face (#227), as an office document: a new agent waiting in the lobby (E on them, world/
 // Candidates.tsx), set up here before they're created (name, coding agent, model, effort), or the CEO's let-go note in
@@ -87,9 +88,7 @@ export function Interview({ requestId }: { requestId: string }) {
             <h2 className="doc-title">{hire ? name : `Let ${req.name} go?`}</h2>
             <div className="muted">{hire ? `Joining ${floor}` : `On ${floor}`}</div>
           </div>
-          <button className="panel-x" onClick={closeOverlay} aria-label="Close">
-            ✕
-          </button>
+          <CloseButton className="panel-x" onClick={closeOverlay} label="Close" />
         </div>
         {stamp && <div className={`doc-stamp ${req.status === 'approved' ? 'doc-stamp-good' : 'doc-stamp-bad'}`}>{stamp}</div>}
         <h3 className="doc-h">{hire ? `Why ${ceo} wants to grow the team` : `${ceo}'s note`}</h3>

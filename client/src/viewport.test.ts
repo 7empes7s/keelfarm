@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appViewport, blocksPinch, insetsCovered } from './viewport';
+import { appViewport, blocksPinch, insetsCovered, isTextField, typing } from './viewport';
 
 describe('appViewport', () => {
   it('is the visible part of the page: the keyboard and the browser bars taken off', () => {
@@ -37,5 +37,23 @@ describe('insetsCovered', () => {
     expect(insetsCovered(safari, false)).toBe(false);
     expect(insetsCovered(chromeIos, true)).toBe(false);
     expect(insetsCovered(safari, true)).toBe(false);
+  });
+});
+
+describe('typing', () => {
+  it('is a touch screen with the keyboard up or a text field focused', () => {
+    expect(typing(true, 844, 508, false)).toBe(true);
+    expect(typing(true, 844, 844, true)).toBe(true);
+    expect(typing(true, 844, 800, false)).toBe(false); // browser bars, not a keyboard
+    expect(typing(false, 844, 508, true)).toBe(false); // a computer keeps its tabs
+  });
+
+  it('counts fields you type into, not checkboxes or buttons', () => {
+    expect(isTextField('TEXTAREA', '', false)).toBe(true);
+    expect(isTextField('INPUT', 'text', false)).toBe(true);
+    expect(isTextField('INPUT', 'search', false)).toBe(true);
+    expect(isTextField('DIV', '', true)).toBe(true);
+    expect(isTextField('INPUT', 'checkbox', false)).toBe(false);
+    expect(isTextField('BUTTON', 'submit', false)).toBe(false);
   });
 });

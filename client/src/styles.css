@@ -1204,19 +1204,6 @@ input.inline:focus {
 .panel-title a {
   color: var(--ds-on-color);
 }
-.panel-x {
-  width: var(--ds-target);
-  height: var(--ds-target);
-  border-radius: 12px;
-  border: 3px solid var(--ds-on-color);
-  background: #fff;
-  color: var(--ds-on-color);
-  font-weight: 700;
-  font-size: var(--ds-text-lg);
-  line-height: 1;
-  cursor: pointer;
-  flex: none;
-}
 .panel-body {
   padding: 16px;
   overflow: auto;
@@ -3157,7 +3144,7 @@ input.inline:focus {
     opacity: 0;
   }
 }
-.phone-x {
+.phone .phone-x {
   display: none;
 }
 .phone-status {
@@ -3860,16 +3847,6 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--muted);
-}
-.chat-reply-x {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1.5px solid var(--ds-line-strong);
-  border-radius: 50%;
-  background: var(--ds-surface-raised);
-  cursor: pointer;
 }
 .quick-answer {
   border-color: var(--accent);
@@ -4823,15 +4800,23 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   display: flex;
   gap: 6px;
 }
+/* iOS-style icon buttons (#134): a soft fill and a hairline, the glyph at about 55% of the button */
 .pk-icon-btn {
   flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 2.5px solid var(--ds-outline);
-  background: var(--ds-surface-raised);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-1);
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 0;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
   font-size: 1.1rem;
   cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
 }
 .pk-main {
   flex: 1;
@@ -5175,19 +5160,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   .phone-status {
     display: none;
   }
-  .phone-x {
-    display: block;
-    flex: none;
+  .phone .phone-x {
+    display: inline-flex;
     align-self: flex-end;
-    width: var(--ds-target);
-    height: var(--ds-target);
     margin-bottom: 6px;
-    border-radius: 12px;
-    border: 3px solid var(--ds-outline);
-    background: var(--ds-surface-raised);
-    color: var(--ds-on-color);
-    font-weight: 700;
-    cursor: pointer;
   }
 }
 

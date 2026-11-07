@@ -261,11 +261,6 @@
   font-weight: var(--ds-weight-strong);
   box-shadow: var(--ds-shadow-1);
 }
-.aw-details-x {
-  border-color: var(--ds-outline);
-  color: var(--ds-text);
-  background: var(--ds-surface-raised);
-}
 .aw-tab-body {
   display: flex;
   flex-direction: column;

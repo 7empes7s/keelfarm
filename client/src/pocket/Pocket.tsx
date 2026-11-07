@@ -32,6 +32,7 @@ import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
+import { CloseButton } from '../ui/Icon';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -532,9 +533,7 @@ export default function Pocket() {
               <b className="pk-ellipsis">💬 {ceoName}</b>
               <span className="spacer" />
               <div className="pk-head-tools" ref={setChatTools} />
-              <button className="pk-icon-btn pk-dock-x" onClick={() => setDock(false)} aria-label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'}>
-                ✕
-              </button>
+              <CloseButton className="pk-dock-x" onClick={() => setDock(false)} label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'} />
             </div>
             {chat}
           </aside>

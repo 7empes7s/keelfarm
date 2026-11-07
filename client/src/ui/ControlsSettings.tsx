@@ -5,6 +5,7 @@ import { isTouch, requestGyro, setTouchPrefs, useTouchLook } from '../world/touc
 import { TOUCH_DEFAULTS, TOUCH_SENS_MAX, TOUCH_SENS_MIN, type StickSide, type StickSize } from '../world/touch/thumbs';
 import { clearBinding, resetControls, setBinding, setPadSensitivity, useControls } from './controls';
 import { ACTIONS, PAD_SENSITIVITY_MAX, PAD_SENSITIVITY_MIN, SLOTS, actionDef, exactKeyLabel, findConflicts, keyLabel, type ActionDef, type ActionId } from './keymap';
+import { Icon } from './Icon';
 
 // Help → Controls: every key action rebindable (click a key, press the new one), conflicts called out, the mouse's
 // sensitivity and invert-Y, the gamepad's sensitivity and button map, and a reset. All saved in this browser.
@@ -195,7 +196,7 @@ export function ControlsSettings() {
                       </button>
                       {code && slot > 0 && (
                         <button className="key-clear" title="Remove this key" aria-label={`Remove ${exactKeyLabel(code)} from ${a.label}`} onClick={() => clearBinding(a.id, slot)}>
-                          ✕
+                          <Icon name="x" />
                         </button>
                       )}
                     </span>

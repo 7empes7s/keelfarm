@@ -37,6 +37,9 @@
 
   /* touch: Apple HIG 44pt, Material 48dp; 44px is the floor for anything tappable */
   --ds-target: 44px;
+  /* icons (#134): Lucide glyphs at about 55% of their button, as iOS does (24px in 44px, 28px in the 56px headers) */
+  --ds-icon-md: 24px;
+  --ds-icon-lg: 28px;
 
   /* colours (light) */
   --ds-surface: var(--paper);
@@ -165,6 +168,39 @@ html[data-reduce-motion] {
   width: var(--ds-target);
   padding: 0;
   font-size: var(--ds-text-lg);
+  --ds-icon: var(--ds-icon-md);
+}
+
+/* ---------- icons (ui/Icon.tsx) ---------- */
+
+.ds-icon {
+  width: var(--ds-icon, 1.2em);
+  height: var(--ds-icon, 1.2em);
+  flex: none;
+  vertical-align: -0.22em;
+}
+/* The shared close button: a soft round fill, no outline, the x at 24px. */
+.ds-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-line);
+  color: var(--ds-text);
+  cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
+  transition: background var(--ds-dur-fast);
+}
+.ds-close:hover {
+  background: var(--ds-line-strong);
+}
+.ds-close:active {
+  transform: scale(0.94);
 }
 .ds-menu-dots {
   font-size: 1.25rem;

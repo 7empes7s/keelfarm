@@ -39,6 +39,7 @@ import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared
 import { useCeoDraft } from './goTo';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
+import { CloseButton, Icon } from './Icon';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -837,20 +838,18 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
       {editing !== null && (
         <div className="chat-reply">
           <b className="grow small">✏️ Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}</b>
-          <button type="button" className="chat-reply-x" aria-label="Cancel the edit" onClick={endEdit}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label="Cancel the edit" onClick={endEdit} />
         </div>
       )}
       {replyTo !== null && (
         <div className="chat-reply">
           <div className="grow chat-reply-body">
-            <b className="small">↩ Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'yourself' : who(quotedNow, ceo.name)) : 'a message'}</b>
+            <b className="small">
+              <Icon name="reply" /> Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'your message' : who(quotedNow, ceo.name)) : 'a message'}
+            </b>
             <div className="chat-reply-text small">{quotedNow ? excerpt(quotedNow.text, 140) : 'The original message is no longer saved'}</div>
           </div>
-          <button type="button" className="chat-reply-x" aria-label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)} />
         </div>
       )}
       {chatQueued && info.held && (
@@ -1152,7 +1151,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   return (
     <div className="overlay phone-overlay" {...backdropClose(closeOverlay)}>
       <div className="phone ds-screen" ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
-        <button className="phone-x" onClick={closeOverlay} aria-label="Close">✕</button>
+        <CloseButton className="phone-x" onClick={closeOverlay} label="Close" />
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />

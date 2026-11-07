@@ -7,6 +7,7 @@ import { slashItems } from './chatCardRules';
 import './chatCards.css';
 import { Sheet } from './ChatArtifacts';
 import type { Pending } from './chatUpload';
+import { CloseButton } from './Icon';
 
 // Files in the CEO chat (shared/files.ts): cards in the bubbles (a thumbnail for images, a chip for the rest), the
 // full-size viewer, the tray of files being attached, the Files list, "Used" under a CEO reply and the "/" picks.
@@ -200,9 +201,7 @@ export function AttachTray({ pending, onRemove }: { pending: readonly Pending[];
           ) : (
             <span className="small muted">{formatSize(p.size)}</span>
           )}
-          <button type="button" className="chat-reply-x" aria-label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label={p.ref || p.error ? `Remove ${p.name}` : `Cancel the upload of ${p.name}`} onClick={() => onRemove(p.key)} />
         </li>
       ))}
     </ul>

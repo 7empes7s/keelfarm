@@ -29,6 +29,20 @@ export function insetsCovered(userAgent: string, standalone: boolean): boolean {
   return !standalone && /\b(CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
 }
 
+/** A field that brings up the keyboard: a textarea, an editable box, or an input you type into (not a checkbox). */
+export function isTextField(tag: string, type: string, editable: boolean): boolean {
+  if (editable || tag === 'TEXTAREA') return true;
+  return tag === 'INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image|hidden)$/.test(type);
+}
+
+/**
+ * Whether the manager is typing on a touch screen (#134: pocket mode hides its tab bar then): the visible part of the
+ * page shrank by more than browser bars do, or a text field has focus (Android may resize the whole page instead).
+ */
+export function typing(touch: boolean, innerHeight: number, visibleHeight: number, textFieldFocused: boolean): boolean {
+  return touch && (visibleHeight < innerHeight - 80 || textFieldFocused);
+}
+
 /** Tells the full-screen views the viewport changed and stray scrolls were put back (the chat sticks to its end). */
 export const VIEWPORT_EVENT = 'cubefarm:viewport';
 
@@ -53,6 +67,7 @@ export function watchViewport() {
   const vv = window.visualViewport;
   let frame = 0;
   let keyboard = false;
+  const touch = matchMedia('(pointer: coarse)').matches;
   const update = () => {
     frame = 0;
     const { height, top } = appViewport(window.innerHeight, vv);
@@ -63,6 +78,9 @@ export function watchViewport() {
     keyboard = open;
     if (insetsCovered(navigator.userAgent, standalone())) root.setAttribute('data-insets-covered', '');
     else root.removeAttribute('data-insets-covered');
+    const field = document.activeElement;
+    const focused = field instanceof HTMLElement && isTextField(field.tagName, (field as HTMLInputElement).type ?? '', field.isContentEditable);
+    root.toggleAttribute('data-typing', typing(touch, window.innerHeight, height, focused));
   };
   const later = () => {
     if (!frame) frame = requestAnimationFrame(update);
@@ -78,6 +96,7 @@ export function watchViewport() {
   window.addEventListener('orientationchange', () => setTimeout(reset, 300)); // iOS reports the new size late
   window.addEventListener('pageshow', reset);
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reset());
+  document.addEventListener('focusin', later);
   // A field losing focus to something that isn't another field: the keyboard is going away.
   document.addEventListener('focusout', (e) => {
     if (!(e.relatedTarget instanceof HTMLElement && e.relatedTarget.matches('input, textarea, select'))) setTimeout(reset, 250);
@@ -85,7 +104,7 @@ export function watchViewport() {
 
   // The zoom lock (touch screens only, so a trackpad pinch and ctrl +/- still zoom on a computer). iOS ignores
   // user-scalable=no, so its pinch gestures and two-finger moves are cancelled here as well.
-  if (!matchMedia('(pointer: coarse)').matches) return;
+  if (!touch) return;
   const stop = (e: Event) => e.preventDefault();
   for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, stop, { passive: false });
   document.addEventListener(

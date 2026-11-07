@@ -7,6 +7,7 @@ import { artifactFileName } from '../../../shared/chatParts';
 import { Markdown } from './Markdown';
 import { useDialogFocus } from './dialogFocus';
 import { copyText } from './clipboard';
+import { CloseButton } from './Icon';
 
 // The CEO's artifacts in the phone chat (shared/chatParts.ts): a card in the bubble, the document full-screen on a
 // phone (a side panel on a desktop) with Copy, Share / Download and "Reply about this", and the list of every one.
@@ -78,9 +79,7 @@ export function Sheet({ label, onClose, className, children }: { label: string; 
           <b id={titleId} className="grow artifact-title">
             {label}
           </b>
-          <button type="button" className="chat-reply-x" aria-label="Close" title="Close (Esc)" onClick={onClose}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label="Close" title="Close (Esc)" onClick={onClose} />
         </div>
         {children}
       </div>

@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { go, useFinder } from './goTo';
 import { dismissGuide, guideDismissed, guideItems, guideProgress, type GuideItem } from './guide';
 import { Sheet } from './Sheet';
+import { CloseButton } from './Icon';
 
 const installed = () => {
   try {
@@ -81,18 +82,16 @@ export function GuideCard() {
       <div className="gm-head">
         <b className="grow">✅ Get the most out of the office</b>
         <Progress items={items} />
-        <button
-          className="pk-icon-btn gm-x"
-          aria-label="Dismiss the guide"
+        <CloseButton
+          className="gm-x"
+          label="Dismiss the guide"
           title="Dismiss (🔍 brings it back)"
           onClick={() => {
             dismissGuide(true);
             setHidden(true);
             useFinder.setState({ guide: false });
           }}
-        >
-          ✕
-        </button>
+        />
       </div>
       <Checklist items={items} open />
       {p.done > 0 && (

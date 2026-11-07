@@ -14,6 +14,7 @@ import { ArtifactView, Sheet } from './ChatArtifacts';
 import { sendToCeo } from './chatSend';
 import { MapCanvas, type MapPaint } from './MapCanvas';
 import './memoryMap.css';
+import { CloseButton, Icon } from './Icon';
 
 const TYPE_LOOK: Record<MapNodeType, [string, string]> = {
   company: ['#ff9f1c', 'Company'],
@@ -201,7 +202,7 @@ export function MemoryMap() {
               </button>
             ))}
             <button type="button" className="mm-seg" aria-label="Show the whole map" onClick={() => setLocal(null)}>
-              ✕
+              <Icon name="x" />
             </button>
           </div>
         )}
@@ -280,9 +281,7 @@ function Peek({ node, local, onLocal, onDetails, onClose, onOpen }: { node: MapN
       <div className="mm-peek-head">
         <span className="mm-dot" style={{ background: TYPE_LOOK[node.type][0] }} aria-hidden />
         <b className="grow mm-ellipsis">{node.title}</b>
-        <button type="button" className="mm-x" aria-label="Clear the selection" onClick={onClose}>
-          ✕
-        </button>
+        <CloseButton className="mm-x" label="Clear the selection" onClick={onClose} />
       </div>
       <div className="muted small mm-ellipsis">{[node.status, ...node.facts.slice(0, 2).map(([k, v]) => `${k}: ${v}`)].filter(Boolean).join(' · ')}</div>
       <div className="mm-peek-actions">

@@ -1,16 +1,6 @@
 /* Pocket mode's own look (pocket/Pocket.tsx), loaded only in pocket mode. */
-@import './pocket-icons.css';
 
-/* Lucide icons in place of emoji, everywhere pocket mode draws text: the font covers only the emoji it replaces. */
-html.pocket-mode {
-  --font: 'Pocket Icons', Fredoka, 'Segoe UI', system-ui, sans-serif;
-  /* ⚙️, ⚠️ and the like ask for emoji presentation; this lets the icon font draw them too */
-  font-variant-emoji: text;
-}
-html.pocket-mode[data-readable-font] {
-  --font: 'Pocket Icons', Verdana, Tahoma, 'Trebuchet MS', 'Segoe UI', sans-serif;
-}
-/* buttons and fields take the page's font (browsers give them their own), so their icons are Lucide too */
+/* buttons and fields take the page's font (browsers give them their own) */
 :where(html.pocket-mode) :where(button, select, input, textarea) {
   font-family: var(--font);
 }
@@ -148,6 +138,10 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
 .pk-tabs {
   order: 1;
 }
+/* typing on the phone (viewport.ts): the keyboard has the bottom, so the tab bar steps aside until it closes */
+html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
+  display: none;
+}
 
 .pk-railed .pk-body {
   position: relative;
@@ -155,7 +149,7 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
   min-height: 0;
   display: flex;
 }
-/* the navigation rail: icons and labels, ⚙️ at its foot (medium widths: icons only) */
+/* the navigation rail: icons and labels, Settings at its foot (medium widths: icons only) */
 .pk-railed .pk-tabs {
   order: 0;
   flex: none;
@@ -275,10 +269,6 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
   padding: 6px 8px 6px 12px;
   background: var(--ds-surface-raised);
   border-bottom: var(--ds-border-strong) solid var(--ds-outline);
-}
-.pk-dock-x {
-  width: var(--ds-target);
-  height: var(--ds-target);
 }
 .pk-dock .phone-chat {
   width: 100%;

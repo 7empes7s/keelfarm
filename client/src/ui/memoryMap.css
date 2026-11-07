@@ -174,8 +174,7 @@
   flex-direction: column;
   gap: var(--ds-space-1);
 }
-.mm-zoom-btn,
-.mm-x {
+.mm-zoom-btn {
   width: var(--ds-target);
   height: var(--ds-target);
   border: var(--ds-border) solid var(--ds-outline);
@@ -186,12 +185,6 @@
   font: inherit;
   font-size: var(--ds-text-lg);
   cursor: pointer;
-}
-.mm-x {
-  flex: none;
-  border-color: transparent;
-  box-shadow: none;
-  background: none;
 }
 .mm-stats {
   position: absolute;
