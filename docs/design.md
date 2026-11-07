@@ -47,7 +47,7 @@ Rejected:
 | Touch | `--ds-target` 44 px |
 | Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; chart series `--ds-series-1…8` (in order; charts group a donut's rest as "Other" in the 8th) |
 | Elevation | `--ds-shadow-1` (buttons), `-2` (cards), `-3` (panels), `--ds-shadow-float` (menus) |
-| Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
+| Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`, `--ds-ease-spring`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
 | Layers | `--ds-z-hud` 10 · `-panel` 30 · `-menu` 50 · `-confirm` 60 · `-toast` 70 |
 | Safe areas | `--ds-safe-top/right/bottom/left` |
 
@@ -122,6 +122,16 @@ The manager's console has five top tabs, and each one shows a side menu of its s
   the state fills, neutral in `--ds-series-4`; the words say it too. With `onClick` or `href` the whole bar is a 44 px
   button or link to what it counts (`tap` says what). Animations use the motion tokens and stop under reduce motion.
   `ProgressRing` is its compact form for avatars and tight cards. Values come from pure `shared/progressBars.ts`.
+- **Hover card** (`ui/HoverCard.tsx`, #213): explains or previews a thing in place. `<HoverCard label=… peek={…}>`
+  around one element (or `usePeek` + `Peek` for a custom trigger); `PeekCard` lays out a title, a few stats, a bar or
+  sparkline, a note and up to two actions. It opens after 350 ms of hover or keyboard focus, closes 150 ms after the
+  pointer leaves trigger and card, never covers the CEO chat column or the chat's message box (timing and placement
+  are pure in `ui/hoverRules.ts`); a long press on touch opens it as a small sheet, and a tap still does the
+  element's own action. Esc dismisses it; ↓ moves into its actions. Peeks read the store only: no fetches, no polling.
+  Bodies for agents, issues and PRs, and QA are in `ui/Peeks.tsx`.
+- **Expanding icon button**: an icon-only button adds `.xbtn` and `<XLabel text="Full screen" keys="F" />`; the label
+  and shortcut slide out to its left on hover or keyboard focus (`--ds-ease-spring`), over its neighbours, never
+  reflowing the header. Primary `.btn-good` buttons lift and glow a little under a pointer.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
 
 ## Finding things and learning the office (#109)

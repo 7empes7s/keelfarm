@@ -16,16 +16,20 @@ import { FloorBuilds } from './FloorBuilds';
 import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
+import { HoverCard } from './HoverCard';
+import { AgentPeek, QaPeek, WorkPeek } from './Peeks';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
   if (!agent) return null;
   return (
-    <span className="agent-chip">
-      <span className="dot" style={{ background: agent.color }} />
-      {agent.name}
-      {agent.task === 'qa' && card.prNumber != null && agent.prNumber === card.prNumber && <span className="chip">QA</span>}
-    </span>
+    <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
+      <span className="agent-chip" tabIndex={0}>
+        <span className="dot" style={{ background: agent.color }} />
+        {agent.name}
+        {agent.task === 'qa' && card.prNumber != null && agent.prNumber === card.prNumber && <span className="chip">QA</span>}
+      </span>
+    </HoverCard>
   );
 }
 
@@ -88,9 +92,11 @@ function Frame({ embedded, ...props }: Parameters<typeof Panel>[0] & { embedded?
 function QaLink({ card }: { card: KanbanCard }) {
   if (!card.qa?.commentUrl) return null;
   return (
-    <a className="small" href={card.qa.commentUrl} target="_blank" rel="noreferrer" title={card.qa.summary ?? ''}>
-      QA report ↗
-    </a>
+    <HoverCard label={`QA on PR #${card.qa.prNumber}`} peek={<QaPeek qa={card.qa} />}>
+      <a className="small" href={card.qa.commentUrl} target="_blank" rel="noreferrer">
+        QA report ↗
+      </a>
+    </HoverCard>
   );
 }
 
@@ -222,9 +228,11 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
             <div className="kcard-title">
               {c.url ? (
-                <a href={c.url} target="_blank" rel="noreferrer">
-                  {c.prNumber ? 'PR ' : ''}#{c.number}
-                </a>
+                <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
+                  <a href={c.url} target="_blank" rel="noreferrer">
+                    {c.prNumber ? 'PR ' : ''}#{c.number}
+                  </a>
+                </HoverCard>
               ) : (
                 <b>#{c.number}</b>
               )}{' '}

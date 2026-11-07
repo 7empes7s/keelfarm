@@ -1,0 +1,221 @@
+/* Hover cards and expanding icon buttons (#213): HoverCard.tsx. */
+
+.peek-trigger {
+  display: contents;
+}
+
+.peek {
+  position: fixed;
+  z-index: 1100; /* over every panel and sheet, the artifact viewer's 1000 included, as the chat's ref peek was */
+  color: var(--ds-text);
+  font-family: var(--font);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading);
+  text-align: left;
+  white-space: normal;
+}
+.peek-card {
+  width: min(300px, calc(100vw - 2 * var(--ds-space-4)));
+  max-height: 50vh;
+  overflow: hidden;
+  padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-float);
+  animation: peek-in var(--ds-dur) var(--ds-ease-spring) both;
+}
+.peek-top {
+  transform-origin: bottom left;
+}
+.peek-bottom {
+  transform-origin: top left;
+}
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+.peek-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: var(--ds-scrim);
+}
+.peek-sheet {
+  left: var(--ds-space-2);
+  right: var(--ds-space-2);
+  bottom: calc(var(--ds-space-2) + var(--ds-safe-bottom));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-float);
+  animation: peek-up var(--ds-dur-slow) var(--ds-ease) both;
+}
+@keyframes peek-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.peek-x {
+  float: right;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  margin: calc(-1 * var(--ds-space-2)) calc(-1 * var(--ds-space-2)) 0 var(--ds-space-2);
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-size: var(--ds-text-md);
+  cursor: pointer;
+}
+.peek p {
+  margin: var(--ds-space-1) 0 0;
+}
+.peek-title {
+  display: block;
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.peek-sub,
+.peek-note {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.peek-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.peek-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--ds-space-1) var(--ds-space-3);
+  margin: var(--ds-space-2) 0 0;
+}
+.peek-stats dt {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.peek-stats dd {
+  margin: 0;
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.peek-bar {
+  height: 8px;
+  margin-top: var(--ds-space-2);
+  overflow: hidden;
+  border: 1px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.peek-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ds-series-4);
+}
+.peek-bar-good i {
+  background: var(--ds-good-fill);
+}
+.peek-bar-warn i {
+  background: var(--ds-warn-fill);
+}
+.peek-bar-bad i {
+  background: var(--ds-bad-fill);
+}
+.peek-spark {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin-top: var(--ds-space-2);
+  overflow: visible;
+}
+.peek-spark polyline {
+  fill: none;
+  stroke: var(--ds-link);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.peek-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  margin-top: var(--ds-space-2);
+}
+.peek-checks {
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-xs);
+}
+.peek-check-fail {
+  color: var(--ds-danger-text);
+}
+.peek-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-3);
+}
+
+/* ---------- expanding icon buttons ---------- */
+
+/* An icon button's label slides out to its left on hover or keyboard focus ("⛶" → "Full screen ⛶"), over its
+   neighbours rather than pushing them, so a header never reflows. Reduced motion: it simply appears. */
+.xbtn {
+  position: relative;
+  isolation: isolate;
+}
+.xbtn-label {
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 0 calc(100% + var(--ds-space-1)) 0 var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  /* the ring is a shadow, not a border: the button's measured size (scrollWidth) stays its own */
+  box-shadow:
+    0 0 0 var(--ds-border) var(--ds-outline),
+    0 calc(var(--ds-border) + 2px) 0 var(--ds-shadow-color);
+  color: var(--ds-text);
+  font-family: var(--font);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  clip-path: inset(-6px -6px -6px 100%);
+  transition:
+    clip-path var(--ds-dur-slow) var(--ds-ease-spring),
+    opacity var(--ds-dur-fast) var(--ds-ease);
+}
+.xbtn-label kbd {
+  padding: 0 var(--ds-space-1);
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+}
+@media (hover: hover) {
+  .xbtn:hover .xbtn-label {
+    opacity: 1;
+    clip-path: inset(-6px);
+  }
+}
+.xbtn:focus-visible .xbtn-label {
+  opacity: 1;
+  clip-path: inset(-6px);
+}

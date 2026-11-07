@@ -34,6 +34,7 @@ import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { useChatMode } from '../ui/chatMode';
 import { useChatFull, useChatFullBack } from '../ui/chatFull';
 import { FullButton } from '../ui/ChatActionsSheet';
+import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
@@ -483,8 +484,9 @@ export default function Pocket() {
             🏢 3D office <kbd>{switchKey}</kbd>
           </button>
         ) : (
-          <button data-tour="console" className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
+          <button data-tour="console" className="pk-icon-btn xbtn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
             ⚙️
+            <XLabel text="Settings" />
           </button>
         )}
       </header>
@@ -554,8 +556,9 @@ export default function Pocket() {
               <b className="pk-ellipsis">💬 {ceoName}</b>
               <span className="spacer" />
               <div className="pk-head-tools" ref={setChatTools} />
-              <button className="pk-icon-btn pk-dock-x" onClick={() => setDock(false)} aria-label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'}>
+              <button className="pk-icon-btn pk-dock-x xbtn" onClick={() => setDock(false)} aria-label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'}>
                 ✕
+                <XLabel text="Hide the chat" keys={layout === 'medium' ? 'Esc' : undefined} />
               </button>
             </div>
             {chat}
