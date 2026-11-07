@@ -1,0 +1,6 @@
+/* a chat link's destination (jumpFlash.ts, #151) */
+.jump-flash {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+  background-color: color-mix(in srgb, var(--ds-focus) 10%, var(--ds-surface-raised));
+}

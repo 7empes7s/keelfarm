@@ -79,6 +79,10 @@ export interface CostSession {
   cheap?: boolean; // a conflict-only fix that ran on Settings' cheaper model (#256, shared/conflicts.ts)
   startup?: StartupContext; // what its first turn loaded (shared/startup.ts), when the CLI reported it
   account?: string; // the account it ran on (#247, shared/accounts.ts)
+  /** A CLI session that reports its running total (#254): its id and that total when this run ended; `usd` is this run's part. */
+  sid?: string;
+  total?: number;
+  corrected?: number; // dollars the #254 repair took off a line booked as its session's running total
 }
 
 /** A merged PR, one line of the cost ledger: what the sessions' cost is divided by. */
@@ -91,6 +95,12 @@ export interface CostMerge {
 }
 
 export type CostRecord = CostSession | CostMerge;
+
+/**
+ * A run's cost from its CLI session's running total (#254): what it added since `last`, the total at the session's
+ * previous run. A session never seen, or a total lower than the last one (the session started over), books the total.
+ */
+export const turnCost = (last: number | undefined, total: number) => (last === undefined || total < last ? total : total - last);
 
 /** Why a session counts as waste, or null. QA rounds past the 2nd, and CEO reviews that changed nothing, count too. */
 export function wasteReason(s: Pick<CostSession, 'kind' | 'outcome' | 'round'>): string | null {
@@ -183,6 +193,7 @@ export interface CostsView {
   startup: StartupRow[]; // what each kind of task loads before its first step (#50)
   rounds: RoundsView; // QA rounds per merge and by cause over 7 and 30 days, whatever `days` is (#188)
   conflicts?: ConflictStats; // conflict rounds per merge and what cheap conflict fixes saved, over 7 days (#256)
+  corrected?: { usd: number; before: number }; // what the #254 repair took off the CEO's lines in this view, up to `before`
 }
 
 /** Settings → effort per kind: what the ledger says this kind cost, e.g. "QA averaged $0.84 at medium (23), $0.40 at low (5)". */
