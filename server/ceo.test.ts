@@ -131,6 +131,7 @@ describe('office tools', () => {
       setFloorProfile: (a) => (floors.push(a), 'saved'),
       proposeCharter: () => 'proposed',
       resolveDecision: () => 'closed',
+      proposeDesign: async (a) => (calls.push(['propose_design', a]), 'proposed'),
       setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
@@ -193,6 +194,7 @@ describe('office tools', () => {
       'message_agent',
       'pr_diff',
       'propose_charter',
+      'propose_design',
       'qa_report',
       'react',
       'reply',
@@ -241,6 +243,21 @@ describe('office tools', () => {
     expect(await ok('reply', { message_id: 4, text: '' })).toBe(false);
     expect(await ok('reply', { text: 'Done.' })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['react', 'react', 'reply']);
+  });
+
+  it('checks propose_design: 2 or 3 options, at most 3 shots each, a real preview link (#209)', async () => {
+    const { client, calls } = await connect();
+    const ok = async (args: Record<string, unknown>) => !(await client.callTool({ name: 'propose_design', arguments: args })).isError;
+    const opt = (label: string) => ({ label, shots: ['/tmp/a.png'] });
+    const base = { floor: 1, title: 'Cards', question: 'Which look?', options: [opt('Flat'), { ...opt('Raised'), previewUrl: 'https://example.com/b' }] };
+    expect(await ok(base)).toBe(true);
+    expect(await ok({ ...base, issue: 12 })).toBe(true);
+    expect(await ok({ ...base, options: [opt('Only one')] })).toBe(false);
+    expect(await ok({ ...base, options: [opt('a'), opt('b'), opt('c'), opt('d')] })).toBe(false);
+    expect(await ok({ ...base, options: [opt('a'), { label: 'b', shots: ['/1', '/2', '/3', '/4'] }] })).toBe(false);
+    expect(await ok({ ...base, options: [opt('a'), { ...opt('b'), previewUrl: 'not a link' }] })).toBe(false);
+    expect(await ok({ ...base, question: '' })).toBe(false);
+    expect(calls.filter(([n]) => n === 'propose_design')).toHaveLength(2);
   });
 
   it("checks the waiting tools' inputs (#28)", async () => {
@@ -611,7 +628,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
-          restartAgent: ok, messageAgent: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok,
+          restartAgent: ok, messageAgent: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
         },
         () => researching,

@@ -1,0 +1,294 @@
+/* The Approvals review room (#209): the list's cards and counts, and the detail pages' sections (docs/design.md tokens). */
+
+.apr-list-col,
+.apr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+.apr-split {
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+}
+.apr-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.apr-group {
+  margin-top: var(--ds-space-2);
+}
+
+/* the counts on top */
+.apr-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.apr-progress p {
+  margin: 0;
+}
+.apr-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: var(--ds-radius-pill);
+  overflow: hidden;
+  background: var(--ds-surface-sunken);
+}
+.apr-seg {
+  flex-basis: 0;
+  min-width: 6px;
+}
+.apr-sort {
+  display: flex;
+  gap: var(--ds-space-2);
+}
+.apr-sort .btn {
+  min-height: var(--ds-target);
+}
+
+/* why it needs you: one colour per group, on the tag and the bar */
+.apr-why {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 2px var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.apr-why-qa {
+  background: var(--ds-bad-fill);
+}
+.apr-why-checks {
+  background: var(--ds-warn-fill);
+}
+.apr-why-outage {
+  background: var(--ds-series-6);
+}
+.apr-why-ready {
+  background: var(--ds-good-fill);
+}
+.apr-why-product {
+  background: var(--ds-series-4);
+}
+.apr-why-design {
+  background: var(--ds-series-5);
+}
+.apr-why-team {
+  background: var(--ds-series-7);
+}
+.apr-why-charter {
+  background: var(--ds-series-8);
+}
+
+/* the list's cards */
+.apr-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+  width: 100%;
+  min-height: var(--ds-target);
+  color: var(--ds-text);
+  text-align: left;
+  cursor: pointer;
+  border-left: 8px solid var(--accent, var(--ds-outline));
+}
+.apr-row-on {
+  background: var(--ds-surface-hover);
+}
+.apr-row-title {
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.apr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.apr-floor,
+.apr-stat,
+.apr-risk {
+  padding: 2px var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.apr-risk {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.apr-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.apr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--ds-line-strong);
+}
+.apr-dot-pass {
+  background: var(--ds-good-fill);
+}
+.apr-dot-fail {
+  background: var(--ds-bad-fill);
+}
+.apr-dot-pending {
+  background: var(--ds-warn-fill);
+}
+
+/* a phone's detail page */
+.apr-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.apr-back {
+  align-self: flex-start;
+  min-height: var(--ds-target);
+}
+
+/* the detail's sections */
+.apr-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  overflow-wrap: anywhere;
+}
+.apr-section p {
+  margin: 0;
+}
+.apr-header {
+  border-top: 8px solid var(--accent, var(--ds-outline));
+}
+.apr-title {
+  margin: 0;
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-tight);
+}
+.apr-h {
+  margin: 0;
+  font-size: var(--ds-text-md);
+}
+.apr-summary {
+  min-height: var(--ds-target);
+  display: flex;
+  align-items: center;
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.apr-lead {
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading);
+}
+.apr-wrap {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.apr-ceo {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+}
+.apr-badge-good {
+  align-self: flex-start;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+  font-weight: var(--ds-weight-strong);
+}
+.apr-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.apr-detail .pk-actions .btn {
+  min-height: var(--ds-target);
+}
+.apr-minus {
+  color: var(--ds-danger-text);
+}
+
+/* screenshots: a swipeable row */
+.apr-gallery {
+  display: flex;
+  gap: var(--ds-space-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: var(--ds-space-1);
+}
+.apr-shot {
+  flex: 0 0 min(240px, 75%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scroll-snap-align: start;
+  color: var(--ds-text);
+  text-decoration: none;
+}
+.apr-shot img {
+  width: 100%;
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+}
+
+/* a design proposal */
+.apr-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--ds-space-3);
+}
+.apr-letter {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ds-series-5);
+  color: var(--ds-on-color);
+}
+.apr-compare-stage {
+  position: relative;
+  max-width: 390px;
+  margin-inline: auto;
+}
+.apr-compare-stage img {
+  display: block;
+  width: 100%;
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+}
+.apr-compare-stage img + img {
+  position: absolute;
+  inset: 0;
+}
+.apr-compare input[type='range'] {
+  width: 100%;
+  min-height: var(--ds-target);
+}
+.apr-compare-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.apr-note {
+  width: 100%;
+  box-sizing: border-box;
+}

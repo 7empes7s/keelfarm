@@ -9,6 +9,17 @@ const SCREENS: Screen[] = [
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
   {
+    name: 'approvals: a design proposal (#209)',
+    widths: POCKET,
+    open: async (page) => {
+      const root = await pocket(page, 'approvals');
+      await root.getByRole('button', { name: /Todo list: flat rows or cards/ }).click();
+      await expect(root.getByRole('region', { name: /Option B/ })).toBeVisible();
+      return root;
+    },
+    tabs: [],
+  },
+  {
     name: 'search palette (#109)',
     widths: PHONES,
     open: async (page) => {

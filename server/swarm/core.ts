@@ -24,6 +24,7 @@ import { MACHINES_DIR } from '../workspace.ts';
 import { envSecrets, Journal } from '../journal.ts';
 import { CostLedger, SessionCosts, type CostRun } from '../costLedger.ts';
 import { dailyLogDir, MACHINE_DAILY_DIR, SessionHistory } from '../history.ts';
+import { stuckSince } from '../../shared/approvals.ts';
 import { DEFAULT_HISTORY_DAYS, historyId, type HistoryEntry } from '../../shared/history.ts';
 import type { CostSession } from '../../shared/costs.ts';
 import { Lab, loadLab } from '../experiments.ts';
@@ -486,6 +487,7 @@ export abstract class SwarmCore extends SwarmContract {
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
       updatedAt: q.updatedAt,
       shots: q.shots ?? [],
+      ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }),
     };
   }
 
@@ -698,9 +700,11 @@ export abstract class SwarmCore extends SwarmContract {
 
   protected setQa(rec: QaRecord, patch: Partial<QaRecord>) {
     const told = rec.status === 'needs-human' && rec.escalated;
+    const was = rec.status;
     Object.assign(rec, patch, { updatedAt: Date.now() });
+    rec.stuckAt = stuckSince(was, rec.status, rec.stuckAt, rec.updatedAt, patch.stuckAt);
     if (!this.state.qa.includes(rec)) return; // it left QA (its PR closed) while a session on it was still wrapping up
-    if (rec.status !== 'needs-human') rec.escalated = false;
+    if (rec.status !== 'needs-human') Object.assign(rec, { escalated: false, ceoNote: null });
     else this.ledger({ kind: 'needs-human', repoId: rec.repoId, pr: rec.prNumber });
     this.broadcast({ type: 'qa', qa: this.qaView(rec) });
     this.save();

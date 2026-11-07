@@ -517,7 +517,7 @@ export abstract class SwarmCeo extends SwarmReactions {
   /** Tell the manager a stuck PR needs them, once each time it gets stuck. note: what the CEO adds. */
   protected escalate(rec: QaRecord, note: string | null) {
     if (rec.status !== 'needs-human' || rec.escalated) return;
-    this.setQa(rec, { escalated: true });
+    this.setQa(rec, { escalated: true, ceoNote: note });
     const repo = this.state.repos.find((r) => r.id === rec.repoId);
     if (repo) this.postMessage('office', `⚠️ PR #${rec.prNumber} on ${repo.fullName} needs you: ${rec.stuckWhy ?? 'it is stuck'}.${note ? ` ${note}` : ''}`);
   }

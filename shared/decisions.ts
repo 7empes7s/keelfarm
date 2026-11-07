@@ -4,9 +4,10 @@
 // the CEO knows what's still open. Pure: the swarm keeps the list (server/swarm/team.ts), the client draws it
 // (client/src/ui/Decisions.tsx).
 
+import type { DesignProposal } from './designs.ts';
 import type { PhoneMessage } from './types.ts';
 
-type DecisionKind = 'suggestion' | 'question' | 'team' | 'charter';
+type DecisionKind = 'suggestion' | 'question' | 'team' | 'charter' | 'design';
 /** archived: open for DECISION_TTL_MS without an answer, kept for the record but never shown or raised. superseded: a newer question replaced it (#183). */
 type DecisionStatus = 'open' | 'resolved' | 'dropped' | 'archived' | 'superseded';
 /** What a suggestion is about: when every one of them is gone (closed, merged, left), so is the question. */
@@ -28,6 +29,7 @@ export interface Decision {
   snoozedUntil: number | null; // Not now
   closedAt: number | null;
   outcome: string | null; // the answer, or why it closed
+  design?: DesignProposal; // kind 'design': the options and their screenshots (#209, shared/designs.ts)
 }
 
 export interface DecisionsState {
@@ -159,7 +161,7 @@ export function syncDecisions(list: Decision[], world: { seeds: DecisionSeed[]; 
   const out = list.map((d) => {
     if (d.status !== 'open') return d;
     const next =
-      d.kind !== 'suggestion' && !seeded.has(d.id)
+      d.kind !== 'suggestion' && d.kind !== 'design' && !seeded.has(d.id)
         ? close(d, 'resolved', 'decided', now)
         : d.kind === 'suggestion' && d.about.length && d.about.every(world.gone)
           ? close(d, 'resolved', 'what it was about is gone', now)

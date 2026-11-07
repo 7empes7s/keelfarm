@@ -1,132 +1,187 @@
-// Pocket mode's Approvals tab: everything waiting on the manager's decision. Team changes (new agents and let-gos, the
-// phone's cards), stuck PRs with the Kanban's Retry QA / Send back / Merge / Close, and passed PRs on floors that don't
-// merge on their own, charter changes the CEO proposed (#48), and the CEO's questions still open (#114). On a desktop
-// (#104) a list beside the one picked.
+// Pocket mode's Approvals tab, a review room (#209): everything waiting on the manager's decision as cards grouped by
+// why it needs them (QA blocked, only CI, a CI outage, a product or design decision, a team or charter change), with
+// when it was asked, the counts on top and oldest-first or impact order. A phone opens one as a page with Back; a
+// desktop (#104) shows the list beside the one picked. The detail pages are in ApprovalDetail.tsx.
 import { Fragment, useState, type ReactNode } from 'react';
-import { api } from '../api';
 import { useStore } from '../store';
-import type { QaView, RepoView } from '../../../shared/types';
-import { qaCardNote } from '../qaCard';
-import { confirmDialog } from '../ui/Confirm';
-import { Menu } from '../ui/Menu';
+import type { PullInfo, QaView, RepoView } from '../../../shared/types';
 import { Resume } from '../ui/TeamChanges';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
-import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';
-import { chatDecisions } from '../../../shared/decisions';
+import { DecisionCard, useMinute } from '../ui/Decisions';
+import { waitingDecisions } from '../../../shared/decisions';
+import { impactOf, impactScore, prWhy, waitLine, whySummary, WHY_LABELS, WHY_ORDER, type ApprovalWhy } from '../../../shared/approvals';
 import { EmptyState } from '../ui/EmptyState';
+import { useBackLayer } from '../ui/Panel';
+import { DesignDetail, PrDetail, WhyTag } from './ApprovalDetail';
+import './approvals.css';
 
-function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
-  const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
-  const [busy, setBusy] = useState(false);
-  const pr = repo.pulls.find((p) => p.number === qa.prNumber);
-  if (!pr) return null;
-  const { note, tone } = qaCardNote(qa, pr, repo.autoMerge);
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    try {
-      await fn();
-    } catch {
-      // api() already toasted
-    } finally {
-      setBusy(false);
-    }
-  };
-  const merge = async () => {
-    const ok = await confirmDialog(
-      ready
-        ? { icon: '🎉', title: `Merge PR #${pr.number}?`, body: `“${pr.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
-        : { tone: 'warn', title: `Merge PR #${pr.number} without QA?`, body: `“${pr.title}” has not passed QA. Merge it into ${repo.defaultBranch} anyway?`, confirm: 'Merge anyway' },
-    );
-    if (ok) await act(() => api.mergePull(repo.id, pr.number));
-  };
-  const sendBack = async () => {
-    let text = '';
-    const ok = await confirmDialog({
-      icon: '🔧',
-      title: `Send PR #${pr.number} back for a fix?`,
-      body: (
-        <>
-          <p>Its author, or any free agent, fixes it with QA's findings, then it's tested once more.</p>
-          <input maxLength={1000} placeholder="Optional note for whoever fixes it" aria-label="Note for whoever fixes it" onChange={(e) => (text = e.target.value)} />
-        </>
-      ),
-      confirm: 'Send back',
-    });
-    if (ok) await act(() => api.sendBack(repo.id, pr.number, text.trim() || undefined));
-  };
-  const close = async () => {
-    const ok = await confirmDialog({ tone: 'danger', title: `Close PR #${pr.number}?`, body: `“${pr.title}” will be closed without merging. The branch stays on GitHub.`, confirm: 'Close PR' });
-    if (ok) await act(() => api.closePull(repo.id, pr.number));
-  };
-  return (
-    <div className={`pk-card pk-pr kcard-${tone ?? 'plain'}`} style={{ ['--accent' as string]: repo.color }}>
-      <div className="pk-pr-head">
-        <span className="floor-badge">{repo.floor}</span>
-        <div className="grow">
-          <a href={pr.url} target="_blank" rel="noreferrer">
-            <b>PR #{pr.number}</b>
-          </a>{' '}
-          {pr.title}
-          <div className="muted small">
-            {repo.fullName.split('/')[1]}
-            {author ? ` · by ${author.name}` : ''} · round {qa.round} · {note}
-          </div>
-        </div>
-      </div>
-      {qa.summary && <div className="small pk-pr-summary">{qa.summary}</div>}
-      {qa.commentUrl && (
-        <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-          QA report ↗
-        </a>
-      )}
-      <div className="pk-actions">
-        {!ready && (
-          <button className="btn btn-small btn-good" disabled={busy} onClick={() => void act(() => api.sendToQa(repo.id, pr.number))}>
-            Retry QA
-          </button>
-        )}
-        {!ready && (
-          <button className="btn btn-small" disabled={busy} onClick={() => void sendBack()}>
-            Send back
-          </button>
-        )}
-        <button className={`btn btn-small ${ready ? 'btn-good' : ''}`} disabled={busy || pr.isDraft} onClick={() => void merge()}>
-          {ready ? 'Merge' : 'Merge anyway'}
-        </button>
-        <span className="spacer" />
-        <Menu label={`More for PR #${pr.number}`} title={`PR #${pr.number} ${pr.title}`} items={[{ label: 'Close PR…', hint: 'Closed without merging; the branch stays', danger: true, disabled: busy, onSelect: () => void close() }]} />
-      </div>
-    </div>
-  );
-}
+type Dot = 'pass' | 'fail' | 'pending';
 
-/** One decision: its group's heading, its line in the desktop's list, and its card. */
-interface Decision {
+/** One thing waiting on the manager: its card in the list and its detail page. */
+interface Item {
   key: string;
-  group: string;
-  label: string;
-  card: ReactNode;
+  why: ApprovalWhy;
+  title: string;
+  floor: number | null;
+  color?: string;
+  askedAt: number;
+  openedAt: number | null;
+  meta: string[]; // round, author…
+  dots: Dot[];
+  score: number; // the impact sort
+  detail: ReactNode;
 }
 
-export function Approvals({ wide }: { wide?: boolean }) {
+const dotsOf = (qa: QaView, pr: PullInfo): Dot[] => [
+  ...qa.checks.map((c): Dot => (c.result === 'fail' ? 'fail' : 'pass')),
+  ...pr.failedChecks.map((): Dot => 'fail'),
+  ...pr.pendingChecks.map((): Dot => 'pending'),
+  ...(pr.checks === 'passing' ? ['pass' as Dot] : []),
+];
+
+/** The items in the order the list shows: grouped by why (WHY_ORDER), each group oldest first or biggest impact first. */
+function useItems(now: number): Item[] {
   const repos = useStore((s) => s.repos);
   const qa = useStore((s) => s.qa);
   const requests = useStore((s) => s.requests);
   const decisions = useStore((s) => s.decisions);
+  const agents = useStore((s) => s.agents);
+  const w = waitingOnYou(repos, qa, requests);
+  const floorOf = (id: string) => repos.find((r) => r.id === id);
+  const prItem = (repo: RepoView, q: QaView): Item[] => {
+    const pr = repo.pulls.find((p) => p.number === q.prNumber);
+    if (!pr) return [];
+    const why = prWhy(q, pr);
+    const author = q.devAgentId ? agents[q.devAgentId]?.name : pr.author;
+    const opened = Date.parse(pr.createdAt);
+    return [
+      {
+        key: `pr:${repo.id}#${pr.number}`,
+        why,
+        title: `#${pr.number} ${pr.title}`,
+        floor: repo.floor,
+        color: repo.color,
+        askedAt: q.stuckAt ?? q.updatedAt,
+        openedAt: Number.isFinite(opened) ? opened : null,
+        meta: [`round ${q.round}`, author ? `by ${author}` : ''].filter(Boolean),
+        dots: dotsOf(q, pr),
+        score: impactScore(impactOf(pr.files ?? [], pr.additions, pr.deletions)),
+        detail: <PrDetail repo={repo} qa={q} pr={pr} why={why} now={now} />,
+      },
+    ];
+  };
+  return [
+    ...w.requests.map((r): Item => {
+      const repo = floorOf(r.repoId);
+      return { key: `req:${r.id}`, why: 'team', title: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, floor: repo?.floor ?? null, color: repo?.color, askedAt: r.createdAt, openedAt: null, meta: [], dots: [], score: 0, detail: <TeamDetail key={r.id} req={r} now={now} /> };
+    }),
+    ...waitingDecisions(decisions, now)
+      .filter((d) => d.kind === 'suggestion' || d.kind === 'question' || (d.kind === 'design' && d.design))
+      .map((d): Item => {
+        const repo = d.repoIds[0] ? floorOf(d.repoIds[0]) : undefined;
+        const design = d.kind === 'design';
+        return {
+          key: d.id,
+          why: design ? 'design' : 'product',
+          title: design ? d.design!.title : d.question,
+          floor: repo?.floor ?? null,
+          color: repo?.color,
+          askedAt: d.askedAt,
+          openedAt: null,
+          meta: design ? [`${d.options.length} options`] : d.raised > 1 ? [`asked ${d.raised}×`] : [],
+          dots: [],
+          score: 0,
+          detail: design ? <DesignDetail key={d.id} d={d} now={now} /> : <DecisionCard key={d.id} d={d} now={now} />,
+        };
+      }),
+    ...repos
+      .filter((r) => r.charter.proposal)
+      .map((r): Item => ({ key: `charter:${r.id}`, why: 'charter', title: `Charter change on ${r.fullName.split('/')[1]}`, floor: r.floor, color: r.color, askedAt: r.charter.proposal!.at, openedAt: null, meta: [], dots: [], score: 0, detail: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
+    ...w.stuck.flatMap((s) => prItem(s.repo, s.qa)),
+    ...w.ready.flatMap((s) => prItem(s.repo, s.qa)),
+  ];
+}
+
+const sortItems = (items: Item[], by: 'oldest' | 'impact') =>
+  [...items].sort((a, b) => WHY_ORDER.indexOf(a.why) - WHY_ORDER.indexOf(b.why) || (by === 'impact' ? b.score - a.score : 0) || a.askedAt - b.askedAt);
+
+function TeamDetail({ req, now }: { req: Parameters<typeof Resume>[0]['req']; now: number }) {
+  const team = useStore((s) => Object.values(s.agents).filter((a) => a.repoId === req.repoId && a.role !== 'ceo').length);
+  const after = req.kind === 'hire' ? team + 1 : Math.max(0, team - 1);
+  return (
+    <div className="apr-detail">
+      <section className="pk-card apr-section apr-header" aria-label={req.kind === 'hire' ? `Hire ${req.name}` : `Let ${req.name} go`}>
+        <div className="apr-chips">
+          <WhyTag why="team" />
+        </div>
+        <div className="small">{waitLine(req.createdAt, null, now)}</div>
+        <p className="small">
+          If approved: the floor goes from {team} to {after} agent{after === 1 ? '' : 's'}
+          {after > 0 ? `, each taking about ${Math.round(100 / after)}% of its work and its share of the plan's usage` : ''}.
+        </p>
+      </section>
+      <Resume req={req} />
+    </div>
+  );
+}
+
+/** "20 need you · 17 only CI · 2 product": a bar of the groups and their counts. */
+function Summary({ items }: { items: Item[] }) {
+  const s = whySummary(items.map((i) => i.why));
+  return (
+    <div className="pk-card apr-progress" aria-label={`${s.total} need you`}>
+      <div className="apr-bar" aria-hidden>
+        {s.parts.map((p) => (
+          <span key={p.why} className={`apr-seg apr-why-${p.why}`} style={{ flexGrow: p.n }} />
+        ))}
+      </div>
+      <p className="small apr-wrap">
+        <b>{s.total} need you</b>
+        {s.parts.map((p) => ` · ${p.n} ${WHY_LABELS[p.why].short}`).join('')}
+      </p>
+    </div>
+  );
+}
+
+function Row({ item, now, on, onOpen }: { item: Item; now: number; on: boolean; onOpen: () => void }) {
+  return (
+    <button className={`pk-card apr-row ${on ? 'apr-row-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={onOpen} style={{ ['--accent' as string]: item.color }}>
+      <span className="apr-chips">
+        <WhyTag why={item.why} />
+        {item.floor !== null && <span className="apr-floor">Floor {item.floor}</span>}
+      </span>
+      <span className="apr-row-title">{item.title}</span>
+      <span className="muted small">{[waitLine(item.askedAt, item.openedAt, now), ...item.meta].join(' · ')}</span>
+      {item.dots.length > 0 && (
+        <span className="apr-dots" aria-label={`${item.dots.filter((d) => d === 'fail').length} failing, ${item.dots.filter((d) => d === 'pass').length} passing checks`}>
+          {item.dots.slice(0, 12).map((d, i) => (
+            <span key={i} className={`apr-dot apr-dot-${d}`} />
+          ))}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** A phone's detail page: Back on top, and the back gesture closes it, not the app. */
+function Page({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+  useBackLayer(onBack);
+  return (
+    <div className="pk-page apr-page">
+      <button className="btn btn-small btn-ghost apr-back" onClick={onBack}>
+        ‹ Approvals
+      </button>
+      {children}
+    </div>
+  );
+}
+
+export function Approvals({ wide }: { wide?: boolean }) {
   const now = useMinute();
   const [picked, setPicked] = useState<string | null>(null);
-  const w = waitingOnYou(repos, qa, requests);
-  const charters = repos.filter((r) => r.charter.proposal);
-  const pr = (s: (typeof w.stuck)[number]) => `PR #${s.qa.prNumber} ${s.repo.pulls.find((p) => p.number === s.qa.prNumber)?.title ?? ''}`;
-  const items: Decision[] = [
-    ...w.requests.map((r) => ({ key: `req:${r.id}`, group: '👥 Team changes', label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} /> })),
-    ...chatDecisions(decisions, now).map((d) => ({ key: d.id, group: DECISIONS_GROUP, label: d.question, card: <DecisionCard key={d.id} d={d} now={now} /> })),
-    ...charters.map((r) => ({ key: `charter:${r.id}`, group: '🎯 Charter changes (edit them in ⚙️ → Charter)', label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
-    ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: '⚠️ Pull requests that need you', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} /> })),
-    ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
-  ];
-  const heading = (d: Decision, i: number) => (i === 0 || items[i - 1].group !== d.group ? d.group : null);
+  const [by, setBy] = useState<'oldest' | 'impact'>('oldest');
+  const items = sortItems(useItems(now), by);
   if (items.length === 0) {
     return (
       <div className="pk-page">
@@ -134,34 +189,43 @@ export function Approvals({ wide }: { wide?: boolean }) {
       </div>
     );
   }
-  if (!wide) {
-    return (
-      <div className="pk-page">
-        {items.map((d, i) => (
-          <Fragment key={d.key}>
-            {heading(d, i) && <h3 className="pk-h">{d.group}</h3>}
-            {d.card}
-          </Fragment>
+  const open = items.find((d) => d.key === picked) ?? (wide ? items[0] : undefined);
+  if (!wide && open) return <Page onBack={() => setPicked(null)}>{open.detail}</Page>;
+  const heading = (d: Item, i: number) => (i === 0 || items[i - 1].why !== d.why ? WHY_LABELS[d.why] : null);
+  const list = (
+    <div className="apr-list-col">
+      <Summary items={items} />
+      <div className="apr-sort" role="group" aria-label="Sort">
+        {(['oldest', 'impact'] as const).map((k) => (
+          <button key={k} className={`btn btn-small ${by === k ? '' : 'btn-ghost'}`} aria-pressed={by === k} onClick={() => setBy(k)}>
+            {k === 'oldest' ? 'Oldest first' : 'Impact'}
+          </button>
         ))}
       </div>
-    );
-  }
-  const open = items.find((d) => d.key === picked) ?? items[0];
-  return (
-    <div className="pk-page pk-split">
-      <ul className="pk-split-list" aria-label="Decisions waiting on you">
-        {items.map((d, i) => (
-          <Fragment key={d.key}>
-            {heading(d, i) && <li className="pk-h">{d.group}</li>}
-            <li>
-              <button className={`pk-split-item ${d === open ? 'pk-split-on' : ''}`} aria-current={d === open ? 'true' : undefined} onClick={() => setPicked(d.key)}>
-                {d.label}
-              </button>
-            </li>
-          </Fragment>
-        ))}
+      <ul className="apr-rows" aria-label="Decisions waiting on you">
+        {items.map((d, i) => {
+          const h = heading(d, i);
+          return (
+            <Fragment key={d.key}>
+              {h && (
+                <li className="pk-h apr-group">
+                  {h.icon} {h.label}
+                </li>
+              )}
+              <li>
+                <Row item={d} now={now} on={wide === true && d === open} onOpen={() => setPicked(d.key)} />
+              </li>
+            </Fragment>
+          );
+        })}
       </ul>
-      <div className="pk-split-detail">{open.card}</div>
+    </div>
+  );
+  if (!wide) return <div className="pk-page">{list}</div>;
+  return (
+    <div className="pk-page pk-split apr-split">
+      {list}
+      <div className="pk-split-detail">{open?.detail}</div>
     </div>
   );
 }
