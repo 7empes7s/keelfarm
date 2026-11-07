@@ -67,3 +67,18 @@ export function prepFailure(prev: PrepStrikes | undefined, sessionFailures: numb
 
 /** Is the PR sitting out after failed preparations? */
 export const prepHeld = (strikes: PrepStrikes | undefined, now: number) => !!strikes && now < strikes.holdUntil;
+
+/** A Box agent's session runs in its Box (docs/cloud.md), so this computer's memory doesn't gate it (#263). */
+export const runsHere = (a: { host?: string }) => a.host !== 'box';
+
+/**
+ * Who runs work the hand-out picked for `picked`, given this computer's memory (#263): a Box agent runs it whatever the
+ * memory; a local agent when it `fits()`, else the free Box agent `cloud()` finds; else nobody, and `admit()` (the memory
+ * gate, which records the wait) refuses it. The wait is recorded only then, so it never counts work a Box agent took.
+ */
+export function runnerFor<T extends { host?: string }>(picked: T, cloud: () => T | null, fits: () => boolean, admit: () => boolean): T | null {
+  if (!runsHere(picked)) return picked;
+  const box = cloud();
+  if (box && !fits()) return box;
+  return admit() ? picked : null;
+}

@@ -504,7 +504,7 @@ export class Swarm extends SwarmCeoTools {
     }
     if (a.status === 'preparing') throw new HttpError(409, `${a.name} is still setting up; try again in a moment`);
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
-    this.ensureSlot(sessionKind(a));
+    this.ensureSlot(sessionKind(a), a);
     this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
     this.chatSay(a, text, who);
     const cwd = this.deskOf(a, repo);
