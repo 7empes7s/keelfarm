@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { desktopFit, DESKTOP_PX, realFullscreen, showRotateHint, viewerLayout, type ViewerScreen, type Width } from './desktopView';
+import { desktopFit, DESKTOP_PX, realFullscreen, showRotateHint, viewerLayout, type ViewerScreen, type Width } from './desktopRules';
 
 const IPHONE: ViewerScreen = { width: 'desktop', phone: true, landscape: false, forced: false, platform: 'ios', canFullscreen: false };
 const ANDROID: ViewerScreen = { ...IPHONE, platform: 'android', canFullscreen: true };

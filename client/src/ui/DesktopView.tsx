@@ -1,10 +1,10 @@
 // The preview viewer's desktop view on a phone (#131): turned sideways on Desktop width (or ⋯ Full screen) the viewer
 // goes edge to edge, the page laid out desktop-wide and scaled to the screen, with a floating ‹ Back / ✕ and ⋯ that
 // hide after 3 s. Android uses the Fullscreen API; iPhones have none for pages, so they get the same layout without it.
-// The rules are pure, in desktopView.ts.
+// The rules are pure, in desktopRules.ts.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { pushLayer } from './backStack';
-import { desktopFit, realFullscreen, showRotateHint, viewerLayout, type Width } from './desktopView';
+import { desktopFit, realFullscreen, showRotateHint, viewerLayout, type Width } from './desktopRules';
 import { platformOf } from './notifySteps';
 
 const HINT_KEY = 'cubefarm:rotate-hint-seen';

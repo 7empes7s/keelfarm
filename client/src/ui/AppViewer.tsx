@@ -9,7 +9,7 @@ import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { closeOverlay, Panel } from './Panel';
 import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
-import type { Width } from './desktopView';
+import type { Width } from './desktopRules';
 import { tuneChannel, useChannel, useWatch } from './theatre';
 import './appViewer.css';
 
