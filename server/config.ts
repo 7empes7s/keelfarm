@@ -46,6 +46,11 @@ export function demoScale(argv: string[], env: NodeJS.ProcessEnv): DemoScale | n
 }
 
 export const DEMO_SCALE = DEMO ? demoScale(process.argv, process.env) : null;
+/** `--no-tour` (or SWARM_DEMO_NO_TOUR=1): a demo booted for QA or a test opens without the setup wizard or the tour. */
+export function demoNoTour(argv: readonly string[], env: NodeJS.ProcessEnv): boolean {
+  return argv.includes('--no-tour') || env.SWARM_DEMO_NO_TOUR === '1' || env.SWARM_DEMO_NO_TOUR === 'true';
+}
+export const DEMO_NO_TOUR = DEMO && demoNoTour(process.argv, process.env);
 // A big company keeps its own state, so it never mixes with the usual demo's.
 export const STATE_FILE = path.join(HOME_DIR, DEMO ? (DEMO_SCALE ? `demo-${DEMO_SCALE.floors}x${DEMO_SCALE.agents}-state.json` : 'demo-state.json') : 'state.json');
 

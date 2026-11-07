@@ -1,7 +1,8 @@
 // The CEO's text as it writes it (#51): Claude Code adds each finished message block to the session's transcript
 // (JSONL), so the office reads the file's new lines while the session runs. No extra model calls: the file is there anyway.
-// Also which session a hook's transcript makes resumable (cliRunner.ts).
+// Also which session a hook's transcript makes resumable (cliRunner.ts), and every agent's chat (#120).
 import fs from 'node:fs';
+import { transcriptEvents, type TranscriptEvent } from '../shared/agentChat.ts';
 
 const POLL_MS = 1000;
 
@@ -44,16 +45,21 @@ export function resumableSession(b: Record<string, unknown>, exists: (file: stri
   return id && file && exists(file) ? id : null;
 }
 
-/** Follows one session's transcript: `watch` it once a hook names the file; every new text block goes to `onText`. */
+/**
+ * Follows one session's transcript: `watch` it once a hook names the file; every new text block goes to `onText`, and
+ * everything the chat shows (shared/agentChat.ts) to `onEvents`.
+ */
 export class TranscriptTail {
   private file = '';
   private offset = 0;
   private timer: NodeJS.Timeout | undefined;
   private readonly seen = new Set<string>();
+  private readonly seenEvents = new Set<string>();
 
   constructor(
     private readonly since: number,
-    private readonly onText: (text: string) => void,
+    private readonly onText?: (text: string) => void,
+    private readonly onEvents?: (events: TranscriptEvent[]) => void,
   ) {}
 
   watch(file: string) {
@@ -78,7 +84,10 @@ export class TranscriptTail {
       fs.readSync(fd, buf, 0, buf.length, this.offset);
       const end = buf.lastIndexOf(0x0a) + 1;
       this.offset += end;
-      for (const t of assistantTexts(buf.subarray(0, end).toString('utf8'), this.since, this.seen)) this.onText(t);
+      const chunk = buf.subarray(0, end).toString('utf8');
+      if (this.onText) for (const t of assistantTexts(chunk, this.since, this.seen)) this.onText(t);
+      const events = this.onEvents ? transcriptEvents(chunk, this.since, this.seenEvents) : [];
+      if (events.length) this.onEvents!(events);
     } catch {
       // not written yet, or gone
     } finally {

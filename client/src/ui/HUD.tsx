@@ -30,6 +30,7 @@ import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchLook, useTouchStick } from '../world/touch/touchState';
 import { TouchZoneHints } from './TouchZoneHints';
 import { switchOffice } from '../pocket/switchOffice';
+import { useChatMode } from './chatMode';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -131,6 +132,16 @@ function SwitchButton() {
   );
 }
 
+/** Chat mode (#120): desks, Team and Kanban open an agent's chat instead of their terminal; this device remembers it. */
+function ChatModeButton() {
+  const { on, set } = useChatMode();
+  return (
+    <button className="pill pill-switch" aria-pressed={on} onClick={() => set(!on)} title={`Chat mode is ${on ? 'on' : 'off'}: desks open an agent's ${on ? 'chat, their steps in plain words' : 'terminal'}. Click to switch`}>
+      💬 Chat {on ? 'on' : 'off'}
+    </button>
+  );
+}
+
 /** On the phone icon while a message is read aloud (ui/voiceMessages.ts); a click stops it. */
 function VoiceIndicator() {
   const speaking = useStore((s) => s.voiceSpeaking);
@@ -219,6 +230,7 @@ export function HUD() {
         <PhotoButton />
         <SearchButton />
         <GuideButton />
+        <ChatModeButton />
         <SwitchButton />
       </div>
 

@@ -54,11 +54,11 @@ describe('the tour', () => {
   it('covers every merged feature on every track, and keeps hooks for the rest', () => {
     for (const track of ['phone', 'desk', 'office'] as Track[]) {
       const ids = stepsFor(track).map((s) => s.id);
-      expect(ids).toEqual(expect.arrayContaining(['search', 'guide', 'bell', 'chat-cards', 'console', 'charter', 'costs']));
+      expect(ids).toEqual(expect.arrayContaining(['search', 'guide', 'bell', 'chat-cards', 'console', 'charter', 'costs', 'agent-chat']));
     }
     expect(stepsFor('desk').map((s) => s.id)).toContain('desk-keys');
     expect(stepsFor('office').map((s) => s.id)).toContain('switch');
-    expect(TOUR.filter((e) => !isStep(e)).map((e) => ('hook' in e ? e.hook : 0))).toEqual([115, 117, 114, 118, 120]);
+    expect(TOUR.filter((e) => !isStep(e)).map((e) => ('hook' in e ? e.hook : 0))).toEqual([115, 117, 114, 118]);
     expect(stepsFor('phone').some((s) => s.id.startsWith('memory'))).toBe(false); // hooks never show
   });
 
@@ -82,7 +82,7 @@ describe("what's new", () => {
     const seen = seenIds(null, true);
     expect(seen).toContain('look');
     expect(seen).not.toContain('bell');
-    expect(newSince('office', seen).map((s) => s.id)).toEqual(['bell', 'chat-cards', 'console', 'charter', 'costs', 'switch']);
+    expect(newSince('office', seen).map((s) => s.id)).toEqual(['bell', 'chat-cards', 'console', 'charter', 'costs', 'agent-chat', 'switch']);
     expect(seenIds(null, false)).toEqual([]); // mid-tour: nothing seen yet
     expect(seenIds('["bell"]', true)).toEqual(['bell']);
     expect(seenIds('not json', true)).toContain('look');

@@ -36,6 +36,14 @@ export function qaOutcome(pass: boolean, rec: QaRoundRecord, pr: QaPull | null):
   return conflicting && rec.mergeFixes < MAX_MERGE_FIXES ? 'conflict' : 'needs-human';
 }
 
+/**
+ * After a lab-error report (#189): the lab failed, not the code, so the PR goes back to QA by itself once in a round
+ * (retry) and to triage on a second one (stuck). Never a failed round, never to a developer.
+ */
+export function labErrorNext(rec: { round: number; labRetryRound: number | null }): 'retry' | 'stuck' {
+  return rec.labRetryRound === rec.round ? 'stuck' : 'retry';
+}
+
 /** A conflict found before QA tested the head: the head it was found on, and the fixReason of the test QA was queued for. */
 export interface PreQa {
   sha: string;
