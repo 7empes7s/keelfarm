@@ -28,10 +28,7 @@ visit. Five tabs, at the bottom:
 | **🛰️ Mission control** | The pipeline, alarms, checks, cost and Claude's usage. |
 | **📱 This device** | Notifications, accessibility and switching to the 3D office. |
 
-Pocket mode draws its icons with [Lucide](https://lucide.dev) (ISC licence, `client/src/pocket/pocket-icons.LICENSE`):
-a small icon font, `pocket-icons.woff2`, covers exactly the emoji the office uses and draws each one as a Lucide icon,
-in the text's colour, while the 3D office keeps its emoji. `scripts/pocketIcons.mjs` lists the pairs and rebuilds the
-font; an emoji not on its list shows as itself.
+Pocket mode and the 3D office draw the same icons: Lucide's, as inline SVG (docs/design.md, Icons).
 
 Only what needs the 3D building stays there: walking the floors, graphics and camera settings, key bindings, the
 time-lapse and the first-run setup. Pocket mode uses the same live connection and commands as the 3D office, and

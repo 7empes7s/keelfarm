@@ -25,10 +25,6 @@
     "@playwright/mcp",
     // Run by path from scripts/codeHealth.mjs; tsgolint is the type-aware backend oxlint finds on its own.
     "oxlint",
-    "oxlint-tsgolint",
-    // scripts/pocketIcons.mjs installs these with --no-save when the icon font is rebuilt.
-    "lucide-static",
-    "opentype.js",
-    "wawoff2"
+    "oxlint-tsgolint"
   ]
 }

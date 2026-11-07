@@ -8,6 +8,7 @@ import { SAMPLE_LINE } from '../../../shared/speech';
 import { cacheLabel, clampKeepDays, KEEP_DAYS_MAX, KEEP_DAYS_MIN } from '../../../shared/voiceClips';
 import { CEO_ID, type ListenProvider, type ListenSettings, type VoiceOption, type VoiceProvider, type VoiceSettings as Voice } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { micCaps, setHandsFree } from './mic';
 import { cantListen } from './micText';
@@ -26,7 +27,7 @@ const PROVIDERS: [VoiceProvider, string, string][] = [
 ];
 
 const LISTENERS: [ListenProvider, string, string][] = [
-  ['off', 'Off', 'no 🎙️'],
+  ['off', 'Off', 'no mic'],
   ['browser', 'Browser', 'free, built in'],
   ['elevenlabs', 'ElevenLabs Speech to Text', 'with your own key'],
 ];
@@ -37,7 +38,7 @@ type Save = (patch: Partial<Voice>) => void;
 type Playing = string | null;
 
 function hintMuted() {
-  if (getAudioPrefs().muted) useStore.getState().pushToast('info', `🔇 Sound is off: press ${keyName('mute')} to hear it`);
+  if (getAudioPrefs().muted) useStore.getState().pushToast('info', `Sound is off: press ${keyName('mute')} to hear it`);
 }
 
 /** The browser's voices, which arrive asynchronously; null where the browser can't speak. */
@@ -79,7 +80,7 @@ function ElevenLabsKey() {
     return (
       <div className="row wrap">
         <span className="grow">
-          🔑 Key saved <code>••••{hint}</code>
+          <Icon name="key-round" /> Key saved <code>••••{hint}</code>
         </span>
         <button className="btn btn-small" onClick={() => setEditing(true)}>
           Replace
@@ -167,7 +168,15 @@ function VoiceRow({ v, chosen, playing, onChoose, onPreview }: { v: VoiceOption;
         title={v.previewUrl ? undefined : 'Says the test line in this voice'}
         onClick={onPreview}
       >
-        {playing ? '■ Stop' : '▶ Preview'}
+        {playing ? (
+          <>
+            <Icon name="square" /> Stop
+          </>
+        ) : (
+          <>
+            <Icon name="play" /> Preview
+          </>
+        )}
       </button>
     </div>
   );
@@ -226,7 +235,11 @@ function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; 
         <input type="search" aria-label="Search voices" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, accent, age…" />
       </label>
       <div ref={listRef} className="voice-list" role="radiogroup" aria-label="ElevenLabs voices">
-        {recommended.length > 0 && <div className="voice-group">⭐ Recommended</div>}
+        {recommended.length > 0 && (
+          <div className="voice-group">
+            <Icon name="star" /> Recommended
+          </div>
+        )}
         {recommended.map(row)}
         {others.length > 0 && <div className="voice-group">All voices</div>}
         {others.map(row)}
@@ -301,8 +314,11 @@ function SavedClips({ voice, save }: { voice: Voice; save: Save }) {
       </label>
       <div className="row wrap">
         <span className="grow small">
-          💾 {cacheLabel(cache.clips, cache.bytes)}
-          <span className="muted"> · the newest 20 CEO messages always keep theirs, so ▶ on the phone replays them for free</span>
+          <Icon name="save" /> {cacheLabel(cache.clips, cache.bytes)}
+          <span className="muted">
+            {' '}
+            · the newest 20 CEO messages always keep theirs, so <Icon name="play" /> on the phone replays them for free
+          </span>
         </span>
         <Menu label="More for saved clips" title="Saved voice clips" items={[{ label: 'Clear saved clips…', danger: true, disabled: busy || cache.clips === 0, onSelect: () => void clear() }]} />
       </div>
@@ -335,7 +351,9 @@ export function VoiceSettings() {
   };
   return (
     <div className="card">
-      <h3>🔊 Voice</h3>
+      <h3>
+        <Icon name="volume-2" /> Voice
+      </h3>
       <p className="muted small">Hear the CEO's messages read aloud the moment they arrive, without opening the phone.</p>
       <div role="radiogroup" aria-labelledby={`${radioName}-label`}>
         <div id={`${radioName}-label`} className="field">
@@ -376,7 +394,15 @@ export function VoiceSettings() {
           </label>
           <div className="row">
             <button className="btn btn-small" disabled={!canTest} onClick={() => void test()} title={canTest ? undefined : 'Save a key and pick a voice first'}>
-              {playing === 'test' ? '■ Stop' : '🔈 Test'}
+              {playing === 'test' ? (
+                <>
+                  <Icon name="square" /> Stop
+                </>
+              ) : (
+                <>
+                  <Icon name="volume-1" /> Test
+                </>
+              )}
             </button>
             <span className="muted small">Previews and tests play at your volume; M mutes them.</span>
           </div>
@@ -400,9 +426,11 @@ function Listening({ keyShown }: { keyShown: boolean }) {
   const why = listen.provider === 'off' ? '' : cantListen(listen.provider, micCaps(), keySet || listen.provider !== 'elevenlabs');
   return (
     <div className="listen-settings">
-      <h4>🎙️ Talk instead of type</h4>
+      <h4>
+        <Icon name="mic" /> Talk instead of type
+      </h4>
       <p className="muted small">
-        Hold the 🎙️ next to Send (or hold <Key action="talk" /> in the message box) and speak: your words fill the box, to edit before you send. A quick tap listens until you stop talking. <kbd>Esc</kbd> stops listening.
+        Hold the <Icon name="mic" /> next to Send (or hold <Key action="talk" /> in the message box) and speak: your words fill the box, to edit before you send. A quick tap listens until you stop talking. <kbd>Esc</kbd> stops listening.
       </p>
       <div role="radiogroup" aria-labelledby={`${radioName}-label`}>
         <div id={`${radioName}-label`} className="field">

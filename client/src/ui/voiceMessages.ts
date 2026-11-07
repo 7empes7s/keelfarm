@@ -123,7 +123,7 @@ async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
   } catch (err) {
     // A replay whose clip went meanwhile (pruned or cleared) says so; the phone's ▶ follows the server's list.
     if (replay) {
-      if (!now.rec) useStore.getState().pushToast('info', replay === 'clip' ? '🔇 Audio no longer saved' : "🔇 The browser couldn't speak this message");
+      if (!now.rec) useStore.getState().pushToast('info', replay === 'clip' ? 'Audio no longer saved' : "The browser couldn't speak this message");
       return;
     }
     // No key, ElevenLabs being down, no voice in this browser: the message still rings, just without words.

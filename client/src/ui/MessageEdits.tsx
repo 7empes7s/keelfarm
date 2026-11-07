@@ -6,6 +6,7 @@ import { useStore } from '../store';
 import type { PhoneMessage } from '../../../shared/types';
 import { allVersions, wordDiff } from '../../../shared/messageEdits';
 import { Sheet } from './ChatArtifacts';
+import { Icon } from './Icon';
 import { useBackLayer } from './Panel';
 import { copyText } from './clipboard';
 import './messageEdits.css';
@@ -57,7 +58,7 @@ export function MessageVersions({ m, author, onClose }: { m: Pick<PhoneMessage, 
               <div className="versions-head">
                 <b className="grow">{label(i)}</b>
                 <button type="button" className="btn btn-small" onClick={() => copy(v.text)} aria-label={`Copy ${label(i)}`}>
-                  📋 Copy
+                  <Icon name="clipboard-list" /> Copy
                 </button>
               </div>
               <div className="small muted">

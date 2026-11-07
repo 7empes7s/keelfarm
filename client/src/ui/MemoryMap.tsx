@@ -14,6 +14,8 @@ import { ArtifactView, Sheet } from './ChatArtifacts';
 import { sendToCeo } from './chatSend';
 import { MapCanvas, type MapPaint, type MapStageProps } from './MapCanvas';
 import './memoryMap.css';
+import { CloseButton, Icon } from './Icon';
+import { iconFor } from './icons';
 
 const TYPE_LOOK: Record<MapNodeType, [string, string]> = {
   company: ['#ff9f1c', 'Company'],
@@ -177,12 +179,12 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
           )}
         </div>
         <button type="button" className="btn mm-filter-btn" onClick={() => setSheet('filters')} aria-label={`Filters and groups${nFilters ? `, ${nFilters} on` : ''}`}>
-          ⚙︎ Filters{nFilters > 0 && <span className="badge">{nFilters}</span>}
+          <Icon name="sliders-horizontal" /> Filters{nFilters > 0 && <span className="badge">{nFilters}</span>}
         </button>
         {action ??
           (office && (
             <button type="button" className="btn mm-filter-btn" onClick={() => useStore.getState().openOverlay({ kind: 'mapRoom' })} aria-label="Walk into the map room: the map in 3D">
-              🌌 3D
+              <Icon name="orbit" /> 3D
             </button>
           ))}
       </div>
@@ -191,7 +193,7 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
         {insights.map((i) => (
           <button key={i.id} type="button" className={`mm-insight ${insight?.id === i.id ? 'mm-insight-on' : ''}`} aria-pressed={insight?.id === i.id} disabled={!i.ids.length} onClick={() => (setSelected(null), setInsight(insight?.id === i.id ? null : i))}>
             <span className="mm-insight-label">
-              {i.icon} {i.label}
+              <Icon name={iconFor(i.icon, 'info')} /> {i.label}
             </span>
             <b className="mm-insight-value mm-ellipsis">{i.value}</b>
           </button>
@@ -213,7 +215,7 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
               </button>
             ))}
             <button type="button" className="mm-seg" aria-label="Show the whole map" onClick={() => setLocal(null)}>
-              ✕
+              <Icon name="x" />
             </button>
           </div>
         )}
@@ -222,7 +224,7 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
 
       <div className="mm-time">
         <button type="button" className="btn btn-small mm-play" onClick={() => (playing ? setPlaying(false) : (setUntil(first), setPlaying(true)))} aria-label={playing ? 'Pause the replay' : 'Replay how the map grew'}>
-          {playing ? '⏸' : '▶'}
+          <Icon name={playing ? 'pause' : 'play'} />
         </button>
         <input type="range" min={first} max={Date.now()} step={3_600_000} value={until ?? Date.now()} aria-label="Show the map as it was on" aria-valuetext={until ? dayLabel(until) : 'now'} onChange={(e) => (setPlaying(false), setUntil(Number(e.target.value) >= Date.now() - 3_600_000 ? null : Number(e.target.value)))} />
         <span className="small mm-time-label">{until ? dayLabel(until) : 'Now'}</span>
@@ -292,9 +294,7 @@ function Peek({ node, local, onLocal, onDetails, onClose, onOpen }: { node: MapN
       <div className="mm-peek-head">
         <span className="mm-dot" style={{ background: TYPE_LOOK[node.type][0] }} aria-hidden />
         <b className="grow mm-ellipsis">{node.title}</b>
-        <button type="button" className="mm-x" aria-label="Clear the selection" onClick={onClose}>
-          ✕
-        </button>
+        <CloseButton className="mm-x" label="Clear the selection" onClick={onClose} />
       </div>
       <div className="muted small mm-ellipsis">{[node.status, ...node.facts.slice(0, 2).map(([k, v]) => `${k}: ${v}`)].filter(Boolean).join(' · ')}</div>
       <div className="mm-peek-actions">
@@ -380,9 +380,15 @@ function NodeSheet({ node, graph, onClose, onGo, onLocal, onOpen }: { node: MapN
             <li key={`${l.kind}-${l.other.id}`}>
               <button type="button" className="mm-link" onClick={() => onGo(l.other.id)}>
                 <span className="mm-dot" style={{ background: TYPE_LOOK[l.other.type][0] }} aria-hidden />
-                <span className="muted small mm-link-kind">{l.out ? EDGE_WORDS[l.kind] : `← ${EDGE_WORDS[l.kind]}`}</span>
+                <span className="muted small mm-link-kind">{l.out ? (
+                    EDGE_WORDS[l.kind]
+                  ) : (
+                    <>
+                      <Icon name="arrow-left" /> {EDGE_WORDS[l.kind]}
+                    </>
+                  )}</span>
                 <span className="grow mm-ellipsis">{l.other.title}</span>
-                <span aria-hidden>›</span>
+                <Icon name="chevron-right" />
               </button>
             </li>
           ))}
@@ -400,7 +406,7 @@ function NodeSheet({ node, graph, onClose, onGo, onLocal, onOpen }: { node: MapN
         >
           <textarea value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} aria-label="Your message to the CEO" />
           <button type="submit" className="btn btn-small" disabled={!ask.trim()}>
-            💬 Send
+            <Icon name="message-circle" /> Send
           </button>
         </form>
       </div>

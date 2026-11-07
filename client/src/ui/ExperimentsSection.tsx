@@ -8,6 +8,7 @@ import { EFFORTS } from './AgentSettings';
 import { confirmDialog } from './Confirm';
 import { describePractices } from '../../../shared/practices';
 import { EmptyState } from './EmptyState';
+import { Icon } from './Icon';
 import './experiments.css';
 
 // Mission control → Experiments (#23): A/B tests of harness practices on real issues. Each experiment's numbers per
@@ -121,14 +122,18 @@ function ExperimentCard({ e, repos }: { e: ExperimentView; repos: RepoView[] }) 
   const everyProject = async (v: ExperimentView['variants'][number]) => {
     const ok = await confirmDialog({
       title: `Make ${v.name} every project's default?`,
-      icon: '📌',
+      icon: 'pin',
       body: (
         <>
           <p>
             Settings → Every project gets: <b>{describePractices(v.settings.practices ?? {})}</b>. Floors that override a switch keep their own.
           </p>
           <p className="small">The evidence: {e.result.summary}.</p>
-          {e.result.winner !== v.id && <p className="small">⚠️ The experiment hasn't shown {v.name} to be better yet.</p>}
+          {e.result.winner !== v.id && (
+            <p className="small">
+              <Icon name="triangle-alert" /> The experiment hasn't shown {v.name} to be better yet.
+            </p>
+          )}
         </>
       ),
       confirm: 'Make it the default',
@@ -175,11 +180,11 @@ function ExperimentCard({ e, repos }: { e: ExperimentView; repos: RepoView[] }) 
       <div className="row wrap lab-actions">
         {e.status === 'running' ? (
           <button className="btn btn-small" disabled={busy} onClick={() => act('stop')} title="New issues go back to the defaults; what's in it keeps its results">
-            ⏹ Stop
+            <Icon name="square" /> Stop
           </button>
         ) : (
           <button className="btn btn-small btn-good" disabled={busy} onClick={() => act('start')} title="New issues on its floors get a variant at random from now on">
-            ▶ {e.status === 'stopped' ? 'Start again' : 'Start'}
+            <Icon name="play" /> {e.status === 'stopped' ? 'Start again' : 'Start'}
           </button>
         )}
         {e.status === 'stopped' && (
@@ -201,7 +206,7 @@ function ExperimentCard({ e, repos }: { e: ExperimentView; repos: RepoView[] }) 
             .filter((v) => v.settings.practices && Object.keys(v.settings.practices).length)
             .map((v) => (
               <button key={v.id} className="btn btn-small" disabled={busy} onClick={() => void everyProject(v)} title="Its practice switches become Settings → Every project's defaults">
-                📌 {v.id.toUpperCase()} for every project
+                <Icon name="pin" /> {v.id.toUpperCase()} for every project
               </button>
             ))}
         {winner && e.status === 'running' && <span className="small muted">{winner.name} looks better: stop the experiment to make it the default.</span>}
@@ -343,7 +348,9 @@ export function ExperimentsSection() {
   const list = [...lab.experiments].sort((a, b) => order[a.status] - order[b.status]);
   return (
     <div id="ops-card-experiments" className="lab">
-      <h3 className="section">🧪 Experiments</h3>
+      <h3 className="section">
+        <Icon name="flask-conical" /> Experiments
+      </h3>
       <p className="muted small">
         A running experiment gives each new issue on its floors a variant at random, balanced by floor and issue size, and its sessions run with it. Agents aren't told. Only you start, stop and promote one.
       </p>
@@ -365,7 +372,7 @@ export function LabChip({ repoId, issue, pr }: { repoId: string; issue: number |
   const v = e?.variants.find((x) => x.id === tag.variantId);
   return (
     <span className="chip lab-chip" title={`${e?.name ?? 'Experiment'}: ${v?.name ?? tag.variantId}`}>
-      🧪 {tag.variantId.toUpperCase()}
+      <Icon name="flask-conical" /> {tag.variantId.toUpperCase()}
     </span>
   );
 }

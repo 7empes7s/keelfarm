@@ -14,6 +14,7 @@ import { LiveTerminal } from './LiveTerminal';
 import { confirmDialog } from './Confirm';
 import { workerCli } from './floorRows';
 import './accounts.css';
+import { Icon } from './Icon';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
@@ -100,7 +101,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
     const ok = await confirmDialog({
       title: `Remove ${a.label}?`,
       body: a.running ? `${a.running} session${a.running > 1 ? 's' : ''} still run on it: it's paused now and goes once they finish.` : a.kind === 'subscription-login' ? 'Its sign-in on this computer is deleted too.' : 'Its saved key is deleted from the office.',
-      icon: '🗑️',
+      icon: 'trash-2',
       confirm: 'Remove',
       tone: 'danger',
     });
@@ -122,13 +123,13 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
         <Menu
           label={`More for ${a.label}`}
           items={[
-            a.kind === 'subscription-login' && { label: '🔑 Sign in again', onSelect: signIn },
-            { label: '🧪 Test', onSelect: () => void test() },
-            !a.removing && { label: a.enabled ? '⏸ Pause in the rotation' : '▶ Resume in the rotation', onSelect: () => void api.updateAccount(a.id, { enabled: !a.enabled }).catch(() => undefined) },
-            !first && { label: '⬆ Move up', onSelect: () => void api.moveAccount(a.id, -1).catch(() => undefined) },
-            !last && { label: '⬇ Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
-            { label: a.kind === 'api-key' ? '✏️ Rename, tags, daily cap' : '✏️ Rename and tags', onSelect: edit },
-            !!billing && { label: '🧾 Open billing and usage', onSelect: () => void window.open(billing, '_blank', 'noopener') },
+            a.kind === 'subscription-login' && { label: 'Sign in again', onSelect: signIn },
+            { label: 'Test', onSelect: () => void test() },
+            !a.removing && { label: a.enabled ? 'Pause in the rotation' : 'Resume in the rotation', onSelect: () => void api.updateAccount(a.id, { enabled: !a.enabled }).catch(() => undefined) },
+            !first && { label: 'Move up', onSelect: () => void api.moveAccount(a.id, -1).catch(() => undefined) },
+            !last && { label: 'Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
+            { label: a.kind === 'api-key' ? 'Rename, tags, daily cap' : 'Rename and tags', onSelect: edit },
+            !!billing && { label: 'Open billing and usage', onSelect: () => void window.open(billing, '_blank', 'noopener') },
             !a.builtIn && !a.removing && { label: 'Remove', danger: true, hint: 'Running sessions finish first', onSelect: () => void remove() },
           ]}
         />
@@ -157,7 +158,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
       </div>
       {a.status === 'signed-out' && a.kind === 'subscription-login' && (
         <button className="btn btn-primary acc-action" onClick={signIn}>
-          🔑 Sign in
+          <Icon name="key-round" /> Sign in
         </button>
       )}
       {a.status === 'signed-out' && a.kind === 'setup-token' && <p className="muted small">Set {a.tokenEnv} in the office's environment (claude setup-token prints it) and restart the office.</p>}
@@ -318,7 +319,7 @@ function SignInSheet({ a, close }: { a: AccountView; close: () => void }) {
       <LiveTerminal agentId={`account:${a.id}`} cli={a.cli} compact keys signIn />
       <div className="row wrap">
         <button className="btn" onClick={() => void api.testAccount(a.id).catch(() => undefined)}>
-          🧪 Test
+          <Icon name="flask-conical" /> Test
         </button>
         <button className="btn btn-primary" onClick={close}>
           Done
@@ -342,7 +343,9 @@ export function ProvidersSettings() {
   const find = (id: string | null) => list.find((a) => a.id === id);
   return (
     <div className="card acc-page">
-      <h3>🔑 Providers & accounts</h3>
+      <h3>
+        <Icon name="key-round" /> Providers & accounts
+      </h3>
       <p className="muted small">
         Every login and API key the coding agents on this computer run on. Agents and the CEO use the rotation (the first ready account, top first) unless you pin them to an account or a tag in their
         setup. {onRotation} on the rotation now.

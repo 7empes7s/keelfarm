@@ -4,6 +4,7 @@ import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { HistoryButton } from './HistoryTab';
@@ -94,7 +95,7 @@ function QaLink({ card }: { card: KanbanCard }) {
   return (
     <HoverCard label={`QA on PR #${card.qa.prNumber}`} peek={<QaPeek qa={card.qa} />}>
       <a className="small" href={card.qa.commentUrl} target="_blank" rel="noreferrer">
-        QA report ↗
+        QA report <Icon name="external-link" />
       </a>
     </HoverCard>
   );
@@ -135,7 +136,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     const passed = c.qa?.status === 'passed';
     const ok = await confirmDialog(
       passed
-        ? { icon: '🎉', title: `Merge PR #${c.number}?`, body: `“${c.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
+        ? { icon: 'party-popper', title: `Merge PR #${c.number}?`, body: `“${c.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
         : {
             tone: 'warn',
             title: `Merge PR #${c.number} without QA?`,
@@ -148,7 +149,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const sendBack = async (c: KanbanCard) => {
     let note = '';
     const ok = await confirmDialog({
-      icon: '🔧',
+      icon: 'wrench',
       title: `Send PR #${c.number} back for a fix?`,
       body: (
         <>
@@ -169,7 +170,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const trust = async (c: KanbanCard) => {
     const ok = await confirmDialog({
       tone: 'warn',
-      icon: '🛡',
+      icon: 'shield',
       title: `Trust issue #${c.number}?`,
       body: `“${c.title}” is from someone outside the team. Agents will build it as written, with a shell on this server: read it on GitHub first. The office adds the ${TRUST_LABEL} label, and the chat records that you let it in.`,
       confirm: 'Trust this issue',
@@ -178,7 +179,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   };
   const reviewOnGitHub = (c: KanbanCard) => (
     <a className="btn btn-small" href={c.url} target="_blank" rel="noreferrer">
-      Review on GitHub ↗
+      Review on GitHub <Icon name="external-link" />
     </a>
   );
   const closePr = async (c: KanbanCard) => {
@@ -219,7 +220,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     openOverlay({ kind: 'card', repoId: repo.id, key: c.key, number: c.number, pr: !!c.prNumber });
     useStore.setState({ back });
   };
-  const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: EmptyKind) => (
+  const column = (title: React.ReactNode, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: EmptyKind) => (
     <div className={`kcol ${cls}`}>
       <div className="kcol-head">
         {title} <span className="count">{cards.length}</span>
@@ -268,9 +269,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       accent={repo.color}
       title={
         <span>
-          📋 {repo.fullName}{' '}
+          <Icon name="clipboard-list" /> {repo.fullName}{' '}
           <a className="small" href={repo.url} target="_blank" rel="noreferrer">
-            GitHub ↗
+            GitHub <Icon name="external-link" />
           </a>
           {!embedded && <InfoButton screen="kanban" />}
         </span>
@@ -282,29 +283,35 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         </button>
         <label className="toggle">
           <input type="checkbox" checked={repo.autoAssign} onChange={(e) => void api.updateRepo(repo.id, { autoAssign: e.target.checked }).catch(() => undefined)} />
-          ⚡ Auto-assign work to free agents
+          <Icon name="zap" /> Auto-assign work to free agents
         </label>
         <label className="toggle" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
           <input type="checkbox" checked={repo.autoMerge} onChange={(e) => void api.updateRepo(repo.id, { autoMerge: e.target.checked }).catch(() => undefined)} />
-          🔀 Auto-merge when QA and checks pass
+          <Icon name="git-merge" /> Auto-merge when QA and checks pass
         </label>
         <span className="spacer" />
         <button className="btn" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">
-          🖥️ View app
+          <Icon name="monitor" /> View app
         </button>
         <span className="muted small">{repo.lastSync ? `Synced ${new Date(repo.lastSync).toLocaleTimeString()}` : 'Syncing…'}</span>
         <button className="btn" disabled={pending === 'sync'} onClick={() => act('sync', () => api.syncRepo(repo.id))}>
-          ⟳ Sync
+          <Icon name="refresh-cw" /> Sync
         </button>
       </div>
-      {repo.syncError && <div className="term-error">⚠️ {repo.syncError}</div>}
+      {repo.syncError && (
+        <div className="term-error">
+          <Icon name="triangle-alert" /> {repo.syncError}
+        </div>
+      )}
       <CiOutageBanner repo={repo} />
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
       <FloorBuilds repoId={repo.id} />
 
       <div className="kanban kanban-5">
         {column(
-          '📋 Backlog',
+          <>
+            <Icon name="clipboard-list" /> Backlog
+          </>,
           'kcol-backlog',
           cols.backlog,
           (c) =>
@@ -337,7 +344,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'backlog',
         )}
         {column(
-          '🔨 In progress',
+          <>
+            <Icon name="hammer" /> In progress
+          </>,
           'kcol-progress',
           cols.progress,
           (c) => (
@@ -351,7 +360,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'progress',
         )}
         {column(
-          '🔍 In QA',
+          <>
+            <Icon name="search" /> In QA
+          </>,
           'kcol-qa',
           cols.qa,
           (c) => {
@@ -397,7 +408,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'qa',
         )}
         {column(
-          '✅ Ready to merge',
+          <>
+            <Icon name="circle-check" /> Ready to merge
+          </>,
           'kcol-review',
           cols.ready,
           (c) => {
@@ -423,7 +436,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'ready',
         )}
         {column(
-          '🎉 Merged',
+          <>
+            <Icon name="party-popper" /> Merged
+          </>,
           'kcol-merged',
           cols.merged,
           (c) => (
