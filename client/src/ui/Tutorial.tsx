@@ -5,6 +5,7 @@ import { CEO_ID } from '../../../shared/types';
 import { Key, MoveKeys } from './Key';
 import { useFinder } from './goTo';
 import { useChatMode } from './chatMode';
+import { isTouch, useTouchStick } from '../world/touch/touchState';
 
 // The first-run tour: a coach card in the corner that moves on by itself as you try each thing,
 // with Next and Skip always there. Progress lives in settings.tutorialStep, so a refresh resumes it.
@@ -27,13 +28,18 @@ interface Step {
 const STEPS: Step[] = [
   {
     title: 'Look around',
-    body: () => (
-      <>
-        Click the view to grab the mouse and look around, then walk with <MoveKeys />. Hold <Key action="run" /> to run. <kbd>Esc</kbd> gives you the mouse back. <Key action="overview" /> shows the whole floor
-        from above.
-      </>
-    ),
-    done: (s) => s.locked,
+    body: () =>
+      isTouch ? (
+        <>
+          Put a thumb near the ghost stick at the bottom and drag to walk (far to run). Drag in the other bottom corner to look around. Tap a desk, a person or the floor to walk there.
+        </>
+      ) : (
+        <>
+          Click the view to grab the mouse and look around, then walk with <MoveKeys />. Hold <Key action="run" /> to run. <kbd>Esc</kbd> gives you the mouse back. <Key action="overview" /> shows the whole floor
+          from above.
+        </>
+      ),
+    done: (s) => (isTouch ? useTouchStick.getState().walked && useTouchStick.getState().looked : s.locked),
     minMs: 5000,
   },
   {

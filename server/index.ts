@@ -409,6 +409,7 @@ app.post(
   ),
 );
 app.post('/api/requests/:id/reject', route((req) => swarm.rejectRequest(String(req.params.id), str(req.body?.note))));
+app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params.id), req.body?.action)));
 // The demo office only: the CEO grows (or shrinks) a floor's team on demand.
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
 

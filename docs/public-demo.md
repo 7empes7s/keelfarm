@@ -34,7 +34,8 @@ curl -s localhost:4400/api/state | head -c 200   # the demo answers
 
 The unit runs as a throwaway user (`DynamicUser`), on port 4400 (never 4317/5317, and not 4399, which a test office
 uses), with its state in `/var/lib/cubefarm-demo`, at most 600 MB of memory, and restarts on exit. To update it:
-`git pull`, `npm ci`, `npm run build` in `/opt/cubefarm-demo`, then `sudo systemctl restart cubefarm-demo`.
+`git pull`, `npm ci`, `npm run build` in `/opt/cubefarm-demo`, then `sudo systemctl restart cubefarm-demo`, or let
+`cubefarm-demo-update.timer` do it (below, "Updating it").
 
 ## The public hostname (Cloudflare)
 
@@ -88,18 +89,62 @@ office (`/root/Projects/keelfarm`, `cubefarm.service`, 4317/5317, `/root/.cubefa
 
 ### Updating it
 
-By hand only (it never updates itself):
+It updates itself (#112): `cubefarm-demo-update.timer` runs `ops/cubefarm-demo-update.sh` every 5 minutes, plain
+shell, no AI session. Each tick, under a lock so runs never overlap:
 
-```bash
-cd /opt/cubefarm-demo && git pull && npm ci && npm run build && systemctl restart cubefarm-demo
-```
+1. `git fetch` main into a bare mirror, `/opt/cubefarm-demo-releases/keelfarm.git`. Nothing new: done, silently.
+2. Which commit: the newest on main after the running one whose CI passed (the newest push run of `ci.yml` on that
+   exact commit), from GitHub's API with the host's token (`GH_TOKEN` in `/etc/keel/gh.env`, keel-deploy's, read
+   at run time and never printed; the repo is private, so the anonymous API can't see it). Not the head alone:
+   merges often land faster than CI runs, and each push cancels the run before it. Nothing green yet: wait for the
+   next tick (the log says why: no run, running, red).
+3. `MemAvailable` under 2 GB: wait for the next tick instead of building.
+4. A fresh clone of the sha into `/opt/cubefarm-demo-releases/<sha>`, then `npm ci` and `npm run build` one after
+   the other under `nice -n 19 ionice -c3`, with Node 22 (`/opt/node22/bin` first on `PATH`). A failed build
+   changes nothing: the demo keeps running the old release.
+5. `current` flips to the new release (`/opt/cubefarm-demo` → `/opt/cubefarm-demo-releases/current` → `<sha>`),
+   `systemctl restart cubefarm-demo`, then the health check: `GET /` and `/api/state` answer 200, `/api/state` says
+   `"demo": true`, and neither shows `/root`, `/opt` or `/var/lib` (the checks under Verification). On failure
+   `current` flips back and the previous release restarts.
+6. A failed build or health check marks the sha in `/var/lib/cubefarm-demo-update/failed/` so it is never retried
+   (delete that file to retry). Success keeps the newest 3 releases.
 
-Use Node 22 (`/opt/node22/bin` first on `PATH`). After a Node upgrade, copy the new binary to `/opt/node22/bin/node`.
+The decisions (which commit? CI green? memory? already failed? healthy?) are `scripts/demoUpdateSteps.mjs`, tested in
+`scripts/demoUpdateSteps.test.ts`. It never touches the live office (`/root/Projects/keelfarm`, `cubefarm.service`,
+4317/5317, `/root/.cubefarm`), and its unit has `cubefarm-demo.service`'s hardening, writing only to the releases.
+
+- **Log:** `journalctl -u cubefarm-demo-update` (one line per update, wait, skip, failure or rollback; idle ticks
+  print nothing). The last result is in `/var/lib/cubefarm-demo-update/status.json` (`result`, `sha`, `message`,
+  `at`); each build's output in `build-<sha>.log` beside it.
+- **Pause:** `systemctl disable --now cubefarm-demo-update.timer` (`enable --now` to resume).
+- **Run now:** `systemctl start cubefarm-demo-update` (it waits for the run to finish).
+- **Install** (done on Mulinux 2026-11-06), the one-time move of the hand-made checkout into the releases:
+
+  ```bash
+  install -d /opt/cubefarm-demo-update /opt/cubefarm-demo-releases
+  install -m 755 ops/cubefarm-demo-update.sh /opt/cubefarm-demo-update/
+  install -m 644 scripts/demoUpdateSteps.mjs /opt/cubefarm-demo-update/
+  sha=$(git -C /opt/cubefarm-demo rev-parse HEAD)
+  mv /opt/cubefarm-demo /opt/cubefarm-demo-releases/$sha
+  ln -s "$sha" /opt/cubefarm-demo-releases/current
+  ln -s /opt/cubefarm-demo-releases/current /opt/cubefarm-demo
+  # its saved settings remember the old folder's parent (/opt) as projectsDir: start it with an empty state
+  systemctl stop cubefarm-demo && rm -rf /var/lib/private/cubefarm-demo/* && systemctl start cubefarm-demo
+  cp ops/cubefarm-demo-update.service ops/cubefarm-demo-update.timer /etc/systemd/system/
+  systemctl daemon-reload && systemctl enable --now cubefarm-demo-update.timer
+  ```
+
+  The updater doesn't update itself: after a change to `ops/cubefarm-demo-update.*` or `scripts/demoUpdateSteps.mjs`,
+  repeat the `install` and `cp` lines and `systemctl daemon-reload`.
+
+By hand, with the timer paused: build a release as in step 4, then `ln -sfn <sha> /opt/cubefarm-demo-releases/current`
+and `systemctl restart cubefarm-demo`. After a Node upgrade, copy the new binary to `/opt/node22/bin/node`.
 
 ### Taking it down
 
-1. `systemctl disable --now cubefarm-demo`; `rm -r /etc/systemd/system/cubefarm-demo.service*` and
-   `systemctl daemon-reload` to remove it for good (`/opt/cubefarm-demo`, `/opt/node22` can go too).
+1. `systemctl disable --now cubefarm-demo-update.timer cubefarm-demo`; `rm -r /etc/systemd/system/cubefarm-demo*`
+   and `systemctl daemon-reload` to remove it for good (`/opt/cubefarm-demo*`, `/var/lib/cubefarm-demo-update`,
+   `/opt/node22` can go too).
 2. Ingress: GET the configuration, drop the `farm.techinsiderbytes.com` rule, PUT it back (or Zero Trust →
    Networks → Tunnels → mimounjarvistunnel → Public hostnames → delete it).
 3. DNS: delete the `farm` CNAME (Cloudflare dashboard → techinsiderbytes.com → DNS).

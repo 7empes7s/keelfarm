@@ -34,10 +34,11 @@ import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, pastPulls } from './demoMap.ts';
-import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
+import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { logStreamed, writeReply } from './demoChat.ts';
+import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 import { withDemoChat } from './demoAgentChat.ts';
@@ -986,6 +987,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     seedNotices: sampleNotices,
+    seedChat: demoEditedChat,
     demoCharter,
     demoHeldUpdate,
     simulateUsage: demoUsage,
@@ -1268,29 +1270,11 @@ export interface DemoFloor {
   agents?: { name: string }[];
 }
 
-/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
-export function demoRefsLine(floors: readonly DemoFloor[]): string {
-  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
-  if (!f) return '';
-  const who = f.agents?.[0]?.name;
-  const pr = f.pullRequests[0]?.number;
-  const issue = f.backlog[0]?.number;
-  return [
-    `Around the office: floor ${f.floor}`,
-    who && `@${who} (watch @${who}/terminal)`,
-    issue && `#${issue} is next`,
-    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
-    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
-    `and main runs at preview: floor ${f.floor}.`,
-  ]
-    .filter(Boolean)
-    .join(', ');
-}
-
 interface DemoStatus {
   company: { scaling: string; officePlaybook: string | null }; // how team changes go, in words ("team changes apply straight away"); the office playbook
   floors: DemoFloor[];
   pendingChanges: unknown[];
+  openDecisions?: { id: string; question: string }[];
 }
 
 /** The objective ids in a floor's charter, in order. */
@@ -1493,11 +1477,18 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
       if (awake) return awake;
+      const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
+      if (resolved) return resolved;
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
       if (/\btelegram\b/i.test(text)) {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
         const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
         return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
+      // "fix your last message": the CEO corrects its latest reply through the real tool (#125), struck through on the phone.
+      if (/\b(fix|correct|edit) your (last |latest )?(message|reply)\b/i.test(text)) {
+        const out = await use('edit_message', { text: `Correction: ${plural(s.floors.length, 'floor')} and ${plural(s.floors.reduce((n, f) => n + f.pullRequests.length, 0), 'pull request')} in flight, as of now.`, reason: 'the manager asked me to correct it' });
+        return out.startsWith('Refused') ? `I couldn't edit it: ${refused(out)}` : 'Corrected: my earlier message now shows what changed, struck through.';
       }
       // "add to the office playbook: run the linter first": a bullet through the real tool, refused past its cap.
       const rule = text.match(/\boffice playbook\b[^:]*:\s*(.+)/i)?.[1]?.trim();

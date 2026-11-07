@@ -18,6 +18,7 @@ import { addNotice, markRead, noticeOf, sticky } from '../../shared/notices';
 import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { applyChat, EMPTY_CHAT } from './ceoChat';
 import type { FileView } from '../../shared/files';
+import type { Decision } from '../../shared/decisions';
 import { showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -142,6 +143,7 @@ interface State {
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
   phoneReadAt: number;
   notices: NoticeView[]; // the notification centre's (shared/notices.ts), oldest first
+  decisions: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts)
   version?: string; // the cubefarm version the server runs
   officeCommit?: string | null; // undefined: the server can't update itself
   officeUpdate?: OfficeUpdateView;
@@ -301,6 +303,7 @@ export const useStore = create<State>((set, get) => ({
   chatOutbox: [],
   phoneReadAt: 0,
   notices: [],
+  decisions: [],
   usage: { state: 'normal', until: null, warning: null },
   health: null,
   testLab: null,
@@ -388,6 +391,7 @@ export const useStore = create<State>((set, get) => ({
           files: d.files ?? [],
           phoneReadAt: d.phoneReadAt,
           notices: d.notices ?? [],
+          decisions: d.decisions ?? [],
           version: d.version,
           officeCommit: d.officeCommit,
           officeUpdate: d.officeUpdate,
@@ -571,6 +575,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
+        break;
+      case 'decisions':
+        set({ decisions: ev.decisions });
         break;
       case 'toast': {
         const n = noticeOf(ev);

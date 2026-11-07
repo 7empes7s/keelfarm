@@ -16,6 +16,7 @@ import { isConfirmOpen } from '../ui/Confirm';
 import { useKeyName } from '../ui/controls';
 import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
 import { Approvals } from './PocketApprovals';
+import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
 import { UsageBars } from '../ui/UsageBars';
 import type { ConsoleSection } from './PocketConsole';
@@ -131,7 +132,8 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
       }),
     [repos, agents, qa],
   );
-  const waiting = approvalsBadge(waitingOnYou(repos, qa, requests));
+  const decisions = useStore((s) => s.decisions);
+  const waiting = approvalsBadge(waitingOnYou(repos, qa, requests)) + chatDecisions(decisions, Date.now()).length;
   return (
     <div className="pk-page">
       <Banners />
@@ -281,7 +283,7 @@ export default function Pocket() {
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
   const unread = useStore((s) => unreadMessages(s.messages, s.phoneReadAt));
-  const waiting = useStore((s) => approvalsBadge(waitingOnYou(s.repos, s.qa, s.requests)));
+  const waiting = useStore((s) => approvalsBadge(waitingOnYou(s.repos, s.qa, s.requests)) + chatDecisions(s.decisions, Date.now()).length); // + the CEO's open questions (#114)
   const ceoName = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);

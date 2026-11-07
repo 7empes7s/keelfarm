@@ -81,15 +81,29 @@ describe('the CEO chat', () => {
     expect(swarm.snapshot().chat?.live).toBeNull();
   });
 
-  it('re-asks an edited last message, and only the last one', { timeout: 60_000 }, async () => {
+  it('re-asks an edited last message', { timeout: 60_000 }, async () => {
     const { swarm, i, lives } = await office();
     const { id: first } = await swarm.messageCeo('Plan a bakery');
-    expect(() => swarm.editMessage(first + 999, 'x')).toThrow(/last message/);
+    expect(() => swarm.editMessage(first + 999, 'x')).toThrow(/no longer in this conversation/);
     await expect(swarm.newConversation()).rejects.toThrow(/still answering you/); // the reply belongs to this conversation
     await until(() => lives.some((l) => l.steps.length > 0));
     swarm.editMessage(first, 'Plan a cake shop');
-    expect(i.state.messages.find((m) => m.id === first)).toMatchObject({ text: 'Plan a cake shop', edited: expect.any(Number) });
+    expect(i.state.messages.find((m) => m.id === first)).toMatchObject({ text: 'Plan a cake shop', edited: expect.any(Number), versions: [{ text: 'Plan a bakery' }] });
     await until(() => [i.state.ceo.job, ...i.state.ceo.queue].some((j) => j?.text?.includes('Answer this version instead:\nPlan a cake shop')));
+    await swarm.stopCeo().catch(() => undefined);
+  });
+
+  it("edits any of the manager's messages (#125): queued ones carry the new text, answered ones reach the CEO as a note", { timeout: 60_000 }, async () => {
+    const { swarm, i, replies } = await office();
+    const { id: first } = await swarm.messageCeo('How is floor 1?');
+    await until(() => replies().length > 0 && !i.state.ceo.job);
+    const { id: second } = await swarm.messageCeo('Plan a bakery');
+    swarm.editMessage(first, 'How is floor 2?'); // answered, and not the last: a note, after the queued message
+    expect(i.state.messages.find((m) => m.id === first)).toMatchObject({ text: 'How is floor 2?', versions: [{ text: 'How is floor 1?' }] });
+    const jobs = () => [i.state.ceo.job, ...i.state.ceo.queue].map((j) => j?.text ?? '').join('\n');
+    await until(() => jobs().includes(`[manager edited message #${first}: "How is floor 1?" → "How is floor 2?"]`));
+    swarm.editMessage(second, 'Plan a cake shop'); // still queued (or being answered): the CEO gets the new text, or is asked again
+    await until(() => /Plan a cake shop/.test(jobs()));
     await swarm.stopCeo().catch(() => undefined);
   });
 

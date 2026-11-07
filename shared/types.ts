@@ -13,6 +13,7 @@ import type { ChatAction } from './ceoActions.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { AgentQuestion } from './questions.ts';
+import type { Decision } from './decisions.ts';
 export type { AgentQuestion }; // its home is shared/questions.ts
 import type { CeoAwakeSettings, CeoSessionView } from './ceoAwake.ts';
 import type { LabView } from './experiments.ts';
@@ -425,7 +426,7 @@ export interface SwarmSettings {
 }
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
-export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge';
+export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge' | 'decisions';
 
 /** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
 export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';
@@ -671,8 +672,16 @@ export interface PhoneMessage {
   steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
-  edited?: number; // the manager's: when they last edited it
+  edited?: number; // when its sender last edited it (#125: anyone's, shared/messageEdits.ts)
+  versions?: MessageVersion[]; // its earlier texts, oldest first (at most MESSAGE_VERSIONS_MAX with the current one)
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+}
+
+/** An earlier text of an edited message: when it was written, and why its sender replaced it (the CEO's edit_message). */
+export interface MessageVersion {
+  text: string;
+  at: number;
+  reason?: string;
 }
 
 /** A system notice in the chat (#138), shown as a card headed by the message's text: the cleaned output behind it, and links to what it's about. */
@@ -768,6 +777,7 @@ export interface WorldSnapshot {
   messages: PhoneMessage[];
   phoneReadAt: number; // CEO messages newer than this are unread
   notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
+  decisions?: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts); absent in a replay
   version?: string; // the cubefarm version the server runs (package.json)
   officeCommit?: string | null; // short sha the server started on (absent on servers without self-update)
   officeUpdate?: OfficeUpdateView;
@@ -830,6 +840,7 @@ export type ServerEvent =
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
+  | { type: 'decisions'; decisions: Decision[] }
   /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
   | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }

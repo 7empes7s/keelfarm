@@ -36,10 +36,15 @@ import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
-import type { AgentView, HireRequestView } from '../../shared/types.ts';
+import type { AgentView, HireRequestView, PhoneMessage } from '../../shared/types.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
+import { decisionsForCeo } from '../../shared/decisions.ts';
+import { applyEdit } from '../../shared/messageEdits.ts';
+import { excerpt } from '../../shared/chat.ts';
+import { parseRefs } from '../../shared/chatRefs.ts';
+import { telegramChat } from '../telegram.ts';
 
 export abstract class SwarmCeoTools extends SwarmTeam {
   /**
@@ -68,6 +73,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
       proposeCharter: acts((a) => this.proposeCharter(a)),
+      resolveDecision: acts((a) => this.resolveDecision(a)),
       defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
@@ -78,6 +84,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      editMessage: async (a) => this.editCeoMessage(a),
       waitFor: (a) => this.waitFor(a),
       askManager: (a) => this.askManager(a),
       consult: (a) => this.consult(a),
@@ -86,6 +93,29 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   }
 
   // ---------- the CEO's office tools ----------
+
+  /** A chat message's text replaced by its sender (#125): its old text kept as a version, its chips found again, every tab told. False when nothing changed. */
+  protected replaceText(m: PhoneMessage, text: string, reason?: string): boolean {
+    const edit = applyEdit(m, text, Date.now(), reason);
+    if (!edit) return false;
+    const refs = parseRefs(text, this.refContext());
+    Object.assign(m, edit, { refs: refs.length ? refs : undefined });
+    this.broadcast({ type: 'ceoChat', message: m });
+    this.save();
+    return true;
+  }
+
+  /** edit_message: one of the CEO's own messages (default its latest), shown with its old words struck through; its Telegram copy follows. */
+  protected editCeoMessage(a: { id?: number; text: string; reason?: string }): string {
+    const mine = this.state.messages.filter((m) => m.from === 'ceo');
+    const m = a.id === undefined ? mine.at(-1) : mine.find((x) => x.id === a.id);
+    if (!m) throw new Error(mine.length ? `#${a.id} isn't one of your messages here. Your latest: ${mine.slice(-3).map((x) => `#${x.id} "${excerpt(x.text, 40)}"`).join(', ')}.` : "You haven't sent the manager a message in this conversation yet.");
+    const text = String(a.text ?? '').trim().slice(0, 6000);
+    if (!text) throw new Error('Write the whole corrected message.');
+    if (!this.replaceText(m, text, a.reason?.trim() || undefined)) return `#${m.id} already says that.`;
+    if (m.telegram === 'out') void this.telegram.editSent(m.id, telegramChat(this.ceo().name, m.text)).then((why) => why && console.warn(`telegram: an edit didn't go out: ${why}`));
+    return `Edited #${m.id}: the manager sees your old words struck through next to the new ones.`;
+  }
 
   protected floorRepo(floor: number) {
     const r = this.state.repos.find((x) => x.floor === Number(floor));
@@ -203,6 +233,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
         floors,
         pendingChanges: pending.map(req),
         recentDecisions: this.state.requests.filter((r) => r.status !== 'pending').slice(-10).map(req),
+        openDecisions: decisionsForCeo(this.state.decisions.list, Date.now(), (id) => this.state.repos.find((r) => r.id === id)?.floor ?? null),
       },
       null,
       1,
@@ -366,6 +397,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     repo.charter.proposal = { at: Date.now(), by: ceo, reason: String(x.reason ?? '').trim().slice(0, 600), charter };
     this.save();
     this.emitRepo(repo);
+    this.syncDecisions();
     this.toast('info', `${ceo} proposed a charter for floor ${repo.floor}: approve or edit it in the console's Charter tab.`);
     const size = charterText(charter).length;
     const long = size > CHARTER_PROMPT_MAX ? ` It is ${size} characters: agents get only the first ${CHARTER_PROMPT_MAX}, so tighten it.` : '';
@@ -427,6 +459,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     this.emitCeo();
     for (const a of this.state.agents) if (touched.has(a.id)) this.emitAgent(a);
     this.save();
+    this.syncDecisions();
   }
 
   /** The agent moved on (a new session, or their task cleared): their open question closes. */

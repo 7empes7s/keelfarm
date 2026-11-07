@@ -23,6 +23,7 @@ import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
+import type { DecisionsState } from '../../shared/decisions.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -184,6 +185,7 @@ export interface Persisted {
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
+  decisions: DecisionsState; // questions waiting on the manager (#114, shared/decisions.ts)
 }
 
 export interface Shot {
