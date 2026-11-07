@@ -287,9 +287,9 @@ export function TerminalView({ agentId }: { agentId: string }) {
 
   const actions = (
     <>
-      <HistoryButton focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
+      <HistoryButton className="ds-btn" focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
       {office && (
-        <button className="btn btn-small btn-ghost" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
+        <button className="ds-btn" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
           🎥 Follow
         </button>
       )}

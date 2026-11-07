@@ -277,33 +277,6 @@
   flex-direction: column;
   gap: var(--ds-space-3);
 }
-.aw-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-3);
-  border: 1.5px solid var(--ds-line-strong);
-  border-left: 5px solid var(--accent, var(--ds-outline));
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-raised);
-}
-.aw-card-title {
-  overflow-wrap: anywhere;
-}
-.aw-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-.aw-chips .chip {
-  min-height: 32px;
-  font-size: var(--ds-text-xs);
-}
-.aw-chip-btn {
-  font: inherit;
-  cursor: pointer;
-}
 .aw-pick select {
   width: 100%;
 }
@@ -334,21 +307,6 @@
   background: var(--accent);
   color: var(--ds-on-color);
   font-weight: var(--ds-weight-strong);
-}
-.aw-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
-  gap: var(--ds-space-2);
-  margin: 0;
-}
-.aw-facts dt {
-  font-size: var(--ds-text-xs);
-  color: var(--ds-text-muted);
-}
-.aw-facts dd {
-  margin: 0;
-  font-weight: var(--ds-weight-strong);
-  font-variant-numeric: tabular-nums;
 }
 .aw-explain {
   margin: 0;

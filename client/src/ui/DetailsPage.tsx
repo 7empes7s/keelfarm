@@ -41,9 +41,9 @@ export function AgentChip({ agent, role }: { agent: Agent; role: string }) {
 }
 
 /** A section as a card with a heading. `id` lets a stat tile scroll to it. */
-export function Section({ id, title, tone, children }: { id?: string; title: ReactNode; tone?: 'bad' | 'warn'; children: ReactNode }) {
+export function Section({ id, title, tone, className, children }: { id?: string; title: ReactNode; tone?: 'bad' | 'warn'; className?: string; children: ReactNode }) {
   return (
-    <section id={id} className={`dp-card dp-section${tone ? ` dp-${tone}` : ''}`}>
+    <section id={id} className={`dp-card dp-section${tone ? ` dp-${tone}` : ''}${className ? ` ${className}` : ''}`}>
       <h4 className="dp-h">{title}</h4>
       {children}
     </section>

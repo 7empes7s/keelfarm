@@ -35,9 +35,9 @@ export type HistoryFocus = NonNullable<Extract<Overlay, { kind: 'manager' }>['hi
 const openHistory = (history: HistoryFocus) => useStore.getState().openOverlay({ kind: 'manager', tab: 'history', history });
 
 /** The History button an agent's desk and a PR card show. */
-export function HistoryButton({ focus, label }: { focus: HistoryFocus; label: string }) {
+export function HistoryButton({ focus, label, className = 'btn btn-small btn-ghost' }: { focus: HistoryFocus; label: string; className?: string }) {
   return (
-    <button className="btn btn-small btn-ghost" title={label} onClick={() => openHistory(focus)}>
+    <button className={className} title={label} onClick={() => openHistory(focus)}>
       📜 History
     </button>
   );
