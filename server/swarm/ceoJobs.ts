@@ -347,8 +347,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     this.researchGuard.clear();
     const preempted = !!job && job === this.ceoPreempted;
     this.ceoPreempted = null;
-    this.settleChanges(preempted);
-    if (preempted) this.state.ceo.queue.push(job);
+    if (this.settleChanges(preempted) && job) this.state.ceo.queue.push(job); // a preempted job hears its changes again
     else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();

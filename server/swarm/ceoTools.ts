@@ -507,13 +507,14 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     });
   }
 
-  /** The CEO's job ended: what it didn't act on was let finish. A preempted job hears its changes again. */
-  protected settleChanges(preempted: boolean) {
+  /** The CEO's job ended: what it didn't act on was let finish. A preempted job hears its changes again. Returns `preempted`. */
+  protected settleChanges(preempted: boolean): boolean {
     const ids = this.ceoChanges.splice(0);
     const list = this.state.ceo.changes.list.filter((c) => ids.includes(c.id));
     if (preempted) for (const c of list) c.told = false;
-    else if (!settle(this.state.ceo.changes, ids)) return;
+    else if (!settle(this.state.ceo.changes, ids)) return preempted;
     this.emitChanges(list.flatMap((c) => c.affects));
+    return preempted;
   }
 
   // ---------- agents' questions (#36, shared/questions.ts) ----------
