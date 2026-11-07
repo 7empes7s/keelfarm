@@ -2,6 +2,8 @@
 // ended with only the CEO's reaction, two messages in a row each answered with its own quote, and the manager's reactions.
 // Before it, a long history (#145): the chat opens on its latest page and loads the rest as the manager scrolls up.
 import type { PhoneMessage } from '../shared/types.ts';
+import { CHAT_KEEP } from '../shared/chatPage.ts';
+import { demoEditedChat } from './demoChat.ts';
 
 /** Ids from `first`; it starts after #125's edited chat (20 minutes ago). */
 export function sampleChat(now: number, first = 1): PhoneMessage[] {
@@ -70,4 +72,11 @@ export function pastChat(now: number, count: number): PhoneMessage[] {
     const [from, text] = PAST[i % PAST.length];
     return { id: i + 1, from, text, at: start + Math.round((i * 2 * day) / count), ...(from === 'manager' && { delivery: 'replied' as const }) };
   });
+}
+
+/** The demo's thread: a full one (#145, it opens on the latest page), then the edited messages and the sample. */
+export function demoThread(now: number): PhoneMessage[] {
+  const past = pastChat(now, CHAT_KEEP - demoEditedChat(now).length - sampleChat(now).length);
+  const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: past.length + i + 1 }));
+  return [...past, ...edits, ...sampleChat(now, past.length + edits.length + 1)];
 }

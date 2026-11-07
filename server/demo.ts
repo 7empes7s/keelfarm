@@ -43,10 +43,9 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
-import { pastChat, sampleChat } from './chatSample.ts';
-import { CHAT_KEEP } from '../shared/chatPage.ts';
+import { demoThread } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { DEMO_QA_ISSUE, demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
@@ -1129,12 +1128,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
-    seedChat: (now) => {
-      const recent = demoEditedChat(now).length + sampleChat(now).length;
-      const past = pastChat(now, CHAT_KEEP - recent); // a full thread (#145): it opens on the latest page
-      const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: past.length + i + 1 }));
-      return [...past, ...edits, ...sampleChat(now, past.length + edits.length + 1)];
-    },
+    seedChat: demoThread,
     demoCharter,
     seedQaReport: (fullName) => {
       if (scale) return null; // the big company measures the office (scale.test.ts), not this example
