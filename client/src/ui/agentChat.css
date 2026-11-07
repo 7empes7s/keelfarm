@@ -269,6 +269,9 @@
     padding: 0;
   }
 }
+.aw-more {
+  flex: none; /* ⋯ keeps its 44px; the name gives way */
+}
 .aw-panes button[aria-pressed='true'] {
   background: var(--ds-text);
   color: var(--ds-surface-raised);

@@ -64,16 +64,20 @@ export function demoEvents(cwd: string, entries: readonly LogEntry[], open: { id
   return out;
 }
 
+/** Tool ids count on across sessions: a later session's results must not land on an earlier one's steps. */
+let toolIds = 0;
+
 /** A fake session's callbacks that also feed its chat, for a Claude Code agent on this computer. */
 export function withDemoChat(opts: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
   if ((opts.cli ?? 'claude') !== 'claude' || opts.box || opts.role === 'ceo') return cb;
-  const open = { id: null as string | null, n: 0 };
+  const open = { id: null as string | null, n: toolIds };
   cb.chat?.([{ kind: 'prompt', t: Date.now(), text: opts.prompt }]);
   return {
     ...cb,
     log: (entries) => {
       cb.log(entries);
       const events = demoEvents(opts.cwd, entries, open);
+      toolIds = Math.max(toolIds, open.n);
       if (events.length) cb.chat?.(events);
     },
     finished: (r) => {

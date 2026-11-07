@@ -34,4 +34,19 @@ describe("the demo's agent chats (#120)", () => {
     c.finished({ ok: true, text: '', costUsd: 0, turns: 1, errors: [] });
     expect(got).toEqual(['prompt', 'tool', 'result']);
   });
+
+  it("finishes a later session's own steps, not the earlier session's (ids don't repeat)", () => {
+    const log = new ChatLog();
+    const cb = { log: () => undefined, finished: () => undefined, chat: (ev: Parameters<ChatLog['apply']>[0]) => log.apply(ev, cwd) } as unknown as SessionCallbacks;
+    const opts = { cwd, prompt: 'Build #3', role: 'agent' } as SessionOptions;
+    for (const file of ['a.ts', 'b.ts']) {
+      log.session();
+      const c = withDemoChat(opts, cb);
+      c.log([{ kind: 'tool', tool: 'Read', text: `⏺ Read ${file}` }, { kind: 'result', text: '  ⎿ Read 9 lines' }]);
+      c.log([{ kind: 'tool', tool: 'Bash', text: '⏺ $ npm test' }, { kind: 'result', text: '  ⎿ Tests  4 passed (4)' }]);
+    }
+    const steps = log.items.filter((x) => x.kind === 'step');
+    expect(steps).toHaveLength(4);
+    expect(steps.every((x) => x.done)).toBe(true);
+  });
 });
