@@ -1,7 +1,7 @@
 import { type Locator } from '@playwright/test';
 import { expect } from './helpers';
 
-// layout.spec.ts's Settings → Notifications views of the demo's Telegram bot (#126).
+// layout/console.spec.ts's Settings → Notifications views of the demo's Telegram bot (#126).
 
 type States = 'on' | 'off' | 'error';
 

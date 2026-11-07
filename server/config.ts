@@ -53,6 +53,8 @@ export function demoNoTour(argv: readonly string[], env: NodeJS.ProcessEnv): boo
 export const DEMO_NO_TOUR = DEMO && demoNoTour(process.argv, process.env);
 // A big company keeps its own state, so it never mixes with the usual demo's.
 export const STATE_FILE = path.join(HOME_DIR, DEMO ? (DEMO_SCALE ? `demo-${DEMO_SCALE.floors}x${DEMO_SCALE.agents}-state.json` : 'demo-state.json') : 'state.json');
+/** The model catalog's cache (#198). */
+export const MODELS_FILE = path.join(HOME_DIR, DEMO ? 'demo-models.json' : 'models.json');
 
 /** A port from the environment, or the fallback when it's unset or not a usable port. */
 export function envPort(value: string | undefined, fallback: number): number {

@@ -89,7 +89,7 @@ server/  Node + Express + ws
   previews.ts     one preview per floor, and the PR theatre's PR previews: ports, statuses, start / stop
   previewRunner.ts  checkout, install and run a floor's app in its preview worktree
   demo.ts         fake GitHub and fake agents for `npm run demo`
-shared/types.ts   the websocket / REST contract
+shared/types.ts   the websocket / REST contract (one file per area in shared/types/)
 ```
 
 The server streams everything to the browser over one websocket (`/ws`); an open terminal panel has its own (`/ws/term?agent=<id>`). Laptop screens and the whiteboard are canvases drawn from that data and used as textures. They only repaint when something changed, and less often when you're far away.
