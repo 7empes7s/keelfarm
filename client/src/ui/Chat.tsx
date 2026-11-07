@@ -48,7 +48,8 @@ import { CloseButton, Icon } from './Icon';
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
  * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
  */
-export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean }) {
+/** `ahead`: drawn hidden before it's opened (the phone's Chat tab): the whole page at once, as nobody waits on it. */
+export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahead = false }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean; ahead?: boolean }) {
   const messages = useStore((s) => s.messages);
   const chatOlder = useStore((s) => s.chatOlder);
   const outbox = useStore((s) => s.chatOutbox);
@@ -100,7 +101,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   if (unreadNow !== firstUnread) setFirstUnread(unreadNow);
   // Opening draws the newest screenful first, the rest of the page two frames later (after a paint); all at once when
   // it must find a message or a scroll position at once.
-  const [warm, setWarm] = useState(() => jumpTo !== null || hasChatScroll());
+  const [warm, setWarm] = useState(() => ahead || jumpTo !== null || hasChatScroll());
   useEffect(() => {
     let r = requestAnimationFrame(() => (r = requestAnimationFrame(() => setWarm(true))));
     return () => cancelAnimationFrame(r);

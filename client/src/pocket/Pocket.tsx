@@ -590,7 +590,7 @@ export default function Pocket() {
   };
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
   const chatMode = useChatMode();
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} />;
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} ahead={!wide && tab !== 'chat'} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''} ${full ? 'pk-chat-full' : ''}`}>
       <header className="pk-head">
