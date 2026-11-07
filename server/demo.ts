@@ -1483,7 +1483,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
       if (awake) return awake;
-      const round = await demoRound(text, s.floors, use, (tool, line, out, error) => step([{ kind: 'tool', tool, text: `⏺ ${line}` }, { kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }])); // "look into …": the step log (#150)
+      const round = await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0]); // "look into …": the step log (#150)
       if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;

@@ -18,7 +18,7 @@ export function StepLogList({ steps, now, live, linked, onFloor }: { steps: read
     if (live && list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [live, steps.length]);
   return (
-    <ol ref={list} className={`step-log ${live ? 'step-log-live' : ''}`}>
+    <ol ref={list} className="step-log">
       {steps.map((s, i) => (
         <li key={i} className={`step-row step-row-${s.state}`}>
           <span className="step-icon" aria-hidden>
@@ -59,7 +59,7 @@ export function LiveBubble({ live, ceoName, linked, onFloor, onOpenLog }: { live
           </div>
         )}
         {step && (
-          <button type="button" className={`live-foot live-step-${step.state}`} onClick={onOpenLog} aria-label={`${step.label}, step ${count}. Show the steps.`}>
+          <button type="button" className={`live-foot live-step-${step.state}`} onClick={onOpenLog}>
             <span className={`live-icon ${step.state === 'running' ? 'live-icon-busy' : ''}`} aria-hidden>
               {step.icon}
             </span>

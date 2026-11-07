@@ -192,14 +192,15 @@ html[data-reduce-motion] .action-confetti {
   line-height: var(--ds-leading-tight);
 }
 .working-now {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .working-meta {
-  flex: none;
-  max-width: 50%;
+  flex: 0 100 auto; /* gives way before the step's words do */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -508,6 +508,7 @@
     "exports:shared/chatParts.ts:SNAPSHOT_ARTIFACT_CHARS",
     "exports:shared/chatParts.ts:SUGGESTION_CHARS",
     "exports:shared/cloud.ts:FREE_BOX_LIMIT",
+    "exports:shared/journal.ts:compactMessage",
     "exports:shared/journal.ts:compactQa",
     "exports:shared/journal.ts:compactRepo",
     "exports:shared/journal.ts:dedupeKey",

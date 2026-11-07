@@ -5,16 +5,16 @@
   align-items: center;
   gap: var(--ds-space-1);
   max-width: 100%;
-  margin: 1px 2px;
-  padding: 1px var(--ds-space-2);
-  border: 1.5px solid var(--ds-outline);
+  margin: 0 1px;
+  padding: 0 var(--ds-space-1);
+  border: 1px solid var(--ds-line-strong);
   border-radius: var(--ds-radius-sm);
   background: var(--ds-surface-sunken);
   color: var(--ds-text);
   font: inherit;
   font-size: 0.85em;
   font-weight: var(--ds-weight-strong);
-  line-height: var(--ds-leading-tight);
+  line-height: inherit; /* one line high, like the text around it (#150) */
   white-space: nowrap; /* the bubble's pre-wrap would keep the status's leading space inside its pill */
   vertical-align: baseline;
   cursor: pointer;
@@ -36,13 +36,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* a floor's repo, an issue's state: inline in a lighter weight; only a coloured state is a pill */
 .ref-chip-status {
   flex: none;
-  padding: 1px 6px;
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-line);
-  font-size: 0.85em;
+  color: var(--ds-text-muted);
+  font-size: 0.9em;
   font-weight: var(--ds-weight);
+}
+:is(.ref-chip-good, .ref-chip-warn, .ref-chip-bad) .ref-chip-status {
+  padding: 0 5px;
+  border-radius: var(--ds-radius-pill);
+  line-height: 1.35;
 }
 .ref-chip-good .ref-chip-status {
   background: var(--ds-good-fill);

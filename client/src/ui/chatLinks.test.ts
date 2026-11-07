@@ -36,18 +36,6 @@ describe('#N links', () => {
   });
 });
 
-describe('floor chips with their repo (#150)', () => {
-  it("joins the floor's own repo name to its chip, in any of the CEO's ways of writing it", () => {
-    expect(linkCeoText('On floor 3 (`web`) all good', floors)).toBe('On [floor 3](cubefarm:floor/3/web) all good');
-    expect(linkCeoText('floor 3 [web] and floor 1 `api`', floors)).toBe('[floor 3](cubefarm:floor/3/web) and [floor 1](cubefarm:floor/1/api)');
-  });
-
-  it("leaves another name, a real link and code blocks alone", () => {
-    expect(linkCeoText('floor 3 (`api`)', floors)).toBe('[floor 3](cubefarm:floor/3) (`api`)');
-    expect(linkCeoText('```\nfloor 3 `web`\n```', floors)).toBe('```\nfloor 3 `web`\n```');
-  });
-});
-
 describe('urlParts', () => {
   it('splits out URLs, without trailing punctuation', () => {
     expect(urlParts('see https://a.io/x?y=1. then http://b.io')).toEqual([

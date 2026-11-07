@@ -78,7 +78,7 @@ type Step = (tool: string, line: string, result: string, error?: boolean) => Pro
  * "Look into …": a round of reads, a search, a failed fetch, a wait and a filed issue through the real office tools, so
  * the working strip, the typing bubble and the reply's step log all show (#150).
  */
-export async function demoRound(text: string, floors: (Floor & { pullRequests: { number?: number }[] })[], use: Use, step: Step): Promise<string | null> {
+export async function demoRound(text: string, floors: (Floor & { pullRequests: { number?: number }[] })[], use: Use, step: Step, objective?: string): Promise<string | null> {
   if (!/\b(look into|investigate|dig into)\b/i.test(text)) return null;
   const f = floors[0];
   if (!f) return 'There are no floors yet, so there is nothing to look into.';
@@ -89,7 +89,7 @@ export async function demoRound(text: string, floors: (Floor & { pullRequests: {
   const pr = f.pullRequests[0]?.number;
   if (pr) await use('pr_diff', { floor: f.floor, pr });
   await use('wait_for', { conditions: [{ kind: 'usage', usage: 'normal' }], timeout_min: 1 });
-  const filed = await use('file_issue', { floor: f.floor, title: 'Mobile joystick: a bigger thumb zone', body: 'Make the on-screen joystick easier to hit at 390 px.\n\nAcceptance criteria:\n- A 120 px thumb zone\n- Works one-handed' });
+  const filed = await use('file_issue', { floor: f.floor, title: 'Mobile joystick: a bigger thumb zone', body: `Make the on-screen joystick easier to hit at 390 px.\n\nAcceptance criteria:\n- A 120 px thumb zone\n- Works one-handed${objective ? `\n\nObjective: ${objective}` : ''}` });
   const n = filed.match(/#(\d+)/)?.[1];
   return filed.startsWith('Refused') ? `I looked into it, but couldn't file it: ${filed.replace(/^Refused: /, '')}` : `I looked into it: the joystick's thumb zone is too small on phones. I filed #${n} on floor ${f.floor} for it.`;
 }

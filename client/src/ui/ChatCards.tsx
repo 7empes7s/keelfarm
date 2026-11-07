@@ -128,7 +128,7 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
     <div className="working-strip" role="status">
       {open && steps.length > 0 && <StepLogList steps={steps} now={now} live linked={linked} onFloor={onFloor} />}
       <div className="working-row">
-        <button type="button" className="working-main" aria-expanded={open} onClick={onToggle} aria-label={`${line.now}. ${open ? 'Hide' : 'Show'} the steps.`} disabled={!steps.length}>
+        <button type="button" className="working-main" aria-expanded={open} onClick={onToggle} disabled={!steps.length}>
           <span className="working-icon" aria-hidden>
             {line.icon ?? '✻'}
           </span>
@@ -150,7 +150,7 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
           type="button"
           className={`working-stop ${confirm ? 'working-stop-confirm' : ''}`}
           onClick={() => (confirm ? (setConfirm(false), onStop()) : setConfirm(true))}
-          aria-label={confirm ? "Tap again to stop: what's done stays done" : `Stop ${info.job?.label ?? 'the job'}`}
+          aria-label={confirm ? "Stop? Tap again: what's done stays done" : `Stop ${info.job?.label ?? 'the job'}`}
           title="Stop: what's done stays done"
         >
           {confirm ? 'Stop?' : '■'}

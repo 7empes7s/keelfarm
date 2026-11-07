@@ -167,7 +167,7 @@
   font-size: var(--ds-text-xs);
 }
 
-/* a floor named in the chat: one line high, the text's own size (#150), its repo inline in a lighter weight */
+/* a floor named in the chat: one line high, the text's own size (#150) */
 .floor-chip {
   display: inline;
   padding: 0;
@@ -184,10 +184,6 @@
 .floor-chip:hover,
 .floor-chip:focus-visible {
   text-decoration-style: solid;
-}
-.floor-chip-repo {
-  font-weight: var(--ds-weight);
-  color: var(--ds-text-muted);
 }
 /* long messages: their start, then Show more */
 .long-folded {
