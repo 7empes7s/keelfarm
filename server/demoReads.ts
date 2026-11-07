@@ -1,5 +1,6 @@
 // The demo's code reads for the CEO's pr_diff and worktree_file: made-up changes, since the demo has no code on disk.
 import type { Backend } from './backend.ts';
+import type { DemoFloor } from './demo.ts';
 import type { PrDiff } from './github.ts';
 import { guardPath, type WorktreeRead } from './worktreeRead.ts';
 
@@ -54,7 +55,7 @@ export function demoReadWorktree(r: WorktreeRead): string {
 }
 
 /** The files every demo floor has, for the chat's file refs (shared/chatRefs.ts). */
-export const DEMO_REF_FILES = ['src/App.tsx', 'README.md'];
+const DEMO_REF_FILES = ['src/App.tsx', 'README.md'];
 
 /** A demo floor's file: made up from its path, or null for one it doesn't have. */
 export function demoRepoFile(fullName: string, rel: string): string | null {
@@ -82,4 +83,23 @@ export function demoRepoFile(fullName: string, rel: string): string | null {
     '}',
     '',
   ].join('\n');
+}
+
+/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
+export function demoRefsLine(floors: readonly DemoFloor[]): string {
+  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
+  if (!f) return '';
+  const who = f.agents?.[0]?.name;
+  const pr = f.pullRequests[0]?.number;
+  const issue = f.backlog[0]?.number;
+  return [
+    `Around the office: floor ${f.floor}`,
+    who && `@${who} (watch @${who}/terminal)`,
+    issue && `#${issue} is next`,
+    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
+    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
+    `and main runs at preview: floor ${f.floor}.`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }

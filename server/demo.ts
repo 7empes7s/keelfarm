@@ -34,7 +34,7 @@ import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, pastPulls } from './demoMap.ts';
-import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
+import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
@@ -1266,25 +1266,6 @@ export interface DemoFloor {
   backlog: { number: number; title: string; inProgress: boolean }[];
   pullRequests: { number: number }[];
   agents?: { name: string }[];
-}
-
-/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
-export function demoRefsLine(floors: readonly DemoFloor[]): string {
-  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
-  if (!f) return '';
-  const who = f.agents?.[0]?.name;
-  const pr = f.pullRequests[0]?.number;
-  const issue = f.backlog[0]?.number;
-  return [
-    `Around the office: floor ${f.floor}`,
-    who && `@${who} (watch @${who}/terminal)`,
-    issue && `#${issue} is next`,
-    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
-    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
-    `and main runs at preview: floor ${f.floor}.`,
-  ]
-    .filter(Boolean)
-    .join(', ');
 }
 
 interface DemoStatus {
