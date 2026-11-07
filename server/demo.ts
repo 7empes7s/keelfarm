@@ -37,6 +37,7 @@ import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { researchBrief } from './demoResearch.ts';
 import { logStreamed, writeReply } from './demoChat.ts';
+import { demoReactions } from './demoReactions.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
@@ -1475,6 +1476,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
+      if (quick !== null) return quick;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
@@ -1637,7 +1640,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       timers.push(
         setTimeout(() => {
           if (stopped || done) return;
-          const said = text.split('\n').slice(1).join(' ').trim() || text;
+          const said = text.split('\n').slice(1).join(' ').replace(/^\(message \d+\) /, '').trim() || text;
           const reply = parseForwarded(said);
           cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
           cb.turn?.(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`);

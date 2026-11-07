@@ -15,6 +15,7 @@ import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
 import { createDemoBackend } from './demo.ts';
+import { sampleChat } from './chatSample.ts';
 import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
@@ -36,7 +37,7 @@ if (PUBLIC_DEMO) {
   }
 }
 
-const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
+const swarm = new Swarm(DEMO ? { ...createDemoBackend(DEMO_SCALE), seedChat: sampleChat } : realBackend); // the chat sample only here: tests start from an empty chat
 if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });
@@ -382,6 +383,7 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
+app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
 app.post('/api/ceo/conversations', route(() => swarm.newConversation()));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));

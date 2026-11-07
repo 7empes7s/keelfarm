@@ -560,6 +560,9 @@ export const useStore = create<State>((set, get) => ({
       case 'delivery':
         set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
         break;
+      case 'status':
+        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, status: ev.status } : m)) });
+        break;
       case 'phoneRead':
         set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
         break;

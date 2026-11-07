@@ -658,7 +658,7 @@ export interface PhoneMessage {
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
-  replyTo?: number; // the manager's message replies to this one (its id)
+  replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
@@ -671,6 +671,16 @@ export interface PhoneMessage {
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
   edited?: number; // the manager's: when they last edited it
+  status?: StatusReaction; // the manager's: the office's reaction as the CEO's job on it moves (shared/reactions.ts)
+  reactions?: MessageReaction[]; // the manager's and the CEO's, oldest first
+  tg?: number; // its Telegram message id, for one the manager sent from there
+}
+
+/** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */
+export type StatusReaction = 'queued' | 'seen' | 'working' | 'done' | 'failed';
+export interface MessageReaction {
+  emoji: string;
+  by: 'ceo' | 'manager';
 }
 
 /** The CEO chat beyond its messages (#51): the reply being written, the conversations and the manager's pinned notes. */
@@ -817,6 +827,8 @@ export type ServerEvent =
   | { type: 'message'; message: PhoneMessage }
   /** The manager's messages moved on: the CEO read them, or replied. */
   | { type: 'delivery'; ids: number[]; delivery: ServerDelivery }
+  /** The CEO's job on the manager's messages moved: their status reaction. */
+  | { type: 'status'; ids: number[]; status: StatusReaction }
   /** The files store changed (an upload, keep, delete or the sweep): every file's metadata, newest first. */
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }

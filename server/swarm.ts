@@ -354,6 +354,7 @@ export class Swarm extends SwarmCeoTools {
       for (const r of this.state.repos) this.seedCharterLog(r); // and the Charter tab's numbers over it
     }
     if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
+    if (this.backend.demo && !this.state.messages.length && this.backend.seedChat) for (const m of (this.state.messages = this.backend.seedChat(Date.now()))) this.messageSeq = Math.max(this.messageSeq, m.id + 1); // and a chat with reactions
     if (this.backend.demo && !this.state.notices.length && this.backend.seedNotices) this.state.notices = this.backend.seedNotices(this.state.repos, this.state.agents, Date.now()); // and a day of notifications
     // A fresh demo office has yesterday to replay too.
     if (this.backend.demo) void this.journal.hasPastDays().then((has) => (has ? undefined : this.journalSample())).catch((err) => console.warn('could not write the sample day', err));
