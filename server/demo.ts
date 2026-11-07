@@ -34,7 +34,7 @@ import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { sampleCareers } from './careerSample.ts';
+import { sampleCareers, sampleHistory, samplePastCareers } from './careerSample.ts';
 import { demoPrFiles, pastPulls } from './demoMap.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
@@ -1061,7 +1061,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
-    seedCareers: sampleCareers,
+    seedCareers: sampleCareers, seedPastCareers: samplePastCareers, seedHistory: sampleHistory,
     demoTeam: (floor) => demoTeam(scale, floor),
     demoNoTour: noTour,
     seedLab: sampleLab,

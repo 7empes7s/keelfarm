@@ -28,20 +28,103 @@ export interface CareerView {
   turns: number;
   /** The last few merged PRs, newest first. */
   recent: { n: number; title: string; at: number }[];
-  /** When their merges of the last four weeks landed (the profile's sparkline; the week's counts filter it). */
+  /** When their merges of the last 7 days landed (the MVP of the week and the week's count). */
   week: number[];
   /** How long their last few builds took from the session's start to the PR (ms), newest first. */
   toPr: number[];
+  /** Times hired: 1 in their first stint, more after rehires (#205). */
+  hires: number;
+  /** When they were rehired (ms), newest first. */
+  rehired: number[];
+  /** Time on the team in earlier stints (ms): tenure is this plus the time since `since`. */
+  served: number;
+  /** Sessions run, those that came to nothing (shared/costs.ts wasteReason), and what those cost. */
+  sessions: number;
+  wasted: number;
+  wasteUsd: number;
+  /** Time in sessions (ms), all told. */
+  workMs: number;
+  /** Tokens, when the CLI reports them (0: it never did; turns stand in). */
+  tokens: number;
+  /** How long their last few merged PRs took from the build's start to the merge (ms), newest first. */
+  toMerge: number[];
+  /** The last WEEKS weeks with any work, oldest first, as rows (weekRow): the sparklines and this week's cost. */
+  weeks: WeekRow[];
+  /** The coding agent, model and effort they run now, and since when (#198 lets them change). */
+  rig: { cli: string; model: string; effort: string; since: number } | null;
+}
+
+/** One week of an agent's work (#205). */
+export interface CareerWeek {
+  /** The week: weekOf(at). */
+  w: number;
+  merged: number;
+  usd: number;
+  /** Spent on sessions that came to nothing. */
+  waste: number;
+  sessions: number;
+  firstQa: number;
+  firstPass: number;
+  /** Minutes in sessions. */
+  min: number;
+}
+
+const WEEK_FIELDS = ['w', 'merged', 'usd', 'waste', 'sessions', 'firstQa', 'firstPass', 'min'] as const;
+
+/** A week as a career keeps it: its numbers in WEEK_FIELDS' order, so a big company's snapshot stays small. */
+export type WeekRow = number[];
+
+export const weekRow = (k: CareerWeek): WeekRow => WEEK_FIELDS.map((f) => k[f]);
+export const weekOfRow = (r: WeekRow): CareerWeek => Object.fromEntries(WEEK_FIELDS.map((f, i) => [f, r[i] ?? 0])) as unknown as CareerWeek;
+const emptyWeek = (w: number): CareerWeek => ({ w, merged: 0, usd: 0, waste: 0, sessions: 0, firstQa: 0, firstPass: 0, min: 0 });
+
+/** A career kept after a let-go (#205), for their rehire and the Team tab's "Past agents". */
+export interface PastCareer {
+  name: string;
+  /** Their last id. */
+  id: string;
+  /** When they were let go (ms). */
+  left: number;
+  career: CareerView;
 }
 
 export const RECENT_KEEP = 8;
 export const WEEK_MS = 7 * 24 * 3_600_000;
 export const DAY_MS = 24 * 3_600_000;
-/** The weeks of merge times a career keeps, for the profile's sparkline. */
-export const SPARK_WEEKS = 4;
+/** The weeks of totals a career keeps (#205): the 8-week sparklines. */
+const WEEKS = 8;
 
 export function newCareer(since: number): CareerView {
-  return { since, opened: 0, merged: 0, firstPass: 0, firstQa: 0, qaPass: 0, qaFail: 0, fixRounds: 0, run: 0, best: 0, reviews: 0, costUsd: 0, turns: 0, recent: [], week: [], toPr: [] };
+  return { since, opened: 0, merged: 0, firstPass: 0, firstQa: 0, qaPass: 0, qaFail: 0, fixRounds: 0, run: 0, best: 0, reviews: 0, costUsd: 0, turns: 0, recent: [], week: [], toPr: [], hires: 1, rehired: [], served: 0, sessions: 0, wasted: 0, wasteUsd: 0, workMs: 0, tokens: 0, toMerge: [], weeks: [], rig: null };
+}
+
+/** A career as an older state file or journal holds it (#205): today's fields it lacks start empty, its numbers stay. */
+export function legacyCareer(raw: Record<string, unknown>): CareerView {
+  const out = newCareer(typeof raw.since === 'number' ? raw.since : Date.now());
+  const into = out as unknown as Record<string, unknown>;
+  for (const [k, d] of Object.entries(into)) {
+    const v = raw[k];
+    if (Array.isArray(d) ? Array.isArray(v) : typeof v === typeof d && v !== null && !Array.isArray(v)) into[k] = v;
+  }
+  return out;
+}
+
+/** The week `at` falls in: weeks since the epoch, starting on Mondays (UTC). */
+export const weekOf = (at: number) => Math.floor((at - 4 * DAY_MS) / WEEK_MS);
+
+/** Adds to their week's totals (made if needed), keeping the last WEEKS weeks. */
+export function addWeek(c: CareerView, at: number, add: Partial<Omit<CareerWeek, 'w'>>) {
+  const w = weekOf(at);
+  let row = c.weeks.find((r) => r[0] === w);
+  if (!row) {
+    row = weekRow(emptyWeek(w));
+    const top = Math.max(w, ...c.weeks.map((r) => r[0]));
+    c.weeks = [...c.weeks, row].filter((r) => r[0] > top - WEEKS).sort((p, q) => p[0] - q[0]);
+  }
+  for (const [f, n] of Object.entries(add)) {
+    const i = WEEK_FIELDS.indexOf(f as keyof CareerWeek);
+    row[i] = Math.round(((row[i] ?? 0) + (n ?? 0)) * 100) / 100;
+  }
 }
 
 /** QA rounds passed as a share of all QA rounds on their PRs (0-1), or null before any. */
@@ -53,7 +136,10 @@ export function passRate(c: CareerView): number | null {
 /** Fix rounds per merged PR, or null before the first merge. */
 export const avgFixRounds = (c: CareerView): number | null => (c.merged ? c.fixRounds / c.merged : null);
 
-export const tenureDays = (c: CareerView, now: number) => Math.max(0, (now - c.since) / DAY_MS);
+/** Time on the team over every stint (ms). */
+const tenureMs = (c: CareerView, now: number) => c.served + Math.max(0, now - c.since);
+
+export const tenureDays = (c: CareerView, now: number) => tenureMs(c, now) / DAY_MS;
 
 /** Merges in the 7 days before `now`. */
 export const mergesThisWeek = (c: CareerView, now: number) => c.week.filter((t) => t > now - WEEK_MS && t <= now).length;
@@ -107,23 +193,18 @@ export const roundsPerMerge = (c: CareerView): number | null => (c.merged ? (c.q
 /** The coding agents' estimated cost per merged PR, or null before the first merge. */
 export const costPerMerge = (c: CareerView): number | null => (c.merged ? c.costUsd / c.merged : null);
 
-/** The median time from a build's start to its PR (ms), or null before any. */
-export function medianToPr(c: CareerView): number | null {
-  if (!c.toPr.length) return null;
-  const xs = [...c.toPr].sort((a, b) => a - b);
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const xs = [...values].sort((a, b) => a - b);
   const mid = xs.length >> 1;
   return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
 }
 
-/** Merges per week over the last `weeks` weeks before `now`, oldest first. */
-export function weeklyMerges(c: CareerView, now: number, weeks = SPARK_WEEKS): number[] {
-  const out = Array.from({ length: weeks }, () => 0);
-  for (const t of c.week) {
-    const ago = Math.floor((now - t) / WEEK_MS);
-    if (t <= now && ago < weeks) out[weeks - 1 - ago]++;
-  }
-  return out;
-}
+/** The median time from a build's start to its PR (ms), or null before any. */
+export const medianToPr = (c: CareerView): number | null => median(c.toPr);
+
+/** The median time from a build's start to its merge (ms), or null before any. */
+export const medianToMerge = (c: CareerView): number | null => median(c.toMerge);
 
 /** The profile's badges, earned from the record. */
 export function badges(c: CareerView): string[] {
@@ -161,7 +242,9 @@ const PROFILE_STATS: StatDef[] = [
   { key: 'firstRound', label: 'First-round QA', value: (c) => firstRoundRate(c), show: pctText, higher: true, title: 'PRs that passed QA on their first round' },
   { key: 'rounds', label: 'QA rounds / merge', value: (c) => roundsPerMerge(c), show: (x) => x.toFixed(1), higher: false, title: 'QA rounds their merged PRs took, on average' },
   { key: 'toPr', label: 'Time to PR', value: (c) => medianToPr(c), show: durationText, higher: false, title: 'Median time from starting an issue to its pull request' },
+  { key: 'toMerge', label: 'Time to merge', value: (c) => medianToMerge(c), show: durationText, higher: false, title: 'Median time from starting an issue to its merge' },
   { key: 'cost', label: 'Cost / merge', value: (c) => costPerMerge(c), show: (x) => `$${x.toFixed(2)}`, higher: false, title: 'Estimated, as the coding agents report it; subscription usage is billed by plan' },
+  { key: 'waste', label: 'Waste', value: (c) => wasteShare(c), show: pctText, higher: false, title: 'Share of their spend on sessions that came to nothing (no PR, no commit, stopped by the watchdog or the usage limit)' },
   { key: 'week', label: 'Merged this week', value: (c, now) => mergesThisWeek(c, now), show: String, higher: true, title: 'Merges in the last 7 days' },
   { key: 'streak', label: 'Best streak', value: (c) => c.best, show: String, higher: true, title: 'PRs in a row that passed QA first time' },
   { key: 'reviews', label: 'QA reviews', value: (c) => c.reviews, show: String, higher: true, title: "Other people's pull requests they tested" },
@@ -210,6 +293,88 @@ export function keyStats(c: CareerView, now: number): string {
   const rate = firstRoundRate(c);
   const cost = costPerMerge(c);
   return [`${mergesThisWeek(c, now)} merged this week`, rate !== null && `${pctText(rate)} first-round QA`, cost !== null && `$${cost.toFixed(2)} / merge`].filter(Boolean).join(' · ');
+}
+
+// ---------- usage and cost (#205) ----------
+
+/** This week's totals (from Monday, UTC). */
+export const thisWeek = (c: CareerView, now: number): CareerWeek => weekIn(c, weekOf(now));
+
+const weekIn = (c: CareerView, w: number): CareerWeek => {
+  const row = c.weeks.find((r) => r[0] === w);
+  return row ? weekOfRow(row) : emptyWeek(w);
+};
+
+/** One value per week over the last `weeks` weeks before `now`, oldest first. */
+function series<T>(c: CareerView, now: number, pick: (k: CareerWeek) => T, weeks = WEEKS): T[] {
+  const top = weekOf(now);
+  return Array.from({ length: weeks }, (_, i) => {
+    return pick(weekIn(c, top - weeks + 1 + i));
+  });
+}
+
+/** The profile's 8-week sparklines: merges, cost per merge and first-round QA, oldest first (null: no data that week). */
+export const weeklySeries = (c: CareerView, now: number) => ({
+  merges: series(c, now, (k) => k.merged),
+  costPerMerge: series(c, now, (k) => (k.merged ? k.usd / k.merged : null)),
+  firstPass: series(c, now, (k) => (k.firstQa ? k.firstPass / k.firstQa : null)),
+});
+
+/** What sessions that came to nothing cost, as a share of everything they spent (0-1), or null before any spend. */
+export const wasteShare = (c: CareerView): number | null => (c.costUsd > 0 ? Math.min(1, c.wasteUsd / c.costUsd) : null);
+
+/** Time in sessions and time on the team outside them (ms), over every stint. */
+export function workIdle(c: CareerView, now: number): { work: number; idle: number } {
+  const tenure = tenureMs(c, now);
+  const work = Math.min(c.workMs, tenure);
+  return { work, idle: tenure - work };
+}
+
+/** Their share of everyone's spend this week (0-1), or null when nobody has spent anything yet. */
+export function spendShare(c: CareerView, everyone: CareerView[], now: number): number | null {
+  const total = everyone.reduce((n, x) => n + thisWeek(x, now).usd, 0);
+  return total > 0 ? thisWeek(c, now).usd / total : null;
+}
+
+type HighlightKey = 'mvp' | 'cheapest' | 'firstPass' | 'reviews' | 'waste' | 'idle';
+
+/** A card in the Team tab's highlights row: who and why. */
+export interface Highlight {
+  key: HighlightKey;
+  label: string;
+  agentId: string;
+  name: string;
+  text: string;
+}
+
+/** First-round QA counts for the highlight from this many PRs on. */
+const FIRST_PASS_MIN = 3;
+
+/**
+ * The Team tab's highlights (#205): MVP of the week, cheapest per merge, best first-round QA, most reviews, biggest
+ * waste, and who has been idle the longest (`idleSince`: when their last task ended, null while working). Cards
+ * without a candidate are left out.
+ */
+export function highlights<T extends { id: string; name: string; career: CareerView | null; idleSince: number | null }>(people: T[], now: number): Highlight[] {
+  const out: Highlight[] = [];
+  const withCareer = people.filter((p): p is T & { career: CareerView } => !!p.career);
+  const top = (label: string, key: HighlightKey, score: (p: T & { career: CareerView }) => number | null, text: (p: T & { career: CareerView }, x: number) => string, lowest = false) => {
+    let best: { p: T & { career: CareerView }; x: number } | null = null;
+    for (const p of withCareer) {
+      const x = score(p);
+      if (x === null || !Number.isFinite(x)) continue;
+      if (!best || (lowest ? x < best.x : x > best.x)) best = { p, x };
+    }
+    if (best) out.push({ key, label, agentId: best.p.id, name: best.p.name, text: text(best.p, best.x) });
+  };
+  const mvp = mvpOfWeek(withCareer, now);
+  if (mvp) out.push({ key: 'mvp', label: 'MVP of the week', agentId: mvp.who.id, name: mvp.who.name, text: plural(mvp.merges, 'merge') + ' this week' });
+  top('Cheapest per merge', 'cheapest', (p) => costPerMerge(p.career), (_p, x) => `$${x.toFixed(2)} / merge`, true);
+  top('Best first-round QA', 'firstPass', (p) => (Math.max(p.career.firstQa, p.career.firstPass) >= FIRST_PASS_MIN ? firstRoundRate(p.career) : null), (p, x) => `${pctText(x)} of ${Math.max(p.career.firstQa, p.career.firstPass)} PRs`);
+  top('Most reviews', 'reviews', (p) => p.career.reviews || null, (_p, x) => plural(x, 'QA review'));
+  top('Biggest waste', 'waste', (p) => p.career.wasteUsd || null, (p, x) => `$${x.toFixed(2)} on ${plural(p.career.wasted, 'session')} that came to nothing`);
+  top('Idle the longest', 'idle', (p) => (p.idleSince === null ? null : now - p.idleSince), (_p, x) => `idle for ${durationText(x)}`);
+  return out;
 }
 
 // ---------- the desk ----------

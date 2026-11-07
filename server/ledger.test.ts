@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addTenure, apply, buy, dayKey, emptyLedger, grant, loadLedger, place, progressView, type LedgerEvent, type LedgerState } from './ledger.ts';
+import { addTenure, apply, backfillWork, buy, dayKey, emptyLedger, grant, loadLedger, pastCareers, place, progressView, type LedgerEvent, type LedgerState } from './ledger.ts';
 import { DECOR_SLOTS, priceOf } from '../shared/progress.ts';
-import { DAY_MS } from '../shared/careers.ts';
+import { DAY_MS, weekOf, weekOfRow } from '../shared/careers.ts';
+import type { CostSession } from '../shared/costs.ts';
 
 const R = 'demo-co/pixel-todo';
 const NAME = 'demo-co/pixel-todo';
@@ -126,12 +127,13 @@ describe('careers', () => {
     expect(s.careers.ada).toMatchObject({ opened: 1, qaPass: 1, firstPass: 1, costUsd: 0.5, turns: 12 });
   });
 
-  it('keep the last eight merges and four weeks of merge times', () => {
+  it('keep the last eight merges and a week of merge times (the weeks before are in their weekly totals)', () => {
     const s = emptyLedger();
     run(s, { kind: 'hired', agentId: 'ada', at: NOON - 50 * DAY_MS });
     for (let n = 1; n <= 10; n++) run(s, open(n), merge(n, NOON - (10 - n) * 4 * DAY_MS));
     expect(s.careers.ada.recent.map((r) => r.n)).toEqual([10, 9, 8, 7, 6, 5, 4, 3]);
-    expect(s.careers.ada.week).toHaveLength(7);
+    expect(s.careers.ada.week).toHaveLength(2);
+    expect(s.careers.ada.weeks.reduce((n, r) => n + weekOfRow(r).merged, 0)).toBe(10);
   });
 
   it('credit the author the office named when the ledger never saw who opened it', () => {
@@ -141,15 +143,46 @@ describe('careers', () => {
     expect(s.careers.grace.merged).toBe(1);
   });
 
-  it('forget a career when they are let go, and never restart one on a second hire event', () => {
+  it('keep a career through a let-go and give it back on a rehire under the same name, with every stint in the tenure (#205)', () => {
     const s = emptyLedger();
-    run(s, { kind: 'hired', agentId: 'ada', at: at(9) }, { kind: 'hired', agentId: 'ada', at: at(11) });
+    run(s, { kind: 'hired', agentId: 'ada', at: at(9), name: 'Ada' }, { kind: 'hired', agentId: 'ada', at: at(11) });
     expect(s.careers.ada.since).toBe(at(9));
-    run(s, { kind: 'let-go', agentId: 'ada' });
+    run(s, open(1), qa(1, true), merge(1), { kind: 'session', agentId: 'ada', key: 'k1', costUsd: 2, turns: 30 });
+    const fx = run(s, { kind: 'let-go', agentId: 'ada', name: 'Ada', at: at(10, 0, 5) });
+    expect(fx.past).toBe(true);
     expect(s.careers.ada).toBeUndefined();
-    // their PR merging later credits nobody, and starts no career for them
-    run(s, open(1), merge(1));
-    expect(s.careers.ada).toBeUndefined();
+    expect(pastCareers(s)).toMatchObject([{ name: 'Ada', id: 'ada', left: at(10, 0, 5), career: { merged: 1, served: at(10, 0, 5) - at(9) } }]);
+    // their PR merging while they're gone credits nobody
+    run(s, open(2), merge(2));
+    expect(pastCareers(s)[0].career.merged).toBe(1);
+
+    // rehired with a new id: the counts come back, tenure counts both stints, and they're no longer a past agent
+    expect(run(s, { kind: 'hired', agentId: 'ada-2', at: at(9, 0, 7), name: 'ada' }).past).toBe(true);
+    expect(s.careers['ada-2']).toMatchObject({ merged: 1, opened: 1, firstPass: 1, costUsd: 2, turns: 30, hires: 2, rehired: [at(9, 0, 7)], since: at(9, 0, 7) });
+    expect(s.careers['ada-2'].served).toBe(at(10, 0, 5) - at(9));
+    expect(pastCareers(s)).toEqual([]);
+    // someone new with another name starts fresh
+    run(s, { kind: 'hired', agentId: 'bob', at: NOON, name: 'Bob' });
+    expect(s.careers.bob).toMatchObject({ merged: 0, hires: 1 });
+  });
+
+  it('count each finished session into the week, time working and waste, and note what they run since when (#205)', () => {
+    const s = emptyLedger();
+    run(s, { kind: 'hired', agentId: 'ada', at: NOON });
+    run(s, { kind: 'work', agentId: 'ada', at: NOON, ms: 20 * 60_000, usd: 1.5, waste: false, tokens: 9_000 }, { kind: 'work', agentId: 'ada', at: NOON, ms: 10 * 60_000, usd: 0.5, waste: true, tokens: null });
+    expect(s.careers.ada).toMatchObject({ sessions: 2, wasted: 1, wasteUsd: 0.5, workMs: 30 * 60_000, tokens: 9_000 });
+    expect(s.careers.ada.weeks.map(weekOfRow)).toEqual([{ w: weekOf(NOON), merged: 0, usd: 2, waste: 0.5, sessions: 2, firstQa: 0, firstPass: 0, min: 30 }]);
+    run(s, { kind: 'rig', agentId: 'ada', cli: 'claude', model: 'opus', effort: 'high', at: NOON });
+    expect(run(s, { kind: 'rig', agentId: 'ada', cli: 'claude', model: 'opus', effort: 'high', at: NOON + 1 }).changed).toBe(false);
+    run(s, { kind: 'rig', agentId: 'ada', cli: 'claude', model: 'sonnet', effort: 'high', at: NOON + 2 });
+    expect(s.careers.ada.rig).toEqual({ cli: 'claude', model: 'sonnet', effort: 'high', since: NOON + 2 });
+  });
+
+  it('time issues from the build to the merge (#205)', () => {
+    const s = emptyLedger();
+    run(s, { kind: 'hired', agentId: 'ada', at: NOON }, open(1, { at: NOON, took: 30 * 60_000 }), qa(1, false), merge(1, NOON + 90 * 60_000));
+    expect(s.careers.ada.toMerge).toEqual([120 * 60_000]);
+    expect(weekOfRow(s.careers.ada.weeks[0])).toMatchObject({ merged: 1, firstQa: 1, firstPass: 0 });
   });
 
   it('wind tenure back in the demo', () => {
@@ -283,6 +316,28 @@ describe('the state file', () => {
     expect(old.prs[`${R}#3`]).toMatchObject({ author: 'ada', title: 'Sound', qaPass: 1 });
     expect(old.careers.ada).not.toHaveProperty('bySpecialty');
     expect(old.careers.ada).toMatchObject({ merged: 2, reviews: 1 });
+  });
+
+  it('loads careers saved before #205: numbers kept, merges in their weeks, past careers empty; and fills in sessions from the cost ledger', () => {
+    const merges = [NOON - DAY_MS, NOON - 8 * DAY_MS];
+    const old = loadLedger({ careers: { ada: { since: NOON - 20 * DAY_MS, merged: 9, opened: 10, costUsd: 12.5, turns: 400, week: merges } } });
+    expect(old.past).toEqual({});
+    expect(old.careers.ada).toMatchObject({ merged: 9, opened: 10, costUsd: 12.5, turns: 400, hires: 1, served: 0, sessions: 0, rig: null });
+    expect(old.careers.ada.weeks.map((r) => [r[0], weekOfRow(r).merged])).toEqual(
+      [...new Set(merges.map(weekOf))].sort((a, b) => a - b).map((w) => [w, merges.filter((t) => weekOf(t) === w).length]),
+    );
+
+    const line = (agentId: string, agent: string, usd: number, outcome: CostSession['outcome']): CostSession => ({ type: 'session', at: NOON, ms: 600_000, repoId: R, agentId, agent, kind: 'issue', issue: 1, pr: null, round: null, model: 'm', effort: '', usd, tokens: null, outcome });
+    // Ada's sessions, one from before a rehire under another id; Bob's aren't hers
+    expect(backfillWork(old, [line('ada', 'Ada', 2, 'pr'), line('ada-old', 'Ada', 1, 'no-pr'), line('bob', 'Bob', 5, 'pr')], [{ id: 'ada', name: 'Ada' }])).toBe(true);
+    expect(old.careers.ada).toMatchObject({ sessions: 2, wasted: 1, wasteUsd: 1, workMs: 1_200_000 });
+    expect(old.careers.ada.costUsd).toBe(12.5); // what was earned before stays as it was
+    // once only: a career with sessions is left alone
+    expect(backfillWork(old, [line('ada', 'Ada', 2, 'pr')], [{ id: 'ada', name: 'Ada' }])).toBe(false);
+
+    const s = emptyLedger();
+    run(s, { kind: 'hired', agentId: 'ada', at: NOON, name: 'Ada' }, { kind: 'let-go', agentId: 'ada', name: 'Ada', at: NOON + DAY_MS });
+    expect(loadLedger(JSON.parse(JSON.stringify(s)))).toEqual(s);
   });
 
   it('shows connected floors only, with empty ones for floors that earned nothing yet', () => {

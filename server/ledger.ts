@@ -2,7 +2,7 @@
 // (PRs opened, QA verdicts, fixes, checks, merges, sessions) and kept in the state file. Floors earn coins and buy
 // decorations with them, the office unlocks achievements, and every agent builds a career. Pure, and idempotent: an
 // event seen twice changes nothing, so the swarm can report what it notices on every sync.
-import { DAY_MS, newCareer, RECENT_KEEP, SPARK_WEEKS, WEEK_MS, type CareerView } from '../shared/careers.ts';
+import { addWeek, DAY_MS, legacyCareer, newCareer, RECENT_KEEP, WEEK_MS, type CareerView, type PastCareer } from '../shared/careers.ts';
 import {
   ACHIEVEMENTS,
   catalogueItem,
@@ -23,6 +23,7 @@ import {
   type ProgressView,
   type RewardView,
 } from '../shared/progress.ts';
+import { wasteReason, type CostRecord, type CostSession } from '../shared/costs.ts';
 import type { PullInfo } from '../shared/types.ts';
 
 /** An open PR the ledger is following, until it merges or goes away. */
@@ -39,6 +40,8 @@ export interface PrTrack {
   needsHuman: boolean;
   /** When the ledger started following it. */
   since: number;
+  /** When the build that opened it started (#205: time to merge). */
+  started?: number;
 }
 
 export interface FloorLedger extends FloorProgressView {
@@ -53,6 +56,8 @@ export interface LedgerState {
   prs: Record<string, PrTrack>;
   floors: Record<string, FloorLedger>;
   careers: Record<string, CareerView>;
+  /** Careers of people let go, by their name in lower case (#205): a rehire picks theirs up again. */
+  past: Record<string, PastCareer>;
   achievements: AchievementView[];
   coffees: number;
   merges: number;
@@ -63,8 +68,9 @@ export interface LedgerState {
 }
 
 export type LedgerEvent =
-  | { kind: 'hired'; agentId: string; at: number }
-  | { kind: 'let-go'; agentId: string }
+  /** `name`: a career kept from an earlier stint under it comes back (#205). */
+  | { kind: 'hired'; agentId: string; at: number; name?: string }
+  | { kind: 'let-go'; agentId: string; name?: string; at?: number }
   /** An open PR on GitHub, as a sync sees it. */
   | { kind: 'pr-open'; repoId: string; pr: number; title: string; author: string | null; checks: PullInfo['checks']; at: number }
   /** An agent's session building an issue ended with this PR open, `took` ms after it started. */
@@ -78,9 +84,58 @@ export type LedgerEvent =
   /** A sync's PR lists: tracks of PRs in neither went away (closed), once they're old enough not to be brand new. */
   | { kind: 'listed'; repoId: string; numbers: number[]; at: number }
   | { kind: 'session'; agentId: string; key: string; costUsd: number; turns: number }
+  /** A finished session's cost ledger line (#205): the weekly totals, time working and waste. */
+  | ({ kind: 'work'; agentId: string } & Work)
+  /** The coding agent, model and effort someone runs (#205). */
+  | { kind: 'rig'; agentId: string; cli: string; model: string; effort: string; at: number }
   | { kind: 'coffee'; id: string; at: number }
   | { kind: 'full-house'; repoName: string; people: number; at: number }
   | { kind: 'tick'; at: number };
+
+/** A finished session, as a career counts it (#205). */
+interface Work {
+  at: number;
+  ms: number;
+  usd: number;
+  waste: boolean;
+  tokens: number | null;
+}
+
+/** A cost ledger line as a career counts it. */
+export const workOf = (line: CostSession): Work => ({ at: line.at, ms: line.ms, usd: line.usd, waste: wasteReason(line) !== null, tokens: line.tokens });
+
+function addWork(c: CareerView, w: Work) {
+  const usd = Math.max(0, w.usd);
+  const ms = Math.max(0, w.ms);
+  addWeek(c, w.at, { usd, min: Math.round(ms / 60_000), sessions: 1, ...(w.waste && { waste: usd }) });
+  c.sessions++;
+  c.workMs += ms;
+  if (w.waste) {
+    c.wasted++;
+    c.wasteUsd = cents(c.wasteUsd + usd);
+  }
+  if (w.tokens) c.tokens += Math.max(0, Math.round(w.tokens));
+}
+
+/**
+ * Careers from before #205 have no sessions counted: they get them from the cost ledger's month (by id, or by name for
+ * someone rehired under a new id), so the weekly totals, time working and waste start with what's known. Returns
+ * whether any changed.
+ */
+export function backfillWork(s: LedgerState, lines: readonly CostRecord[], agents: readonly { id: string; name: string }[]): boolean {
+  let changed = false;
+  for (const a of agents) {
+    const c = s.careers[a.id];
+    if (!c || c.sessions > 0) continue;
+    const name = a.name.toLowerCase();
+    for (const line of lines) {
+      if (line.type !== 'session' || (line.agentId !== a.id && line.agent.toLowerCase() !== name)) continue;
+      addWork(c, workOf(line));
+      changed = true;
+    }
+  }
+  return changed;
+}
 
 /** What an event changed, for the swarm to send on. */
 export interface Effects {
@@ -92,19 +147,24 @@ export interface Effects {
   unlocked: AchievementView[];
   /** The progress view changed (coins, decorations, achievements, counters). */
   progress: boolean;
+  /** The past careers changed: someone was let go or rehired (#205). */
+  past: boolean;
 }
 
 const SEEN_KEEP = 600;
 /** A track this new isn't dropped for missing from a sync's lists: that sync may have started before the PR existed. */
 const LISTED_GRACE_MS = 10 * 60_000;
 const SPOTLESS_MERGES = 5;
+/** Past careers kept for rehires and the Team tab: the most recently let go. */
+const PAST_KEEP = 40;
 const PERFECT_RUN = 5;
 
 export function emptyLedger(): LedgerState {
-  return { seen: [], prs: {}, floors: {}, careers: {}, achievements: [], coffees: 0, merges: 0, clean: 0, day: { date: '', merges: 0, qaFails: 0 } };
+  return { seen: [], prs: {}, floors: {}, careers: {}, past: {}, achievements: [], coffees: 0, merges: 0, clean: 0, day: { date: '', merges: 0, qaFails: 0 } };
 }
 
-const fx = (): Effects => ({ changed: false, reward: null, careers: [], unlocked: [], progress: false });
+const fx = (): Effects => ({ changed: false, reward: null, careers: [], unlocked: [], progress: false, past: false });
+const cents = (x: number) => Math.round(x * 1e4) / 1e4;
 const prKey = (repoId: string, pr: number) => `${repoId}#${pr}`;
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -164,14 +224,27 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
   switch (ev.kind) {
     case 'hired': {
       if (s.careers[ev.agentId]) break;
-      s.careers[ev.agentId] = newCareer(ev.at);
+      const key = ev.name?.trim().toLowerCase();
+      const back = key ? s.past[key] : undefined;
+      if (back && key) delete s.past[key];
+      s.careers[ev.agentId] = back ? { ...back.career, since: ev.at, hires: back.career.hires + 1, rehired: [ev.at, ...back.career.rehired].slice(0, RECENT_KEEP) } : newCareer(ev.at);
       out.careers.push(ev.agentId);
       out.changed = true;
+      out.past = !!back;
       break;
     }
     case 'let-go': {
-      if (!s.careers[ev.agentId]) break;
+      const c = s.careers[ev.agentId];
+      if (!c) break;
       delete s.careers[ev.agentId];
+      const name = ev.name?.trim();
+      if (name) {
+        const at = ev.at ?? Date.now();
+        s.past[name.toLowerCase()] = { name, id: ev.agentId, left: at, career: { ...c, served: c.served + Math.max(0, at - c.since) } };
+        const keep = Object.entries(s.past).sort((a, b) => b[1].left - a[1].left);
+        for (const [k] of keep.slice(PAST_KEEP)) delete s.past[k];
+        out.past = true;
+      }
       out.changed = true;
       break;
     }
@@ -191,6 +264,7 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
       t.author = ev.author;
       t.title = ev.title.slice(0, 80) || t.title;
       out.changed = true;
+      if (ev.took && ev.took > 0) t.started ??= ev.at - ev.took;
       const c = markSeen(s, `open:${prKey(ev.repoId, ev.pr)}`) ? careerOf(s, ev.author, out) : null;
       if (c) {
         c.opened++;
@@ -217,6 +291,7 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
         else c.qaFail++;
         if (first && ev.round === 1) {
           c.firstQa++;
+          addWeek(c, ev.at, { firstQa: 1, ...(ev.pass && { firstPass: 1 }) });
           if (ev.pass) {
             c.firstPass++;
             c.run++;
@@ -266,6 +341,23 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
       if (!c) break;
       c.costUsd = Math.round((c.costUsd + Math.max(0, ev.costUsd)) * 1e4) / 1e4;
       c.turns += Math.max(0, Math.round(ev.turns));
+      out.changed = true;
+      break;
+    }
+    case 'work': {
+      // once per session (the cost ledger's line), so no seen key: those are for what syncs report again
+      const c = careerOf(s, ev.agentId, out);
+      if (!c) break;
+      addWork(c, ev);
+      out.changed = true;
+      break;
+    }
+    case 'rig': {
+      const c = s.careers[ev.agentId];
+      const r = c?.rig;
+      if (!c || (r && r.cli === ev.cli && r.model === ev.model && r.effort === ev.effort)) break;
+      c.rig = { cli: ev.cli, model: ev.model, effort: ev.effort, since: ev.at };
+      careerOf(s, ev.agentId, out);
       out.changed = true;
       break;
     }
@@ -328,7 +420,9 @@ function merged(s: LedgerState, ev: Extract<LedgerEvent, { kind: 'merged' }>, ou
     c.merged++;
     c.fixRounds += t.fixRounds;
     c.recent = [{ n: ev.pr, title, at: ev.at }, ...c.recent].slice(0, RECENT_KEEP);
-    c.week = [...c.week.filter((x) => x > ev.at - SPARK_WEEKS * WEEK_MS), ev.at].slice(-200);
+    c.week = [...c.week.filter((x) => x > ev.at - WEEK_MS), ev.at].slice(-200);
+    addWeek(c, ev.at, { merged: 1 });
+    if (t.started && ev.at > t.started) c.toMerge = [ev.at - t.started, ...c.toMerge].slice(0, RECENT_KEEP);
   }
   out.reward = { repoId: ev.repoId, prNumber: ev.pr, agentId: author, coins, reasons };
 
@@ -418,6 +512,9 @@ export function progressView(s: LedgerState, repoIds: string[]): ProgressView {
   return { floors, achievements: s.achievements, coffees: s.coffees, merges: s.merges };
 }
 
+/** The Team tab's "Past agents" (#205): careers of people let go, the most recently gone first. */
+export const pastCareers = (s: LedgerState): PastCareer[] => Object.values(s.past).sort((a, b) => b.left - a.left);
+
 const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
@@ -438,6 +535,7 @@ export function loadLedger(raw: unknown): LedgerState {
       fixRounds: num(x.fixRounds),
       needsHuman: x.needsHuman === true,
       since: num(x.since, Date.now()),
+      ...(typeof x.started === 'number' && { started: x.started }),
     };
   }
   for (const [id, f] of Object.entries(obj(r.floors))) {
@@ -457,30 +555,10 @@ export function loadLedger(raw: unknown): LedgerState {
       streak: Array.isArray(x.streak) ? x.streak.filter((t): t is number => typeof t === 'number') : [],
     };
   }
-  for (const [id, c] of Object.entries(obj(r.careers))) {
-    const x = obj(c);
-    s.careers[id] = {
-      ...newCareer(num(x.since, Date.now())),
-      opened: num(x.opened),
-      merged: num(x.merged),
-      firstPass: num(x.firstPass),
-      firstQa: num(x.firstQa),
-      qaPass: num(x.qaPass),
-      qaFail: num(x.qaFail),
-      fixRounds: num(x.fixRounds),
-      run: num(x.run),
-      best: num(x.best),
-      reviews: num(x.reviews),
-      costUsd: num(x.costUsd),
-      turns: num(x.turns),
-      recent: (Array.isArray(x.recent) ? x.recent : [])
-        .map(obj)
-        .filter((m) => typeof m.n === 'number')
-        .map((m) => ({ n: m.n as number, title: typeof m.title === 'string' ? m.title : '', at: num(m.at) }))
-        .slice(0, RECENT_KEEP),
-      week: Array.isArray(x.week) ? x.week.filter((t): t is number => typeof t === 'number') : [],
-      toPr: (Array.isArray(x.toPr) ? x.toPr : []).filter((t): t is number => typeof t === 'number' && t > 0).slice(0, RECENT_KEEP),
-    };
+  for (const [id, c] of Object.entries(obj(r.careers))) s.careers[id] = loadCareer(obj(c));
+  for (const [key, p] of Object.entries(obj(r.past))) {
+    const x = obj(p);
+    if (typeof x.name === 'string' && x.name) s.past[key] = { name: x.name, id: typeof x.id === 'string' ? x.id : '', left: num(x.left), career: loadCareer(obj(x.career)) };
   }
   const known = new Set(ACHIEVEMENTS.map((a) => a.id));
   s.achievements = (Array.isArray(r.achievements) ? r.achievements : [])
@@ -493,4 +571,24 @@ export function loadLedger(raw: unknown): LedgerState {
   const day = obj(r.day);
   s.day = { date: typeof day.date === 'string' ? day.date : '', merges: num(day.merges), qaFails: num(day.qaFails) };
   return s;
+}
+
+/** A career from the state file: older ones (before #205) keep their numbers, and the fields they lack start empty. */
+function loadCareer(x: Record<string, unknown>): CareerView {
+  const c = legacyCareer(x);
+  c.recent = c.recent
+    .map(obj)
+    .filter((m) => typeof m.n === 'number')
+    .map((m) => ({ n: m.n as number, title: typeof m.title === 'string' ? m.title : '', at: num(m.at) }))
+    .slice(0, RECENT_KEEP);
+  c.week = c.week.filter((t): t is number => typeof t === 'number');
+  c.toPr = c.toPr.filter((t): t is number => typeof t === 'number' && t > 0).slice(0, RECENT_KEEP);
+  c.toMerge = c.toMerge.filter((t): t is number => typeof t === 'number' && t > 0).slice(0, RECENT_KEEP);
+  c.rehired = c.rehired.filter((t): t is number => typeof t === 'number').slice(0, RECENT_KEEP);
+  c.weeks = c.weeks.filter((r): r is number[] => Array.isArray(r) && r.length > 0 && r.every((n) => typeof n === 'number'));
+  if (!Array.isArray(x.weeks)) for (const at of c.week) addWeek(c, at, { merged: 1 }); // a record from before #205: its merges' weeks
+  const rig = obj(c.rig);
+  c.rig = typeof rig.cli === 'string' ? { cli: rig.cli, model: String(rig.model ?? ''), effort: String(rig.effort ?? ''), since: num(rig.since) } : null;
+  c.hires = Math.max(1, c.hires);
+  return c;
 }

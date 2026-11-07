@@ -1,5 +1,5 @@
 // Types shared between the swarm server and the 3D client.
-import type { CareerView } from './careers.ts';
+import type { CareerView, PastCareer } from './careers.ts';
 import type { CharterView } from './charter.ts';
 import type { ProgressView, RewardView } from './progress.ts';
 
@@ -849,6 +849,7 @@ export interface WorldSnapshot {
   notifyChannels: NotifyChannelsView;
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   progress: ProgressView; // coins, decorations and achievements (#210)
+  pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
@@ -917,6 +918,7 @@ export type ServerEvent =
   | { type: 'history'; entry: HistoryEntry }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
+  | { type: 'pastCareers'; past: PastCareer[] }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
   /** A plain toast, or with the notice fields a rich one that also joins the notification centre. */

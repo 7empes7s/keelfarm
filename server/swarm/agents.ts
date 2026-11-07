@@ -10,7 +10,7 @@ import { MODELS_FILE } from '../config.ts';
 import { CATALOG_MS, loadCatalog, saveCatalog } from '../modelCatalog.ts';
 import { machineName } from '../machines.ts';
 import type { SessionKind } from '../health.ts';
-import { apply as applyLedger } from '../ledger.ts';
+import { apply as applyLedger, pastCareers } from '../ledger.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import {
   isToolId,
@@ -123,7 +123,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       logTail: [],
     };
     this.state.agents.push(agent);
-    applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now() });
+    if (applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now(), name }).past) this.broadcast({ type: 'pastCareers', past: pastCareers(this.state.progress) });
     this.agentRt.set(agent.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
     this.appendLog(agent, [{ kind: 'system', text: `👋 ${name} joined floor ${repo.floor} (${repo.fullName})${host === 'box' ? ', working in the cloud' : ''}.` }]);
     this.save();
@@ -514,7 +514,7 @@ export abstract class SwarmAgents extends SwarmMerge {
         .then(() => this.sweepFloor(repo.id));
     }
     this.state.agents = this.state.agents.filter((x) => x.id !== id);
-    applyLedger(this.state.progress, { kind: 'let-go', agentId: id });
+    if (applyLedger(this.state.progress, { kind: 'let-go', agentId: id, name: a.name, at: Date.now() }).past) this.broadcast({ type: 'pastCareers', past: pastCareers(this.state.progress) });
     this.agentRt.delete(id);
     this.seenActivity.delete(id);
     this.shownActivity.delete(id);

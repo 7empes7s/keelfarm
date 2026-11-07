@@ -2,7 +2,7 @@
 // can replay it. Pure, so the server (recording, reading, pruning) and the client (replay) share one set of rules:
 // which events are kept and how they're slimmed and scrubbed of secrets, keyframes and seeking, retention, and the
 // marks on the replay's timeline. Terminal output, settings and anything secret are never kept.
-import type { CareerView } from './careers.ts';
+import { legacyCareer, type CareerView } from './careers.ts';
 import { emptyCharterView } from './charter.ts';
 import { INSTALL_STEP, type AgentView, type CeoInfo, type HireRequestView, type IssueInfo, type OpsView, type PhoneMessage, type PreviewView, type PullInfo, type QaView, type RepoView, type ServerEvent, type TickerItem, type UsageView, type WorldSnapshot } from './types.ts';
 
@@ -526,7 +526,8 @@ const LAB_STATIONS = 3;
 /**
  * An agent as journals and state files written before interchangeable agents (docs/agents.md) hold them, in today's
  * shape: developers and QA testers are agents (testers keep their seat: desk 12 + their station), and the title,
- * specialty, brief and hiredBy go, as does their career's bySpecialty. Today's records come back unchanged. `T`: the
+ * specialty, brief and hiredBy go, as does their career's bySpecialty, and fields careers gained since start empty.
+ * Today's records come back unchanged. `T`: the
  * record's type today (the journal's agent unless said otherwise, e.g. the state file's).
  */
 export function legacyAgent<T extends object = JournalAgent>(a: T | Record<string, unknown>): T {
@@ -535,7 +536,7 @@ export function legacyAgent<T extends object = JournalAgent>(a: T | Record<strin
   const out: Record<string, unknown> = { ...rest, role: rest.role === 'ceo' ? 'ceo' : 'agent', desk: rest.role === 'qa' ? LAB_DESK + (desk % LAB_STATIONS) : desk };
   if (rest.career && typeof rest.career === 'object') {
     const { bySpecialty: _by, ...career } = rest.career as Record<string, unknown>;
-    out.career = career;
+    out.career = legacyCareer(career); // and fields added since (#205) start empty
   }
   return out as T;
 }
