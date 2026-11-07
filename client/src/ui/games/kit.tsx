@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react';
 import { isConfirmOpen } from '../Confirm';
 import { isKey } from '../controls';
+import { Icon } from '../Icon';
 
 // Shared plumbing for the phone games: a canvas that fits the phone and redraws every frame, keyboard input that
 // doesn't leak into the office, and touch buttons that repeat while held.
@@ -114,7 +115,7 @@ export function GameHeader({ title, color, onBack, children }: { title: string; 
   return (
     <div className="game-head" style={{ ['--game' as string]: color }}>
       <button type="button" className="game-back" onClick={onBack} title="Back to the games (Backspace)">
-        ‹ Games
+        <Icon name="chevron-left" /> Games
       </button>
       <b className="game-title">{title}</b>
       <span className="game-head-right">{children}</span>

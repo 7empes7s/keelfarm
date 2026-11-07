@@ -194,7 +194,7 @@ export async function takeShot(scale: ShotScale = usePhoto.getState().scale) {
     download(item.url, name);
     const copied = await copyImage(r.png);
     const shrunk = r.scale < scale ? ` (${scale}× was too big for the browser, so ${Math.round(r.scale * 10) / 10}×)` : '';
-    note(`📸 Saved ${name}, ${r.width}×${r.height}${shrunk}${copied ? ', and copied it' : ''}`);
+    note(`Saved ${name}, ${r.width}×${r.height}${shrunk}${copied ? ', and copied it' : ''}`);
     return { name, width: r.width, height: r.height, bytes: r.png.size, copied };
   } catch (err) {
     note(`The shot failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
@@ -242,7 +242,7 @@ export async function stopRecording(): Promise<ClipResult | null> {
     const item = addToGallery(blob, { kind: 'clip', name, width: c.width, height: c.height, seconds });
     download(item.url, name);
     result = { name, bytes: blob.size, seconds, type: blob.type, width: c.width, height: c.height };
-    note(`🎬 Saved ${name}, ${Math.round(seconds)} s at ${c.width}×${c.height}`);
+    note(`Saved ${name}, ${Math.round(seconds)} s at ${c.width}×${c.height}`);
   } catch (err) {
     note(`The clip failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
   } finally {

@@ -12,6 +12,8 @@ import { LobbyNudge, TeamChanges } from './TeamChanges';
 import { clock } from './phoneParts';
 import { useMode } from '../pocket/mode';
 import { useChatFull, useChatFullBack } from './chatFull';
+import { CloseButton, Icon } from './Icon';
+import type { IconName } from './icons';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -49,18 +51,18 @@ function useCompany() {
     const pending = pendingRequests(requests).length;
 
     // The report: a few plain sentences, most urgent first.
-    const report: { icon: string; text: string; tone?: 'good' | 'warn' }[] = [];
+    const report: { icon: IconName; text: string; tone?: 'good' | 'warn' }[] = [];
     const readyList = floors.filter((f) => f.ready > 0);
     if (readyList.length)
       report.push({
-        icon: '✅',
+        icon: 'circle-check',
         text: `${sum('ready')} pull request${sum('ready') === 1 ? ' passed' : 's passed'} QA and ${sum('ready') === 1 ? 'is' : 'are'} ready for you to merge (${readyList.map((f) => `${f.repo.fullName.split('/')[1]}: ${f.ready}`).join(', ')}).`,
         tone: 'good',
       });
-    if (sum('stuck')) report.push({ icon: '⚠️', text: `${sum('stuck')} pull request${sum('stuck') === 1 ? '' : 's'} need${sum('stuck') === 1 ? 's' : ''} your call: the team can't move ${sum('stuck') === 1 ? 'it' : 'them'} on alone.`, tone: 'warn' });
-    if (pending) report.push({ icon: '👥', text: `${pending} team change${pending === 1 ? ' is' : 's are'} waiting in Team.`, tone: 'warn' });
+    if (sum('stuck')) report.push({ icon: 'triangle-alert', text: `${sum('stuck')} pull request${sum('stuck') === 1 ? '' : 's'} need${sum('stuck') === 1 ? 's' : ''} your call: the team can't move ${sum('stuck') === 1 ? 'it' : 'them'} on alone.`, tone: 'warn' });
+    if (pending) report.push({ icon: 'users', text: `${pending} team change${pending === 1 ? ' is' : 's are'} waiting in Team.`, tone: 'warn' });
     report.push({
-      icon: '⚙️',
+      icon: 'settings',
       text: settings.sessionLimit
         ? running
           ? `${running} of ${settings.sessionLimit} session slots are busy right now.`
@@ -71,16 +73,16 @@ function useCompany() {
     });
     for (const f of floors) {
       if (f.issues > 0 && !f.repo.autoAssign && f.working === 0 && f.idle > 0) {
-        report.push({ icon: '💤', text: `${f.repo.fullName.split('/')[1]} has ${f.issues} open issue${f.issues === 1 ? '' : 's'} and free agents, but auto-assign is off.` });
+        report.push({ icon: 'moon', text: `${f.repo.fullName.split('/')[1]} has ${f.issues} open issue${f.issues === 1 ? '' : 's'} and free agents, but auto-assign is off.` });
       }
     }
     const busiest = [...floors].sort((a, b) => b.issues + b.prs - (a.issues + a.prs))[0];
     if (busiest && busiest.issues + busiest.prs > 0 && floors.length > 1) {
-      report.push({ icon: '🔥', text: `Most work in flight: ${busiest.repo.fullName.split('/')[1]} (${busiest.issues} issues, ${busiest.prs} PRs).` });
+      report.push({ icon: 'flame', text: `Most work in flight: ${busiest.repo.fullName.split('/')[1]} (${busiest.issues} issues, ${busiest.prs} PRs).` });
     }
     if (ceo) {
       report.push({
-        icon: '🧠',
+        icon: 'brain',
         text:
           ceo.status === 'working'
             ? `${ceo.name} is ${(info.job?.label ?? 'working').replace(/^\w/, (c) => c.toLowerCase())}.`
@@ -89,7 +91,7 @@ function useCompany() {
               : `${ceo.name}'s periodic reviews are off.`,
       });
     }
-    if (floors.length === 0) report.splice(0, report.length, { icon: '👋', text: "No projects yet. Connect a repo in the manager's office (lobby, back left) and the CEO will staff it." });
+    if (floors.length === 0) report.splice(0, report.length, { icon: 'hand', text: "No projects yet. Connect a repo in the manager's office (lobby, back left) and the CEO will staff it." });
     return { floors, staff: staff.length, running, max: settings.sessionLimit, issues: sum('issues'), prs: sum('prs'), report };
   }, [repos, agents, qa, requests, settings, info]);
 }
@@ -102,26 +104,26 @@ function Shortcuts() {
   return (
     <nav className="phone-links" aria-label="Open a panel">
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager' })}>
-        🧑‍💼 Console
+        <Icon name="briefcase-business" /> Console
       </button>
       {repoId && (
         <button className="btn btn-small" onClick={() => openOverlay({ kind: 'kanban', repoId })}>
-          📋 Kanban
+          <Icon name="clipboard-list" /> Kanban
         </button>
       )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
-        👥 Floor list
+        <Icon name="users" /> Floor list
       </button>
       {office && (
         <button className="btn btn-small" onClick={() => openOverlay({ kind: 'mapRoom' })}>
-          🌌 Map room
+          <Icon name="orbit" /> Map room
         </button>
       )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
-        ❓ Help
+        <Icon name="circle-help" /> Help
       </button>
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager', tab: 'access' })}>
-        ♿ Accessibility
+        <Icon name="accessibility" /> Accessibility
       </button>
     </nav>
   );
@@ -130,21 +132,19 @@ function Shortcuts() {
 function Company() {
   const c = useCompany();
   const goToFloor = useStore((s) => s.goToFloor);
-  const tiles: [string, string | number, string][] = [
-    ['🏢', c.floors.length, c.floors.length === 1 ? 'project' : 'projects'],
-    ['📋', c.issues, 'open issues'],
-    ['🔀', c.prs, 'open PRs'],
-    ['👥', c.staff, 'on staff'],
-    ['⚙️', c.max ? `${c.running}/${c.max}` : `${c.running}`, 'working now'],
+  const tiles: [IconName, string | number, string][] = [
+    ['building-2', c.floors.length, c.floors.length === 1 ? 'project' : 'projects'],
+    ['clipboard-list', c.issues, 'open issues'],
+    ['git-merge', c.prs, 'open PRs'],
+    ['users', c.staff, 'on staff'],
+    ['settings', c.max ? `${c.running}/${c.max}` : `${c.running}`, 'working now'],
   ];
   return (
     <div className="phone-scroll">
       <div className="tiles">
         {tiles.map(([icon, value, label]) => (
           <div key={label} className="tile">
-            <div className="tile-value">
-              {icon} {value}
-            </div>
+            <div className="tile-value"><Icon name={icon} /> {value}</div>
             <div className="tile-label">{label}</div>
           </div>
         ))}
@@ -154,7 +154,7 @@ function Company() {
       <ul className="report">
         {c.report.map((r, i) => (
           <li key={i} className={r.tone ? `report-${r.tone}` : ''}>
-            <span>{r.icon}</span>
+            <span><Icon name={r.icon} /></span>
             <span>{r.text}</span>
           </li>
         ))}
@@ -174,13 +174,13 @@ function Company() {
           </div>
           <div className="proj-stats small">
             <span>
-              👥 {f.team}
+              <Icon name="users" /> {f.team}
               {f.working ? ` (${f.working} busy)` : ''}
             </span>
-            <span>📋 {f.issues}</span>
-            <span>🔍 {f.inQa}</span>
-            <span className={f.ready ? 'proj-ready' : ''}>✅ {f.ready}</span>
-            <span>🎉 {f.merged}</span>
+            <span><Icon name="clipboard-list" /> {f.issues}</span>
+            <span><Icon name="search" /> {f.inQa}</span>
+            <span className={f.ready ? 'proj-ready' : ''}><Icon name="circle-check" /> {f.ready}</span>
+            <span><Icon name="party-popper" /> {f.merged}</span>
           </div>
         </div>
       ))}
@@ -255,20 +255,20 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
 
   const pending = pendingRequests(requests).length;
   const unread = unreadMessages(messages, readAt);
-  const tabs: [PhoneTab, string, string, number][] = [
-    ['chat', '💬', ceoName, tab === 'chat' ? 0 : unread],
-    ['hires', '👥', 'Team', pending],
-    ['company', '📊', 'Company', 0],
-    ['games', '🎮', 'Games', 0],
+  const tabs: [PhoneTab, IconName, string, number][] = [
+    ['chat', 'message-circle', ceoName, tab === 'chat' ? 0 : unread],
+    ['hires', 'users', 'Team', pending],
+    ['company', 'chart-column', 'Company', 0],
+    ['games', 'gamepad-2', 'Games', 0],
   ];
   return (
     <div className={`overlay phone-overlay ${full ? 'phone-overlay-full' : ''}`} {...backdropClose(closeOverlay)}>
       <div className={`phone ds-screen ${full ? 'phone-full' : ''}`} ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
-        <button className="phone-x" onClick={closeOverlay} aria-label="Close">✕</button>
+        <CloseButton className="phone-x" onClick={closeOverlay} label="Close" />
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />
-          <span>📶 🔋</span>
+          <span><Icon name="signal" /> <Icon name="battery-full" /></span>
         </div>
         <HolidayStrip />
         <div className="phone-screen">
@@ -289,7 +289,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
               onClick={() => (k === 'games' && tab === 'games' ? setGame(null) : setTab(k))}
             >
               <span className="phone-tab-icon" aria-hidden>
-                {icon}
+                <Icon name={icon} />
                 {badge > 0 && <span className="badge badge-dot">{badge}</span>}
               </span>
               <span>{label}</span>

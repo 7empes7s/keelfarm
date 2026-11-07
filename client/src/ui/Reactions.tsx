@@ -2,6 +2,7 @@
 // bar of emoji; the picked ones show as chips under it. What each one means to the agent: shared/reactions.ts.
 import { useRef, useState, type ReactNode } from 'react';
 import { REACTIONS, sendsNote, type Reaction } from '../../../shared/reactions';
+import { Icon } from './Icon';
 
 const HOLD_MS = 450;
 
@@ -60,7 +61,7 @@ export function Reactable({ picked, onPick, label, children }: { picked: readonl
     >
       {children}
       <button type="button" className="rx-open-btn" aria-label={`React to ${label}`} aria-expanded={open} title="React" onClick={() => setOpen(!open)}>
-        ☺
+        <Icon name="smile-plus" />
       </button>
       {open && (
         <ReactionBar

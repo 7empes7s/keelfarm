@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Held } from '../store';
 import { ammoLabel, reloadProgress } from '../world/toys/darts';
+import { Icon } from './Icon';
 import { Key } from './Key';
 
 /** With a blaster in hand: the controls, and the darts left ("Darts 9/12") with a bar while reloading. */
@@ -25,7 +26,9 @@ export function BlasterHud({ held }: { held: Extract<Held, { kind: 'blaster' }> 
         <kbd>Click</kbd> / <Key action="throw" /> fire · <Key action="reload" /> reload · <Key action="drop" /> drop
       </div>
       <div className={`hud-ammo ${empty ? 'hud-ammo-empty' : ''}`}>
-        <span className="hud-ammo-count">🎯 {ammoLabel(held, performance.now())}</span>
+        <span className="hud-ammo-count">
+          <Icon name="target" /> {ammoLabel(held, performance.now())}
+        </span>
         {reloading && (
           <div className="hud-ammo-bar">
             <div ref={bar} className="hud-ammo-fill" />

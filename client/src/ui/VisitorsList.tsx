@@ -4,6 +4,7 @@ import { useCameraView } from '../world/camera/rig';
 import { followVisitor, following, stopFollowing } from '../world/presence/presenceState';
 import { useProfile } from '../world/presence/profile';
 import { VisitorRow } from './VisitorRow';
+import { Icon } from './Icon';
 
 // Who else is in the office (shared presence), at the top of the people list: where each visitor is, and Follow to
 // trail them with the camera.
@@ -22,7 +23,9 @@ export function VisitorsList() {
   return (
     <div className="wk-group">
       <div className="wk-group-head vs-head" title="Everyone else viewing the office">
-        <span className="wk-group-arrow">👋</span>
+        <span className="wk-group-arrow">
+          <Icon name="hand" />
+        </span>
         <span className="wk-group-name">Visitors</span>
         <span className="vs-me">{appear ? `you: ${name}` : 'you: hidden'}</span>
         <span className="wk-group-count">{visitors.length}</span>

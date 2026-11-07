@@ -123,7 +123,7 @@ export function Grill() {
     const t = now();
     const { op, grill: next } = pressGrill(model.current, t, s.held !== null);
     if (op === 'full') {
-      s.pushToast('info', s.held?.kind === 'sausage' ? '🌭 One at a time: eat that one first (E)' : '🙌 Your hands are full');
+      s.pushToast('info', s.held?.kind === 'sausage' ? 'One at a time: eat that one first (E)' : 'Your hands are full');
       return;
     }
     const was = model.current;

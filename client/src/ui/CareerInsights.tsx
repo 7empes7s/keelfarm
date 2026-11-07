@@ -9,6 +9,8 @@ import { useStore, type Agent } from '../store';
 import { ProgressBar } from './ProgressBar';
 import { cliName } from './AgentSettings';
 import './careers.css';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 export const usd = (x: number) => `$${x < 10 ? x.toFixed(2) : x.toFixed(0)}`;
 export const hours = (ms: number) => `${Math.round(ms / 360_000) / 10}h`;
@@ -105,19 +107,19 @@ const dayTitle = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString
 const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 const STOP_TEXT: Record<string, string> = { error: 'hit an error', watchdog: 'stopped by the watchdog', stopped: 'stopped', interrupted: 'interrupted', limited: "cut off by Claude's usage limit" };
 
-function itemLine(it: Exclude<TimelineItem, { type: 'rehired' }>): { icon: string; title: string; meta: string } {
+function itemLine(it: Exclude<TimelineItem, { type: 'rehired' }>): { icon: IconName; title: string; meta: string } {
   const cost = `${durationText(Math.max(60_000, it.ms))} · ${usd(it.usd)}`;
   if (it.type === 'build') {
     const passed = it.rounds.filter((r) => r.pass).length;
     const failed = it.rounds.length - passed;
     const causes = [...new Set(it.rounds.flatMap((r) => (r.cause ? [ROUND_CAUSE_LABELS[r.cause]] : [])))];
-    const rounds = it.rounds.length ? `QA ${it.rounds.map((r) => (r.pass ? '✓' : '✗')).join('')}${failed && causes.length ? ` (${causes.join(', ')})` : ''}` : '';
+    const rounds = it.rounds.length ? `QA passed ${passed} of ${it.rounds.length}${failed && causes.length ? ` (${causes.join(', ')})` : ''}` : '';
     const state = it.state === 'merged' ? 'merged' : it.state === 'no-pr' ? 'no PR' : `PR #${it.pr} open`;
-    return { icon: it.state === 'merged' ? '🟣' : it.state === 'no-pr' ? '⚪' : '🟢', title: `${it.issue !== null ? `#${it.issue} ` : ''}${it.title || 'An issue'}`, meta: [it.pr !== null && it.state === 'merged' ? `PR #${it.pr} merged` : state, rounds, it.fixes ? `${it.fixes} fix${it.fixes > 1 ? 'es' : ''}` : '', cost].filter(Boolean).join(' · ') };
+    return { icon: it.state === 'merged' ? 'git-merge' : it.state === 'no-pr' ? 'circle-dot' : 'git-branch', title: `${it.issue !== null ? `#${it.issue} ` : ''}${it.title || 'An issue'}`, meta: [it.pr !== null && it.state === 'merged' ? `PR #${it.pr} merged` : state, rounds, it.fixes ? `${it.fixes} fix${it.fixes > 1 ? 'es' : ''}` : '', cost].filter(Boolean).join(' · ') };
   }
-  if (it.type === 'review') return { icon: it.pass ? '✅' : '❌', title: `QA on PR #${it.pr}: ${it.pass ? 'passed' : 'failed'}`, meta: [it.cause && ROUND_CAUSE_LABELS[it.cause], it.title, cost].filter(Boolean).join(' · ') };
-  if (it.type === 'fix') return { icon: it.why === 'conflict' ? '🔀' : '🔧', title: `${it.why === 'conflict' ? 'Conflict fix' : it.why === 'checks' ? 'Fixed a red check' : "Fixed QA's findings"} on PR #${it.pr}`, meta: [it.title, cost].filter(Boolean).join(' · ') };
-  return { icon: '⛔', title: `${it.title || 'A session'} ${STOP_TEXT[it.outcome] ?? it.outcome}`, meta: [it.note, cost].filter(Boolean).join(' · ') };
+  if (it.type === 'review') return { icon: it.pass ? 'circle-check' : 'circle-x', title: `QA on PR #${it.pr}: ${it.pass ? 'passed' : 'failed'}`, meta: [it.cause && ROUND_CAUSE_LABELS[it.cause], it.title, cost].filter(Boolean).join(' · ') };
+  if (it.type === 'fix') return { icon: it.why === 'conflict' ? 'git-merge' : 'wrench', title: `${it.why === 'conflict' ? 'Conflict fix' : it.why === 'checks' ? 'Fixed a red check' : "Fixed QA's findings"} on PR #${it.pr}`, meta: [it.title, cost].filter(Boolean).join(' · ') };
+  return { icon: 'ban', title: `${it.title || 'A session'} ${STOP_TEXT[it.outcome] ?? it.outcome}`, meta: [it.note, cost].filter(Boolean).join(' · ') };
 }
 
 /** What they did over the last month, by day, as cards; each row opens the PR, QA report or session behind it. */
@@ -161,7 +163,7 @@ export function CareerTimeline({ agent }: { agent: Agent }) {
               if (it.type === 'rehired')
                 return (
                   <li key={`r${it.at}`} className="cr-item cr-item-note">
-                    <span aria-hidden>👋</span> Rehired at {clock(it.at)}, their record kept
+                    <Icon name="hand" /> Rehired at {clock(it.at)}, their record kept
                   </li>
                 );
               const line = itemLine(it);
@@ -170,7 +172,7 @@ export function CareerTimeline({ agent }: { agent: Agent }) {
                 <li key={`${it.type}${it.at}${i}`}>
                   <button type="button" className="cr-item" onClick={() => open(it)} aria-label={`${line.title}. ${line.meta}. ${tap}`}>
                     <span className="cr-item-icon" aria-hidden>
-                      {line.icon}
+                      <Icon name={line.icon} />
                     </span>
                     <span className="cr-item-main">
                       <span className="cr-item-title">{line.title}</span>
@@ -179,7 +181,7 @@ export function CareerTimeline({ agent }: { agent: Agent }) {
                       </span>
                     </span>
                     <span className="cr-chev" aria-hidden>
-                      {it.type === 'build' && it.pr !== null ? '↗' : '›'}
+                      <Icon name={it.type === 'build' && it.pr !== null ? 'external-link' : 'chevron-right'} />
                     </span>
                   </button>
                 </li>
@@ -195,7 +197,7 @@ export function CareerTimeline({ agent }: { agent: Agent }) {
 
 // ---------- the Team tab ----------
 
-const HL_ICON: Record<Highlight['key'], string> = { mvp: '🏆', cheapest: '💸', firstPass: '🎯', reviews: '🔍', waste: '🗑️', idle: '💤' };
+const HL_ICON: Record<Highlight['key'], IconName> = { mvp: 'trophy', cheapest: 'wallet', firstPass: 'target', reviews: 'search', waste: 'trash-2', idle: 'moon' };
 
 /** The highlights row above the Team table: each card opens that agent's profile (the waste card their History). */
 export function Highlights({ people }: { people: { id: string; name: string; career: CareerView | null; idleSince: number | null }[] }) {
@@ -213,7 +215,7 @@ export function Highlights({ people }: { people: { id: string; name: string; car
             title={h.key === 'waste' ? 'See the sessions in History' : `Open ${h.name}'s profile`}
           >
             <span className="cr-hl-label">
-              <span aria-hidden>{HL_ICON[h.key]}</span> {h.label}
+              <Icon name={HL_ICON[h.key]} /> {h.label}
             </span>
             <b className="cr-hl-name">{h.name}</b>
             <small>{h.text}</small>
