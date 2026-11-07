@@ -2471,6 +2471,14 @@ input.inline:focus {
 .office-card .grow {
   min-width: 190px; /* narrow screens: the buttons wrap below instead of squeezing the status */
 }
+.mc-changes {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+.mc-changes li + li {
+  margin-top: 4px;
+}
 .office-state {
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -5220,6 +5228,23 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .notify-events .toggle.block {
   margin: 4px 0;
+}
+.notify-today {
+  margin: 4px 0 10px;
+}
+.notify-today-bar {
+  display: flex;
+  height: 6px;
+  margin-bottom: 4px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+}
+.notify-today-sent {
+  background: var(--ds-accent);
+}
+.notify-today-skipped {
+  background: var(--ds-good-fill);
 }
 .notify-hook {
   padding: 8px 0;

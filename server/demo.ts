@@ -36,6 +36,7 @@ import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
+import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -172,8 +173,39 @@ function shippedPull(fullName: string, number: number, title: string, agoMs: num
   };
 }
 
+// The demo's long issue (#206): sections, a checklist and code, for the card view; its PR fails QA's first round.
+const DARK_MODE_TITLE = 'Add dark mode toggle';
+const DARK_MODE_BODY = [
+  'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.',
+  '',
+  'Objective: O1',
+  '',
+  '## Why',
+  'Half the feedback this month asks for a dark theme: people plan their day late at night and the white page glares.',
+  'Three users said they stopped using the app in the evening because of it.',
+  '',
+  '## Build',
+  '1. A toggle in the header (sun / moon), 44 px, with a label for screen readers.',
+  '2. Colours move to CSS custom properties on `:root`, with a `[data-theme="dark"]` set beside them:',
+  '```css',
+  ':root[data-theme="dark"] {',
+  '  --bg: #16151d;',
+  '  --text: #f2f0ea;',
+  '}',
+  '```',
+  '3. The choice is saved in `localStorage` and read before the first paint, so the page never flashes white.',
+  "4. With nothing saved, follow the device's `prefers-color-scheme`.",
+  '',
+  '## Acceptance',
+  '- The toggle switches every screen between light and dark',
+  '- The choice survives a reload',
+  '- No white flash on load in dark mode',
+  '- Contrast passes WCAG AA in both themes',
+  '- Unit tests cover reading and saving the choice',
+].join('\n');
+
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
+  ['Add dark mode toggle', DARK_MODE_BODY],
   ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
@@ -181,6 +213,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
 strangers('demo-co/pixel-todo');
+repos.get('demo-co/pixel-todo')!.pulls.push(...stalePulls(['Try a darker theme', 'Experiment: drag to reorder', 'Spike: offline mode'], (title) => shippedPull('demo-co/pixel-todo', repos.get('demo-co/pixel-todo')!.nextNumber++, title, 0)));
 seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
@@ -508,7 +541,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     cb.tool(null);
     if (kind === 'qa') {
       // Most first rounds pass; some fail so the fix loop can be seen in action.
-      const pass = round > 1 || Math.random() > 0.35;
+      const pass = round > 1 || (title !== DARK_MODE_TITLE && Math.random() > 0.35);
       cb.log([{ kind: 'text', text: pass ? '● Everything checks out. Writing up the report.' : '● The toolbar overflows on a 375px screen. Failing this round.' }]);
       cb.finished({
         ok: true,
@@ -1025,7 +1058,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       installedDesks.add(dir);
       return 'installed';
     },
-    removeDesk: async () => undefined,
+    ...demoPreviewDesks(), // removeDesk and previewDesks (#204)
     sweepDesks: async () => ({ desks: 0, folders: 0, branches: 0, patches: [], skipped: [] }),
     trimDesk: (_fullName, _slug, stillIdle) => fakeTrim(stillIdle),
     releaseDesk: async () => undefined,
@@ -1571,6 +1604,27 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
       return needs.length ? needs.join(' ') : 'Nothing to do.';
     },
+    // The manager's changes touched running work (#207): a closed issue stops its builder, a closed PR's author is told to wrap up, the rest finish.
+    async changes(lines: string[]) {
+      const out: string[] = [];
+      for (const l of lines) {
+        const floor = Number(l.match(/^- floor (\d+)/)?.[1] ?? 0);
+        for (const [, name, id, state] of (l.split(' · touched: ')[1] ?? '').matchAll(/([^,(]+?) \(([\w-]+), ([^)]*)\)/g)) {
+          const who = name.trim();
+          if (state === 'finished it already') {
+            out.push(`${who} had already finished, so there was nothing to stop.`);
+            continue;
+          }
+          await use('agent_log', { agent_id: id, lines: 30 });
+          const stop = /: closed #/.test(l) ? await use('stop_agent', { agent_id: id, reason: 'you closed their issue' }) : '';
+          if (/isn't running/.test(stop)) out.push(`${who} had already finished, so there was nothing to stop.`);
+          else if (stop && !stop.startsWith('Refused')) out.push(`Stopped ${who}: you closed their issue.`);
+          else if (/: closed PR/.test(l) && !(await use('message_agent', { floor, agent_id: id, text: 'The manager closed your PR: push nothing more, wrap up and say what is left.' })).startsWith('Refused')) out.push(`Redirected ${who}: they wrap up, since you closed their PR.`);
+          else out.push(`Let ${who} finish: your change doesn't undo their work.`);
+        }
+      }
+      return out.join('\n') || 'Nothing to do: that work had already ended.';
+    },
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
@@ -1703,13 +1757,16 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].split('\n\nOpen decisions from the last 24 h')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo), open decisions (#208) and pinned notes (ceoMemory.ts)
+  const [asked, changed = ''] = opts.prompt.split("\n\nYour changes since last time"); // the manager's changes (#207), after the rest
+  const prompt = asked.split('\n\nSince you last looked:')[0].split('\n\nOpen decisions from the last 24 h')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo), open decisions (#208) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
     : prompt.startsWith('Research for the manager:')
       ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
+    : prompt.startsWith('The manager changed work')
+      ? () => scripts.changes(changed.split('\n').filter((l) => l.startsWith('- floor ')))
     : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)
