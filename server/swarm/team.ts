@@ -7,11 +7,11 @@ import { cliLabel, isCli } from '../clis.ts';
 import { plainText } from '../notify.ts';
 import { modelProblem } from '../../shared/models.ts';
 import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction, PhoneMessage, RepoView, WorldSnapshot } from '../../shared/types.ts';
-import { closeDecision, digestDue, fromCeoMessage, onManagerMessage, shownDecisions, snoozeDecision, syncDecisions, type Decision, type DecisionAbout, type DecisionSeed } from '../../shared/decisions.ts';
+import { closeDecision, digestDue, fromCeoMessage, onCeoAction, onManagerMessage, reopenDecision, settleProbable, shownDecisions, snoozeDecision, syncDecisions, type Decision, type DecisionAbout, type DecisionAct, type DecisionSeed } from '../../shared/decisions.ts';
 import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS, BUSY, oneLine } from './model.ts';
 import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
-import { DEMO_DECISION_MESSAGES } from '../demoDecisions.ts';
+import { DEMO_DECISION_MESSAGES, DEMO_REASK } from '../demoDecisions.ts';
 
 export abstract class SwarmTeam extends SwarmUpkeep {
   // ---------- team changes ----------
@@ -311,18 +311,40 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     this.notice({ kind: 'approval', title: `🧭 ${n} decision${n === 1 ? '' : 's'} waiting`, text: 'Questions you have not answered yet wait in the chat and in Approvals.', actions: ['approvals'] }, { event: 'decisions' });
   }
 
-  /** The manager's ⋯ on a decision: Not now (24 hours) or Drop it (never raised again). */
+  /**
+   * The manager on a decision: Not now (24 hours) or Drop it (never raised again) from its ⋯, Answered? ✓ Yes / Still
+   * open on a probably answered one (#208), and Reopen in the decision log.
+   */
   decideOpen(id: string, action: unknown) {
     const d = this.state.decisions.list.find((x) => x.id === id);
+    if (action === 'reopen') {
+      if (!d || d.status === 'open') throw new HttpError(404, 'That decision is already open');
+      if (d.kind !== 'suggestion' && d.kind !== 'question') throw new HttpError(409, 'Team and charter changes reopen only when the office asks again');
+      this.setDecisions(reopenDecision(this.state.decisions.list, id, Date.now()));
+      return { ok: true };
+    }
     if (!d || d.status !== 'open') throw new HttpError(404, 'That decision is no longer open');
-    if (action !== 'snooze' && action !== 'drop') throw new HttpError(400, 'action must be "snooze" or "drop"');
     const now = Date.now(), list = this.state.decisions.list;
+    if (action === 'answered' || action === 'open') {
+      if (!d.probably) throw new HttpError(409, 'That decision is not marked as probably answered');
+      this.setDecisions(settleProbable(list, id, action === 'answered', now));
+      return { ok: true };
+    }
+    if (action !== 'snooze' && action !== 'drop') throw new HttpError(400, 'action must be "snooze", "drop", "answered", "open" or "reopen"');
     this.setDecisions(action === 'snooze' ? snoozeDecision(list, id, now) : closeDecision(list, id, 'dropped', 'dropped by the manager', now));
     return { ok: true };
   }
 
-  /** Demo only: a fresh demo office opens with a CEO question left unanswered and a team change waiting. */
+  /** A CEO tool call in a job the manager's message started: the open questions it answered close, or are marked probably answered (#208). */
+  protected decisionActedOn(act: DecisionAct) {
+    if (this.ceoAsked) this.setDecisions(onCeoAction(this.state.decisions.list, act, Date.now()));
+  }
+
+  /** Demo only: a fresh demo office opens with a question answered through its re-ask (#208), CEO questions left unanswered and a team change waiting. */
   protected seedDemoDecisions() {
+    const asked = this.postMessage('ceo', DEMO_REASK.ask);
+    this.postMessage('ceo', DEMO_REASK.reAsk);
+    this.postMessage('manager', DEMO_REASK.answer, undefined, { replyTo: asked.id, delivery: 'read' });
     for (const text of DEMO_DECISION_MESSAGES) this.postMessage('ceo', text);
     for (const kind of ['hire', 'let-go']) {
       try {

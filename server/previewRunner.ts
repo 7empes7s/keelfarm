@@ -243,3 +243,10 @@ export const realPreviews: PreviewBackend = {
       .then(() => true)
       .catch(() => false),
 };
+
+/** The preview desks in a floor's desks folder (desks/preview, desks/preview-pr-N) and their size on disk (#204). */
+export async function previewDesks(fullName: string): Promise<{ slug: string; bytes: number }[]> {
+  const root = path.join(workspace.repoDir(fullName), 'desks');
+  const names = (await fs.readdir(root, { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory() && /^preview(-pr-\d+)?$/.test(e.name)).map((e) => e.name);
+  return Promise.all(names.map(async (slug) => ({ slug, bytes: await workspace.dirSize(path.join(root, slug)) })));
+}

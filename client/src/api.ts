@@ -185,7 +185,7 @@ export const api = {
   /** Decides a team change: a hire with the manager's changes to the new agent, if any. */
   approveRequest: (id: string, overrides: AgentSetupPatch & { name?: string; note?: string } = {}) => call('POST', `/api/requests/${id}/approve`, overrides),
   rejectRequest: (id: string, note?: string) => call('POST', `/api/requests/${id}/reject`, { note }),
-  decideOpen: (id: string, action: 'snooze' | 'drop') => call('POST', `/api/decisions/${encodeURIComponent(id)}`, { action }),
+  decideOpen: (id: string, action: 'snooze' | 'drop' | 'answered' | 'open' | 'reopen') => call('POST', `/api/decisions/${encodeURIComponent(id)}`, { action }),
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
@@ -194,7 +194,7 @@ export const api = {
   voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`),
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
-  history: (f: HistoryFilter) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`),
+  history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
   historyEntry: (id: string) => call<HistoryDetail>('GET', `/api/history/${encodeURIComponent(id)}`),
   historyUsage: () => call<HistoryUsage>('GET', '/api/history/usage'),
   costs: (days: number, repo?: string) => call<CostsView>('GET', `/api/costs?days=${days}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`),

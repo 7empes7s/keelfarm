@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEMORY, heldNote, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
 import { createDemoBackend } from './demo.ts';
-import { admission, checkRestart, heldMessage, heldPing, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
+import { admission, checkRestart, heldMessage, heldPing, idlePreview, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryRelief, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
 import { Swarm } from './swarm.ts';
 
 // The office never takes its computer down (#55): sessions start only when memory allows, sessions killed for memory
@@ -109,6 +109,23 @@ describe('killed sessions', () => {
     expect(memoryVictim({ memory: mem(4000), headroomMb: 1536, sessionMaxMb: 1024, sessions })?.id).toBe('b');
     expect(memoryVictim({ memory: mem(4000), headroomMb: 1536, sessionMaxMb: 0, sessions })).toBeNull();
     expect(memoryVictim({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 0, sessions })).toMatchObject({ id: 'b', why: expect.stringMatching(/running out of memory/) });
+  });
+
+  it('stop an idle preview before any session when memory is about to run out (#204)', () => {
+    const sessions = [{ id: 'a', rssMb: 900 }, { id: 'b', rssMb: 1800 }];
+    const previews = [
+      { key: 'o/r#main', rssMb: 300, idle: true },
+      { key: 'o/r#4', rssMb: 700, idle: true },
+      { key: 'o/r#5', rssMb: 900, idle: false }, // on screen, or an agent tests in it
+    ];
+    expect(idlePreview(previews)).toBe('o/r#4');
+    expect(idlePreview([previews[2]])).toBeNull();
+    expect(memoryRelief({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 0, sessions, previews })).toEqual({ preview: 'o/r#4' });
+    // No idle preview: the biggest session, as before.
+    expect(memoryRelief({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 0, sessions, previews: [previews[2]] })).toMatchObject({ session: { id: 'b' } });
+    // A session over its ceiling is that session's problem; plenty of memory: nothing stops.
+    expect(memoryRelief({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 1024, sessions, previews })).toMatchObject({ session: { id: 'b' } });
+    expect(memoryRelief({ memory: mem(4000), headroomMb: 1536, sessionMaxMb: 0, sessions, previews })).toBeNull();
   });
 });
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -139,6 +139,7 @@ interface State {
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
   qa: Record<string, QaView>; // `${repoId}#${prNumber}`
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
+  previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
@@ -276,6 +277,8 @@ export const useStore = create<State>((set, get) => ({
     tutorialStep: -1,
     pacingSessions: 3,
     trimIdleDesksMin: 120,
+    previewRecentHours: 48,
+    mainPreviewIdleMin: 30,
     dailyLogDir: '',
     historyDays: 90,
     voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },
@@ -301,6 +304,7 @@ export const useStore = create<State>((set, get) => ({
   screens: {},
   qa: {},
   prPreviews: {},
+  previewStats: { diskBytes: null, memMb: null, cleanedAt: null },
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
@@ -391,6 +395,7 @@ export const useStore = create<State>((set, get) => ({
           screens,
           qa,
           prPreviews,
+          previewStats: d.previewStats ?? { diskBytes: null, memMb: null, cleanedAt: null },
           requests: d.requests,
           ceo: d.ceo,
           messages: d.messages,
@@ -532,6 +537,9 @@ export const useStore = create<State>((set, get) => ({
       }
       case 'prPreview':
         set({ prPreviews: { ...get().prPreviews, [qaKey(ev.preview.repoId, ev.preview.pr)]: ev.preview } });
+        break;
+      case 'previewStats':
+        set({ previewStats: ev.stats });
         break;
       case 'prPreviewRemoved': {
         const { [qaKey(ev.repoId, ev.pr)]: _gone, ...prPreviews } = get().prPreviews;

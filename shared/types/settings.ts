@@ -38,6 +38,8 @@ export interface SwarmSettings {
   updateSettleMin?: number; // an automatic update waits this long after the latest commit (at most 15 min after the first), so a run of merges is one restart
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
+  previewRecentHours: number; // an open PR updated this recently gets its own channel chip; older ones fold under "Older"
+  mainPreviewIdleMin: number; // a floor's main preview stops after this many minutes with nobody watching; 0 = never
   dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
   historyDays: number; // days the session history and its transcripts are kept; 0 = forever
   voice: VoiceSettings;

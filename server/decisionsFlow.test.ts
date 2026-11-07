@@ -11,6 +11,7 @@ type Internals = {
   ensureCeo(interrupted: unknown[]): void;
   officeTools(): OfficeTools;
   postMessage(from: PhoneMessage['from'], text: string): PhoneMessage;
+  ceoAsked: boolean;
   broadcast(ev: ServerEvent): void;
   state: { decisions: { list: Decision[] } };
 };
@@ -67,6 +68,28 @@ describe('open decisions', () => {
     expect(() => swarm.decideOpen(`msg:${m.id}`, 'drop')).toThrow(/no longer open/);
     internals.postMessage('ceo', ASK); // asked again: never raised again
     expect((await status()).openDecisions).toEqual([]);
+  });
+
+  // #208: answered by doing, in a job the manager's message started
+  it("the CEO's file_issue closes the question it answers, marks a vague one probably answered, and the manager settles or reopens them", async () => {
+    const { swarm, internals, open } = await office();
+    const sure = internals.postMessage('ceo', 'Should I also file the dark mode toggle for floor 1?\n```suggestions\nYes, file it\nNot now\n```');
+    const vague = internals.postMessage('ceo', 'C was the dark mode toggle for the console. Want it?\n```suggestions\nYes\nNo\n```');
+    internals.postMessage('ceo', 'Floor 1: raise the memory margin?\n```suggestions\nRaise it\nLeave it\n```');
+    expect(open()).toHaveLength(3);
+    await internals.officeTools().call('file_issue', { floor: 1, title: 'Dark mode toggle for the console', body: 'x' }); // not asked: refused, nothing changes
+    expect(open()).toHaveLength(3);
+    internals.ceoAsked = true;
+    expect(await internals.officeTools().call('file_issue', { floor: 1, title: 'Dark mode toggle for the console', body: 'A toggle.' })).toMatch(/^Filed #(\d+)/);
+    const byId = (id: number) => internals.state.decisions.list.find((d) => d.id === `msg:${id}`)!;
+    expect(byId(sure.id)).toMatchObject({ status: 'resolved', closedBy: { kind: 'action' } });
+    expect(byId(vague.id)).toMatchObject({ status: 'open', probably: { done: expect.stringMatching(/^filed #\d+$/) } });
+    expect(open()).toHaveLength(2);
+    swarm.decideOpen(`msg:${vague.id}`, 'answered');
+    expect(byId(vague.id)).toMatchObject({ status: 'resolved', closedBy: { kind: 'confirmed' } });
+    swarm.decideOpen(`msg:${sure.id}`, 'reopen');
+    expect(byId(sure.id)).toMatchObject({ status: 'open', closedAt: null });
+    expect(() => swarm.decideOpen(`msg:${sure.id}`, 'answered')).toThrow(/not marked/);
   });
 
   it('a charter proposal is a decision until the manager decides it', async () => {

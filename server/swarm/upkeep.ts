@@ -18,6 +18,8 @@ import {
   type WatchMemory,
 } from '../watchdog.ts';
 import { PREVIEW_SLUG } from '../previewRunner.ts';
+import { pruneQaShots } from '../qaShots.ts';
+import { previewSettings } from '../prTheatre.ts';
 import { desksToTrim, formatBytes, freedMessage, idleSince } from '../deskTrim.ts';
 import { machineName } from '../machines.ts';
 import type { DeskTrim } from '../workspace.ts';
@@ -38,7 +40,7 @@ import { achievementDef, type ProgressView } from '../../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
 import type { CostRecord } from '../../shared/costs.ts';
 import type { DoctorFinding, DoctorFix, PullInfo } from '../../shared/types.ts';
-import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine } from './model.ts';
+import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
 import { slugify } from './flavour.ts';
 import { SwarmCeo } from './ceoJobs.ts';
 
@@ -109,6 +111,18 @@ export abstract class SwarmUpkeep extends SwarmCeo {
       this.trimming = false;
     }
   }
+  /** Settings → the previews' chip window and main idle stop, clamped (#204). */
+  protected previewSettings(patch: Partial<Record<'previewRecentHours' | 'mainPreviewIdleMin', unknown>>) {
+    Object.assign(this.state.settings, previewSettings(this.state.settings, patch));
+  }
+
+  /** Previews' upkeep (#204): leftover PR slot desks go, QA shots of PRs no longer in QA go, and the stats say when. */
+  protected async cleanPreviews() {
+    const diskBytes = await this.previews.cleanLeftovers(this.state.repos).catch(() => null);
+    await pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`))).catch(() => undefined);
+    this.setPreviewStats({ diskBytes, cleanedAt: Date.now() });
+  }
+
   protected watch: WatchMemory = { remedied: new Map(), nudged: new Map() };
   protected doctor: DoctorFinding[] = [];
   protected ignored = new Set<string>(); // findings the manager ignored, until they go away
