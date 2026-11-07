@@ -462,7 +462,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       this.emitAgent(a);
       setTimeout(() => this.schedule(), 300);
     };
-    handle = this.backend.startSession(
+    handle = this.startOnAccount(a,
       {
         cwd,
         prompt: consultPrompt(c, repo.fullName, this.ceo().name),

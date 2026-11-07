@@ -10,7 +10,7 @@ import { agentsOnRepo, pendingRequests, useStore } from '../store';
 import { CEO_ID, PLAYBOOK_MAX, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
 import { CLAUDE_MODELS, effectiveModel, modelAfterCliChange } from '../../../shared/models';
 import { ModelMissing, ModelPicker } from './ModelPicker';
-import { CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
+import { AccountSelect, CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
 import { letGo } from './dangerActions';
@@ -362,6 +362,10 @@ export function CeoTab() {
             <label className="field">
               <span>Effort</span>
               <EffortSelect agent={ceo} />
+            </label>
+            <label className="field">
+              <span>Account</span>
+              <AccountSelect agent={ceo} />
             </label>
           </div>
           <div className="small">

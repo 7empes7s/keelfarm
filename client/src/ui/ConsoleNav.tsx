@@ -13,6 +13,7 @@ import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
 import { EveryProjectCard } from './PracticesSettings';
 import { ProfileSettings } from './ProfileSettings';
 import { CloudSettings } from './CloudSettings';
+import { ProvidersSettings } from './ProvidersSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { OutsideSettings } from './OutsideSettings';
 import { NotifySettings } from './NotifySettings';
@@ -85,6 +86,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return one(<CompanySettings />);
     case 'profile':
       return one(<ProfileSettings />);
+    case 'accounts':
+      return one(<ProvidersSettings />);
     case 'cloud-agents':
       return one(<CloudSettings />);
     case 'voice':

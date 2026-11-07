@@ -1,0 +1,127 @@
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { Accounts, type AccountsDeps } from './accounts.ts';
+import { createDemoBackend } from './demo.ts';
+import { Swarm } from './swarm.ts';
+import { cliEnv, keyHelperCommand } from './unblock.ts';
+import { ACCOUNT_KEY_ENV } from '../shared/accounts.ts';
+import type { AccountsView } from '../shared/types.ts';
+
+const KEY = 'sk-ant-api03-supersecretkey-0123456789';
+const dirs: string[] = [];
+const made: Accounts[] = [];
+afterEach(async () => {
+  for (const a of made.splice(0)) await a.flushed();
+  for (const d of dirs.splice(0)) await fs.rm(d, { recursive: true, force: true, maxRetries: 3 });
+});
+
+async function office(over: Partial<AccountsDeps> = {}) {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'cf-accounts-'));
+  dirs.push(home);
+  const events: AccountsView[] = [];
+  const signIns: Record<string, string>[] = [];
+  const agents = [{ id: 'ada', account: 'max' }, { id: 'ceo' }];
+  const accounts = new Accounts({
+    secretsFile: path.join(home, 'secrets.json'),
+    file: path.join(home, 'accounts.json'),
+    home,
+    env: { CLAUDE_CONFIG_DIR: '/manager/.claude' },
+    homedir: '/manager',
+    check: async (a, _dir, secret) => ({ signedIn: a.kind !== 'api-key' || secret.startsWith('sk-ant-'), readings: [], note: 'checked' }),
+    signIn: (o, exited) => {
+      signIns.push(o.env);
+      setTimeout(() => exited(0), 0);
+      return { stop: () => undefined };
+    },
+    spend: () => [],
+    agents: () => agents,
+    builtInUsage: () => [],
+    changed: (v) => events.push(v),
+    ...over,
+  });
+  made.push(accounts);
+  await accounts.init();
+  return { accounts, home, events, signIns };
+}
+
+describe('Accounts', () => {
+  it('runs every session on the login on this computer until another account is added', async () => {
+    const { accounts } = await office();
+    const use = accounts.use(undefined, 'claude')!;
+    expect(use).toMatchObject({ id: 'claude-login', builtIn: true, env: {}, keyEnv: null });
+    expect(accounts.view().accounts.find((a) => a.id === 'claude-login')?.configDir).toBe('/manager/.claude');
+    // What the session's CLI gets: today's CLAUDE_CONFIG_DIR, as before accounts.
+    expect(cliEnv({ CLAUDE_CONFIG_DIR: '/manager/.claude', PATH: '/bin' }, {}, { machine: use.env }).CLAUDE_CONFIG_DIR).toBe('/manager/.claude');
+  });
+
+  it('signs a second Claude subscription in, and runs an agent pinned to it, in its own folder', async () => {
+    const { accounts, home, signIns } = await office();
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Max 2', tags: 'max' });
+    const dir = path.join(home, 'accounts', id, 'claude');
+    expect((await fs.stat(dir)).isDirectory()).toBe(true);
+    accounts.signIn(id);
+    expect(signIns).toEqual([{ CLAUDE_CONFIG_DIR: dir }]);
+    const use = accounts.use('max', 'claude')!;
+    expect(use.id).toBe(id);
+    const env = cliEnv({ CLAUDE_CONFIG_DIR: '/manager/.claude', ANTHROPIC_API_KEY: 'leak', PATH: '/bin' }, {}, { machine: use.env });
+    expect(env.CLAUDE_CONFIG_DIR).toBe(dir);
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(accounts.view().accounts.find((a) => a.id === id)).toMatchObject({ agents: ['ada'], running: 1, configDir: dir });
+  });
+
+  it('keeps an API key out of the registry, the views and events; the session gets it through apiKeyHelper only', async () => {
+    const { accounts, home, events } = await office();
+    await expect(accounts.add({ cli: 'claude', kind: 'api-key', key: 'nope' })).rejects.toThrow(/sk-ant-/);
+    const { id } = await accounts.add({ cli: 'claude', kind: 'api-key', key: ` ${KEY} `, tags: ['api'] });
+    await accounts.flushed();
+    expect(await fs.readFile(path.join(home, 'accounts.json'), 'utf8')).not.toContain(KEY);
+    expect(JSON.parse(await fs.readFile(path.join(home, 'secrets.json'), 'utf8'))[`account:${id}`]).toBe(KEY);
+    expect(JSON.stringify(accounts.view())).not.toContain(KEY);
+    expect(JSON.stringify(events)).not.toContain(KEY);
+    expect(accounts.view().accounts.find((a) => a.id === id)?.keyHint).toBe(KEY.slice(-4));
+    expect(accounts.secretValues()).toContain(KEY);
+    const use = accounts.use('api', 'claude')!;
+    expect(use.keyEnv).toBe(ACCOUNT_KEY_ENV);
+    expect(use.env).toEqual({ [ACCOUNT_KEY_ENV]: KEY });
+    expect(keyHelperCommand(use.keyEnv!)).not.toContain(KEY);
+    // A restart reads it back from secrets.json.
+    const again = await office({ secretsFile: path.join(home, 'secrets.json'), file: path.join(home, 'accounts.json') });
+    expect(again.accounts.use(id, 'claude')?.env[ACCOUNT_KEY_ENV]).toBe(KEY);
+  });
+
+  it('waits for running sessions before removing an account, and keeps the built-in login', async () => {
+    const { accounts, home } = await office();
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login' });
+    const use = accounts.use(id, 'claude')!;
+    expect(await accounts.remove(id)).toBe('waiting');
+    expect(accounts.view().accounts.find((a) => a.id === id)).toMatchObject({ removing: true, status: 'paused' });
+    expect(accounts.use(id, 'claude')?.id).toBe('claude-login'); // no new sessions on it
+    use.release();
+    await accounts.flushed();
+    expect(accounts.list().some((a) => a.id === id)).toBe(false);
+    await expect(fs.stat(path.join(home, 'accounts', id))).rejects.toThrow();
+    await expect(accounts.remove('claude-login')).rejects.toThrow(/stays/);
+  });
+
+  it('seeds the demo’s accounts once', async () => {
+    const seed = () => ({ accounts: [{ id: 'claude-demo', cli: 'claude' as const, kind: 'api-key' as const, label: 'Demo', tags: ['api'], priority: 1, enabled: true }], keys: { 'claude-demo': KEY } });
+    const { accounts } = await office({ seed });
+    expect(accounts.view().accounts.find((a) => a.id === 'claude-demo')).toMatchObject({ status: 'ready', keyHint: KEY.slice(-4) });
+  });
+});
+
+describe('pinning agents in the office', () => {
+  it('pins an agent to an account or tag, refuses unknown ones, and shows it on their card and the account', async () => {
+    const swarm = new Swarm(createDemoBackend());
+    const repo = await swarm.connectRepo('demo-co/pixel-todo');
+    const ada = swarm.snapshot().agents.find((a) => a.repoId === repo.id)!;
+    expect(() => swarm.updateAgent(ada.id, { account: 'gold' })).toThrow(/No account or tag "gold"/);
+    swarm.updateAgent(ada.id, { account: 'claude-login' });
+    expect(swarm.snapshot().agents.find((a) => a.id === ada.id)?.account).toBe('claude-login');
+    expect(swarm.snapshot().accounts?.accounts.find((a) => a.id === 'claude-login')?.agents).toContain(ada.id);
+    swarm.updateAgent(ada.id, { account: 'rotation' });
+    expect(swarm.snapshot().agents.find((a) => a.id === ada.id)?.account).toBeUndefined();
+  });
+});

@@ -1,7 +1,7 @@
 // Agents' sessions: terminals, desk setup, prompts, starting and finishing a build session.
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
-import type { LogEntry, SessionResult } from '../agentRunner.ts';
+import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
 import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
 import { CloudError } from '../box.ts';
@@ -26,7 +26,7 @@ import { resolveEffort, type CostsView } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
 import { AgentTerminal } from '../terminal.ts';
 import { INSTALL_STEP } from '../../shared/types.ts';
-import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo } from '../../shared/types.ts';
+import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo, WorldSnapshot } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -82,8 +82,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     }
   }
 
-  /** A browser opened an agent's terminal (/ws/term?agent=<id>). */
+  /** A browser opened an agent's terminal (/ws/term?agent=<id>), or an account's sign-in (agent=account:<id>, #247). */
   attachTerminal(agentId: string, ws: WebSocket) {
+    if (agentId.startsWith('account:')) {
+      const t = this.accounts.terminal(agentId.slice('account:'.length));
+      return t ? t.attach(ws) : ws.close(4404, 'No such account');
+    }
     const a = this.state.agents.find((x) => x.id === agentId);
     // Opening the terminal of a cloud agent who waits for a sign-in (at their desk, or 🔑 Sign in) starts one if none runs.
     if (a?.needsSignIn && a.host === 'box') {
@@ -431,6 +435,46 @@ export abstract class SwarmSessions extends SwarmAgents {
       .catch((err) => console.warn('could not save screenshot', err));
   }
 
+  // ---------- accounts (#247) ----------
+
+  override snapshot(): WorldSnapshot {
+    return { ...super.snapshot(), accounts: this.accounts.view() };
+  }
+
+  protected override secrets(): string[] {
+    return [...super.secrets(), ...this.accounts.secretValues()];
+  }
+
+  /**
+   * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
+   * into its environment, its usage and limit hits to the account, and its line in the cost ledger says which it was.
+   * A cloud agent's runs on the cloud's credentials (docs/cloud.md), OpenCode on its own setup.
+   */
+  protected startOnAccount(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
+    const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
+    const use = a.host === 'box' || cli === 'opencode' ? null : this.accounts.use(a.account, cli);
+    if (!use) return this.backend.startSession(opts, cb);
+    this.spend.account(a.id, use.id);
+    this.accounts.emit();
+    const env = { ...opts.env, ...use.env };
+    return this.backend.startSession(
+      { ...opts, ...(Object.keys(env).length ? { env } : {}), ...(use.keyEnv && cli === 'claude' ? { apiKeyEnv: use.keyEnv } : {}) },
+      {
+        ...cb,
+        usage: (readings) => (use.builtIn ? cb.usage?.(readings) : this.accounts.readings(use.id, readings)),
+        limited: (at) => {
+          this.accounts.limited(use.id, at);
+          // Only the login everyone shared stops the whole office: another account's limit is that account's.
+          if (use.builtIn) cb.limited?.(at);
+        },
+        finished: (result) => {
+          use.release();
+          cb.finished(result);
+        },
+      },
+    );
+  }
+
   protected launchSession(
     a: PersistedAgent,
     repo: PersistedRepo,
@@ -472,7 +516,8 @@ export abstract class SwarmSessions extends SwarmAgents {
     };
     // The demo's QA tests in its PR's preview, as a real one's lab would (#204): the app viewer shows it held.
     if (this.backend.demo && testLab && a.task === 'qa' && a.prNumber) void this.labPreviewUrl(repo.id, a.prNumber, a.id).catch(() => undefined);
-    rt.session = this.backend.startSession(
+    rt.session = this.startOnAccount(
+      a,
       {
         cwd,
         prompt,
