@@ -42,6 +42,7 @@ import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
 import type { CostRecord, CostSession } from '../../shared/costs.ts';
 import type { DoctorFinding, DoctorFix, PullInfo } from '../../shared/types.ts';
 import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
+import { LAB_SLUG } from '../testLabRunner.ts';
 import { slugify } from './flavour.ts';
 import { SwarmCeo } from './ceoJobs.ts';
 
@@ -115,6 +116,16 @@ export abstract class SwarmUpkeep extends SwarmCeo {
   /** Settings → the previews' chip window and main idle stop, clamped (#204). */
   protected previewSettings(patch: Partial<Record<'previewRecentHours' | 'mainPreviewIdleMin', unknown>>) {
     Object.assign(this.state.settings, previewSettings(this.state.settings, patch));
+  }
+
+  /**
+   * Nothing outlives its session (#227): stop processes in machines' worktrees that no live session owns, and at boot
+   * in the lab's checkouts. The office's processes and everything under them are left alone.
+   */
+  protected async sweepOrphans(boot = false) {
+    const live = this.state.agents.filter((a) => a.machine && (BUSY.includes(a.status) || !!this.agentRt.get(a.id)?.session)).map((a) => a.machine!);
+    const idle = boot ? this.state.repos.map((r) => this.backend.deskDir(r.fullName, LAB_SLUG)) : [];
+    for (const line of await this.backend.machines.orphans(live, idle).catch(() => [])) console.log(`sweep: stopped ${line}, left by no live session`);
   }
 
   /** Previews' upkeep (#204): leftover PR slot desks go, QA shots of PRs no longer in QA go, and the stats say when. */

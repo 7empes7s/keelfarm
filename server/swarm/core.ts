@@ -834,9 +834,9 @@ export abstract class SwarmCore extends SwarmContract {
     return a.machine ? this.machinesFor(a).deskDir(a.machine, repo.fullName) : this.backend.deskDir(repo.fullName, this.agentSlug(a));
   }
 
-  /** Stop what an agent left running at their desk: on their port, or started there. */
-  protected releaseDesk(a: PersistedAgent, repo: PersistedRepo) {
-    return a.machine ? this.machinesFor(a).release(a.machine, repo.fullName, this.port(a)) : this.backend.releaseDesk(repo.fullName, this.agentSlug(a), this.port(a));
+  /** Stop what an agent left running at their desk: on their ports, or started there. Resolves to their ports still held after. */
+  protected releaseDesk(a: PersistedAgent, repo: PersistedRepo): Promise<number[]> {
+    return a.machine ? this.machinesFor(a).release(a.machine, repo.fullName, this.port(a)) : this.backend.releaseDesk(repo.fullName, this.agentSlug(a), this.port(a)).then(() => []);
   }
 
   /**
