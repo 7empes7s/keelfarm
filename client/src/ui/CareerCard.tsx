@@ -1,9 +1,10 @@
 // Careers (#226) in the HUD and the panels: an agent's career card (portrait, rank, badges, stats, last merged PRs and
 // what they're known for), the card that pops up when you look at a desk for a moment, the agent window's Profile tab
-// (#117) and the Team tab's table.
+// (#117, with usage and a timeline since #205) and the Team tab's highlights, table (cards on a phone) and past agents.
 import { useEffect, useRef, useState } from 'react';
-import { avgFixRounds, badges, knownFor, mergesThisWeek, passRate, profileStats, rank, tenureDays, weeklyMerges, type CareerView } from '../../../shared/careers';
+import { avgFixRounds, badges, costPerMerge, durationText, firstRoundRate, knownFor, medianToMerge, mergesThisWeek, passRate, profileStats, rank, spendShare, tenureDays, thisWeek, wasteShare, weeklySeries, workIdle, type CareerView } from '../../../shared/careers';
 import { agentsOnRepo, useStore, type Agent } from '../store';
+import { CareerTimeline, Highlights, hours, rigText, Spark, usageText, usd, UsageInsights } from './CareerInsights';
 import { drawPortrait } from './portrait';
 import './charter.css'; // the stat cards (docs/design.md)
 
@@ -22,6 +23,9 @@ export function tenureText(c: CareerView, now: number) {
   const m = Math.max(1, Math.round(h * 60));
   return `${m} minute${m === 1 ? '' : 's'}`;
 }
+
+/** " · rehired 2×" after someone's tenure, '' in their first stint (#205). */
+const rehiredText = (c: CareerView) => (c.hires > 1 ? ` · rehired ${c.hires - 1}×` : '');
 
 function ago(at: number, now: number) {
   const m = Math.max(0, Math.round((now - at) / 60_000));
@@ -80,44 +84,29 @@ function CareerCard({ agent, compact = false }: { agent: Agent; compact?: boolea
         <Stat label="fix rounds / PR" value={fixed1(avgFixRounds(c))} />
         <Stat label="QA reviews" value={c.reviews} />
         <Stat label="longest streak" value={c.best} title="PRs in a row that passed QA first time" />
-        <Stat label="on the team" value={tenureText(c, now)} />
+        <Stat label="on the team" value={tenureText(c, now) + rehiredText(c)} />
         {!compact && <Stat label="est. cost" value={`$${c.costUsd.toFixed(2)}`} title="What the coding agents report, API-equivalent; subscription usage is billed by plan" />}
         {!compact && <Stat label="turns" value={c.turns} />}
       </div>
       {c.recent.length > 0 && (
         <div className="career-recent">
           {!compact && <div className="muted small">Last merged</div>}
-          {c.recent.slice(0, compact ? 1 : LAST).map((r) => (
-            <div key={r.n} className="career-pr">
+          {c.recent.slice(0, compact ? 1 : LAST).map(([n, title, at]) => (
+            <div key={n} className="career-pr">
               {compact && <span className="muted">Last merged </span>}
               {repo ? (
-                <a href={`https://github.com/${repo.fullName}/pull/${r.n}`} target="_blank" rel="noreferrer">
-                  #{r.n}
+                <a href={`https://github.com/${repo.fullName}/pull/${n}`} target="_blank" rel="noreferrer">
+                  #{n}
                 </a>
               ) : (
-                <b>#{r.n}</b>
+                <b>#{n}</b>
               )}{' '}
-              <span className="career-pr-title">{r.title || 'untitled'}</span> <span className="muted">{ago(r.at, now)}</span>
+              <span className="career-pr-title">{title || 'untitled'}</span> <span className="muted">{ago(at, now)}</span>
             </div>
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-/** Merges per week over the last four weeks, as bars, oldest first. */
-function Sparkline({ weeks }: { weeks: number[] }) {
-  const top = Math.max(1, ...weeks);
-  return (
-    <figure className="pf-spark">
-      <svg viewBox={`0 0 ${weeks.length * 12} 32`} role="img" aria-label={`Merges per week, oldest first: ${weeks.join(', ')}`}>
-        {weeks.map((n, i) => (
-          <rect key={i} x={i * 12 + 2} y={30 - (n / top) * 28} width={8} height={Math.max(1.5, (n / top) * 28)} rx={2} />
-        ))}
-      </svg>
-      <figcaption className="muted small">Merges a week, last 4 weeks: {weeks.join(' · ')}</figcaption>
-    </figure>
   );
 }
 
@@ -129,6 +118,7 @@ export function AgentProfile({ agent }: { agent: Agent }) {
   const c = agent.career;
   if (!c) return <p className="muted small">{agent.name} runs the company; their record is the whole office.</p>;
   const floor = agentsOnRepo(agents, agent.repoId).flatMap((a) => (a.career && a.role !== 'ceo' ? [a.career] : []));
+  const everyone = Object.values(agents).flatMap((a) => (a.career && a.role !== 'ceo' ? [a.career] : []));
   const stats = profileStats(c, floor, repo?.floor ?? 0, now);
   const earned = badges(c);
   return (
@@ -139,7 +129,7 @@ export function AgentProfile({ agent }: { agent: Agent }) {
           <div className="career-name">{agent.name}</div>
           <div className="career-title">
             {rank(c)}
-            {repo ? ` · floor ${repo.floor}` : ''} · {tenureText(c, now)} on the team
+            {repo ? ` · floor ${repo.floor}` : ''} · {tenureText(c, now)} on the team{rehiredText(c)}
           </div>
           <div className="career-known">{knownFor(c)}</div>
         </div>
@@ -153,7 +143,7 @@ export function AgentProfile({ agent }: { agent: Agent }) {
           </div>
         ))}
       </div>
-      <Sparkline weeks={weeklyMerges(c, now)} />
+      <UsageInsights c={c} everyone={everyone} />
       {earned.length > 0 && (
         <div className="career-badges">
           {earned.map((b) => (
@@ -166,20 +156,21 @@ export function AgentProfile({ agent }: { agent: Agent }) {
       {c.recent.length > 0 && (
         <div className="career-recent">
           <div className="muted small">Last merged</div>
-          {c.recent.slice(0, LAST).map((r) => (
-            <div key={r.n} className="career-pr">
+          {c.recent.slice(0, LAST).map(([n, title, at]) => (
+            <div key={n} className="career-pr">
               {repo ? (
-                <a href={`https://github.com/${repo.fullName}/pull/${r.n}`} target="_blank" rel="noreferrer">
-                  #{r.n}
+                <a href={`https://github.com/${repo.fullName}/pull/${n}`} target="_blank" rel="noreferrer">
+                  #{n}
                 </a>
               ) : (
-                <b>#{r.n}</b>
+                <b>#{n}</b>
               )}{' '}
-              <span className="career-pr-title">{r.title || 'untitled'}</span> <span className="muted">{ago(r.at, now)}</span>
+              <span className="career-pr-title">{title || 'untitled'}</span> <span className="muted">{ago(at, now)}</span>
             </div>
           ))}
         </div>
       )}
+      <CareerTimeline agent={agent} />
     </div>
   );
 }
@@ -205,42 +196,91 @@ export function CareerPeek() {
 
 // ---------- the Team tab ----------
 
-type Col = { key: string; label: string; title?: string; value: (a: Agent, c: CareerView, now: number) => number | string; show?: (a: Agent, c: CareerView, now: number) => string };
+/** What the columns read besides the career: the time, everyone's careers (for shares) and the coding agents' names. */
+interface Ctx {
+  now: number;
+  everyone: CareerView[];
+  clis: ReturnType<typeof useStore.getState>['clis'];
+}
+
+type Col = { key: string; label: string; title?: string; value: (c: CareerView, x: Ctx) => number | string; show?: (c: CareerView, x: Ctx) => string };
+
+const orNone = (x: number | null) => x ?? -1;
 
 const COLS: Col[] = [
-  { key: 'merged', label: 'Merged', value: (_a, c) => c.merged },
-  { key: 'opened', label: 'Opened', value: (_a, c) => c.opened },
-  { key: 'firstPass', label: '1st-time QA', title: 'PRs that passed QA on their first round', value: (_a, c) => c.firstPass },
-  { key: 'rate', label: 'Pass rate', value: (_a, c) => passRate(c) ?? -1, show: (_a, c) => pct(passRate(c)) },
-  { key: 'fixes', label: 'Fixes / PR', title: 'Fix rounds per merged PR', value: (_a, c) => avgFixRounds(c) ?? -1, show: (_a, c) => fixed1(avgFixRounds(c)) },
-  { key: 'reviews', label: 'Reviews', title: 'QA reviews done', value: (_a, c) => c.reviews },
-  { key: 'best', label: 'Streak', title: 'Longest run of PRs passing QA first time', value: (_a, c) => c.best },
-  { key: 'week', label: 'This week', value: (_a, c, now) => mergesThisWeek(c, now) },
-  { key: 'since', label: 'On the team', value: (_a, c) => -c.since, show: (_a, c, now) => tenureText(c, now) },
-  { key: 'cost', label: 'Cost', title: 'Estimated, as the coding agents report it', value: (_a, c) => c.costUsd, show: (_a, c) => `$${c.costUsd.toFixed(2)}` },
-  { key: 'turns', label: 'Turns', value: (_a, c) => c.turns },
+  { key: 'merged', label: 'Merged', value: (c) => c.merged },
+  { key: 'opened', label: 'Opened', value: (c) => c.opened },
+  { key: 'firstRound', label: '1st-round QA', title: 'PRs that passed QA on their first round', value: (c) => orNone(firstRoundRate(c)), show: (c) => pct(firstRoundRate(c)) },
+  { key: 'firstPass', label: '1st-time passes', title: 'PRs that passed QA on their first round, counted', value: (c) => c.firstPass },
+  { key: 'rate', label: 'Pass rate', title: 'QA rounds on their PRs that passed', value: (c) => orNone(passRate(c)), show: (c) => pct(passRate(c)) },
+  { key: 'fixes', label: 'Fixes / PR', title: 'Fix rounds per merged PR', value: (c) => orNone(avgFixRounds(c)), show: (c) => fixed1(avgFixRounds(c)) },
+  { key: 'reviews', label: 'Reviews', title: 'QA reviews done', value: (c) => c.reviews },
+  { key: 'best', label: 'Streak', title: 'Longest run of PRs passing QA first time', value: (c) => c.best },
+  { key: 'week', label: 'This week', title: 'Merges in the last 7 days', value: (c, x) => mergesThisWeek(c, x.now) },
+  { key: 'since', label: 'On the team', title: 'Every stint together', value: (c, x) => tenureDays(c, x.now), show: (c, x) => tenureText(c, x.now) + rehiredText(c) },
+  { key: 'costWeek', label: 'Cost this week', title: 'Estimated, as the coding agents report it', value: (c, x) => thisWeek(c, x.now).usd, show: (c, x) => usd(thisWeek(c, x.now).usd) },
+  { key: 'cost', label: 'Cost', title: 'All time, estimated', value: (c) => c.costUsd, show: (c) => usd(c.costUsd) },
+  { key: 'perMerge', label: 'Cost / merge', value: (c) => orNone(costPerMerge(c)), show: (c) => (costPerMerge(c) === null ? '—' : usd(costPerMerge(c)!)) },
+  { key: 'waste', label: 'Waste', title: 'Spent on sessions that came to nothing, and its share', value: (c) => c.wasteUsd, show: (c) => `${usd(c.wasteUsd)} (${pct(wasteShare(c))})` },
+  { key: 'work', label: 'Working', title: 'Hours in sessions', value: (c, x) => workIdle(c, x.now).work, show: (c, x) => hours(workIdle(c, x.now).work) },
+  { key: 'idle', label: 'Idle', title: 'Hours on the team outside sessions', value: (c, x) => workIdle(c, x.now).idle, show: (c, x) => hours(workIdle(c, x.now).idle) },
+  { key: 'usage', label: 'Tokens / turns', title: 'Tokens when their coding agent reports them, else turns', value: (c) => c.tokens || c.turns, show: usageText },
+  { key: 'toMerge', label: 'To merge', title: 'Median time from starting an issue to its merge', value: (c) => orNone(medianToMerge(c)), show: (c) => (medianToMerge(c) === null ? '—' : durationText(medianToMerge(c)!)) },
+  { key: 'rig', label: 'Model', title: 'The coding agent, model and effort they run', value: (c, x) => rigText(c, x.clis, x.now, true), show: (c, x) => rigText(c, x.clis, x.now, true) },
+  { key: 'share', label: 'Share', title: "Their share of the office's spend this week", value: (c, x) => orNone(spendShare(c, x.everyone, x.now)), show: (c, x) => pct(spendShare(c, x.everyone, x.now)) },
 ];
 
-/** Everyone's stats in one sortable table (click a heading; again to flip it). */
+const DEFAULT_COLS = ['merged', 'firstRound', 'week', 'costWeek', 'perMerge', 'waste', 'work', 'since', 'rig'];
+const COLS_KEY = 'cubefarm:career-cols';
+
+/** The columns this browser picked (a convenience: the defaults when storage is off). */
+function useColumns(): [string[], (key: string) => void] {
+  const [cols, setCols] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLS_KEY) ?? 'null') as unknown;
+      if (Array.isArray(saved)) return COLS.map((c) => c.key).filter((k) => saved.includes(k));
+    } catch {
+      // private window or blocked storage
+    }
+    return DEFAULT_COLS;
+  });
+  const toggle = (key: string) => {
+    const next = cols.includes(key) ? cols.filter((k) => k !== key) : COLS.map((c) => c.key).filter((k) => k === key || cols.includes(k));
+    setCols(next);
+    try {
+      localStorage.setItem(COLS_KEY, JSON.stringify(next));
+    } catch {
+      // kept for this visit only
+    }
+  };
+  return [cols, toggle];
+}
+
+/** Everyone's stats: highlights, a sortable table with a column picker (cards on a phone), and the past agents. */
 export function TeamStats() {
   const agents = useStore((s) => s.agents);
   const repos = useStore((s) => s.repos);
+  const clis = useStore((s) => s.clis);
+  const past = useStore((s) => s.pastCareers);
   const openOverlay = useStore((s) => s.openOverlay);
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: 'merged', dir: -1 });
+  const [shown, toggle] = useColumns();
   const now = Date.now();
-  const col = COLS.find((c) => c.key === sort.key);
   const floor = (a: Agent) => repos.find((r) => r.id === a.repoId)?.floor ?? 0;
-  const rows = Object.values(agents)
-    .filter((a): a is Agent & { career: CareerView } => a.role !== 'ceo' && !!a.career)
-    .sort((a, b) => {
-      if (sort.key === 'name') return a.name.localeCompare(b.name) * sort.dir;
-      if (sort.key === 'floor') return (floor(a) - floor(b)) * sort.dir;
-      const va = col!.value(a, a.career, now);
-      const vb = col!.value(b, b.career, now);
-      const d = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
-      return d * sort.dir || a.name.localeCompare(b.name);
-    });
-  if (!rows.length) return null;
+  const people = Object.values(agents).filter((a): a is Agent & { career: CareerView } => a.role !== 'ceo' && !!a.career);
+  const x: Ctx = { now, everyone: people.map((a) => a.career), clis };
+  const cols = COLS.filter((c) => shown.includes(c.key));
+  const col = COLS.find((c) => c.key === sort.key);
+  const rows = [...people].sort((a, b) => {
+    if (sort.key === 'name') return a.name.localeCompare(b.name) * sort.dir;
+    if (sort.key === 'floor' || !col) return (floor(a) - floor(b)) * sort.dir;
+    const va = col.value(a.career, x);
+    const vb = col.value(b.career, x);
+    const d = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
+    return d * sort.dir || a.name.localeCompare(b.name);
+  });
+  if (!rows.length && !past.length) return null;
+  const profile = (a: Agent) => openOverlay({ kind: 'terminal', agentId: a.id, profile: true });
   const head = (key: string, label: string, title?: string) => (
     <th key={key} title={title} aria-sort={sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
       <button className="sort-btn" onClick={() => setSort({ key, dir: sort.key === key ? (-sort.dir as 1 | -1) : key === 'name' || key === 'floor' ? 1 : -1 })}>
@@ -253,37 +293,96 @@ export function TeamStats() {
     <div className="card team-stats">
       <div className="row">
         <b className="grow">🏅 Careers</b>
-        <span className="muted small">Counted from what the office sees: PRs, QA rounds, fixes and merges. Look at a desk for a moment to see its card.</span>
+        <span className="muted small">Counted from what the office sees: PRs, QA rounds, fixes, merges and sessions. Careers stay through a let-go and come back on a rehire.</span>
       </div>
-      <div className="team-stats-scroll">
-        <table className="team stats-table">
-          <thead>
-            <tr>
-              {head('name', 'Name')}
-              {head('floor', 'Floor')}
-              {COLS.map((c) => head(c.key, c.label, c.title))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((a) => (
-              <tr key={a.id}>
-                <td className="nowrap">
-                  <span className="dot" style={{ background: a.color }} />{' '}
-                  <button className="link-btn" title="Open their desk" onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
-                    {a.name}
-                  </button>
-                </td>
-                <td>{repos.find((r) => r.id === a.repoId)?.floor ?? '—'}</td>
-                {COLS.map((c) => (
-                  <td key={c.key} className="num">
-                    {c.show ? c.show(a, a.career, now) : c.value(a, a.career, now)}
-                  </td>
-                ))}
-              </tr>
+      <Highlights people={people.map((a) => ({ id: a.id, name: a.name, career: a.career, idleSince: a.status === 'idle' || a.status === 'done' ? (a.endedAt ?? a.career.since) : null }))} />
+      <div className="cr-team">
+        <details className="cr-cols">
+          <summary className="ds-btn btn-small">Columns ({cols.length})</summary>
+          <div className="cr-cols-list">
+            {COLS.map((c) => (
+              <label key={c.key} className="cr-col" title={c.title}>
+                <input type="checkbox" checked={shown.includes(c.key)} onChange={() => toggle(c.key)} /> {c.label}
+              </label>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </details>
+        <div className="team-stats-scroll cr-table">
+          <table className="team stats-table">
+            <thead>
+              <tr>
+                {head('name', 'Name')}
+                {head('floor', 'Floor')}
+                {cols.map((c) => head(c.key, c.label, c.title))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.id}>
+                  <td className="nowrap">
+                    <span className="dot" style={{ background: a.color }} />{' '}
+                    <button className="link-btn" title="Open their profile" onClick={() => profile(a)}>
+                      {a.name}
+                    </button>
+                  </td>
+                  <td>{repos.find((r) => r.id === a.repoId)?.floor ?? '—'}</td>
+                  {cols.map((c) => (
+                    <td key={c.key} className="num">
+                      {c.show ? c.show(a.career, x) : c.value(a.career, x)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <ul className="cr-cards" aria-label="Careers">
+          {rows.map((a) => (
+            <li key={a.id}>
+              <button type="button" className="cr-card" style={{ ['--accent' as string]: a.color }} onClick={() => profile(a)} aria-label={`${a.name}: open their profile`}>
+                <span className="cr-card-who">
+                  <span className="dot" style={{ background: a.color }} /> <b>{a.name}</b>
+                  <span className="muted small">floor {floor(a) || '—'}</span>
+                  <span className="cr-chev" aria-hidden>
+                    ›
+                  </span>
+                </span>
+                <span className="cr-card-stats">
+                  <span>
+                    <b>{mergesThisWeek(a.career, now)}</b> merged this week
+                  </span>
+                  <span>
+                    <b>{pct(firstRoundRate(a.career))}</b> 1st-round QA
+                  </span>
+                  <span>
+                    <b>{costPerMerge(a.career) === null ? '—' : usd(costPerMerge(a.career)!)}</b> / merge
+                  </span>
+                </span>
+                <Spark label="Merges a week" values={weeklySeries(a.career, now).merges} show={String} />
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
+      {past.length > 0 && (
+        <details className="cr-past">
+          <summary className="cr-past-sum">Past agents ({past.length})</summary>
+          <ul className="cr-past-list">
+            {past.map((p) => (
+              <li key={p.name} className="cr-past-row">
+                <b>{p.name}</b>
+                <span className="muted small">
+                  left {durationText(Math.max(60_000, now - p.left))} ago · {tenureText(p.career, p.left)} on the team{rehiredText(p.career)}
+                </span>
+                <span className="small">
+                  {p.career.merged} merged · {p.career.reviews} reviews · {pct(firstRoundRate(p.career))} 1st-round QA · {usd(p.career.costUsd)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">Hire someone with the same name and their record comes back.</p>
+        </details>
+      )}
     </div>
   );
 }

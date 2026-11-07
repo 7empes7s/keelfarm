@@ -1,0 +1,294 @@
+/* Careers with insight (#205, CareerInsights.tsx, the Team tab in CareerCard.tsx): the profile's usage, sparklines and
+   timeline, the highlights row, the column picker, the table's sticky name column and its phone cards. Tokens only. */
+
+.cr-h {
+  margin: 0;
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-strong);
+}
+.cr-usage,
+.cr-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cr-rig {
+  font-size: var(--ds-text-md);
+}
+
+/* ---------- sparklines ---------- */
+.cr-sparks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
+  gap: var(--ds-space-2);
+}
+.cr-spark {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+.cr-spark figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+.cr-spark figcaption b {
+  color: var(--ds-text);
+}
+.cr-spark svg {
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  fill: var(--accent, var(--ds-series-1));
+}
+.cr-spark .cr-spark-gap {
+  fill: var(--ds-line-strong);
+}
+
+/* ---------- the timeline ---------- */
+.cr-day {
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  overflow: hidden;
+}
+.cr-day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  background: var(--ds-surface-sunken);
+}
+.cr-day-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cr-day-items > li + li {
+  border-top: 1px solid var(--ds-line);
+}
+.cr-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.cr-item:hover,
+button.cr-item:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.cr-item-note {
+  cursor: default;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.cr-item-icon {
+  flex: none;
+  width: 1.5rem;
+  text-align: center;
+}
+.cr-item-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.cr-item-title {
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.cr-item-meta {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  overflow-wrap: anywhere;
+}
+.cr-chev {
+  flex: none;
+  margin-left: auto;
+  color: var(--ds-text-muted);
+}
+
+/* ---------- the Team tab ---------- */
+.cr-highlights {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(10rem, 1fr);
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-2) 0;
+  padding-bottom: var(--ds-space-1);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.cr-hl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-2);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cr-hl:hover,
+.cr-hl:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.cr-hl-label {
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-text-muted);
+}
+.cr-hl-name {
+  font-size: var(--ds-text-lg);
+}
+.cr-hl small {
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.cr-team {
+  container-type: inline-size;
+  min-width: 0;
+}
+.cr-cols {
+  margin: var(--ds-space-2) 0;
+}
+.cr-cols > summary {
+  list-style: none;
+}
+.cr-cols > summary::-webkit-details-marker {
+  display: none;
+}
+.cr-cols-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: 0 var(--ds-space-3);
+  margin-top: var(--ds-space-2);
+}
+.cr-col {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  cursor: pointer;
+}
+/* The name stays in view while the numbers scroll sideways. */
+.cr-table th:first-child,
+.cr-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ds-surface);
+  box-shadow: 1px 0 0 var(--ds-line);
+}
+.cr-table th:first-child {
+  padding-left: var(--ds-space-2);
+}
+.cr-cards {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container (max-width: 600px) {
+  .cr-cols,
+  .cr-table {
+    display: none;
+  }
+  .cr-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+  }
+}
+.cr-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-3);
+  border: 1.5px solid var(--ds-line-strong);
+  border-left: 4px solid var(--accent, var(--ds-outline));
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cr-card:hover,
+.cr-card:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.cr-card-who {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cr-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+.cr-card-stats b {
+  display: block;
+  font-size: var(--ds-text-md);
+  color: var(--ds-text);
+}
+
+.cr-past {
+  margin-top: var(--ds-space-2);
+}
+.cr-past-sum {
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-target);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.cr-past-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cr-past-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
+}

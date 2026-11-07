@@ -104,7 +104,7 @@ function useTermFont(phone: boolean): [number, (by: 1 | -1) => void] {
 
 const blank = (t: string) => !t.trim();
 
-export function TerminalView({ agentId, view }: { agentId: string; view?: AgentPane }) {
+export function TerminalView({ agentId, view, profile = false }: { agentId: string; view?: AgentPane; profile?: boolean }) {
   const agent = useStore((s) => s.agents[agentId]);
   const log = useStore((s) => s.logs[agentId]) ?? [];
   const shotAt = useStore((s) => s.screens[agentId]);
@@ -120,11 +120,11 @@ export function TerminalView({ agentId, view }: { agentId: string; view?: AgentP
   useUpdateHold('agent-composer', busy ? 'send' : blank(text) ? null : 'draft');
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState(profile);
   const [side, setSide] = useState(true);
   const details = phone ? sheet : side;
   const setDetails = phone ? setSheet : setSide;
-  const [tab, setTab] = useState<DetailsTab>('now');
+  const [tab, setTab] = useState<DetailsTab>(profile ? 'profile' : 'now');
   const swipe = useSwipe(details, setDetails);
   const [fontPx, stepFontSize] = useTermFont(phone);
   const uiScale = useA11y((s) => s.prefs.uiScale);
