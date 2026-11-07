@@ -1,7 +1,16 @@
-/* Paste in the terminal (#278): the sign-in terminal's highlighted Paste key, and the paste sheet (PasteSheet.tsx). */
+/* Paste in the terminal (#278): the sign-in terminal's Paste code key, and the paste sheet (PasteSheet.tsx). The key is
+   a call to action, green with an outline and a glyph: never the orange fill of a latched Ctrl or Alt (#302). */
 .term-key.term-key-primary {
-  background: var(--term-key-on);
+  background: var(--ds-good-fill);
   color: var(--ds-on-color);
+  box-shadow: inset 0 0 0 2px var(--term-key-ink);
+}
+.term-key-primary .ds-icon {
+  margin-right: var(--ds-space-1);
+  vertical-align: -0.2em;
+}
+.term-key.term-key-primary:active {
+  filter: brightness(0.9);
 }
 .paste-sheet-scrim {
   position: fixed;

@@ -148,7 +148,7 @@ describe('Paste (#278)', () => {
   });
 
   it('is the highlighted key on a sign-in terminal', () => {
-    expect(barKeys('claude', { signIn: true })[1]).toMatchObject({ label: 'Paste', paste: true, primary: true });
+    expect(barKeys('claude', { signIn: true })[1]).toMatchObject({ label: 'Paste code', paste: true, primary: true });
   });
 
   it('pastes what the clipboard has, trimmed', async () => {

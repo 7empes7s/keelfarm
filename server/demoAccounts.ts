@@ -29,7 +29,7 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
     signIn: (o, exited) => {
       const id = /accounts[\\/]([^\\/]+)[\\/]/.exec(Object.values(o.env)[0] ?? '')?.[1];
       return signIn(o, (code) => {
-        if (code === 0 && id) signedIn.add(id);
+        if (code === 0 && id && o.mode !== 'setup-token') signedIn.add(id);
         exited(code);
       });
     },

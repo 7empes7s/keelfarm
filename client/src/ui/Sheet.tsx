@@ -2,7 +2,7 @@
 // on a phone, a centred card on a computer; ✕, Esc and the backdrop close it, and only it (capture phase).
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useDialogFocus } from './dialogFocus';
+import { isTopDialog, useDialogFocus } from './dialogFocus';
 import { backdropClose } from './Panel';
 import './finder.css';
 import { CloseButton } from './Icon';
@@ -13,7 +13,7 @@ export function Sheet({ title, onClose, children, className, top }: { title: Rea
   useDialogFocus(box);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || !isTopDialog(box.current)) return; // a sheet over it (the paste sheet) closes first
       e.preventDefault();
       e.stopImmediatePropagation();
       onClose();
