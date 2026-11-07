@@ -13,7 +13,7 @@ import { recordCost } from '../metrics.ts';
 import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
 import { speaks } from '../voice.ts';
-import { teamKeyboard, telegramChat } from '../telegram.ts';
+import { teamKeyboard, telegramChat, telegramMessage } from '../telegram.ts';
 import { blockedNotice } from '../unblock.ts';
 import { clip, plainText, stuckAgents, type TeamChange } from '../notify.ts';
 import { redact as scrub } from '../../shared/journal.ts';
@@ -660,7 +660,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, withVisualsText(m.text, m.visuals)), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      void this.telegram.send(telegramMessage(this.ceo().name, m, this.state.settings.notify.officeUrl), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }

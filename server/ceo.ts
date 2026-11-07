@@ -378,7 +378,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'attach_file',
-      "Send the manager a file you made (a document, slides, spreadsheet, PDF, image, video, markdown, CSV or zip, at most 50 MB) with your next message: it shows on their phone with a preview and Download. The path must be absolute, inside your working folder or the temp folder. Kept on the office server for 30 days unless kept.",
+      "Send the manager a file you made (a document, slides, spreadsheet, PDF, image, video, markdown, CSV or zip, at most 500 MB) with your next message: it shows on their phone with a preview and Download. The path must be absolute, inside your working folder or the temp folder. Kept on the office server for 30 days unless kept.",
       { path: z.string().min(1).max(1000).describe('Absolute path of the file') },
       (a) => run(() => h.attachFile(a)),
     ),
