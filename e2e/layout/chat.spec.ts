@@ -7,6 +7,18 @@ import { checkScreens, MODES, PHONES, png, pocket, POCKET, type Screen } from '.
 const SCREENS: Screen[] = [
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
   {
+    // ⛶ (#201): the chat full screen, then back to normal
+    name: 'pocket chat full screen',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      await root.getByRole('button', { name: 'Full screen', exact: true }).click();
+      await expect(root).toHaveClass(/pk-chat-full/);
+      return root;
+    },
+    tabs: ['', { name: 'normal', go: (root) => root.getByRole('button', { name: 'Leave full screen' }).click() }],
+  },
+  {
     // a CEO reply's action cards, idea card and artifact (#108), at the chat's smallest, normal and biggest text (#135)
     name: 'pocket chat cards',
     widths: POCKET,

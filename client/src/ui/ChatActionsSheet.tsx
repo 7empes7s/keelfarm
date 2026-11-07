@@ -6,9 +6,14 @@ import { useDialogFocus } from './dialogFocus';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 import { openTextPill } from './ChatZoom';
+import { canGoFullscreen, goFullscreen, useChatFull } from './chatFull';
+import { Menu } from './Menu';
+import { keyLabel } from './keymap';
+import { useControls } from './controls';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; text size; hands-free).
+// prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; text size; hands-free;
+// full screen and its ⋯).
 
 interface PlusProps {
   text: string;
@@ -98,10 +103,12 @@ interface ToolsProps {
   onFiles: () => void;
   /** Where to draw them: pocket mode's header (null until it's there); undefined draws them in place. */
   into?: HTMLElement | null;
+  /** ⛶ and ⋯ here: off where the screen draws ⛶ itself (pocket mode on a phone, in its top bar). */
+  full?: boolean;
 }
 
-/** Icon buttons with their counts as badges: conversations and search, artifacts, files, text size, hands-free. */
-export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onFiles, into }: ToolsProps) {
+/** Icon buttons with their counts as badges: conversations and search, artifacts, files, text size, hands-free, full screen. */
+export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onFiles, into, full = true }: ToolsProps) {
   const tools = (
     <>
       <button type="button" className="chat-tool" onClick={onChats} aria-haspopup="dialog" aria-label="Conversations and search" title="Conversations: a new one, an earlier one, search them all, and what the CEO remembers">
@@ -121,10 +128,46 @@ export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onF
         Aa
       </button>
       <HandsFreeToggle ceoName={ceoName} />
+      {full && (
+        <>
+          <FullButton />
+          <FullMenu />
+        </>
+      )}
     </>
   );
   if (into === undefined) return tools;
   return into ? createPortal(tools, into) : null;
+}
+
+// Lucide's maximize-2 and minimize-2 (ISC, lucide.dev).
+const MAXIMIZE = 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7';
+const MINIMIZE = 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7';
+
+/** ⛶ (#201): the chat fills the window, or on a phone hides the tab bar. */
+export function FullButton() {
+  const { on, set } = useChatFull();
+  const key = keyLabel(useControls((s) => s.bindings.chatFull)[0] ?? '');
+  const label = on ? 'Leave full screen' : 'Full screen';
+  return (
+    <button type="button" data-tour="chat-full" className="chat-tool chat-full-btn" aria-pressed={on} aria-label={label} title={`${label}${key ? ` (${key})` : ''}`} onClick={() => set(!on)}>
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d={on ? MINIMIZE : MAXIMIZE} />
+      </svg>
+    </button>
+  );
+}
+
+/** The chat's ⋯: full screen, and where the browser allows it the real one. */
+function FullMenu() {
+  const { on, set } = useChatFull();
+  return (
+    <Menu
+      label="More for the chat"
+      className="chat-more"
+      items={[{ label: on ? 'Leave full screen' : 'Full screen', onSelect: () => set(!on) }, canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen }]}
+    />
+  );
 }
 
 function HandsFreeToggle({ ceoName }: { ceoName: string }) {
