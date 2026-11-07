@@ -9,6 +9,7 @@ import { MAX_VISUALS, parseVisual, visualKind, type ChatVisual } from './chatVis
 
 export const MAX_SUGGESTIONS = 4;
 export const SUGGESTION_CHARS = 60;
+const ASK_CHARS = 200;
 export const MAX_ARTIFACTS = 3;
 /** An artifact's markdown, at most (characters). A longer one stays in the text. */
 export const ARTIFACT_CHARS = 20_000;
@@ -22,6 +23,7 @@ export const SNAPSHOT_ARTIFACT_CHARS = 60_000;
 export interface ParsedMessage {
   text: string;
   suggestions?: string[];
+  ask?: string;
   idea?: ChatIdea;
   artifacts?: { title: string; markdown: string }[];
   visuals?: ChatVisual[];
@@ -45,10 +47,12 @@ function closing(lines: string[], from: number, open: string, nestable: boolean)
   return -1;
 }
 
-function suggestionsOf(body: string[]): string[] | null {
+/** A suggestions block's options, and its question when its first line is `? <question>` (#183). */
+function suggestionsOf(body: string[]): { options: string[]; ask?: string } | null {
   const out = body.map((l) => l.replace(/^\s*(?:[-*+•]|\d+[.)])\s+/, '').trim()).filter(Boolean);
-  if (!out.length || out.length > MAX_SUGGESTIONS || out.some((s) => s.length > SUGGESTION_CHARS)) return null;
-  return out;
+  const ask = out[0]?.startsWith('?') ? out.shift()!.slice(1).trim() : '';
+  if (!out.length || out.length > MAX_SUGGESTIONS || out.some((s) => s.length > SUGGESTION_CHARS) || ask.length > ASK_CHARS) return null;
+  return { options: out, ...(ask && { ask }) };
 }
 
 /** An ```idea block: a known kind, a title line, and optionally the message Accept sends (else the title). */
@@ -85,6 +89,7 @@ export function parseCeoMessage(raw: string): ParsedMessage {
   const lines = raw.replace(/\r\n?/g, '\n').split('\n');
   const keep: string[] = [];
   let suggestions: string[] | undefined;
+  let ask: string | undefined;
   let idea: ChatIdea | undefined;
   const artifacts: { title: string; markdown: string }[] = [];
   const visuals: ChatVisual[] = [];
@@ -108,7 +113,7 @@ export function parseCeoMessage(raw: string): ParsedMessage {
     const d = kind === 'idea' && !idea ? ideaOf(info, body) : null;
     const vk = visualKind(info);
     const v = vk && visuals.length < MAX_VISUALS ? parseVisual(vk, body.join('\n')) : null;
-    if (s) suggestions = s;
+    if (s) ({ options: suggestions, ask } = s);
     else if (a) artifacts.push(a);
     else if (d) idea = d;
     else if (v) visuals.push(v);
@@ -117,7 +122,7 @@ export function parseCeoMessage(raw: string): ParsedMessage {
   }
   if (!suggestions && !idea && !artifacts.length && !visuals.length) return { text: raw };
   const text = keep.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { text, ...(suggestions && { suggestions }), ...(idea && { idea }), ...(artifacts.length && { artifacts }), ...(visuals.length && { visuals }) };
+  return { text, ...(suggestions && { suggestions }), ...(ask && { ask }), ...(idea && { idea }), ...(artifacts.length && { artifacts }), ...(visuals.length && { visuals }) };
 }
 
 /** An artifact's first line as plain words, for its card. */
