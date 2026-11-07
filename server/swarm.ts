@@ -283,7 +283,7 @@ export class Swarm extends SwarmCeoTools {
       // Mission control opens on a week that already happened.
       this.state.ops = this.backend.seedOps?.(this.state.repos.map((r) => r.id), Date.now()) ?? this.state.ops;
       const base = this.messageSeq - 1; // edits of every kind (#125), reactions and quoted replies (#118)
-      for (const m of this.backend.seedChat?.(Date.now()) ?? []) this.state.messages.push({ ...m, id: m.id + base, ...(m.replyTo && { replyTo: m.replyTo + base }) });
+      for (const m of this.backend.seedChat?.(Date.now(), this.sampleCardFloor()) ?? []) this.state.messages.push({ ...m, id: m.id + base, ...(m.replyTo && { replyTo: m.replyTo + base }) });
       this.messageSeq = Math.max(this.messageSeq, ...this.state.messages.map((m) => m.id + 1));
       if (this.backend.seedThreads) this.messageSeq = await this.ceoChat.seed(this.state.ceo.chats, this.state.messages, this.backend.seedThreads(this.state.repos, Date.now()), this.files, this.messageSeq); // threads across floors (#132)
     }

@@ -1128,9 +1128,9 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
-    seedChat: (now) => {
+    seedChat: (now, cards) => {
       const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
-      return [...edits, ...sampleChat(now, edits.length + 1)];
+      return [...edits, ...sampleChat(now, edits.length + 1, scale ? undefined : cards)]; // the big company measures the office (scale.test.ts), not the cards' example
     },
     seedThreads: demoThreads,
     demoCharter,
