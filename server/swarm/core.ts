@@ -468,7 +468,7 @@ export abstract class SwarmCore extends SwarmContract {
       effort: a.effort,
       cli: a.cli,
       host: a.host === 'box' ? 'box' : 'local',
-      ...(a.host === 'box' ? { cloud: this.boxMachines.stateOf(a.machine ?? machineName(a.id)), needsSignIn: !!a.needsSignIn } : {}),
+      ...(a.host === 'box' ? { cloud: this.boxMachines.stateOf(a.machine ?? machineName(a.id)), needsSignIn: !!a.needsSignIn, ...(a.needsSignIn && a.ownLogin ? { signInWhy: a.ownLogin } : {}) } : {}),
       terminal: !!rt.terminal,
       status: a.status,
       issueNumber: a.issueNumber,

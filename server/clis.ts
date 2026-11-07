@@ -3,7 +3,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { run } from './exec.ts';
 import { localModel, type LocalProvider } from '../shared/models.ts';
-import type { AgentCli, CliView, EffortLevel } from '../shared/types.ts';
+import type { AgentCli, CliView, EffortLevel, KeyTrouble } from '../shared/types.ts';
+import { keyTrouble } from '../shared/keyTrouble.ts';
 import type { BoxVersions } from './boxScripts.ts';
 import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 
@@ -388,6 +389,18 @@ export function signedOutScreen(screen: string): boolean {
   return /Please run \/login|Sign in again to continue|Login expired|OAuth (?:access )?token (?:has )?(?:expired|been revoked|revoked)|Failed to authenticate|access token could not be refreshed|log out and sign in again|Sign in with ChatGPT|run '?`?codex login/i.test(
     screen,
   );
+}
+
+/**
+ * Why a cloud agent's session that failed (or said nothing) ended, when it's their login: the office's API key ran out
+ * of credit or was turned away (#258), or the CLI's own login is gone. Only the screen's last lines count for the key:
+ * the error is the CLI's last word, not something the agent printed while working.
+ */
+export function lostLogin(screen: string, errors: string[], label: string): { keyTrouble?: KeyTrouble; signedOut?: true; errors: string[] } | null {
+  const trouble = keyTrouble([...screen.split('\n').filter((l) => l.trim()).slice(-12), ...errors].join('\n'));
+  if (trouble) return { keyTrouble: trouble, errors: [`${label}'s API key ${trouble === 'out-of-credit' ? 'ran out of credit' : 'was turned away'}.`] };
+  if (signedOutScreen(screen) || errors.some((e) => /authentication failed/i.test(e))) return { signedOut: true, errors: [`${label}'s sign-in in their cloud machine expired or was turned away.`] };
+  return null;
 }
 
 // ---------- helper scripts the CLIs run ----------

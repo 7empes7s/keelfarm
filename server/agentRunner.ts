@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentCli, AgentRole, AgentTask, EffortLevel, LogKind, UsageReading } from '../shared/types.ts';
+import type { AgentCli, AgentRole, AgentTask, EffortLevel, KeyTrouble, LogKind, UsageReading } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
 import { usageTokens } from '../shared/startup.ts';
 import { memoryChars } from './tooling.ts';
@@ -79,6 +79,8 @@ export interface SessionResult {
   interrupted?: boolean;
   /** A cloud agent's CLI isn't signed in, or its login expired: the task waits for the manager to sign it in again. */
   signedOut?: boolean;
+  /** A cloud agent's API key ran out of credit or was turned away (shared/keyTrouble.ts): they switch to their own login. */
+  keyTrouble?: KeyTrouble;
 }
 
 export interface SessionCallbacks {

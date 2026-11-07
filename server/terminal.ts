@@ -122,6 +122,18 @@ export class AgentTerminal {
     return rows.join('\n');
   }
 
+  /** The visible rows as plain text with rows the terminal wrapped joined back, so a long link reads whole (#258). */
+  unwrapped(): string {
+    const b = this.term.buffer.active;
+    let out = '';
+    for (let i = b.viewportY; i < b.viewportY + this.rows; i++) {
+      const line = b.getLine(i);
+      if (!line) continue;
+      out += (i > b.viewportY && !line.isWrapped ? '\n' : '') + line.translateToString(!b.getLine(i + 1)?.isWrapped);
+    }
+    return out;
+  }
+
   /** The last `n` rows of scrollback and screen as plain text, blank rows at the bottom left out (the CEO's agent_log). */
   tail(n: number): string[] {
     const b = this.term.buffer.active;

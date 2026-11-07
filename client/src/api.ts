@@ -133,6 +133,8 @@ export const api = {
   react: (id: string, itemId: number, reaction: string) => call<{ sent: boolean; note: boolean }>('POST', `/api/agents/${id}/react`, { itemId, reaction }),
   /** Start a cloud agent's sign-in again in their terminal (docs/cloud.md). */
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
+  signInCheck: (id: string) => call('POST', `/api/agents/${id}/sign-in-check`),
+  signInLink: (id: string) => call<{ url: string | null }>('GET', `/api/agents/${id}/sign-in-link`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
   careerTimeline: (id: string) => call<TimelineView>('GET', `/api/agents/${id}/timeline`, undefined, false),
   updateSettings: (patch: Partial<SwarmSettings>) => call('PATCH', '/api/settings', patch),
@@ -221,6 +223,8 @@ export const api = {
   deleteCloudOrphans: () => call<{ deleted: number }>('POST', '/api/cloud/orphans'),
   /** The demo only: every cloud agent's sign-in expires. */
   expireSignIns: () => call('POST', '/api/cloud/demo-expire'),
+  useKeyAgain: (kind: 'anthropic' | 'openai') => call<CloudView>('POST', '/api/cloud/key-again', { kind }),
+  simulateOutOfCredit: () => call<CloudView>('POST', '/api/cloud/demo-credit'),
   // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
   addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
   updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),

@@ -23,6 +23,7 @@ import { clock } from './phoneParts';
 import { isPinching, lastPinchAt } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
 import { Icon } from './Icon';
+import { SignInCard } from './SignInCard';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -159,10 +160,10 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
 
   // An office note: hold or right-click it for its actions (Delete).
-  if (m && (look === 'pill' || (m.notice && look === 'card')))
+  if (m && (look === 'pill' || ((m.notice || m.signIn) && look === 'card')))
     return (
       <div className="bubble-row-office" data-msg={id} {...gestures}>
-        {look === 'pill' ? <NoticePill text={officeText(m.text)} /> : <NoticeCard text={officeText(m.text)} notice={m.notice!} />}
+        {look === 'pill' ? <NoticePill text={officeText(m.text)} /> : m.signIn ? <SignInCard card={m.signIn} /> : <NoticeCard text={officeText(m.text)} notice={m.notice!} />}
       </div>
     );
   const quote =

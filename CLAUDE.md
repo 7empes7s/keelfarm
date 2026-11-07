@@ -80,6 +80,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `repos.ts` | connecting floors, syncing issues and PRs, previews, manager commands on GitHub |
   | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
   | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
+  | `cloudCredit.ts` | cloud agents off an API key out of credit (#258): own login, the sign-in card per burst, back on the key |
   | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
   | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |
   | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |

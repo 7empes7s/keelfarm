@@ -38,6 +38,7 @@ import type {
   EffortLevel,
   HireRequestView,
   IssueInfo,
+  KeyTrouble,
   LogLine,
   MachineHost,
   NoticeView,
@@ -108,6 +109,7 @@ export interface PersistedAgent {
   host?: MachineHost; // 'box': their machine is an Upstash Box (docs/cloud.md); absent: a folder on this computer
   boxCli?: BoxCliRecord | null; // a cloud agent's live CLI in their Box, to pick up again after a restart
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
+  ownLogin?: KeyTrouble; // a cloud agent off the office's API key, which stopped working: their CLI uses its own login (#258)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
   account?: string; // the account (id) or tag they're pinned to (#247, shared/accounts.ts); absent: the rotation
   voiceId?: string; // their ElevenLabs voice (#320, shared/voices.ts); absent: none yet
