@@ -140,6 +140,7 @@ interface RawPull {
   reviewDecision: string | null;
   closingIssuesReferences: { number: number }[] | null;
   createdAt: string;
+  updatedAt?: string;
   mergedAt: string | null;
   body?: string | null;
   additions: number;
@@ -156,7 +157,7 @@ interface RawPull {
 }
 
 const PR_FIELDS =
-  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository,body';
+  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,updatedAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository,body';
 
 type Check = NonNullable<RawPull['statusCheckRollup']>[number];
 const BAD = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
@@ -203,6 +204,7 @@ function toPull(p: RawPull): PullInfo {
     reviewDecision: p.reviewDecision || null,
     closesIssues: (p.closingIssuesReferences ?? []).map((r) => r.number),
     createdAt: p.createdAt,
+    updatedAt: p.updatedAt ?? p.createdAt,
     mergedAt: p.mergedAt,
     additions: p.additions,
     deletions: p.deletions,

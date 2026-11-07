@@ -36,6 +36,7 @@ import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
+import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -181,6 +182,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
 strangers('demo-co/pixel-todo');
+repos.get('demo-co/pixel-todo')!.pulls.push(...stalePulls(['Try a darker theme', 'Experiment: drag to reorder', 'Spike: offline mode'], (title) => shippedPull('demo-co/pixel-todo', repos.get('demo-co/pixel-todo')!.nextNumber++, title, 0)));
 seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
@@ -1025,7 +1027,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       installedDesks.add(dir);
       return 'installed';
     },
-    removeDesk: async () => undefined,
+    ...demoPreviewDesks(), // removeDesk and previewDesks (#204)
     sweepDesks: async () => ({ desks: 0, folders: 0, branches: 0, patches: [], skipped: [] }),
     trimDesk: (_fullName, _slug, stillIdle) => fakeTrim(stillIdle),
     releaseDesk: async () => undefined,
