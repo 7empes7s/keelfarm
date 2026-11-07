@@ -85,7 +85,10 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 - **Panel / sheet** (`ui/Panel.tsx`): title (truncates), ✕ 44 px, body scrolls. Full-screen sheet ≤ 600 px.
   `className="ds-console"` adds the console's tabs, cards and headings.
 - **Buttons**: `.btn` (primary actions: `.btn-good`; destructive confirm: `.btn-bad`; quiet: `.btn-ghost`) and
-  `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44.
+  `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44. Both share one base in design.css
+  (`:where(.btn, .ds-btn)`: inline-flex, centred, one line height, no underline), so a link, label or summary styled
+  as a button looks and lines up like a `<button>`. A link that can't be followed yet stays a link: no `href`,
+  `aria-disabled="true"`, the disabled look; never swap it for a `<button disabled>` twin.
 - **Overflow menu** (`ui/Menu.tsx`): `<Menu label="More for Ada" title="Ada" items={[…]} />`. A popover on wide
   screens, a bottom sheet with a title and Cancel on phones. Arrow keys, Home/End, Esc (focus back to ⋯), Tab leaves,
   outside tap or scroll closes. Items with `danger: true` go last, under a separator, in red; end their label with "…"
@@ -113,6 +116,12 @@ The manager's console has five top tabs, and each one shows a side menu of its s
   never in the text flow. Expandable groups are buttons with `aria-expanded`.
 - **Share bar** (`.costs-bar`): an 8 px pill, 1 px ink outline, segments in `--ds-series-1…4` in that order, with a
   legend of dots below when there's more than one; give it `role="img"` and an `aria-label` with the numbers.
+- **Progress bar** (`ui/ProgressBar.tsx`, #140): a label and its number above an 8 px pill track (6 px `compact`)
+  with a 1 px ink outline. Filled to a share (`pct`; `null` sweeps, for work of unknown length), stacked `parts`
+  (`--ds-series-*`, legend below), or `steps` (done ones filled, the current one pulsing). Tone good / warn / bad from
+  the state fills, neutral in `--ds-series-4`; the words say it too. With `onClick` or `href` the whole bar is a 44 px
+  button or link to what it counts (`tap` says what). Animations use the motion tokens and stop under reduce motion.
+  `ProgressRing` is its compact form for avatars and tight cards. Values come from pure `shared/progressBars.ts`.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
 
 ## Finding things and learning the office (#109)
@@ -149,7 +158,8 @@ Don't:
 Each `e2e/layout/<screen>.spec.ts` opens each screen in its `SCREENS` (the checks are `checkScreens` in
 `e2e/layout/helpers.ts`) at its widths in light and dark, walks its tabs and fails on:
 sideways page scroll or an element wider than the viewport (outside a scroller), a button that can't be scrolled
-into view or is covered (`elementFromPoint`), a button under 44×44, a destructive button outside a menu, a ⋯ menu
+into view or is covered (`elementFromPoint`), a button under 44×44, anything styled `.btn`/`.ds-btn` under 44 px
+tall, with its label off centre or a different height from the buttons beside it, a destructive button outside a menu, a ⋯ menu
 whose danger items aren't last and separated or whose Esc closes more than the menu, and any axe WCAG 2.1 AA
 violation. Run it alone with your reserved port:
 

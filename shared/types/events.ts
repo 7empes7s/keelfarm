@@ -10,7 +10,7 @@ import type { WeatherView } from '../outside.ts';
 import type { ProgressView, RewardView } from '../progress.ts';
 import type { TestLabView } from '../testLab.ts';
 import type { ToolInventory } from '../tooling.ts';
-import type { AgentView, CliView, CloudView, HireRequestView, LogLine } from './agents.ts';
+import type { AgentView, CliView, CloudView, HireRequestView, LogLine, ModelCatalogView } from './agents.ts';
 import type { CeoChatView, CeoInfo, PhoneMessage, ServerDelivery, StatusReaction } from './chat.ts';
 import type { NoteView, NoticeView, NotifyChannelsView } from './notify.ts';
 import type { DoctorFinding, OfficeUpdateView, UsageCheckError, UsageReading, UsageView } from './office.ts';
@@ -47,6 +47,7 @@ export interface WorldSnapshot {
   ops: OpsView;
   doctor?: DoctorFinding[]; // the office doctor's findings the manager hasn't ignored
   clis: CliView[];
+  models?: ModelCatalogView; // the coding agents' models to pick from (#198); absent in a replay
   voiceKeySet: boolean; // an ElevenLabs key is saved (the key itself never leaves the server)
   voiceKeyHint: string; // its last 4 characters, '' when none
   voiceCache: VoiceCacheView;
@@ -110,6 +111,7 @@ export type ServerEvent =
   | { type: 'ops'; ops: OpsView }
   | { type: 'doctor'; doctor: DoctorFinding[] }
   | { type: 'clis'; clis: CliView[] }
+  | { type: 'models'; models: ModelCatalogView }
   | { type: 'voiceKey'; voiceKeySet: boolean; voiceKeyHint: string }
   | { type: 'voiceCache'; voiceCache: VoiceCacheView }
   | { type: 'weather'; weather: WeatherView }

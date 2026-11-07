@@ -5,6 +5,7 @@ import { nameList } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
 import { cliLabel, isCli } from '../clis.ts';
 import { plainText } from '../notify.ts';
+import { modelProblem } from '../../shared/models.ts';
 import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction, PhoneMessage, RepoView, WorldSnapshot } from '../../shared/types.ts';
 import { closeDecision, digestDue, fromCeoMessage, onManagerMessage, shownDecisions, snoozeDecision, syncDecisions, type Decision, type DecisionAbout, type DecisionSeed } from '../../shared/decisions.ts';
 import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS, BUSY, oneLine } from './model.ts';
@@ -183,6 +184,8 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     if (!reason) throw new Error('Say why: the manager reads the reason.');
     const cli: AgentCli | '' = isCli(x.cli) ? x.cli : '';
     if (cli && !this.cliReady(cli)) throw new Error(`${cliLabel(cli)} isn't installed here. Installed: ${this.clis.filter((c) => c.installed).map((c) => c.id).join(', ') || 'none'}.`);
+    const bad = modelProblem(x.model, this.state.settings.runtime === 'terminal' ? cli || this.state.settings.defaultCli : 'claude', this.models);
+    if (bad) throw new Error(bad);
     const max = this.state.settings.maxAgents;
     const team = this.teamNow(repo);
     const before = plannedSize(team);
@@ -330,12 +333,12 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     }
   }
 
-  /** resolve_decision: the CEO closes one the manager answered in words. */
-  protected resolveDecision(x: { id: string; outcome: string }) {
+  /** resolve_decision: the CEO closes one the manager answered in words, or one a newer question replaced. */
+  protected resolveDecision(x: { id: string; outcome: string; superseded?: boolean }) {
     const d = this.state.decisions.list.find((y) => y.id === x.id);
     if (!d) throw new Error(`No decision "${x.id}". Use an id from company_status's openDecisions.`);
     if (d.status !== 'open') return `"${d.question}" was already ${d.status}.`;
-    this.setDecisions(closeDecision(this.state.decisions.list, d.id, 'resolved', x.outcome, Date.now()));
-    return `Closed "${d.question}": ${plainText(x.outcome, 120)}.`;
+    this.setDecisions(closeDecision(this.state.decisions.list, d.id, x.superseded ? 'superseded' : 'resolved', x.outcome, Date.now()));
+    return `${x.superseded ? 'Superseded' : 'Closed'} "${d.question}": ${plainText(x.outcome, 120)}.`;
   }
 }

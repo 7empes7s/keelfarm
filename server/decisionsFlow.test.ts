@@ -52,6 +52,9 @@ describe('open decisions', () => {
     expect(await internals.officeTools().call('resolve_decision', { id: 'msg:999', outcome: 'x' })).toMatch(/^Refused: No decision/);
     expect(await internals.officeTools().call('resolve_decision', { id: `msg:${m.id}`, outcome: 'quieter fix' })).toMatch(/^Closed/);
     expect(open()).toEqual([]);
+    const n = internals.postMessage('ceo', 'Did the GitHub payment go through?\n```suggestions\nYes\nNot yet\n```');
+    expect(await internals.officeTools().call('resolve_decision', { id: `msg:${n.id}`, outcome: 'asked again', superseded: true })).toMatch(/^Superseded/);
+    expect(internals.state.decisions.list.find((d) => d.id === `msg:${n.id}`)).toMatchObject({ status: 'superseded' });
     expect((await status()).openDecisions).toEqual([]);
   });
 

@@ -36,6 +36,8 @@ import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
+import { modelAfterCliChange, modelProblem } from '../../shared/models.ts';
+import { isCli } from '../clis.ts';
 import type { AgentView, HireRequestView, PhoneMessage } from '../../shared/types.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
@@ -306,7 +308,12 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       if (item.locks?.agent) throw new Error(`${item.name} can't be switched for agents: ${item.locks.agent.why}.`);
       return { item, on };
     });
-    if (x.cli !== undefined || x.model !== undefined || x.effort !== undefined) this.updateAgent(a.id, { cli: x.cli, model: x.model, effort: x.effort });
+    // A model must be one of their coding agent's (#198); one the new coding agent doesn't have goes back to the default.
+    const cli = this.state.settings.runtime === 'terminal' ? (x.cli === undefined ? a.cli : isCli(x.cli) ? x.cli : '') || this.state.settings.defaultCli : 'claude';
+    const bad = modelProblem(x.model, cli, this.models);
+    if (bad) throw new Error(bad);
+    const model = x.model ?? (x.cli !== undefined ? modelAfterCliChange(a.model, cli, this.models) : undefined);
+    if (x.cli !== undefined || model !== undefined || x.effort !== undefined) this.updateAgent(a.id, { cli: x.cli, model, effort: x.effort });
     for (const { item, on } of picked) this.setToolSwitch(a.id, item.id, on);
     const setup = this.setupLabel(a) || 'the office defaults';
     const tools = picked.map(({ item, on }) => `${item.name} ${on === null ? 'as the office has it' : on ? 'on' : 'off'}`).join(', ');

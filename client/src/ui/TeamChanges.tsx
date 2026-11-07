@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api';
 import { pendingRequests, useStore } from '../store';
-import type { AgentCli, CliView, EffortLevel, HireRequestView, MachineHost, SwarmSettings } from '../../../shared/types';
+import type { AgentCli, CliView, EffortLevel, HireRequestView, MachineHost, ModelCatalogView, SwarmSettings } from '../../../shared/types';
 import { Markdown } from './Markdown';
 import { DecisionList } from './Decisions';
-import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
+import { CLAUDE_MODELS, effectiveModel, labelOf, modelAfterCliChange } from '../../../shared/models';
+import { ModelPicker } from './ModelPicker';
 import { attempt, Avatar } from './phoneParts';
 
 // Team changes on the phone and in the lobby: a new agent's setup, the résumé card that approves or rejects a change, and the list.
@@ -35,10 +36,10 @@ export const setupOf = (r: HireRequestView): HireSetup => ({ name: r.name, cli: 
 /** The approval's overrides: the setup as the manager left it, an emptied name back to the CEO's pick. */
 export const hireOverrides = (r: HireRequestView, s: HireSetup) => ({ name: s.name.trim() || r.name, cli: s.cli, model: s.model.trim(), effort: s.effort, host: s.host });
 
-/** "Claude Code · claude-opus-5-5 · medium effort": what they'll run, the office defaults filled in. */
-export function setupLine(s: Pick<HireSetup, 'cli' | 'model' | 'effort'>, settings: SwarmSettings, clis: CliView[]) {
+/** "Claude Code · Opus 5.5 · medium effort": what they'll run, the office defaults filled in. */
+export function setupLine(s: Pick<HireSetup, 'cli' | 'model' | 'effort'>, settings: SwarmSettings, clis: CliView[], models: ModelCatalogView) {
   const cli = hireCli(s.cli, settings);
-  return `${cliLabel(clis, cli)} · ${effectiveModel(s.model, cli, settings, CLAUDE_MODELS[0]) || 'its default model'} · ${s.effort || settings.defaultEffort} effort`;
+  return `${cliLabel(clis, cli)} · ${labelOf(effectiveModel(s.model, cli, settings, CLAUDE_MODELS[0]), cli, models)} · ${s.effort || settings.defaultEffort} effort`;
 }
 
 /** A new agent's settings, edited before they're created: the lobby's card and the phone's both use these. */
@@ -48,8 +49,11 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
   const id = useId();
   const cloudKey = useStore((s) => s.cloud.keySet);
   const sdk = settings.runtime !== 'terminal';
+  const models = useStore((s) => s.models);
   const cli = hireCli(value.cli, settings);
   const set = (patch: Partial<HireSetup>) => onChange({ ...value, ...patch });
+  // A model the new coding agent doesn't have goes back to the default (#198).
+  const setCli = (c: AgentCli | '') => set({ cli: c, model: modelAfterCliChange(value.model, hireCli(c, settings), models) });
   return (
     <div className="hire-setup">
       <label className="field" htmlFor={`${id}-name`}>
@@ -63,7 +67,7 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
           value={sdk ? '' : value.cli}
           disabled={disabled || sdk}
           title={sdk ? 'The Agent SDK runs Claude Code for every agent (Settings → How agents run)' : undefined}
-          onChange={(e) => set({ cli: e.target.value as AgentCli | '' })}
+          onChange={(e) => setCli(e.target.value as AgentCli | '')}
         >
           <option value="">{sdk ? 'Claude Code' : `${cliLabel(clis, settings.defaultCli)} (default)`}</option>
           {[...clis]
@@ -78,20 +82,7 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
       </label>
       <label className="field" htmlFor={`${id}-model`}>
         <span>Model</span>
-        <input
-          id={`${id}-model`}
-          list={`${id}-models`}
-          value={value.model}
-          disabled={disabled}
-          placeholder={effectiveModel('', cli, settings, CLAUDE_MODELS[0]) || 'agent default'}
-          title="Empty: the default for their coding agent"
-          onChange={(e) => set({ model: e.target.value })}
-        />
-        <datalist id={`${id}-models`}>
-          {modelSuggestions(cli).map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
+        <ModelPicker id={`${id}-model`} cli={cli} value={value.model} disabled={disabled} resolvedDefault={effectiveModel('', cli, settings, CLAUDE_MODELS[0])} onChange={(model) => set({ model })} />
       </label>
       <label className="field" htmlFor={`${id}-effort`}>
         <span>Effort</span>
@@ -128,6 +119,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
   const repo = useStore((s) => s.repos.find((r) => r.id === req.repoId));
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
+  const models = useStore((s) => s.models);
   const [setup, setSetup] = useState(() => setupOf(req));
   const [editing, setEditing] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -165,7 +157,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
       {req.reason && <Markdown className="resume-reason" text={req.reason} />}
       {hire && (
         <div className="resume-meta small">
-          <span className="grow">⚙️ {setupLine(pending ? setup : req, settings, clis)}</span>
+          <span className="grow">⚙️ {setupLine(pending ? setup : req, settings, clis, models)}</span>
           {pending && (
             <button className="linkish small" aria-expanded={editing} onClick={() => setEditing(!editing)}>
               {editing ? 'Done' : 'Change'}
