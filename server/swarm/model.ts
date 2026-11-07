@@ -135,6 +135,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
+  labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
 }
 

@@ -4,12 +4,13 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { hasChrome } from './browser.ts';
 import { installDesk, killTree } from './deps.ts';
 import { git } from './exec.ts';
 import { prepareDesk } from './workspace.ts';
-import { labFile, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
+import { BROWSER_INSTALL_MIN_MB, browsersPath, labFile, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
 import type { LabProfile } from '../shared/testLab.ts';
 
 /** The floor desk the lab's heavy commands run in (kept by the desk sweep). */
@@ -68,6 +69,47 @@ function contextOptions(profile: LabProfile, width: number, theme: 'light' | 'da
 function chromium(): { launch(o: Record<string, unknown>): Promise<PwBrowser> } {
   const req = createRequire(createRequire(import.meta.url).resolve('@playwright/mcp/package.json'));
   return (req('playwright-core') as { chromium: { launch(o: Record<string, unknown>): Promise<PwBrowser> } }).chromium;
+}
+
+/** Every lab process (and the start-up install) uses one browser cache. */
+const BROWSERS = browsersPath(process.env, os.homedir(), process.platform);
+
+/**
+ * Installs Playwright's Chromium into the shared cache with the Playwright at `cli` (argv before `install chromium`),
+ * niced, and only when memory allows; resolves whether it worked. Already installed is a quick no-op.
+ */
+function installChromium(cwd: string, cli: string[]): Promise<boolean> {
+  if (os.freemem() / (1024 * 1024) < BROWSER_INSTALL_MIN_MB) return Promise.resolve(false);
+  const argv = [...cli, 'install', 'chromium'];
+  const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: BROWSERS };
+  const child =
+    process.platform === 'win32'
+      ? path.isAbsolute(argv[0])
+        ? spawn(argv[0], argv.slice(1), { cwd, env, windowsHide: true, stdio: 'ignore' })
+        : spawn('cmd.exe', ['/d', '/s', '/c', argv.join(' ')], { cwd, env, windowsHide: true, stdio: 'ignore' }) // npx is a .cmd shim
+      : spawn('nice', ['-n', '19', ...argv], { cwd, env, windowsHide: true, detached: true, stdio: 'ignore' });
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => void killTree(child), 15 * 60_000);
+    child.once('error', () => resolve(false));
+    child.once('close', (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
+  });
+}
+
+/** playwright-core's CLI: its package.json is exported, cli.js isn't, so it's found beside the package.json. */
+export function playwrightCli(resolve: (id: string) => string = createRequire(createRequire(import.meta.url).resolve('@playwright/mcp/package.json')).resolve): string {
+  return path.join(path.dirname(resolve('playwright-core/package.json')), 'cli.js');
+}
+
+/** At office start: the browser floors' Playwright suites need, installed once per machine so no session has to. Never throws. */
+async function warmLabBrowser(): Promise<boolean> {
+  try {
+    return await installChromium(os.tmpdir(), [process.execPath, playwrightCli()]);
+  } catch {
+    return false;
+  }
 }
 
 const clean = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, ''); // eslint-disable-line no-control-regex
@@ -224,7 +266,7 @@ export function createLabRunner(): LabRunner {
       const started = Date.now();
       const env: Record<string, string> = {};
       for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !/^(ANTHROPIC_|CLAUDE|SWARM_)/i.test(k)) env[k] = v;
-      Object.assign(env, { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' });
+      Object.assign(env, { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PLAYWRIGHT_BROWSERS_PATH: BROWSERS });
       const [cmd, ...args] = o.argv;
       // Arguments are plain words (testLab.ts labCommand), so joining them for cmd.exe needs no quoting.
       const child =
@@ -233,7 +275,19 @@ export function createLabRunner(): LabRunner {
           : spawn(cmd.includes('/') ? path.join(o.dir, cmd) : cmd, args, { cwd: o.dir, env, windowsHide: true, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
       const tail: string[] = [];
       let partial = '';
+      let silent = false;
+      let quiet: ReturnType<typeof setTimeout> | undefined;
+      const hush = () => {
+        clearTimeout(quiet);
+        if (o.silenceMs === null) return;
+        quiet = setTimeout(() => {
+          silent = true;
+          void killTree(child);
+        }, o.silenceMs);
+      };
+      hush();
       const take = (d: Buffer) => {
+        hush();
         const parts = clean(partial + d.toString()).split('\n');
         partial = parts.pop() ?? '';
         tail.push(...parts);
@@ -249,8 +303,9 @@ export function createLabRunner(): LabRunner {
       return new Promise<RunResult>((resolve) => {
         const end = (code: number | null) => {
           clearTimeout(timer);
+          clearTimeout(quiet);
           if (partial) tail.push(partial);
-          resolve({ code, ms: Date.now() - started, tail: tail.slice(-TAIL), timedOut, artifacts: artifacts(o.dir) });
+          resolve({ code, ms: Date.now() - started, tail: tail.slice(-TAIL), timedOut, silent, artifacts: artifacts(o.dir) });
         };
         child.on('error', (err) => {
           tail.push(err.message);
@@ -259,6 +314,9 @@ export function createLabRunner(): LabRunner {
         child.on('close', (code) => end(code));
       });
     },
+
+    installBrowser: (dir) => installChromium(dir, ['npx', 'playwright']),
+    warm: warmLabBrowser,
 
     async close() {
       const b = browser;

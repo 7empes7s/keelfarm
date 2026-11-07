@@ -51,6 +51,8 @@ describe("the demo's mission control", () => {
     expect(v.floors[0].ciMs).toBeGreaterThan(2 * 60_000);
     expect(v.floors[0].qaRoundsPerMerge).toBeGreaterThanOrEqual(1);
     expect(v.floors[0].qaFirstPass).toBeLessThan(1);
+    expect(h.qa.filter((q) => q[6]).length).toBe(1); // one lab-error round (#189)
+    expect(v.floors[0].qaLabErrors).toBe(1);
     expect(v.total.leadMs).toBeGreaterThan(20 * 60_000);
     expect(v.ceoCostToday).toBeGreaterThan(0);
     expect(v.total.spark.some((n) => n > 0)).toBe(true);

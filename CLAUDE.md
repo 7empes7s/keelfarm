@@ -47,7 +47,7 @@ It ships on npm as `cubefarm` (`npx cubefarm`); it used to be called Office Swar
 | `npm run test:e2e` | optional, local only: Playwright (`e2e/`, `playwright.config.ts`): builds (`E2E_SKIP_BUILD=1` reuses your `dist/`), boots a demo office on `E2E_PORT` (default 4399; set it to your reserved port) with a temp `SWARM_HOME`, and smoke-tests it headless in a local Google Chrome, else Playwright's Chromium. Stops at once if the browser is missing: never install it mid-task |
 | `node scripts/smoke-package.mjs` | after a build: packs the npm package, installs it into a temp folder and boots its demo |
 | `npm run bench -- --port <yours>` | after a build: the scale benchmark (`scripts/bench.mjs`): boots the big-company demo headless, visits the lobby and three floors, writes FPS, frame-time p95, CPU per frame, draw calls, triangles, heap, audio nodes and websocket traffic to a JSON report (`--help`) |
-| `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs) |
+| `node --import tsx server/index.ts --demo` | a demo office (see SAFETY for the env it needs); `--no-tour` opens it without the setup wizard or tour, for QA's browser |
 
 CI (`.github/workflows/ci.yml`): Node 24, `npm ci` → `typecheck` → `test` → `build` → package smoke test → `lint`, for every PR
 and push to `main`, with a throwaway `SWARM_HOME` and `SWARM_PORT=0`, on `ubuntu-latest` always and on `windows-latest`

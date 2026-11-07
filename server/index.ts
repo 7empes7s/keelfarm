@@ -10,7 +10,7 @@ import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
 import type { ServerEvent } from '../shared/types.ts';
-import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
+import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
@@ -36,7 +36,7 @@ if (PUBLIC_DEMO) {
   }
 }
 
-const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
+const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE, DEMO_NO_TOUR) : realBackend);
 if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });
