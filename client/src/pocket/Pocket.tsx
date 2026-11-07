@@ -477,7 +477,8 @@ export default function Pocket() {
       setBackToChat(jump.backToChat);
       markTeamLanding();
       setTeamJump((n) => n + 1);
-      return go('team', jump.repoId);
+      setRepoId(jump.repoId);
+      return setTab('team'); // go()'s console and overlay closing is done above
     }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);

@@ -13,6 +13,7 @@ import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS
 import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
 import { DEMO_DECISION_MESSAGES, DEMO_REASK } from '../demoDecisions.ts';
+import type { SampleFloor } from '../chatSample.ts';
 
 export abstract class SwarmTeam extends SwarmUpkeep {
   // ---------- team changes ----------
@@ -345,6 +346,13 @@ export abstract class SwarmTeam extends SwarmUpkeep {
   /** A CEO tool call in a job the manager's message started: the open questions it answered close, or are marked probably answered (#208). */
   protected decisionActedOn(act: DecisionAct) {
     if (this.ceoAsked) this.setDecisions(onCeoAction(this.state.decisions.list, act, Date.now()));
+  }
+
+  /** Demo only: the first floor and its newest agent, for the sample chat's action cards of every kind (#151). */
+  protected sampleCardFloor(): SampleFloor | undefined {
+    const floor = this.state.repos[0];
+    const team = floor ? this.state.agents.filter((a) => a.repoId === floor.id && a.role !== 'ceo') : [];
+    return floor && team.length ? { floor: floor.floor, repoId: floor.id, agent: team[team.length - 1], size: team.length } : undefined;
   }
 
   /** Demo only: a fresh demo office opens with a question answered through its re-ask (#208), CEO questions left unanswered and a team change waiting. */
