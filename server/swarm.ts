@@ -132,6 +132,7 @@ export class Swarm extends SwarmCeoTools {
           qaChecks: q.qaChecks ?? null,
           stuckWhy: q.stuckWhy ?? null,
           triages: q.triages ?? 0,
+          labRetryRound: q.labRetryRound ?? null,
           escalated: q.escalated ?? q.status === 'needs-human', // stuck before triage existed: the manager was told
           mergeNote: null,
         })),
@@ -204,6 +205,8 @@ export class Swarm extends SwarmCeoTools {
     } catch {
       // first run
     }
+    if (this.backend.demoNoTour) Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
+    if (this.state.settings.testLab.enabled) void Promise.resolve().then(() => this.backend.testLab.warm()).catch(() => false); // never takes start-up down
     await this.voice.init();
     await this.weather.init();
     await this.notifier.init();
@@ -493,6 +496,7 @@ export class Swarm extends SwarmCeoTools {
     const rt = this.agentRt.get(id)!;
     if (rt.session) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
+      this.chatSay(a, text, who);
       if (!typed) rt.session.send(text);
       return;
     }
@@ -500,6 +504,7 @@ export class Swarm extends SwarmCeoTools {
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
     this.ensureSlot(sessionKind(a));
     this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
+    this.chatSay(a, text, who);
     const cwd = this.deskOf(a, repo);
     a.lastError = null;
     a.startedAt = Date.now();
@@ -725,6 +730,7 @@ export class Swarm extends SwarmCeoTools {
       const url = (patch.notify as { officeUrl?: unknown } | null)?.officeUrl;
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
+      this.telegram.refresh(); // the switch: Off stops reading the bot at once, On resumes it
     }
     if (patch.everyProject !== undefined) {
       try {

@@ -2,11 +2,11 @@
 import type { RoundCause } from '../shared/rounds.ts';
 import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory, type QaEntry } from './metrics.ts';
 
-const PAST_CAUSES: RoundCause[] = ['bug', 'nit', 'bug', 'spec-missing', 'lab-error', 'bug', 'outage']; // why QA failed it (#188)
+const PAST_CAUSES: RoundCause[] = ['bug', 'nit', 'bug', 'spec-missing', 'nit', 'bug', 'outage']; // why QA failed it (#188)
 
 /**
  * A believable past week for mission control: each floor merged a few PRs every working day (the first floor more),
- * most QA rounds and check runs passed, and sessions cost around a dollar. `rand` is there for the tests.
+ * most QA rounds and check runs passed (one lab error), and sessions cost around a dollar. `rand` is there for the tests.
  */
 export function demoPastWeek(repos: string[], now: number, rand: () => number = Math.random): OpsHistory {
   const h = emptyHistory();
@@ -38,6 +38,10 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
   for (const list of [h.merges, h.qa, h.checks, h.cost] as [number, ...unknown[]][][]) {
     for (let i = list.length - 1; i >= 0; i--) if (list[i][0] > now) list.splice(i, 1); // nothing from later today
   }
+  // One QA round the test lab failed (#189): before the first floor's latest merge's first round, counted apart.
+  const last = h.merges.filter((m) => m[1] === repos[0]).sort((a, b) => b[0] - a[0])[0];
+  const first = last && h.qa.find((q) => q[1] === last[1] && q[4] === last[2] && q[5] === 1);
+  if (first) h.qa.push([first[0] - 15 * min, first[1], false, first[3], last[2], 1, 'lab-error']);
   prune(h, now);
   return h;
 }

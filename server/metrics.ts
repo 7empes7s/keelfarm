@@ -18,7 +18,8 @@ const MAX_ENTRIES = 4000; // per list, however busy the week was
 export type MergeEntry = [at: number, repo: string, pr: number, leadMs: number | null];
 /**
  * A QA verdict: when, the repo, whether it passed, how long the PR waited for an agent to test it (null: unknown), and
- * the PR and its 1-based QA round (absent on entries from before they were recorded), and a fail's cause (#188).
+ * the PR and its 1-based QA round (absent on entries from before they were recorded), and a fail's cause (#188). A
+ * lab-error round (#189) is the lab's fail, not the code's: it counts in none of the QA rates, only as a lab error.
  */
 export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null, pr?: number, round?: number, cause?: RoundCause];
 /** GitHub's check runs on a commit, all finished: when, the repo, the commit (8 characters), passed, how long they took. */
@@ -60,6 +61,7 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
     merges: list(r.merges).filter((e) => isNum(e[2]) && orNull(e[3])) as MergeEntry[],
     qa: list(r.qa)
       .filter((e) => typeof e[2] === 'boolean' && orNull(e[3]))
+      .map((e) => (e[6] === 1 ? [...e.slice(0, 6), 'lab-error'] : e)) // #189 wrote a lab error as 1
       .map((e) => (isNum(e[4]) && isNum(e[5]) ? e.slice(0, isRoundCause(e[6]) ? 7 : 6) : e.slice(0, 4))) as QaEntry[],
     checks: list(r.checks).filter((e) => typeof e[2] === 'string' && typeof e[3] === 'boolean' && isNum(e[4])) as CheckEntry[],
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
@@ -173,7 +175,8 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
   const today = startOfDay(now);
   const day = (e: [number, ...unknown[]]) => now - e[0] <= DAY_MS;
   const merges = h.merges.filter((m) => mine(m[1]));
-  const qa = h.qa.filter((q) => mine(q[1]));
+  const tested = h.qa.filter((q) => mine(q[1]));
+  const qa = tested.filter((q) => !excludedCause(q[6])); // verdicts: lab errors and outages aren't the PR's
   const checks = h.checks.filter((c) => mine(c[1]));
   return {
     mergedToday: merges.filter((m) => m[0] >= today).length,
@@ -182,8 +185,9 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
     leadMs: median(merges.filter(day).flatMap((m) => (m[3] === null ? [] : [m[3]]))),
     qaWaitMs: median(qa.filter(day).flatMap((q) => (q[3] === null ? [] : [q[3]]))),
     qaPass: share(qa.filter((q) => q[2]).length, qa.length),
-    qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1 && !excludedCause(q[6])).length),
+    qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1).length),
     qaRoundsPerMerge: qaRoundsPerMerge(merges, qa),
+    qaLabErrors: tested.filter((q) => q[6] === 'lab-error').length,
     ciPass: share(checks.filter((c) => c[3]).length, checks.length),
     ciRuns: checks.length,
     ciMs: median(checks.map((c) => c[4])),

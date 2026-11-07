@@ -4,6 +4,7 @@ import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
+import { telegramViews } from './telegramViews';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
 // viewport, every button on screen, unobstructed and at least 44px, no destructive action one tap away, and axe clean.
@@ -138,7 +139,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -266,6 +267,29 @@ const SCREENS: Screen[] = [
       return page.getByRole('dialog');
     },
     tabs: ['', ...(['Now', 'Profile', 'Setup'] as const).map((t) => ({ name: `details › ${t}`, go: (root: Locator) => agentTab(root, t) }))],
+  },
+  {
+    // their chat (#120): the conversation, a group of steps opened, then the terminal again
+    name: 'agent chat',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'team');
+      await root.getByRole('button', { name: 'Terminal', exact: true }).first().click();
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Chat', exact: true }).click();
+      return d;
+    },
+    tabs: [
+      '',
+      {
+        name: 'a step open',
+        go: async (root) => {
+          const step = root.locator('.ac-steps > summary').first(); // an agent who hasn't started yet has none
+          if (await step.count()) await step.click();
+        },
+      },
+      { name: 'terminal', go: (root) => root.getByRole('button', { name: 'Terminal', exact: true }).click() },
+    ],
   },
   {
     name: 'app viewer',

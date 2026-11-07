@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import { blockers } from '../../shared/issues';
+import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
+import { mergeChat, type ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
@@ -39,7 +41,7 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string }
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal' } // view: opened on it (the CEO chat's @Agent opens their chat)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
@@ -128,6 +130,7 @@ interface State {
   agents: Record<string, Agent>;
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
   latest: Record<string, LogLine>; // everyone's latest line worth listing, for the workers list
+  agentChat: Record<string, ChatItem[]>; // chat items (#120) of the agents whose window is open
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
   peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
@@ -287,6 +290,7 @@ export const useStore = create<State>((set, get) => ({
   agents: {},
   logs: {},
   latest: {},
+  agentChat: {},
   workersOpen: false,
   peek: null,
   screens: {},
@@ -320,7 +324,7 @@ export const useStore = create<State>((set, get) => ({
     pushDevices: 0,
     devices: [],
     desktop: null,
-    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null },
+    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null },
   },
   cloud: EMPTY_CLOUD,
   tooling: EMPTY_INVENTORY,
@@ -490,6 +494,12 @@ export const useStore = create<State>((set, get) => ({
       case 'latest':
         set({ latest: { ...get().latest, ...ev.lines } });
         break;
+      case 'agentChat': {
+        const chats = { ...get().agentChat };
+        for (const [id, items] of Object.entries(ev.chats)) chats[id] = mergeChat(ev.catchUp ? [] : (chats[id] ?? []), items);
+        set({ agentChat: chats });
+        break;
+      }
       case 'screen': {
         const a = get().agents[ev.agentId];
         set({
@@ -766,6 +776,8 @@ export interface KanbanCard {
   qa?: QaView;
   /** The 3D board draws it as an outline: its sticky is off the board, with the agent testing it (StickyNotes.tsx). */
   ghost?: boolean;
+  /** An outsider's issue or PR (#185): the office leaves it alone. */
+  untrusted?: boolean;
 }
 
 export interface KanbanColumns {
@@ -811,13 +823,13 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const rec = qaRecords[qaKey(repo.id, p.number)];
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
-    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec };
-    const card = { ...base, ...qaCardNote(rec, p, repo.autoMerge) };
+    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
+    const card = { ...base, ...(p.untrusted ? { note: `🛡 ${OUTSIDE_PR}`, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
   }
 
-  const claimed = new Set<number>([...progress.map((c) => c.number), ...openPulls.flatMap((p) => p.closesIssues)]);
+  const claimed = new Set<number>([...progress.map((c) => c.number), ...openPulls.flatMap((p) => (p.untrusted ? [] : p.closesIssues))]);
   const open = new Set(repo.issues.map((i) => i.number));
   const held = new Map((repo.held ?? []).map((h) => [h.issue, h.pr]));
   const paced = repo.autoAssign && usage && usage.state !== 'normal' ? (usage.state === 'paused' ? '⏸ paused' : '⏸ paced') : '';
@@ -827,6 +839,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       const waits = blockers(i.body, open);
       const labels = i.labels.slice(0, 2).join(', ');
       const card = { key: `i-${i.number}`, number: i.number, title: i.title, url: i.url };
+      if (i.untrusted) return { ...card, note: `🛡 ${UNTRUSTED_ISSUE} · @${i.author ?? 'ghost'}`, tone: 'warn' as const, untrusted: true };
       // Its PR was closed: it waits for the manager rather than going back to auto-assign.
       if (held.has(i.number)) return { ...card, note: `⏸ PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
       return { ...card, note: (waits.length ? `⏳ after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };

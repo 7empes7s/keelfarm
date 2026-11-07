@@ -1,6 +1,7 @@
 // The Swarm's persisted shapes, runtimes and constants, shared by its layers (server/swarm/*.ts).
 import path from 'node:path';
 import type { SessionHandle } from '../agentRunner.ts';
+import type { ChatLog } from '../../shared/agentChat.ts';
 import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
@@ -68,6 +69,7 @@ export interface PersistedRepo {
   summary: string;
   qaBrief: string;
   playbook: string;
+  trustedAuthors?: string[]; // the floor's allow-list besides the owner, the office and write collaborators (#185)
   labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
@@ -136,6 +138,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
+  labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
 }
 
@@ -206,6 +209,7 @@ export interface AgentRuntime {
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
   blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
+  chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }
 
 export interface RepoRuntime {
@@ -224,6 +228,7 @@ export interface RepoRuntime {
   closedPulls: Map<number, LearnedPull>; // PRs it learned are closed or merged
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
   insights?: CharterInsights; // the Charter tab's numbers, worked out at each sync and charter change (refreshInsights)
+  writers?: { logins: string[]; at: number }; // collaborators with write access, as last asked (#185)
 }
 
 /** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */

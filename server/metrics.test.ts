@@ -212,6 +212,19 @@ describe('the numbers', () => {
     expect(opsView([floor()], h, NOW).floors[0].qaFirstPass).toBe(0);
     expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW).qa[0][6]).toBe('lab-error'); // kept through the state file
   });
+
+  it('keep lab errors (#189) out of the QA rates and rounds per merge, counted on their own', () => {
+    const h = emptyHistory();
+    // #1: the lab failed its first round, QA ran it again by itself and it passed; then it merged
+    recordQa(h, 'o/a', false, null, NOW - 3 * HOUR_MS, 1, 1, 'lab-error');
+    recordQa(h, 'o/a', true, null, NOW - 2 * HOUR_MS, 1, 1);
+    h.merges.push([NOW - HOUR_MS, 'o/a', 1, null]);
+    expect(qaRoundsPerMerge(h.merges, h.qa)).toBe(1);
+    expect(opsView([floor()], h, NOW).floors[0]).toMatchObject({ qaPass: 1, qaFirstPass: 1, qaRoundsPerMerge: 1, qaLabErrors: 1 });
+    expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW).qa).toEqual(h.qa); // kept through the state file
+    const old = loadHistory({ qa: [[NOW, 'o/a', false, null, 2, 1, 1]] }, NOW); // #189's state files wrote a lab error as 1
+    expect(old.qa).toEqual([[NOW, 'o/a', false, null, 2, 1, 'lab-error']]);
+  });
 });
 
 describe('alarms', () => {

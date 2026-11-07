@@ -71,6 +71,8 @@ export function demoLabRunner(): LabRunner {
       await pause(4000);
       return { code: 0, ms: 4000, timedOut: false, artifacts: [], tail: [`> ${o.argv.join(' ')}`, '', ' ✓ 128 tests passed (demo)', '', 'Done in 4.0s'] };
     },
+    installBrowser: async () => true,
+    warm: async () => false,
     close: async () => void (up = false),
   };
 }

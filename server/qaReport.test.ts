@@ -45,3 +45,31 @@ describe("QA's cause for a fail (#188)", () => {
     expect(parseReport(result({ structured: report({ verdict: 'fail', cause: 'typo' }) }))!.cause).toBeUndefined();
   });
 });
+
+describe('lab errors (#189)', () => {
+  it('is a verdict QA can give', () => {
+    expect((QA_SCHEMA.properties as { verdict: { enum: string[] } }).verdict.enum).toContain('lab-error');
+    expect(parseReport(result({ structured: report({ verdict: 'lab-error', summary: 'No browser.' }) }))!.verdict).toBe('lab-error');
+  });
+
+  it('turns a fail whose only failures are the lab into a lab error: a watchdog-aborted run is not a failed round', () => {
+    const checks = [
+      { name: 'Unit tests', result: 'pass', details: '210 passed' },
+      { name: 'e2e overflow.spec.ts', result: 'fail', details: 'lab_run went silent for 300 s and was aborted, twice' },
+    ];
+    expect(parseReport(result({ structured: report({ verdict: 'fail', checks }) }))!.verdict).toBe('lab-error');
+    const missing = [{ name: 'e2e guard', result: 'fail', details: "the lab has no Playwright browser: Executable doesn't exist" }];
+    expect(parseReport(result({ structured: report({ verdict: 'fail', checks: missing }) }))!.verdict).toBe('lab-error');
+  });
+
+  it('keeps a real failure a fail, even next to a lab problem, and a charter violation too', () => {
+    const checks = [
+      { name: 'e2e', result: 'fail', details: 'LAB ERROR (silent)' },
+      { name: 'Pocket mode at 390 px', result: 'fail', details: 'the sheet is cut off' },
+    ];
+    expect(parseReport(result({ structured: report({ verdict: 'fail', checks }) }))!.verdict).toBe('fail');
+    expect(parseReport(result({ structured: report({ verdict: 'fail', checks: [] }) }))!.verdict).toBe('fail');
+    const lab = [{ name: 'e2e', result: 'fail', details: 'LAB ERROR (oom)' }];
+    expect(parseReport(result({ structured: report({ verdict: 'fail', checks: lab, charterCheck: 'violation: no test' }) }))!.verdict).toBe('fail');
+  });
+});

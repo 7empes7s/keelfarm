@@ -51,7 +51,7 @@ export function floorBuilds(repo: RepoView, agents: Worker[], qa: Record<string,
   const prs: BuildCard[] = [];
   let merged = 0;
   for (const p of [...repo.pulls].sort((a, b) => time(b.mergedAt ?? b.createdAt) - time(a.mergedAt ?? a.createdAt))) {
-    if (p.state === 'CLOSED' || (p.state === 'MERGED' && ++merged > MERGED_SHOWN)) continue;
+    if (p.state === 'CLOSED' || (p.state === 'OPEN' && p.untrusted) || (p.state === 'MERGED' && ++merged > MERGED_SHOWN)) continue; // an outsider's PR is never previewed (#185)
     const q = qa[`${repo.id}#${p.number}`];
     const author = q?.devAgentId ?? team.find((a) => a.prNumber === p.number && a.task !== 'qa')?.id ?? null;
     const open = p.state === 'OPEN';

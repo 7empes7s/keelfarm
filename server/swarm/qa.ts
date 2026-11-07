@@ -7,7 +7,7 @@ import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
-import { conflictFixInstructions, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
 import { qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
@@ -42,6 +42,7 @@ export abstract class SwarmQa extends SwarmSessions {
   protected queueQa(repo: PersistedRepo, prNumber: number, dev: PersistedAgent | null, issueNumber: number | null) {
     const rt = this.repoRt.get(repo.id);
     if (rt && !stillOpen({ kind: 'pr', number: prNumber }, this.floorState(rt))) return; // it closed: QA has nothing to test
+    if (this.outsidePull(repo.id, prNumber)) return; // a fork's or a stranger's: review on GitHub (#185)
     let rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     if (rec) {
       if (rec.status === 'testing') return;
@@ -79,6 +80,7 @@ export abstract class SwarmQa extends SwarmSessions {
         stuckWhy: null,
         triages: 0,
         escalated: false,
+        labRetryRound: null,
       };
       this.state.qa.push(rec);
       this.setQa(rec, {});
@@ -91,6 +93,7 @@ export abstract class SwarmQa extends SwarmSessions {
     const repo = this.repo(repoId);
     const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber && p.state === 'OPEN');
     if (!pr) throw new HttpError(404, `PR #${prNumber} is not open on ${repo.fullName}`);
+    this.refuseOutside(repo, prNumber);
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     if (rec?.status === 'testing' || rec?.status === 'fixing') throw new HttpError(409, `PR #${prNumber} is already ${rec.status}`);
     if (rec && (rec.status === 'needs-human' || rec.status === 'passed' || rec.status === 'failed')) {
@@ -120,6 +123,7 @@ export abstract class SwarmQa extends SwarmSessions {
     const repo = this.repo(repoId);
     const find = () => this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     const listed = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber);
+    this.refuseOutside(repo, prNumber);
     sendBackPatch(prNumber, listed, find(), repo.defaultBranch, note, from); // refuse before asking GitHub
     // The last sync's mergeability may be stale or UNKNOWN: ask about the PR itself whether it conflicts now.
     const details = await this.backend.prDetails(repo.fullName, prNumber).catch(() => null);
@@ -273,6 +277,20 @@ export abstract class SwarmQa extends SwarmSessions {
     }
 
     a.status = 'done';
+    if (report.verdict === 'lab-error') {
+      // The lab failed, not the code (#189): QA again by itself once, never a failed round or a developer's job.
+      this.spend.outcome(a.id, 'done');
+      this.appendLog(a, [{ kind: 'error', text: `🧪 Lab error on PR #${a.prNumber}: ${clip(report.summary, 160)} (not a failed round)` }]);
+      if (rec) {
+        const key = `${repo.id}#${rec.prNumber}`;
+        recordQa(this.state.ops, repo.id, false, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round, 'lab-error');
+        this.qaWaits.delete(key);
+        const patch = { qaAgentId: null, summary: `Lab error: ${report.summary}`, labRetryRound: rec.round };
+        if (labErrorNext(rec) === 'retry') this.setQa(rec, { ...patch, status: 'queued' });
+        else this.stuck(rec, patch, `the test lab failed twice while testing it: ${clip(report.summary, 160)}`);
+      }
+      return;
+    }
     const pass = report.verdict === 'pass';
     // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
     // and the checks are recorded so a re-run of a red one can count as the fix. They name the cause QA didn't (#188).

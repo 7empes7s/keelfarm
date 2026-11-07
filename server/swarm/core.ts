@@ -173,6 +173,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected outbox = new Outbox({
     agents: () => this.state.agents.map((a) => ({ id: a.id, floor: this.floorOf(a) })),
     log: (id) => this.agentRt.get(id)?.log ?? [],
+    chat: (id) => this.agentRt.get(id)?.chat?.items ?? [],
     beforeFlush: (ids) => this.updateSigns(ids),
   });
   protected user: string | null = null;
@@ -274,6 +275,7 @@ export abstract class SwarmCore extends SwarmContract {
       api: backend.telegram,
       // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+      on: () => this.state.settings.notify.channels.telegram,
       message: async (text, id) => void (await this.messageCeo(text, undefined, 'telegram', [], id)),
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
@@ -349,6 +351,7 @@ export abstract class SwarmCore extends SwarmContract {
       summary: r.summary,
       qaBrief: r.qaBrief,
       playbook: r.playbook,
+      trustedAuthors: r.trustedAuthors ?? [],
       localPath: r.localPath,
       checkoutPath: this.backend.mainDir(r.fullName),
       cloneStatus: rt.cloneStatus,

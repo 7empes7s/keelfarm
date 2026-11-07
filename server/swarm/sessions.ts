@@ -446,6 +446,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
     const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(this.prRecord(a)) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
+    this.chatOf(a)?.session(); // its first prompt is their chat's task card
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
     };
@@ -486,6 +487,7 @@ export abstract class SwarmSessions extends SwarmAgents {
           rt.currentTool = name;
           this.emitAgent(a);
         },
+        chat: (events) => this.chatEvents(a, events, cwd),
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? (how.cli ?? 'claude') : null;

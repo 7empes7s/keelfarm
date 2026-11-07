@@ -25,6 +25,7 @@ import type { Conversation } from './conversations.ts';
 import type { MemoryNote } from './ceoMemory.ts';
 import type { TestLabSettings, TestLabView } from './testLab.ts';
 import type { EveryProject, FloorPracticeView } from './practices.ts';
+import type { ChatItem } from './agentChat.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -51,6 +52,13 @@ export interface IssueInfo {
   url: string;
   labels: string[];
   createdAt: string;
+  /** Its author's login (null: a deleted user) and GitHub's authorAssociation, for trust (shared/trust.ts, #185). */
+  author?: string | null;
+  authorAssociation?: string;
+  /** Who last added the office-trusted label. */
+  trustedBy?: string | null;
+  /** Not from a trusted author: listed, never built (set by the sync). */
+  untrusted?: boolean;
 }
 
 export interface PullInfo {
@@ -77,6 +85,10 @@ export interface PullInfo {
   checkRun?: { ms: number; doneAt: number } | null;
   /** The paths it changes (up to PR_FILES_MAX), for the memory map's hot files and conflict risk (shared/memoryMap.ts). */
   files?: string[];
+  author?: string | null;
+  isCrossRepository?: boolean;
+  /** From a fork or an untrusted author: never QA'd, fixed, previewed or merged by the office (set by the sync, #185). */
+  untrusted?: boolean;
 }
 
 export const PR_FILES_MAX = 30;
@@ -98,6 +110,7 @@ export interface RepoView extends FloorPracticeView {
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
   playbook: string; // the floor's architecture map, conventions, skills to use and traps, for every agent's prompt (up to PLAYBOOK_MAX)
+  trustedAuthors?: string[]; // GitHub logins trusted besides the owner, the office and write collaborators (#185)
   localPath: string | null; // the manager's own project folder, when the floor lives in one
   checkoutPath: string; // where the floor's main checkout is on disk (localPath, or a clone the office manages)
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
@@ -471,8 +484,11 @@ export interface TelegramView {
   linked: boolean; // the manager pressed Start in their chat
   chat: string; // that chat's first name, for "Linked to …"
   linking: boolean; // a Start link is waiting to be pressed
-  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages
+  on: boolean; // Settings' Telegram switch: off, nothing is read, retried or sent; the token and chat are kept
+  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages ('off' while there's no token or the switch is off)
   error: string; // why the last read failed, while retrying
+  okAt: number | null; // when reading last worked
+  advice: string; // what to check after repeated failures
   last: NotifyHealth | null; // its last send
 }
 
@@ -830,6 +846,7 @@ export type ServerEvent =
   | { type: 'logs'; tails: Record<string, LogLine[]>; catchUp?: boolean }
   /** The latest line worth listing of agents it doesn't watch, for the workers list. */
   | { type: 'latest'; lines: Record<string, LogLine> }
+  | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean } // chat items (#120) of the agent windows a tab has open; catchUp replaces
   | { type: 'screen'; agentId: string; url: string | null; at: number }
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
