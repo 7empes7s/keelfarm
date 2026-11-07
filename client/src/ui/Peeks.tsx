@@ -1,5 +1,5 @@
 // The hover cards' bodies (#213): an agent, an issue or PR, a QA verdict and its checks. Read from the store as it is.
-import { firstRoundRate, mergesThisWeek, rank, weeklyMerges } from '../../../shared/careers';
+import { firstRoundRate, mergesThisWeek, rank, weeklySeries } from '../../../shared/careers';
 import type { QaView, RepoView } from '../../../shared/types';
 import { qaKey, useStore, type Agent } from '../store';
 import { fmtUsd } from '../ops';
@@ -30,7 +30,7 @@ export function AgentPeek({ agent }: { agent: Agent }) {
           ['First-round QA', rate === null ? '—' : `${Math.round(rate * 100)}%`],
         ] as [string, number | string][]) : []),
       ]}
-      spark={c ? weeklyMerges(c, now) : undefined}
+      spark={c ? weeklySeries(c, now).merges : undefined}
       note={agent.issueTitle}
       actions={[{ label: agent.terminal ? 'Open terminal' : 'Open their window', onSelect: () => useStore.getState().openOverlay({ kind: 'terminal', agentId: agent.id }) }]}
     />
