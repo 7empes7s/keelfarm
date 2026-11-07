@@ -69,10 +69,12 @@ test('the ⋯ menu hides a CEO message and deletes one of mine, each with Undo',
   const log = page.locator('.chat-log');
   const menu = page.locator('.chat-menu');
   for (const [row, label, notice] of [
-    [log.locator('.bubble-row:not(.bubble-row-me)').last(), 'Hide', 'Message hidden'],
-    [log.locator('.bubble-row-me').last(), 'Delete', 'Message deleted'],
+    // only saved messages: the CEO's reply still being written is a bubble row with no id
+    [log.locator('.bubble-row[data-msg]:not(.bubble-row-me)').last(), 'Hide', 'Message hidden'],
+    [log.locator('.bubble-row-me[data-msg]').last(), 'Delete', 'Message deleted'],
   ] as const) {
     const id = await row.getAttribute('data-msg');
+    expect(id, `a ${label} target`).toMatch(/^\d+$/);
     await row.getByRole('button', { name: 'Message actions' }).focus();
     await page.keyboard.press('Enter');
     await menu.getByRole('button', { name: label }).click();
