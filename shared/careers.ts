@@ -112,6 +112,23 @@ export function legacyCareer(raw: Record<string, unknown>): CareerView {
   return out;
 }
 
+/** A career as a snapshot sends it (#291): its values in newCareer's key order, not 27 key names per person. */
+export type CareerRow = CareerView[keyof CareerView][];
+const CAREER_FIELDS = Object.keys(newCareer(0)) as (keyof CareerView)[];
+export const careerRow = (c: CareerView): CareerRow => CAREER_FIELDS.map((f) => c[f]);
+export const careerOfRow = (r: CareerRow): CareerView => legacyCareer(Object.fromEntries(CAREER_FIELDS.map((f, i) => [f, r[i]])));
+
+/** A snapshot as a tab gets it (#291): its agents' careers moved into rows by id, each agent's `career` then null. */
+export function packCareers<S extends { agents: { id: string; career: CareerView | null }[] }>(s: S): S & { careers: Record<string, CareerRow> } {
+  const careers: Record<string, CareerRow> = {};
+  const agents = s.agents.map((a) => {
+    if (!a.career) return a;
+    careers[a.id] = careerRow(a.career);
+    return { ...a, career: null };
+  });
+  return { ...s, agents, careers };
+}
+
 /** The week `at` falls in: weeks since the epoch, starting on Mondays (UTC). */
 export const weekOf = (at: number) => Math.floor((at - 4 * DAY_MS) / WEEK_MS);
 
