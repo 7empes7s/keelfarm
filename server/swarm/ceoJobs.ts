@@ -37,6 +37,7 @@ import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
+import { fileLinks } from '../../shared/files.ts';
 import { ceoSessionStep } from '../ceoWaits.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
@@ -651,7 +652,8 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      const files = fileLinks(m.attachments ?? [], this.state.settings.notify.officeUrl); // links: Telegram takes no file over 50 MB
+      void this.telegram.send(telegramChat(this.ceo().name, [m.text, files].filter(Boolean).join('\n')), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }

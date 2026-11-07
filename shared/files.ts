@@ -19,7 +19,11 @@ export interface FileView extends FileRef {
   expiresAt: number | null;
 }
 
-export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const MAX_FILE_BYTES = 500 * 1024 * 1024;
+/** Uploads and copies are refused while the disk has less than this free after them (#148). */
+export const MIN_FREE_BYTES = 10 * 1024 * 1024 * 1024;
+/** Images up to this size get a thumbnail in a bubble; bigger ones show as a chip, drawn only when opened. */
+const THUMB_MAX_BYTES = 15 * 1024 * 1024;
 export const MAX_FILES_PER_MESSAGE = 10;
 export const RETENTION_MS = 30 * 24 * 3600_000;
 /** How often the office looks for expired files. */
@@ -85,11 +89,13 @@ export function sanitizeName(name: string): string {
 }
 
 const MB = 1024 * 1024;
+const GB = 1024 * MB;
 
-/** A size for people: "820 B", "14 KB", "3.2 MB". */
+/** A size for people: "820 B", "14 KB", "3.2 MB", "12.4 GB". */
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < MB) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`;
   return `${(bytes / MB).toFixed(bytes < 10 * MB ? 1 : 0)} MB`;
 }
 
@@ -102,6 +108,39 @@ export function attachmentProblem(files: readonly { name: string; type?: string;
     if (f.size <= 0) return `${sanitizeName(f.name)} is empty.`;
   }
   return null;
+}
+
+/** Why the disk can't take `incoming` more bytes (it would leave less than MIN_FREE_BYTES free), or null when it can. */
+export function diskProblem(free: number, incoming: number, reserve = MIN_FREE_BYTES): string | null {
+  if (free - incoming >= reserve) return null;
+  const need = incoming > 0 ? `That's ${formatSize(incoming)}, but the` : 'The';
+  return `${need} office's disk is nearly full (${formatSize(Math.max(0, free))} free; it keeps ${formatSize(reserve)} free). Delete some files in Files, or free space on the server, then try again.`;
+}
+
+/** An upload's line under its progress bar: "120 MB of 450 MB · 4.1 MB/s · 1 min left" (speed once a second has passed). */
+export function uploadStatus(loaded: number, total: number, elapsedMs: number): string {
+  const done = `${formatSize(loaded)} of ${formatSize(total)}`;
+  if (elapsedMs < 1000 || loaded <= 0) return done;
+  const rate = loaded / (elapsedMs / 1000);
+  const left = Math.max(0, (total - loaded) / rate);
+  const eta = left < 60 ? `${Math.ceil(left)} s left` : `${Math.ceil(left / 60)} min left`;
+  return `${done} · ${formatSize(Math.round(rate))}/s · ${eta}`;
+}
+
+/** Images small enough to draw as a thumbnail in a bubble. */
+export const thumbnailable = (f: Pick<FileRef, 'type' | 'size'>) => f.type.startsWith('image/') && f.size <= THUMB_MAX_BYTES;
+
+/**
+ * A message's files as Telegram text: a download link on the office for each (the bot sends no files, and Telegram
+ * refuses any over 50 MB), or, with no office address set, where to find them.
+ */
+export function fileLinks(files: readonly Pick<FileRef, 'id' | 'name' | 'size'>[], officeUrl: string): string {
+  return files
+    .map((f) => {
+      const where = officeUrl ? new URL(`/api/files/${f.id}?download`, officeUrl).href : "in the office's Files";
+      return `📎 ${f.name} (${formatSize(f.size)}): ${where}`;
+    })
+    .join('\n');
 }
 
 /** Store ids: 24 hex characters, nothing that could be a path. */
@@ -120,10 +159,16 @@ export const daysLeft = (f: Pick<FileRef, 'at' | 'keep'>, now: number) => (f.kee
 
 // ---------- what the CEO and agents are told ----------
 
+/** Files the CEO can read with Read: images, PDFs and text. Videos, office files and zips are only stored. */
+const ceoReadable = (f: Pick<FileRef, 'name' | 'type'>) => ['image', 'pdf', 'text'].includes(fileKind(f.name, f.type) ?? '');
+
 /** The lines added to the manager's message for the CEO: each attachment's absolute path, name and type, to read with Read. */
 export function attachmentLines(files: readonly Pick<FileRef, 'name' | 'type' | 'size'>[], pathOf: (i: number) => string): string {
   if (!files.length) return '';
-  return ['Attached (read with Read; a file\'s name in the store is its file id):', ...files.map((f, i) => `- ${pathOf(i)} (${f.name}, ${f.type}, ${formatSize(f.size)})`)].join('\n');
+  return [
+    'Attached (read with Read; a file\'s name in the store is its file id):',
+    ...files.map((f, i) => `- ${pathOf(i)} (${f.name}, ${f.type}, ${formatSize(f.size)}${ceoReadable(f) ? '' : '; stored, not readable by the CEO'})`),
+  ].join('\n');
 }
 
 /** The store ids an issue body hands to its agents: "Attached: <id>[, <id>…]" lines. */

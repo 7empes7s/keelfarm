@@ -1,5 +1,6 @@
 // The manager's attachments while they write a message to the CEO: each file uploads to the office's files store as
-// soon as it's picked, pasted or dropped (with progress, cancellable), and the message carries the uploaded ids.
+// soon as it's picked, pasted or dropped (with progress, cancellable, retried from the start after a drop), and the
+// message carries the uploaded ids.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
@@ -14,18 +15,20 @@ export interface Pending {
   size: number;
   preview: string | null; // an object URL for images the browser can show
   progress: number; // 0..1
+  loaded: number; // bytes sent
+  startedAt: number; // this attempt, epoch ms
   ref?: FileRef; // uploaded
   error?: string;
 }
 
 /** POSTs a file's bytes to the store; `abort` cancels it. */
-function uploadFile(file: File, onProgress: (fraction: number) => void): { done: Promise<FileRef>; abort: () => void } {
+function uploadFile(file: File, onProgress: (loaded: number) => void): { done: Promise<FileRef>; abort: () => void } {
   const xhr = new XMLHttpRequest();
   const done = new Promise<FileRef>((resolve, reject) => {
     xhr.open('POST', '/api/files');
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.upload.onprogress = (e) => onProgress(e.loaded);
     xhr.onload = () => {
       let data: { error?: string } & Partial<FileRef> = {};
       try {
@@ -53,6 +56,24 @@ export function useAttachments() {
   const latest = useRef(pending);
   latest.current = pending;
 
+  const held = useRef(new Map<number, File>()); // for Retry
+
+  /** Uploads (again) the file under `key`, from its first byte. */
+  const send = useCallback((key: number) => {
+    const file = held.current.get(key);
+    if (!file) return;
+    patch(key, { progress: 0, loaded: 0, startedAt: Date.now(), error: undefined });
+    const up = uploadFile(file, (loaded) => patch(key, { loaded, progress: file.size ? loaded / file.size : 0 }));
+    aborts.current.set(key, up.abort);
+    up.done.then(
+      (ref) => {
+        held.current.delete(key);
+        patch(key, { ref, progress: 1, loaded: file.size });
+      },
+      (err: Error) => err.name !== 'AbortError' && patch(key, { error: err.message }),
+    ).finally(() => aborts.current.delete(key));
+  }, []);
+
   const add = useCallback((files: readonly File[]) => {
     if (!files.length) return;
     const problem = attachmentProblem(files, latest.current.length);
@@ -63,20 +84,17 @@ export function useAttachments() {
     for (const file of files) {
       const key = ++seq;
       const showable = file.type.startsWith('image/') && inlineType(file.type) && !/hei[cf]/.test(file.type);
-      setPending((all) => [...all, { key, name: file.name || 'file', type: file.type, size: file.size, preview: showable ? URL.createObjectURL(file) : null, progress: 0 }]);
-      const up = uploadFile(file, (progress) => patch(key, { progress }));
-      aborts.current.set(key, up.abort);
-      up.done.then(
-        (ref) => patch(key, { ref, progress: 1 }),
-        (err: Error) => err.name !== 'AbortError' && patch(key, { error: err.message }),
-      ).finally(() => aborts.current.delete(key));
+      held.current.set(key, file);
+      setPending((all) => [...all, { key, name: file.name || 'file', type: file.type, size: file.size, preview: showable ? URL.createObjectURL(file) : null, progress: 0, loaded: 0, startedAt: Date.now() }]);
+      send(key);
     }
-  }, []);
+  }, [send]);
 
   /** Takes a file off the tray: cancels its upload, or deletes what was already uploaded. */
   const remove = useCallback((key: number) => {
     const p = latest.current.find((x) => x.key === key);
     aborts.current.get(key)?.();
+    held.current.delete(key);
     if (p?.ref) void api.deleteFile(p.ref.id, false).catch(() => undefined);
     if (p?.preview) URL.revokeObjectURL(p.preview);
     setPending((all) => all.filter((x) => x.key !== key));
@@ -85,6 +103,7 @@ export function useAttachments() {
   /** Empties the tray once the message took the files. */
   const clear = useCallback(() => {
     for (const p of latest.current) if (p.preview) URL.revokeObjectURL(p.preview);
+    held.current.clear();
     setPending([]);
   }, []);
 
@@ -93,5 +112,5 @@ export function useAttachments() {
   const ready = pending.flatMap((p) => (p.ref ? [p.ref] : []));
   const busy = pending.some((p) => !p.ref && !p.error);
   const failed = pending.some((p) => p.error);
-  return { pending, add, remove, clear, ready, busy, failed };
+  return { pending, add, remove, retry: send, clear, ready, busy, failed };
 }

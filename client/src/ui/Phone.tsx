@@ -866,7 +866,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         </div>
       )}
       <WorkingStrip onStop={stop} />
-      <AttachTray pending={att.pending} onRemove={att.remove} />
+      <AttachTray pending={att.pending} onRemove={att.remove} onRetry={att.retry} />
       {mention.picks}
       {slash.picks}
       <form

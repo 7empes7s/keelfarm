@@ -9,7 +9,7 @@ import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { expired, expiry, fileKind, fileType, formatSize, isFileId, MAX_FILE_BYTES, sanitizeName, type FileRef, type FileView } from '../shared/files.ts';
+import { diskProblem, expired, expiry, fileKind, fileType, formatSize, isFileId, MAX_FILE_BYTES, sanitizeName, type FileRef, type FileView } from '../shared/files.ts';
 import { HttpError } from './httpError.ts';
 
 interface StoredFile extends FileRef {
@@ -30,7 +30,7 @@ function inside(child: string, parent: string): boolean {
 
 /**
  * attach_file's checks: an absolute path to a regular file that, with every symlink resolved, is inside one of
- * `roots`, of a kind a message may carry and at most 50 MB. Errors say what to do instead.
+ * `roots`, of a kind a message may carry and at most 500 MB. Errors say what to do instead.
  */
 export async function checkAttachPath(p: string, roots: readonly string[], max = MAX_FILE_BYTES): Promise<{ real: string; name: string; size: number }> {
   if (!path.isAbsolute(p)) throw new Error(`Give an absolute path, not "${p}".`);
@@ -47,14 +47,30 @@ export async function checkAttachPath(p: string, roots: readonly string[], max =
   return { real, name, size: st.size };
 }
 
+/** Free bytes on the disk holding `dir`. */
+async function diskFree(dir: string): Promise<number> {
+  const s = await fs.statfs(dir);
+  return s.bavail * s.bsize;
+}
+
 export class FileStore {
   private files = new Map<string, StoredFile>();
   private saving: Promise<void> = Promise.resolve();
 
+  /** `freeBytes`: the disk probe (tests pass a fake one). */
   constructor(
     readonly root: string,
     private onChange: () => void = () => undefined,
+    private freeBytes: (dir: string) => Promise<number> = diskFree,
   ) {}
+
+  /** 507 when taking `incoming` bytes would leave the disk under MIN_FREE_BYTES free. */
+  private async checkDisk(incoming: number) {
+    await fs.mkdir(this.root, { recursive: true, mode: 0o700 });
+    const free = await this.freeBytes(this.root).catch(() => Infinity); // no probe here: ENOSPC still stops the write
+    const why = diskProblem(free, incoming);
+    if (why) throw new HttpError(507, why);
+  }
 
   private get indexFile() {
     return path.join(this.root, 'index.json');
@@ -85,10 +101,14 @@ export class FileStore {
     return filePath(this.root, id);
   }
 
-  /** An upload: the stream's bytes, refused with 413 past `max`. */
-  async addStream(body: Readable, meta: { name: string; type: string; from: FileRef['from'] }, max = MAX_FILE_BYTES): Promise<FileRef> {
+  /**
+   * An upload: the stream's bytes written as they arrive, refused with 413 past `max` (counted, whatever the declared
+   * length said) and with 507 when the disk can't take `meta.length` more. A failed or cut-off upload leaves nothing.
+   */
+  async addStream(body: Readable, meta: { name: string; type: string; from: FileRef['from']; length?: number }, max = MAX_FILE_BYTES): Promise<FileRef> {
     const name = sanitizeName(meta.name);
     if (!fileKind(name, meta.type)) throw new HttpError(415, `${name}: that kind of file can't be attached.`);
+    await this.checkDisk(meta.length ?? 0);
     const id = crypto.randomBytes(12).toString('hex');
     const part = `${this.pathOf(id)}.part`;
     let size = 0;
@@ -118,6 +138,7 @@ export class FileStore {
   async addCopy(real: string, meta: { name: string; from: FileRef['from'] }): Promise<FileRef> {
     const own = path.basename(real);
     if (path.dirname(real) === (await fs.realpath(this.root).catch(() => this.root)) && this.files.has(own)) return this.files.get(own)!;
+    await this.checkDisk((await fs.stat(real)).size);
     const id = crypto.randomBytes(12).toString('hex');
     await fs.copyFile(real, this.pathOf(id));
     await fs.chmod(this.pathOf(id), 0o600).catch(() => undefined);
