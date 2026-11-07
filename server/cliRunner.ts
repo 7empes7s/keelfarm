@@ -33,7 +33,7 @@ import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
 import { isHarnessText } from '../shared/chat.ts';
 import { transcriptStartup } from './tooling.ts';
-import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
@@ -905,7 +905,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       statusLine: box
         ? { type: 'command', command: `node ${BOX_BIN}/statusline.cjs ${events}`, padding: 0 }
         : { type: 'command', command: `${shellArg(process.execPath)} ${shellArg(path.join(BIN_DIR, 'statusline.cjs'))} ${shellArg(hookUrl)}`, padding: 0 },
-      ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : {}),
+      ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : !box && opts.apiKeyEnv ? { apiKeyHelper: keyHelperCommand(opts.apiKeyEnv) } : {}),
       permissions: worktreePermissions(opts.cwd),
       // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
       ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),

@@ -28,6 +28,7 @@ export interface PhoneMessage {
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
   quiet?: true; // the CEO's: its notification wasn't sent, as the manager was in the app (#210)
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
+  clientId?: string; // the manager's: the phone's id for the send, so a resend after a reload is taken once (#216)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   ask?: string; // the CEO's: the question those replies answer, when it named one (a `? …` first line, #183)

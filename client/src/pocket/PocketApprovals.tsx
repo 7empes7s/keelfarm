@@ -16,6 +16,8 @@ import { EmptyState } from '../ui/EmptyState';
 import { useBackLayer } from '../ui/Panel';
 import { DesignDetail, PrDetail, WhyTag } from './ApprovalDetail';
 import './approvals.css';
+import { HoverCard, PeekCard } from '../ui/HoverCard';
+import { agoText, prAdvice } from '../ui/peekFacts';
 
 type Dot = 'pass' | 'fail' | 'pending';
 
@@ -32,6 +34,8 @@ interface Item {
   dots: Dot[];
   score: number; // the impact sort
   detail: ReactNode;
+  /** The desktop list row's peek (#213): why it needs you and what to do. */
+  peek: { why: string; recommend: string };
 }
 
 const dotsOf = (qa: QaView, pr: PullInfo): Dot[] => [
@@ -50,7 +54,7 @@ function useItems(now: number): Item[] {
   const agents = useStore((s) => s.agents);
   const w = waitingOnYou(repos, qa, requests);
   const floorOf = (id: string) => repos.find((r) => r.id === id);
-  const prItem = (repo: RepoView, q: QaView): Item[] => {
+  const prItem = (repo: RepoView, q: QaView, ready: boolean): Item[] => {
     const pr = repo.pulls.find((p) => p.number === q.prNumber);
     if (!pr) return [];
     const why = prWhy(q, pr);
@@ -69,13 +73,14 @@ function useItems(now: number): Item[] {
         dots: dotsOf(q, pr),
         score: impactScore(impactOf(pr.files ?? [], pr.additions, pr.deletions)),
         detail: <PrDetail repo={repo} qa={q} pr={pr} why={why} now={now} />,
+        peek: prAdvice(q, ready),
       },
     ];
   };
   return [
     ...w.requests.map((r): Item => {
       const repo = floorOf(r.repoId);
-      return { key: `req:${r.id}`, why: 'team', title: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, floor: repo?.floor ?? null, color: repo?.color, askedAt: r.createdAt, openedAt: null, meta: [], dots: [], score: 0, detail: <TeamDetail key={r.id} req={r} now={now} /> };
+      return { key: `req:${r.id}`, why: 'team', title: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, floor: repo?.floor ?? null, color: repo?.color, askedAt: r.createdAt, openedAt: null, meta: [], dots: [], score: 0, detail: <TeamDetail key={r.id} req={r} now={now} />, peek: { why: r.reason || 'The CEO asked for this team change.', recommend: r.kind === 'hire' ? 'Read the résumé, then Hire or Decline' : 'Let them go, or Keep them' } };
     }),
     ...waitingDecisions(decisions, now)
       .filter((d) => d.kind === 'suggestion' || d.kind === 'question' || (d.kind === 'design' && d.design))
@@ -94,13 +99,14 @@ function useItems(now: number): Item[] {
           dots: [],
           score: 0,
           detail: design ? <DesignDetail key={d.id} d={d} now={now} /> : <DecisionCard key={d.id} d={d} now={now} />,
+          peek: { why: d.context || 'The CEO asked you in the chat.', recommend: d.options.length ? `Answer: ${d.options.slice(0, 3).join(' / ')}` : 'Answer it in the chat' },
         };
       }),
     ...repos
       .filter((r) => r.charter.proposal)
-      .map((r): Item => ({ key: `charter:${r.id}`, why: 'charter', title: `Charter change on ${r.fullName.split('/')[1]}`, floor: r.floor, color: r.color, askedAt: r.charter.proposal!.at, openedAt: null, meta: [], dots: [], score: 0, detail: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
-    ...w.stuck.flatMap((s) => prItem(s.repo, s.qa)),
-    ...w.ready.flatMap((s) => prItem(s.repo, s.qa)),
+      .map((r): Item => ({ key: `charter:${r.id}`, why: 'charter', title: `Charter change on ${r.fullName.split('/')[1]}`, floor: r.floor, color: r.color, askedAt: r.charter.proposal!.at, openedAt: null, meta: [], dots: [], score: 0, detail: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />, peek: { why: r.charter.proposal!.reason || `${r.charter.proposal!.by} proposed a charter change.`, recommend: 'Read the change, then Approve or Dismiss' } })),
+    ...w.stuck.flatMap((s) => prItem(s.repo, s.qa, false)),
+    ...w.ready.flatMap((s) => prItem(s.repo, s.qa, true)),
   ];
 }
 
@@ -145,8 +151,9 @@ function Summary({ items }: { items: Item[] }) {
   );
 }
 
-function Row({ item, now, on, onOpen }: { item: Item; now: number; on: boolean; onOpen: () => void }) {
-  return (
+/** A list row; on the desktop's split it peeks on hover (#213). */
+function Row({ item, now, on, peek, onOpen }: { item: Item; now: number; on: boolean; peek?: boolean; onOpen: () => void }) {
+  const row = (
     <button className={`pk-card apr-row ${on ? 'apr-row-on' : ''}`} aria-current={on ? 'true' : undefined} onClick={onOpen} style={{ ['--accent' as string]: item.color }}>
       <span className="apr-chips">
         <WhyTag why={item.why} />
@@ -162,6 +169,12 @@ function Row({ item, now, on, onOpen }: { item: Item; now: number; on: boolean; 
         </span>
       )}
     </button>
+  );
+  if (!peek) return row;
+  return (
+    <HoverCard label={item.title} peek={<PeekCard title={item.title} sub={`Asked ${agoText(item.askedAt, Date.now())}`} note={item.peek.why} stats={[['Recommended', item.peek.recommend]]} />}>
+      {row}
+    </HoverCard>
   );
 }
 
@@ -238,7 +251,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
                 </li>
               )}
               <li>
-                <Row item={d} now={now} on={wide === true && d === open} onOpen={() => pick(d.key)} />
+                <Row item={d} now={now} on={wide === true && d === open} peek={wide} onOpen={() => pick(d.key)} />
               </li>
             </Fragment>
           );

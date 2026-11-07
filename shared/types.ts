@@ -9,3 +9,4 @@ export * from './types/office.ts';
 export * from './types/chat.ts';
 export * from './types/events.ts';
 export * from './types/presence.ts';
+export * from './types/accounts.ts';

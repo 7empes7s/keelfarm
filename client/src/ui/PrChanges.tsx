@@ -7,6 +7,8 @@ import { screenshotUrl } from '../screenshot';
 import { qaKey, useStore } from '../store';
 import { QA_BADGE, qaShotUrl, type Channel } from './channels';
 import { Markdown } from './Markdown';
+import { HoverCard } from './HoverCard';
+import { QaPeek } from './Peeks';
 import { cardOpen, liveAgent, openingPath, pagePath, prPages, remember, type PrMemory, type PrPage } from './prChangesRules';
 import './prChanges.css';
 
@@ -246,7 +248,11 @@ function QaReport({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa: QaVi
   return (
     <>
       <div className="qa-side-status">
-        <span className={`qa-badge qa-badge-${qa.status}`}>{QA_BADGE[qa.status]}</span>
+        <HoverCard label={`QA on PR #${qa.prNumber}`} peek={<QaPeek qa={qa} />}>
+          <span className={`qa-badge qa-badge-${qa.status}`} tabIndex={0}>
+            {QA_BADGE[qa.status]}
+          </span>
+        </HoverCard>
         <span className="muted small">round {qa.round}</span>
         {qa.commentUrl && (
           <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
