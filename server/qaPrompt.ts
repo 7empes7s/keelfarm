@@ -46,6 +46,22 @@ function testStep(hasChecks: boolean): string {
     : "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).";
 }
 
+// ---------- the full-quality pass (#301) ----------
+
+/** Files that change how the 3D office looks: the world, photo mode, rendering, shaders and the 3D HUD's styles. */
+const VISUAL = [/^client\/src\/world\//, /^client\/src\/photo\//, /^client\/src\/(perf\.tsx|dprControl\.ts|Office\.tsx|styles\.css)$/, /^client\/src\/ui\/(HUD|\w+Hud)\.tsx$/, /\.(glsl|vert|frag)$/];
+
+/** Does a PR with these changed files need one full-quality pass besides the lab's light graphics? */
+export function needsFullQualityPass(files: readonly string[]): boolean {
+  return files.some((f) => VISUAL.some((re) => re.test(f.replace(/\\/g, '/'))));
+}
+
+/** The QA prompt's line for a PR that changes 3D/visual code; '' for any other (or when the lab isn't used). */
+export function fullQualityLine(files: readonly string[] | null, lab: boolean): string {
+  if (!lab || !files || !needsFullQualityPass(files)) return '';
+  return 'This PR changes 3D/visual code. The lab draws 3D in its light graphics profile (same UI and layout): run your checks there, then, after them, one full-quality pass: lab_screenshot with graphics: "full" of the changed scene at the real settings. Your report lists both the lab checks and the full-quality screenshots; without that pass the verdict is fail.';
+}
+
 function retest(i: QaPromptInput): string {
   // A retried session (it crashed or the office restarted) already recorded this head: there's no diff to go by.
   const since = i.lastTestedSha && i.lastTestedSha !== i.headSha ? i.lastTestedSha : null;

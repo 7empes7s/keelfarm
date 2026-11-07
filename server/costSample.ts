@@ -25,12 +25,14 @@ export interface SampleFloor {
   agents: { id: string; name: string }[];
   /** Its open issues: today's work in flight is on them, so the usage view shows their titles, open ones and repeats. */
   open?: number[];
+  /** Twice the work: the first floor, so the Charter's drift view has an objective with 20+ PRs in a week (#240). */
+  busy?: boolean;
 }
 
 /** The sample for an office: its floors, their agents and open issues, and its CEO. */
 export function sampleOffice(repos: { id: string; open?: number[] }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number, rand: () => number, days = 7): CostRecord[] {
   const ceo = agents.find((a) => a.role === 'ceo') ?? { id: 'ceo', name: 'Morgan' };
-  return sampleCosts(repos.map((r) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id), open: r.open })), ceo, now, rand, days);
+  return sampleCosts(repos.map((r, i) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id), open: r.open, busy: i === 0 })), ceo, now, rand, days);
 }
 
 export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: string }, now: number, rand: () => number, days = 7): CostRecord[] {
@@ -49,7 +51,7 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
     const at = () => Math.round(between(start, end));
     for (const f of floors) {
       if (!f.agents.length) continue;
-      const tasks = 2 + Math.floor(rand() * 4);
+      const tasks = (2 + Math.floor(rand() * 4)) * (f.busy ? 2 : 1);
       for (let t = 0; t < tasks; t++) {
         const issue = issueNo++;
         const dev = pick(f.agents);

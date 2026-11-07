@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { AdaptiveResolution, currentDpr, FrameWhilePaused, HitchProbe, ScenePrecompile, StatsProbe, statsEnabled, usePageHidden, useRenderPaused } from '../perf';
+import { AdaptiveResolution, currentDpr, FrameCap, FrameWhilePaused, HitchProbe, ScenePrecompile, StatsProbe, statsEnabled, usePageHidden, useRenderPaused } from '../perf';
 import { hitchPaused } from '../hitches';
 import { setOfficeCanvas, usePhotoGate } from '../photo/gate';
 import { coversView, pausesView, repoOnFloor, useStore } from '../store';
@@ -14,6 +14,7 @@ import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
 import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
 import { decorRects } from './decor/decor';
+import { LAB_GFX, LAB_GFX_LIMITS } from './gfx/device';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
 import { OfficeFloor } from './OfficeFloor';
@@ -123,14 +124,16 @@ export function Game() {
   // Behind the start screen the office is only a blurred backdrop: draw it when something in the scene changes,
   // not every frame, so the start screen's buttons answer at once on a phone.
   const started = useStore((s) => s.started);
+  // The test lab's profile (#301): no shadows or antialiasing, and frames on demand at a capped rate (FrameCap).
+  const loop = paused || frozen ? 'never' : started && !LAB_GFX ? 'always' : 'demand';
 
   return (
     <Canvas
-      shadows
-      frameloop={paused || frozen ? 'never' : started ? 'always' : 'demand'}
+      shadows={!LAB_GFX}
+      frameloop={loop}
       dpr={currentDpr()}
       camera={{ fov: 72, near: 0.05, far: 560, position: [0, 1.65, 10] }}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      gl={{ antialias: !LAB_GFX, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
         setOfficeCanvas(gl.domElement);
         gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -162,6 +165,7 @@ export function Game() {
       <TypingSounds />
       <Chatter />
       <FrameWhilePaused paused={paused} />
+      {LAB_GFX && started && <FrameCap fps={LAB_GFX_LIMITS.fps} paused={paused || frozen} />}
       <AdaptiveResolution paused={paused || frozen} />
       <ScenePrecompile paused={paused || frozen} watch={`${floor}:${theme}`} />
       <Graphics paused={paused || photo} />

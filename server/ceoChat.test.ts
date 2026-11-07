@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
+import { CeoChat } from './ceoChat.ts';
 import type { SessionOptions } from './agentRunner.ts';
 import type { CeoLive } from '../shared/ceoStream.ts';
 import type { AgentStatus, PhoneMessage, ServerEvent } from '../shared/types.ts';
@@ -124,9 +125,28 @@ describe('the CEO chat', () => {
     const reply = replies().find((m) => !m.requestId)!;
     expect(reply.actions?.map((a) => a.tool)).toEqual(['file_issue', 'scale_team']);
     expect(reply.actions?.[0]).toMatchObject({ icon: '📝', text: expect.stringMatching(/^Filed floor 1 #\d+ · Polish: phone layout/), ref: { kind: 'issue', repoId: 'demo-co/pixel-todo' } });
-    expect(reply.actions?.[1].ref).toEqual({ kind: 'floor', repoId: 'demo-co/pixel-todo', section: 'team' });
+    expect(reply.actions?.[1].ref).toEqual({ kind: 'section', section: 'team', repoId: 'demo-co/pixel-todo' });
     expect(reply.steps).toContain('Reading company status'); // the reads stay in the steps, not on cards
     expect(reply.artifacts?.map((a) => a.title)).toEqual(['Milestone plan']);
     expect(reply.idea).toMatchObject({ kind: 'objective', message: expect.stringContaining("floor 1's charter") });
+  });
+});
+
+describe('CeoChat.noteMessage (#215)', () => {
+  it("keeps the agent chat item a tool call posted on that call's card, even with calls running at once", async () => {
+    const chat = new CeoChat('', '', () => undefined, () => 'r1', (ref) => (ref === 'Linus' ? 'a7' : null));
+    chat.noteMessage(1); // outside any call: nothing
+    const tools = chat.track({
+      messageAgent: async (a: { agent_id: string; id: number; floor: number }) => {
+        await new Promise((r) => setTimeout(r, a.id === 5 ? 20 : 0));
+        chat.noteMessage(a.id);
+        return 'Sent.';
+      },
+    });
+    await Promise.all([tools.messageAgent({ agent_id: 'Linus', id: 5, floor: 1 }), tools.messageAgent({ agent_id: 'Linus', id: 6, floor: 1 })]);
+    expect(chat.turnActions(await chat.settled(100)).map((c) => c.ref)).toEqual([
+      { kind: 'agent', agentId: 'a7', messageId: 5 },
+      { kind: 'agent', agentId: 'a7', messageId: 6 },
+    ]);
   });
 });

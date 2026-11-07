@@ -460,6 +460,8 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const server = http.createServer(app);
+// Node cuts a request still arriving after 5 minutes; a 500 MB upload from a phone can take longer (#148).
+server.requestTimeout = 2 * 3600_000;
 // Two sockets: /ws carries the office's state to every tab, /ws/term?agent=<id> one agent's terminal to whoever opened it.
 const wss = new WebSocketServer({ noServer: true });
 const terms = new WebSocketServer({ noServer: true });

@@ -4,7 +4,8 @@ import { qaKey, useStore, type Overlay } from '../store';
 import { useMode } from '../pocket/mode';
 import type { ChatRef, RefFileView } from '../../../shared/types';
 import { fileUrl } from '../../../shared/chatRefs';
-import { chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type Jump, type RefWorld } from './chatRefs';
+import { actionJump, chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type Jump, type RefWorld } from './chatRefs';
+import type { ActionRef } from '../../../shared/ceoActions';
 import { qaShotUrl } from './channels';
 import { Sheet } from './ChatArtifacts';
 import { Icon } from './Icon';
@@ -60,7 +61,11 @@ export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (flo
       if (j.kind === 'url') window.open(j.url, '_blank', 'noopener,noreferrer');
       else if (j.kind === 'file') setFile(at);
       else if (j.kind === 'floor') onFloor(j.floor);
-      else {
+      else if (j.kind === 'decisions') {
+        // The decision log sits under the approvals: the phone's Hires tab in 3D, the Approvals tab in pocket mode.
+        if (!pocket) return useStore.getState().openOverlay({ kind: 'phone', tab: 'hires' });
+        window.dispatchEvent(new CustomEvent('cubefarm:open', { detail: '/?tab=approvals' }));
+      } else {
         // Pocket mode keeps the chat under the panel (not under a tab: a team, #151); the 3D phone closes for it, so it
         // remembers where it was.
         if (!pocket || (j.overlay.kind === 'manager' && j.overlay.tab === 'team')) chatScroll = scroller.current?.scrollTop ?? null;
@@ -73,13 +78,24 @@ export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (flo
   return { wrap, viewer, mode: pocket ? ('pocket' as const) : ('office' as const) };
 }
 
-/** Opens what an action card names (shared/ceoActions.ts), as its chip would; null when it's gone or outside a chat. */
+/** Opens what a ref names, as its chip would; null when it's gone or outside a chat. */
 export function useRefOpen(): ((ref: ChatRef) => (() => void) | null) {
   const nav = useContext(NavContext);
   const world = useWorld();
   const pocket = useMode((s) => s.mode) === 'pocket';
   return (ref) => {
     const j = nav && jumpFor(ref, pocket ? 'pocket' : 'office', world);
+    return j ? () => nav.go(j, { messageId: -1, index: -1 }) : null;
+  };
+}
+
+/** Opens what a CEO action card is about (shared/ceoActions.ts, #215); null when it's gone or outside a chat. */
+export function useActionOpen(): ((ref: ActionRef) => (() => void) | null) {
+  const nav = useContext(NavContext);
+  const world = useWorld();
+  const pocket = useMode((s) => s.mode) === 'pocket';
+  return (ref) => {
+    const j = nav && actionJump(ref, pocket ? 'pocket' : 'office', world);
     return j ? () => nav.go(j, { messageId: -1, index: -1 }) : null;
   };
 }

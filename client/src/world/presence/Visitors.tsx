@@ -13,6 +13,7 @@ import { SANS, roundRect } from '../draw';
 import { useCanvasTexture } from '../interact';
 import { shade, toon } from '../materials';
 import { bodyState, bodyTarget, placeBody, say, saying, seatBody, setHandMug } from '../people';
+import { LAB_GFX, LAB_GFX_LIMITS } from '../gfx/device';
 import { Box, Cyl } from '../Toon';
 import { BALLS, BallLook } from '../toys/balls';
 import { BLASTERS } from '../toys/darts';
@@ -72,9 +73,11 @@ export function Visitors() {
   return (
     // in instanced batches of their own (world/Batched.tsx), with no shadows and no outlines far away, as below
     <Batches shadows={false} outlineRange={OUTLINE_FAR}>
-      {drawnVisitors().map((id) => (
-        <VisitorFigure key={id} id={id} />
-      ))}
+      {drawnVisitors()
+        .slice(0, LAB_GFX ? LAB_GFX_LIMITS.visitors : undefined)
+        .map((id) => (
+          <VisitorFigure key={id} id={id} />
+        ))}
     </Batches>
   );
 }

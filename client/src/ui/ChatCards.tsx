@@ -6,7 +6,7 @@ import { CEO_ID, type ChatIdea, type ChatNotice } from '../../../shared/types';
 import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
 import { Icon } from './Icon';
 import { iconFor, type IconName } from './icons';
-import { useRefOpen } from './RefChips';
+import { useActionOpen } from './RefChips';
 import './chatCards.css';
 
 // The CEO chat's cards (#108): what a reply did as action cards with a live status, its idea card (Accept / Edit /
@@ -15,8 +15,8 @@ import './chatCards.css';
 /** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. */
 function ActionCard({ action }: { action: ChatAction }) {
   const world = { repos: useStore((s) => s.repos), agents: useStore((s) => s.agents), qa: useStore((s) => s.qa) };
-  const openRef = useRefOpen();
-  const open = action.ref ? openRef({ ...action.ref, start: 0, end: 0 }) : null;
+  const openAction = useActionOpen();
+  const open = action.ref ? openAction(action.ref) : null;
   const status: ActionStatus | null = action.refused ? { label: 'refused', tone: 'bad' } : action.ref ? actionStatus(action.ref, world) : null;
   const body = (
     <>

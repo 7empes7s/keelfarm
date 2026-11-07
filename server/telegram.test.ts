@@ -22,6 +22,7 @@ import {
   startCommand,
   startUrl,
   teamKeyboard,
+  telegramMessage,
   telegramError,
   telegramNote,
   telegramPolls,
@@ -343,4 +344,14 @@ describe('the Telegram bot', () => {
     expect(fake.calls.filter((c) => c.method === 'sendMessage').at(-1)?.params.chat_id).toBe(42);
     await b.stop();
   });
+});
+
+it('mirrors visual summaries and large file links together', () => {
+  const text = telegramMessage('Morgan', {
+    text: 'The recording.',
+    visuals: [{ kind: 'table', title: 'Encoding', columns: [{ label: 'Size', unit: '' }], rows: [['450 MB']] }],
+    attachments: [{ id: '0123456789abcdef01234567', name: 'demo.mp4', type: 'video/mp4', size: 450 * 1024 ** 2, from: 'ceo', at: 0, keep: false }],
+  }, 'https://host/office');
+  expect(text).toContain('Encoding');
+  expect(text).toContain('📎 demo.mp4 (450 MB): https://host/office/api/files/0123456789abcdef01234567?download');
 });

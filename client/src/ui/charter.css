@@ -118,8 +118,40 @@
 .charter-drift-none .charter-drift-bar {
   background: linear-gradient(90deg, var(--ds-warn-fill) var(--share), var(--ds-surface-sunken) var(--share));
 }
-.charter-drift a {
-  margin-right: var(--ds-space-2);
+/* its PRs: compact pills that wrap inside the card, each with a 44px tap area (#240) */
+.charter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--ds-space-1);
+  min-width: 0;
+}
+.charter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  text-decoration: none;
+}
+.charter-chip > span {
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  font-variant-numeric: tabular-nums;
+}
+.charter-chip:hover > span {
+  background: var(--ds-surface-hover);
+}
+.charter-chip:focus-visible {
+  outline: none;
+}
+.charter-chip:focus-visible > span {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
 }
 
 /* the page to read (#105) */

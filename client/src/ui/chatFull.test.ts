@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // A device's storage, before the store reads its saved choice.
 const saved = new Map<string, string>([['cubefarm:chatFull', 'on']]);
 vi.stubGlobal('localStorage', { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => void saved.set(k, v) });
-const { initialChatFull, togglesFull, useChatFull } = await import('./chatFull');
+const { initialChatFull, leaveFullFor, navLeavesFull, togglesFull, useChatFull } = await import('./chatFull');
 
 const key = { ctrlKey: false, metaKey: false, altKey: false, repeat: false, defaultPrevented: false };
 
@@ -42,5 +42,18 @@ describe('the CEO chat full screen (#201)', () => {
     expect(togglesFull(key, true, false, false)).toBe(false); // focus elsewhere
     expect(togglesFull(key, true, true, true)).toBe(false); // typing
     for (const k of ['ctrlKey', 'metaKey', 'altKey', 'repeat', 'defaultPrevented'] as const) expect(togglesFull({ ...key, [k]: true }, true, true, false), k).toBe(false);
+  });
+
+  it('leaves full screen when the rail navigates, wide only (#242)', () => {
+    expect(navLeavesFull(true, true)).toBe(true);
+    expect(navLeavesFull(true, false)).toBe(false);
+    expect(navLeavesFull(false, true)).toBe(false); // a phone's tab bar is hidden while full
+    useChatFull.getState().set(true);
+    leaveFullFor(false);
+    expect(useChatFull.getState().on).toBe(true);
+    leaveFullFor(true);
+    expect(useChatFull.getState().on).toBe(false);
+    useChatFull.getState().toggle(); // ⛶ again brings it back
+    expect(useChatFull.getState().on).toBe(true);
   });
 });

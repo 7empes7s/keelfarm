@@ -7,11 +7,12 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { hasChrome } from './browser.ts';
+import { labBrowserMb } from './health.ts';
 import { endGroup, installDesk, killTree } from './deps.ts';
 import { LAB_PREVIEW_PORT } from './portLanes.ts';
 import { git } from './exec.ts';
 import { prepareDesk } from './workspace.ts';
-import { BROWSER_INSTALL_MIN_MB, browsersPath, labFile, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
+import { BROWSER_INSTALL_MIN_MB, browsersPath, labFile, labInitScript, labLaunchArgs, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
 import type { LabProfile } from '../shared/testLab.ts';
 
 /** The floor desk the lab's heavy commands run in (kept by the desk sweep). */
@@ -44,11 +45,13 @@ interface PwPage {
   evaluate(expression: string): Promise<unknown>;
   addScriptTag(o: { path: string }): Promise<unknown>;
   screenshot(o: { path: string; fullPage?: boolean }): Promise<unknown>;
+  close(): Promise<void>;
   keyboard: { press(key: string): Promise<void>; type(text: string): Promise<void> };
   mouse: { wheel(x: number, y: number): Promise<void> };
 }
 interface PwContext {
   newPage(): Promise<PwPage>;
+  addInitScript(script: string): Promise<void>;
   close(): Promise<void>;
 }
 interface PwBrowser {
@@ -121,7 +124,7 @@ export function createLabRunner(): LabRunner {
 
   const shared = () => {
     browser ??= chromium()
-      .launch({ headless: true, ...(hasChrome() ? { channel: 'chrome' } : {}), args: ['--disable-dev-shm-usage'] })
+      .launch({ headless: true, ...(hasChrome() ? { channel: 'chrome' } : {}), args: labLaunchArgs() })
       .then((b) => {
         up = true;
         b.on('disconnected', () => {
@@ -140,8 +143,10 @@ export function createLabRunner(): LabRunner {
   /** A fresh context and page; what goes wrong on the page is collected into `issues`. */
   async function withPage<T>(o: BrowserOpts, width: number, issues: PageIssues, fn: (page: PwPage) => Promise<T>): Promise<T> {
     const ctx = await (await shared()).newContext(contextOptions(o.profile, width, o.theme));
+    let page: PwPage | null = null;
     try {
-      const page = await ctx.newPage();
+      await ctx.addInitScript(labInitScript(o.graphics, o.profile));
+      page = await ctx.newPage();
       const add = (list: string[], x: string) => void (list.includes(x) || list.length >= 50 || list.push(x));
       page.on('console', (m) => m.type() === 'error' && add(issues.consoleErrors, m.text()));
       page.on('pageerror', (e) => add(issues.pageErrors, e.message));
@@ -150,6 +155,8 @@ export function createLabRunner(): LabRunner {
       await page.waitForLoadState('networkidle', { timeout: SETTLE_MS }).catch(() => undefined); // an app still loading its scripts
       return await fn(page);
     } finally {
+      // Nothing outlives its job: the page, then its context (#301).
+      await page?.close().catch(() => undefined);
       await ctx.close().catch(() => undefined);
     }
   }
@@ -218,7 +225,7 @@ export function createLabRunner(): LabRunner {
       const issues: PageIssues = { consoleErrors: [], pageErrors: [], failedRequests: [] };
       const shots: { label: string; file: string }[] = [];
       for (const width of o.viewports) {
-        const label = `${o.profile}-${width}-${o.theme}`;
+        const label = `${o.profile}-${width}-${o.theme}${o.graphics === 'full' ? '-full' : ''}`;
         const file = labFile(o.outDir, `${label}.png`);
         await withPage(o, width, issues, async (page) => {
           if (o.waitFor) await page.waitForSelector(o.waitFor, { timeout: STEP_MS });
@@ -319,6 +326,7 @@ export function createLabRunner(): LabRunner {
     },
 
     installBrowser: (dir) => installChromium(dir, ['npx', 'playwright']),
+    browserMb: () => (up ? labBrowserMb() : Promise.resolve(null)),
     warm: warmLabBrowser,
 
     async close() {
