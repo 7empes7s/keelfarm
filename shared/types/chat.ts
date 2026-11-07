@@ -107,7 +107,7 @@ export interface ChatArtifact {
   markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
-export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup' | 'research';
+export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup' | 'research' | 'changes';
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO

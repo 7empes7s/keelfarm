@@ -33,10 +33,13 @@ import {
   type CommandResult,
   type Effects,
   type LedgerEvent,
+  workOf,
 } from '../ledger.ts';
+import { careerTimeline, type TimelineView } from '../../shared/careerTimeline.ts';
 import { followupEvents } from '../../shared/followups.ts';
 import { achievementDef, type ProgressView } from '../../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
+import type { CostRecord, CostSession } from '../../shared/costs.ts';
 import type { DoctorFinding, DoctorFix, PullInfo } from '../../shared/types.ts';
 import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
 import { slugify } from './flavour.ts';
@@ -368,6 +371,14 @@ export abstract class SwarmUpkeep extends SwarmCeo {
     this.fanout(applyLedger(this.state.progress, ev), emitAgents);
   }
 
+  /** A finished session into its agent's career (#205): what they ran, the weekly totals, time working and waste. */
+  protected careerWork(line: CostSession) {
+    const a = this.state.agents.find((x) => x.id === line.agentId);
+    if (!a || a.role === 'ceo') return;
+    this.ledger({ kind: 'rig', agentId: a.id, cli: a.cli || this.state.settings.defaultCli, model: line.model, effort: line.effort, at: line.at }, false);
+    this.ledger({ kind: 'work', agentId: a.id, ...workOf(line) });
+  }
+
   protected fanout(fx: Effects, emitAgents = true) {
     if (!fx.changed) return;
     if (fx.reward) this.broadcast({ type: 'reward', reward: fx.reward });
@@ -385,6 +396,19 @@ export abstract class SwarmUpkeep extends SwarmCeo {
     }
     if (fx.progress) this.broadcast({ type: 'progress', progress: this.progressView() });
     this.save();
+  }
+
+  /** GET /api/agents/:id/timeline (#205): what they did over the last month, built when their profile opens. */
+  careerTimeline(id: string): TimelineView {
+    const a = this.agent(id);
+    return careerTimeline({ entries: this.history.all(), costs: this.spend.ledger.all(), agent: a, rehired: this.state.progress.careers[a.id]?.rehired ?? [], now: Date.now() });
+  }
+
+  /** A fresh demo office's made-up cost ledger, the session history it makes (timelines) and someone let go (#205). */
+  protected seedCareerPast(records: CostRecord[]) {
+    Object.assign(this.state.progress.past, this.backend.seedPastCareers?.(Date.now()));
+    if (!this.history.all().length) void this.history.seed(this.backend.seedHistory?.(records, this.state.repos, Date.now()) ?? []);
+    return this.spend.ledger.replace(records);
   }
 
   protected progressView(): ProgressView {

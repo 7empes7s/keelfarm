@@ -7,6 +7,7 @@ import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, Do
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { HistoryDetail, HistoryFilter, HistoryPage, HistoryUsage } from '../../shared/history';
+import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -130,6 +131,7 @@ export const api = {
   /** Start a cloud agent's sign-in again in their terminal (docs/cloud.md). */
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
+  careerTimeline: (id: string) => call<TimelineView>('GET', `/api/agents/${id}/timeline`, undefined, false),
   updateSettings: (patch: Partial<SwarmSettings>) => call('PATCH', '/api/settings', patch),
   /** Settings → effort per kind of task; '' puts the kind back on the default. */
   setTaskEffort: (kind: TaskKind, effort: EffortLevel | '') => call('PATCH', '/api/settings', { taskEffort: { [kind]: effort } }),

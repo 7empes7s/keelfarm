@@ -207,6 +207,40 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 .pk-switch kbd {
   font-size: 0.7rem;
 }
+/* the CEO chat's header button (#214): their avatar, pressed while the chat is open */
+.pk-chat-btn {
+  position: relative;
+}
+.pk-chat-btn-on {
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+  box-shadow: none;
+  transform: translateY(2px);
+}
+.pk-chat-avatar {
+  position: relative;
+  display: inline-grid;
+  vertical-align: middle;
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-width: 2px;
+  font-size: 0.75rem;
+}
+.pk-chat-working {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-outline);
+  background: var(--ds-good-fill);
+}
+.pk-chat-btn .badge-dot {
+  top: -8px;
+  right: -8px;
+}
 
 /* the pages, the console over them, and a terminal, app or card in a pane beside them */
 .pk-railed .pk-work {

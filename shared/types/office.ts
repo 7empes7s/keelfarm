@@ -64,3 +64,27 @@ export interface OfficeUpdateView {
   holds: boolean; // nothing new starts until the office has restarted
   detail: string | null;
 }
+
+/** What the manager did on a board (#207): the kinds of action the CEO hears about. */
+export type ManagerChangeKind = 'close-issue' | 'close-pr' | 'merge' | 're-qa' | 'send-back';
+
+/** What the CEO did about a change that touched running work. */
+export type CeoVerdict = 'stopped' | 'redirected' | 'let-finish';
+
+/**
+ * One of the manager's board actions (#207). The action happens at once; agents it touched keep working until the
+ * CEO decides (shared/managerChanges.ts).
+ */
+export interface ManagerChange {
+  id: string;
+  at: number;
+  kind: ManagerChangeKind;
+  repoId: string;
+  floor: number;
+  issue: number | null;
+  pr: number | null;
+  detail: string; // one line, e.g. 'closed #12 "Dark mode"'
+  affects: string[]; // ids of the agents whose running work it touched
+  told: boolean; // in a CEO job's prompt already
+  verdict: CeoVerdict | null; // what the CEO did about the agents it touched (null: undecided, or none touched)
+}
