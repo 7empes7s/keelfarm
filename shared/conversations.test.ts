@@ -152,6 +152,11 @@ describe('threads (#132)', () => {
     expect(currentConversation(s)).toMatchObject({ floors: ['r2'], files: 2, ceoAt: 5 });
     expect(unreadThread(currentConversation(s), 4)).toBe(true);
     expect(unreadThread(currentConversation(s), 5)).toBe(false);
+    // the list in every snapshot carries a thread's project, floors, files and reply time, never their empty defaults
+    startConversation(s, null, 8);
+    const [fresh, used] = conversationsView(s);
+    expect(Object.keys(fresh)).toEqual(['id', 'title', 'startedAt', 'updatedAt', 'pinned', 'count']);
+    expect(used).toMatchObject({ repoId: 'r1', floors: ['r2'], files: 2, ceoAt: 5 });
   });
 
   it('renames, archives, pins and moves a thread, refusing what it cannot be', () => {

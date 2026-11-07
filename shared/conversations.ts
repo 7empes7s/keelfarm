@@ -192,7 +192,8 @@ export function editConversation(s: ChatsState, id: string, p: ConversationPatch
 export const conversationsView = (s: ChatsState): Conversation[] =>
   [...s.list]
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
-    .map(({ id, title, startedAt, updatedAt, pinned, count, repoId, floors, archived, ceoAt, files }) => ({ id, title, startedAt, updatedAt, pinned, count, repoId, floors, archived, ceoAt, files }));
+    // in every snapshot: the defaults (a Company thread, no floors or files, not archived) are left out
+    .map(({ id, title, startedAt, updatedAt, pinned, count, repoId, floors, archived, ceoAt, files }) => ({ id, title, startedAt, updatedAt, pinned, count, ...(repoId && { repoId }), ...(floors.length && { floors }), ...(archived && { archived }), ...(ceoAt && { ceoAt }), ...(files && { files }) }));
 
 /** The thread has a CEO message the manager hasn't read (`readAt`: the phone's read time). */
 export const unreadThread = (c: Pick<Conversation, 'ceoAt'>, readAt: number) => (c.ceoAt ?? 0) > readAt;
