@@ -39,6 +39,7 @@ import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
 import { snapshotMessages } from '../shared/chatParts.ts';
+import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
@@ -278,6 +279,7 @@ export class Swarm extends SwarmCeoTools {
       }
       // Mission control opens on a week that already happened.
       this.state.ops = this.backend.seedOps?.(this.state.repos.map((r) => r.id), Date.now()) ?? this.state.ops;
+      for (const m of this.backend.seedChat?.(Date.now()) ?? []) this.state.messages.push({ ...m, id: this.messageSeq++ }); // edits of every kind (#125)
     }
     for (const r of this.state.repos) this.ensureAgent(r);
     this.ensureCeo(interrupted);
@@ -545,27 +547,28 @@ export class Swarm extends SwarmCeoTools {
     this.markDelivery('all', 'replied');
   }
 
-  /** POST /api/ceo/messages/:id/edit: the manager's last message, edited and sent again. An answer to the old version stops. */
+  /**
+   * POST /api/ceo/messages/:id/edit: any of the manager's messages, its text replaced (#125). Still queued, the job takes
+   * the new text; their last one is asked again (an answer to the old version stops); an earlier one comes as a note.
+   */
   editMessage(id: number, text: string) {
     const t = text.trim().slice(0, 4000);
     if (!t) throw new HttpError(400, 'Write the message first.');
-    const m = this.lastManagerMessage();
-    if (!m || m.id !== id) throw new HttpError(409, 'Only your last message can be edited.');
+    const m = this.state.messages.find((x) => x.id === id && x.from === 'manager');
+    if (!m) throw new HttpError(404, 'That message is no longer in this conversation.');
     if (m.text === t) return;
-    Object.assign(m, { text: t, edited: Date.now(), delivery: 'sent' });
-    this.broadcast({ type: 'ceoChat', message: m });
-    this.save();
+    const [before, forward] = [m.text, this.forwardOf(m)];
     const c = this.state.ceo;
     const queued = c.queue.find((j) => j.kind === 'chat' && j.messageIds?.includes(id));
-    if (queued) {
-      queued.text = this.forwardOf(m);
-      return;
-    }
-    const again = `The manager edited their last message. Answer this version instead:\n${this.forwardOf(m)}`;
+    const how = editDelivery({ queued: !!queued, last: this.lastManagerMessage()?.id === id });
+    if (!queued) m.delivery = 'sent';
+    this.replaceText(m, t);
+    if (queued) return void (queued.text = queued.text?.includes(forward) ? queued.text.replace(forward, () => this.forwardOf(m)) : this.forwardOf(m));
+    const say = how === 'reask' ? `The manager edited their last message. Answer this version instead:\n${this.forwardOf(m)}` : editNote(id, before, t);
     const rt = this.agentRt.get(CEO_ID);
-    if (c.job?.messageIds?.includes(id)) this.stopAgent(CEO_ID);
-    else if (rt?.session && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: c.job?.kind ?? null, session: true })) return rt.session.send(again); // like messageCeo: a background job is preempted instead
-    this.enqueueCeo({ kind: 'chat', text: again, messageIds: [id], at: Date.now() });
+    if (how === 'reask' && c.job?.messageIds?.includes(id)) this.stopAgent(CEO_ID);
+    else if (rt?.session && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: c.job?.kind ?? null, session: true })) return rt.session.send(say); // like messageCeo: a background job is preempted instead
+    this.enqueueCeo({ kind: 'chat', text: say, messageIds: [id], at: Date.now() });
   }
 
   /** POST /api/ceo/retry: the CEO answers the manager's last message afresh (its answer failed, or missed). */

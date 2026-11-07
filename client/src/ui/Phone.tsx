@@ -37,6 +37,8 @@ import { HolidayStrip } from './HolidayStrip';
 import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
 import { useCeoDraft } from './goTo';
+import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
+import { MessageVersions } from './MessageEdits';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -478,7 +480,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
             )}
           </div>
         ) : (
-          text && <LongText text={text}><Markdown className="bubble-md" text={linked(refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
+          text && <LongText text={text}><Markdown className="bubble-md" text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
@@ -492,7 +494,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
           {m && !mine && <ReplayButton m={m} />}
           {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
           {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
-          {m?.edited && <span className="bubble-via">edited · </span>}
+          {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>
@@ -521,7 +523,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const goToFloor = useStore((s) => s.goToFloor);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<number | null>(null);
-  const [editing, setEditing] = useState<number | null>(null); // the manager's last message, being edited to send again
+  const [editing, setEditing] = useState<number | null>(null); // one of the manager's messages, being edited (#125)
+  const [versions, setVersions] = useState<PhoneMessage | null>(null);
   const endEdit = () => (setEditing(null), setText(''));
   const [sheet, setSheet] = useState<'chats' | 'memory' | null>(null);
   const chat = useStore((s) => s.chat);
@@ -673,7 +676,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
     const m = item.m;
     if (!m || m.from === 'office') return [];
     return [
-      ...(m.id === last('manager') ? [{ label: '✏️ Edit and resend', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
+      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? '✏️ Edit and resend' : '✏️ Edit', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
+      ...(hasVersionsSheet(m) ? [{ label: `🕘 Versions (${(m.versions?.length ?? 0) + 1})`, run: () => setVersions(m) }] : []),
       ...(m.id === last('ceo') ? [{ label: '⟳ Retry', run: () => void attempt(api.ceoRetry) }] : []),
       { label: '📌 Remember this', run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (🧠 to see or edit)`)) },
     ];
@@ -783,6 +787,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
             {unseen ? `${unseen} new ↓` : '↓ Latest'}
           </button>
         )}
+        {versions && <MessageVersions m={byId.get(versions.id) ?? versions} author={versions.from === 'manager' ? 'you' : ceo.name} onClose={() => setVersions(null)} />}
         {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
         {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => setSheet('memory')} />}
         {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
@@ -831,7 +836,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
       </div>
       {editing !== null && (
         <div className="chat-reply">
-          <b className="grow small">✏️ Editing your message: Send replaces it, and {ceo.name} answers the new version</b>
+          <b className="grow small">✏️ Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}</b>
           <button type="button" className="chat-reply-x" aria-label="Cancel the edit" onClick={endEdit}>
             ✕
           </button>
@@ -903,7 +908,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           </button>
         ) : (
           <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
-            {editing !== null ? 'Resend' : 'Send'}
+            {editing === null ? 'Send' : editing === last('manager') ? 'Resend' : 'Save'}
           </button>
         )}
       </form>
