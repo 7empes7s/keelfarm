@@ -4,12 +4,13 @@ import { SCREEN_HELP, type ScreenId } from './screenHelp';
 import { Sheet } from './Sheet';
 import { openWhatsNew } from './tour';
 
-export function InfoButton({ screen }: { screen: ScreenId }) {
+/** `className`: the button's look, e.g. a back bar's shared icon button (docs/design.md) instead of the bare glyph. */
+export function InfoButton({ screen, className = 'info-btn' }: { screen: ScreenId; className?: string }) {
   const [open, setOpen] = useState(false);
   const h = SCREEN_HELP[screen];
   return (
     <>
-      <button className="info-btn" data-tour="info" onClick={() => setOpen(true)} aria-label={`What can I do on ${h.title}?`} title="What can I do here?">
+      <button className={className} data-tour="info" onClick={() => setOpen(true)} aria-label={`What can I do on ${h.title}?`} title="What can I do here?">
         ⓘ
       </button>
       {open && (
