@@ -3,7 +3,7 @@ import { crc32, deflateSync } from 'node:zlib';
 import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
-import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
+import { enterOffice, expect, overflowProblems, startAt, test, type SavedView } from './helpers';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
 // viewport, every button on screen, unobstructed and at least 44px, no destructive action one tap away, and axe clean.
@@ -355,7 +355,6 @@ async function layoutProblems(root: Locator): Promise<string[]> {
   const problems = await root.evaluate((el, danger) => {
     const out: string[] = [];
     const vw = document.documentElement.clientWidth;
-    if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
     const title = document.querySelector('.pk-head .pk-title');
     if (title && title.scrollWidth > title.clientWidth + 1) out.push(`the header's name "${title.textContent}" is cut off`);
     const name = (b: Element) => (b.getAttribute('aria-label') || (b as HTMLElement).innerText || b.getAttribute('title') || b.tagName).trim().slice(0, 40);
@@ -370,25 +369,6 @@ async function layoutProblems(root: Locator): Promise<string[]> {
     for (const x of el.querySelectorAll('*')) {
       const r = x.getBoundingClientRect();
       if (r.width > vw + 1 && !scroller(x)) out.push(`${x.tagName.toLowerCase()}.${x.className} is ${Math.round(r.width)}px wide`);
-    }
-    // Nothing wider than the box it scrolls in (#149): a box that scrolls up and down, or clips sideways (the panels'
-    // safety net), must not have content past its right edge, or a finger drags it sideways. Only a box that scrolls
-    // sideways alone (a tab strip, a table's wrapper) may. Names the box and its widest child.
-    const sel = (x: Element) => x.tagName.toLowerCase() + [...x.classList].slice(0, 3).map((c) => `.${c}`).join('');
-    for (const x of [el, ...el.querySelectorAll('*')]) {
-      if (!x.checkVisibility() || x.scrollWidth <= x.clientWidth + 1) continue;
-      const css = getComputedStyle(x);
-      const vertical = css.overflowY === 'auto' || css.overflowY === 'scroll';
-      if (!vertical && css.overflowX !== 'hidden' && css.overflowX !== 'clip') continue;
-      if (css.textOverflow === 'ellipsis' || (x as HTMLElement).isContentEditable || x.matches('input, textarea, select, .xterm *, canvas')) continue;
-      const edge = x.getBoundingClientRect().right - parseFloat(css.borderRightWidth);
-      let widest: Element | null = null;
-      let right = edge;
-      for (const c of x.querySelectorAll('*')) {
-        const cr = c.getBoundingClientRect().right;
-        if (cr > right + 1 && c.checkVisibility()) [widest, right] = [c, cr];
-      }
-      out.push(`${sel(x)} scrolls sideways (${x.scrollWidth} > ${x.clientWidth}px)${widest ? `: ${sel(widest)} ends ${Math.round(right - edge)}px past it` : ''}`);
     }
     const re = new RegExp(danger, 'i');
     for (const b of el.querySelectorAll<HTMLElement>('button')) {
@@ -421,6 +401,7 @@ async function layoutProblems(root: Locator): Promise<string[]> {
       return out;
     })),
   );
+  problems.push(...(await overflowProblems(root)));
   return problems;
 }
 

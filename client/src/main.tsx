@@ -8,6 +8,7 @@ import { keepOfficeOpen } from './ui/outsideLinks';
 import './ui/a11y';
 import './styles.css';
 import './design.css';
+import './overflow.css';
 
 connect();
 watchViewport();

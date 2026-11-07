@@ -11,39 +11,42 @@ function People({ rows, caption }: { rows: FloorRow[]; caption: string }) {
   const openOverlay = useStore((s) => s.openOverlay);
   if (!rows.length) return <p className="muted">Nobody works here yet.</p>;
   return (
-    <table className="floor-table">
-      <caption className="sr-only">{caption}</caption>
-      <thead>
-        <tr>
-          <th scope="col">Name</th>
-          <th scope="col">Agent</th>
-          <th scope="col">Status</th>
-          <th scope="col">Doing</th>
-          <th scope="col">
-            <span className="sr-only">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.id}>
-            <th scope="row">{r.name}</th>
-            <td>{r.agent}</td>
-            <td>
-              <span className={`status-kind status-kind-${r.kind}`}>
-                <span aria-hidden>{r.icon}</span> {r.status}
-              </span>
-            </td>
-            <td>{r.doing}</td>
-            <td>
-              <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: r.id })} aria-label={r.signIn ? `Sign ${r.name}'s ${r.signIn} in, in their terminal` : `Open ${r.name}'s terminal`}>
-                {r.signIn ? '🔑 Sign in' : 'Terminal'}
-              </button>
-            </td>
+    // its own box scrolls sideways on a narrow screen, never the panel (#149)
+    <div className="ops-table-wrap" tabIndex={0} role="region" aria-label={caption}>
+      <table className="floor-table">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Agent</th>
+            <th scope="col">Status</th>
+            <th scope="col">Doing</th>
+            <th scope="col">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <th scope="row">{r.name}</th>
+              <td>{r.agent}</td>
+              <td>
+                <span className={`status-kind status-kind-${r.kind}`}>
+                  <span aria-hidden>{r.icon}</span> {r.status}
+                </span>
+              </td>
+              <td>{r.doing}</td>
+              <td>
+                <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: r.id })} aria-label={r.signIn ? `Sign ${r.name}'s ${r.signIn} in, in their terminal` : `Open ${r.name}'s terminal`}>
+                  {r.signIn ? '🔑 Sign in' : 'Terminal'}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
