@@ -4158,10 +4158,17 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   padding: 8px 10px 10px;
   background: var(--ds-surface-raised);
   min-height: calc(var(--ds-target) + 18px);
+  /* the box's five lines (its font: 0.95rem, at least 16px on touch screens, design.css) and the padding (#152) */
+  max-height: calc(5 * 1.35 * 0.95rem + 38px);
 }
-/* about five lines, fewer when the keyboard leaves less room (#152); then it scrolls */
+@media (pointer: coarse) {
+  .chat-input {
+    max-height: calc(5 * 1.35 * max(16px, 1rem) + 38px);
+  }
+}
+/* about five lines, fewer when the keyboard leaves less room; then it scrolls */
 .chat-input textarea.msg-box {
-  max-height: min(calc(5 * 1.35em + 20px), 100%);
+  max-height: 100%;
 }
 /* one row at any width: the +, the box, the mic and Send (or Stop) */
 .chat-input > :not(.msg-box) {
