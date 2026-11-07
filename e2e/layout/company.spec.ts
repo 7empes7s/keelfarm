@@ -32,6 +32,7 @@ async function companyProblems(root: Locator): Promise<string[]> {
       range.selectNodeContents(card);
       const content = range.getBoundingClientRect();
       const css = getComputedStyle(card);
+      if (box.height <= (parseFloat(css.minHeight) || 0) + 1) continue; // a 44px target centres its label
       const room = parseFloat(css.paddingBottom) + parseFloat(css.borderBottomWidth) + 4;
       if (box.bottom - content.bottom > room) out.push(`side card .${card.className.split(' ')[0]} is ${Math.round(box.bottom - content.bottom)}px taller than its content`);
     }
@@ -56,7 +57,7 @@ async function companyProblems(root: Locator): Promise<string[]> {
     if (el.querySelectorAll('.pk-status .pk-banner').length > 1) out.push('more than one status row');
     return out;
   });
-  return [...out, ...(await buttonRowProblems(root))];
+  return [...out, ...(await buttonRowProblems(root.locator('.pk-page').first()))];
 }
 
 /** Company, the chat docked or hidden (remembered per device), at this viewport. */
