@@ -56,7 +56,8 @@ export type Overlay =
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
   | { kind: 'floorList' }
-  | { kind: 'notices' }; // the notification centre (ui/Notices.tsx)
+  | { kind: 'notices' } // the notification centre (ui/Notices.tsx)
+  | { kind: 'mapRoom' }; // the memory map as a 3D constellation (ui/MapRoom.tsx, #137)
 
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
@@ -737,10 +738,10 @@ export const agentsOnRepo = (agents: Record<string, Agent>, repoId: string) =>
     .sort((a, b) => a.desk - b.desk);
 
 /**
- * Panels that hide the whole office (the wide ones: Kanban, terminals and the manager's console), so the
+ * Panels that hide the whole office (the wide ones: Kanban, terminals, the manager's console and the map room), so the
  * 3D view can stop drawing behind them. The phone, help, elevator panel and confirm dialogs are see-through.
  */
-export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager';
+export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager' || o?.kind === 'mapRoom';
 
 /**
  * Whether the 3D view stops drawing under this panel: a full-screen one anywhere, and any panel on a touch screen
