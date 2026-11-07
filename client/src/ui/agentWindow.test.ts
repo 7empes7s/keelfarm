@@ -5,7 +5,7 @@ const agent = { status: 'working' as const, task: 'issue' as const, waiting: nul
 
 describe('the agent window (#117)', () => {
   it('rings the avatar by what they do, with an icon and a label', () => {
-    expect(ringStatus(agent)).toEqual({ ring: 'working', icon: '●', label: 'Working' });
+    expect(ringStatus(agent)).toEqual({ ring: 'working', icon: 'activity', label: 'Working' });
     expect(ringStatus({ ...agent, task: 'qa' }).ring).toBe('qa');
     expect(ringStatus({ ...agent, task: 'fix' }).ring).toBe('fixing');
     expect(ringStatus({ ...agent, status: 'error' })).toMatchObject({ ring: 'error', label: 'Needs help' });

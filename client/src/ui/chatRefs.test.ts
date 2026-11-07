@@ -67,12 +67,12 @@ describe('jumpFor', () => {
 
 describe('chipInfo', () => {
   it('shows status from the office', () => {
-    expect(chipInfo(ref({ kind: 'agent', agentId: 'ada' }), world)).toEqual({ icon: '👤', status: 'working · #3', tone: 'good' });
-    expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 13 }), world)).toEqual({ icon: '🔀', status: 'QA passed', tone: 'good' });
-    expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 16 }), world)).toEqual({ icon: '🔀', status: 'checks failing', tone: 'bad' });
-    expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 3 }), world)).toEqual({ icon: '📋', status: 'open' });
-    expect(chipInfo(ref({ kind: 'qa', repoId: 'o/web', number: 15 }), world)).toEqual({ icon: '🔍', status: 'failed', tone: 'bad' });
-    expect(chipInfo(ref({ kind: 'preview', repoId: 'o/web' }), world)).toEqual({ icon: '▶️', status: 'running' });
+    expect(chipInfo(ref({ kind: 'agent', agentId: 'ada' }), world)).toEqual({ icon: 'user', status: 'working · #3', tone: 'good' });
+    expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 13 }), world)).toEqual({ icon: 'git-merge', status: 'QA passed', tone: 'good' });
+    expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 16 }), world)).toEqual({ icon: 'git-merge', status: 'checks failing', tone: 'bad' });
+    expect(chipInfo(ref({ kind: 'issue', repoId: 'o/web', number: 3 }), world)).toEqual({ icon: 'clipboard-list', status: 'open' });
+    expect(chipInfo(ref({ kind: 'qa', repoId: 'o/web', number: 15 }), world)).toEqual({ icon: 'search', status: 'failed', tone: 'bad' });
+    expect(chipInfo(ref({ kind: 'preview', repoId: 'o/web' }), world)).toEqual({ icon: 'play', status: 'running' });
     expect(chipInfo(ref({ kind: 'agent', agentId: 'zed' }), world)).toBeNull();
   });
 });

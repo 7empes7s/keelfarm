@@ -1,6 +1,7 @@
 // Where a chat link lands (#151): the section it names scrolled into view and tinted for a second, as iOS does.
 // Under reduced motion it jumps there instead of scrolling.
 import { reduceMotion } from './a11y';
+import './jumpFlash.css';
 
 const FLASH_MS = 1000;
 

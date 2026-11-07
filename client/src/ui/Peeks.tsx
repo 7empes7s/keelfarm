@@ -52,7 +52,7 @@ export function WorkPeek({ repo, n }: { repo: RepoView; n: number }) {
       stats={[
         ["Who's on it", who.length ? who.join(', ') : 'nobody yet'],
         ...(pull ? ([['Checks', pull.failedChecks.length ? `✗ ${pull.failedChecks.map((c) => c.name).slice(0, 3).join(', ')}` : pull.checks]] as [string, string][]) : []),
-        ...(qa ? ([['QA', `${QA_BADGE[qa.status]} · round ${qa.round}`]] as [string, string][]) : []),
+        ...(qa ? ([['QA', `${QA_BADGE[qa.status].text} · round ${qa.round}`]] as [string, string][]) : []),
       ]}
       note={fail ? `✗ ${fail.name}: ${fail.line}` : qa?.summary || (issue ? bodyLines(issue.body).join(' ') : null)}
     >
@@ -73,7 +73,7 @@ export function WorkPeek({ repo, n }: { repo: RepoView; n: number }) {
 export function QaPeek({ qa }: { qa: QaView }) {
   const fail = firstFailing(qa.checks);
   return (
-    <PeekCard title={`QA on PR #${qa.prNumber}: ${QA_BADGE[qa.status]}`} sub={`round ${qa.round}${qa.mergeNote ? ` · ${qa.mergeNote}` : ''}`} note={qa.summary}>
+    <PeekCard title={`QA on PR #${qa.prNumber}: ${QA_BADGE[qa.status].text}`} sub={`round ${qa.round}${qa.mergeNote ? ` · ${qa.mergeNote}` : ''}`} note={qa.summary}>
       {qa.checks.length > 0 && (
         <ul className="peek-checks">
           {qa.checks.slice(0, 6).map((c) => (

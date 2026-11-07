@@ -449,7 +449,7 @@ function meter(stream: MediaStream, onLevel: (rms: number) => void): () => void 
 async function transcribe(s: Session, clip: Blob, ms: number) {
   if (s.mode === 'handsfree' && s.ears?.lastSpeech == null) return close('nothing'); // nobody spoke: don't pay to hear silence
   const bad = clipProblem({ bytes: clip.size, ms, type: clip.type });
-  if (bad) return fail(s.n, `🎙️ ${bad.message}`);
+  if (bad) return fail(s.n, bad.message);
   set({ state: 'transcribing', live: false });
   s.release?.(); // the mic is off: sounds come back while the text is on its way
   s.release = null;
@@ -463,7 +463,7 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
     if (record) record.transcript = s.transcript;
     deliver(s);
   } catch (err) {
-    if (session === s) fail(s.n, `🎙️ ${(err as Error).message}`);
+    if (session === s) fail(s.n, (err as Error).message);
   }
 }
 
@@ -516,7 +516,7 @@ export function replyEnded() {
   if (listening().handsFree && !micAllowed && r.phoneChat && !askedToAllow) {
     // The browser hasn't been asked for the mic yet, and hands-free never asks out of the blue.
     askedToAllow = true;
-    useStore.getState().pushToast('info', '🎧 Hold 🎙️ once to let the office use your microphone, then hands-free can listen.');
+    useStore.getState().pushToast('info', 'Hold the mic once to let the office use your microphone, then hands-free can listen.');
   }
   step({ type: 'reply-ended', now: performance.now(), room: r });
 }

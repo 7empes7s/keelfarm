@@ -3,6 +3,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import type { Conversation, ConversationHit } from '../../../shared/conversations';
 import { Sheet } from './ChatArtifacts';
+import { Icon } from './Icon';
 
 // The CEO chat's conversations (#51): a new one (a fresh CEO session), the earlier ones with search across them, and pins.
 
@@ -27,7 +28,7 @@ function Row({ c, current, snippet, onOpen }: { c: Conversation; current: boolea
         title={c.pinned ? 'Unpin' : 'Pin: kept at the top, and never dropped'}
         onClick={() => void api.pinConversation(c.id, !c.pinned).catch(() => undefined)}
       >
-        📌
+        <Icon name="pin" />
       </button>
     </li>
   );
@@ -64,7 +65,7 @@ export function Conversations({ ceoName, onClose, onMemory }: { ceoName: string;
           ＋ New conversation
         </button>
         <button type="button" className="btn conv-new" onClick={onMemory}>
-          🧠 What {ceoName} remembers
+          <Icon name="brain" /> What {ceoName} remembers
         </button>
         <input className="conv-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every conversation…" aria-label="Search conversations" />
         {shown.length === 0 ? (
