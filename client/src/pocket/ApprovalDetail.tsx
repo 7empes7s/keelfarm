@@ -230,6 +230,12 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
           </>
         )}
         {qa.summary && <p className="small apr-wrap">{qa.summary}</p>}
+        {qa.fixInstructions && (
+          <div className="apr-ceo">
+            <b>What has to change</b>
+            <p className="apr-wrap">{qa.fixInstructions}</p>
+          </div>
+        )}
       </Section>
 
       <Section title="Steps" fold>

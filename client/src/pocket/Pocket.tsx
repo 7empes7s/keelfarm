@@ -369,7 +369,7 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} profile={overlay.profile} />;
-  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
+  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} path={overlay.path} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
   return null;
@@ -604,7 +604,7 @@ export default function Pocket() {
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
-        {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
+        {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
         {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
         {!wide && tab === 'chat' && <FullButton />}
         {wide && (

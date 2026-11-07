@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { CostsSection } from './CostsSection';
+import { Actions, Chip, LinkButton, Section } from './DetailsPage';
 import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
 import { Icon } from './Icon';
@@ -63,22 +64,15 @@ function UsageCard({ hot }: { hot: boolean }) {
         ? `Claude turned a session away at the limit, so nothing new starts until ${m.resets}. That can't be cleared early; sessions already running carry on.`
         : 'New work starts at full speed. When Claude warns that usage is getting high, the office paces itself (Settings → Sessions while pacing).';
   return (
-    <div id="ops-card-usage" className={`card usage-card usage-${m.tone} ${hot ? 'ops-card-hot' : ''}`}>
-      <div className="row wrap">
-        <b>
-          <Icon name="bot" /> Claude usage
-        </b>
-        <span className={`pill usage-pill-${m.tone}`}>{m.state}</span>
-        <span className="spacer" />
-        <button
-          className="btn btn-small btn-good"
-          disabled={usage.state !== 'pacing'}
-          title={usage.state === 'paused' ? "A pause at the limit can't be cleared early" : usage.state === 'normal' ? 'Already at full speed' : 'Stop pacing new issues now'}
-          onClick={() => void confirmResume()}
-        >
-          <Icon name="fast-forward" /> Resume full speed
-        </button>
-      </div>
+    <Section
+      id="ops-card-usage"
+      className={`usage-card usage-${m.tone} ${hot ? 'ops-card-hot' : ''}`}
+      title={
+        <span className="dp-chips">
+          <Icon name="bot" /> Claude usage <Chip tone={m.tone}>{m.state}</Chip>
+        </span>
+      }
+    >
       <UsageBars />
       {usage.warning && (
         <div className="small">
@@ -86,7 +80,17 @@ function UsageCard({ hot }: { hot: boolean }) {
           {m.resets && ` · resets ${m.resets}`}
         </div>
       )}
-      <div className="muted small">{why}</div>
+      <div className="dp-meta">{why}</div>
+      <Actions>
+        <button
+          className="ds-btn"
+          disabled={usage.state !== 'pacing'}
+          title={usage.state === 'paused' ? "A pause at the limit can't be cleared early" : usage.state === 'normal' ? 'Already at full speed' : 'Stop pacing new issues now'}
+          onClick={() => void confirmResume()}
+        >
+          <Icon name="fast-forward" /> Resume full speed
+        </button>
+      </Actions>
       {demo && (
         <div className="row wrap">
           <span className="muted small">Demo:</span>
@@ -98,7 +102,7 @@ function UsageCard({ hot }: { hot: boolean }) {
           </button>
         </div>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -107,55 +111,47 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
   const goToFloor = useStore((s) => s.goToFloor);
   const pr = alarm.prNumber !== null ? repo?.pulls.find((p) => p.number === alarm.prNumber) : undefined;
   return (
-    <div id={`ops-card-${alarm.id}`} className={`card floor-card alarm-card ${hot ? 'ops-card-hot' : ''}`} style={{ ['--accent' as string]: repo?.color ?? '#ef476f' }}>
-      <div className="row">
-        <span className="floor-badge">{alarm.floor}</span>
-        <div className="grow">
-          <b>
-            <Icon name="siren" /> {alarm.text}
-          </b>
-          <div className="muted small">
-            {repo?.fullName ?? alarm.repoId}
-            {pr ? ` · ${pr.title}` : ''} · since {new Date(alarm.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
+    <Section id={`ops-card-${alarm.id}`} tone="bad" className={hot ? 'ops-card-hot' : undefined} title={
+        <>
+          <Icon name="siren" /> {alarm.text}
+        </>
+      }
+    >
+      <div className="dp-meta">
+        Floor {alarm.floor} · {repo?.fullName ?? alarm.repoId}
+        {pr ? ` · ${pr.title}` : ''} · since {new Date(alarm.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
-      <div className="row wrap">
+      <Actions>
         {alarm.kind === 'pr' && alarm.prNumber !== null ? (
           <>
-            <button className="btn btn-small" onClick={() => openOverlay({ kind: 'kanban', repoId: alarm.repoId })}>
+            <button className="ds-btn" onClick={() => openOverlay({ kind: 'kanban', repoId: alarm.repoId })}>
               <Icon name="clipboard-list" /> Open the Kanban
             </button>
-            <button className="btn btn-small btn-good" onClick={() => void attempt(() => api.sendToQa(alarm.repoId, alarm.prNumber!))}>
+            <button className="ds-btn" onClick={() => void attempt(() => api.sendToQa(alarm.repoId, alarm.prNumber!))}>
               Retry QA
             </button>
-            <button className="btn btn-small" title="Hand it to its author, or any free agent, with QA's findings" onClick={() => void attempt(() => api.sendBack(alarm.repoId, alarm.prNumber!))}>
+            <button className="ds-btn" title="Hand it to its author, or any free agent, with QA's findings" onClick={() => void attempt(() => api.sendBack(alarm.repoId, alarm.prNumber!))}>
               Send back for a fix
             </button>
-            {pr && (
-              <a className="small" href={pr.url} target="_blank" rel="noreferrer">
-                PR on GitHub <Icon name="external-link" />
-              </a>
-            )}
+            {pr && <LinkButton href={pr.url}>PR on GitHub <Icon name="external-link" /></LinkButton>}
           </>
         ) : (
           alarm.agentId && (
             <>
-              <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: alarm.agentId! })}>
+              <button className="ds-btn" onClick={() => openOverlay({ kind: 'terminal', agentId: alarm.agentId! })}>
                 Terminal
               </button>
             </>
           )
         )}
-        <span className="spacer" />
-        <button className="btn btn-small btn-ghost" onClick={() => goToFloor(alarm.floor)}>
+        <button className="ds-btn ds-btn-ghost" onClick={() => goToFloor(alarm.floor)}>
           Visit floor {alarm.floor}
         </button>
         {alarm.kind !== 'pr' && alarm.agentId && (
           <Menu label="More for this alarm" title={alarm.text} items={[{ label: 'Clear desk…', hint: 'Clear their desk so they take new work', danger: true, onSelect: () => void clearDeskOf(alarm.agentId!) }]} />
         )}
-      </div>
-    </div>
+      </Actions>
+    </Section>
   );
 }
 
@@ -207,33 +203,29 @@ async function applyFix(f: DoctorFinding, fix: DoctorFix) {
 function DoctorCard({ finding: f, repo }: { finding: DoctorFinding; repo: RepoView | undefined }) {
   const openOverlay = useStore((s) => s.openOverlay);
   return (
-    <div id={`ops-card-doctor-${f.id}`} className="card floor-card alarm-card doctor-card" style={{ ['--accent' as string]: repo?.color ?? '#7c6cf0' }}>
-      <div className="row">
-        <span className="floor-badge">{repo?.floor ?? '?'}</span>
-        <div className="grow">
-          <b>
-            <Icon name="stethoscope" /> {f.text}
-          </b>
-          <div className="muted small">
-            {repo?.fullName ?? f.repoId} · since {new Date(f.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
+    <Section id={`ops-card-doctor-${f.id}`} tone="warn" title={
+        <>
+          <Icon name="stethoscope" /> {f.text}
+        </>
+      }
+    >
+      <div className="dp-meta">
+        Floor {repo?.floor ?? '?'} · {repo?.fullName ?? f.repoId} · since {new Date(f.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
-      <div className="row wrap">
+      <Actions>
         {f.fixes
           .filter((fix) => !RISKY.includes(fix))
           .map((fix, i) => (
-            <button key={fix} className={`btn btn-small ${i === 0 ? 'btn-good' : ''}`} title={FIXES[fix][1]} onClick={() => void applyFix(f, fix)}>
+            <button key={fix} className={`ds-btn ${i === 0 ? '' : 'ds-btn-ghost'}`} title={FIXES[fix][1]} onClick={() => void applyFix(f, fix)}>
               {FIX_ICON[fix] && <Icon name={FIX_ICON[fix]!} />} {FIXES[fix][0]}
             </button>
           ))}
         {f.agentId && (
-          <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: f.agentId! })}>
+          <button className="ds-btn" onClick={() => openOverlay({ kind: 'terminal', agentId: f.agentId! })}>
             Terminal
           </button>
         )}
-        <span className="spacer" />
-        <button className="btn btn-small btn-ghost" title="Hide it until it goes away" onClick={() => void attempt(() => api.doctorIgnore(f.id))}>
+        <button className="ds-btn ds-btn-ghost" title="Hide it until it goes away" onClick={() => void attempt(() => api.doctorIgnore(f.id))}>
           Ignore
         </button>
         {f.fixes.some((fix) => RISKY.includes(fix)) && (
@@ -243,8 +235,8 @@ function DoctorCard({ finding: f, repo }: { finding: DoctorFinding; repo: RepoVi
             items={f.fixes.filter((fix) => RISKY.includes(fix)).map((fix) => ({ label: `${FIXES[fix][0]}…`, hint: FIXES[fix][1], danger: true, onSelect: () => void applyFix(f, fix) }))}
           />
         )}
-      </div>
-    </div>
+      </Actions>
+    </Section>
   );
 }
 

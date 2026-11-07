@@ -293,7 +293,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
         <div ref={pane} className="cn-pane tab-body ds-stack-scope" role="tabpanel" id={`${ids}-pane`} aria-label={section.label}>
           <div className="cn-pane-info">
             {!searching && row.length === 0 && searchButton}
-            <InfoButton key={section.id} screen={section.id} />
+            <InfoButton key={section.id} screen={section.id} className="ds-btn ds-btn-icon" />
           </div>
           <SectionBody key={section.id} id={section.id} where={where} focus={focus} />
         </div>

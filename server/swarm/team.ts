@@ -350,13 +350,14 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     if (this.ceoAsked) this.setDecisions(onCeoAction(this.state.decisions.list, act, Date.now()));
   }
 
-  /** Demo only: a fresh demo office opens with a question answered through its re-ask (#208), CEO questions left unanswered and a team change waiting. */
+  /** Demo only: a fresh demo office opens with a question answered through its re-ask (#208), CEO questions left unanswered, a PR QA failed with a full report (#155) and a team change waiting. */
   protected seedDemoDecisions() {
     const asked = this.postMessage('ceo', DEMO_REASK.ask);
     this.postMessage('ceo', DEMO_REASK.reAsk);
     this.postMessage('manager', DEMO_REASK.answer, undefined, { replyTo: asked.id, delivery: 'read' });
     for (const text of DEMO_DECISION_MESSAGES) this.postMessage('ceo', text);
     this.seedDemoActions();
+    this.seedDemoQa();
     void this.backend.demoDesign?.().then((a) => this.proposeDesign(a)).catch(() => undefined); // and a design proposal (#209)
     for (const kind of ['hire', 'let-go']) {
       try {
