@@ -13,6 +13,7 @@ export type ActionRef =
   /** Their chat, at `messageId` when the call posted one; `details`: their window's details on that tab instead. */
   | { kind: 'agent'; agentId: string; messageId?: number; details?: 'now' | 'setup' }
   | { kind: 'section'; section: ActionSection; repoId?: string }
+  | { kind: 'approvals' }
   | { kind: 'decision'; id: string }; // its entry in the decision log (#208)
 
 export interface ChatAction {
@@ -45,6 +46,7 @@ const ACTS: Record<string, string> = {
   escalate: '🚩',
   set_mandate: '📜',
   propose_charter: '🧭',
+  propose_design: '🎨',
   resolve_decision: '✅',
   define_experiment: '🧪',
   set_floor_profile: '🏢',
@@ -79,6 +81,7 @@ function refOf(call: OfficeCall, repoOf: (floor: number) => string | null, agent
   // wait_for: the thing its first condition waited on (the usage meter for usage).
   const wait = call.tool === 'wait_for' && Array.isArray(call.args?.conditions) ? (call.args.conditions[0] as Record<string, unknown> | undefined) : undefined;
   const a = wait ?? call.args ?? {};
+  if (call.tool === 'propose_design') return { kind: 'approvals' };
   if (call.tool === 'resolve_decision' && typeof a.id === 'string' && a.id) return { kind: 'decision', id: a.id };
   if (wait?.kind === 'usage') return { kind: 'section', section: 'ops' };
   const floor = num(a.floor) ?? (Array.isArray(a.floors) ? num(a.floors[0]) : null);

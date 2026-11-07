@@ -13,7 +13,7 @@ import './decisions.css';
 // that asked it, or the team change's or charter's own call. Not now / Drop it are in its ⋯. Tapping the question opens
 // it whole in a sheet, with the message that asked it (#183).
 
-const ICON: Record<Decision['kind'], string> = { suggestion: '🧭', question: '❓', team: '👥', charter: '🎯' };
+const ICON: Record<Decision['kind'], string> = { suggestion: '🧭', question: '❓', team: '👥', charter: '🎯', design: '🎨' };
 /** api() already toasted a failure. */
 const attempt = (fn: () => Promise<unknown>) => fn().catch(() => undefined);
 
@@ -187,7 +187,7 @@ export function DecisionTray({ hide, typing, onPick, onJump }: { hide?: number; 
   );
 }
 
-export const DECISIONS_GROUP = '🧭 Questions from the CEO';
+const DECISIONS_GROUP = '🧭 Questions from the CEO';
 
 /** The CEO's open questions for the approvals (their team changes and charter changes are cards there already). */
 export function DecisionList({ heading }: { heading: (text: string) => ReactNode }) {

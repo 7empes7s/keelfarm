@@ -91,3 +91,7 @@ describe('every action card opens what it is about (#215)', () => {
     ]);
   });
 });
+
+it('opens the review room for design proposals added on main', () => {
+  expect(actionCards([call('propose_design', 'Proposed Layout as decision design:42.', { floor: 3 })], repoOf)[0].ref).toEqual({ kind: 'approvals' });
+});

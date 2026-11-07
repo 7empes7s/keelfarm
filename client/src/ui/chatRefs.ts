@@ -66,7 +66,7 @@ export function agentFor(w: RefWorld, idOrName: string): RefWorld['agents'][stri
 
 /** Where a CEO action card goes (#215): its agent's chat at the message or their details, a console section, the decision log, or as its chip would. */
 export function actionJump(ref: ActionRef, mode: 'office' | 'pocket', w: RefWorld): Jump | null {
-  if (ref.kind === 'decision') return { kind: 'decisions' };
+  if (ref.kind === 'decision' || ref.kind === 'approvals') return { kind: 'decisions' };
   if (ref.kind === 'section') return { kind: 'overlay', overlay: { kind: 'manager', tab: ref.section, ...(ref.repoId && { repoId: ref.repoId }) } };
   if (ref.kind !== 'agent') return jumpFor({ ...ref, start: 0, end: 0 }, mode, w);
   const a = agentFor(w, ref.agentId);

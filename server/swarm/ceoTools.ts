@@ -78,6 +78,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       setMandate: acts((a) => this.setMandate(a)),
       proposeCharter: acts((a) => this.proposeCharter(a)),
       resolveDecision: acts((a) => this.resolveDecision(a)),
+      proposeDesign: acts((a) => this.proposeDesign(a)),
       defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),

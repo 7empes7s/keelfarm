@@ -19,7 +19,7 @@ const BUSY = new Set(['working', 'preparing']);
 
 /** Where an action card's issue, PR, floor or agent stands now, or null when it's gone from the office. */
 export function actionStatus(ref: ActionRef, w: RefWorld): ActionStatus | null {
-  if (ref.kind === 'decision' || (ref.kind === 'section' && (ref.section !== 'team' || !ref.repoId))) return null;
+  if (ref.kind === 'decision' || ref.kind === 'approvals' || (ref.kind === 'section' && (ref.section !== 'team' || !ref.repoId))) return null;
   if (ref.kind === 'agent') {
     const a = agentFor(w, ref.agentId);
     if (!a) return null;
