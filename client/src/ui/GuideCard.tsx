@@ -30,7 +30,7 @@ function Checklist({ items, onGo, open }: { items: GuideItem[]; onGo?: () => voi
     <ul className="gm-list">
       {sorted.map((i) => (
         <li key={i.id} className={`gm-item ${i.done ? 'gm-item-done' : ''}`} data-guide={i.id} data-done={i.done}>
-          <span className="gm-tick" aria-label={i.done ? 'Done' : 'Not done yet'}>
+          <span className="gm-tick" role="img" aria-label={i.done ? 'Done' : 'Not done yet'}>
             {i.done ? '✓' : ''}
           </span>
           <div className="gm-text">

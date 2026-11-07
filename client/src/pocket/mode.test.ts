@@ -32,7 +32,7 @@ describe('pocket mode', () => {
 });
 
 describe("pocket mode's layout (#104)", () => {
-  const at = (width: number, touch = false) => pickLayout({ width, touch });
+  const at = (width: number, touch = false, height = 800) => pickLayout({ width, height, touch });
 
   it('is the phone layout up to 760 px, the rail from 761 px and side by side from 1024 px', () => {
     expect([360, 390, 430, 760].map((w) => at(w))).toEqual(['compact', 'compact', 'compact', 'compact']);
@@ -40,9 +40,12 @@ describe("pocket mode's layout (#104)", () => {
     expect([1024, 1280, 1920].map((w) => at(w))).toEqual(['expanded', 'expanded', 'expanded']);
   });
 
-  it('keeps touch-only screens on the phone layout until they are expanded-wide', () => {
+  it('keeps touch-only screens on the phone layout until they are a tablet (#212)', () => {
     expect(at(390, true)).toBe('compact');
-    expect(at(900, true)).toBe('compact');
+    expect(at(766, true)).toBe('compact');
+    expect(at(820, true, 1180)).toBe('medium'); // an iPad upright: the rail, the chat a drawer
+    expect(at(932, true, 430)).toBe('compact'); // a big phone on its side
+    expect(at(1180, true, 820)).toBe('expanded'); // the iPad sideways: the chat docked
     expect(at(1366, true)).toBe('expanded');
   });
 

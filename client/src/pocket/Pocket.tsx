@@ -2,10 +2,10 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { agentsOnRepo, kanbanFor, unreadMessages, useStore, type Overlay } from '../store';
 import { CEO_ID } from '../../../shared/types';
-import { officeUpdateChip } from '../officeUpdate';
+import { officeUpdateChip, restartExpected } from '../officeUpdate';
 import { UpdatePill } from '../ui/UpdatePill';
 import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
@@ -42,6 +42,9 @@ import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
 import { useRunningPreviews } from '../ui/PreviewsPage';
 import { parsePreviewsHash } from '../ui/previewGroups';
+import { floorColumns, statusLine } from './companyLayout';
+import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
+import { DockGrip, useDockWidth } from './DockGrip';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -116,7 +119,9 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
   const connected = useStore((s) => s.connected);
   const loaded = useStore((s) => s.loaded);
   const usage = useStore((s) => s.usage);
-  const update = useStore((s) => (s.restarting ? '⟳ The office is restarting…' : officeUpdateChip(s.officeUpdate)));
+  const restarting = useStore((s) => s.restarting || restartExpected(s.officeUpdate));
+  const update = useStore((s) => officeUpdateChip(s.officeUpdate));
+  const status = statusLine({ connected, loaded, restarting, update });
   const closedLast = useMode((s) => s.closedLast);
   const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   return (
@@ -129,10 +134,13 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
           </button>
         </div>
       )}
-      {!connected && <div className="pk-banner pk-banner-bad">{loaded ? '📡 Reconnecting to the office…' : '📡 Connecting to the office…'}</div>}
+      {status && (
+        <div className="pk-status" role="status">
+          <div className={`pk-banner ${status.bad ? 'pk-banner-bad' : ''}`}>{status.text}</div>
+        </div>
+      )}
       {usage.state === 'paused' && <div className="pk-banner pk-banner-bad">⏸ Claude's usage limit was reached: no new work starts{until ? ` until ${until}` : ''}.</div>}
       {usage.state === 'pacing' && <div className="pk-banner">🐢 Pacing new work after a usage warning{until ? ` until ${until}` : ''}.</div>}
-      {update && <div className="pk-banner">{update}</div>}
       <MemoryBanner open={() => settings('ops')} />
     </>
   );
@@ -156,6 +164,13 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       }),
     [repos, agents, qa],
   );
+  const [floorsWidth, setFloorsWidth] = useState(0);
+  const measureFloors = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setFloorsWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const decisions = useStore((s) => s.decisions);
   const waiting = approvalsBadge(waitingOnYou(repos, qa, requests)) + chatDecisions(decisions, Date.now()).length;
   return (
@@ -165,10 +180,13 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       <div className="pk-company-side">
       {waiting > 0 && (
         <button className="pk-callout" onClick={() => go('approvals')}>
-          <span>
-            ⚠️ <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
+          <span className="pk-callout-icon" aria-hidden>
+            ⚠️
           </span>
-          <span>Approvals →</span>
+          <span className="pk-callout-text">
+            <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
+          </span>
+          <span className="pk-callout-go">Approvals ›</span>
         </button>
       )}
       <TourInvite track={track} />
@@ -195,7 +213,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
         </div>
       )}
       </div>
-      <div className="pk-company-floors">
+      <div className="pk-company-floors" ref={measureFloors} style={{ '--pk-cols': floorColumns(floorsWidth, floors.length) } as CSSProperties}>
       {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
         ➕ Move in a project
@@ -221,7 +239,9 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
                   </span>
                   {p[k]}
                 </span>
-                <span className="pk-stage-label">{label}</span>
+                <span className="pk-stage-label" title={label}>
+                  {label}
+                </span>
               </div>
             ))}
           </div>
@@ -229,16 +249,17 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
           <CiOutageBanner repo={repo} />
           <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
-            <span className="muted">
-              👥 {team} · {busy} busy · 📋 {p.backlog} in backlog
+            <span className="muted pk-ellipsis" title={`${team} on this floor, ${busy} busy, ${p.backlog} in backlog`}>
+              👥 {team} · {busy} busy · 📋 {p.backlog}
             </span>
-            <span className="spacer" />
-            <button className="btn btn-small" onClick={() => go('kanban', repo.id)}>
-              Board
-            </button>
-            <button className="btn btn-small" onClick={() => go('team', repo.id)}>
-              Team
-            </button>
+            <span className="pk-floor-actions">
+              <button className="btn btn-small" onClick={() => go('kanban', repo.id)}>
+                Board
+              </button>
+              <button className="btn btn-small" onClick={() => go('team', repo.id)}>
+                Team
+              </button>
+            </span>
           </div>
         </div>
       ))}
@@ -281,6 +302,23 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 }
 
 // ---------- the shell ----------
+
+/** The overlays that open in the pane: an agent's terminal, a card and the notification centre (a floor's app opens the Previews page). */
+const inPane = (o: Overlay | null) => (o?.kind === 'terminal' && o.agentId !== CEO_ID) || o?.kind === 'card' || o?.kind === 'notices';
+
+/** The pane's overlay for the panel manager (#212): its key, and what the back chip says. */
+function paneEntry(o: Overlay): PanelEntry<Overlay> {
+  const s = useStore.getState();
+  if (o.kind === 'terminal') return { key: `terminal:${o.agentId}`, slot: 'pane', label: `${s.agents[o.agentId]?.name ?? 'Agent'}'s ${o.view === 'chat' ? 'chat' : 'window'}`, value: o };
+  if (o.kind === 'card') return { key: `card:${o.repoId}:${o.key}`, slot: 'pane', label: `${o.pr ? 'PR' : 'Issue'} #${o.number}`, value: o };
+  return { key: o.kind, slot: 'pane', label: 'Notifications', value: o };
+}
+
+/** A slot's place in the panel manager's order: the host's z-index wide, its panel's (pocket.css) on a phone. */
+const layer = (order: Panels, slot: string) => {
+  const n = layerOf(order, slot);
+  return n ? { zIndex: n, ['--pk-layer' as string]: n } : undefined;
+};
 
 /** Wide, the CEO chat is a window, opened from the header like 🔔 (#214): the CEO's avatar, unread badge and a working dot. */
 function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
@@ -359,6 +397,7 @@ export default function Pocket() {
   const track = trackFor('pocket', layout);
   // The chat beside the pages: on wide screens open unless hidden (remembered), at medium widths a drawer, closed at first.
   const [dockPref, setDockPref] = useState(savedDock);
+  const [dockW, setDockW] = useDockWidth();
   const [drawer, setDrawer] = useState(false);
   const dock = layout === 'expanded' ? dockPref : layout === 'medium' && drawer;
   const setDock = useCallback(
@@ -378,15 +417,45 @@ export default function Pocket() {
     focusChatBox();
   };
 
+  // The panel manager (#212): the console and the pane in the order they were opened or touched, the top one in front.
+  const order = usePanels();
+  const top = topPanel(order);
+  const consoleHost = useRef<HTMLDivElement>(null);
+  const paneHost = useRef<HTMLDivElement>(null);
+  const pane = useStore((s) => (inPane(s.overlay) ? s.overlay : null));
+  useEffect(() => (pane ? panels.open(paneEntry(pane)) : panels.closeSlot('pane')), [pane]);
+  useEffect(() => (settings ? panels.open({ key: 'console', slot: 'main', label: 'Console', value: settings }) : panels.closeSlot('main')), [settings]);
+  useEffect(() => () => usePanels.setState({ open: [], back: null }), []);
+  // What comes to the top takes the focus (Esc and Back then close it first), and the chat drawer makes way for it.
+  const topKey = top?.key;
+  const topSlot = top?.slot;
+  useEffect(() => {
+    if (!topSlot) return;
+    const panel = (topSlot === 'main' ? consoleHost : paneHost).current?.querySelector<HTMLElement>('.panel');
+    if (panel && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+    setDrawer(false);
+  }, [topKey, topSlot]);
+  const reopen = (p: PanelEntry) => (p.slot === 'main' ? setSettings(p.value as ConsoleSection) : useStore.getState().openOverlay(p.value as Overlay));
+  // The rail and links to a page bring the page to the front: the console closes, and a pane covering the page too.
+  const show = (t: PocketTab) => {
+    setTab(t);
+    setSettings(null);
+    const p = paneHost.current;
+    const o = useStore.getState().overlay;
+    if (o?.kind === 'previews' || o?.kind === 'app') useStore.getState().openOverlay(null); // the Previews page covers the pages
+    else if (o && inPane(o) && (!wide || (p && getComputedStyle(p).position === 'absolute'))) useStore.getState().openOverlay(null);
+  };
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
-    setTab(t);
+    show(t);
   };
   // A tapped notification (here, or through the service worker) opens what it's about.
   useEffect(() => {
     const onOpen = (e: Event) => {
       const t = tabFrom((e as CustomEvent<string>).detail);
-      if (t) setTab(t);
+      if (!t) return;
+      setTab(t);
+      setSettings(null); // the page it's about comes to the front
     };
     window.addEventListener('cubefarm:open', onOpen);
     return () => window.removeEventListener('cubefarm:open', onOpen);
@@ -413,7 +482,8 @@ export default function Pocket() {
     if (!kanban) return;
     useStore.getState().openOverlay(null);
     setSettings(null);
-    go('kanban', kanban);
+    setRepoId(kanban);
+    setTab('kanban');
   }, [kanban]);
   // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
@@ -425,6 +495,7 @@ export default function Pocket() {
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
+    panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
   // A link to the Previews page (#previews/3/pr-12) opens it once the floors are known.
   useEffect(() => {
@@ -463,7 +534,7 @@ export default function Pocket() {
       if (n >= 0) {
         e.preventDefault();
         if (TABS[n] === 'chat') openChat();
-        else setTab(TABS[n]);
+        else show(TABS[n]);
       } else if (e.key === '/' && !e.altKey) {
         e.preventDefault();
         openChat();
@@ -502,6 +573,11 @@ export default function Pocket() {
         </span>
         <b className="pk-title">{company || 'cubefarm'}</b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
+        {wide && order.back && (
+          <button className="btn btn-small pk-back-chip" onClick={() => reopen(order.back!)} title={`Back to ${order.back.label}`}>
+            ‹ <span className="pk-ellipsis">{order.back.label}</span>
+          </button>
+        )}
         <span className="spacer" />
         {publicDemo && tab !== 'chat' && (
           <span className="chip" title={`Demo office: it resets every ${publicDemo.resetHours} h`}>
@@ -552,10 +628,7 @@ export default function Pocket() {
                 className={`pk-tab ${on ? 'pk-tab-on' : ''}`}
                 aria-current={on ? 'page' : undefined}
                 title={wide ? `${label} (${TABS.indexOf(k) + 1})` : undefined}
-                onClick={() => {
-                  setTab(k);
-                  if (previewsOpen) useStore.getState().openOverlay(null); // the rail navigates: the page under it comes back
-                }}
+                onClick={() => show(k)}
               >
                 <span className="pk-tab-icon">
                   {icon}
@@ -586,15 +659,20 @@ export default function Pocket() {
           )}
           {wide && (
             <button data-tour="console" className={`pk-tab pk-tab-console ${settings && !previewsOpen ? 'pk-tab-on' : ''}`} aria-pressed={!!settings && !previewsOpen} onClick={() => {
-                if (previewsOpen) useStore.getState().openOverlay(null); // the console under the page comes back
-                setSettings(settings && !previewsOpen ? null : (settings ?? 'menu'));
+                if (previewsOpen) {
+                  useStore.getState().openOverlay(null); // the console under the page comes back
+                  if (settings) panels.focus('console');
+                  else setSettings('menu');
+                } else if (!settings) setSettings('menu');
+                else if (top?.slot === 'main') setSettings(null);
+                else panels.focus('console');
               }} title="Settings and notifications">
               <span className="pk-tab-icon">⚙️</span>
               <span className="pk-tab-label">Console</span>
             </button>
           )}
         </nav>
-        <div className="pk-work">
+        <div className={`pk-work ${settings ? 'pk-work-console' : ''}`}>
           <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`}>
             {loaded && !setupDone ? (
               <div className="pk-page">
@@ -613,23 +691,26 @@ export default function Pocket() {
               </>
             )}
           </main>
-          {/* wide, the console covers the pages and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
-          <div className="pk-console-host">{settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}</div>
+          {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
+          <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
+            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
+          </div>
           {/* the Previews page takes everything beside the chat, over the console it may have been opened from */}
           <div className="pk-page-host">
             <Suspense fallback={null}>
               <PreviewsHost />
             </Suspense>
           </div>
-          {/* after the console, so a terminal or app opened from it shows over it */}
-          <div className="pk-pane">
+          {/* beside the console when there's room, else over it: whichever was opened or touched last is in front */}
+          <div ref={paneHost} className="pk-pane" style={layer(order, 'pane')} onFocus={() => pane && panels.focus(paneEntry(pane).key)}>
             <Suspense fallback={null}>
               <PocketOverlay />
             </Suspense>
           </div>
         </div>
         {wide && dock && (
-          <aside className="pk-dock" aria-label={`Chat with ${ceoName}`}>
+          <aside className="pk-dock" aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
+            {layout === 'expanded' && !full && <DockGrip width={dockW} onWidth={setDockW} />}
             <div className="pk-dock-head">
               <b className="pk-ellipsis">💬 {ceoName}</b>
               <span className="spacer" />
