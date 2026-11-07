@@ -15,6 +15,7 @@ import { HttpError } from '../httpError.ts';
 import { IssueAges } from '../issueAges.ts';
 import { PR_LIMITS_VERSION } from '../prOwnership.ts';
 import { Previews } from '../previews.ts';
+import { DEFAULT_MAIN_PREVIEW_IDLE_MIN, DEFAULT_PREVIEW_RECENT_HOURS, mainKey, prKey } from '../prTheatre.ts';
 import { DEFAULT_PACING_SESSIONS } from '../pacing.ts';
 import { emptyHistory } from '../metrics.ts';
 import { DEFAULT_TRIM_IDLE_MIN } from '../deskTrim.ts';
@@ -61,6 +62,7 @@ import type {
   LogLine,
   MachineHost,
   NotifyEvent,
+  PreviewStatsView,
   QaView,
   RepoView,
   ServerEvent,
@@ -116,6 +118,8 @@ export abstract class SwarmCore extends SwarmContract {
       autoUpdate: true,
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
+      previewRecentHours: DEFAULT_PREVIEW_RECENT_HOURS,
+      mainPreviewIdleMin: DEFAULT_MAIN_PREVIEW_IDLE_MIN,
       dailyLogDir: '',
       historyDays: DEFAULT_HISTORY_DAYS,
       voice: { ...DEFAULT_VOICE },
@@ -227,6 +231,9 @@ export abstract class SwarmCore extends SwarmContract {
     save: () => this.save(),
     retry: (id, why, requeue) => this.state.agents.filter((a) => a.id === id && a.status === 'stopped' && a.task).forEach((a) => this.recover([a], new Set(), new Set(requeue ? [a] : []), undefined, why)),
     schedule: () => this.schedule(),
+    previews: () => this.previews.running(),
+    stopPreview: (key) => this.previews.stopIdle(key),
+    previewMem: (memMb) => this.setPreviewStats({ memMb }),
   });
   /** Where the Claude plan goes (#18): a line per finished session and merged PR. Never in the state file. */
   protected spend: SessionCosts;
@@ -328,7 +335,30 @@ export abstract class SwarmCore extends SwarmContract {
       emitPr: (preview) => this.broadcast({ type: 'prPreview', preview }),
       prRemoved: (repoId, pr) => this.broadcast({ type: 'prPreviewRemoved', repoId, pr }),
       note: (text) => this.toast('info', text),
+      holder: (repoId, pr) => this.previewHolder(repoId, pr),
+      mainIdleMs: () => this.state.settings.mainPreviewIdleMin * 60_000,
+      floors: () => this.state.repos,
     });
+  }
+
+  // ---------- previews in use (#204) ----------
+
+  /** Preview key (prTheatre's prKey / mainKey) → the agent whose QA lab or fix session asked for it. */
+  protected previewHolds = new Map<string, { agentId: string; repoId: string; pr: number | null }>();
+  protected previewStats: PreviewStatsView = { diskBytes: null, memMb: null, cleanedAt: null };
+
+  /** The agent using a preview now: one whose lab asked for it, still on a QA or fix session on that floor. */
+  protected previewHolder(repoId: string, pr: number | null): string | null {
+    const id = this.previewHolds.get(pr ? prKey(repoId, pr) : mainKey(repoId))?.agentId;
+    const a = id ? this.state.agents.find((x) => x.id === id) : undefined;
+    return a && a.repoId === repoId && BUSY.includes(a.status) && (a.task === 'qa' || a.task === 'fix') ? a.name : null;
+  }
+
+  protected setPreviewStats(patch: Partial<PreviewStatsView>) {
+    const next = { ...this.previewStats, ...patch };
+    if (JSON.stringify(next) === JSON.stringify(this.previewStats)) return;
+    this.previewStats = next;
+    this.broadcast({ type: 'previewStats', stats: next });
   }
 
   // ---------- views ----------
@@ -499,6 +529,7 @@ export abstract class SwarmCore extends SwarmContract {
       agents: this.state.agents.map((a) => this.agentView(a, false)),
       qa: this.state.qa.map((q) => this.qaView(q)),
       prPreviews: this.previews.prViews(),
+      previewStats: this.previewStats,
       requests: this.state.requests,
       ceo: this.ceoInfo(),
       chat: this.chatView(),

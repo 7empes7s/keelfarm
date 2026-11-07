@@ -73,6 +73,7 @@ export interface PullInfo {
   reviewDecision: string | null;
   closesIssues: number[];
   createdAt: string;
+  updatedAt?: string; // GitHub's last activity on it (absent: read as createdAt)
   mergedAt: string | null;
   additions: number;
   deletions: number;
@@ -163,6 +164,8 @@ export interface PreviewView {
   startedAt: number | null;
   error: string | null;
   logTail: string[]; // the last 40 lines of install / app output
+  stopsAt?: number | null; // running with nobody watching: when it stops for being idle (null: it won't)
+  heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop and restart are refused)
 }
 
 /**
@@ -181,6 +184,15 @@ export interface PrPreviewView {
   watched: boolean; // a viewer has it on screen now
   error: string | null;
   logTail: string[]; // the last 40 lines of install / app output
+  stopsAt?: number | null; // nobody watching: when it stops for being idle (null: it won't)
+  heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop, restart and eviction are refused)
+}
+
+/** The previews' upkeep, for the app viewer's stats: what their desks hold on disk and use in memory, and the last cleanup. */
+export interface PreviewStatsView {
+  diskBytes: number | null; // the preview desks' size on disk (null: not measured yet)
+  memMb: number | null; // what the previews' processes use (null: not measured, or not Linux)
+  cleanedAt: number | null; // the last cleanup of leftover preview desks
 }
 
 /** A folder in the manager's projects folder, as offered when adding a floor. */
@@ -432,6 +444,8 @@ export interface SwarmSettings {
   updateSettleMin?: number; // an automatic update waits this long after the latest commit (at most 15 min after the first), so a run of merges is one restart
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
+  previewRecentHours: number; // an open PR updated this recently gets its own channel chip; older ones fold under "Older"
+  mainPreviewIdleMin: number; // a floor's main preview stops after this many minutes with nobody watching; 0 = never
   dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
   historyDays: number; // days the session history and its transcripts are kept; 0 = forever
   voice: VoiceSettings;
@@ -805,6 +819,7 @@ export interface WorldSnapshot {
   agents: AgentView[];
   qa: QaView[];
   prPreviews: PrPreviewView[];
+  previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
@@ -862,6 +877,7 @@ export type ServerEvent =
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
   | { type: 'prPreview'; preview: PrPreviewView }
+  | { type: 'previewStats'; stats: PreviewStatsView }
   | { type: 'prPreviewRemoved'; repoId: string; pr: number }
   | { type: 'settings'; settings: SwarmSettings }
   | { type: 'request'; request: HireRequestView }

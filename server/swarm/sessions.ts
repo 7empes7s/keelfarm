@@ -10,6 +10,7 @@ import { ceoSystemPrompt } from '../ceo.ts';
 import { stillOpen } from '../closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from '../deps.ts';
 import { setUpDesk } from '../deskSetup.ts';
+import { mainKey, prKey } from '../prTheatre.ts';
 import { MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { PREP_HOLD_MS, prepFailure } from '../handOut.ts';
 import { sessionStart } from '../reconcile.ts';
@@ -347,7 +348,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     settings: () => this.state.settings.testLab,
     refusal: (kind) => this.health.refusal(kind),
     forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
-    previewUrl: (repoId, pr) => this.labPreviewUrl(repoId, pr),
+    previewUrl: (repoId, pr, agentId) => this.labPreviewUrl(repoId, pr, agentId),
     shot: (agentId, file) => this.labShot(agentId, file),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
   });
@@ -377,11 +378,12 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   /** The address of a floor's app for the lab: the PR's preview (the PR theatre's), else the floor's, started if need be. */
-  protected async labPreviewUrl(repoId: string, pr: number | null): Promise<string> {
+  protected async labPreviewUrl(repoId: string, pr: number | null, agentId: string): Promise<string> {
     const repo = this.repo(repoId);
     const now = () => (pr ? this.previews.prViews().find((v) => v.repoId === repoId && v.pr === pr) : this.previews.view(repo));
     const v = now();
     if (!v || v.status === 'stopped' || v.status === 'error') await (pr ? this.startPrPreview(repoId, pr) : this.startPreview(repoId));
+    this.holdPreview(agentId, repoId, pr);
     for (const until = Date.now() + LAB_PREVIEW_MS; Date.now() < until; await new Promise((r) => setTimeout(r, 2000))) {
       this.previews.watch(LAB_VIEWER, repoId, pr); // kept up while the lab uses it; the theatre stops it once idle
       const x = now();
@@ -389,6 +391,24 @@ export abstract class SwarmSessions extends SwarmAgents {
       if (x?.status === 'error' || x?.status === 'unconfigured') throw new Error(`The ${pr ? `PR #${pr} ` : ''}preview didn't start: ${x.error ?? 'no command to run the app'}. Start your dev server and give its url instead.`);
     }
     throw new Error("The preview didn't start in 5 minutes: start your dev server and give its url instead.");
+  }
+
+  /** An agent's lab uses this preview: the manager can't stop, restart or evict it while their QA or fix session runs (#204). */
+  protected holdPreview(agentId: string, repoId: string, pr: number | null) {
+    const key = pr ? prKey(repoId, pr) : mainKey(repoId);
+    if (this.previewHolds.get(key)?.agentId === agentId) return;
+    this.previewHolds.set(key, { agentId, repoId, pr });
+    this.previews.heldChanged(repoId, pr);
+  }
+
+  /** Every 15 s: previews nobody watches stop, and holds whose agent's QA or fix session ended let go (the views say so). */
+  protected sweepPreviews() {
+    this.previews.sweepPrs();
+    for (const [key, { repoId, pr }] of this.previewHolds) {
+      if (this.previewHolder(repoId, pr)) continue;
+      this.previewHolds.delete(key);
+      this.previews.heldChanged(repoId, pr);
+    }
   }
 
   /** A screenshot the lab took for an agent: their screen in the office, and QA's evidence, as a Playwright one would. */
@@ -450,6 +470,8 @@ export abstract class SwarmSessions extends SwarmAgents {
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
     };
+    // The demo's QA tests in its PR's preview, as a real one's lab would (#204): the app viewer shows it held.
+    if (this.backend.demo && testLab && a.task === 'qa' && a.prNumber) void this.labPreviewUrl(repo.id, a.prNumber, a.id).catch(() => undefined);
     rt.session = this.backend.startSession(
       {
         cwd,

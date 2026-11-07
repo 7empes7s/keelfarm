@@ -209,6 +209,15 @@ export function CompanySettings() {
         />
       </label>
       <p className="muted small">A desk left idle this long loses its node_modules and build output to save disk space. Its next task installs them again.</p>
+      <label className="field">
+        <span>Stop a floor's app preview after (minutes unwatched, 0 = never)</span>
+        <input key={settings.mainPreviewIdleMin} type="number" min={0} max={1440} defaultValue={settings.mainPreviewIdleMin} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.mainPreviewIdleMin && set({ mainPreviewIdleMin: Number(e.target.value) })} />
+      </label>
+      <label className="field">
+        <span>PRs get their own channel when updated within (hours)</span>
+        <input key={settings.previewRecentHours} type="number" min={1} max={2160} defaultValue={settings.previewRecentHours} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.previewRecentHours && set({ previewRecentHours: Number(e.target.value) })} />
+      </label>
+      <p className="muted small">Never while someone watches it or an agent tests in it. Older open PRs fold under “Older” in the app viewer.</p>
       {typeof settings.autoUpdate === 'boolean' && (
         <>
           <label className="field">

@@ -5,10 +5,11 @@ import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../
 import { previewSteps } from '../../../shared/progressBars';
 import { ProgressBar } from './ProgressBar';
 import type { PreviewStatus, PreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
-import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSync, onOfficeComputer, prAsPreview, QA_BADGE, qaShotUrl, reachable, relayPath, type Channel, type Side } from './channels';
+import { atPath, comparePath, newPathSync, onOfficeComputer, prAsPreview, QA_BADGE, qaShotUrl, reachable, relayPath, type Side } from './channels';
 import { sendToCeo } from './chatSend';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
+import { ChannelBar, HeldNote, PreviewStats } from './PreviewChannels';
 import { closeOverlay, Panel } from './Panel';
 import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
 import type { Width } from './desktopRules';
@@ -329,29 +330,6 @@ function PreviewStage({
 
 // ---------- the PR theatre: channels, compare, QA ----------
 
-/** main, then every open PR on the floor; picking a PR starts its preview. */
-function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel: Channel; onPick: (pr: Channel) => void }) {
-  const prPreviews = useStore((s) => s.prPreviews);
-  const qa = useStore((s) => s.qa);
-  const pulls = channelPulls(repo.pulls);
-  return (
-    <div className="channels" role="tablist" aria-label="Channels">
-      <button role="tab" aria-selected={channel == null} className={`channel ${channel == null ? 'channel-on' : ''}`} onClick={() => onPick(null)} title={`The floor's app on ${repo.defaultBranch}`}>
-        <span className={`led led-${channelLed(repo.preview.status)}`} aria-hidden /> {repo.defaultBranch}
-      </button>
-      {pulls.map((p) => {
-        const label = channelLabel(p, qa[qaKey(repo.id, p.number)]);
-        return (
-          <button key={p.number} role="tab" aria-selected={channel === p.number} className={`channel ${channel === p.number ? 'channel-on' : ''}`} onClick={() => onPick(p.number)} title={label}>
-            <span className={`led led-${channelLed(prPreviews[qaKey(repo.id, p.number)]?.status)}`} aria-hidden /> {label}
-          </button>
-        );
-      })}
-      {pulls.length === 0 && <span className="muted small channels-empty">No open PRs: each one gets a channel here, to try it running beside {repo.defaultBranch}.</span>}
-    </div>
-  );
-}
-
 const CHECKS_LABEL: Record<PullInfo['checks'], string> = { passing: '✅ passing', failing: '❌ failing', pending: '⏳ running', none: 'none' };
 const CHECK_ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 
@@ -595,6 +573,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   const [side, setSide] = useState<Side>('pr'); // compare on a phone: the side on screen
   const [busy, setBusy] = useState(false);
   const [reloads, setReloads] = useState(0);
+  const [stats, setStats] = useState(false);
   const toolbar = useRef<HTMLDivElement>(null);
 
   // Opened on a channel (a chip on the big screen, a Kanban PR card): tune to it.
@@ -661,8 +640,10 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
     lastQa = !showQa;
     setShowQa(!showQa);
   };
+  const held = !!current.heldBy;
+  const heldWhy = held ? `@${current.heldBy} is testing in this` : undefined;
   const startStop = active ? (
-    <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
+    <button className="btn btn-small btn-bad" disabled={busy || held} title={heldWhy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
       ■ Stop
     </button>
   ) : (
@@ -677,11 +658,12 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
       items={[
         { label: 'Open in browser ↗', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
         { label: '⟳ Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
-        active && { label: '↻ Restart', onSelect: () => void (channel == null ? startMain() : startPr(true)) },
+        active && { label: '↻ Restart', disabled: held, onSelect: () => void (channel == null ? startMain() : startPr(true)) },
         view.forced ? { label: '⛶ Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: '⛶ Full screen', onSelect: view.enterFull },
         ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) }))),
         prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
         prView && { label: showQa ? '📋 Hide the QA report' : '📋 QA report', onSelect: toggleQa },
+        { label: '📊 Preview stats', onSelect: () => setStats(true) },
       ]}
     />
   );
@@ -724,9 +706,10 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
     >
       <div ref={toolbar}>
         <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />
+        {active && <HeldNote preview={current} label={label} repo={repo} />}
         {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
           {active && (
-            <button className="btn btn-small" disabled={busy} onClick={() => void (channel == null ? startMain() : startPr(true))} title={`Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
+            <button className="btn btn-small" disabled={busy || held} onClick={() => void (channel == null ? startMain() : startPr(true))} title={heldWhy ?? `Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
               ↻ Restart
             </button>
           )}
@@ -775,6 +758,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
             <PreviewStage repo={repo} preview={current} label={label} src={openUrl} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} shots={shots} onAsk={ask} />
           )}
         </div>
+        {stats && <PreviewStats repo={repo} onClose={() => setStats(false)} />}
         {prView && showQa && pull && <QaPanel repo={repo} pull={pull} qa={rec} />}
       </div>
       {current.status === 'running' && !narrow && (
