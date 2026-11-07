@@ -529,6 +529,17 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   grid-column: 1 / -1;
 }
 
+/* Team: a floor's "+ Agent" at the end of its header, and the card of someone just added (#243) */
+.pk-h .pk-add-agent {
+  margin-left: auto;
+}
+.pk-agent {
+  transition: box-shadow var(--ds-dur-slow) var(--ds-ease);
+}
+.pk-agent.pk-agent-new {
+  box-shadow: 0 0 0 var(--ds-border-strong) var(--ds-good-fill), var(--ds-shadow-2);
+}
+
 /* Approvals: the decisions as a list, the one picked beside it */
 .pk-split {
   display: grid;

@@ -7,10 +7,10 @@ import { keyStats } from '../../../shared/careers';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore } from '../store';
-import { CEO_ID, PLAYBOOK_MAX, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
-import { CLAUDE_MODELS, effectiveModel, modelAfterCliChange } from '../../../shared/models';
-import { ModelMissing, ModelPicker } from './ModelPicker';
-import { AccountSelect, CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
+import { CEO_ID, PLAYBOOK_MAX, type OfficeUpdateView, type RepoView } from '../../../shared/types';
+import { ModelMissing } from './ModelPicker';
+import { AddAgentForm } from './AddAgentForm';
+import { AccountSelect, CliSelect, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
 import { letGo } from './dangerActions';
@@ -483,67 +483,6 @@ export function CeoTab() {
 
 // ---------- team ----------
 
-interface NewAgent {
-  name: string;
-  cli: AgentCli | '';
-  model: string;
-  effort: EffortLevel | '';
-}
-
-const NO_SETUP: NewAgent = { name: '', cli: '', model: '', effort: '' };
-
-/** A floor's "+ Agent": an optional name and their coding agent, model and effort ('' = the office's defaults). */
-function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
-  const settings = useStore((s) => s.settings);
-  const clis = useStore((s) => s.clis);
-  const models = useStore((s) => s.models);
-  const [draft, setDraft] = useState<NewAgent>(NO_SETUP);
-  const [busy, setBusy] = useState(false);
-  const terminal = settings.runtime === 'terminal';
-  const cli = terminal ? draft.cli || settings.defaultCli : 'claude';
-  const full = size >= settings.maxAgents;
-  const edit = (p: Partial<NewAgent>) => setDraft({ ...draft, ...p });
-  const add = () => {
-    setBusy(true);
-    const { name, ...setup } = draft;
-    void attempt(() => api.hireAgent(repo.id, { ...setup, name: name.trim() || undefined }))
-      .then((a) => a && setDraft(NO_SETUP))
-      .finally(() => setBusy(false));
-  };
-  return (
-    <div className="ds-fields add-agent" id={`add-agent-${repo.floor}`}>
-      <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name (optional)" maxLength={24} aria-label={`New agent's name on floor ${repo.floor}`} />
-      {terminal && (
-        <select
-          value={draft.cli}
-          onChange={(e) => {
-            const next = e.target.value as AgentCli | '';
-            edit({ cli: next, model: modelAfterCliChange(draft.model, next || settings.defaultCli, models) });
-          }}
-          aria-label="New agent's coding agent"
-        >
-          <option value="">{cliName(clis, settings.defaultCli)} (default)</option>
-          <CliOptions clis={clis} />
-        </select>
-      )}
-      <ModelPicker cli={cli} value={draft.model} label="New agent's model" resolvedDefault={effectiveModel('', cli, settings, CLAUDE_MODELS[0])} onChange={(model) => edit({ model })} />
-      <select value={draft.effort} onChange={(e) => edit({ effort: e.target.value as EffortLevel | '' })} aria-label="New agent's effort">
-        <option value="">default effort ({settings.defaultEffort})</option>
-        {EFFORTS.map((x) => (
-          <option key={x} value={x}>
-            {x}
-          </option>
-        ))}
-      </select>
-      <span className="add-agent-go" title={full ? `Floor ${repo.floor} has its most agents (${settings.maxAgents}): change it in Settings → Agents → Most agents per floor` : undefined}>
-        <button className="btn btn-small btn-good" disabled={busy || full} onClick={add}>
-          + Agent
-        </button>
-      </span>
-    </div>
-  );
-}
-
 export function TeamTab() {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
@@ -569,7 +508,7 @@ export function TeamTab() {
                 {team.length} of {settings.maxAgents} agents
               </span>
             </div>
-            <AddAgent repo={repo} size={team.length} />
+            <AddAgentForm repo={repo} size={team.length} />
             {team.length === 0 && <EmptyState kind="team" compact onAction={() => document.getElementById(`add-agent-${repo.floor}`)?.querySelector('input')?.focus()} />}
             <table className="team ds-table roster">
               <tbody>

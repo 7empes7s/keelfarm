@@ -46,6 +46,16 @@ const SCREENS: Screen[] = [
     tabs: ['', charterDrift('pocket')], // its PR chips wrap beside the docked chat (#240)
   },
   {
+    name: 'chat open: + Agent sheet (#243)',
+    widths: [1280, 1920],
+    open: async (page) => {
+      const work = await beside(page, 'team');
+      await work.getByRole('button', { name: /^Add an agent to floor/ }).first().click();
+      return page.getByRole('dialog', { name: /New agent on floor/ });
+    },
+    tabs: [],
+  },
+  {
     name: 'chat open: terminal',
     widths: WIDTHS,
     open: async (page) => {
