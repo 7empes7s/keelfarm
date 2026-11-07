@@ -465,7 +465,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
     if (resumes) {
       this.refuseWhileUpdating();
-      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+      this.ensureSlot(sessionKind(a), a); // refused with the reason: memory, or the session limit
     }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
