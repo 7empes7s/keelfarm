@@ -185,6 +185,7 @@ html[data-reduce-motion] .action-confetti {
   text-align: center;
 }
 .working-text {
+  flex: 1;
   display: flex;
   align-items: baseline;
   gap: var(--ds-space-2);
@@ -198,11 +199,18 @@ html[data-reduce-motion] .action-confetti {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.working-meta {
+.working-next {
   flex: 0 100 auto; /* gives way before the step's words do */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-text-xs);
+}
+/* the elapsed time and step count stay whole, pinned right: a long step ellipsizes instead */
+.working-meta {
+  flex-shrink: 0;
+  margin-left: auto;
   white-space: nowrap;
   font-size: var(--ds-text-xs);
   font-variant-numeric: tabular-nums;

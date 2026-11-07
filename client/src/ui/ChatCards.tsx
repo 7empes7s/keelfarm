@@ -134,10 +134,10 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
           </span>
           <span className="grow working-text">
             <b className="working-now">{line.now}</b>
+            {line.next && <span className="working-next muted">next: {line.next}</span>}
             <span className="working-meta muted">
               {elapsed(now - (live?.since ?? start))}
               {count > 0 && ` · step ${count}`}
-              {line.next && ` · next: ${line.next}`}
             </span>
           </span>
           {steps.length > 0 && (
