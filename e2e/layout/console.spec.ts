@@ -1,7 +1,7 @@
 import type { Where } from '../../client/src/ui/consoleNavRules';
 import { expect, test } from '../helpers';
 import { telegramViews } from '../telegramViews';
-import { checkScreens, consoleSections, dialog, office, OFFICE, officeSection, pocketSection, type Screen, type View } from './helpers';
+import { checkScreens, consoleSections, dialog, office, OFFICE, consoleSection, pocketSection, type Screen, type View } from './helpers';
 
 // Settings, the console and their sections: pocket mode's Settings and the 3D office's manager's console (#102).
 
@@ -18,7 +18,7 @@ const addProject = (mode: string): View => ({
 const tapOpen = (name: string, group: string, section: string, row: string) => (where: Where): View => ({
   name,
   go: async (root) => {
-    await (where === 'pocket' ? pocketSection(root, section) : officeSection(root, group, section));
+    await (where === 'pocket' ? pocketSection(root, section) : consoleSection(root, group, section));
     const head = root.locator(row).first();
     await head.scrollIntoViewIfNeeded();
     await head.click();
@@ -41,7 +41,7 @@ const charterEditor: View = {
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
-    widths: [360, 390, 430, 1280],
+    widths: [360, 390, 430, 768, 1280, 1440], // the phone's list, then the desktop's top tabs and sections row (#199)
     open: async (page) => {
       await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
       await page.goto('/?pocket=1');

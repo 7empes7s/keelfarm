@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUPS, hashFor, opening, parseHash, resolve, search, SECTIONS, sectionsIn, TEST_LAB_SECTION } from './consoleNavRules';
+import { GROUPS, hashFor, opening, parseHash, resolve, search, SECTIONS, sectionRow, sectionsIn, stepTab, TEST_LAB_SECTION } from './consoleNavRules';
 
 describe('the console map', () => {
   it('has a handful of top tabs, each with sections, and unique section ids', () => {
@@ -40,6 +40,22 @@ describe('the console map', () => {
     expect(search('accessibility', 'office')[0]).toMatchObject({ label: 'Accessibility', section: { id: 'access' } });
     expect(search('  ', 'office')).toEqual([]);
     expect(search('Open the 3D office', 'office')).toEqual([]); // pocket mode's only
+  });
+
+  it("puts a group's sections in the row under the top tabs, and no row for a group of one (#199)", () => {
+    expect(sectionRow('work', 'office').map((s) => s.id)).toEqual(['floors', 'issues', 'team']);
+    expect(sectionRow('work', 'pocket').map((s) => s.id)).toEqual(['floors', 'team']);
+    expect(sectionRow('history', 'pocket').map((s) => s.id)).toEqual(['history', 'daily-log']); // no time-lapse on a phone
+  });
+
+  it('moves between tabs with the arrow keys, wrapping, and Home and End', () => {
+    expect(stepTab(0, 3, 'ArrowRight')).toBe(1);
+    expect(stepTab(2, 3, 'ArrowRight')).toBe(0);
+    expect(stepTab(0, 3, 'ArrowLeft')).toBe(2);
+    expect(stepTab(1, 3, 'Home')).toBe(0);
+    expect(stepTab(1, 3, 'End')).toBe(2);
+    expect(stepTab(1, 3, 'Enter')).toBeUndefined();
+    expect(stepTab(0, 0, 'ArrowRight')).toBeUndefined();
   });
 });
 

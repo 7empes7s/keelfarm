@@ -34,7 +34,7 @@ import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from 
 import { conversationsView, loadChats, openConversation, pinConversation, searchConversations, startConversation } from '../shared/conversations.ts';
 import { loadMemory, removeNote, saveNote, type MemoryNote } from '../shared/ceoMemory.ts';
 import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
-import { forwardText } from '../shared/chat.ts';
+import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
@@ -138,7 +138,7 @@ export class Swarm extends SwarmCeoTools {
         })),
         requests: (loaded.requests ?? []).map((raw) => legacyRequest<HireRequestView>(raw)),
         ceo: { ...this.state.ceo, ...loaded.ceo, followups: loadFollowups(loaded.ceo?.followups), chats: loadChats(loaded.ceo?.chats, loaded.messages ?? [], Date.now()), remember: loadMemory(loaded.ceo?.remember) },
-        messages: loaded.messages ?? [],
+        messages: hideHarness(loaded.messages ?? []),
         phoneReadAt: loaded.phoneReadAt ?? 0,
         notices: keepNotices(loaded.notices, Date.now()),
         prLimits: loaded.prLimits ?? 1,
@@ -702,7 +702,7 @@ export class Swarm extends SwarmCeoTools {
     if (typeof patch.projectsDir === 'string' && patch.projectsDir.trim()) s.projectsDir = path.resolve(patch.projectsDir.trim());
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
-    if (typeof patch.autoUpdate === 'boolean') s.autoUpdate = patch.autoUpdate;
+    for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
     if (patch.trimIdleDesksMin !== undefined) {

@@ -28,8 +28,9 @@ export abstract class SwarmReactions extends SwarmUpdate {
     this.save();
   }
 
-  /** Moves the status reaction of the manager's messages (`open`: those the CEO has in hand; shared/reactions.ts) and tells the phones and Telegram. */
+  /** Moves the status reaction of the manager's messages (`open`: those the CEO has in hand; shared/reactions.ts) and tells the phones and Telegram. Off unless Settings → Status reactions (#193). */
   protected markStatus(ids: readonly number[] | 'open', ev: StatusEvent) {
+    if (!this.state.settings.statusReactions) return;
     const moved = new Map<StatusReaction, PhoneMessage[]>();
     for (const m of this.state.messages) {
       if (m.from !== 'manager' || (ids === 'open' ? !isOpen(m) : !ids.includes(m.id))) continue;

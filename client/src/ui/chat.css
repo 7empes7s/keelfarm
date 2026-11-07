@@ -348,3 +348,35 @@
 .a11y-chat-preview {
   border-radius: var(--ds-radius-md);
 }
+
+/* full screen (#201): ⛶'s icon at about 55% of its button; the messages in a reading column of about 760px, the CEO's
+   code, tables and charts running wider (up to about 1100px) when the window has room */
+.chat-full-btn svg {
+  width: 55%;
+  height: 55%;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-full .chat-log-wrap {
+  container-type: inline-size;
+}
+.chat-full .chat-log {
+  padding-inline: max(10px, calc((100cqi - 760px) / 2));
+}
+.chat-full .chat-log > .bubble-row:has(> .bubble-them :is(pre, table, .md-code, .viz-svg)) {
+  margin-inline: calc(-1 * min(170px, max(0px, (100cqi - 780px) / 2)));
+}
+/* the chat's ⋯ only where its header has room for it; ⛶ is always there */
+.phone-chat,
+.pk-dock {
+  container: chatbox / inline-size;
+}
+@container chatbox (max-width: 519px) {
+  .chat-more {
+    display: none;
+  }
+}

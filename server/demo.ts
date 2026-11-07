@@ -35,7 +35,7 @@ import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
-import { demoPrFiles, pastPulls } from './demoMap.ts';
+import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -226,7 +226,7 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
 {
   const r = repos.get(CI_DOWN_REPO)!;
   const n = r.nextNumber++;
-  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3] };
+  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.' };
   r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
 }
 
@@ -406,9 +406,10 @@ function qaScript(cb: SessionCallbacks, pr: number, title: string, round: number
     [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
     () => cb.screenshot(Buffer.from(screenshotSvg(`QA · ${title}`, `localhost:${port}`, hue)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
-    [{ kind: 'tool', tool: 'mcp__playwright__browser_click', text: '⏺ 🌐 click "Add todo" button' }, { kind: 'result', text: '  ⎿ Clicked' }],
+    () => cb.browserUrl(`http://localhost:${port}${demoQaPage(pr)}`),
+    [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}${demoQaPage(pr)}` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}${demoQaPage(pr)}` }],
     [{ kind: 'tool', tool: 'mcp__playwright__browser_resize', text: '⏺ 🌐 resize 375x740' }, { kind: 'result', text: '  ⎿ Resized' }],
-    () => cb.screenshot(Buffer.from(screenshotSvg(`QA · mobile · ${title}`, `localhost:${port}`, (hue + 40) % 360)), 'image/svg+xml'),
+    () => cb.screenshot(Buffer.from(screenshotSvg(`QA · mobile · ${demoQaPage(pr)}`, `localhost:${port}${demoQaPage(pr)}`, (hue + 40) % 360)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
     [{ kind: 'tool', tool: 'mcp__playwright__browser_console_messages', text: '⏺ 🌐 console_messages' }, { kind: 'result', text: '  ⎿ No errors' }],
   ];
@@ -562,7 +563,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
             { command: 'npm test -- --run', result: '41 passed' },
             { command: 'npm run lint && npm run build', result: 'clean, built in 1.84s' },
           ],
-          screenshots: ['Desktop view after the change', 'Mobile view at 375px'],
+          screenshots: ['Home page', 'The changed page at 375px'],
           fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
         },
       });
@@ -610,6 +611,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
         failedChecks: [],
         pendingChecks: [],
         files: demoPrFiles(fullName, repo.issues.find((i) => i.number === number), number),
+        summary: demoPrSummary(repo.issues.find((i) => i.number === number)),
       });
       runChecks(repo.pulls[0]);
       cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);

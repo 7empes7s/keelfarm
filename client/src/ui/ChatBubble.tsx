@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useStore } from '../store';
 import type { Delivery, PhoneMessage } from '../../../shared/types';
-import { DELIVERY_LABEL, excerpt } from '../../../shared/chat';
+import { DELIVERY_LABEL, excerpt, messageLook } from '../../../shared/chat';
 import { officeText } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
 import { RefChip } from './RefChips';
@@ -13,7 +13,7 @@ import { ArtifactCard } from './ChatArtifacts';
 import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { LongText, StepsList } from './ChatLive';
-import { ActionCards, NoticeCard } from './ChatCards';
+import { ActionCards, NoticeCard, NoticePill } from './ChatCards';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
@@ -106,7 +106,10 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; at: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
-  if (m?.from === 'office') return m.notice ? <NoticeCard text={officeText(m.text)} notice={m.notice} /> : <div className="bubble-office">{officeText(m.text)}</div>;
+  const look = m ? messageLook(m) : 'bubble';
+  if (look === 'hidden') return null; // the CLI's own output (#193) stays backend
+  if (m?.notice && look === 'card') return <NoticeCard text={officeText(m.text)} notice={m.notice} />;
+  if (m && look === 'pill') return <NoticePill text={officeText(m.text)} />;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
