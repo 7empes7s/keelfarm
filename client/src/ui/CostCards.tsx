@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { fmtUsd } from '../ops';
 import { useStore } from '../store';
 import { costInsights, KIND_GROUP_LABELS, kindGroup, wasteGroups, type CostItem, type CostsView, type CostWaste, type KindGroup, type WasteGroup } from '../../../shared/costs';
@@ -6,6 +6,7 @@ import { dayKey } from '../../../shared/journal';
 import { ago } from '../../../shared/usage';
 import { spendLimit } from '../../../shared/progressBars';
 import { ProgressBar } from './ProgressBar';
+import { HoverCard, PeekCard } from './HoverCard';
 import type { RepoView } from '../../../shared/types';
 
 // Mission control → Where the plan goes (#106): the insight strip, the most expensive issues as ranked cards and the
@@ -54,33 +55,57 @@ const KIND_TONE: Record<KindGroup, string> = { build: 'var(--ds-series-1)', qa: 
 export function InsightStrip({ view, floorName, onCause }: { view: CostsView; floorName: (id: string) => string; onCause: (cause: string) => void }) {
   const i = costInsights(view, dayKey(Date.now()));
   const spend = i.today && spendLimit(i.today);
+  // Each stat explains itself on hover or focus (#213): what it means, how it's counted, its last 7 days.
+  const week = view.byDay.slice(0, 7).reverse();
+  const tip = (title: string, children: ReactElement<Record<string, unknown>>, means: string, counted: string, spark?: number[]) => (
+    <HoverCard label={title} peek={<PeekCard title={title} sub={means} stats={[['How it’s counted', counted]]} spark={spark} note={spark && spark.length > 1 ? `The last ${spark.length} days, oldest first` : undefined} />}>
+      {children}
+    </HoverCard>
+  );
   return (
     <div className="costs-stats">
-      {i.today && (
-        <button className="costs-stat" onClick={() => jump('costs-days')}>
-          <span className="costs-stat-label">Today</span>
-          <b className="costs-stat-value">{fmtUsd(i.today.usd)}</b>
-          <span className="costs-stat-note">
-            <Change change={i.today.change} /> vs {fmtUsd(i.today.avg)} a day
-          </span>
-          {spend && <ProgressBar label="Of a usual day" value={pct(i.today.usd / i.today.avg)} pct={spend.pct} tone={spend.tone} compact aria={`Today's spend: ${fmtUsd(i.today.usd)}, ${pct(i.today.usd / i.today.avg)} of the 7-day average`} />}
-        </button>
-      )}
-      <button className="costs-stat" onClick={() => jump(view.byDay.length > 1 ? 'costs-days' : 'costs-floors')}>
-        <span className="costs-stat-label">Per merge</span>
-        <b className="costs-stat-value">{view.total.perMerge === null ? '—' : fmtUsd(view.total.perMerge)}</b>
-        <Sparkline points={i.perMerge.points} />
-        {i.perMerge.change !== null && (
-          <span className="costs-stat-note">
-            <Change change={i.perMerge.change} /> over the days
-          </span>
+      {i.today &&
+        tip(
+          'Today',
+          <button className="costs-stat" onClick={() => jump('costs-days')}>
+            <span className="costs-stat-label">Today</span>
+            <b className="costs-stat-value">{fmtUsd(i.today.usd)}</b>
+            <span className="costs-stat-note">
+              <Change change={i.today.change} /> vs {fmtUsd(i.today.avg)} a day
+            </span>
+            {spend && <ProgressBar label="Of a usual day" value={pct(i.today.usd / i.today.avg)} pct={spend.pct} tone={spend.tone} compact aria={`Today's spend: ${fmtUsd(i.today.usd)}, ${pct(i.today.usd / i.today.avg)} of the 7-day average`} />}
+          </button>,
+          'What the agents and the CEO spent since midnight, against a usual day.',
+          'Every finished session’s cost in the ledger today; a usual day is the 7-day average',
+          week.map((d) => d.usd),
         )}
-      </button>
-      <button className="costs-stat" onClick={() => jump('costs-waste')}>
-        <span className="costs-stat-label">Waste</span>
-        <b className="costs-stat-value">{i.wasteShare === null ? '—' : pct(i.wasteShare)}</b>
-        <span className="costs-stat-note">of spend, {fmtUsd(view.total.wasteUsd)}</span>
-      </button>
+      {tip(
+        'Per merge',
+        <button className="costs-stat" onClick={() => jump(view.byDay.length > 1 ? 'costs-days' : 'costs-floors')}>
+          <span className="costs-stat-label">Per merge</span>
+          <b className="costs-stat-value">{view.total.perMerge === null ? '—' : fmtUsd(view.total.perMerge)}</b>
+          <Sparkline points={i.perMerge.points} />
+          {i.perMerge.change !== null && (
+            <span className="costs-stat-note">
+              <Change change={i.perMerge.change} /> over the days
+            </span>
+          )}
+        </button>,
+        'What one merged PR costs, everything included.',
+        'All sessions’ cost (builds, QA, fixes, the CEO) over the merges in the window',
+        week.flatMap((d) => (d.perMerge === null ? [] : [d.perMerge])),
+      )}
+      {tip(
+        'Waste',
+        <button className="costs-stat" onClick={() => jump('costs-waste')}>
+          <span className="costs-stat-label">Waste</span>
+          <b className="costs-stat-value">{i.wasteShare === null ? '—' : pct(i.wasteShare)}</b>
+          <span className="costs-stat-note">of spend, {fmtUsd(view.total.wasteUsd)}</span>
+        </button>,
+        'Spend that didn’t lead anywhere.',
+        'Sessions that failed, were stopped or redone, as a share of all spend',
+        week.map((d) => d.wasteUsd),
+      )}
       {i.biggestCause && (
         <button
           className="costs-stat"

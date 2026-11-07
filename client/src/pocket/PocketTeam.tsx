@@ -11,6 +11,8 @@ import { MessageBox } from '../ui/MessageBox';
 import { badgeStatus, StatusPill as Status } from '../ui/StatusPill';
 import { agentPhrase } from '../ui/statusPhrase';
 import { AgentRing } from '../ui/AgentRing';
+import { HoverCard } from '../ui/HoverCard';
+import { AgentPeek } from '../ui/Peeks';
 import { TaskRing } from '../ui/TaskProgress';
 import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
@@ -63,7 +65,9 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
   return (
     <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : ''}`}>
       <button type="button" className="pk-agent-head pk-agent-open" title={`Open ${agent.name}'s window`} onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
-        <AgentRing agent={agent} />
+        <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
+          <AgentRing agent={agent} />
+        </HoverCard>
         <span className="grow">
           <span>
             <b>{agent.name}</b> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
