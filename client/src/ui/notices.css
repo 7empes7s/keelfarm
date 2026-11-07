@@ -76,14 +76,7 @@
   position: absolute;
   top: 2px;
   right: 2px;
-  width: var(--ds-target);
-  height: var(--ds-target);
-  border: 0;
-  background: none;
   color: inherit;
-  font-size: 1rem;
-  cursor: pointer;
-  border-radius: var(--ds-radius-md);
 }
 .notice-x:hover,
 .notice-body:hover {

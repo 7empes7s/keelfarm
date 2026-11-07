@@ -349,7 +349,7 @@ html[data-typing] .working-next {
   font-size: 0.7rem;
   line-height: 1.2;
 }
-/* ↻ and ✕ on a tray item: the shared 44 px icon button, the glyph kept small. */
+/* ↻ on a failed tray item: the shared 44 px icon button, the glyph kept small. */
 .attach-item .attach-btn {
   font-size: var(--ds-text-sm);
 }

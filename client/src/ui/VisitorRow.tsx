@@ -1,4 +1,5 @@
 import type { VisitorView } from '../../../shared/types';
+import { Icon } from './Icon';
 
 // One visitor in the people list (VisitorsList.tsx). Their name is rendered as text, so whatever someone calls
 // themselves stays text (VisitorRow.test.tsx).
@@ -12,7 +13,13 @@ export function VisitorRow({ v, where, following, onFollow }: { v: VisitorView; 
         <span className="wk-last">{where}</span>
       </span>
       <button className={`btn btn-small vs-follow ${following ? 'vs-on' : ''}`} onClick={onFollow} title={following ? `Stop following ${v.name}` : `Follow ${v.name} with the camera`}>
-        {following ? 'Stop' : '👀 Follow'}
+        {following ? (
+          'Stop'
+        ) : (
+          <>
+            <Icon name="eye" /> Follow
+          </>
+        )}
       </button>
     </div>
   );

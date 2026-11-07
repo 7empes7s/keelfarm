@@ -1,0 +1,30 @@
+/* The office's icons (#134, ui/Icon.tsx): a Lucide glyph in the text's colour, and the shared close button. */
+.ds-icon {
+  width: var(--ds-icon, 1.2em);
+  height: var(--ds-icon, 1.2em);
+  flex: none;
+  vertical-align: -0.22em;
+}
+/* The shared close button: a soft round fill, no outline, the x at 24px. */
+.ds-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-line);
+  color: var(--ds-text);
+  cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
+  transition: background var(--ds-dur-fast);
+}
+.ds-close:hover {
+  background: var(--ds-line-strong);
+}
+.ds-close:active {
+  transform: scale(0.94);
+}

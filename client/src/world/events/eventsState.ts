@@ -76,7 +76,7 @@ export function triggerEvent(id: EventId, side?: Side, forced = true): EventRun 
   startRunning(state.director, run.key, id, run.seconds);
   state.history.push({ id, side: run.side, at: Date.now(), forced });
   if (state.history.length > HISTORY) state.history.splice(0, state.history.length - HISTORY);
-  if (EVENTS[id].toast) useStore.getState().pushToast('info', `👀 Something's happening outside, ${run.side} side!`);
+  if (EVENTS[id].toast) useStore.getState().pushToast('info', `Something's happening outside, ${run.side} side!`);
   publish();
   return run;
 }

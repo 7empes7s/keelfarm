@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from '../store';
 import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
+import { Icon } from './Icon';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 import { openTextPill } from './ChatZoom';
@@ -46,7 +47,7 @@ export function ChatActionsSheet({ text, ceoName, onFiles, onResearch, onQuick }
       <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => take(e.currentTarget)} />
       <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => take(e.currentTarget)} />
       <button type="button" className="chat-plus" aria-label="More: attach, research, quick prompts" aria-haspopup="dialog" aria-expanded={open} title="Attach, research, quick prompts" onClick={() => setOpen(true)}>
-        ➕
+        <Icon name="plus" />
       </button>
       {open && <Sheet actions={composerActions(text, touch)} ceoName={ceoName} onPick={run} onClose={() => setOpen(false)} />}
     </>
@@ -62,7 +63,7 @@ function Sheet({ actions, ceoName, onPick, onClose }: { actions: SheetAction[]; 
   const tools = actions.filter((a) => !a.id.startsWith('quick:'));
   const button = (a: SheetAction) => (
     <button key={a.id} type="button" className={a.id.startsWith('quick:') ? 'chat-sheet-quick' : 'chat-sheet-item'} disabled={a.disabled} onClick={() => onPick(a.id)}>
-      {a.label}
+      {a.icon && <Icon name={a.icon} />} {a.label}
     </button>
   );
   return (
@@ -113,19 +114,19 @@ export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onF
   const tools = (
     <>
       <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Conversations and search" title="Conversations: a new one, an earlier one, search them all, and what the CEO remembers">
-        🔍
+        <Icon name="search" />
         <XLabel text="Conversations" />
       </button>
       {artifacts > 0 && (
         <button type="button" className="chat-tool xbtn" onClick={onArtifacts} aria-haspopup="dialog" aria-label={`Artifacts (${artifacts})`} title="Every artifact in this conversation, newest first">
-          📄
+          <Icon name="file-text" />
           <XLabel text="Artifacts" />
           <span className="badge badge-dot chat-tool-n" aria-hidden>{artifacts}</span>
         </button>
       )}
       {files > 0 && (
         <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-haspopup="dialog" aria-label={`Files (${files})`} title="Every file in this conversation: keep or delete them">
-          📎
+          <Icon name="paperclip" />
           <XLabel text="Files" />
           <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
         </button>
@@ -193,7 +194,7 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
       title={on ? `Hands-free is on: after ${ceoName}'s spoken reply the phone listens for up to 8 s and sends what you say. Esc or M closes the mic.` : why || `Hands-free: talk with ${ceoName} without touching anything`}
       onClick={() => void setHandsFree(!on, ceoName)}
     >
-      🎧
+      <Icon name="headphones" />
       <XLabel text={on ? 'Hands-free on' : 'Hands-free'} />
     </button>
   );

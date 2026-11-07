@@ -8,6 +8,8 @@ import { DecisionLog } from './DecisionLog';
 import { CLAUDE_MODELS, effectiveModel, labelOf, modelAfterCliChange } from '../../../shared/models';
 import { ModelPicker } from './ModelPicker';
 import { attempt, Avatar } from './phoneParts';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 // Team changes on the phone and in the lobby: a new agent's setup, the résumé card that approves or rejects a change, and the list.
 
@@ -100,10 +102,10 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
         <label className="field" htmlFor={`${id}-host`}>
           <span>Works on</span>
           <select id={`${id}-host`} value={value.host} disabled={disabled} onChange={(e) => set({ host: e.target.value as MachineHost | '' })}>
-            <option value="">{settings.cloud.machineKind === 'box' ? '☁️ Upstash Box' : '🖥️ This computer'} (default)</option>
-            <option value="local">🖥️ This computer</option>
+            <option value="">{settings.cloud.machineKind === 'box' ? 'Upstash Box' : 'This computer'} (default)</option>
+            <option value="local">This computer</option>
             <option value="box" disabled={cli === 'opencode'}>
-              ☁️ Upstash Box{cli === 'opencode' ? " (OpenCode can't run there)" : ''}
+              Upstash Box{cli === 'opencode' ? " (OpenCode can't run there)" : ''}
             </option>
           </select>
         </label>
@@ -138,7 +140,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
     await attempt(fn);
     setBusy(false);
   };
-  const outcome = req.status === 'approved' ? (hire ? '✅ hired' : '👋 left') : hire ? '✋ declined' : '🤝 kept';
+  const [outIcon, outcome]: [IconName, string] = req.status === 'approved' ? (hire ? ['circle-check', 'hired'] : ['hand', 'left']) : hire ? ['hand', 'declined'] : ['handshake', 'kept'];
   return (
     <div ref={ref} className={`resume ${hire ? '' : 'resume-letgo'} ${highlight ? 'resume-hot' : ''} ${pending ? '' : 'resume-done'}`}>
       <div className="resume-head">
@@ -147,7 +149,11 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
           <div className="resume-name">{hire ? name : `Let ${req.name} go?`}</div>
           <div className="resume-title">{hire ? 'A new agent' : 'Leaving the team'}</div>
         </div>
-        {!pending && <span className={`chip ${req.status === 'approved' ? 'chip-good' : ''}`}>{outcome}</span>}
+        {!pending && (
+          <span className={`chip ${req.status === 'approved' ? 'chip-good' : ''}`}>
+            <Icon name={outIcon} /> {outcome}
+          </span>
+        )}
       </div>
       <div className="resume-meta">
         <span className="chip" style={{ background: repo?.color }}>
@@ -158,7 +164,9 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
       {req.reason && <Markdown className="resume-reason" text={req.reason} />}
       {hire && (
         <div className="resume-meta small">
-          <span className="grow">⚙️ {setupLine(pending ? setup : req, settings, clis, models)}</span>
+          <span className="grow">
+            <Icon name="settings" /> {setupLine(pending ? setup : req, settings, clis, models)}
+          </span>
           {pending && (
             <button className="linkish small" aria-expanded={editing} onClick={() => setEditing(!editing)}>
               {editing ? 'Done' : 'Change'}
@@ -204,7 +212,9 @@ export function LobbyNudge() {
   if (!n) return null;
   return (
     <div className="phone-nudge" role="status">
-      <span>🪑</span>
+      <span>
+        <Icon name="armchair" />
+      </span>
       <span className="grow">
         {n} new agent{n === 1 ? ' is' : 's are'} waiting in the lobby
       </span>
@@ -224,7 +234,9 @@ export function TeamChanges({ focusId }: { focusId?: string }) {
   const decided = requests.filter((r) => r.status !== 'pending').slice(-8).reverse();
   return (
     <div className="phone-scroll">
-      <h3 className="phone-h">👥 Waiting on you {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
+      <h3 className="phone-h">
+        <Icon name="users" /> Waiting on you {pending.length > 0 && <span className="badge">{pending.length}</span>}
+      </h3>
       {pending.length === 0 && <p className="muted small phone-empty">Nothing waiting. When the CEO wants a floor's team to grow or shrink, the change shows up here for your OK.</p>}
       {pending.map((r) => (
         <Resume key={r.id} req={r} highlight={r.id === focusId} />
@@ -235,10 +247,10 @@ export function TeamChanges({ focusId }: { focusId?: string }) {
         <div className="row wrap">
           <span className="muted small">Demo:</span>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(() => api.demoPropose('hire'))}>
-            👥 Grow a floor
+            <Icon name="users" /> Grow a floor
           </button>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(() => api.demoPropose('let-go'))}>
-            ✉️ Shrink a floor
+            <Icon name="mail" /> Shrink a floor
           </button>
         </div>
       )}

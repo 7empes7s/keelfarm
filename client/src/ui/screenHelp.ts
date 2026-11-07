@@ -19,7 +19,7 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
   company: {
     title: 'Company',
     shows: "Every floor's pipeline at a glance: building, in QA, fixing, ready and what needs you, plus Claude's usage and the CEO.",
-    actions: ['Tap Board or Team on a floor to see its work and people.', 'Tick off the guide card to get the most from the office.', 'Search anything with 🔍 at the top.'],
+    actions: ['Tap Board or Team on a floor to see its work and people.', 'Tick off the guide card to get the most from the office.', 'Search anything from the search box at the top.'],
     docs: `${HOW}#how-an-issue-flows-through-the-office`,
   },
   kanban: {
@@ -55,7 +55,7 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
   team: {
     title: 'Team',
     shows: 'Each floor’s agents, their coding agent, model, effort and look.',
-    actions: ['Add an agent to a floor.', 'Change an agent’s model or effort.', 'Let an agent go from its ⋯ menu.'],
+    actions: ['Add an agent to a floor.', 'Change an agent’s model or effort.', 'Let an agent go from its options menu.'],
     docs: `${DOCS}agents.md`,
   },
   ops: {

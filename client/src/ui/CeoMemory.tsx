@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { MEMORY_MAX_NOTES, MEMORY_NOTE_MAX, MEMORY_TOTAL_MAX, searchNotes, type MemoryNote } from '../../../shared/ceoMemory';
 import { Sheet } from './ChatArtifacts';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 
@@ -31,7 +32,7 @@ function NoteRow({ n }: { n: MemoryNote }) {
     <li className="memory-note row">
       <span className="grow">{n.text}</span>
       <button type="button" className="btn btn-small" onClick={() => setText(n.text)} aria-label={`Edit the note “${n.text}”`}>
-        ✏️
+        <Icon name="pencil" />
       </button>
       <Menu
         label={`More for the note “${n.text}”`}
@@ -83,7 +84,7 @@ export function CeoMemory({ ceoName, onClose }: { ceoName: string; onClose: () =
         >
           <textarea className="memory-input" value={draft} maxLength={MEMORY_NOTE_MAX} onChange={(e) => setDraft(e.target.value)} placeholder="Remember this… (e.g. “Ship on Fridays only after QA”)" aria-label={`A note for ${ceoName} to remember`} />
           <button className="btn btn-small btn-good" disabled={!draft.trim() || notes.length >= MEMORY_MAX_NOTES}>
-            📌 Remember
+            <Icon name="pin" /> Remember
           </button>
         </form>
         <h3 className="memory-h">{ceoName}'s own notes</h3>

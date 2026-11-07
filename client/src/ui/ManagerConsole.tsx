@@ -28,6 +28,7 @@ import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
+import { Icon } from './Icon';
 
 // The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
 
@@ -62,7 +63,7 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
     <div className="card office-card">
       <div className="row wrap">
         <span className="floor-badge office-badge" aria-hidden>
-          🏢
+          <Icon name="building-2" />
         </span>
         <div className="grow">
           <b>Office</b> <span className="muted small">running {commit ? <code>{commit}</code> : 'an unknown commit'}</span>
@@ -111,7 +112,7 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
         <div className="row wrap">
           <span className="muted small">Demo:</span>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
-            ⟳ Simulate an office update
+            <Icon name="refresh-cw" /> Simulate an office update
           </button>
         </div>
       )}
@@ -144,7 +145,11 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           <a className="ds-row-title floor-name" href={repo.url} target="_blank" rel="noreferrer" title={repo.fullName}>
             {repo.fullName}
           </a>
-          {repo.summary && <div className="ds-row-meta">🧠 {repo.summary}</div>}
+          {repo.summary && (
+            <div className="ds-row-meta">
+              <Icon name="brain" /> {repo.summary}
+            </div>
+          )}
         </div>
         {!pocket && (
           <button className="btn btn-small" onClick={() => goToFloor(repo.floor)}>
@@ -155,7 +160,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           label={`Manage floor ${repo.floor}`}
           title={repo.fullName}
           items={[
-            { label: '⟳ Sync the folder now', hint: "Fast-forward it to GitHub's default branch, when that's safe", onSelect: () => void attempt(() => api.syncFolder(repo.id)) },
+            { label: 'Sync the folder now', hint: "Fast-forward it to GitHub's default branch, when that's safe", onSelect: () => void attempt(() => api.syncFolder(repo.id)) },
             { label: 'Disconnect…', hint: 'Everyone on this floor is let go', danger: true, onSelect: disconnect },
           ]}
         />
@@ -167,7 +172,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
       <details className="small">
         <summary>Details</summary>
         <div className="ds-row-meta" title={repo.localPath ? 'Your own project folder' : 'A clone the office manages'}>
-          📁 <code>{repo.checkoutPath}</code> · default branch <code>{repo.defaultBranch}</code>
+          <Icon name="folder" /> <code>{repo.checkoutPath}</code> · default branch <code>{repo.defaultBranch}</code>
           {officeFolder ? " · the office's own folder, updated from the Office row" : repo.folderSync && <span title={repo.folderSync}> · {repo.folderSync}</span>}
         </div>
       </details>
@@ -175,21 +180,23 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
       {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
       <div className="ds-switches">
         <label className="toggle floor-colour">
-          <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} aria-label={`Floor ${repo.floor} colour`} /> 🎨 Floor colour
+          <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} aria-label={`Floor ${repo.floor} colour`} /> <Icon name="palette" /> Floor colour
         </label>
         <label className="toggle">
-          <input type="checkbox" checked={repo.autoAssign} onChange={(e) => patch({ autoAssign: e.target.checked })} /> ⚡ Auto-assign issues
+          <input type="checkbox" checked={repo.autoAssign} onChange={(e) => patch({ autoAssign: e.target.checked })} /> <Icon name="zap" /> Auto-assign issues
         </label>
         <label className="toggle" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
-          <input type="checkbox" checked={repo.autoMerge} onChange={(e) => patch({ autoMerge: e.target.checked })} /> 🔀 Auto-merge
+          <input type="checkbox" checked={repo.autoMerge} onChange={(e) => patch({ autoMerge: e.target.checked })} /> <Icon name="git-merge" /> Auto-merge
         </label>
         <label className="toggle">
-          <input type="checkbox" checked={repo.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> 🌐 Browser testing (Playwright MCP)
+          <input type="checkbox" checked={repo.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> <Icon name="globe" /> Browser testing (Playwright MCP)
         </label>
       </div>
       {others.length > 0 && (
         <div className="ds-switches links">
-          <span className="ds-row-meta">🔗 Agents here may read:</span>
+          <span className="ds-row-meta">
+            <Icon name="link" /> Agents here may read:
+          </span>
           {others.map((o) => (
             <label key={o.id} className="toggle small">
               <input
@@ -204,7 +211,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
       )}
       <details className="small preview-details">
         <summary>
-          🖥️ App preview · <PreviewPill status={repo.preview.status} />
+          <Icon name="monitor" /> App preview · <PreviewPill status={repo.preview.status} />
           {repo.previewConfig.command ? (
             <>
               {' '}
@@ -231,14 +238,18 @@ export function FloorsTab() {
     <div className="tab-grid">
       <div>
         {officeUpdate && <OfficeRow update={officeUpdate} />}
-        <h3 className="section">🏢 Floors</h3>
+        <h3 className="section">
+          <Icon name="building-2" /> Floors
+        </h3>
         {repos.length === 0 && <EmptyState kind="projects" onAction={() => document.getElementById('add-project')?.scrollIntoView({ block: 'center' })} />}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
           <FloorRow key={r.id} repo={r} all={repos} />
         ))}
       </div>
       <div className="card" id="add-project">
-        <h3>➕ Add a project</h3>
+        <h3>
+          <Icon name="plus" /> Add a project
+        </h3>
         <ProjectPicker />
       </div>
     </div>
@@ -259,7 +270,15 @@ function FloorBrief({ repo }: { repo: RepoView }) {
           <b className="ds-row-title" title={repo.fullName}>
             {repo.fullName}
           </b>
-          <div className="ds-row-meta">{repo.summary ? `🧠 ${repo.summary}` : 'The CEO has not studied this floor yet.'}</div>
+          <div className="ds-row-meta">
+            {repo.summary ? (
+              <>
+                <Icon name="brain" /> {repo.summary}
+              </>
+            ) : (
+              'The CEO has not studied this floor yet.'
+            )}
+          </div>
         </div>
         <button className="btn btn-small btn-ghost" onClick={() => void attempt(() => api.onboardFloor(repo.id))} title="Study the repo again and rethink the plan and the team's size">
           Re-study
@@ -273,10 +292,20 @@ function FloorBrief({ repo }: { repo: RepoView }) {
         <span className="spacer" />
         <label className="toggle small" title="The CEO looks at current docs, how others do it and your connected apps first, and brings you options with sources. Your pick becomes the plan.">
           <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} />
-          <span>🔎 Research first</span>
+          <span>
+            <Icon name="search" /> Research first
+          </span>
         </label>
         <button className="btn btn-small btn-good" disabled={!mission.trim()} onClick={() => void attempt(() => api.planFloor(repo.id, mission, research))}>
-          {research ? '🔎 Ask the CEO to research it' : '🧠 Ask the CEO to plan it'}
+          {research ? (
+            <>
+              <Icon name="search" /> Ask the CEO to research it
+            </>
+          ) : (
+            <>
+              <Icon name="brain" /> Ask the CEO to plan it
+            </>
+          )}
         </button>
       </div>
       <details className="small">
@@ -409,14 +438,14 @@ export function CeoTab() {
           <div className="row wrap">
             {working && (
               <button className="btn btn-small btn-bad" onClick={() => void attempt(() => api.stop(ceo.id))}>
-                ■ Stop
+                <Icon name="square" /> Stop
               </button>
             )}
             <button className="btn btn-small" disabled={repos.length === 0} onClick={() => void attempt(() => api.ceoReview())}>
-              🔎 Review the company now
+              <Icon name="search" /> Review the company now
             </button>
             <button className="btn btn-small" onClick={() => openOverlay({ kind: 'phone', tab: 'chat' })}>
-              📱 Open the phone
+              <Icon name="smartphone" /> Open the phone
             </button>
           </div>
         </div>
@@ -424,7 +453,9 @@ export function CeoTab() {
       <div>
         <CeoSession />
         <CeoMandates />
-        <h3 className="section">📄 Team changes {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
+        <h3 className="section">
+          <Icon name="file-text" /> Team changes {pending.length > 0 && <span className="badge">{pending.length}</span>}
+        </h3>
         {pending.length === 0 && <p className="muted small">None waiting. The CEO grows or shrinks a floor's team when its work calls for it (CEO settings → Team changes from the CEO).</p>}
         {pending.map((r) => (
           <Resume key={r.id} req={r} />
@@ -437,7 +468,9 @@ export function CeoTab() {
             ))}
           </details>
         )}
-        <h3 className="section">🗺️ Project briefs</h3>
+        <h3 className="section">
+          <Icon name="map" /> Project briefs
+        </h3>
         <OfficePlaybook />
         {repos.length === 0 && <p className="muted small">Connect a repo first.</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
@@ -548,7 +581,7 @@ export function TeamTab() {
                         <NameInput agent={a} />
                         {a.host === 'box' && (
                           <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
-                            ☁
+                            <Icon name="cloud" />
                           </span>
                         )}
                         <StatusPill status={badgeStatus(a)} phrase={agentPhrase(a, { autoAssign: repo.autoAssign })} />
@@ -582,14 +615,14 @@ export function TeamTab() {
                         <div className="ds-row-actions">
                           {a.host === 'box' && a.needsSignIn && (
                             <button className="btn btn-small btn-good" title={`${a.name}'s cloud machine needs you to sign their coding agent in`} onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
-                              🔑 Sign in
+                              <Icon name="key-round" /> Sign in
                             </button>
                           )}
                           <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: a.id })}>
                             Terminal
                           </button>
                           <button className="btn btn-small btn-ghost" aria-expanded={openLook === a.id} title={`${a.name}'s look`} onClick={() => setOpenLook(openLook === a.id ? null : a.id)}>
-                            🎨 Look
+                            <Icon name="palette" /> Look
                           </button>
                           <Menu label={`More for ${a.name}`} title={a.name} items={[{ label: `Let ${a.name} go…`, hint: 'Their worktree is removed', danger: true, onSelect: () => void letGo(a) }]} />
                         </div>
@@ -630,7 +663,9 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
   return (
     <div className="tab-grid">
       <div className="card">
-        <h3>📝 File a new issue</h3>
+        <h3>
+          <Icon name="notebook-pen" /> File a new issue
+        </h3>
         <select value={repoId} onChange={(e) => setRepoId(e.target.value)} aria-label="Floor">
           {repos.map((r) => (
             <option key={r.id} value={r.id}>

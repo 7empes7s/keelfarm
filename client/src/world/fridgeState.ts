@@ -124,13 +124,13 @@ export function fridgeAction(op: 'door' | 'take' | 'lunch', snack?: SnackId) {
     return;
   }
   if (op === 'lunch') {
-    s.pushToast('info', `🥡 “${lunch}”. Best leave it.`);
+    s.pushToast('info', `“${lunch}”. Best leave it.`);
     return;
   }
   if (!snack || !isSnackId(snack)) return;
   const def = SNACKS[snack];
   if (s.held) {
-    s.pushToast('info', s.held.kind === 'snack' ? `${SNACKS[s.held.snack].emoji} One at a time: finish that one first (E)` : '🙌 Your hands are full');
+    s.pushToast('info', s.held.kind === 'snack' ? `${SNACKS[s.held.snack].emoji} One at a time: finish that one first (E)` : 'Your hands are full');
     return;
   }
   if (!take(snack)) {

@@ -9,6 +9,7 @@ import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
 import { VIEWPORT_EVENT } from '../viewport';
 import { socketUrl } from '../socketUrl';
 import { liveStatus, TERM_FONT } from './termLayout';
+import { Icon } from './Icon';
 
 // An agent's real terminal: their CLI's screen streamed from the office (/ws/term), and what you type sent back to it.
 // Opening it late shows everything so far: the office keeps a copy of each agent's screen and scrollback.
@@ -231,7 +232,7 @@ export function LiveTerminal({
           <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />
           <span className="grow">{status}</span>
           <button type="button" className="live-term-keys-toggle" aria-pressed={keysOn} title={keysOn ? 'Hide the terminal key bar' : 'Show a bar of terminal keys: Esc, Tab, arrows, Ctrl…'} onClick={() => setKeysOn(!keysOn)}>
-            ⌨ Keys
+            <Icon name="keyboard" /> Keys
           </button>
         </div>
       )}

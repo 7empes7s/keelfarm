@@ -16,6 +16,8 @@ import { EmptyState } from '../ui/EmptyState';
 import { useBackLayer } from '../ui/Panel';
 import { DesignDetail, PrDetail, WhyTag } from './ApprovalDetail';
 import './approvals.css';
+import { Icon } from '../ui/Icon';
+import { iconFor } from '../ui/icons';
 import { HoverCard, PeekCard } from '../ui/HoverCard';
 import { agoText, prAdvice } from '../ui/peekFacts';
 
@@ -193,7 +195,7 @@ function Page({ onBack, children }: { onBack: () => void; children: ReactNode })
   return (
     <div className="pk-page apr-page" ref={page}>
       <button className="btn btn-small btn-ghost apr-back" onClick={onBack}>
-        ‹ Approvals
+        <Icon name="chevron-left" /> Approvals
       </button>
       {children}
     </div>
@@ -246,8 +248,8 @@ export function Approvals({ wide }: { wide?: boolean }) {
             <Fragment key={d.key}>
               {h && (
                 <li className="pk-h apr-group">
-                  {h.icon} {h.label}
-                  {d.why === 'charter' && <span className="muted small"> (edit them in ⚙️ → Charter)</span>}
+                  <Icon name={iconFor(h.icon, 'circle-help')} /> {h.label}
+                  {d.why === 'charter' && <span className="muted small"> (edit them in Settings → Charter)</span>}
                 </li>
               )}
               <li>

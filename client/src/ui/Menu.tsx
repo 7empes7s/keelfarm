@@ -4,6 +4,7 @@
 // Outside taps, scrolling and resizing close it. Rules (sections, keys, placement) are pure, in menuLogic.ts.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { pushLayer } from './backStack';
+import { Icon } from './Icon';
 import { menuKey, menuPlacement, menuSections, openKey, type MenuItem } from './menuLogic';
 
 export type { MenuItem } from './menuLogic';
@@ -137,7 +138,7 @@ export function Menu({
       >
         {text && <span>{text}</span>}
         <span aria-hidden className="ds-menu-dots">
-          ⋯
+          <Icon name="ellipsis" />
         </span>
       </button>
       {open && (

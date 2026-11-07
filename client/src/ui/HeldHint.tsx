@@ -4,6 +4,7 @@ import { CHARGE, chargePower } from '../world/toys/hands';
 import { BlasterHud } from './BlasterHud';
 import { decorName } from '../world/decor/actions';
 import { SNACKS } from '../world/fridge';
+import { Icon } from './Icon';
 import { Key } from './Key';
 import { PongHud } from './PongHud';
 
@@ -39,7 +40,7 @@ export function HeldHint() {
   if (held.kind === 'sausage') {
     return (
       <div className="hud-hint hud-held">
-        🌭 {held.bites} {held.bites === 1 ? 'bite' : 'bites'} left{held.charred ? ' (a bit charred)' : ''} · <Key action="interact" /> eat · <Key action="drop" /> drop
+        <Icon name="drumstick" /> {held.bites} {held.bites === 1 ? 'bite' : 'bites'} left{held.charred ? ' (a bit charred)' : ''} · <Key action="interact" /> eat · <Key action="drop" /> drop
       </div>
     );
   }
@@ -55,7 +56,7 @@ export function HeldHint() {
   if (held.kind === 'decor') {
     return (
       <div className="hud-hint hud-held">
-        📦 Carrying the {decorName(held.item).toLowerCase()} · <Key action="interact" /> on a glowing spot places it · <Key action="drop" /> puts it back
+        <Icon name="package" /> Carrying the {decorName(held.item).toLowerCase()} · <Key action="interact" /> on a glowing spot places it · <Key action="drop" /> puts it back
       </div>
     );
   }
@@ -63,14 +64,15 @@ export function HeldHint() {
   if (held.kind === 'sticky') {
     return (
       <div className="hud-hint hud-held">
-        📌 {held.pr ? `PR #${held.number}` : `#${held.number}`} · {held.pr ? "take it to a free agent's desk to have them test it" : "take it to a free agent's desk"} and press <Key action="interact" /> · <Key action="drop" /> elsewhere puts it back
+        <Icon name="pin" /> {held.pr ? `PR #${held.number}` : `#${held.number}`} · {held.pr ? "take it to a free agent's desk to have them test it" : "take it to a free agent's desk"} and press <Key action="interact" /> ·{' '}
+        <Key action="drop" /> elsewhere puts it back
       </div>
     );
   }
   if (held.kind === 'mug') {
     return (
       <div className="hud-hint hud-held">
-        ☕ {held.sips > 0 ? `${held.sips} ${held.sips === 1 ? 'sip' : 'sips'} left` : 'Empty mug'} · <Key action="drop" /> drop
+        <Icon name="coffee" /> {held.sips > 0 ? `${held.sips} ${held.sips === 1 ? 'sip' : 'sips'} left` : 'Empty mug'} · <Key action="drop" /> drop
       </div>
     );
   }
