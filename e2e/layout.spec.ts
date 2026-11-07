@@ -131,7 +131,7 @@ const charterEditor: View = {
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
-    widths: [360, 390, 430, 1280],
+    widths: [360, 375, 390, 430, 1280],
     open: async (page) => {
       await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
       await page.goto('/?pocket=1');
@@ -370,6 +370,25 @@ async function layoutProblems(root: Locator): Promise<string[]> {
     for (const x of el.querySelectorAll('*')) {
       const r = x.getBoundingClientRect();
       if (r.width > vw + 1 && !scroller(x)) out.push(`${x.tagName.toLowerCase()}.${x.className} is ${Math.round(r.width)}px wide`);
+    }
+    // Nothing wider than the box it scrolls in (#149): a box that scrolls up and down, or clips sideways (the panels'
+    // safety net), must not have content past its right edge, or a finger drags it sideways. Only a box that scrolls
+    // sideways alone (a tab strip, a table's wrapper) may. Names the box and its widest child.
+    const sel = (x: Element) => x.tagName.toLowerCase() + [...x.classList].slice(0, 3).map((c) => `.${c}`).join('');
+    for (const x of [el, ...el.querySelectorAll('*')]) {
+      if (!x.checkVisibility() || x.scrollWidth <= x.clientWidth + 1) continue;
+      const css = getComputedStyle(x);
+      const vertical = css.overflowY === 'auto' || css.overflowY === 'scroll';
+      if (!vertical && css.overflowX !== 'hidden' && css.overflowX !== 'clip') continue;
+      if (css.textOverflow === 'ellipsis' || (x as HTMLElement).isContentEditable || x.matches('input, textarea, select, .xterm *, canvas')) continue;
+      const edge = x.getBoundingClientRect().right - parseFloat(css.borderRightWidth);
+      let widest: Element | null = null;
+      let right = edge;
+      for (const c of x.querySelectorAll('*')) {
+        const cr = c.getBoundingClientRect().right;
+        if (cr > right + 1 && c.checkVisibility()) [widest, right] = [c, cr];
+      }
+      out.push(`${sel(x)} scrolls sideways (${x.scrollWidth} > ${x.clientWidth}px)${widest ? `: ${sel(widest)} ends ${Math.round(right - edge)}px past it` : ''}`);
     }
     const re = new RegExp(danger, 'i');
     for (const b of el.querySelectorAll<HTMLElement>('button')) {
