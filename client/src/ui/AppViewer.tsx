@@ -4,12 +4,12 @@ import { qaKey, useStore } from '../store';
 import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../../shared/previewEnv';
 import { previewSteps } from '../../../shared/progressBars';
 import { ProgressBar } from './ProgressBar';
-import type { PreviewStatus, PreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
-import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSync, onOfficeComputer, prAsPreview, QA_BADGE, qaShotUrl, reachable, relayPath, type Channel, type Side } from './channels';
+import type { PreviewStatus, PreviewView, RepoView } from '../../../shared/types';
+import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSync, onOfficeComputer, prAsPreview, qaShotUrl, reachable, relayPath, type Channel, type Side } from './channels';
 import { sendToCeo } from './chatSend';
-import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { closeOverlay, Panel } from './Panel';
+import { PrChangesCard, usePrChanges } from './PrChanges';
 import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
 import type { Width } from './desktopRules';
 import { tuneChannel, useChannel, useWatch } from './theatre';
@@ -44,7 +44,6 @@ let lastWidth: Width = 'desktop';
 
 // A phone's screen, either way up: the viewer's controls go in a ⋯ menu and compare shows one side at a time (#129).
 const NARROW = '(max-width: 600px), (max-height: 500px) and (pointer: coarse)';
-const narrowNow = () => typeof matchMedia === 'function' && matchMedia(NARROW).matches;
 
 // A cross-origin frame never tells us it was refused, so this only catches frames that don't load at all.
 const SLOW_LOAD_MS = 12_000;
@@ -352,90 +351,6 @@ function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel: Channe
   );
 }
 
-const CHECKS_LABEL: Record<PullInfo['checks'], string> = { passing: '✅ passing', failing: '❌ failing', pending: '⏳ running', none: 'none' };
-const CHECK_ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
-
-/** The PR beside its app: GitHub's checks, and QA's latest report with its screenshots. */
-function QaPanel({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa?: QaView }) {
-  const shots = qa?.shots ?? [];
-  return (
-    <aside className="qa-side" aria-label={`PR #${pull.number}: checks and QA`}>
-      <h4 className="qa-side-title">
-        <a href={pull.url} target="_blank" rel="noreferrer">
-          PR #{pull.number} ↗
-        </a>{' '}
-        {pull.title}
-      </h4>
-      <div className="qa-side-meta small">
-        <span>
-          +{pull.additions} −{pull.deletions}
-        </span>
-        <a href={`${pull.url}/checks`} target="_blank" rel="noreferrer">
-          Checks: {CHECKS_LABEL[pull.checks]}
-        </a>
-        {pull.isDraft && <span>draft</span>}
-      </div>
-      {pull.failedChecks.length > 0 && (
-        <ul className="qa-failed small">
-          {pull.failedChecks.map((c) => (
-            <li key={c.name}>
-              {c.url ? (
-                <a href={c.url} target="_blank" rel="noreferrer">
-                  ❌ {c.name}
-                </a>
-              ) : (
-                `❌ ${c.name}`
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {qa ? (
-        <>
-          <div className="qa-side-status">
-            <span className={`qa-badge qa-badge-${qa.status}`}>{QA_BADGE[qa.status]}</span>
-            <span className="muted small">round {qa.round}</span>
-            {qa.commentUrl && (
-              <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-                Full report ↗
-              </a>
-            )}
-          </div>
-          {qa.summary ? <Markdown className="qa-summary" text={qa.summary} /> : <p className="muted small">{qa.status === 'testing' ? 'QA is testing it now.' : 'No QA report yet.'}</p>}
-          {qa.checks.length > 0 && (
-            <ul className="qa-checks">
-              {qa.checks.map((c, i) => (
-                <li key={i} className={`qa-check qa-check-${c.result}`}>
-                  <span aria-label={c.result}>{CHECK_ICON[c.result]}</span>
-                  <div>
-                    <b>{c.name}</b>
-                    {c.details && <div className="muted small">{c.details}</div>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {shots.length > 0 && (
-            <div className="qa-shots">
-              {shots.map((s, i) => {
-                const url = qaShotUrl(repo.id, pull.number, i, qa.updatedAt);
-                return (
-                  <a key={i} className="qa-shot" href={url} target="_blank" rel="noreferrer" title={s.page ?? s.caption}>
-                    <img src={url} alt={s.caption} loading="lazy" />
-                    <span className="small">{s.caption}</span>
-                  </a>
-                );
-              })}
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="muted small">QA hasn't tested this PR yet.</p>
-      )}
-    </aside>
-  );
-}
-
 // Remembered while the page is open, like the width.
 let lastSync = true;
 
@@ -470,6 +385,7 @@ function CompareView({
   busy,
   onStartMain,
   onStartPr,
+  start,
 }: {
   repo: RepoView;
   main: PreviewView;
@@ -479,9 +395,10 @@ function CompareView({
   busy: boolean;
   onStartMain: () => void;
   onStartPr: () => void;
+  start: string; // the path both sides open at: the page picked in the PR's card
 }) {
-  const [path, setPath] = useState('/');
-  const [draft, setDraft] = useState('/');
+  const [path, setPath] = useState(start);
+  const [draft, setDraft] = useState(start);
   const [opened, setOpened] = useState(0); // "Open on both" reloads both sides, even on the path they started on
   const [sync, setSync] = useState(lastSync);
   const [where, setWhere] = useState<Record<Side, string | null>>({ main: null, pr: null }); // the path each side reports
@@ -577,10 +494,9 @@ function CompareView({
 
 // Remembered while the page is open, so reopening the viewer keeps them.
 let lastCompare = false;
-let lastQa = true;
 
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-/** `qa`: open with the QA panel showing (a chat chip's qa: ref). */
+/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). */
 export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | null; qa?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
@@ -591,7 +507,6 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   const narrow = useMedia(NARROW);
   const view = useDesktopView(width, narrow);
   const fit = useDesktopFit(view.immersive);
-  const [showQa, setShowQa] = useState(qa || (lastQa && !narrowNow())); // on a phone QA's report takes room: only when asked
   const [side, setSide] = useState<Side>('pr'); // compare on a phone: the side on screen
   const [busy, setBusy] = useState(false);
   const [reloads, setReloads] = useState(0);
@@ -602,6 +517,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
     if (pr !== undefined) tuneChannel(repoId, pr);
   }, [repoId, pr]);
   useWatch(repoId, channel);
+  const changes = usePrChanges(repo, channel, qa);
 
   // Start with focus on the toolbar, so Esc closes the panel until the app itself is clicked.
   useEffect(() => {
@@ -657,10 +573,8 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
     lastCompare = !compare;
     setCompare(!compare);
   };
-  const toggleQa = () => {
-    lastQa = !showQa;
-    setShowQa(!showQa);
-  };
+  const toggleQa = () => changes.setOpen(!changes.open);
+  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : url); // a PR opens at the page to look at
   const startStop = active ? (
     <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
       ■ Stop
@@ -681,7 +595,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
         view.forced ? { label: '⛶ Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: '⛶ Full screen', onSelect: view.enterFull },
         ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) }))),
         prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
-        prView && { label: showQa ? '📋 Hide the QA report' : '📋 QA report', onSelect: toggleQa },
+        prView && pull && !narrow && { label: changes.open ? '📋 Hide what this PR changes' : '📋 What this PR changes', onSelect: toggleQa },
       ]}
     />
   );
@@ -747,9 +661,9 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
             ))}
           </div>
           <span className="spacer" />
-          {prView && (
-            <button className={`btn btn-small ${showQa ? 'btn-on' : ''}`} aria-pressed={showQa} onClick={toggleQa}>
-              📋 QA
+          {prView && pull && (
+            <button className={`btn btn-small ${changes.open ? 'btn-on' : ''}`} aria-pressed={changes.open} onClick={toggleQa} title="What this PR changes: its goal, pages to look at and QA">
+              📋 Changes
             </button>
           )}
           {/* one element running or not: a link without an href is disabled (aria-disabled), never a <button> twin */}
@@ -765,17 +679,28 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
           {view.hint && <RotateHint onDismiss={view.dismissHint} onFull={view.enterFull} />}
           {comparing && narrow ? (
             side === 'main' ? (
-              <PreviewStage repo={repo} preview={main} label={repo.defaultBranch} src={main.url && reachable(main.url, location)} width={width} reloads={reloads} busy={busy} onStart={() => void startMain()} />
+              <PreviewStage repo={repo} preview={main} label={repo.defaultBranch} src={main.url && atPath(reachable(main.url, location), changes.path)} width={width} reloads={reloads} busy={busy} onStart={() => void startMain()} />
             ) : (
-              <PreviewStage repo={repo} preview={prView} label={label} src={prView.url && reachable(prView.url, location)} width={width} reloads={reloads} busy={busy} onStart={() => void startPr()} shots={shots} onAsk={ask} />
+              <PreviewStage repo={repo} preview={prView} label={label} src={at(prView.url && reachable(prView.url, location))} width={width} reloads={reloads} busy={busy} onStart={() => void startPr()} shots={shots} onAsk={ask} />
             )
           ) : comparing ? (
-            <CompareView repo={repo} main={main} pr={prView} width={width} reloads={reloads} busy={busy} onStartMain={() => void startMain()} onStartPr={() => void startPr()} />
+            <CompareView key={changes.path} repo={repo} main={main} pr={prView} width={width} reloads={reloads} busy={busy} onStartMain={() => void startMain()} onStartPr={() => void startPr()} start={changes.path} />
           ) : (
-            <PreviewStage repo={repo} preview={current} label={label} src={openUrl} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} shots={shots} onAsk={ask} />
+            <PreviewStage repo={repo} preview={current} label={label} src={at(openUrl)} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} shots={shots} onAsk={ask} />
           )}
         </div>
-        {prView && showQa && pull && <QaPanel repo={repo} pull={pull} qa={rec} />}
+        {prView && pull && (changes.open || narrow) && (
+          <PrChangesCard
+            repo={repo}
+            pull={pull}
+            state={changes}
+            sheet={narrow}
+            onCompare={() => {
+              if (!comparing) toggleCompare();
+              if (narrow) setSide('pr');
+            }}
+          />
+        )}
       </div>
       {current.status === 'running' && !narrow && (
         <p className="muted small app-foot">
