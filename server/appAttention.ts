@@ -14,7 +14,7 @@ export class AppAttention {
   /** Handles a tab's attention message; false for anything else on /ws. */
   receive(tab: Tab, raw: unknown, now = Date.now()): boolean {
     const att = parseAttention(raw);
-    if (att) this.tabs.set(tab, { visible: att.visible, at: now });
+    if (att) this.tabs.set(tab, { visible: att.visible, at: now, ...(att.call && { call: true }) });
     return !!att;
   }
 

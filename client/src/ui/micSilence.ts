@@ -16,8 +16,8 @@ export const FLOOR_SAMPLES = 60;
 /** The first levels only teach the mic the room. */
 export const WARMUP_SAMPLES = 6;
 
-/** How a session started: held (🎙 or V), tapped (listens until you stop talking), or opened by the hands-free phone. */
-export type MicMode = 'hold' | 'tap' | 'handsfree';
+/** How a session started: held (🎙 or V), tapped (listens until you stop talking), opened by the hands-free phone, or a voice call's turn. */
+export type MicMode = 'hold' | 'tap' | 'handsfree' | 'call';
 
 /** What the mic has heard so far. Times are the caller's clock (performance.now()). */
 export interface Ears {
@@ -65,8 +65,8 @@ export function listenRules(mode: MicMode, autoSend: boolean): ListenRules {
   };
 }
 
-/** Whether what was heard is sent when listening ends by itself or by letting go: hands-free always, else with auto-send on. */
-export const sendsWhenDone = (mode: MicMode, autoSend: boolean) => mode === 'handsfree' || autoSend;
+/** Whether what was heard is sent when listening ends by itself or by letting go: hands-free and calls always, else with auto-send on. */
+export const sendsWhenDone = (mode: MicMode, autoSend: boolean) => mode === 'handsfree' || mode === 'call' || autoSend;
 
 export type Verdict = 'listening' | 'done' | 'no-speech' | 'too-long';
 

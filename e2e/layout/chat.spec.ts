@@ -196,6 +196,33 @@ for (const width of PHONES) {
   });
 }
 
+// Full screen when wide (#242): the rail stays and works, the chat fills the rest from the rail's right edge.
+for (const width of [1024, 1280, 1440, 1920]) {
+  test(`chat full screen keeps the rail at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/?pocket=1&tab=chat');
+    const root = page.locator('.pocket');
+    if (!(await root.locator('.pk-dock').isVisible())) await root.locator('.pk-chat-btn').click();
+    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen', exact: true }).click();
+    await expect(root).toHaveClass(/pk-chat-full/);
+    const rail = root.locator('.pk-tabs');
+    await expect(rail).toBeVisible();
+    const [r, d] = [(await rail.boundingBox())!, (await root.locator('.pk-dock').boundingBox())!];
+    expect(Math.abs(d.x - (r.x + r.width))).toBeLessThanOrEqual(1);
+    expect(Math.abs(d.x + d.width - width)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    // a rail item navigates and leaves full screen; ⛶ brings it back
+    await rail.getByRole('button', { name: /Team/ }).click();
+    await expect(root).not.toHaveClass(/pk-chat-full/);
+    await expect(rail.getByRole('button', { name: /Team/ })).toHaveAttribute('aria-current', 'page');
+    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen', exact: true }).click();
+    await expect(root).toHaveClass(/pk-chat-full/);
+    await rail.getByRole('button', { name: /Console/ }).click();
+    await expect(root).not.toHaveClass(/pk-chat-full/);
+    await expect(root.locator('.pk-settings')).toBeVisible();
+  });
+}
+
 // A code block (#200): a 150-character command wraps whole inside its card, Copy in the header above it, never over it.
 for (const width of [360, 390, 1280]) {
   test(`chat code blocks are readable at ${width}px`, async ({ page }) => {
