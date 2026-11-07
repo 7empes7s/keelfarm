@@ -334,7 +334,7 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
     if (res) setExported(res.url);
   };
   return (
-    <div className="tab-grid charter-tab">
+    <div className="tab-grid charter-tab" data-tour="charter">
       <div>
         <div className="charter-bar">
           <select value={repo.id} onChange={(e) => setRepoId(e.target.value)} aria-label="Floor">

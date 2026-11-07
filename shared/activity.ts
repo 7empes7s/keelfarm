@@ -234,6 +234,8 @@ const OFFICE_KINDS: Record<string, ActivityKind> = {
   close_pull: 'git',
   escalate: 'talk',
   send_telegram: 'talk',
+  react: 'talk',
+  reply: 'talk',
   answer_agent: 'talk',
   ask_manager_choice: 'talk',
 };

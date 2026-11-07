@@ -99,7 +99,7 @@ export function CostsSection() {
     return id === '' ? 'The CEO' : r ? `${r.floor} · ${r.fullName.split('/')[1]}` : id;
   };
   return (
-    <div id="ops-card-costs" className="costs">
+    <div id="ops-card-costs" className="costs" data-tour="costs">
       <h3 className="section">💸 Where the plan goes</h3>
       <div className="row wrap">
         <select aria-label="Days" value={days} onChange={(e) => setDays(Number(e.target.value))}>

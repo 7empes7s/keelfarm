@@ -96,7 +96,7 @@ function PhoneButton() {
   if (!started || overlay?.kind === 'phone') return null;
   const busy = ceo?.status === 'working';
   return (
-    <button className={`phone-btn ${badge ? 'phone-btn-ring' : ''}`} onClick={() => openOverlay({ kind: 'phone' })} title={`Your phone (${key})`}>
+    <button data-tour="phone" className={`phone-btn ${badge ? 'phone-btn-ring' : ''}`} onClick={() => openOverlay({ kind: 'phone' })} title={`Your phone (${key})`}>
       <span className="phone-btn-icon">📱</span>
       {badge > 0 && <span className="badge phone-btn-badge">{badge}</span>}
       <span className="phone-btn-label">
@@ -125,7 +125,7 @@ function PhotoButton() {
 function SwitchButton() {
   const key = useKeyName('switchOffice');
   return (
-    <button className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
+    <button data-tour="switch" className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
       🗺️ 2D office <kbd>{key}</kbd>
     </button>
   );

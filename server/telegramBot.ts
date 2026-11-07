@@ -79,8 +79,8 @@ export interface TelegramDeps {
   secretsFile: string;
   /** Settings' Telegram switch. Off: no polling, retries or sends; the token and chat stay saved. */
   on(): boolean;
-  /** A message from the manager's chat, for the CEO (as from the phone, marked "via Telegram"). */
-  message(text: string): Promise<void>;
+  /** A message from the manager's chat, for the CEO (as from the phone, marked "via Telegram"), with its Telegram id. */
+  message(text: string, messageId: number): Promise<void>;
   /** A team-change button: approves or declines it through the office's own paths. Returns what to show; throws why not. */
   decide(verdict: 'approve' | 'decline', id: string): string;
   /** The view changed (linked, polling, a send): the settings redraw. */
@@ -215,8 +215,8 @@ export class TelegramBot {
     return this.view();
   }
 
-  /** A message to the manager's chat, split at Telegram's limit (buttons under the last piece). Null when it arrived, else why not. `key`: the phone message it copies, for editSent. */
-  async send(text: string, keyboard?: TgButton[][], key?: number): Promise<string | null> {
+  /** A message to the manager's chat, split at Telegram's limit (buttons under the last piece). Null when it arrived, else why not. `key`: the phone message it copies, for editSent; `replyTo`: the Telegram message it answers. */
+  async send(text: string, keyboard?: TgButton[][], key?: number, replyTo?: number): Promise<string | null> {
     const s = this.secrets;
     if (!s || s.chatId === undefined) return 'Telegram isn\'t linked';
     if (!this.deps.on()) return 'Telegram is off in Settings';
@@ -231,6 +231,7 @@ export class TelegramBot {
           chat_id: s.chatId,
           text: part,
           link_preview_options: { is_disabled: true },
+          ...(i === 0 && replyTo !== undefined ? { reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } } : {}),
           ...(buttons ? { reply_markup: { inline_keyboard: buttons } } : {}),
         })) as { message_id?: unknown } | null;
         const id = Number(r?.message_id) || 0;
@@ -246,6 +247,13 @@ export class TelegramBot {
     if (why) this.deps.log(`telegram: a message didn't go out: ${why}`);
     this.deps.changed();
     return why;
+  }
+
+  /** A reaction on a message in the manager's chat (setMessageReaction), replacing the bot's last one there. A failure is only logged. */
+  async react(messageId: number, emoji: string): Promise<void> {
+    const s = this.secrets;
+    if (!s || s.chatId === undefined) return;
+    await this.deps.api.call(s.token, 'setMessageReaction', { chat_id: s.chatId, message_id: messageId, reaction: [{ type: 'emoji', emoji }] }).catch((err: unknown) => this.deps.log(`telegram: a reaction didn't go on: ${err instanceof Error ? err.message : 'unknown error'}`));
   }
 
   /** What each of the latest phone messages went out as here (#125), for editSent; this run of the office only. */
@@ -377,7 +385,7 @@ export class TelegramBot {
         await this.send('This chat is already linked to the office. Write here to reach the CEO.');
         return;
       }
-      await this.deps.message(ceoText(u));
+      await this.deps.message(ceoText(u), u.messageId);
       return;
     }
     const d = parseDecision(u.data);

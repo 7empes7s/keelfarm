@@ -1,0 +1,109 @@
+/* Reactions in the CEO chat (#118): badges under a bubble, the bar in a message's actions, the 👎 note. */
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin-top: var(--ds-space-1);
+}
+.bubble-me .reactions {
+  justify-content: flex-end;
+}
+.reaction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+  padding: 0 var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+}
+/* the badge looks small but takes a 44px tap */
+button.reaction::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+button.reaction {
+  cursor: pointer;
+}
+.reaction-mine {
+  border-color: var(--ds-focus);
+  background: #e8edff;
+}
+.reaction-count {
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.reaction-note {
+  flex-basis: 100%;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.reaction-pop {
+  animation: reaction-pop var(--ds-dur-slow) var(--ds-ease);
+}
+@keyframes reaction-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reaction-pop {
+    animation: none;
+  }
+}
+html[data-reduce-motion] .reaction-pop {
+  animation: none;
+}
+
+.reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  margin: var(--ds-space-1) 0 var(--ds-space-2);
+}
+.reaction-pick {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  border: var(--ds-border) solid transparent;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.reaction-pick:hover,
+.reaction-pick:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.reaction-pick.reaction-mine {
+  border-color: var(--ds-focus);
+}
+.reaction-why {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin-bottom: var(--ds-space-2);
+}
+.reaction-why textarea {
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  font: inherit;
+  font-size: var(--ds-text-md);
+  box-sizing: border-box;
+}

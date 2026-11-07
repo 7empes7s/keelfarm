@@ -125,7 +125,7 @@ export function SearchPalette({ where }: { where: Where }) {
 /** The 🔍 that opens it. */
 export function SearchButton({ className }: { className?: string }) {
   return (
-    <button className={className ?? 'pill pill-search'} onClick={openSearch} aria-label="Search everything (Ctrl+K)" title="Search everything (Ctrl+K)">
+    <button data-tour="search" className={className ?? 'pill pill-search'} onClick={openSearch} aria-label="Search everything (Ctrl+K)" title="Search everything (Ctrl+K)">
       🔍
     </button>
   );
