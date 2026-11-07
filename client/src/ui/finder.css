@@ -269,6 +269,7 @@
   line-height: 1;
   cursor: pointer;
   border-radius: 50%;
+  --ds-icon: var(--ds-icon-md);
 }
 .info-btn:hover {
   background: var(--ds-surface-hover);

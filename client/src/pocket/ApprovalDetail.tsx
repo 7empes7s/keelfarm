@@ -12,8 +12,10 @@ import { confirmDialog } from '../ui/Confirm';
 import { Menu } from '../ui/Menu';
 import { qaShotUrl } from '../ui/channels';
 import { sendToCeo } from '../ui/chatSend';
+import { Icon } from '../ui/Icon';
+import { iconFor, type IconName } from '../ui/icons';
 
-const CHECK_ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
+const CHECK_ICON: Record<'pass' | 'fail' | 'skip', IconName> = { pass: 'circle-check', fail: 'circle-x', skip: 'skip-forward' };
 const fileUrl = (id: string) => `/api/files/${id}`;
 
 /** A section card; `fold`: a disclosure group, closed until tapped. */
@@ -39,7 +41,7 @@ export function WhyTag({ why }: { why: ApprovalWhy }) {
   const w = WHY_LABELS[why];
   return (
     <span className={`apr-why apr-why-${why}`}>
-      <span aria-hidden>{w.icon}</span> {w.label}
+      <Icon name={iconFor(w.icon, 'circle-help')} /> {w.label}
     </span>
   );
 }
@@ -74,14 +76,14 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
       label: ready ? 'Approve & merge' : 'Merge anyway',
       run: async () => {
         const t = mergeConfirmText(why, qa, pr, repo);
-        const ok = await confirmDialog(t.warn ? { tone: 'warn', title: t.title, body: t.body, confirm: t.confirm } : { icon: '🎉', title: t.title, body: t.body, confirm: t.confirm });
+        const ok = await confirmDialog(t.warn ? { tone: 'warn', title: t.title, body: t.body, confirm: t.confirm } : { icon: 'party-popper', title: t.title, body: t.body, confirm: t.confirm });
         if (ok) await act(() => api.mergePull(repo.id, pr.number));
       },
     },
     retry: {
       label: 'Retry QA',
       run: async () => {
-        const ok = await confirmDialog({ icon: '🔍', title: `Retry QA on PR #${pr.number}?`, body: `A free agent tests it again as round ${qa.round + 1}. Nobody's work is stopped.`, confirm: 'Retry QA' });
+        const ok = await confirmDialog({ icon: 'search', title: `Retry QA on PR #${pr.number}?`, body: `A free agent tests it again as round ${qa.round + 1}. Nobody's work is stopped.`, confirm: 'Retry QA' });
         if (ok) await act(() => api.sendToQa(repo.id, pr.number));
       },
     },
@@ -90,7 +92,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
       run: async () => {
         let text = '';
         const ok = await confirmDialog({
-          icon: '🔧',
+          icon: 'wrench',
           title: `Send PR #${pr.number} back for a fix?`,
           body: (
             <>
@@ -113,7 +115,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
   };
   const order: PrAction[] = ready ? ['merge'] : ['retry', 'sendBack', 'merge'];
   const ask = async () => {
-    const ok = await confirmDialog({ icon: '💬', title: `Ask ${ceo} about PR #${pr.number}?`, body: `${ceo} gets your question in the chat and answers there.`, confirm: 'Ask' });
+    const ok = await confirmDialog({ icon: 'message-circle', title: `Ask ${ceo} about PR #${pr.number}?`, body: `${ceo} gets your question in the chat and answers there.`, confirm: 'Ask' });
     if (ok) sendToCeo(`What do you recommend for PR #${pr.number} on floor ${repo.floor} (“${pr.title}”)? It's in my Approvals as ${WHY_LABELS[why].label.toLowerCase()}.`);
   };
   const shots = qa.shots ?? [];
@@ -174,11 +176,15 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
       </Section>
 
       <Section title="What's failing">
-        {why === 'outage' && <p className="apr-badge-good">💳 Only CI or billing, not the code</p>}
+        {why === 'outage' && <p className="apr-badge-good">
+            <Icon name="credit-card" /> Only CI or billing, not the code
+          </p>}
         <ul className="apr-list">
           {pr.failedChecks.map((c) => (
             <li key={c.name}>
-              <span aria-label="failed">❌</span>{' '}
+              <span aria-label="failed">
+                <Icon name="circle-x" />
+              </span>{' '}
               {c.url ? (
                 <a href={c.url} target="_blank" rel="noreferrer">
                   {c.name}
@@ -191,12 +197,19 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
           ))}
           {pr.pendingChecks.map((n) => (
             <li key={n}>
-              <span aria-label="pending">⏳</span> {n} <span className="muted small">· running</span>
+              <span aria-label="pending">
+                <Icon name="hourglass" />
+              </span>{' '}
+              {n} <span className="muted small">· running</span>
             </li>
           ))}
           {!pr.failedChecks.length && !pr.pendingChecks.length && (
             <li>
-              {pr.checks === 'passing' ? '✅ GitHub checks pass' : pr.checks === 'none' ? 'No GitHub checks' : `GitHub checks: ${pr.checks}`}
+              {pr.checks === 'passing' ? (
+                <>
+                  <Icon name="circle-check" /> GitHub checks pass
+                </>
+              ) : pr.checks === 'none' ? 'No GitHub checks' : `GitHub checks: ${pr.checks}`}
               {pr.checkRun && <span className="muted small"> · {Math.round(pr.checkRun.ms / 60_000)} min</span>}
             </li>
           )}
@@ -207,7 +220,9 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
             <ul className="apr-list">
               {qa.checks.map((c, i) => (
                 <li key={i}>
-                  <span aria-label={c.result}>{CHECK_ICON[c.result]}</span> <b>{c.name}</b>
+                  <span aria-label={c.result}>
+                    <Icon name={CHECK_ICON[c.result]} />
+                  </span> <b>{c.name}</b>
                   {c.details && <div className="muted small">{c.details}</div>}
                 </li>
               ))}
@@ -224,7 +239,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
           {qa.commentUrl ? '; ' : '.'}
           {qa.commentUrl && (
             <a href={qa.commentUrl} target="_blank" rel="noreferrer">
-              the full QA report ↗
+              the full QA report <Icon name="external-link" />
             </a>
           )}
         </p>
@@ -245,7 +260,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
           <div className="apr-chips">
             {impact.risks.map((r) => (
               <span key={r} className="apr-risk">
-                ⚠️ {r}
+                <Icon name="triangle-alert" /> {r}
               </span>
             ))}
           </div>
@@ -285,7 +300,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
         )}
         {qa.commentUrl && (
           <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-            📄 QA report ↗
+            <Icon name="file-text" /> QA report <Icon name="external-link" />
           </a>
         )}
       </Section>
@@ -322,7 +337,7 @@ export function DesignDetail({ d, now }: { d: Decision; now: number }) {
   const firsts = design.options.map((o) => o.shots[0]?.id);
   const answer = async (pick: number | 'changes') => {
     const text = designAnswer(d, pick, note);
-    const ok = await confirmDialog({ icon: '🎨', title: pick === 'changes' ? 'Ask for changes?' : `Pick ${optionLetter(pick)}?`, body: `${ceo} gets: “${text}” and passes it to the floor's agent.`, confirm: pick === 'changes' ? 'Ask for changes' : `Pick ${optionLetter(pick)}` });
+    const ok = await confirmDialog({ icon: 'palette', title: pick === 'changes' ? 'Ask for changes?' : `Pick ${optionLetter(pick)}?`, body: `${ceo} gets: “${text}” and passes it to the floor's agent.`, confirm: pick === 'changes' ? 'Ask for changes' : `Pick ${optionLetter(pick)}` });
     if (!ok) return;
     sendToCeo(text, d.messageId ?? undefined);
     setSent(text);
@@ -363,7 +378,7 @@ export function DesignDetail({ d, now }: { d: Decision; now: number }) {
               </button>
               {o.previewUrl && (
                 <a className="btn btn-small btn-ghost" href={o.previewUrl} target="_blank" rel="noreferrer">
-                  Live preview ↗
+                  Live preview <Icon name="external-link" />
                 </a>
               )}
             </div>

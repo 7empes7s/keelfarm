@@ -1,6 +1,7 @@
 // The Company page's layout decisions (#223), pure: how many columns the floor cards get in the width the page has
 // (the chat open or closed and the browser's zoom only change that width), and the one status row while the office
 // connects, updates or restarts.
+import type { IconName } from '../ui/icons';
 
 /** A floor card is at least this wide; a little narrower (SOFT_MIN) only to keep a card from sitting alone in a row. */
 export const FLOOR_MIN = 340;
@@ -33,8 +34,8 @@ export interface StatusInput {
 
 /** One status line at a time: "Updating the office…" while it updates, "Back in a moment…" while it restarts, a
  *  reconnect only when the drop wasn't expected. Null when there's nothing to say. */
-export function statusLine({ connected, loaded, restarting, update }: StatusInput): { text: string; bad: boolean } | null {
-  if (!connected && restarting) return { text: '⟳ Back in a moment…', bad: false };
-  if (!connected) return { text: loaded ? '📡 Reconnecting to the office…' : '📡 Connecting to the office…', bad: true };
+export function statusLine({ connected, loaded, restarting, update }: StatusInput): { text: string; bad: boolean; icon?: IconName } | null {
+  if (!connected && restarting) return { text: 'Back in a moment…', bad: false, icon: 'refresh-cw' };
+  if (!connected) return { text: loaded ? 'Reconnecting to the office…' : 'Connecting to the office…', bad: true, icon: 'radio-tower' };
   return update ? { text: update, bad: false } : null;
 }

@@ -107,6 +107,6 @@ export async function saveReplay(): Promise<{ name: string; bytes: number; secon
   const canvas = officeCanvas();
   const item = addToGallery(blob, { kind: 'replay', name, width: canvas?.width ?? 0, height: canvas?.height ?? 0, seconds });
   download(item.url, name);
-  toast('success', `🎬 Saved the last ${Math.round(seconds)} s as ${name}`);
+  toast('success', `Saved the last ${Math.round(seconds)} s as ${name}`);
   return { name, bytes: blob.size, seconds };
 }

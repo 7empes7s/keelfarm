@@ -555,7 +555,7 @@ export function stepRig(dt: number) {
       rig.snap = false;
       if (inp.zoom) zoomView(inp.zoom * dt * 900);
     } else if ((rig.lost += dt) > LOST_S && performance.now() > rig.waitUntil) {
-      useStore.getState().pushToast('info', `🎥 Lost sight of ${t?.label ?? 'them'}: back to you`);
+      useStore.getState().pushToast('info', `Lost sight of ${t?.label ?? 'them'}: back to you`);
       exitView();
       return stepRig(dt);
     }

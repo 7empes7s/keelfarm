@@ -82,7 +82,7 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 
 - **Screens**: every Panel, the phone, pocket mode, the start screen and the HUD carry `.ds-screen`:
   every button, field, switch and disclosure row inside is at least 44 px.
-- **Panel / sheet** (`ui/Panel.tsx`): title (truncates), ✕ 44 px, body scrolls. Full-screen sheet ≤ 600 px.
+- **Panel / sheet** (`ui/Panel.tsx`): title (truncates), the shared Close button, body scrolls. Full-screen sheet ≤ 600 px.
   `className="ds-console"` adds the console's tabs, cards and headings.
 - **Buttons**: `.btn` (primary actions: `.btn-good`; destructive confirm: `.btn-bad`; quiet: `.btn-ghost`) and
   `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44. Both share one base in design.css
@@ -133,6 +133,26 @@ The manager's console has five top tabs, and each one shows a side menu of its s
   and shortcut slide out to its left on hover or keyboard focus (`--ds-ease-spring`), over its neighbours, never
   reflowing the header. Primary `.btn-good` buttons lift and glow a little under a pointer.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
+
+## Icons (#134)
+
+One pack everywhere: [Lucide](https://lucide.dev) (ISC licence), as inline SVG through `lucide-react`, so iOS,
+Android, Windows and Linux draw the same glyph in the text's colour, with no icon font and no emoji fallback.
+
+- **`<Icon name="settings" />`** (`ui/Icon.tsx`): `currentColor`, stroke 2, `aria-hidden`. Beside text it is 1.2em;
+  an icon-only button carries the `aria-label` and sets `--ds-icon` on itself: `--ds-icon-md` (24 px) in a 44 px
+  button, `--ds-icon-lg` (28 px) in the 56 px headers, about 55% of the button as iOS does (SF Symbols). Icon-only
+  buttons get a soft fill (`--ds-surface-sunken`) and a hairline (`--ds-line`) rather than the thick outline; the
+  primary action (Send) stays filled.
+- **`<CloseButton onClick label />`**: the one ✕ for every panel, sheet, viewer, modal, toast and the reply bar: a
+  44 px round soft-filled button with the x at 24 px, top right. Pass a class only to place it.
+- **The map** is `ui/icons.ts`: `ICONS` is every icon the UI may use (add one there, by its Lucide name), and
+  `EMOJI_ICONS` maps each emoji or glyph the UI used to show to its icon (⚙️ settings, 🎙 mic, 📎 paperclip,
+  ✕ x, ↗ external-link, ⋯ ellipsis, ✓ check, ↩ reply, ▶ play, ⏸ pause, 🔍 search, ⚠️ triangle-alert, …).
+- **No emoji as chrome**: `ui/icons.test.ts` scans every string and JSX text in `client/src` and fails on an emoji or
+  icon glyph. Emoji that are content stay emoji: what people type and react with in chat, what is drawn into the 3D
+  scene's textures, speech bubbles and decorations, game pieces. Those files are listed, with the reason, in the
+  test's `CONTENT`. Plain-text strings (toasts, tooltips, notifications) use words, not emoji.
 
 ## Finding things and learning the office (#109)
 

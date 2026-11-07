@@ -11,6 +11,8 @@ import { HoverCard } from './HoverCard';
 import { QaPeek } from './Peeks';
 import { cardOpen, liveAgent, openingPath, pagePath, prPages, remember, type PrMemory, type PrPage } from './prChangesRules';
 import './prChanges.css';
+import { CloseButton, Icon } from './Icon';
+import type { IconName } from './icons';
 
 const MEMORY_KEY = 'cubefarm:prChanges';
 
@@ -94,8 +96,13 @@ export function usePrChanges(repo: RepoView | undefined, channel: Channel, force
 
 export type PrChangesState = ReturnType<typeof usePrChanges>;
 
-const CHECKS_LABEL: Record<PullInfo['checks'], string> = { passing: '✅ passing', failing: '❌ failing', pending: '⏳ running', none: 'none' };
-const CHECK_ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
+const CHECKS_LABEL: Record<PullInfo['checks'], { icon: IconName | null; text: string }> = {
+  passing: { icon: 'circle-check', text: 'passing' },
+  failing: { icon: 'circle-x', text: 'failing' },
+  pending: { icon: 'hourglass', text: 'running' },
+  none: { icon: null, text: 'none' },
+};
+const CHECK_ICON: Record<'pass' | 'fail' | 'skip', IconName> = { pass: 'circle-check', fail: 'circle-x', skip: 'skip-forward' };
 
 /** The card. `sheet`: a phone's pull-up sheet, its handle always showing; otherwise the side column. */
 export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: RepoView; pull: PullInfo; state: PrChangesState; sheet: boolean; onCompare: () => void }) {
@@ -113,7 +120,7 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
         <b>{title}</b>
         <span className="muted small">
           {pages.length} {pages.length === 1 ? 'page' : 'pages'}
-          {qa ? ` · ${QA_BADGE[qa.status]}` : ''}
+          {qa ? ` · ${QA_BADGE[qa.status].text}` : ''}
           {agent ? ` · @${agent.name} live` : ''}
         </span>
       </button>
@@ -124,15 +131,19 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
       <div className="prc-head">
         {sheet && <span className="prc-grip" aria-hidden />}
         <h4 className="prc-title">{title}</h4>
-        <button className="panel-x" onClick={() => setOpen(false)} aria-label={sheet ? 'Lower the sheet' : 'Hide what this PR changes'}>
-          {sheet ? '▾' : '✕'}
-        </button>
+        {sheet ? (
+          <button className="panel-x" onClick={() => setOpen(false)} aria-label="Lower the sheet">
+            <Icon name="chevron-down" />
+          </button>
+        ) : (
+          <CloseButton className="panel-x" onClick={() => setOpen(false)} label="Hide what this PR changes" />
+        )}
       </div>
 
       <section className="prc-goal">
         <div className="small">
           <a href={pull.url} target="_blank" rel="noreferrer">
-            PR #{pull.number} ↗
+            PR #{pull.number} <Icon name="external-link" />
           </a>{' '}
           {issue ? (
             <>
@@ -193,7 +204,7 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
             {pages.map((p: PrPage) => (
               <li key={p.path}>
                 <button className={`prc-page ${p.path === path ? 'prc-page-on' : ''}`} aria-current={p.path === path || undefined} onClick={() => openPage(p.path)}>
-                  {p.shot != null && qa ? <img src={qaShotUrl(repo.id, pull.number, p.shot, qa.updatedAt)} alt="" loading="lazy" /> : <span className="prc-page-glyph" aria-hidden>📄</span>}
+                  {p.shot != null && qa ? <img src={qaShotUrl(repo.id, pull.number, p.shot, qa.updatedAt)} alt="" loading="lazy" /> : <span className="prc-page-glyph" aria-hidden><Icon name="file-text" /></span>}
                   <span className="prc-page-text">
                     <span>{p.caption}</span>
                     <code>{p.path}</code>
@@ -217,7 +228,7 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
             +{pull.additions} −{pull.deletions}
           </span>
           <a href={`${pull.url}/checks`} target="_blank" rel="noreferrer">
-            Checks: {CHECKS_LABEL[pull.checks]}
+            Checks: {CHECKS_LABEL[pull.checks].icon && <Icon name={CHECKS_LABEL[pull.checks].icon!} />} {CHECKS_LABEL[pull.checks].text}
           </a>
           {pull.isDraft && <span>draft</span>}
         </div>
@@ -227,10 +238,12 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
               <li key={c.name}>
                 {c.url ? (
                   <a href={c.url} target="_blank" rel="noreferrer">
-                    ❌ {c.name}
+                    <Icon name="circle-x" /> {c.name}
                   </a>
                 ) : (
-                  `❌ ${c.name}`
+                  <>
+                    <Icon name="circle-x" /> {c.name}
+                  </>
                 )}
               </li>
             ))}
@@ -250,13 +263,13 @@ function QaReport({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa: QaVi
       <div className="qa-side-status">
         <HoverCard label={`QA on PR #${qa.prNumber}`} peek={<QaPeek qa={qa} />}>
           <span className={`qa-badge qa-badge-${qa.status}`} tabIndex={0}>
-            {QA_BADGE[qa.status]}
+            <Icon name={QA_BADGE[qa.status].icon} /> {QA_BADGE[qa.status].text}
           </span>
         </HoverCard>
         <span className="muted small">round {qa.round}</span>
         {qa.commentUrl && (
           <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-            Full report ↗
+            Full report <Icon name="external-link" />
           </a>
         )}
       </div>
@@ -265,7 +278,7 @@ function QaReport({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa: QaVi
         <ul className="qa-checks">
           {qa.checks.map((c, i) => (
             <li key={i} className={`qa-check qa-check-${c.result}`}>
-              <span aria-label={c.result}>{CHECK_ICON[c.result]}</span>
+              <span aria-label={c.result}><Icon name={CHECK_ICON[c.result]} /></span>
               <div>
                 <b>{c.name}</b>
                 {c.details && <div className="muted small">{c.details}</div>}

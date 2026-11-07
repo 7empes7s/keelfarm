@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useDialogFocus } from './dialogFocus';
 import { backdropClose } from './Panel';
 import './finder.css';
+import { CloseButton } from './Icon';
 
 export function Sheet({ title, onClose, children, className, top }: { title: ReactNode; onClose: () => void; children: ReactNode; className?: string; top?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
@@ -27,9 +28,7 @@ export function Sheet({ title, onClose, children, className, top }: { title: Rea
           <h2 className="sheet-title" id={titleId}>
             {title}
           </h2>
-          <button className="panel-x" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <CloseButton className="panel-x" onClick={onClose} label="Close" />
         </div>
         <div className="sheet-body">{children}</div>
       </div>

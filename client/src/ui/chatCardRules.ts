@@ -7,6 +7,7 @@ import type { LiveStep } from '../../../shared/ceoStream';
 import { RESEARCH_PREFIX } from '../../../shared/chat';
 import { CEO_ID } from '../../../shared/types';
 import { matchPicks, pickText, type QuickPicks } from '../../../shared/used';
+import type { IconName } from './icons';
 import type { RefWorld } from './chatRefs';
 
 export interface ActionStatus {
@@ -136,7 +137,7 @@ export const continuesGroup = (prev: { from: string; at: number } | undefined, m
 
 export interface SlashItem {
   key: string;
-  icon: string;
+  icon: IconName;
   name: string;
   hint: string;
   example?: string;
@@ -145,7 +146,7 @@ export interface SlashItem {
 
 /** The "/" list: the office's commands first (templates for `floor`), then the manager's skills and apps. */
 export function slashItems(p: QuickPicks | null, query: string, floor: number): SlashItem[] {
-  const cmds = matchCommands(query).map((c) => ({ key: `cmd-${c.cmd}`, icon: '⚡', name: `/${c.cmd}`, hint: c.hint, example: c.template(floor).trim(), text: c.template(floor) }));
-  const picks = (p ? matchPicks(p, query) : []).map((x) => ({ key: `${x.kind}-${x.name}`, icon: x.kind === 'skill' ? '✨' : '🔌', name: x.name, hint: x.kind === 'skill' ? 'skill' : 'app', text: pickText(x.kind, x.name) }));
+  const cmds = matchCommands(query).map((c): SlashItem => ({ key: `cmd-${c.cmd}`, icon: 'zap', name: `/${c.cmd}`, hint: c.hint, example: c.template(floor).trim(), text: c.template(floor) }));
+  const picks = (p ? matchPicks(p, query) : []).map((x): SlashItem => ({ key: `${x.kind}-${x.name}`, icon: x.kind === 'skill' ? 'sparkles' : 'plug', name: x.name, hint: x.kind === 'skill' ? 'skill' : 'app', text: pickText(x.kind, x.name) }));
   return [...cmds, ...picks];
 }

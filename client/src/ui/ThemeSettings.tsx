@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { DEFAULT_THEME_SETTINGS, THEME_IDS, THEME_INFO, type ThemeMode, type ThemeSettings as Themes } from '../../../shared/themes';
 import { useTheme } from '../world/themes/active';
+import { Icon } from './Icon';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -20,7 +21,9 @@ export function ThemeSettings() {
   const source = now.source === 'auto' ? 'by date' : now.source === 'forced' ? 'forced' : now.source === 'url' ? 'from the address bar' : '';
   return (
     <div className="card">
-      <h3>🎉 Themes</h3>
+      <h3>
+        <Icon name="party-popper" /> Themes
+      </h3>
       <p className="muted small">
         The office dresses up for the holidays: decorations, costumes, music and a few surprises.{' '}
         {now.id ? (

@@ -8,6 +8,8 @@ import { costDays, resolveVisual, type Resolved, type SourceData } from './chatV
 import { useRefOpen } from './RefChips';
 import { Sheet } from './ChatArtifacts';
 import './chatVisuals.css';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 // The CEO's charts, tables and dashboards in a chat bubble (#146; blocks in shared/chatVisuals.ts, live sources in
 // chatVisualSources.ts). Loaded lazily with the first message that has one. Small SVG charts of our own, no chart
@@ -353,7 +355,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
             </b>
             {open && (
               <button type="button" className="btn btn-small viz-tip-open" onClick={open}>
-                Open ›
+                Open <Icon name="chevron-right" />
               </button>
             )}
           </>
@@ -399,7 +401,7 @@ function TableBody({ t, big }: { t: Resolved<VisualTable>; big?: boolean }) {
                 <th key={j} scope="col" className={c.unit ? 'viz-num' : undefined} aria-sort={sort?.col === j ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                   <button type="button" onClick={() => flip(j)}>
                     {c.label}
-                    <span aria-hidden>{sort?.col === j ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+                    <span aria-hidden>{sort?.col === j ? <> <Icon name={sort.dir === 'asc' ? 'chevron-up' : 'chevron-down'} /></> : ''}</span>
                   </button>
                 </th>
               ))}
@@ -496,7 +498,7 @@ function DashboardBody({ d, big }: { d: Resolved<Extract<ChatVisual, { kind: 'da
 
 // ---------- the card ----------
 
-const ICONS = { chart: '📊', table: '📋', dashboard: '📈' } as const;
+const VIZ_ICON: Record<'chart' | 'table' | 'dashboard', IconName> = { chart: 'chart-column', table: 'clipboard-list', dashboard: 'trending-up' };
 
 function Body({ v, big }: { v: Resolved; big?: boolean }) {
   if (v.kind === 'chart') return <ChartBody c={v} big={big} />;
@@ -511,7 +513,7 @@ function VisualCard({ visual }: { visual: ChatVisual }) {
   const title = v.title || (v.kind === 'chart' ? 'Chart' : v.kind === 'table' ? 'Table' : 'Dashboard');
   const head = (extra?: ReactNode) => (
     <div className="viz-head">
-      <span aria-hidden>{ICONS[v.kind]}</span>
+      <Icon name={VIZ_ICON[v.kind]} />
       <b id={titleId} className="grow viz-title">
         {title}
       </b>
@@ -528,7 +530,7 @@ function VisualCard({ visual }: { visual: ChatVisual }) {
       )}
       <Body v={v} />
       {full && (
-        <Sheet label={`${ICONS[v.kind]} ${title}`} onClose={() => setFull(false)} className="viz-sheet">
+        <Sheet label={title} onClose={() => setFull(false)} className="viz-sheet">
           <div className="artifact-body">
             <Body v={v} big />
           </div>

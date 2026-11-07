@@ -8,6 +8,7 @@ import { PET_COLOR, Pet, drawDeliveryBox, drawPetFigure } from './PetGame';
 import { SNAKE_COLOR, Snake, snakeInProgress } from './SnakeGame';
 import { TETRIS_COLOR, Tetris, tetrisInProgress } from './TetrisGame';
 import { bestScore } from './storage';
+import { Icon } from '../Icon';
 
 // The phone's Games app: a little launcher for Cubetris, Cable Snake and Desk Pet, something to do while the
 // team works. Backspace goes back to the list from a game.
@@ -89,7 +90,9 @@ function Card({ icon, name, what, status, color, onOpen }: { icon: (ctx: CanvasR
         <span className="game-card-what">{what}</span>
         <span className="game-card-status">{status}</span>
       </span>
-      <span className="game-card-go">▶</span>
+      <span className="game-card-go">
+        <Icon name="chevron-right" />
+      </span>
     </button>
   );
 }
@@ -115,15 +118,17 @@ function Launcher({ onGame }: { onGame: (g: GameId) => void }) {
 
   return (
     <div className="phone-scroll games-list">
-      <h3 className="phone-h">🎮 Games</h3>
+      <h3 className="phone-h">
+        <Icon name="gamepad-2" /> Games
+      </h3>
       <p className="muted small games-blurb">Something to do while the team works. They pause when you put the phone away.</p>
-      <Card icon={drawTetrisThumb} name="Cubetris" what="Falling blocks (a Tetris clone)" status={tetrisInProgress() ? '⏸ Game paused, tap to resume' : best('tetris')} color={TETRIS_COLOR} onOpen={() => onGame('tetris')} />
-      <Card icon={drawSnakeThumb} name="Cable Snake" what="Eat the bugs (a Snake clone)" status={snakeInProgress() ? '⏸ Game paused, tap to resume' : best('snake')} color={SNAKE_COLOR} onOpen={() => onGame('snake')} />
+      <Card icon={drawTetrisThumb} name="Cubetris" what="Falling blocks (a Tetris clone)" status={tetrisInProgress() ? 'Game paused, tap to resume' : best('tetris')} color={TETRIS_COLOR} onOpen={() => onGame('tetris')} />
+      <Card icon={drawSnakeThumb} name="Cable Snake" what="Eat the bugs (a Snake clone)" status={snakeInProgress() ? 'Game paused, tap to resume' : best('snake')} color={SNAKE_COLOR} onOpen={() => onGame('snake')} />
       <Card
         icon={petIcon}
         name="Desk Pet"
         what="Your office pet (a Tamagotchi clone)"
-        status={view ? `${view.name} the ${STAGES[stage(view.xp)].title.toLowerCase()} ${moodText[mood(view)]}` : '📦 A delivery is waiting for you'}
+        status={view ? `${view.name} the ${STAGES[stage(view.xp)].title.toLowerCase()} ${moodText[mood(view)]}` : 'A delivery is waiting for you'}
         color={PET_COLOR}
         onOpen={() => onGame('pet')}
       />
