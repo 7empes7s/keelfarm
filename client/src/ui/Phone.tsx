@@ -40,6 +40,8 @@ import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared
 import { useCeoDraft } from './goTo';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
+import { ChatTextPill, isPinching, lastPinchAt, useChatPinch } from './ChatZoom';
+import { pinchCancels } from './chatPinch';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -391,7 +393,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
-  const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
+  const press = useRef<{ x: number; y: number; at: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   if (m?.from === 'office') return m.notice ? <NoticeCard text={officeText(m.text)} notice={m.notice} /> : <div className="bubble-office">{officeText(m.text)}</div>;
   const mine = !m || m.from === 'manager';
@@ -401,20 +403,22 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const id = m?.id;
   const files: FileRef[] = (m ? m.attachments : item.out!.files) ?? [];
 
-  // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click).
+  // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click). A second
+  // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu.
   const end = () => {
     const p = press.current;
     press.current = null;
     if (!p) return;
     clearTimeout(p.timer);
     setDx(0);
-    if (p.swipe && id !== undefined) onReply(id);
+    if (p.swipe && id !== undefined && !pinchCancels(p.at, lastPinchAt())) onReply(id);
   };
   const gestures = {
     onPointerDown: (e: ReactPointerEvent) => {
-      if (e.pointerType === 'mouse' || (e.target as HTMLElement).closest('a, button')) return;
-      const p = { x: e.clientX, y: e.clientY, long: false, swipe: false, timer: 0 };
+      if (e.pointerType === 'mouse' || isPinching() || (e.target as HTMLElement).closest('a, button')) return;
+      const p = { x: e.clientX, y: e.clientY, at: performance.now(), long: false, swipe: false, timer: 0 };
       p.timer = window.setTimeout(() => {
+        if (pinchCancels(p.at, lastPinchAt())) return;
         p.long = true;
         onActions(item);
       }, LONG_PRESS_MS);
@@ -423,6 +427,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
     onPointerMove: (e: ReactPointerEvent) => {
       const p = press.current;
       if (!p || p.long) return;
+      if (pinchCancels(p.at, lastPinchAt())) return (p.swipe = false), end();
       const mx = e.clientX - p.x;
       const my = e.clientY - p.y;
       if (Math.abs(mx) > 10 || Math.abs(my) > 10) clearTimeout(p.timer);
@@ -558,6 +563,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
   const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
   const scroller = useRef<HTMLDivElement>(null);
+  const [logWrap, setLogWrap] = useState<HTMLDivElement | null>(null);
+  useChatPinch(logWrap, useCallback(() => scroller.current, []));
   const form = useRef<HTMLFormElement>(null);
   const stick = useRef(true);
   const opened = useRef(false);
@@ -743,7 +750,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         </div>
         <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} />
       </div>
-      <div className="chat-log-wrap">
+      <div className="chat-log-wrap" ref={setLogWrap}>
+        <ChatTextPill />
         <div
           className="chat-log"
           ref={scroller}

@@ -191,6 +191,21 @@ const SCREENS: Screen[] = [
     },
     tabs: [],
   },
+  {
+    // the chat's text at its smallest, normal and biggest (#135): bubbles, cards and chips reflow, nothing sideways
+    name: 'pocket chat text size',
+    widths: POCKET,
+    open: async (page) => {
+      await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
+      const root = await pocket(page, 'chat');
+      await expect(root.locator('.action-card').first()).toBeVisible({ timeout: 90_000 });
+      return root;
+    },
+    tabs: [80, 100, 200].map((v) => ({
+      name: `text ${v}%`,
+      go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
+    })),
+  },
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
