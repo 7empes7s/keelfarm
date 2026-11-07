@@ -5,6 +5,7 @@ import { closedHow, closerOf, decisionCounts, type Decision, type DecisionCloser
 import { ago } from '../../../shared/usage';
 import { useMinute } from './Decisions';
 import { go } from './goTo';
+import { Icon } from './Icon';
 
 // The decision log (#208), under the approvals: the last week's closed questions, each with its answer, how it closed
 // (an option, a reply to a message you can jump to, a re-ask, the CEO, an action with its issue, dropped), when, and
@@ -33,11 +34,11 @@ function Entry({ d, now }: { d: Decision; now: number }) {
       <div className="decision-log-how small muted">
         {how.messageId !== undefined ? (
           <button type="button" className="decision-log-link" onClick={() => go({ kind: 'ceo', jump: how.messageId })}>
-            ↪ {how.text}
+            <Icon name="redo-2" /> {how.text}
           </button>
         ) : issueUrl ? (
           <a className="decision-log-link" href={issueUrl} target="_blank" rel="noopener noreferrer">
-            ↗ {how.text}
+            <Icon name="external-link" /> {how.text}
           </a>
         ) : (
           <span>{how.text}</span>
@@ -69,7 +70,7 @@ export function DecisionLog({ heading }: { heading: (text: string) => ReactNode 
   ];
   return (
     <section className="decision-log" aria-label="Decision log">
-      {heading('🗂 Decision log')}
+      {heading('Decision log')}
       <div className="decision-log-bar" role="img" aria-label={parts.map(([l, n]) => `${n} ${l}`).join(', ')}>
         {parts.map(([l, n, cls]) => n > 0 && <i key={l} className={cls} style={{ flexGrow: n / total }} />)}
       </div>

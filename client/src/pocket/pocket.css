@@ -1,16 +1,6 @@
 /* Pocket mode's own look (pocket/Pocket.tsx), loaded only in pocket mode. */
-@import './pocket-icons.css';
 
-/* Lucide icons in place of emoji, everywhere pocket mode draws text: the font covers only the emoji it replaces. */
-html.pocket-mode {
-  --font: 'Pocket Icons', Fredoka, 'Segoe UI', system-ui, sans-serif;
-  /* ⚙️, ⚠️ and the like ask for emoji presentation; this lets the icon font draw them too */
-  font-variant-emoji: text;
-}
-html.pocket-mode[data-readable-font] {
-  --font: 'Pocket Icons', Verdana, Tahoma, 'Trebuchet MS', 'Segoe UI', sans-serif;
-}
-/* buttons and fields take the page's font (browsers give them their own), so their icons are Lucide too */
+/* buttons and fields take the page's font (browsers give them their own) */
 :where(html.pocket-mode) :where(button, select, input, textarea) {
   font-family: var(--font);
 }
@@ -166,18 +156,20 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 
 .pk-railed .pk-body {
+  /* the rail's width, which the full-screen chat also starts at (#242) */
+  --pk-rail-w: 92px;
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
 }
-/* the navigation rail: icons and labels, ⚙️ at its foot (medium widths: icons only) */
+/* the navigation rail: icons and labels, Settings at its foot (medium widths: icons only) */
 .pk-railed .pk-tabs {
   order: 0;
   flex: none;
   flex-direction: column;
   gap: 4px;
-  width: 92px;
+  width: var(--pk-rail-w);
   padding: 8px 6px;
   border-top: none;
   border-right: var(--ds-border-strong) solid var(--ds-outline);
@@ -191,8 +183,8 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 .pk-railed .pk-tab-console {
   margin-top: auto;
 }
-.pk-layout-medium .pk-tabs {
-  width: 68px;
+.pk-layout-medium .pk-body {
+  --pk-rail-w: 68px;
 }
 .pk-layout-medium .pk-tab-label {
   position: absolute;
@@ -393,25 +385,22 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   background: var(--ds-surface-raised);
   border-bottom: var(--ds-border-strong) solid var(--ds-outline);
 }
-.pk-dock-x {
-  width: var(--ds-target);
-  height: var(--ds-target);
-}
 .pk-dock .phone-chat {
   width: 100%;
   background: var(--paper);
 }
-/* the chat full screen (#201): wide, the docked chat covers the rail and the pages, which keep their place behind it;
-   on a phone the tab bar and the working strip's second line step aside */
+/* the chat full screen (#201): wide, the docked chat covers the pages beside the rail (#242: the rail stays, and tapping
+   it leaves full screen), the pages keeping their place behind it; on a phone the tab bar and the working strip's
+   second line step aside */
 .pk-railed.pk-chat-full .pk-dock {
   position: absolute;
-  inset: 0;
+  inset: 0 0 0 var(--pk-rail-w);
   z-index: 4;
   width: auto;
   border-left: none;
   box-shadow: none;
 }
-.pk-railed.pk-chat-full :is(.pk-tabs, .pk-work) {
+.pk-railed.pk-chat-full .pk-work {
   visibility: hidden;
 }
 .pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
@@ -537,6 +526,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   overflow-x: auto;
 }
 .pk-layout-expanded .kanban-embedded .kanban-5 {
+  --kc-open: minmax(200px, 1fr);
   grid-template-columns: repeat(5, minmax(200px, 1fr));
 }
 
@@ -548,6 +538,17 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 .pk-railed .pk-section > :is(.pk-h, p) {
   grid-column: 1 / -1;
+}
+
+/* Team: a floor's "+ Agent" at the end of its header, and the card of someone just added (#243) */
+.pk-h .pk-add-agent {
+  margin-left: auto;
+}
+.pk-agent {
+  transition: box-shadow var(--ds-dur-slow) var(--ds-ease);
+}
+.pk-agent.pk-agent-new {
+  box-shadow: 0 0 0 var(--ds-border-strong) var(--ds-good-fill), var(--ds-shadow-2);
 }
 
 /* Approvals: the decisions as a list, the one picked beside it */

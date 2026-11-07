@@ -18,7 +18,7 @@ import type { HealthView } from '../../shared/health';
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
   if (method !== 'GET' && useStore.getState().replaying) {
-    useStore.getState().pushToast('info', '▶ Replaying: live actions are off. Press Esc to go back to the live office.');
+    useStore.getState().pushToast('info', 'Replaying: live actions are off. Press Esc to go back to the live office.');
     throw new Error('The time-lapse is playing');
   }
   const res = await fetch(url, {
@@ -120,7 +120,7 @@ export const api = {
   sendToQa: (repoId: string, n: number, agentId?: string) => call('POST', `${r(repoId)}/pulls/${n}/qa`, agentId ? { agentId } : {}),
   sendBack: (repoId: string, n: number, note?: string) => call('POST', `${r(repoId)}/pulls/${n}/fix`, { note }),
   /** A new agent on the floor (refused past Settings → Most agents per floor). Empty settings use the office's defaults. */
-  hireAgent: (repoId: string, opts: AgentSetupPatch & { name?: string } = {}) => call<AgentView>('POST', `${r(repoId)}/agents`, opts),
+  hireAgent: (repoId: string, opts: AgentSetupPatch & { name?: string } = {}, toast = true) => call<AgentView>('POST', `${r(repoId)}/agents`, opts, toast),
   updateAgent: (id: string, patch: AgentSetupPatch & { name?: string; look?: 'feminine' | 'masculine'; style?: AgentStyle | null }) => call('PATCH', `/api/agents/${id}`, patch),
   fireAgent: (id: string) => call('DELETE', `/api/agents/${id}`),
   /** waitForDeps: refuse an issue that still waits for open ones, as the whiteboard's stickies do. */

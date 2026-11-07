@@ -333,7 +333,7 @@ const Placed = memo(function Placed({ slot, item, repo, floor, carrying }: { slo
     carrying
       ? null
       : item === 'arcade'
-        ? { id: `decor:${slot}`, label: "Play the arcade (your phone's games) · move it from the 📦 decor box", action: { kind: 'decoration', op: 'arcade', slot } }
+        ? { id: `decor:${slot}`, label: "Play the arcade (your phone's games) · move it from the decor box", action: { kind: 'decoration', op: 'arcade', slot } }
         : { id: `decor:${slot}`, label: `Pick up the ${name} to move it`, action: { kind: 'decoration', op: 'take', slot } },
     4.5,
   );

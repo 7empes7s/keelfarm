@@ -152,7 +152,7 @@ const STICKER_KEY = 'cubefarm:stickers';
 function openPresent(i: number, day: string, at: THREE.Vector3, tintMug: ThemeProps['office']['tintMug']): string | null {
   const opened = daily(PRESENT_KEY, day);
   if (opened.includes(i)) {
-    useStore.getState().pushToast('info', '🎁 Already opened. Santa wraps them again tomorrow!');
+    useStore.getState().pushToast('info', 'Already opened. Santa wraps them again tomorrow!');
     return null;
   }
   daily(PRESENT_KEY, day, [...opened, i]);
@@ -163,20 +163,20 @@ function openPresent(i: number, day: string, at: THREE.Vector3, tintMug: ThemePr
     const [color, name] = MUG_GIFTS[i % MUG_GIFTS.length];
     tintMug(s.held.id, color);
     s.setHeld({ ...s.held });
-    s.pushToast('success', `🎁 A ${name} mug! The one in your hand is festive now.`);
+    s.pushToast('success', `A ${name} mug! The one in your hand is festive now.`);
     return `mug:${name}`;
   }
   if (roll === 2) {
     burstAt(at.x, at.y + 0.3, at.z, THEMES.christmas.confetti!.colors);
     chime(at);
-    s.pushToast('success', '🎁 Pop! A burst of confetti. Merry Christmas!');
+    s.pushToast('success', 'Pop! A burst of confetti. Merry Christmas!');
     return 'confetti';
   }
   const sticker = STICKERS[(i + day.length) % STICKERS.length];
   const have = loadList<string>(STICKER_KEY);
   if (!have.includes(sticker)) saveList(STICKER_KEY, [...have, sticker]);
   chime(at);
-  s.pushToast('success', `🎁 A sticker for your phone: ${sticker}`);
+  s.pushToast('success', `A sticker for your phone: ${sticker}`);
   return `sticker:${sticker}`;
 }
 
@@ -195,7 +195,7 @@ function Tree({ at }: { at: Spot[] }) {
           <mesh geometry={star} material={paintedGlow()} />
           <TreeLights />
           {PRESENTS.map((p, i) => (
-            <Hotspot key={i} id={`present-${i}`} label={opened.includes(i) ? 'Opened: more tomorrow' : 'Open a present 🎁'} position={[p.x, 0, p.z]} rotationY={i * 0.4}>
+            <Hotspot key={i} id={`present-${i}`} label={opened.includes(i) ? 'Opened: more tomorrow' : 'Open a present'} position={[p.x, 0, p.z]} rotationY={i * 0.4}>
               <mesh geometry={opened.includes(i) ? geos[i].open : geos[i].closed} material={paintedToon()} castShadow />
             </Hotspot>
           ))}
@@ -450,5 +450,5 @@ export default function Christmas({ kind, floor, top, office }: ThemeProps) {
 function status(day: string) {
   const opened = daily(PRESENT_KEY, day).length;
   const stickers = loadList<string>(STICKER_KEY).length;
-  return `🎁 ${opened}/${PRESENTS.length} presents opened today${stickers ? ` · ${stickers} sticker${stickers === 1 ? '' : 's'}` : ''}`;
+  return `${opened}/${PRESENTS.length} presents opened today${stickers ? ` · ${stickers} sticker${stickers === 1 ? '' : 's'}` : ''}`;
 }

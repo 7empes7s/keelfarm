@@ -6,6 +6,8 @@ import { ago } from '../../../shared/usage';
 import { Menu } from './Menu';
 import { Sheet } from './Sheet';
 import { sendToCeo } from './chatSend';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import './decisions.css';
 
 // Open decisions (#114, shared/decisions.ts): the chat's "Waiting on you" tray just above the message box, and the
@@ -13,7 +15,7 @@ import './decisions.css';
 // that asked it, or the team change's or charter's own call. Not now / Drop it are in its ⋯. Tapping the question opens
 // it whole in a sheet, with the message that asked it (#183).
 
-const ICON: Record<Decision['kind'], string> = { suggestion: '🧭', question: '❓', team: '👥', charter: '🎯', design: '🎨' };
+const ICON: Record<Decision['kind'], IconName> = { suggestion: 'compass', question: 'circle-help', team: 'users', charter: 'target', design: 'palette' };
 /** api() already toasted a failure. */
 const attempt = (fn: () => Promise<unknown>) => fn().catch(() => undefined);
 
@@ -49,7 +51,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
     <div className="decision-options decision-probably">
       <span className="decision-probably-what small muted">Answered? {d.probably.done}</span>
       <button type="button" className="decision-option decision-yes" onClick={() => void attempt(() => api.decideOpen(d.id, 'answered'))} aria-label={`Yes, answered: ${d.probably.done}`}>
-        ✓ Yes
+        <Icon name="check" /> Yes
       </button>
       <button type="button" className="decision-option" onClick={() => void attempt(() => api.decideOpen(d.id, 'open'))}>
         Still open
@@ -80,7 +82,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
     <article className="decision-card" aria-label={d.question}>
       <div className="decision-head">
         <span className="decision-icon" aria-hidden>
-          {ICON[d.kind]}
+          <Icon name={ICON[d.kind]} />
         </span>
         <div className="grow">
           <button type="button" className="decision-q" aria-haspopup="dialog" onClick={() => setWhole(true)}>
@@ -91,9 +93,9 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
         <Menu
           label={`More for “${d.question}”`}
           items={[
-            { label: '⏰ Not now', hint: 'Back in 24 hours', onSelect: () => void attempt(() => api.decideOpen(d.id, 'snooze')) },
-            { label: '🗑 Drop it', hint: 'Never raised again', onSelect: () => void attempt(() => api.decideOpen(d.id, 'drop')) },
-            onJump && d.messageId !== null && { label: '↪ Jump to the message', onSelect: () => onJump(d.messageId!) },
+            { label: 'Not now', hint: 'Back in 24 hours', onSelect: () => void attempt(() => api.decideOpen(d.id, 'snooze')) },
+            { label: 'Drop it', hint: 'Never raised again', onSelect: () => void attempt(() => api.decideOpen(d.id, 'drop')) },
+            onJump && d.messageId !== null && { label: 'Jump to the message', onSelect: () => onJump(d.messageId!) },
           ]}
         />
       </div>
@@ -121,7 +123,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
                 onJump(d.messageId!);
               }}
             >
-              ↪ Jump to the message
+              <Icon name="redo-2" /> Jump to the message
             </button>
           )}
         </Sheet>
@@ -156,14 +158,16 @@ export function DecisionTray({ hide, typing, onPick, onJump }: { hide?: number; 
     return (
       <div className="decision-tray decision-tray-closed">
         <button type="button" className="decision-pill" aria-expanded={false} onClick={() => setOpen(true)}>
-          🧭 {label}
+          <Icon name="compass" /> {label}
         </button>
       </div>
     );
   return (
     <section className="decision-tray" aria-label="Waiting on you">
       <div className="decision-tray-head">
-        <b className="small grow">🧭 Waiting on you · {list.length}</b>
+        <b className="small grow">
+          <Icon name="compass" /> Waiting on you · {list.length}
+        </b>
         {list.length > 1 && (
           <span className="decision-pages small muted" aria-live="polite">
             <span className="decision-dots" aria-hidden>
@@ -187,7 +191,7 @@ export function DecisionTray({ hide, typing, onPick, onJump }: { hide?: number; 
   );
 }
 
-const DECISIONS_GROUP = '🧭 Questions from the CEO';
+const DECISIONS_GROUP = 'Questions from the CEO';
 
 /** The CEO's open questions for the approvals (their team changes and charter changes are cards there already). */
 export function DecisionList({ heading }: { heading: (text: string) => ReactNode }) {

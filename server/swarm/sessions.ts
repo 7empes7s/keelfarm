@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
 import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
+import { agentPortEnv } from '../portLanes.ts';
 import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
 import { CloudError } from '../box.ts';
@@ -24,6 +25,7 @@ import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
+import { knownUrl } from '../../shared/browserAddress.ts';
 import { AgentTerminal } from '../terminal.ts';
 import { INSTALL_STEP } from '../../shared/types.ts';
 import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo, WorldSnapshot } from '../../shared/types.ts';
@@ -177,7 +179,7 @@ export abstract class SwarmSessions extends SwarmAgents {
       if (this.repoRt.get(repo.id)?.cloneStatus !== 'ready') await this.cloneRepo(repo.id);
       const note = (text: string) => this.appendLog(a, [{ kind: 'system', text }]);
       const cwd = await setUpDesk(this.agentRt.get(a.id)?.terminal, {
-        release: () => this.releaseDesk(a, repo),
+        release: () => this.releaseDesk(a, repo).then(() => undefined),
         prepare: () => this.machinesFor(a).prepareDesk(this.machineOf(a), repo.fullName, { defaultBranch: repo.defaultBranch, pr: base.pr }, branch, note),
       });
       this.deskAlerts.delete(a.id);
@@ -353,7 +355,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     refusal: (kind) => this.health.refusal(kind),
     forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
     previewUrl: (repoId, pr, agentId) => this.labPreviewUrl(repoId, pr, agentId),
-    shot: (agentId, file) => this.labShot(agentId, file),
+    shot: (agentId, file, page) => this.labShot(agentId, file, page),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
   });
 
@@ -416,19 +418,21 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   /** A screenshot the lab took for an agent: their screen in the office, and QA's evidence, as a Playwright one would. */
-  protected labShot(agentId: string, file: string) {
+  protected labShot(agentId: string, file: string, page: string) {
     const a = this.state.agents.find((x) => x.id === agentId);
-    if (a) void fs.readFile(file).then((data) => this.screenTaken(a, data, 'image/png'), () => undefined);
+    if (a) void fs.readFile(file).then((data) => this.screenTaken(a, data, 'image/png', page), () => undefined);
   }
 
-  protected screenTaken(a: PersistedAgent, data: Buffer, mime: string) {
+  /** page: the address the screenshot is of, when known; else their last known one stays (#230). */
+  protected screenTaken(a: PersistedAgent, data: Buffer, mime: string, page?: string | null) {
     const rt = this.agentRt.get(a.id);
     if (!rt) return;
     const at = Date.now();
+    rt.browserUrl = knownUrl(rt.browserUrl, page);
     rt.screenshot = { data, mime, at };
     rt.shots.push({ data, mime, url: rt.browserUrl, at });
     if (rt.shots.length > 12) rt.shots.shift();
-    this.broadcast({ type: 'screen', agentId: a.id, url: rt.browserUrl, at });
+    this.broadcast({ type: 'screen', agentId: a.id, url: rt.browserUrl, at, earlier: rt.shots.slice(-6, -1).map((s) => s.at) });
     void removeScreens(a.id)
       .then(() => fs.mkdir(SCREENS_DIR, { recursive: true }))
       .then(() => fs.writeFile(screenFile(a.id, mime), data))
@@ -530,7 +534,8 @@ export abstract class SwarmSessions extends SwarmAgents {
         additionalDirectories: linked ?? (a.host === 'box' ? [] : this.linkedRepos(repo).map((r) => this.backend.mainDir(r.fullName))),
         role: a.role,
         task: a.task,
-        env: this.machineEnv(a),
+        // On this computer a demo office the agent starts takes their own ports, never the live office's (#227).
+        env: a.host === 'box' ? this.machineEnv(a) : { ...agentPortEnv(this.port(a)), ...this.machineEnv(a) },
         outputSchema,
         ...(box ? { box } : {}),
         // An agent's CLI stays at its prompt after building or fixing, for the manager and for follow-ups; after QA it
@@ -623,8 +628,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, result.costUsd, a.endedAt);
     this.ledger({ kind: 'session', agentId: a.id, key: `${a.id}:${a.startedAt}:${a.endedAt}`, costUsd: result.costUsd, turns: result.turns }, false); // emitted below
-    // Dev servers the agent forgot to stop would otherwise keep its port and lock its desk folder.
-    void this.releaseDesk(a, repo).catch(() => undefined);
+    // Dev servers (or a demo office) the agent forgot to stop would otherwise keep its ports and lock its desk folder.
+    void this.releaseDesk(a, repo)
+      .then((busy) => {
+        if (busy.length) this.appendLog(a, [{ kind: 'system', text: `⚠ Port${busy.length > 1 ? 's' : ''} ${busy.join(', ')} still in use after the session's clean-up.` }]);
+      })
+      .catch(() => undefined);
     if (result.interrupted) this.interrupted(a);
     const killed = this.health.ended(a, sessionKind(a), result.errors, !this.dropping.has(a.id) && a.status !== 'stopped', resumesAfterRestart(a, false, this.backend.demo));
     const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' || !!killed };

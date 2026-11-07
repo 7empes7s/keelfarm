@@ -6,6 +6,7 @@ import { agentsOnRepo, useStore } from '../store';
 import { backlogParts, backlogSplit, buildingOf, focusProgress, objectiveParts, planBatches, type BacklogSplit } from '../../../shared/progressBars';
 import type { RepoView } from '../../../shared/types';
 import { ProgressBar } from './ProgressBar';
+import { Icon } from './Icon';
 
 /** Merges per day this week as small bars, oldest first. */
 function Trend({ days }: { days: number[] }) {
@@ -57,7 +58,9 @@ export function FloorProgress() {
   if (!repos.length) return null;
   return (
     <>
-      <h3 className="section">📈 Progress</h3>
+      <h3 className="section">
+        <Icon name="trending-up" /> Progress
+      </h3>
       {repos.map((repo) => {
         const insights = repo.charter.insights;
         const focus = insights ? focusProgress(insights.objectives, insights.focus) : null;
@@ -85,7 +88,11 @@ export function FloorProgress() {
             {plans.slice(0, 3).map((p) => (
               <ProgressBar
                 key={p.filedAt}
-                label={`🧭 ${p.name}`}
+                label={
+                  <>
+                    <Icon name="compass" /> {p.name}
+                  </>
+                }
                 value={`${p.merged.length} of ${p.total} merged`}
                 parts={[
                   { key: 'merged', label: 'Merged', value: p.merged.length },

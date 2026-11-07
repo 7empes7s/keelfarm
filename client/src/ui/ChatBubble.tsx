@@ -22,6 +22,7 @@ import { Resume } from './TeamChanges';
 import { clock } from './phoneParts';
 import { isPinching, lastPinchAt } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
+import { Icon } from './Icon';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -44,7 +45,7 @@ function ReplayButton({ m }: { m: PhoneMessage }) {
       aria-label={playing ? 'Stop this message' : 'Play this message'}
       onClick={() => void import('./voiceMessages').then((v) => (playing ? v.stopSpeaking() : kind !== 'gone' && v.replayMessage(m, kind)))}
     >
-      {playing ? '⏹' : '▶'}
+      <Icon name={playing ? 'square' : 'play'} />
     </button>
   );
 }
@@ -70,10 +71,10 @@ interface BubbleProps {
 
 
 function DeliveryTick({ d }: { d: Delivery }) {
-  const icon = { sending: '🕓', sent: '✓', read: '✓✓', replied: '↩', failed: '⚠' }[d];
+  const icon: Record<Delivery, ReactNode> = { sending: <Icon name="clock" />, sent: <Icon name="check" />, read: <Icon name="check-check" />, replied: <Icon name="reply" />, failed: <Icon name="triangle-alert" /> };
   return (
     <span className={`bubble-tick bubble-tick-${d}`} title={DELIVERY_LABEL[d]}>
-      <span aria-hidden>{icon}</span>
+      <span aria-hidden>{icon[d]}</span>
       <span className="sr-only">{DELIVERY_LABEL[d]}</span>
     </span>
   );
@@ -85,16 +86,16 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
     <div className="bubble-tools">
       {id !== undefined && (
         <button type="button" className="bubble-tool" aria-label="Reply to this message" title="Reply" onClick={() => onReply(id)}>
-          ↩
+          <Icon name="reply" />
         </button>
       )}
       {item.m?.from === 'ceo' && (
         <button type="button" className="bubble-tool" aria-label="React to this message" aria-haspopup="dialog" title="React" onClick={() => onActions(item)}>
-          ☺
+          <Icon name="smile-plus" />
         </button>
       )}
       <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
-        ⋯
+        <Icon name="ellipsis" />
       </button>
     </div>
   );
@@ -160,7 +161,9 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
 
   const quote =
     quoted === undefined ? null : quoted === null ? (
-      <div className="bubble-quote bubble-quote-gone">↩ The original message is no longer saved</div>
+      <div className="bubble-quote bubble-quote-gone">
+        <Icon name="reply" /> The original message is no longer saved
+      </div>
     ) : (
       <button
         type="button"
@@ -168,7 +171,7 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
         onClick={() => onQuote(quoted.id)}
         aria-label={`In reply to ${who(quoted, ceoName)}: ${excerpt(speechText(quoted.text, 300), 140)}. Show the original message.`}
       >
-        <span className="bubble-quote-from">↩ {quoted.from === 'manager' ? 'You' : who(quoted, ceoName)}</span>
+        <span className="bubble-quote-from"><Icon name="reply" /> {quoted.from === 'manager' ? 'You' : who(quoted, ceoName)}</span>
         <span className="bubble-quote-text">{excerpt(quoted.text, 140)}</span>
       </button>
     );
@@ -179,7 +182,7 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
       <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (
           <span className={`bubble-swipe ${dx > SWIPE_PX ? 'bubble-swipe-on' : ''}`} aria-hidden>
-            ↩
+            <Icon name="reply" />
           </span>
         )}
         {!mine && <div className="bubble-from">{ceoName}</div>}
@@ -217,22 +220,33 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
-        {m?.used && <UsedLine used={m.used} />}
-        {!!m?.steps?.length && <StepsList steps={m.steps} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
-        <div className="bubble-time">
-          {m && !mine && <ReplayButton m={m} />}
-          {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
-          {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
-          {m?.quiet && m.telegram !== 'out' && <span className="bubble-via">📱 not sent: you were in the app · </span>}
-          {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
-          {clock(at)}
-          {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
+        {/* one compact meta row (#215): Used and Steps fold open across it, the time on its right */}
+        <div className="bubble-meta">
+          {m?.used && <UsedLine used={m.used} />}
+          {!!m?.steps?.length && <StepsList steps={m.steps} />}
+          <div className="bubble-time">
+            {m && !mine && <ReplayButton m={m} />}
+            {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
+            {m?.telegram === 'out' && (
+              <span className="bubble-via">
+                <Icon name="plane" /> sent to Telegram ·{' '}
+              </span>
+            )}
+            {m?.quiet && m.telegram !== 'out' && (
+              <span className="bubble-via">
+                <Icon name="smartphone" /> not sent: you were in the app ·{' '}
+              </span>
+            )}
+            {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
+            {clock(at)}
+            {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
+          </div>
         </div>
         {m && <Reactions m={m} ceoName={ceoName} />}
         {delivery === 'failed' && (
           <button type="button" className="bubble-retry" onClick={() => retrySend(item.out!.key)}>
-            ⚠ Failed, tap to retry
+            <Icon name="triangle-alert" /> Failed, tap to retry
           </button>
         )}
       </div>

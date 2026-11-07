@@ -399,6 +399,19 @@ describe('quiet while in the app (#210)', () => {
     expect(loud.posts).toHaveLength(3);
   });
 
+  it('sends nothing during a voice call (#287), even from a hidden tab with quiet-in-app off, and as usual after it', async () => {
+    const o = await office(false);
+    const phone = { OPEN: 1, readyState: 1 };
+    o.n.attention.receive(phone, JSON.stringify({ type: 'attention', visible: false, call: true }));
+    o.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.');
+    await pastGrace();
+    expect([o.posts, o.tg]).toEqual([[], []]);
+    o.n.attention.receive(phone, JSON.stringify({ type: 'attention', visible: false }));
+    o.n.notify('ceoMessage', 'Mimoun', 'Call over: PR #3 merged.');
+    await pastGrace();
+    expect(o.posts).toHaveLength(3);
+  });
+
   it('cancels a message read within the grace, and clears one already sent on every device', async () => {
     const o = await office();
     o.n.notify('ceoMessage', 'Mimoun', 'First');

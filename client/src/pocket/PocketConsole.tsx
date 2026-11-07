@@ -9,6 +9,7 @@ import type { HistoryFocus } from '../ui/HistoryTab';
 import { InfoButton } from '../ui/InfoButton';
 import { useRunningPreviews } from '../ui/PreviewsPage';
 import { useStore } from '../store';
+import { Icon } from '../ui/Icon';
 
 /** A section, or 'menu': the list of them. */
 export type ConsoleSection = SectionId | 'menu';
@@ -43,12 +44,12 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
       <div className="pk-console" ref={body}>
         <div className="cn-back-bar">
           <button className="btn btn-ghost cn-back" onClick={() => pick('menu')} aria-label="Back to settings">
-            ‹ Settings
+            <Icon name="chevron-left" /> Settings
           </button>
           <h2 className="cn-title">
-            <span aria-hidden>{open.icon}</span> {open.label}
+            <Icon name={open.icon} /> {open.label}
           </h2>
-          <InfoButton screen={open.id} />
+          <InfoButton screen={open.id} className="ds-btn ds-btn-icon" />
         </div>
         <div className="ds-stack-scope" role="region" aria-label={open.label}>
           <SectionBody id={open.id} where="pocket" focus={{ history, repoId }} />
@@ -74,11 +75,11 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
           <ul>
             <li>
               <button className="cn-item cn-row" onClick={() => useStore.getState().openOverlay({ kind: 'previews' })}>
-                <span aria-hidden>🖥️</span>
+                <Icon name="monitor" />
                 <span className="cn-item-text">Previews</span>
                 <Badge n={previews} />
                 <span className="cn-chevron" aria-hidden>
-                  ›
+                  <Icon name="chevron-right" />
                 </span>
               </button>
             </li>
@@ -89,17 +90,17 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
         GROUPS.map((g) => (
           <section key={g.id} className="cn-list" aria-label={g.label}>
             <h3 className="cn-list-head">
-              {g.icon} {g.label}
+              <Icon name={g.icon} /> {g.label}
             </h3>
             <ul>
               {sectionsIn(g.id, 'pocket').map((s) => (
                 <li key={s.id}>
                   <button className="cn-item cn-row" onClick={() => pick(s.id)}>
-                    <span aria-hidden>{s.icon}</span>
+                    <Icon name={s.icon} />
                     <span className="cn-item-text">{s.label}</span>
                     <Badge n={badges[s.id]} />
                     <span className="cn-chevron" aria-hidden>
-                      ›
+                      <Icon name="chevron-right" />
                     </span>
                   </button>
                 </li>

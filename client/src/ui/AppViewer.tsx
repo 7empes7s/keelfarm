@@ -7,6 +7,7 @@ import { ProgressBar } from './ProgressBar';
 import type { PreviewStatus, PreviewView, RepoView } from '../../../shared/types';
 import { atPath, comparePath, newPathSync, onOfficeComputer, prAsPreview, qaShotUrl, reachable, relayPath, type Side } from './channels';
 import { sendToCeo } from './chatSend';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { ChannelBar, HeldNote, PreviewStats } from './PreviewChannels';
 import { closeOverlay, Panel } from './Panel';
@@ -35,9 +36,9 @@ const STEPS: { status: PreviewStatus; label: string }[] = [
 ];
 
 const WIDTHS: [Width, string][] = [
-  ['phone', '📱 Phone'],
-  ['tablet', '▭ Tablet'],
-  ['desktop', '🖥 Desktop'],
+  ['phone', 'Phone'],
+  ['tablet', 'Tablet'],
+  ['desktop', 'Desktop'],
 ];
 
 // The last width picked, so reopening the viewer keeps it.
@@ -133,7 +134,9 @@ export function PreviewSettings({ repo, saveLabel = 'Save', onSaved }: { repo: R
           Environment: {envChars.toLocaleString('en-US')} of {PREVIEW_ENV_MAX_CHARS.toLocaleString('en-US')} characters (each variable counts as KEY=value).
         </p>
       )}
-      {error && <div className="term-error">⚠️ {error}</div>}
+      {error && (
+        <div className="term-error"><Icon name="triangle-alert" /> {error}</div>
+      )}
       <div className="row">
         <button className="btn btn-small btn-good" disabled={busy || (!dirty && !onSaved) || (unconfigured && !command.trim())}>
           {busy ? 'Saving…' : saveLabel}
@@ -224,9 +227,7 @@ function PreviewStage({
         {slow && !loaded && (
           <div className="app-frame-hint" role="status">
             <b>The app isn't showing up here.</b> It may refuse to be shown inside another page (X-Frame-Options or a CSP frame-ancestors rule).{' '}
-            <a href={src} target="_blank" rel="noreferrer">
-              Open it in a new tab ↗
-            </a>
+            <a href={src} target="_blank" rel="noreferrer">Open it in a new tab <Icon name="external-link" /></a>
             {!!shots?.length && (
               <>
                 <div className="small">QA's screenshots of it meanwhile:</div>
@@ -250,7 +251,7 @@ function PreviewStage({
     const now = STEPS[at];
     return (
       <div className={`app-state ${compact ? 'app-state-compact' : ''}`} role="status">
-        <div className="app-state-icon app-spin">⚙️</div>
+        <div className="app-state-icon app-spin"><Icon name="settings" /></div>
         <h3>Starting {label}…</h3>
         {steps && now && (
           <div className="app-steps">
@@ -270,7 +271,7 @@ function PreviewStage({
   if (preview.status === 'error') {
     return (
       <div className={`app-state app-state-left ${compact ? 'app-state-compact' : ''}`}>
-        <h3>⚠️ {label} didn't run</h3>
+        <h3><Icon name="triangle-alert" /> {label} didn't run</h3>
         <div className="term-error">{preview.error ?? 'The app stopped unexpectedly.'}</div>
         <pre className="term app-log" aria-label="Last output">
           {preview.logTail.length ? preview.logTail.join('\n') : '(no output)'}
@@ -278,19 +279,17 @@ function PreviewStage({
         <div className="row wrap">
           {preview.portOwner && onOtherPort && (
             <button className="btn btn-good" disabled={busy} onClick={onOtherPort}>
-              ⇢ Use another port
+              <Icon name="arrow-right" /> Use another port
             </button>
           )}
           <button className={`btn ${preview.portOwner && onOtherPort ? '' : 'btn-good'}`} disabled={busy} onClick={onStart}>
-            ↻ Try again
+            <Icon name="rotate-ccw" /> Try again
           </button>
           <button className="btn" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
-            ⚙️ Run settings
+            <Icon name="settings" /> Run settings
           </button>
           {onAsk && (
-            <button className="btn" onClick={onAsk}>
-              💬 Ask the CEO
-            </button>
+            <button className="btn" onClick={onAsk}><Icon name="message-circle" /> Ask the CEO</button>
           )}
         </div>
         {showSettings && <PreviewSettings repo={repo} />}
@@ -300,7 +299,7 @@ function PreviewStage({
   if (preview.status === 'unconfigured') {
     return (
       <div className="app-state app-state-left">
-        <h3>🛠️ How should the office run this app?</h3>
+        <h3><Icon name="wrench" /> How should the office run this app?</h3>
         <p className="muted">{preview.error ?? 'This floor has no package.json to fall back on.'} Give it a command that serves the app on the floor's port.</p>
         <PreviewSettings repo={repo} saveLabel="Save & start" onSaved={onStart} />
       </div>
@@ -308,20 +307,18 @@ function PreviewStage({
   }
   return (
     <div className={`app-state ${compact ? 'app-state-compact' : ''}`}>
-      <div className="app-state-icon">🖥️</div>
+      <div className="app-state-icon"><Icon name="monitor" /></div>
       <h3>{label} isn't running</h3>
       <p className="muted">
         {preview.pr
           ? `Start it to try the PR's head right here, beside ${repo.defaultBranch}. It runs from a worktree of its own and stops after a while unwatched.`
           : `Start it to use it right here. It runs from the floor's own preview worktree on port ${preview.port}.`}
       </p>
-      <button className="btn btn-good" disabled={busy} onClick={onStart}>
-        ▶ Start {label} (about 1 min)
-      </button>
+      <button className="btn btn-good" disabled={busy} onClick={onStart}><Icon name="play" /> Start {label} (about 1 min)</button>
       {!preview.pr && !compact && (
         <>
           <button className="btn btn-ghost btn-small" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
-            ⚙️ Run settings
+            <Icon name="settings" /> Run settings
           </button>
           {showSettings && (
             <div className="app-state-left app-settings">
@@ -491,8 +488,8 @@ function Bare({ title, className, accent, children }: { title: ReactNode; classN
 }
 
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). `bare`: inside the Previews page, which lists the channels. */
-export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; bare?: boolean }) {
+/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). `path`: at that page (#230). `bare`: inside the Previews page, which lists the channels. */
+export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string; bare?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
   const qaRecords = useStore((s) => s.qa);
@@ -514,6 +511,12 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
   }, [repoId, pr, merged]);
   useWatch(repoId, channel);
   const changes = usePrChanges(repo, channel, qa);
+  // An agent's browser address (#230): a PR opens at that page; main does below (`at`).
+  const { openPage } = changes;
+  useEffect(() => {
+    if (path && channel != null && channel === pr) openPage(path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening, not each time openPage is made anew
+  }, [path, channel, pr]);
 
   // Start with focus on the toolbar, so Esc closes the panel until the app itself is clicked.
   useEffect(() => {
@@ -573,16 +576,16 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
     setCompare(!compare);
   };
   const toggleQa = () => changes.setOpen(!changes.open);
-  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : url); // a PR (or a merged one, on main) opens at the page to look at
+  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : path && pr == null ? atPath(url, path) : url); // a PR (or a merged one, on main) opens at the page to look at
   const held = !!current.heldBy;
   const heldWhy = held ? `@${current.heldBy} is testing in this` : undefined;
   const startStop = active ? (
     <button className="btn btn-small btn-bad" disabled={busy || held} title={heldWhy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
-      ■ Stop
+      <Icon name="square" /> Stop
     </button>
   ) : (
     <button className="btn btn-small btn-good" disabled={busy || current.status === 'unconfigured'} onClick={() => void (channel == null ? startMain() : startPr())}>
-      ▶ Start
+      <Icon name="play" /> Start
     </button>
   );
   const more = (
@@ -590,14 +593,14 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
       label="More for the app"
       title={`${name} · ${label}`}
       items={[
-        { label: 'Open in browser ↗', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
-        { label: '⟳ Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
-        active && { label: '↻ Restart', disabled: held, onSelect: () => void (channel == null ? startMain() : startPr(true)) },
-        view.forced ? { label: '⛶ Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: '⛶ Full screen', onSelect: view.enterFull },
-        ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) }))),
-        prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
-        prView && pull && !narrow && { label: changes.open ? '📋 Hide what this PR changes' : '📋 What this PR changes', onSelect: toggleQa },
-        { label: '📊 Preview stats', onSelect: () => setStats(true) },
+        { label: 'Open in browser', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
+        { label: 'Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
+        active && { label: 'Restart', disabled: held, onSelect: () => void (channel == null ? startMain() : startPr(true)) },
+        view.forced ? { label: 'Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: 'Full screen', onSelect: view.enterFull },
+        ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' (current)' : ''}`, onSelect: () => pickWidth(w) }))),
+        prView && { label: comparing ? `Stop comparing` : `Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
+        prView && pull && !narrow && { label: changes.open ? 'Hide what this PR changes' : 'What this PR changes', onSelect: toggleQa },
+        { label: 'Preview stats', onSelect: () => setStats(true) },
       ]}
     />
   );
@@ -627,7 +630,7 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
       accent={repo.color}
       title={
         <span className="app-title">
-          <span className="app-title-name">🖥️ {name}</span>
+          <span className="app-title-name"><Icon name="monitor" /> {name}</span>
           <PreviewPill status={current.status} />
           {current.ref && current.status !== 'stopped' && current.status !== 'unconfigured' && (
             <span className="muted small app-title-ref">
@@ -643,7 +646,7 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
         {active && <HeldNote preview={current} label={label} repo={repo} />}
         {mergedHere && (
           <p className="app-merged" role="note">
-            🟣 PR #{mergedHere.pr} is merged into {repo.defaultBranch}
+            <Icon name="git-merge" /> PR #{mergedHere.pr} is merged into {repo.defaultBranch}
             {mergedHere.sha && (
               <>
                 {' '}
@@ -666,7 +669,7 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
             </button>
           )}
           <button className="btn btn-small" disabled={current.status !== 'running' && !(comparing && main.status === 'running')} onClick={() => setReloads((n) => n + 1)} title="Reload the app">
-            ⟳ Reload
+            <Icon name="refresh-cw" /> Reload
           </button>
           <div className="seg" role="group" aria-label="Viewport width">
             {WIDTHS.map(([w, text]) => (
@@ -678,12 +681,12 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
           <span className="spacer" />
           {prView && pull && (
             <button className={`btn btn-small ${changes.open ? 'btn-on' : ''}`} aria-pressed={changes.open} onClick={toggleQa} title="What this PR changes: its goal, pages to look at and QA">
-              📋 Changes
+              <Icon name="clipboard-list" /> Changes
             </button>
           )}
           {/* one element running or not: a link without an href is disabled (aria-disabled), never a <button> twin */}
           <a className="btn btn-small" href={openUrl || undefined} aria-disabled={!openUrl || undefined} target="_blank" rel="noreferrer">
-            Open in new tab ↗
+            Open in new tab <Icon name="external-link" />
           </a>
         </div>}
       </div>
@@ -721,7 +724,7 @@ export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr
       {current.status === 'running' && !narrow && (
         <p className="muted small app-foot">
           Blank, or “refused to connect”? The app may block being framed: use <b>Open in new tab</b>. Keys typed in the app stay in the app, so <kbd>Esc</kbd> only closes this panel
-          when focus is outside it; <b>✕</b> always does.
+          when focus is outside it; the close button always does.
           {prView && ' A PR preview stops after a while with nobody watching it, and when its PR merges or closes.'}
         </p>
       )}

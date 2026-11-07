@@ -3,6 +3,8 @@ import { api, type FloorOptions } from '../api';
 import { useStore } from '../store';
 import type { GhRepoSummary, ProjectFolderView, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import './projectPicker.css';
 
 // Add a project to the office: one of your own folders, a GitHub repo, or something brand new.
@@ -50,7 +52,7 @@ function FolderMode({ floor, onDone }: { floor: FloorOptions; onDone: (r: RepoVi
   };
   const publish = async (f: ProjectFolderView) => {
     const ok = await confirmDialog({
-      icon: '🐙',
+      icon: 'git-branch',
       title: `Put ${f.name} on GitHub?`,
       body: (
         <>
@@ -90,11 +92,15 @@ function FolderMode({ floor, onDone }: { floor: FloorOptions; onDone: (r: RepoVi
         {shown.map((f) => (
           <div key={f.path} className="repo-row">
             <div style={{ minWidth: 0 }}>
-              <b>📁 {f.name}</b>{' '}
+              <b>
+                <Icon name="folder" /> {f.name}
+              </b>{' '}
               {f.floor != null ? (
                 <span className="chip chip-good">floor {f.floor}</span>
               ) : f.github ? (
-                <span className="chip">🐙 {f.github}</span>
+                <span className="chip">
+                  <Icon name="git-branch" /> {f.github}
+                </span>
               ) : (
                 <span className="chip chip-warn">{f.git ? 'not on GitHub' : 'no git yet'}</span>
               )}
@@ -236,17 +242,20 @@ export function ProjectPicker({ onConnected, initial = 'folder' }: { onConnected
     onConnected?.(repo);
   };
   // The short label stands in for the long one when the card is narrow (a phone): projectPicker.css.
-  const modes: [Mode, string, string, string][] = [
-    ['folder', '📁', 'A folder on this computer', 'Folder'],
-    ['github', '🐙', 'A GitHub repo', 'GitHub'],
-    ['new', '✨', 'Something new', 'New'],
+  const modes: [Mode, IconName, string, string][] = [
+    ['folder', 'folder', 'A folder on this computer', 'Folder'],
+    ['github', 'git-branch', 'A GitHub repo', 'GitHub'],
+    ['new', 'sparkles', 'Something new', 'New'],
   ];
   return (
     <div className="picker">
       <div className="picker-tabs">
         {modes.map(([k, icon, label, short]) => (
           <button key={k} className={`picker-tab ${mode === k ? 'picker-tab-on' : ''}`} onClick={() => setMode(k)} aria-label={label} aria-pressed={mode === k}>
-            <span aria-hidden="true">{icon}</span> <span className="picker-long">{label}</span>
+            <span aria-hidden="true">
+              <Icon name={icon} />
+            </span>{' '}
+            <span className="picker-long">{label}</span>
             <span className="picker-short">{short}</span>
           </button>
         ))}
@@ -259,7 +268,7 @@ export function ProjectPicker({ onConnected, initial = 'folder' }: { onConnected
       />
       <label className="toggle small">
         <input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} />
-        ⚡ Start work automatically: free agents pick up issues as soon as they're filed (you can switch this off per floor)
+        <Icon name="zap" /> Start work automatically: free agents pick up issues as soon as they're filed (you can switch this off per floor)
       </label>
       {mode === 'folder' && <FolderMode floor={floor} onDone={done} />}
       {mode === 'github' && <GithubMode floor={floor} onDone={done} />}

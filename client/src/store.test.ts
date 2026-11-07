@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { careerRow, newCareer, type CareerView } from '../../shared/careers';
 import type { AgentView, IssueInfo, LogLine, OpsAlarm, PullInfo, QaStatus, QaView, RepoView, WorldSnapshot } from '../../shared/types';
 
 // The merge trigger, through the store's own apply(): sounds and the gong are mocked (they need a browser).
@@ -51,6 +52,16 @@ describe('the merge gong trigger', () => {
     off();
     expect(gongForMerge).toHaveBeenCalledTimes(1);
     expect(bursts).toEqual([{ repoId: 'acme/floor1', prNumber: 5, agentId: null }]);
+  });
+
+  it('turns a snapshot’s career rows back into careers (#291)', () => {
+    const career = { ...newCareer(1_000), merged: 2, recent: [[4, 'Dark mode', 2_000]] as CareerView['recent'] };
+    const ada = { id: 'a1', name: 'Ada', role: 'agent', repoId: 'acme/floor1', log: [], career: null } as Partial<AgentView>;
+    const ceo = { id: 'ceo', name: 'CEO', role: 'ceo', log: [], career: null } as Partial<AgentView>;
+    const s = snapshot([repo(1)], [ada, ceo]);
+    useStore.getState().apply({ ...s, data: { ...s.data, careers: { a1: careerRow(career) } } });
+    expect(useStore.getState().agents.a1.career).toEqual(career);
+    expect(useStore.getState().agents.ceo.career).toBeNull();
   });
 
   it('sends the PR’s author, one call per merge in order', () => {
@@ -143,11 +154,11 @@ describe('mission control in the store', () => {
     const issue = (number: number, body = '', labels: string[] = []) => ({ number, title: `#${number}`, body, url: '', labels, createdAt: '' }) as IssueInfo;
     const r = { ...repo(1), issues: [issue(1), issue(2, 'Depends on #1'), issue(3, '', ['bug'])], autoAssign: true, autoMerge: true } as RepoView;
     const notes = (usage?: { state: 'normal' | 'pacing' | 'paused' }, autoAssign = true) => kanbanFor({ ...r, autoAssign }, [], {}, usage).backlog.map((c) => c.note);
-    expect(notes()).toEqual([undefined, '⏳ after #1', 'bug']);
-    expect(notes({ state: 'normal' })).toEqual([undefined, '⏳ after #1', 'bug']);
-    expect(notes({ state: 'pacing' })).toEqual(['⏸ paced', '⏳ after #1', '⏸ paced · bug']);
-    expect(notes({ state: 'paused' })).toEqual(['⏸ paused', '⏳ after #1', '⏸ paused · bug']);
-    expect(notes({ state: 'pacing' }, false)).toEqual([undefined, '⏳ after #1', 'bug']); // nothing starts on its own there anyway
+    expect(notes()).toEqual([undefined, 'after #1', 'bug']);
+    expect(notes({ state: 'normal' })).toEqual([undefined, 'after #1', 'bug']);
+    expect(notes({ state: 'pacing' })).toEqual(['paced', 'after #1', 'paced · bug']);
+    expect(notes({ state: 'paused' })).toEqual(['paused', 'after #1', 'paused · bug']);
+    expect(notes({ state: 'pacing' }, false)).toEqual([undefined, 'after #1', 'bug']); // nothing starts on its own there anyway
   });
 });
 
@@ -182,7 +193,7 @@ describe('kanbanFor: In progress', () => {
 
   it('marks an issue whose PR was closed as waiting for the manager, in the backlog', () => {
     const held = { ...r(), held: [{ issue: 192, pr: 198 }] } as RepoView;
-    expect(kanbanFor(held, [], {}).backlog).toMatchObject([{ number: 192, note: '⏸ PR #198 closed · assign by hand', tone: 'warn' }]);
+    expect(kanbanFor(held, [], {}).backlog).toMatchObject([{ number: 192, note: 'PR #198 closed · assign by hand', tone: 'warn' }]);
     expect(kanbanFor(r(), [], {}).backlog[0].tone).toBeUndefined();
   });
 });
@@ -238,5 +249,19 @@ describe('pausesView (#83)', () => {
   it('under the CEO chat full screen, not the phone (#201)', () => {
     expect(pausesView({ kind: 'phone', tab: 'chat', full: true }, false)).toBe(true);
     expect(pausesView({ kind: 'phone', tab: 'chat' }, false)).toBe(false);
+  });
+});
+
+describe('an agent’s screenshots (#230)', () => {
+  it('keeps the last known address through a screenshot without one, and the earlier shots for the filmstrip', () => {
+    const { apply } = useStore.getState();
+    const grace = { id: 'g1', name: 'Grace', role: 'agent', repoId: 'acme/floor1', browserUrl: null, log: [] } as Partial<AgentView>;
+    apply(snapshot([repo(1)], [grace]));
+    apply({ type: 'screen', agentId: 'g1', url: null, at: 1 });
+    expect(useStore.getState().agents.g1.browserUrl).toBeNull(); // unknown until a shot says
+    apply({ type: 'screen', agentId: 'g1', url: 'http://localhost:5200/settings', at: 2, earlier: [1] });
+    apply({ type: 'screen', agentId: 'g1', url: null, at: 3, earlier: [1, 2] });
+    expect(useStore.getState().agents.g1).toMatchObject({ browserUrl: 'http://localhost:5200/settings', screenshotAt: 3, hasScreenshot: true });
+    expect(useStore.getState().shotTimes.g1).toEqual([1, 2]);
   });
 });

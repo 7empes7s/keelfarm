@@ -1,15 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type TextareaHTMLAttributes } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { changedParts, charterOf, charterText, CHARTER_PROMPT_MAX, cleanCharter, OBJECTIVES_MAX, OUTCOME_MAX, FOCUS_MAX, isEmptyCharter } from '../../../shared/charter';
-import type { Charter, CharterProposal } from '../../../shared/charter';
+import type { Charter, CharterProposal, DriftGroup } from '../../../shared/charter';
 import { focusIds, STATS_WINDOWS, type StatsWindow } from '../../../shared/charterStats';
 import type { RepoView } from '../../../shared/types';
+import { jumpFor } from './chatRefs';
+import { chipRow } from './chipRow';
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { reduceMotion } from './a11y';
 import { InsightStrip, ObjectiveCard } from './CharterStats';
 import { EmptyState } from './EmptyState';
+import { Icon } from './Icon';
 import './charter.css';
 
 // The manager's console → Charter (#48), also in pocket mode: each floor's charter as a page to read (#105), the
@@ -54,7 +57,7 @@ export function ProposalCard({ repo, proposal, onEdit }: { repo: RepoView; propo
   return (
     <div className="card charter-proposal" role="group" aria-label={`Charter proposal from ${proposal.by}`}>
       <h3>
-        🧠 {proposal.by} proposes a change{onEdit ? '' : ` · floor ${repo.floor}`}
+        <Icon name="brain" /> {proposal.by} proposes a change{onEdit ? '' : ` · floor ${repo.floor}`}
       </h3>
       <p className="small">
         {proposal.reason} <span className="muted">({ago(proposal.at)})</span>
@@ -115,7 +118,7 @@ function Editor({ repo, start, fromProposal, onDone }: { repo: RepoView; start: 
   };
   const remove = async (i: number) => {
     const o = draft.objectives[i];
-    const ok = await confirmDialog({ tone: 'danger', icon: '🗑️', title: `Remove ${o.id}?`, body: `"${o.outcome || 'This objective'}" leaves the charter when you save it. Issues that name ${o.id} keep their tag.`, confirm: `Remove ${o.id}` });
+    const ok = await confirmDialog({ tone: 'danger', icon: 'trash-2', title: `Remove ${o.id}?`, body: `"${o.outcome || 'This objective'}" leaves the charter when you save it. Issues that name ${o.id} keep their tag.`, confirm: `Remove ${o.id}` });
     if (ok) setDraft((d) => ({ ...d, objectives: d.objectives.filter((x) => x !== o) }));
   };
   const save = async () => {
@@ -192,12 +195,42 @@ function Editor({ repo, start, fromProposal, onDone }: { repo: RepoView; start: 
   );
 }
 
+/** A drift group's PRs, newest first: chips that wrap in the card, the first few then "+N more" (#240). A tap opens the PR's card; GitHub when the office no longer has it. */
+function DriftPrs({ repo, label, prs }: { repo: RepoView; label: string; prs: DriftGroup['prs'] }) {
+  const [open, setOpen] = useState(false);
+  const row = chipRow(prs, open);
+  const openCard = (e: MouseEvent, number: number) => {
+    const s = useStore.getState();
+    const j = jumpFor({ kind: 'issue', repoId: repo.id, number, start: 0, end: 0 }, 'pocket', s); // 'pocket': no elevator ride, the card opens over this tab
+    if (j?.kind !== 'overlay') return; // a link to GitHub
+    e.preventDefault();
+    // closing the card comes back here, as the Kanban's does
+    const back = s.overlay;
+    s.openOverlay(j.overlay);
+    useStore.setState({ back });
+  };
+  return (
+    <div className="charter-chips" role="group" aria-label={`${label}: ${prs.length} merged PRs`}>
+      {row.shown.map((p) => (
+        <a key={p.number} className="charter-chip" href={`${repo.url}/pull/${p.number}`} target="_blank" rel="noreferrer" title={p.title} onClick={(e) => openCard(e, p.number)}>
+          <span>#{p.number}</span>
+        </a>
+      ))}
+      {(row.more > 0 || open) && (
+        <button className="btn btn-small btn-ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show fewer' : `+${row.more} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Drift({ repo }: { repo: RepoView }) {
   const groups = repo.charter.drift;
   const merged = groups.reduce((n, g) => n + g.prs.length, 0);
   return (
     <div className="card">
-      <h3>🧭 Where the last 7 days went</h3>
+      <h3><Icon name="compass" /> Where the last 7 days went</h3>
       {merged === 0 ? (
         <EmptyState kind="drift" compact target={{ kind: 'ceo', text: `Plan floor ${repo.floor}'s next issues against its charter objectives.` }} />
       ) : (
@@ -210,15 +243,7 @@ function Drift({ repo }: { repo: RepoView }) {
                 <span className="small">{g.prs.length}</span>
               </div>
               <div className="charter-drift-bar" style={{ ['--share' as string]: `${(g.prs.length / merged) * 100}%` }} aria-hidden />
-              {g.prs.length > 0 && (
-                <div className="muted small">
-                  {g.prs.map((p) => (
-                    <a key={p.number} href={`${repo.url}/pull/${p.number}`} target="_blank" rel="noreferrer" title={p.title}>
-                      #{p.number}
-                    </a>
-                  ))}
-                </div>
-              )}
+              {g.prs.length > 0 && <DriftPrs repo={repo} label={g.objective ?? 'No objective'} prs={g.prs} />}
             </li>
           ))}
         </ul>
@@ -230,7 +255,7 @@ function Drift({ repo }: { repo: RepoView }) {
 function History({ repo }: { repo: RepoView }) {
   return (
     <div className="card">
-      <h3>🕓 Changes</h3>
+      <h3><Icon name="clock" /> Changes</h3>
       {repo.charter.history.length === 0 ? (
         <p className="muted small">No changes yet.</p>
       ) : (
@@ -324,7 +349,7 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
   const start = fromProposal ? proposal.charter : charterOf(repo.mission, repo.charter);
   const exportIt = async () => {
     const ok = await confirmDialog({
-      icon: '📄',
+      icon: 'file-text',
       title: 'Export the charter?',
       body: `The office commits docs/CHARTER.md to the cubefarm/charter branch of ${repo.fullName} and opens a pull request for you to merge. QA leaves it alone.`,
       confirm: 'Export',
@@ -360,14 +385,16 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
         <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
           <div className="ds-card-head">
             <div className="ds-row-main">
-              <h3 className="ds-row-title">{fromProposal ? `🎯 ${proposal.by}'s proposal, your edits` : editing ? '🎯 Editing the charter' : '🎯 Charter'}</h3>
+              <h3 className="ds-row-title">
+                <Icon name="target" /> {fromProposal ? `${proposal.by}'s proposal, your edits` : editing ? 'Editing the charter' : 'Charter'}
+              </h3>
             </div>
             {!editing && (
               <button className="btn btn-small" onClick={() => setEditing('charter')}>
-                ✏️ Edit
+                <Icon name="pencil" /> Edit
               </button>
             )}
-            <Menu label="More for the charter" title="Charter" items={[{ label: '📄 Export to docs/CHARTER.md…', hint: 'Opens a pull request for you to merge', onSelect: () => void exportIt() }]} />
+            <Menu label="More for the charter" title="Charter" items={[{ label: 'Export to docs/CHARTER.md…', hint: 'Opens a pull request for you to merge', onSelect: () => void exportIt() }]} />
           </div>
           <p className="muted small">Every build, fix and QA prompt on this floor starts with it, and QA fails a PR that breaks a standard.</p>
           {exported && (

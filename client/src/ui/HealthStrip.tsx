@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { gb, type MemorySettings } from '../../../shared/health';
+import { Icon } from './Icon';
 import { memoryLimit } from '../../../shared/progressBars';
 import { ProgressBar } from './ProgressBar';
 
@@ -34,7 +35,7 @@ export function HealthStrip() {
     <div className="card office-card" id="ops-card-health">
       <div className="row wrap">
         <span className="floor-badge office-badge" aria-hidden>
-          🩺
+          <Icon name="stethoscope" />
         </span>
         <div className="grow">
           <b>Server</b>{' '}

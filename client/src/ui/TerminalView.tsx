@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { api } from '../api';
 import { isBusy, kanbanFor, agentsOnRepo, useStore } from '../store';
 import { AgentChat } from './AgentChat';
+import { BrowserCard } from './BrowserCard';
 import { AgentDetails, type DetailsTab } from './AgentDetails';
 import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMode';
 import { AgentRing } from './AgentRing';
@@ -27,6 +28,7 @@ import { HistoryButton } from './HistoryTab';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
+import { Icon } from './Icon';
 import { useMode } from '../pocket/mode';
 import './termPhone.css';
 import { useDraft } from '../drafts';
@@ -101,7 +103,9 @@ function useTermFont(phone: boolean): [number, (by: 1 | -1) => void] {
   return [size, step];
 }
 
-export function TerminalView({ agentId, view, profile = false }: { agentId: string; view?: AgentPane; profile?: boolean }) {
+/** `jump`: the chat item to show (a CEO action card's message, #215); `details`: open their details on that tab. */
+export function TerminalView({ agentId, view, jump, details: requestedDetails, profile = false }: { agentId: string; view?: AgentPane; jump?: number; details?: DetailsTab; profile?: boolean }) {
+  const openOn = requestedDetails ?? (profile ? 'profile' : undefined);
   const agent = useStore((s) => s.agents[agentId]);
   const log = useStore((s) => s.logs[agentId]) ?? [];
   const shotAt = useStore((s) => s.screens[agentId]);
@@ -114,11 +118,11 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
   const [busy, setBusy] = useState(false);
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.
-  const [sheet, setSheet] = useState(profile);
+  const [sheet, setSheet] = useState(!!openOn);
   const [side, setSide] = useState(true);
   const details = phone ? sheet : side;
   const setDetails = phone ? setSheet : setSide;
-  const [tab, setTab] = useState<DetailsTab>(profile ? 'profile' : 'now');
+  const [tab, setTab] = useState<DetailsTab>(openOn ?? 'now');
   const swipe = useSwipe(details, setDetails);
   const [fontPx, stepFontSize] = useTermFont(phone);
   const uiScale = useA11y((s) => s.prefs.uiScale);
@@ -126,14 +130,21 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
   const [keysOn, setKeysOn] = useTermKeysPref(false);
   const chatMode = useChatMode();
   const [opened, setOpened] = useState(view);
+  useEffect(() => {
+    setOpened(view);
+    if (openOn) {
+      setTab(openOn);
+      setSheet(true);
+      setSide(true);
+    }
+  }, [agentId, view, jump, openOn]);
   const [liveLine, setLiveLine] = useState('');
   const onStatus = useCallback((line: string) => setLiveLine(line), []);
   const [, tick] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  // The browser pane shows the last screenshot that loaded, never a broken image. The loaded <img> itself goes in
-  // the pane, so showing it never asks the server again.
-  const shotView = useRef<HTMLDivElement>(null);
+  // The browser card shows the last screenshot that loaded, never a broken image. The loaded <img> itself goes in
+  // the card, so showing it never asks the server again.
   const [shot, setShot] = useState<{ agentId: string; img: HTMLImageElement } | null>(null);
   const shotTime = agent?.hasScreenshot ? (shotAt ?? agent.screenshotAt) : null;
 
@@ -149,9 +160,6 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
       }),
     [agentId, shotTime],
   );
-  useEffect(() => {
-    shotView.current?.replaceChildren(...(shot?.agentId === agentId ? [shot.img] : []));
-  }, [shot, agentId, agent?.hasScreenshot, details, tab]);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
@@ -209,13 +217,21 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
 
   const notes = (
     <>
-      {agent.lastError && agent.status !== 'working' && !signIn && <div className="term-error">⚠️ {agent.lastError}</div>}
-      {agent.blocked && agent.status === 'working' && <div className="term-error">⛔ Blocked: {agent.blocked}. Answer it in the terminal.</div>}
+      {agent.lastError && agent.status !== 'working' && !signIn && (
+        <div className="term-error">
+          <Icon name="triangle-alert" /> {agent.lastError}
+        </div>
+      )}
+      {agent.blocked && agent.status === 'working' && (
+        <div className="term-error">
+          <Icon name="ban" /> Blocked: {agent.blocked}. Answer it in the terminal.
+        </div>
+      )}
       {signIn && (
         <div className="sign-in-note" role="status">
           <span className="grow">
             <b>
-              🔑 Sign {agent.name}'s {signIn} in
+              <Icon name="key-round" /> Sign {agent.name}'s {signIn} in
             </b>
             <br />
             {signIn === 'Codex'
@@ -224,26 +240,20 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
             Their cloud machine keeps the sign-in{agent.task && isBusy(agent) ? ', and their task starts once it’s done' : ''}.
           </span>
           <button className="btn btn-small" disabled={busy} title="Close this sign-in and show a new link" onClick={() => run(() => api.signIn(agent.id))}>
-            ↻ Start over
+            <Icon name="rotate-ccw" /> Start over
           </button>
         </div>
       )}
     </>
   );
 
-  const browser = agent.hasScreenshot && (
-    <div className="browser">
-      <div className="browser-bar">🔒 {agent.browserUrl ?? 'about:blank'}</div>
-      <div className="browser-view" ref={shotView} tabIndex={0} role="region" aria-label="Their browser" />
-      <div className="muted small">Latest Playwright screenshot{agent.screenshotAt ? ` · ${new Date(agent.screenshotAt).toLocaleTimeString()}` : ''}</div>
-    </div>
-  );
+  const browser = agent.hasScreenshot && <BrowserCard agent={agent} img={shot?.agentId === agentId ? shot.img : null} />;
   const split = pane === 'chat' ? (
-    <AgentChat agent={agent} repo={repo} onTerminal={() => choose('terminal')} onSend={send} onStop={() => void stop()} />
+    <AgentChat agent={agent} repo={repo} jump={jump} onTerminal={() => choose('terminal')} onSend={send} onStop={() => void stop()} />
   ) : (
     <div className="term-split">
       {agent.terminal ? (
-        <LiveTerminal agentId={agent.id} cli={cli} fontSize={fontSize} compact={phone} keys={phone ? keysOn : undefined} onStatus={phone ? onStatus : undefined} />
+        <LiveTerminal agentId={agent.id} cli={cli} fontSize={fontSize} compact={phone} keys={phone ? keysOn : undefined} onStatus={phone ? onStatus : undefined} signIn={!!signIn} />
       ) : (
         <div
           className="term"
@@ -260,7 +270,11 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
               {l.text || ' '}
             </div>
           ))}
-          {working && <div className="term-line term-spin">✻ {agent.status === 'preparing' ? (agent.currentTool ?? 'Setting up worktree') : toolVerb(agent.currentTool) || 'Thinking'}… ({elapsed(agent.startedAt, null)})</div>}
+          {working && (
+            <div className="term-line term-spin">
+              <Icon name="asterisk" /> {agent.status === 'preparing' ? (agent.currentTool ?? 'Setting up worktree') : toolVerb(agent.currentTool) || 'Thinking'}… ({elapsed(agent.startedAt, null)})
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -289,7 +303,7 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
     >
       {phone && agent.terminal && (
         <button type="button" className="btn term-keys-toggle" aria-pressed={keysOn} aria-label="Terminal keys" title={keysOn ? 'Hide the terminal key bar' : 'Show a bar of terminal keys: Esc, Tab, arrows, Ctrl…'} onPointerDown={(e) => e.preventDefault()} onClick={() => setKeysOn(!keysOn)}>
-          ⌨
+          <Icon name="keyboard" />
         </button>
       )}
       <MessageBox value={text} onChange={setText} aria-label={`Message ${agent.name}`} title="Enter sends · Shift+Enter adds a new line" placeholder={placeholder} disabled={!canMessage} autoFocus={!agent.terminal && !phone} />
@@ -302,10 +316,10 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
 
   const actions = (
     <>
-      <HistoryButton focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
+      <HistoryButton className="ds-btn" focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
       {office && (
-        <button className="btn btn-small btn-ghost" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
-          🎥 Follow
+        <button className="ds-btn" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
+          <Icon name="video" /> Follow
         </button>
       )}
     </>
@@ -318,14 +332,14 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
       className="aw-more"
       items={[
         { label: details ? 'Hide the details' : 'Show the details', hint: 'Task, profile and setup', onSelect: () => setDetails(!details) },
-        { label: '🏅 Profile', hint: 'Their stats beside the floor’s', onSelect: () => openTab('profile') },
-        { label: '⚙️ Setup', hint: 'Coding agent, model, effort, tools', onSelect: () => openTab('setup') },
-        { label: '📜 History', hint: 'Past sessions and transcripts', onSelect: () => useStore.getState().openOverlay({ kind: 'manager', tab: 'history', history: { agent: agent.id } }) },
-        office && { label: '🎥 Follow with the camera', hint: 'A movement key or Esc gives you the controls back', onSelect: () => followAgent(agent.id) },
+        { label: 'Profile', hint: 'Their stats beside the floor’s', onSelect: () => openTab('profile') },
+        { label: 'Setup', hint: 'Coding agent, model, effort, tools', onSelect: () => openTab('setup') },
+        { label: 'History', hint: 'Past sessions and transcripts', onSelect: () => useStore.getState().openOverlay({ kind: 'manager', tab: 'history', history: { agent: agent.id } }) },
+        office && { label: 'Follow with the camera', hint: 'A movement key or Esc gives you the controls back', onSelect: () => followAgent(agent.id) },
         { label: 'A+ Bigger terminal text', onSelect: () => stepFontSize(1) },
         { label: 'A− Smaller terminal text', onSelect: () => stepFontSize(-1) },
-        working && { label: `■ Stop ${agent.name}…`, hint: 'Ends their session; a message picks it back up', danger: true, disabled: busy, onSelect: () => void stop() },
-        !working && agent.status !== 'idle' && { label: '↺ Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
+        working && { label: `Stop ${agent.name}…`, hint: 'Ends their session; a message picks it back up', danger: true, disabled: busy, onSelect: () => void stop() },
+        !working && agent.status !== 'idle' && { label: 'Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
         { label: `Let ${agent.name} go…`, hint: 'Their worktree is removed', danger: true, disabled: busy, onSelect: () => void letGo(agent).then((gone) => gone && closeOverlay()) },
       ]}
     />
@@ -338,27 +352,32 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
       <button type="button" className="aw-who" aria-expanded={details} aria-controls="aw-details" title={details ? 'Hide the details' : 'Task, profile and setup (or swipe up)'} {...swipe}>
         <span className="aw-name">
           {agent.name}
-          {signIn && <span title={`Waiting for you to sign ${signIn} in, in their terminal`}> 🔑</span>}
+          {signIn && (
+            <span title={`Waiting for you to sign ${signIn} in, in their terminal`}>
+              {' '}
+              <Icon name="key-round" />
+            </span>
+          )}
           {time && <span className="aw-time"> · {time}</span>}
         </span>
         <span className="aw-task">{taskLine(agent)}</span>
       </button>
       {working && (
         <button type="button" className="aw-icon aw-stop" aria-label={`Stop ${agent.name}…`} title={`Stop ${agent.name} (asks first)`} disabled={busy} onClick={() => void stop()}>
-          ■
+          <Icon name="square" />
         </button>
       )}
       {!noChat && phone && (
         // one button for the other pane: the two-button pill doesn't fit beside ■, ⋯ and × at 390px
         <button type="button" className="aw-icon aw-pane-toggle" aria-label={pane === 'chat' ? 'Terminal' : 'Chat'} title={pane === 'chat' ? 'Their terminal' : 'Their work as a conversation'} onClick={() => choose(pane === 'chat' ? 'terminal' : 'chat')}>
-          <span aria-hidden>{pane === 'chat' ? '⌨' : '💬'}</span>
+          <Icon name={pane === 'chat' ? 'keyboard' : 'message-circle'} />
         </button>
       )}
       {!noChat && !phone && (
         <div className="aw-panes" role="group" aria-label="Show">
           {(['chat', 'terminal'] as const).map((p) => (
             <button key={p} type="button" aria-pressed={pane === p} aria-label={p === 'chat' ? 'Chat' : 'Terminal'} title={p === 'chat' ? 'Their work as a conversation' : 'Their terminal'} onClick={() => choose(p)}>
-              <span aria-hidden>{p === 'chat' ? '💬' : '⌨'}</span>
+              <Icon name={p === 'chat' ? 'message-circle' : 'keyboard'} />
               <span className="aw-pane-label">{p === 'chat' ? ' Chat' : ' Terminal'}</span>
             </button>
           ))}

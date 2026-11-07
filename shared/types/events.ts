@@ -1,6 +1,6 @@
 // The snapshot and what goes out on /ws: the events that keep a tab's state up to date. Imported through shared/types.ts.
 import type { ChatItem } from '../agentChat.ts';
-import type { PastCareer } from '../careers.ts';
+import type { CareerRow, PastCareer } from '../careers.ts';
 import type { Decision } from '../decisions.ts';
 import type { LabView } from '../experiments.ts';
 import type { FileView } from '../files.ts';
@@ -61,6 +61,7 @@ export interface WorldSnapshot {
   accounts?: AccountsView; // Settings → Providers & accounts (#247): no secrets
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
+  careers?: Record<string, CareerRow>; // agents' careers by id as rows (#291), their `career` then null; absent in a replay
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
@@ -90,7 +91,7 @@ export type ServerEvent =
   /** The latest line worth listing of agents it doesn't watch, for the workers list. */
   | { type: 'latest'; lines: Record<string, LogLine> }
   | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean } // chat items (#120) of the agent windows a tab has open; catchUp replaces
-  | { type: 'screen'; agentId: string; url: string | null; at: number }
+  | { type: 'screen'; agentId: string; url: string | null; at: number; earlier?: number[] } // earlier: the session's previous shots (#230's filmstrip, at most 5, /api/agents/:id/screen?at=)
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
   | { type: 'prPreview'; preview: PrPreviewView }

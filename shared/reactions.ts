@@ -72,7 +72,7 @@ export function react(list: readonly MessageReaction[] | undefined, by: MessageR
   return [...all.filter((r) => r.by !== by), ...mine.slice(Math.max(0, mine.length - MANAGER_MAX + 1)), { by, emoji }];
 }
 
-/** The reactions under a bubble: each emoji once, with its count and who added it, in the order they came. */
+/** The reactions under a bubble: each emoji once, with its count and who added it, the most-used first (ties in the order they came). */
 export function reactionCounts(list: readonly MessageReaction[] | undefined): { emoji: string; count: number; mine: boolean; ceo: boolean }[] {
   const out: { emoji: string; count: number; mine: boolean; ceo: boolean }[] = [];
   for (const r of list ?? []) {
@@ -82,13 +82,17 @@ export function reactionCounts(list: readonly MessageReaction[] | undefined): { 
     if (r.by === 'manager') c.mine = true;
     else c.ceo = true;
   }
-  return out;
+  return out.sort((a, b) => b.count - a.count); // stable: ties keep their order
+}
+
+/** Who added a reaction, for its hover and long-press note: "You", "Mimoun" or "You and Mimoun". */
+export function reactionWho(c: { mine: boolean; ceo: boolean }, ceoName: string): string {
+  return [c.mine && 'You', c.ceo && ceoName].filter(Boolean).join(' and ');
 }
 
 /** What a screen reader says for a reaction under a message. */
 export function reactionLabel(c: { emoji: string; mine: boolean; ceo: boolean }, ceoName: string): string {
-  const who = [c.mine && 'You', c.ceo && ceoName].filter(Boolean).join(' and ');
-  return `${who} reacted ${c.emoji}${c.mine ? ', tap to remove yours' : ''}`;
+  return `${reactionWho(c, ceoName)} reacted ${c.emoji}${c.mine ? ', tap to remove yours' : ''}`;
 }
 
 /** What a screen reader says for a status reaction. */

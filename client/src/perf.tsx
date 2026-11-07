@@ -7,6 +7,7 @@ import { DEVICE_PROFILE } from './world/gfx/device';
 import { DPR, dprSample, dprSettle, newDpr } from './dprControl';
 import { glCounts, hitchFrame, hitchNote, hitchResume, hitchSummary, setHitchContext, startHitchRecorder, watchGl } from './hitches';
 import { statsLine } from './hitchLog';
+import { Icon } from './ui/Icon';
 
 // Keeping the office cheap to leave open all day: the 3D view stops drawing while a panel hides it or
 // the tab is in the background, the resolution steps down when frames get slow (and Auto graphics, world/gfx,
@@ -32,6 +33,17 @@ export function useRenderPaused() {
   const covered = useStore((s) => coversView(s.overlay));
   const hidden = usePageHidden();
   return covered || hidden;
+}
+
+/** Lives inside the Canvas on demand frames (the test lab's profile, #301): draws at most `fps` frames a second. */
+export function FrameCap({ fps, paused }: { fps: number; paused: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    if (paused) return;
+    const t = setInterval(() => invalidate(), 1000 / fps);
+    return () => clearInterval(t);
+  }, [fps, paused, invalidate]);
+  return null;
 }
 
 /**
@@ -261,7 +273,7 @@ export function StatsReadout() {
       >
         measuring…
       </span>
-      {paused && <span>⏸ 3D view paused</span>}
+      {paused && <span><Icon name="pause" /> 3D view paused</span>}
     </div>
   );
 }

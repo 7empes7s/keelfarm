@@ -10,7 +10,8 @@ import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
 import type { ServerEvent } from '../shared/types.ts';
-import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
+import { liveLaneRefusal } from './portLanes.ts';
+import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PREVIEW_PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
@@ -251,7 +252,7 @@ app.post('/api/experiments/:id/every-project', route((req) => swarm.adoptPractic
 app.get('/api/agents/:id/timeline', route((req) => swarm.careerTimeline(String(req.params.id))));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
-  const shot = swarm.screenshot(String(req.params.id));
+  const shot = swarm.screenshot(String(req.params.id), Number(req.query.at) || undefined);
   res.setHeader('Cache-Control', 'no-store');
   if (!shot) return void res.status(screenStatus(shot)).end();
   res.setHeader('Content-Type', shot.mime);
@@ -459,6 +460,8 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const server = http.createServer(app);
+// Node cuts a request still arriving after 5 minutes; a 500 MB upload from a phone can take longer (#148).
+server.requestTimeout = 2 * 3600_000;
 // Two sockets: /ws carries the office's state to every tab, /ws/term?agent=<id> one agent's terminal to whoever opened it.
 const wss = new WebSocketServer({ noServer: true });
 const terms = new WebSocketServer({ noServer: true });
@@ -502,6 +505,8 @@ server.listen(PORT, HOST, () => {
   if (PUBLIC_DEMO) console.log(`     public demo: visitors change nothing that matters; resets every ${PUBLIC_DEMO_RESET_H} h and 30 min after the last visitor leaves`);
   console.log(`     state: ${STATE_FILE}`);
   console.log(`     workspaces: ${WORKSPACE_ROOT}`);
+  const refused = liveLaneRefusal(PREVIEW_PORT, DEMO);
+  if (refused) console.warn(`     ⚠ previews won't start: ${refused}`);
   console.log(`     agents' machines: ${DEMO ? '(pretend ones, in the demo)' : MACHINES_DIR}\n`);
 });
 

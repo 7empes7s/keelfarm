@@ -37,7 +37,7 @@ export const useMic = create<MicView>(() => ({ state: 'idle', mode: null, target
 /** A message box with a 🎙. */
 export interface MicTarget {
   id: string;
-  kind: 'phone' | 'agent' | 'console';
+  kind: 'phone' | 'agent' | 'console' | 'call';
   /** The box's form: a key in a field of this form is a key in the box. */
   form(): HTMLFormElement | null;
   text(): string;
@@ -155,10 +155,11 @@ const set = (patch: Partial<MicView>) => useMic.setState(patch);
 export function listen(id: string, mode: MicMode) {
   const target = targets.get(id);
   if (!target || session || target.disabled()) return;
-  const { provider } = listening();
+  // A call listens with the browser's recognition when Talk instead of type is off.
+  const provider = mode === 'call' && listening().provider === 'off' ? 'browser' : listening().provider;
   if (provider === 'off') return;
   const why = cantListen(provider, micCaps(), useStore.getState().voiceKeySet);
-  if (why) return void explain(why, id);
+  if (why) return void (mode === 'call' ? callEars?.problem(why) : explain(why, id));
   const n = ++sessions;
   const s: Session = {
     n,
@@ -171,7 +172,7 @@ export function listen(id: string, mode: MicMode) {
     hearing: null,
     began: performance.now(),
     finishing: false,
-    release: quiet(),
+    release: quiet(mode),
     tick: setInterval(() => check(n), 100),
   };
   session = s;
@@ -232,6 +233,7 @@ function heard(n: number, text: string, speaking: boolean) {
   if (!s) return;
   if (!s.ears) started(n);
   if (speaking && s.ears) s.ears = heardWords(s.ears, performance.now());
+  if (speaking && s.mode === 'call') callEars?.speech(text);
   s.transcript = text;
   if (record) record.transcript = text;
   lastTranscript = text;
@@ -284,8 +286,9 @@ function fail(n: number, line: string | null) {
   }
   s.hearing?.abort();
   lastError = line;
+  if (s.mode === 'call') callEars?.problem(line); // the call screen says it, and falls back to tap-to-talk
   close('error');
-  useStore.getState().pushToast('error', line);
+  if (s.mode !== 'call') useStore.getState().pushToast('error', line);
   set({ state: 'error', target: s.target.id });
   setTimeout(() => useMic.getState().state === 'error' && !session && set({ state: 'idle', target: null }), 3000);
 }
@@ -303,6 +306,7 @@ function close(outcome: NonNullable<MicRecord['outcome']>) {
     record = null;
   }
   set({ state: 'idle', mode: null, target: null, live: false });
+  if (s.mode === 'call') callEars?.closed(outcome);
   if (s.mode === 'handsfree') {
     if (outcome !== 'sent') listenChime(false);
     step({ type: 'closed' });
@@ -317,8 +321,9 @@ function explain(line: string, id: string) {
 }
 
 /** While the mic listens: the jukebox, other sounds and the CEO's voice dip, the browser's voice pauses, cues wait. */
-function quiet(): () => void {
+function quiet(mode: MicMode): () => void {
   const unduck = holdMusicDuck();
+  if (mode === 'call') return unduck; // a call listens over the CEO's voice, for barge-in
   setMicOpen(true);
   const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
   const paused = !!synth?.speaking && !synth.paused;
@@ -394,7 +399,9 @@ async function recordClip(n: number) {
   let aborted = false;
   const levels = meter(stream, (level) => {
     const cur = live(n);
-    if (cur?.ears) cur.ears = heardLevel(cur.ears, level, performance.now());
+    const now = performance.now();
+    if (cur?.ears) cur.ears = heardLevel(cur.ears, level, now);
+    if (cur?.mode === 'call' && cur.ears?.lastSpeech === now) callEars?.speech('');
   });
   rec.ondataavailable = (e) => {
     chunks.push(e.data);
@@ -449,7 +456,7 @@ function meter(stream: MediaStream, onLevel: (rms: number) => void): () => void 
 async function transcribe(s: Session, clip: Blob, ms: number) {
   if (s.mode === 'handsfree' && s.ears?.lastSpeech == null) return close('nothing'); // nobody spoke: don't pay to hear silence
   const bad = clipProblem({ bytes: clip.size, ms, type: clip.type });
-  if (bad) return fail(s.n, `🎙️ ${bad.message}`);
+  if (bad) return fail(s.n, bad.message);
   set({ state: 'transcribing', live: false });
   s.release?.(); // the mic is off: sounds come back while the text is on its way
   s.release = null;
@@ -463,9 +470,20 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
     if (record) record.transcript = s.transcript;
     deliver(s);
   } catch (err) {
-    if (session === s) fail(s.n, `🎙️ ${(err as Error).message}`);
+    if (session === s) fail(s.n, (err as Error).message);
   }
 }
+
+// ---------- a voice call's ears ----------
+
+/** A voice call (voiceCallEngine.ts) hears its turns' speech, and its mic closing or failing. */
+export interface CallEars {
+  speech(text: string): void;
+  closed(outcome: MicRecord['outcome']): void;
+  problem(line: string): void;
+}
+let callEars: CallEars | null = null;
+export const setCallEars = (ears: CallEars | null) => void (callEars = ears);
 
 // ---------- the hands-free phone ----------
 
@@ -516,7 +534,7 @@ export function replyEnded() {
   if (listening().handsFree && !micAllowed && r.phoneChat && !askedToAllow) {
     // The browser hasn't been asked for the mic yet, and hands-free never asks out of the blue.
     askedToAllow = true;
-    useStore.getState().pushToast('info', '🎧 Hold 🎙️ once to let the office use your microphone, then hands-free can listen.');
+    useStore.getState().pushToast('info', 'Hold the mic once to let the office use your microphone, then hands-free can listen.');
   }
   step({ type: 'reply-ended', now: performance.now(), room: r });
 }
@@ -588,6 +606,7 @@ function onKeyDown(e: KeyboardEvent) {
   const { place, target, box } = placeOf(e.target);
   const s = session;
   if (s) {
+    if (s.mode === 'call') return; // a call's keys are its own (voiceCallEngine.ts)
     if (closesMic(e, s.mode === 'handsfree', place, mute)) {
       e.preventDefault();
       e.stopImmediatePropagation(); // Esc stops listening; it doesn't also close the phone or the panel
@@ -655,7 +674,7 @@ if (typeof window !== 'undefined') {
   let wasMuted = getAudioPrefs().muted;
   subscribeAudio(() => {
     const muted = getAudioPrefs().muted;
-    if (muted && !wasMuted && session && session.mode !== 'hold') cancel('stopped');
+    if (muted && !wasMuted && session && session.mode !== 'hold' && session.mode !== 'call') cancel('stopped');
     wasMuted = muted;
   });
   // Whether the browser already lets the office use the mic (from an earlier visit).

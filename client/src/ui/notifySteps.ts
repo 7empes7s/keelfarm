@@ -76,7 +76,7 @@ export function unblockHow(platform: Platform, standalone: boolean): string[] {
   if (platform === 'ios') return ['Open the iPhone Settings app.', 'Tap Notifications, then cubefarm.', 'Turn on Allow Notifications, then come back here.'];
   if (platform === 'android') {
     return standalone
-      ? ['Touch and hold the cubefarm icon on your home screen, then tap App info (ⓘ).', 'Tap Notifications and turn them on.', 'Come back here.']
+      ? ['Touch and hold the cubefarm icon on your home screen, then tap App info.', 'Tap Notifications and turn them on.', 'Come back here.']
       : ['Tap the icon left of the address (or ⋮ → Settings → Site settings).', 'Tap Notifications, then Allow.', 'Reload this page.'];
   }
   return ['Click the icon left of the address bar (the padlock or the sliders).', 'Set Notifications to Allow.', 'Reload this page.'];
@@ -86,7 +86,7 @@ const HOME_SCREEN_HOW = [
   'In Safari, tap Share (the square with an arrow, at the bottom).',
   'Scroll down and tap Add to Home Screen, then Add.',
   'Close Safari and open cubefarm from your home screen.',
-  'There, open ⚙️ → Notifications again and carry on.',
+  'There, open Settings → Notifications again and carry on.',
 ];
 
 /** A step's title while an earlier one comes first: what it will be, not what's wrong with it yet. */

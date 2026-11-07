@@ -7,7 +7,7 @@ import { confirmDialog } from './Confirm';
 export async function letGo(agent: { id: string; name: string }): Promise<boolean> {
   const ok = await confirmDialog({
     tone: 'danger',
-    icon: '👋',
+    icon: 'hand',
     title: `Let ${agent.name} go?`,
     body: 'Their worktree is removed. Branches they pushed stay on GitHub.',
     confirm: `Let ${agent.name} go`,
@@ -23,7 +23,7 @@ export async function letGo(agent: { id: string; name: string }): Promise<boolea
 export async function clearDesk(agent: { id: string; name: string }): Promise<boolean> {
   const ok = await confirmDialog({
     tone: 'danger',
-    icon: '↺',
+    icon: 'rotate-ccw',
     title: `Clear ${agent.name}'s desk?`,
     body: 'They drop the task they had and take new work. A PR they were testing goes back in the QA queue; one they were fixing is marked failed. Their branch stays on GitHub.',
     confirm: 'Clear desk',
@@ -37,7 +37,7 @@ export async function clearDesk(agent: { id: string; name: string }): Promise<bo
 
 /** Asks, then stops the agent's session (#117: Stop always asks, wherever it is). */
 export async function stopAgent(agent: { id: string; name: string }): Promise<boolean> {
-  const ok = await confirmDialog({ tone: 'danger', icon: '■', title: `Stop ${agent.name}?`, body: 'Their session ends now. A message picks it back up.', confirm: 'Stop' });
+  const ok = await confirmDialog({ tone: 'danger', icon: 'square', title: `Stop ${agent.name}?`, body: 'Their session ends now. A message picks it back up.', confirm: 'Stop' });
   if (!ok) return false;
   return api.stop(agent.id).then(
     () => true,

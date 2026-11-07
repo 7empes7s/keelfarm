@@ -21,6 +21,7 @@ import { ThemeSettings } from './ThemeSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
 import { Panel, useBackLayer } from './Panel';
 import { InfoButton } from './InfoButton';
+import { Icon } from './Icon';
 import { setMode } from '../pocket/mode';
 import './console.css';
 
@@ -103,13 +104,13 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
     case 'pocket':
       return one(
         <div className="card">
-          <h3>📱 Pocket mode</h3>
+          <h3><Icon name="smartphone" /> Pocket mode</h3>
           <p className="muted small">
             This is the office without the 3D building, for phones and touch screens. It's picked on its own on small or touch screens; this device remembers what you last chose. To reach the office from
             your phone safely, see <a href="https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md">docs/pocket.md</a>.
           </p>
           <button className="btn" onClick={openOffice}>
-            🏢 Open the 3D office
+            <Icon name="building-2" /> Open the 3D office
           </button>
         </div>,
       );
@@ -182,7 +183,7 @@ export function ConsoleSearch({ where, query, setQuery, go, onClose }: { where: 
           {hits.map((h) => (
             <li key={`${h.section.id}:${h.label}`}>
               <button className="cn-item" onClick={() => go(h)}>
-                <span aria-hidden>{h.section.icon}</span>
+                <Icon name={h.section.icon} />
                 <span className="cn-item-text">
                   {h.label}
                   {h.label !== h.section.label && <span className="cn-item-meta">{h.section.label}</span>}
@@ -240,7 +241,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
   const closeSearch = useCallback(() => setSearching(false), []);
   const searchButton = (
     <button className="btn btn-ghost cn-search-open" onClick={() => setSearching(true)} aria-label="Search settings" data-tour="console-search">
-      <span aria-hidden>🔍</span>
+      <Icon name="search" />
     </button>
   );
   return (
@@ -248,7 +249,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
       <div className="tabs cn-groups" role="tablist" aria-label="Console" onKeyDown={tabArrows(GROUPS, groupAt, (g) => openGroup(g.id))}>
         {GROUPS.map((g) => (
           <button key={g.id} role="tab" aria-selected={section.group === g.id} tabIndex={section.group === g.id ? 0 : -1} className={`tab ${section.group === g.id ? 'tab-on' : ''}`} onClick={() => openGroup(g.id)}>
-            {g.icon} {g.label} <Badge n={groupBadge(g.id, where, badges)} />
+            <Icon name={g.icon} /> {g.label} <Badge n={groupBadge(g.id, where, badges)} />
           </button>
         ))}
       </div>
@@ -278,7 +279,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
                       className={`cn-sec ${section.id === s.id ? 'cn-sec-on' : ''}`}
                       onClick={() => pick(s)}
                     >
-                      <span aria-hidden>{s.icon}</span>
+                      <Icon name={s.icon} />
                       <span>{s.label}</span>
                       <Badge n={badges[s.id]} />
                     </button>
@@ -292,7 +293,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
         <div ref={pane} className="cn-pane tab-body ds-stack-scope" role="tabpanel" id={`${ids}-pane`} aria-label={section.label}>
           <div className="cn-pane-info">
             {!searching && row.length === 0 && searchButton}
-            <InfoButton key={section.id} screen={section.id} />
+            <InfoButton key={section.id} screen={section.id} className="ds-btn ds-btn-icon" />
           </div>
           <SectionBody key={section.id} id={section.id} where={where} focus={focus} />
         </div>
@@ -306,7 +307,7 @@ export function ManagerConsole({ initialTab, initialRepo, card, history }: { ini
   const [section, setSection] = useState<Section>(() => opening(initialTab, location.hash, 'office', loadRemembered()));
   useSectionAddress(section);
   return (
-    <Panel wide title="🧑‍💼 Manager's console" className="ds-console">
+    <Panel wide title={<><Icon name="laptop" /> Manager's console</>} className="ds-console">
       <ConsoleSplit where="office" section={section} pick={setSection} focus={{ repoId: initialRepo, card, history }} />
     </Panel>
   );

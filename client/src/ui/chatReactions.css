@@ -1,67 +1,80 @@
 /* Reactions in the CEO chat (#118): badges under a bubble, the bar in a message's actions, the 👎 note. */
 .reactions {
-  /* a tapback (#193): small pills on the bubble's top corner, the far one from where the bubble points */
+  /* #215: small pills overlapping the bubble's bottom corner, like Instagram's and Claude's, away from the time */
   position: absolute;
-  top: -14px;
-  right: -8px;
+  bottom: -15px;
+  left: 10px;
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   align-items: center;
-  gap: 2px;
-  max-width: calc(100% + 8px);
-}
-.bubble-me .reactions {
-  right: auto;
-  left: -8px;
-  justify-content: flex-start;
+  gap: 4px;
+  max-width: calc(100% - 20px);
 }
 .bubble:has(> .reactions) {
-  margin-top: 14px;
+  margin-bottom: 16px;
 }
 .reaction {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   box-sizing: border-box;
-  height: 24px;
-  min-width: 28px;
-  padding: 0 6px;
-  border: 2px solid var(--ds-surface-sunken); /* cut out of the chat's background, like a tapback */
+  height: 26px;
+  min-width: 32px;
+  padding: 0 7px;
+  border: 1px solid var(--ds-line-strong);
   border-radius: var(--ds-radius-pill);
   background: var(--ds-surface-raised);
-  box-shadow: 0 1px 2px rgba(31, 29, 43, 0.18);
+  box-shadow: 0 1px 3px rgba(31, 29, 43, 0.16);
   color: var(--ds-text);
   font: inherit;
-  font-size: 14px; /* the glyph at ~60% of the pill */
   line-height: 1;
 }
-/* the badge looks small but takes a 44px tap */
+.reaction-emoji {
+  display: block;
+  font-size: 16px;
+  line-height: 1;
+}
+/* the pill looks small but takes a 44px tap: 26 + 2 × 9 tall, at least 32 + 2 × 6 wide */
 button.reaction::after {
   content: '';
   position: absolute;
-  inset: -10px -8px;
+  inset: -9px -6px;
 }
 button.reaction {
   cursor: pointer;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+@media (hover: hover) {
+  button.reaction:hover {
+    background: var(--ds-surface-hover);
+  }
 }
 /* beats design.css's .ds-screen button 44px minimum (pocket mode) and styles.css's 48px thumb targets on touch
    screens: the ::after above already gives the 44px tap */
 .reactions button.reaction,
 html[data-touch] .reactions button.reaction {
   min-height: 0;
-  min-width: 28px;
-  font-size: 14px;
+  min-width: 32px;
+  height: 26px;
+  padding: 0 7px;
 }
-.reaction-mine {
-  background: #dfe6ff;
+/* yours: an accent ring */
+.reactions .reaction-mine {
+  border-color: var(--ds-focus);
+  box-shadow: 0 0 0 1px var(--ds-focus), 0 1px 3px rgba(31, 29, 43, 0.16);
+  background: #eef1ff;
 }
 .reaction-count {
   font-size: var(--ds-text-xs);
   font-weight: var(--ds-weight-strong);
+  color: var(--ds-text-muted);
+}
+.reaction-mine .reaction-count {
+  color: var(--ds-focus);
 }
 .reaction-note {
   flex-basis: 100%;

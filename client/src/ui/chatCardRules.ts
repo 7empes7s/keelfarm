@@ -7,7 +7,8 @@ import type { LiveStep } from '../../../shared/ceoStream';
 import { RESEARCH_PREFIX } from '../../../shared/chat';
 import { CEO_ID } from '../../../shared/types';
 import { matchPicks, pickText, type QuickPicks } from '../../../shared/used';
-import type { RefWorld } from './chatRefs';
+import type { IconName } from './icons';
+import { agentFor, type RefWorld } from './chatRefs';
 
 export interface ActionStatus {
   label: string;
@@ -19,8 +20,9 @@ const BUSY = new Set(['working', 'preparing']);
 
 /** Where an action card's issue, PR, floor or agent stands now, or null when it's gone from the office. */
 export function actionStatus(ref: ActionRef, w: RefWorld): ActionStatus | null {
+  if (ref.kind === 'decision' || ref.kind === 'approvals' || (ref.kind === 'section' && (ref.section !== 'team' || !ref.repoId))) return null;
   if (ref.kind === 'agent') {
-    const a = w.agents[ref.agentId];
+    const a = agentFor(w, ref.agentId);
     if (!a) return null;
     const on = a.prNumber ?? a.issueNumber;
     return { label: `${a.status}${on && a.status !== 'idle' ? ` · #${on}` : ''}`, ...(a.status === 'error' ? { tone: 'bad' as const } : BUSY.has(a.status) && { tone: 'good' as const }) };
@@ -28,7 +30,7 @@ export function actionStatus(ref: ActionRef, w: RefWorld): ActionStatus | null {
   const repo = w.repos.find((r) => r.id === ref.repoId);
   if (!repo) return null;
   const team = Object.values(w.agents).filter((a) => a.repoId === repo.id && a.id !== CEO_ID);
-  if (ref.kind === 'floor') return { label: `${team.length} agent${team.length === 1 ? '' : 's'} · ${team.filter((a) => BUSY.has(a.status)).length} busy` };
+  if (ref.kind === 'floor' || ref.kind === 'section') return { label: `${team.length} agent${team.length === 1 ? '' : 's'} · ${team.filter((a) => BUSY.has(a.status)).length} busy` };
   const n = ref.number;
   // The PR itself, else the PR that closes the issue (a merged one first, then an open one).
   const closing = repo.pulls.filter((p) => p.closesIssues.includes(n) && p.state !== 'CLOSED').sort((a, b) => Number(b.state === 'MERGED') - Number(a.state === 'MERGED'));
@@ -136,7 +138,7 @@ export const continuesGroup = (prev: { from: string; at: number } | undefined, m
 
 export interface SlashItem {
   key: string;
-  icon: string;
+  icon: IconName;
   name: string;
   hint: string;
   example?: string;
@@ -145,7 +147,7 @@ export interface SlashItem {
 
 /** The "/" list: the office's commands first (templates for `floor`), then the manager's skills and apps. */
 export function slashItems(p: QuickPicks | null, query: string, floor: number): SlashItem[] {
-  const cmds = matchCommands(query).map((c) => ({ key: `cmd-${c.cmd}`, icon: '⚡', name: `/${c.cmd}`, hint: c.hint, example: c.template(floor).trim(), text: c.template(floor) }));
-  const picks = (p ? matchPicks(p, query) : []).map((x) => ({ key: `${x.kind}-${x.name}`, icon: x.kind === 'skill' ? '✨' : '🔌', name: x.name, hint: x.kind === 'skill' ? 'skill' : 'app', text: pickText(x.kind, x.name) }));
+  const cmds = matchCommands(query).map((c): SlashItem => ({ key: `cmd-${c.cmd}`, icon: 'zap', name: `/${c.cmd}`, hint: c.hint, example: c.template(floor).trim(), text: c.template(floor) }));
+  const picks = (p ? matchPicks(p, query) : []).map((x): SlashItem => ({ key: `${x.kind}-${x.name}`, icon: x.kind === 'skill' ? 'sparkles' : 'plug', name: x.name, hint: x.kind === 'skill' ? 'skill' : 'app', text: pickText(x.kind, x.name) }));
   return [...cmds, ...picks];
 }

@@ -24,6 +24,7 @@ import { GRAPHICS_PRESETS, type GraphicsPreset } from '../world/gfx/quality';
 import { effectiveTier, setGraphicsPreset, useGfx } from '../world/gfx/useGraphics';
 import { hitchSummary, performanceReport } from '../hitches';
 import { setReplay, usePhotoGate } from '../photo/gate';
+import { Icon } from './Icon';
 
 export { closeOverlay, Panel } from './Panel';
 
@@ -48,10 +49,10 @@ export function SoundControls() {
     <div className="sound-controls">
       <div className="row wrap sound">
         <label className="toggle">
-          <input type="checkbox" checked={!muted} onChange={(e) => setAudioPrefs({ muted: !e.target.checked })} /> {muted ? '🔇' : '🔊'} Sound
+          <input type="checkbox" checked={!muted} onChange={(e) => setAudioPrefs({ muted: !e.target.checked })} /> <Icon name={muted ? 'volume-x' : 'volume-2'} /> Sound
         </label>
         <label className="toggle" title={SOUND_GROUP_TITLES.score}>
-          <input type="checkbox" checked={soundtrack} onChange={(e) => setAudioPrefs({ soundtrack: e.target.checked })} /> 🎼 Soundtrack
+          <input type="checkbox" checked={soundtrack} onChange={(e) => setAudioPrefs({ soundtrack: e.target.checked })} /> <Icon name="music" /> Soundtrack
         </label>
         <label className="sound-volume">
           <span className="muted small">Volume</span>
@@ -90,7 +91,9 @@ function ChatterSettings() {
   return (
     <div className="chatter-settings">
       <div className="day-settings" role="radiogroup" aria-label="Agent chatter">
-        <span>💬 Agent chatter</span>
+        <span>
+          <Icon name="message-circle" /> Agent chatter
+        </span>
         {CHATTER_LEVELS.map((l) => (
           <label key={l} className="toggle">
             <input type="radio" name="chatter-level" checked={chatter === l} onChange={() => setAudioPrefs({ chatter: l })} /> {CHATTER_LABELS[l]}
@@ -160,7 +163,7 @@ function PerformanceReportButton() {
     const n = hitchSummary().frames;
     navigator.clipboard
       .writeText(text)
-      .then(() => pushToast('success', `📋 Performance report copied (${n ? `${n} hitch${n > 1 ? 'es' : ''}` : 'no hitches'} lately)`))
+      .then(() => pushToast('success', `Performance report copied (${n ? `${n} hitch${n > 1 ? 'es' : ''}` : 'no hitches'} lately)`))
       .catch(() => {
         console.info(text);
         pushToast('error', "Couldn't reach the clipboard: the report is in the browser console");
@@ -189,10 +192,10 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
     <Panel title="How the office works" className="ds-console">
       <div className="tabs" role="tablist" aria-label="Help">
         <button role="tab" aria-selected={tab === 'office'} className={`tab ${tab === 'office' ? 'tab-on' : ''}`} onClick={() => setTab('office')}>
-          📖 The office
+          <Icon name="book-open" /> The office
         </button>
         <button role="tab" aria-selected={tab === 'controls'} className={`tab ${tab === 'controls' ? 'tab-on' : ''}`} onClick={() => setTab('controls')}>
-          🎮 Controls
+          <Icon name="gamepad-2" /> Controls
         </button>
       </div>
       {tab === 'controls' ? (
@@ -210,9 +213,12 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
           </p>
           <h3>Views</h3>
           <p>
-            <Key action="overview" /> (or the 🗺️ button) flies up to the overview: the whole floor at once, ceiling and near walls cut away, with a chip over every desk saying who is working, testing, fixing, stuck or free.
+            <Key action="overview" /> (or the <Icon name="map" /> button) flies up to the overview: the whole floor at once, ceiling and near walls cut away, with a chip over every desk saying who is working, testing, fixing, stuck or free.
             Drag to pan, scroll to zoom, <Key action="rotateLeft" /> and <Key action="rotateRight" /> turn it a quarter. Click a person, a desk, the whiteboard or the app screen to open it. <Key action="overview" />{' '}
-            again flies you back to where you were standing. Press it twice quickly for the building: every floor stacked, each with its live summary; click one to go there. In an agent's panel, <b>🎥 Follow</b>{' '}
+            again flies you back to where you were standing. Press it twice quickly for the building: every floor stacked, each with its live summary; click one to go there. In an agent's panel,{' '}
+            <b>
+              <Icon name="video" /> Follow
+            </b>{' '}
             trails them with the camera as they go about the office; any movement key or <kbd>Esc</kbd> gives you the controls back.
           </p>
           <h3>Balls</h3>
@@ -321,20 +327,21 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
           </p>
           <h3>Time-lapse</h3>
           <p>
-            Missed the day? The manager's console → 📼 Time-lapse (or the screen by the lobby's hoop) replays it right here in the office at up to 600× speed, or just what happened while you were away. Merges still
+            Missed the day? The manager's console → <Icon name="film" /> Time-lapse (or the screen by the lobby's hoop) replays it right here in the office at up to 600× speed, or just what happened while you were away. Merges still
             bang the gong. While it plays, <kbd>Esc</kbd> frees the mouse and <kbd>Esc</kbd> again goes back to the live office.
           </p>
           <h3>Your phone</h3>
           <p>
             Press <Key action="phone" /> anywhere to pull out your phone. Text the CEO, approve or decline their team changes, see every project at a glance, or play Cubetris, Cable Snake or look after your
             Desk Pet while the team works. The red badge counts decisions and messages waiting for you. In the chat, and in an agent's terminal, <kbd>Enter</kbd> sends and <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a
-            new line. To talk instead of type, hold the 🎙️ next to Send, or hold <Key action="talk" /> in the message box, and speak: your words fill the box to edit before you send (a tap of the 🎙️ listens until you
-            stop talking, and <kbd>Esc</kbd> stops listening). With 🎧 Hands-free on, the phone listens for a few seconds after the CEO's spoken reply and sends what you say. Settings → Voice picks the browser's
+            new line. To talk instead of type, hold the <Icon name="mic" /> next to Send, or hold <Key action="talk" /> in the message box, and speak: your words fill the box to edit before you send (a tap of the{' '}
+            <Icon name="mic" /> listens until you
+            stop talking, and <kbd>Esc</kbd> stops listening). With <Icon name="headphones" /> Hands-free on, the phone listens for a few seconds after the CEO's spoken reply and sends what you say. Settings → Voice picks the browser's
             speech recognition or ElevenLabs.
           </p>
           <h3>Photo mode and clips</h3>
           <p>
-            Press <Key action="photo" /> (or 📷 at the top right) to freeze the office and fly a camera of your own: click the view to steer, <MoveKeys /> to fly, <kbd>Space</kbd> and <kbd>C</kbd> up and down,{' '}
+            Press <Key action="photo" /> (or <Icon name="camera" /> at the top right) to freeze the office and fly a camera of your own: click the view to steer, <MoveKeys /> to fly, <kbd>Space</kbd> and <kbd>C</kbd> up and down,{' '}
             <Key action="rotateLeft" /> and <Key action="rotateRight" /> to roll and the wheel to zoom. Pick a filter, add depth of field, the logo, the floor and date, or move the sun to golden hour, then{' '}
             <kbd>Enter</kbd> saves a PNG (up to 4× your screen) and copies it. <kbd>V</kbd> records a clip with the office's sound, optionally slowly circling the gong, the whiteboard or someone. Unfreeze (
             <kbd>F</kbd>) to film the office live. The work carries on while you shoot, and <Key action="photo" /> puts you back exactly where you were. Shots and clips are kept in this tab's gallery and saved to your
@@ -369,19 +376,26 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
             report with screenshots on the PR. If it fails, its author (or any free agent) fixes it and it's tested again.
           </p>
           <p>
-            <b>⚙️ Setup</b>, at the top of their panel, changes their name, look, coding agent, model and effort. Changes apply from their next task, so nothing is interrupted. Open <b>What they're told</b> there
+            <b>
+              <Icon name="settings" /> Setup
+            </b>
+            , at the top of their panel, changes their name, look, coding agent, model and effort. Changes apply from their next task, so nothing is interrupted. Open <b>What they're told</b> there
             to read what the office tells every agent on each kind of task. The CEO's model, effort and prompt are in the console's CEO tab.
           </p>
           <h3>Coins, decorations and trophies</h3>
           <p>
-            Every merged PR earns its floor coins (🪙 at the top right): 10 a merge, 5 more when QA passed it first time, 5 when its checks were green first time, and 10 for the third merge on a floor within an hour.
-            Nothing ever costs coins but the catalogue. Spend them at the catalogue kiosk in the lobby; what you buy waits in the floor's 📦 decor box by its elevator. Take something out, walk to a glowing spot and
+            Every merged PR earns its floor coins (<Icon name="coins" /> at the top right): 10 a merge, 5 more when QA passed it first time, 5 when its checks were green first time, and 10 for the third merge on a floor within an hour.
+            Nothing ever costs coins but the catalogue. Spend them at the catalogue kiosk in the lobby; what you buy waits in the floor's <Icon name="package" /> decor box by its elevator. Take something out, walk to a glowing spot and
             press <Key action="interact" />: it snaps in. <Key action="interact" /> on a placed decoration picks it up to move it, and the box puts things away. The arcade cabinet plays your phone's games.
             Achievements fill the trophy shelf in the lobby: <Key action="interact" /> on a trophy says what it was for and when.
           </p>
           <p>
             Desks tell their owner's story: a plaque on the monitor for every merged PR, a gold star for ten first-time QA passes, and a plant, a photo and a desk toy that arrive with time on the team.
-            Look at a desk for a moment to see its career card (or open <b>🏅 Career</b> in their panel); the console's Team tab compares everyone.
+            Look at a desk for a moment to see its career card (or open{' '}
+            <b>
+              <Icon name="medal" /> Career
+            </b>{' '}
+            in their panel); the console's Team tab compares everyone.
           </p>
           <h3>The whiteboard</h3>
           <p>
@@ -418,10 +432,10 @@ function HelpAccess() {
       </p>
       <div className="row wrap">
         <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager', tab: 'access' })}>
-          ♿ Accessibility settings
+          <Icon name="accessibility" /> Accessibility settings
         </button>
         <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
-          👥 List view of this floor
+          <Icon name="users" /> List view of this floor
         </button>
       </div>
     </>
@@ -433,7 +447,7 @@ export function Overlays() {
   if (!overlay) return null;
   switch (overlay.kind) {
     case 'terminal':
-      return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} view={overlay.view} profile={overlay.profile} />;
+      return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} profile={overlay.profile} />;
     case 'phone':
       return <Phone tab={overlay.tab} requestId={overlay.requestId} />;
     case 'kanban':
@@ -441,9 +455,9 @@ export function Overlays() {
     case 'card':
       return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
     case 'app':
-      return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
+      return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} path={overlay.path} />;
     case 'previews':
-      return <PreviewsPage repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
+      return <PreviewsPage repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} path={overlay.path} />;
     case 'elevator':
       return <ElevatorPanel />;
     case 'manager':

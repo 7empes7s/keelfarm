@@ -4,6 +4,8 @@
 
 import { CEO_ID, type AgentView, type ChatRef, type QaView, type RepoView } from '../../../shared/types';
 import type { Overlay } from '../store';
+import type { ActionRef } from '../../../shared/ceoActions';
+import type { IconName } from './icons';
 
 export interface RefWorld {
   repos: readonly Pick<RepoView, 'id' | 'floor' | 'fullName' | 'pulls' | 'issues' | 'preview'>[];
@@ -16,7 +18,8 @@ export type Jump =
   | { kind: 'overlay'; overlay: Overlay; floor?: number }
   | { kind: 'floor'; floor: number; repoId: string }
   | { kind: 'file' }
-  | { kind: 'url'; url: string };
+  | { kind: 'url'; url: string }
+  | { kind: 'decisions' }; // the decision log under the approvals (#208)
 
 const ghUrl = (fullName: string, n: number, pull: boolean) => `https://github.com/${fullName}/${pull ? 'pull' : 'issues'}/${n}`;
 
@@ -56,34 +59,52 @@ export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): J
   return { kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: n ?? null }, ...ride(repo.id) };
 }
 
+/** An agent by id, else by name (old action cards kept the name the CEO gave). */
+export function agentFor(w: RefWorld, idOrName: string): RefWorld['agents'][string] | undefined {
+  const name = idOrName.trim().toLowerCase();
+  return w.agents[idOrName] ?? Object.values(w.agents).find((a) => a.id !== CEO_ID && a.name.toLowerCase() === name);
+}
+
+/** Where a CEO action card goes (#215): its agent's chat at the message or their details, a console section, the decision log, or as its chip would. */
+export function actionJump(ref: ActionRef, mode: 'office' | 'pocket', w: RefWorld): Jump | null {
+  if (ref.kind === 'decision' || ref.kind === 'approvals') return { kind: 'decisions' };
+  if (ref.kind === 'section') return { kind: 'overlay', overlay: { kind: 'manager', tab: ref.section, ...(ref.repoId && { repoId: ref.repoId }) } };
+  if (ref.kind !== 'agent') return jumpFor({ ...ref, start: 0, end: 0 }, mode, w);
+  const a = agentFor(w, ref.agentId);
+  if (!a) return null;
+  const floor = mode === 'office' ? w.repos.find((r) => r.id === a.repoId)?.floor : undefined;
+  const overlay: Overlay = { kind: 'terminal', agentId: a.id, view: 'chat', ...(ref.messageId !== undefined && { jump: ref.messageId }), ...(ref.details && { details: ref.details }) };
+  return { kind: 'overlay', overlay, ...(floor !== undefined && { floor }) };
+}
+
 /** A chip's icon, its status words and their tone, or null when what it names is gone (shown as text). */
-export function chipInfo(ref: ChatRef, w: RefWorld): { icon: string; status?: string; tone?: 'good' | 'warn' | 'bad' } | null {
+export function chipInfo(ref: ChatRef, w: RefWorld): { icon: IconName; status?: string; tone?: 'good' | 'warn' | 'bad' } | null {
   if (ref.kind === 'agent') {
     const a = w.agents[ref.agentId];
     if (!a) return null;
     const on = a.prNumber ?? a.issueNumber;
     const tone = a.status === 'error' ? 'bad' : a.status === 'working' || a.status === 'preparing' ? 'good' : undefined;
-    return { icon: ref.terminal ? '🖥️' : '👤', status: `${a.status}${on && a.status !== 'idle' ? ` · #${on}` : ''}`, ...(tone && { tone }) };
+    return { icon: ref.terminal ? 'monitor' : 'user', status: `${a.status}${on && a.status !== 'idle' ? ` · #${on}` : ''}`, ...(tone && { tone }) };
   }
   const repo = w.repos.find((r) => r.id === ref.repoId);
   if (!repo) return null;
-  if (ref.kind === 'floor') return { icon: '🏢', status: repo.fullName.split('/')[1] };
-  if (ref.kind === 'file') return { icon: '📄' };
+  if (ref.kind === 'floor') return { icon: 'building-2', status: repo.fullName.split('/')[1] };
+  if (ref.kind === 'file') return { icon: 'file-text' };
   const n = ref.number;
   const pull = n === undefined ? undefined : repo.pulls.find((p) => p.number === n);
   const qa = n === undefined ? undefined : w.qa[`${repo.id}#${n}`];
   const qaTone = (s: string) => (s === 'passed' ? 'good' : s === 'failed' || s === 'needs-human' ? 'bad' : 'warn');
-  if (ref.kind === 'qa') return { icon: '🔍', status: qa?.status ?? 'not tested', ...(qa && { tone: qaTone(qa.status) }) };
+  if (ref.kind === 'qa') return { icon: 'search', status: qa?.status ?? 'not tested', ...(qa && { tone: qaTone(qa.status) }) };
   if (ref.kind === 'preview') {
     const status = n === undefined ? repo.preview.status : pull?.state === 'OPEN' ? 'PR app' : pull?.state.toLowerCase();
-    return { icon: '▶️', ...(status && { status }) };
+    return { icon: 'play', ...(status && { status }) };
   }
   if (pull) {
-    if (pull.state !== 'OPEN') return { icon: '🔀', status: pull.state.toLowerCase(), ...(pull.state === 'MERGED' && { tone: 'good' as const }) };
+    if (pull.state !== 'OPEN') return { icon: 'git-merge', status: pull.state.toLowerCase(), ...(pull.state === 'MERGED' && { tone: 'good' as const }) };
     const tone = qa ? qaTone(qa.status) : pull.checks === 'failing' ? 'bad' : undefined;
-    return { icon: '🔀', status: qa ? `QA ${qa.status}` : `checks ${pull.checks}`, ...(tone && { tone }) };
+    return { icon: 'git-merge', status: qa ? `QA ${qa.status}` : `checks ${pull.checks}`, ...(tone && { tone }) };
   }
-  return repo.issues.some((i) => i.number === n) ? { icon: '📋', status: 'open' } : { icon: '📋' };
+  return repo.issues.some((i) => i.number === n) ? { icon: 'clipboard-list', status: 'open' } : { icon: 'clipboard-list' };
 }
 
 // ---------- the message box's "@" and "#" ----------

@@ -32,11 +32,11 @@ import { Lab, loadLab } from '../experiments.ts';
 import { FloorPractice } from '../practiceState.ts';
 import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
-import { emptyLedger, pastCareers } from '../ledger.ts';
+import { emptyLedger, packCareers, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
-import { isResync, Outbox } from '../outbox.ts';
+import { isResync, Outbox, snapshotAgent } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
 import { Notifier } from '../notifier.ts';
 import { TelegramBot } from '../telegramBot.ts';
@@ -511,7 +511,7 @@ export abstract class SwarmCore extends SwarmContract {
       devAgentId: q.devAgentId,
       qaAgentId: q.qaAgentId,
       summary: q.summary,
-      checks: q.checks,
+      checks: q.checks, ...(q.status !== 'passed' && q.fixInstructions && { fixInstructions: q.fixInstructions }), // only while it's to do (scale.test.ts)
       commentUrl: q.commentUrl,
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
@@ -530,7 +530,7 @@ export abstract class SwarmCore extends SwarmContract {
       settings: this.state.settings,
       repos: this.state.repos.map((r) => this.repoView(r)),
       // no terminal lines: each tab asks for the ones it shows (shared/watch.ts)
-      agents: this.state.agents.map((a) => this.agentView(a, false)),
+      agents: this.state.agents.map((a) => snapshotAgent(this.agentView(a, false))),
       qa: this.state.qa.map((q) => this.qaView(q)),
       prPreviews: this.previews.prViews(),
       previewStats: this.previewStats,
@@ -574,10 +574,10 @@ export abstract class SwarmCore extends SwarmContract {
     return this.officeHead?.slice(0, 7) ?? null;
   }
 
-  /** The agent's latest screenshot: null when it has none right now, undefined for an unknown agent. */
-  screenshot(agentId: string) {
+  /** The agent's latest screenshot (or this session's taken `at`, #230): null when it has none, undefined for an unknown agent. */
+  screenshot(agentId: string, at?: number) {
     const rt = this.agentRt.get(agentId);
-    return rt ? rt.screenshot : undefined;
+    return !rt ? undefined : at ? (rt.shots.find((s) => s.at === at) ?? null) : rt.screenshot;
   }
 
   // ---------- clients ----------
@@ -589,11 +589,11 @@ export abstract class SwarmCore extends SwarmContract {
       // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
       // otherwise it's saying whether the manager is using it (#210) or what it shows (shared/watch.ts).
       if (isResync(raw)) {
-        this.send(ws, { type: 'snapshot', data: this.snapshot() });
+        this.send(ws, { type: 'snapshot', data: packCareers(this.snapshot()) });
         this.outbox.resync(ws);
       } else if (!this.notifier.attention.receive(ws, raw)) this.outbox.receive(ws, String(raw));
     });
-    this.send(ws, { type: 'snapshot', data: this.snapshot() });
+    this.send(ws, { type: 'snapshot', data: packCareers(this.snapshot()) });
   }
 
   /** The floor an agent's desk is on, for routing their terminal lines: 0 for the CEO in the lobby, null for none. */
@@ -834,9 +834,9 @@ export abstract class SwarmCore extends SwarmContract {
     return a.machine ? this.machinesFor(a).deskDir(a.machine, repo.fullName) : this.backend.deskDir(repo.fullName, this.agentSlug(a));
   }
 
-  /** Stop what an agent left running at their desk: on their port, or started there. */
-  protected releaseDesk(a: PersistedAgent, repo: PersistedRepo) {
-    return a.machine ? this.machinesFor(a).release(a.machine, repo.fullName, this.port(a)) : this.backend.releaseDesk(repo.fullName, this.agentSlug(a), this.port(a));
+  /** Stop what an agent left running at their desk: on their ports, or started there. Resolves to their ports still held after. */
+  protected releaseDesk(a: PersistedAgent, repo: PersistedRepo): Promise<number[]> {
+    return a.machine ? this.machinesFor(a).release(a.machine, repo.fullName, this.port(a)) : this.backend.releaseDesk(repo.fullName, this.agentSlug(a), this.port(a)).then(() => []);
   }
 
   /**

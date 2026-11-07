@@ -47,6 +47,7 @@ import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
+import { DEMO_QA_ISSUE, demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 import { withDemoChat } from './demoAgentChat.ts';
 import { demoAccounts } from './demoAccounts.ts';
@@ -385,8 +386,11 @@ function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: nu
     ],
     [{ kind: 'tool', tool: 'Bash', text: '⏺ $ npm run typecheck' }, { kind: 'result', text: '  ⎿ (no output)' }],
     [{ kind: 'tool', tool: 'Bash', text: `⏺ $ npm run dev -- --port ${port} &` }, { kind: 'result', text: '  ⎿ VITE ready in 412 ms' }],
-    () => cb.browserUrl(`http://localhost:${port}/`),
-    [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
+    // Odd issues screenshot a page they never navigated to, so their browser card shows "address unknown" (#230).
+    () => issueNumber % 2 || cb.browserUrl(`http://localhost:${port}/`),
+    issueNumber % 2
+      ? [{ kind: 'tool', tool: 'mcp__playwright__browser_wait_for', text: '⏺ 🌐 wait_for "Ready"' }, { kind: 'result', text: '  ⎿ Waited for Ready' }]
+      : [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
     () => cb.screenshot(Buffer.from(screenshotSvg(issueTitle, `localhost:${port}`, hue)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
     [{ kind: 'text', text: '● Looks right in the browser. A production build, then the PR.' }],
@@ -558,6 +562,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     if (kind === 'qa') {
       // Most first rounds pass; some fail so the fix loop can be seen in action.
       const pass = round > 1 || (title !== DARK_MODE_TITLE && Math.random() > 0.35);
+      const full = opts.prompt.includes('graphics: "full"'); // a 3D PR (qaPrompt.ts fullQualityLine) reports its full pass
       cb.log([{ kind: 'text', text: pass ? '● Everything checks out. Writing up the report.' : '● The toolbar overflows on a 375px screen. Failing this round.' }]);
       cb.finished({
         ok: true,
@@ -576,12 +581,14 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
             { name: 'Feature works on desktop', result: 'pass', details: 'Clicked through the new flow at 1280x800' },
             { name: 'Mobile layout (375px)', result: pass ? 'pass' : 'fail', details: pass ? 'Layout wraps correctly' : 'Toolbar overflows horizontally; button unreachable' },
             { name: 'Console errors', result: 'pass', details: 'None' },
+            ...(full ? [{ name: 'Lab graphics profile', result: 'pass' as const, details: 'Canvas, controls, panels, 390px pocket mode, no console errors' }] : []),
+            ...(full ? [{ name: 'Full-quality pass', result: 'pass' as const, details: 'Real graphics at 1280px, shadows and lighting; ran alone, browser restarted after' }] : []),
           ],
           commands: [
             { command: 'npm test -- --run', result: '41 passed' },
             { command: 'npm run lint && npm run build', result: 'clean, built in 1.84s' },
           ],
-          screenshots: ['Home page', 'The changed page at 375px'],
+          screenshots: ['Home page', 'The changed page at 375px', ...(full ? ['Full quality · the changed scene at 1280px'] : [])],
           fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
         },
       });
@@ -864,7 +871,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
   let lowMemory = false; // the health strip's Simulate low memory: too little left for another session (a big company: a big server)
   return {
     demo: true,
-    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, simulate: (low) => void (lowMemory = low) },
+    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, browser: async () => (lowMemory ? 640 : null), simulate: (low) => void (lowMemory = low) },
     user: async () => 'demo-manager',
     listMyRepos: async (): Promise<GhRepoSummary[]> =>
       [...repos.values()].map((r) => ({ nameWithOwner: r.fullName, description: r.description, visibility: 'PUBLIC', updatedAt: now() })),
@@ -1056,7 +1063,8 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
         return dir;
       },
       env: () => ({}),
-      release: async () => undefined,
+      release: async () => [],
+      orphans: async () => [],
       trimDesk: (_machine, _fullName, stillIdle) => fakeTrim(stillIdle),
       sweep: async () => 0,
       remove: async () => ({ removed: true, patches: [] }),
@@ -1125,6 +1133,16 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       return [...edits, ...sampleChat(now, edits.length + 1)];
     },
     demoCharter,
+    seedQaReport: (fullName) => {
+      if (scale) return null; // the big company measures the office (scale.test.ts), not this example
+      const r = repos.get(fullName);
+      if (!r) return null;
+      const stuck = { ...issue(takeNumber(r), DEMO_QA_ISSUE.title, DEMO_QA_ISSUE.body, fullName), createdAt: new Date(Date.now() - 5 * 3_600_000).toISOString() };
+      r.issues.push(stuck);
+      const seeded = demoQaReport(fullName, takeNumber(r), stuck, 3 * 3_600_000, fakeSha());
+      r.pulls.unshift(seeded.pull);
+      return seeded;
+    },
     demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
@@ -1844,12 +1862,13 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
 // ---------- voice ----------
 
 /**
- * A short two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, a little longer for longer text, and
- * pitched by the voice, so a replayed clip is audibly the one made in the voice of its day.
+ * A two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, longer for longer text (up to 6 s, so a
+ * voice call can be paused, skipped and talked over mid-reply), and pitched by the voice, so a replayed clip is
+ * audibly the one made in the voice of its day.
  */
 export function demoChime(chars: number, voiceId = ''): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 400, 2);
+  const seconds = Math.min(0.4 + chars / 40, 6);
   const n = Math.round(rate * seconds);
   const wav = Buffer.alloc(44 + n);
   wav.write('RIFF', 0);

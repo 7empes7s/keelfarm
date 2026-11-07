@@ -58,7 +58,10 @@ export function demoLabRunner(): LabRunner {
     async screenshot(o) {
       up = true;
       await pause(1500);
-      const shots = o.viewports.map((w) => ({ label: `${o.profile}-${w}-${o.theme}`, file: write(o.outDir, `${o.profile}-${w}-${o.theme}.png`, w, o.theme === 'dark') }));
+      const shots = o.viewports.map((w) => {
+        const label = `${o.profile}-${w}-${o.theme}${o.graphics === 'full' ? '-full' : ''}`;
+        return { label, file: write(o.outDir, `${label}.png`, w, o.theme === 'dark') };
+      });
       return { shots, consoleErrors: [], pageErrors: [], failedRequests: [] };
     },
     async check(o) {
@@ -73,6 +76,7 @@ export function demoLabRunner(): LabRunner {
     },
     installBrowser: async () => true,
     warm: async () => false,
+    browserMb: async () => (up ? 420 : null),
     close: async () => void (up = false),
   };
 }
@@ -80,10 +84,19 @@ export function demoLabRunner(): LabRunner {
 /** A fake build or QA session on the test lab asks it for screenshots a few seconds in, the way a real one would. */
 export function withLab(opts: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
   const lab = opts.office;
-  if (!lab || (opts.task !== 'issue' && opts.task !== 'qa')) return cb;
+  // Builds of odd issues skip it: their screenshot is one without an address (demo.ts issueScript, #230).
+  if (!lab || (opts.task !== 'issue' && opts.task !== 'qa') || (opts.task === 'issue' && Number(opts.prompt.match(/#(\d+):/)?.[1] ?? 0) % 2)) return cb;
   setTimeout(() => {
     cb.log([{ kind: 'tool', tool: 'mcp__office__lab_screenshot', text: '⏺ 🧪 lab_screenshot 390, 1280' }]);
-    void lab.call('lab_screenshot', { preview: false, url: 'http://localhost:5173/', viewports: [390, 1280] }).then((r) => cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0]}` }]));
+    void lab
+      .call('lab_screenshot', { preview: false, url: 'http://localhost:5173/', viewports: [390, 1280] })
+      .then((r) => cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0]}` }]))
+      .then(() => {
+        // A PR that changes 3D code (qaPrompt.ts fullQualityLine): one full-quality pass after the lab checks.
+        if (opts.task !== 'qa' || !opts.prompt.includes('graphics: "full"')) return;
+        cb.log([{ kind: 'tool', tool: 'mcp__office__lab_screenshot', text: '⏺ 🧪 lab_screenshot 1280, full quality' }]);
+        return lab.call('lab_screenshot', { preview: false, url: 'http://localhost:5173/', viewports: [1280], graphics: 'full' }).then((r) => cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0]} at full quality` }]));
+      });
   }, 4000);
   return cb;
 }

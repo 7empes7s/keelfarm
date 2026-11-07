@@ -8,7 +8,7 @@ import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
 import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
-import { qaInstructions } from '../qaPrompt.ts';
+import { fullQualityLine, qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
 import { failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from '../prompts.ts';
@@ -86,6 +86,54 @@ export abstract class SwarmQa extends SwarmSessions {
       this.setQa(rec, {});
     }
     setTimeout(() => this.schedule(), 200);
+  }
+
+  /** Demo only: a fresh demo office opens with a PR QA failed and left with the manager: nine checks, a charter violation and a conflict (#155). */
+  protected seedDemoQa() {
+    for (const repo of this.state.repos) {
+      const seed = this.backend.seedQaReport?.(repo.fullName);
+      if (!seed) continue;
+      const pr = seed.pull;
+      const dev = this.state.agents.find((a) => a.repoId === repo.id && a.role !== 'ceo');
+      const qa = this.state.agents.find((a) => a.repoId === repo.id && a.role !== 'ceo' && a !== dev);
+      const rec: QaRecord = {
+        repoId: repo.id,
+        prNumber: pr.number,
+        status: 'needs-human',
+        round: MAX_QA_ROUNDS, // out of rounds: nothing moves it on its own (catchUp, rebaseHandOffs)
+        devAgentId: dev?.id ?? null,
+        qaAgentId: qa?.id ?? null,
+        summary: seed.summary,
+        checks: seed.checks,
+        commentUrl: `${pr.url}#issuecomment-1`,
+        updatedAt: Date.now() - 20 * 60_000,
+        issueNumber: pr.closesIssues[0] ?? null,
+        devSessionId: null,
+        fixInstructions: seed.fixInstructions,
+        sessionFailures: 0,
+        mergeNote: null,
+        testedSha: pr.headSha,
+        passedSha: null,
+        fixReason: 'qa',
+        mergeFixes: 0,
+        retests: 0,
+        pendingSince: null,
+        mergeRetryAt: null,
+        alerted: true,
+        preQa: null,
+        noChangeSha: null,
+        rerunSha: null,
+        rerunAt: null,
+        qaChecks: pr.checks,
+        stuckWhy: `it failed QA ${MAX_QA_ROUNDS} times, the most QA rounds a PR gets`,
+        triages: 0,
+        escalated: true, // with the manager already: no CEO triage
+        labRetryRound: null,
+      };
+      this.state.qa.push(rec);
+      this.setQa(rec, {});
+      return;
+    }
   }
 
   /** Manager's "send to QA" for any open PR (including ones opened by people); with `agentId`, that free agent tests it now. byCeo: the CEO's triage, not a manager change. */
@@ -229,12 +277,16 @@ export abstract class SwarmQa extends SwarmSessions {
       fixInstructions: rec.fixInstructions,
       defaultBranch: repo.defaultBranch,
     });
+    // A PR that changes how the 3D office looks gets one full-quality pass in the lab (#301).
+    const lab = repo.browserTesting && this.usesTestLab(a, repo);
+    const files = lab ? await this.backend.prDiff(repo.fullName, pr.number, false).then((d) => d.files.map((f) => f.path), () => null) : null;
     const prompt = [
       `Please QA pull request #${pr.number}: ${pr.title}`,
       `URL: ${pr.url}`,
       `Author: ${dev ? (dev.id === a.id ? `you, in an earlier session` : dev.name) : 'a teammate'} · QA round ${rec.round}`,
       qa.checks,
       qa.retest,
+      fullQualityLine(files, lab),
       '',
       'PR description:',
       pr.body.trim() || '(empty)',

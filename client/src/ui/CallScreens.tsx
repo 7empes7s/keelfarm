@@ -1,0 +1,266 @@
+// The voice call's screens (docs/voice.md), all drawing the one call in useCall (voiceCallEngine.ts runs it): on a
+// phone a call screen like a phone call's, which folds into a pill at the top while you use the app; on a desktop or
+// tablet a CEO orb that follows across every page, drags to a corner, and opens into a small call card. Unmounting
+// any of them (a page change, the 3D/pocket switch) never touches the call. App.tsx loads this once a call starts.
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { CEO_ID } from '../../../shared/types';
+import { messageSpeech } from '../../../shared/speech';
+import { useStore } from '../store';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
+import { callClock, callStatus, inCall, splitSentences, type Call } from './voiceCall';
+import { endCall, setMinimised, skipSentence, talkOnce, toggleCaptions, toggleMute, togglePause, toggleSpeaker } from './voiceCallEngine';
+import { useCall } from './voiceCallStore';
+import './voiceCall.css';
+
+const NARROW = '(max-width: 640px)';
+
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return narrow;
+}
+
+/** The call's clock, ticking once a second. */
+function useClock(startedAt: number) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return callClock(now - startedAt);
+}
+
+/** The sentence the CEO is saying, from the reply's words. */
+function useSaying(call: Call): string {
+  const message = useStore((s) => (call.reply ? s.messages.find((m) => m.id === call.reply!.id) : undefined));
+  if (!message || !call.reply) return '';
+  return splitSentences(messageSpeech(message))[call.reply.sentence] ?? '';
+}
+
+export default function CallScreens() {
+  const view = useCall();
+  const narrow = useNarrow();
+  if (!inCall(view.call)) return null;
+  return narrow ? <PhoneCall /> : <CallOrb />;
+}
+
+// ---------- the controls ----------
+
+interface Key {
+  id: string;
+  icon: IconName;
+  label: string;
+  on?: boolean;
+  disabled?: boolean;
+  act: () => void;
+}
+
+function useKeys(): Key[] {
+  const { call, captions, speaker } = useCall();
+  return [
+    { id: 'mute', icon: 'mic', label: call.muted ? 'Unmute' : 'Mute', on: call.muted, act: toggleMute },
+    { id: 'speaker', icon: speaker ? 'volume-2' : 'volume-1', label: 'Speaker', on: speaker, act: toggleSpeaker },
+    { id: 'pause', icon: call.paused ? 'play' : 'pause', label: call.paused ? 'Resume' : 'Pause', on: call.paused, act: togglePause },
+    { id: 'skip', icon: 'skip-forward', label: 'Skip', disabled: call.phase !== 'speaking' || call.paused, act: skipSentence },
+    { id: 'captions', icon: 'scroll-text', label: 'Captions', on: captions, act: toggleCaptions },
+  ];
+}
+
+function Keys({ small }: { small?: boolean }) {
+  const keys = useKeys();
+  return (
+    <div className={`vcall-keys ${small ? 'vcall-keys-small' : ''}`}>
+      {keys.map((k) => (
+        <div key={k.id} className="vcall-key-cell">
+          <button type="button" className={`ds-btn ds-btn-icon vcall-key ${k.on ? 'vcall-key-on' : ''}`} aria-pressed={k.on} disabled={k.disabled} aria-label={k.label} data-key={k.id} onClick={k.act}>
+            <Icon name={k.icon} />
+            {k.id === 'mute' && k.on && <span className="vcall-slash" aria-hidden />}
+          </button>
+          <span className="vcall-key-label">{k.label}</span>
+        </div>
+      ))}
+      <div className="vcall-key-cell">
+        <button type="button" className="ds-btn ds-btn-icon vcall-key vcall-end" aria-label="End call" data-key="end" onClick={endCall}>
+          <Icon name="phone" />
+        </button>
+        <span className="vcall-key-label">End</span>
+      </div>
+    </div>
+  );
+}
+
+/** Live captions: the CEO's sentence, or what you're saying. */
+function CaptionsLine() {
+  const { call, heard, captions } = useCall();
+  const saying = useSaying(call);
+  const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
+  if (!captions) return null;
+  const line = call.phase === 'speaking' && saying ? `${ceo}: ${saying}` : heard ? `You: ${heard}` : '';
+  return (
+    <p className="vcall-captions" aria-live="polite">
+      {line || ' '}
+    </p>
+  );
+}
+
+/** The mic can't listen by itself: why, and a Talk button. */
+function TapToTalk() {
+  const why = useCall((s) => s.call.tapToTalk);
+  if (!why) return null;
+  return (
+    <div className="vcall-tap">
+      <p className="vcall-why">{why}</p>
+      <button type="button" className="ds-btn" onClick={talkOnce}>
+        <Icon name="mic" /> Talk
+      </button>
+    </div>
+  );
+}
+
+function Orb({ call, initial, size }: { call: Call; initial: string; size: 'big' | 'small' }) {
+  const state = call.paused ? 'paused' : call.phase;
+  return (
+    <div className={`vcall-orb vcall-orb-${size}`} data-state={state} aria-hidden>
+      <span>{initial}</span>
+    </div>
+  );
+}
+
+function openChat() {
+  setMinimised(true);
+  useCall.setState({ chatTucked: false });
+  useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' });
+}
+
+// ---------- the phone: a call screen, and its pill ----------
+
+function PhoneCall() {
+  const { call, minimised } = useCall();
+  const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
+  const clock = useClock(call.startedAt);
+  if (minimised)
+    return (
+      <button type="button" className="vcall-pill" onClick={() => setMinimised(false)} aria-label={`Back to the call with ${ceo}, ${clock}`}>
+        <Icon name="phone" />
+        <span className="vcall-pill-name">{ceo}</span>
+        <span className="vcall-pill-status">{callStatus(call, ceo)}</span>
+        <span className="vcall-clock">{clock}</span>
+      </button>
+    );
+  return (
+    <div className="vcall-screen" role="dialog" aria-label={`Call with ${ceo}`}>
+      <header className="vcall-top">
+        <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Minimise the call" title="Use the app; the call goes on" onClick={() => setMinimised(true)}>
+          <Icon name="chevron-down" />
+        </button>
+        <span className="vcall-clock">{clock}</span>
+        <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Open chat" title="The chat, while the call goes on" onClick={openChat}>
+          <Icon name="message-circle" />
+        </button>
+      </header>
+      <div className="vcall-middle">
+        <Orb call={call} initial={ceo.charAt(0)} size="big" />
+        <h2 className="vcall-name">{ceo}</h2>
+        <p className="vcall-status">{callStatus(call, ceo)}</p>
+        <TapToTalk />
+        <CaptionsLine />
+      </div>
+      <Keys />
+    </div>
+  );
+}
+
+// ---------- the desktop: the orb and its card ----------
+
+type Corner = 'br' | 'bl' | 'tr' | 'tl';
+const CORNER_KEY = 'cubefarm:call-corner';
+
+function savedCorner(): Corner {
+  try {
+    const c = localStorage.getItem(CORNER_KEY);
+    return c === 'bl' || c === 'tr' || c === 'tl' ? c : 'br';
+  } catch {
+    return 'br';
+  }
+}
+
+function CallOrb() {
+  const { call, minimised } = useCall();
+  const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
+  const clock = useClock(call.startedAt);
+  const [corner, setCorner] = useState<Corner>(savedCorner);
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const dragged = useRef(false); // the click that ends a drag doesn't open the card
+
+  const down = (e: ReactPointerEvent<HTMLElement>) => {
+    if (e.currentTarget.tagName !== 'BUTTON' && (e.target as HTMLElement).closest('button')) return; // the card's own buttons
+    press.current = { x: e.clientX, y: e.clientY, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const move = (e: ReactPointerEvent<HTMLElement>) => {
+    const p = press.current;
+    if (!p) return;
+    if (!p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) return;
+    p.moved = true;
+    setDrag({ x: e.clientX, y: e.clientY });
+  };
+  const up = (e: ReactPointerEvent<HTMLElement>) => {
+    const p = press.current;
+    press.current = null;
+    if (!p?.moved) return;
+    dragged.current = true;
+    setDrag(null);
+    // Snaps to the nearest corner (clear of the panels' headers, so it never covers a ✕).
+    const c: Corner = `${e.clientY < window.innerHeight / 2 ? 't' : 'b'}${e.clientX < window.innerWidth / 2 ? 'l' : 'r'}` as Corner;
+    setCorner(c);
+    try {
+      localStorage.setItem(CORNER_KEY, c);
+    } catch {
+      // remembered for this visit only
+    }
+  };
+  const open = () => {
+    if (dragged.current) dragged.current = false;
+    else setMinimised(false);
+  };
+  const style = drag ? { left: drag.x, top: drag.y, right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' } : undefined;
+
+  return (
+    <div className={`vcall-float vcall-${corner}`} style={style} data-dragging={drag ? '' : undefined}>
+      {minimised ? (
+        <button type="button" className="vcall-bubble" aria-label={`Call with ${ceo}, ${callStatus(call, ceo)}: open the call card`} title="Drag to a corner" onPointerDown={down} onPointerMove={move} onPointerUp={up} onClick={open}>
+          <Orb call={call} initial={ceo.charAt(0)} size="small" />
+          <span className="vcall-clock">{clock}</span>
+        </button>
+      ) : (
+        <section className="vcall-card" role="dialog" aria-label={`Call with ${ceo}`}>
+          <header className="vcall-card-head" onPointerDown={down} onPointerMove={move} onPointerUp={up}>
+            <Orb call={call} initial={ceo.charAt(0)} size="small" />
+            <div className="vcall-card-who">
+              <strong className="vcall-name">{ceo}</strong>
+              <span className="vcall-status">
+                {callStatus(call, ceo)} · <span className="vcall-clock">{clock}</span>
+              </span>
+            </div>
+            <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Fold the call card" title="Fold to the orb; the call goes on" onClick={() => setMinimised(true)}>
+              <Icon name="chevron-down" />
+            </button>
+          </header>
+          <TapToTalk />
+          <CaptionsLine />
+          <Keys small />
+          <button type="button" className="ds-btn" onClick={openChat}>
+            <Icon name="message-circle" /> Open chat
+          </button>
+        </section>
+      )}
+    </div>
+  );
+}

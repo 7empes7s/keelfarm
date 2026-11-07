@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
-import type { PastCareer } from '../../shared/careers';
+import { careerOfRow, type PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
@@ -28,6 +28,7 @@ import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
 import { claimVoice } from './ui/voiceClaim';
+import { callOn, callVoice, holdNote } from './ui/voiceCallStore';
 import { speakable } from './ui/voiceQueue';
 import { emitMerge, mergeBursts, recentQaRecord, rememberQa } from './world/confetti';
 import { takeEmote, takePing, takePose, takeRoster } from './world/presence/presenceState';
@@ -42,13 +43,11 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); profile: with their Profile open (#205)
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; jump?: number; details?: 'now' | 'profile' | 'setup'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); jump: their chat item to scroll to; details: the details tab to open (#215); profile: with their Profile open (#205)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
-  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } } // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so
-  /** The Previews page (#226): every floor's previews in one list, one on stage. Pocket mode opens 'app' here too. */
-  | { kind: 'previews'; repoId?: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } }
+  | (({ kind: 'app'; repoId: string } | { kind: 'previews'; repoId?: string }) & { pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string }) // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so; path: at that page (an agent's browser address, #230). 'previews': the Previews page (#226), where pocket mode opens 'app' too
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string; full?: boolean }
@@ -139,6 +138,7 @@ interface State {
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
   peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
+  shotTimes: Record<string, number[]>; // agentId -> their session's earlier screenshots (#230), from the screen events this tab got
   qa: Record<string, QaView>; // `${repoId}#${prNumber}`
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
   previewStats: PreviewStatsView;
@@ -307,6 +307,7 @@ export const useStore = create<State>((set, get) => ({
   workersOpen: false,
   peek: null,
   screens: {},
+  shotTimes: {},
   qa: {},
   prPreviews: {},
   previewStats: { diskBytes: null, memMb: null, cleanedAt: null },
@@ -378,7 +379,7 @@ export const useStore = create<State>((set, get) => ({
         const logs: Record<string, LogLine[]> = {};
         const screens: Record<string, number> = {};
         for (const { log, ...a } of d.agents) {
-          agents[a.id] = a;
+          agents[a.id] = d.careers?.[a.id] ? { ...a, career: careerOfRow(d.careers[a.id]) } : a;
           logs[a.id] = log;
           if (a.screenshotAt) screens[a.id] = a.screenshotAt;
         }
@@ -528,7 +529,8 @@ export const useStore = create<State>((set, get) => ({
         const a = get().agents[ev.agentId];
         set({
           screens: { ...get().screens, [ev.agentId]: ev.at },
-          agents: a ? { ...get().agents, [ev.agentId]: { ...a, hasScreenshot: true, screenshotAt: ev.at, browserUrl: ev.url ?? a.browserUrl } } : get().agents,
+          shotTimes: { ...get().shotTimes, [ev.agentId]: ev.earlier ?? [] },
+          agents: a ? { ...get().agents, [ev.agentId]: { ...a, hasScreenshot: true, screenshotAt: ev.at, browserUrl: ev.url || a.browserUrl } } : get().agents,
         });
         break;
       }
@@ -582,8 +584,8 @@ export const useStore = create<State>((set, get) => ({
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
-        // Read aloud, in this tab or another; the voice plays the chirp itself if it can't. Locked audio can't speak.
-        const speak = live && audioUnlocked() && speakable(ev.message, get().settings.voice, Date.now());
+        // Read aloud, in this tab or another (always in a voice call); the voice plays the chirp itself if it can't. Locked audio can't speak.
+        const speak = live && audioUnlocked() && speakable(ev.message, callVoice(get().settings.voice), Date.now());
         if (speak) {
           const arrived = Date.now();
           const wait = claimVoice(ev.message.id);
@@ -591,8 +593,7 @@ export const useStore = create<State>((set, get) => ({
         }
         // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
         if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
-        // Its toast is the office's notice (#107).
-        if (ev.message.from === 'ceo' && !reading && !speak) chirp();
+        if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
         break;
       }
       case 'ceoChat':
@@ -617,8 +618,8 @@ export const useStore = create<State>((set, get) => ({
         const n = noticeOf(ev);
         if (n && !replay) set({ notices: addNotice(get().notices, n, Date.now()) }); // the centre is live-only
         const o = get().overlay;
-        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read).
-        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat')) get().pushToast(ev.level, ev.text, n ?? undefined);
+        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read); a voice call holds it till its end.
+        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat') && !holdNote({ level: ev.level, text: ev.text, ...(n && { notice: n }) })) get().pushToast(ev.level, ev.text, n ?? undefined);
         break;
       }
       case 'noticesRead':
@@ -685,7 +686,7 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.
-        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false);
+        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false && !callOn());
         break;
       // Presence: the list is state; poses, emotes and pings go straight to the 3D view (world/presence/presence.ts).
       case 'visitors':
@@ -723,7 +724,7 @@ export const useStore = create<State>((set, get) => ({
   openOverlay(overlay) {
     // Terminals and the floor's app are live, whatever the time-lapse shows.
     if (overlay && get().replaying && (overlay.kind === 'terminal' || overlay.kind === 'app' || overlay.kind === 'previews')) {
-      get().pushToast('info', '▶ That shows the live office: press Esc to leave the replay first.');
+      get().pushToast('info', 'That shows the live office: press Esc to leave the replay first.');
       return;
     }
     // Closing a panel a chat chip opened goes back to the chat.
@@ -866,7 +867,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
     const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
-    const card = { ...base, ...(p.untrusted ? { note: `🛡 ${OUTSIDE_PR}`, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
+    const card = { ...base, ...(p.untrusted ? { note: OUTSIDE_PR, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
   }
@@ -874,17 +875,17 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
   const claimed = new Set<number>([...progress.map((c) => c.number), ...openPulls.flatMap((p) => (p.untrusted ? [] : p.closesIssues))]);
   const open = new Set(repo.issues.map((i) => i.number));
   const held = new Map((repo.held ?? []).map((h) => [h.issue, h.pr]));
-  const paced = repo.autoAssign && usage && usage.state !== 'normal' ? (usage.state === 'paused' ? '⏸ paused' : '⏸ paced') : '';
+  const paced = repo.autoAssign && usage && usage.state !== 'normal' ? (usage.state === 'paused' ? 'paused' : 'paced') : '';
   const backlog: KanbanCard[] = repo.issues
     .filter((i) => !claimed.has(i.number))
     .map((i) => {
       const waits = blockers(i.body, open);
       const labels = i.labels.slice(0, 2).join(', ');
       const card = { key: `i-${i.number}`, number: i.number, title: i.title, url: i.url };
-      if (i.untrusted) return { ...card, note: `🛡 ${UNTRUSTED_ISSUE} · @${i.author ?? 'ghost'}`, tone: 'warn' as const, untrusted: true };
+      if (i.untrusted) return { ...card, note: `${UNTRUSTED_ISSUE} · @${i.author ?? 'ghost'}`, tone: 'warn' as const, untrusted: true };
       // Its PR was closed: it waits for the manager rather than going back to auto-assign.
-      if (held.has(i.number)) return { ...card, note: `⏸ PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
-      return { ...card, note: (waits.length ? `⏳ after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };
+      if (held.has(i.number)) return { ...card, note: `PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
+      return { ...card, note: (waits.length ? `after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };
     });
 
   const merged: KanbanCard[] = repo.pulls

@@ -63,10 +63,13 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
   };
   useEffect(() => stop, []);
   const repeat = 'repeat' in k && k.repeat;
+  // Paste goes on the click: a phone lets the clipboard be read only from a real activation, which a touch's pointer
+  // down isn't (#278). Its pointer down still keeps the terminal focused.
+  const paste = 'paste' in k;
   return (
     <button
       type="button"
-      className={`term-key ${latch && latch !== 'off' ? `term-key-${latch}` : ''}`}
+      className={`term-key ${latch && latch !== 'off' ? `term-key-${latch}` : ''} ${paste && k.primary ? 'term-key-primary' : ''}`}
       title={k.title}
       aria-label={k.title}
       aria-pressed={latch ? latch !== 'off' : undefined}
@@ -74,6 +77,7 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
+        if (paste) return;
         navigator.vibrate?.(8);
         onPress(k);
         if (repeat) delay.current = window.setTimeout(() => (every.current = window.setInterval(() => onPress(k), REPEAT_EVERY)), REPEAT_DELAY);
@@ -82,7 +86,7 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
       onPointerLeave={stop}
       onPointerCancel={stop}
       onContextMenu={(e) => e.preventDefault()}
-      onClick={(e) => e.detail === 0 && onPress(k)} // Enter or Space on a focused key
+      onClick={(e) => (paste || e.detail === 0) && onPress(k)} // Enter or Space on a focused key; every Paste
     >
       {k.label}
     </button>
@@ -90,7 +94,7 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
 }
 
 /** `dock` (the default) moves the bar onto the phone keyboard while it's up; a window already above it passes false. */
-export function TermKeyBar({ cli, mods, onPress, dock = true }: { cli: AgentCli; mods: ModState; onPress: (k: BarKey) => void; dock?: boolean }) {
+export function TermKeyBar({ cli, mods, onPress, dock = true, signIn = false }: { cli: AgentCli; mods: ModState; onPress: (k: BarKey) => void; dock?: boolean; signIn?: boolean }) {
   const [more, setMore] = useState(false);
   const keyboard = useKeyboardInset();
   const inset = dock ? keyboard : 0;
@@ -103,7 +107,7 @@ export function TermKeyBar({ cli, mods, onPress, dock = true }: { cli: AgentCli;
         </div>
       )}
       <div className="term-keys-row">
-        {barKeys(cli).map(key)}
+        {barKeys(cli, { signIn }).map(key)}
         <button type="button" className="term-key term-key-more" aria-label="More keys" aria-expanded={more} onPointerDown={(e) => e.preventDefault()} onClick={() => setMore((v) => !v)}>
           {more ? 'Less' : 'More'}
         </button>

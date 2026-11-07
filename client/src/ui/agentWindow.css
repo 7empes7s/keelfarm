@@ -34,6 +34,7 @@
   font-size: 9px;
   font-weight: var(--ds-weight-strong);
   line-height: 1;
+  --ds-icon: 11px;
 }
 .aw-ring-working {
   --ring: var(--st-working, #74c0fc);
@@ -117,6 +118,7 @@
   font-size: var(--ds-text-md);
   font-weight: var(--ds-weight-strong);
   cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
 }
 .aw-stop {
   background: var(--ds-bad-fill);
@@ -261,11 +263,6 @@
   font-weight: var(--ds-weight-strong);
   box-shadow: var(--ds-shadow-1);
 }
-.aw-details-x {
-  border-color: var(--ds-outline);
-  color: var(--ds-text);
-  background: var(--ds-surface-raised);
-}
 .aw-tab-body {
   display: flex;
   flex-direction: column;
@@ -276,33 +273,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
-}
-.aw-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-3);
-  border: 1.5px solid var(--ds-line-strong);
-  border-left: 5px solid var(--accent, var(--ds-outline));
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-raised);
-}
-.aw-card-title {
-  overflow-wrap: anywhere;
-}
-.aw-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-.aw-chips .chip {
-  min-height: 32px;
-  font-size: var(--ds-text-xs);
-}
-.aw-chip-btn {
-  font: inherit;
-  cursor: pointer;
 }
 .aw-pick select {
   width: 100%;
@@ -335,29 +305,11 @@
   color: var(--ds-on-color);
   font-weight: var(--ds-weight-strong);
 }
-.aw-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
-  gap: var(--ds-space-2);
-  margin: 0;
-}
-.aw-facts dt {
-  font-size: var(--ds-text-xs);
-  color: var(--ds-text-muted);
-}
-.aw-facts dd {
-  margin: 0;
-  font-weight: var(--ds-weight-strong);
-  font-variant-numeric: tabular-nums;
-}
 .aw-explain {
   margin: 0;
 }
 .aw-details .agent-setup {
   margin: 0;
-}
-.aw-details .browser-view {
-  max-height: 40vh;
 }
 
 /* ---------- the Profile tab ---------- */

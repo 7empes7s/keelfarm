@@ -31,10 +31,10 @@ export function officeUpdateText(u: OfficeUpdateView, now = Date.now()): string 
 /** The HUD chip while an update is on its way; null when there's nothing to show. */
 export function officeUpdateChip(u: OfficeUpdateView | undefined, now = Date.now()): string | null {
   if (!u) return null;
-  if (u.state === 'settling') return `⟳ ${settlingText(u, now)}`;
-  if (u.state === 'updating') return '⟳ Updating the office…';
+  if (u.state === 'settling') return settlingText(u, now);
+  if (u.state === 'updating') return 'Updating the office…';
   if (u.state !== 'waiting' && u.state !== 'draining') return null;
-  return u.running > 0 ? `⟳ Updating the office after ${plural(u.running, 'session')} finish${u.running === 1 ? 'es' : ''}` : '⟳ Updating the office shortly';
+  return u.running > 0 ? `Updating the office after ${plural(u.running, 'session')} finish${u.running === 1 ? 'es' : ''}` : 'Updating the office shortly';
 }
 
 /** When a drain gives up on the sessions still running, or null when it isn't draining. */
@@ -65,6 +65,7 @@ export interface LoadBlockers {
   uploading: boolean;
   sending: boolean; // a message on its way to the office
   sheet: boolean; // a sheet, menu or confirmation open
+  call?: boolean; // a voice call: a reload would hang up on the CEO
 }
 
 /** Back from the background after this long, the app may load the new client. */
@@ -75,6 +76,7 @@ export type LoadMoment = { kind: 'nav' } | { kind: 'visible'; hiddenMs: number }
 
 /** What the new client waits for, in a few words ("the upload finishes"); null when nothing holds it. */
 export function loadBlocker(b: LoadBlockers): string | null {
+  if (b.call) return 'the call ends';
   if (b.uploading) return 'the upload finishes';
   if (b.sending) return 'your message is sent';
   if (b.draft) return 'you send or clear your message';

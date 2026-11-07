@@ -122,7 +122,7 @@ function Plaques({ row, won }: { row: number; won: Map<string, AchievementView> 
 const Trophy = memo(function Trophy({ a, i }: { a: AchievementView; i: number }) {
   const def = ACHIEVEMENTS[i];
   const p = trophySpot(i);
-  const ref = useInteractable<THREE.Group>({ id: `trophy:${a.id}`, label: `${def.icon} ${def.name}: what it was for, and when`, action: { kind: 'trophy', id: a.id } }, 3.5);
+  const ref = useInteractable<THREE.Group>({ id: `trophy:${a.id}`, label: `${def.name}: what it was for, and when`, action: { kind: 'trophy', id: a.id } }, 3.5);
   return (
     <group ref={ref} position={[p.x, p.y + 0.14, p.z]}>
       <mesh visible={false}>

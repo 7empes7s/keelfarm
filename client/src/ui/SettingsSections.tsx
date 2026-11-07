@@ -3,8 +3,9 @@
 // own in the side menu (consoleNavRules.ts); the other sections are their own components.
 import { api } from '../api';
 import { useStore } from '../store';
-import { DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
-import { CLAUDE_MODELS } from '../../../shared/models';
+import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
+import { CLAUDE_MODELS, modelLabel } from '../../../shared/models';
+import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
 import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
 import { MemoryFields } from './HealthStrip';
@@ -13,6 +14,8 @@ import { EffortByKind } from './CostsSection';
 import { AwakeSettings, FollowupSettings } from './CeoFollowups';
 import { useChatMode } from './chatMode';
 import { openWhatsNew, useTour } from './tour';
+import { Icon } from './Icon';
+import { STATUS_EMOJI } from '../../../shared/reactions';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
 const set = (p: SettingsPatch) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
@@ -39,7 +42,9 @@ export function AgentsSettings() {
   const defaultCli = terminal ? settings.defaultCli : 'claude';
   return (
     <div className="card">
-      <h3>🧑‍💻 Agents</h3>
+      <h3>
+        <Icon name="laptop" /> Agents
+      </h3>
       {terminal && (
         <label className="field">
           <span>Default coding agent</span>
@@ -110,11 +115,37 @@ export function AgentsSettings() {
   );
 }
 
+const JOB_NAMES: Record<CeoModelKind, string> = { chat: 'Chat with you', plan: 'Planning', research: 'Research', review: 'Company reviews', followup: 'Follow-ups', triage: 'Stuck PR triage' };
+
+/** CEO settings → Model per job (#331): routine jobs on a cheaper model, the rest on the CEO's own. */
+function CeoModelsByJob() {
+  const awake = useStore((s) => s.settings.ceoAwake);
+  const models = awake.models;
+  const ceoModel = useStore((s) => s.agents[CEO_ID]?.model) || CLAUDE_MODELS[0];
+  const same = `Same as the CEO model (${modelLabel(ceoModel)})`;
+  return (
+    <div>
+      <div className="small">
+        <b>Model per job</b>
+      </div>
+      {CEO_MODEL_KINDS.map((kind) => (
+        <label key={kind} className="field" htmlFor={`ceo-model-${kind}`}>
+          <span>{JOB_NAMES[kind]}</span>
+          <ModelPicker id={`ceo-model-${kind}`} cli="claude" value={models[kind]} resolvedDefault={ceoModel} defaultLabel={same} label={`${JOB_NAMES[kind]}: model`} onChange={(m) => set({ ceoAwake: { ...awake, models: { ...models, [kind]: m } } })} />
+        </label>
+      ))}
+      <p className="muted small">A job starts a fresh session when its model differs from the last one's. If a model isn't available, the job runs again on the CEO model and the office chat says so.</p>
+    </div>
+  );
+}
+
 export function CeoSettings() {
   const settings = useStore((s) => s.settings);
   return (
     <div className="card">
-      <h3>🎛️ CEO settings</h3>
+      <h3>
+        <Icon name="sliders-horizontal" /> CEO settings
+      </h3>
       <div role="radiogroup" aria-label="Team changes from the CEO">
         <div className="small">
           <b>Team changes from the CEO</b>
@@ -138,15 +169,16 @@ export function CeoSettings() {
         <input type="number" min={0} max={1440} defaultValue={settings.ceoHeartbeatMin} onBlur={(e) => set({ ceoHeartbeatMin: Number(e.target.value) })} />
       </label>
       <p className="muted small">A review checks team sizes, stuck PRs and floor profiles, and is skipped when nothing changed since the last one. It never files issues: new work only comes from you. The CEO's own model and effort are in The CEO.</p>
+      <CeoModelsByJob />
       <label className="field">
         <span>Research time budget (minutes)</span>
         <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />
       </label>
-      <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
+      <p className="muted small">Research (<Icon name="search" /> in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
       <label className="toggle block">
         <input type="checkbox" checked={!!settings.statusReactions} onChange={(e) => set({ statusReactions: e.target.checked })} />
         <span>
-          <b>Status reactions</b>: 👀 ⏳ ✅ under your messages while the CEO or an agent works on them. Off, the working strip shows it.
+          <b>Status reactions</b>: {[STATUS_EMOJI.seen, STATUS_EMOJI.working, STATUS_EMOJI.done].join(' ')} under your messages while the CEO or an agent works on them. Off, the working strip shows it.
         </span>
       </label>
       <FollowupSettings />
@@ -160,7 +192,9 @@ export function RuntimeSettings() {
   const chat = useChatMode();
   return (
     <div className="card">
-      <h3>⌨️ How agents run</h3>
+      <h3>
+        <Icon name="keyboard" /> How agents run
+      </h3>
       <label className="toggle block">
         <input type="radio" checked={runtime === 'terminal'} onChange={() => set({ runtime: 'terminal' })} />
         <span>
@@ -192,7 +226,9 @@ export function CompanySettings() {
   const user = useStore((s) => s.user);
   return (
     <div className="card">
-      <h3>🏬 Company</h3>
+      <h3>
+        <Icon name="store" /> Company
+      </h3>
       <label className="field">
         <span>Your name</span>
         <input defaultValue={settings.managerName} placeholder={user ?? 'Boss'} onBlur={(e) => e.target.value !== settings.managerName && set({ managerName: e.target.value })} />
@@ -247,10 +283,10 @@ export function CompanySettings() {
             set({ tutorialStep: 0 });
           }}
         >
-          🧭 Replay the tour
+          <Icon name="compass" /> Replay the tour
         </button>
         <button className="btn btn-small" onClick={() => openWhatsNew()}>
-          ✨ What's new
+          <Icon name="sparkles" /> What's new
         </button>
       </div>
     </div>
@@ -266,7 +302,9 @@ export function AboutOffice() {
   const commit = useStore((s) => s.officeCommit);
   return (
     <div className="card">
-      <h3>ℹ️ About this office</h3>
+      <h3>
+        <Icon name="info" /> About this office
+      </h3>
       <dl className="cn-facts small">
         <dt>Version</dt>
         <dd>

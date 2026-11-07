@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { LabChip } from './ExperimentsSection';
 import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { Panel } from './Panel';
 import { HistoryButton } from './HistoryTab';
@@ -13,6 +14,10 @@ import type { EmptyKind } from './emptyStates';
 import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
+import { COLUMN_IDS, foldSummary, isFolded, parseFolds, withFold, type ColumnId, type FoldMap } from './kanbanFold';
+import { useLayout } from '../pocket/mode';
+import { reduceMotion } from './a11y';
+import './kanbanFold.css';
 import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
@@ -89,12 +94,31 @@ function Frame({ embedded, ...props }: Parameters<typeof Panel>[0] & { embedded?
   );
 }
 
+const FOLD_KEY = 'cubefarm:kanban-fold';
+const SHORT: Record<ColumnId, string> = { backlog: 'Backlog', progress: 'In progress', qa: 'In QA', ready: 'Ready', merged: 'Merged' };
+
+function loadFolds(): FoldMap {
+  try {
+    return parseFolds(localStorage.getItem(FOLD_KEY));
+  } catch {
+    return {};
+  }
+}
+
+function saveFolds(map: FoldMap) {
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify(map));
+  } catch {
+    // remembered for this visit only
+  }
+}
+
 function QaLink({ card }: { card: KanbanCard }) {
   if (!card.qa?.commentUrl) return null;
   return (
     <HoverCard label={`QA on PR #${card.qa.prNumber}`} peek={<QaPeek qa={card.qa} />}>
       <a className="small" href={card.qa.commentUrl} target="_blank" rel="noreferrer">
-        QA report ↗
+        QA report <Icon name="external-link" />
       </a>
     </HoverCard>
   );
@@ -110,6 +134,14 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const cols = useMemo(() => (repo ? kanbanFor(repo, agents, qaRecords, { state: usageState }) : null), [repo, agents, qaRecords, usageState]);
   const [showForm, setShowForm] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  // Folding (#154): a phone stacks the columns, so a folded one is its header (and the board comes before the builds);
+  // side by side it's a narrow strip.
+  const layout = useLayout();
+  const phone = !!embedded && layout === 'compact';
+  const strips = !embedded || layout === 'expanded';
+  const [folds, setFolds] = useState(loadFolds);
+  const foldId = useId();
+  const colEls = useRef<Partial<Record<ColumnId, HTMLDivElement | null>>>({});
 
   if (!repo || !cols) {
     return (
@@ -135,7 +167,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     const passed = c.qa?.status === 'passed';
     const ok = await confirmDialog(
       passed
-        ? { icon: '🎉', title: `Merge PR #${c.number}?`, body: `“${c.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
+        ? { icon: 'party-popper', title: `Merge PR #${c.number}?`, body: `“${c.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
         : {
             tone: 'warn',
             title: `Merge PR #${c.number} without QA?`,
@@ -148,7 +180,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const sendBack = async (c: KanbanCard) => {
     let note = '';
     const ok = await confirmDialog({
-      icon: '🔧',
+      icon: 'wrench',
       title: `Send PR #${c.number} back for a fix?`,
       body: (
         <>
@@ -169,7 +201,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const trust = async (c: KanbanCard) => {
     const ok = await confirmDialog({
       tone: 'warn',
-      icon: '🛡',
+      icon: 'shield',
       title: `Trust issue #${c.number}?`,
       body: `“${c.title}” is from someone outside the team. Agents will build it as written, with a shell on this server: read it on GitHub first. The office adds the ${TRUST_LABEL} label, and the chat records that you let it in.`,
       confirm: 'Trust this issue',
@@ -178,7 +210,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   };
   const reviewOnGitHub = (c: KanbanCard) => (
     <a className="btn btn-small" href={c.url} target="_blank" rel="noreferrer">
-      Review on GitHub ↗
+      Review on GitHub <Icon name="external-link" />
     </a>
   );
   const closePr = async (c: KanbanCard) => {
@@ -219,47 +251,69 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     openOverlay({ kind: 'card', repoId: repo.id, key: c.key, number: c.number, pr: !!c.prNumber });
     useStore.setState({ back });
   };
-  const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: EmptyKind) => (
-    <div className={`kcol ${cls}`}>
-      <div className="kcol-head">
-        {title} <span className="count">{cards.length}</span>
-      </div>
-      <div className="kcol-body">
-        {cards.length === 0 && (
-          <div className="kempty">
-            <EmptyState kind={empty} compact {...emptyAction[empty]} />
-          </div>
-        )}
-        {cards.map((c) => (
-          <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
-            <div className="kcard-title">
-              <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
-                <button className="linkish" title="Open the card" onClick={() => openCard(c)}>
-                  {c.prNumber ? 'PR ' : ''}#{c.number}
-                </button>
-              </HoverCard>{' '}
-              {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
-              {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
-            </div>
-            {cls !== 'kcol-merged' && cls !== 'kcol-backlog' && (
-              <TaskBar
-                input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
-                repoId={repo.id}
-                since={taskSince(repo, c.number, c.prNumber ?? null)}
-                name={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}
-                compact
-                {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
-              />
+  const folded = (id: ColumnId) => isFolded(folds, repo.id, id, phone);
+  const fold = (id: ColumnId, shut: boolean) => {
+    const next = withFold(folds, repo.id, id, shut);
+    setFolds(next);
+    saveFolds(next);
+  };
+  const jump = (id: ColumnId) => {
+    fold(id, false);
+    requestAnimationFrame(() => colEls.current[id]?.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' }));
+  };
+  const column = (title: React.ReactNode, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, id: EmptyKind & ColumnId) => {
+    const shut = folded(id);
+    const summary = shut && foldSummary(id, cards);
+    return (
+      <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''}`} ref={(el) => void (colEls.current[id] = el)}>
+        <button type="button" className="kcol-head" aria-expanded={!shut} aria-controls={`${foldId}-${id}`} onClick={() => fold(id, !shut)}>
+          <span className="kcol-name">{title}</span> <span className="count">{cards.length}</span>
+          {summary && <span className="kcol-summary">{summary}</span>}
+          <span className="kcol-chev" aria-hidden="true">
+            <Icon name="chevron-right" />
+          </span>
+        </button>
+        <div className="kcol-fold" id={`${foldId}-${id}`}>
+          <div className="kcol-body">
+            {cards.length === 0 && (
+              <div className="kempty">
+                <EmptyState kind={id} compact {...emptyAction[id]} />
+              </div>
             )}
-            {c.prNumber != null && cls !== 'kcol-merged' && !c.untrusted && (
-              <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
-            )}
-            {render(c)}
+            {cards.map((c) => (
+              <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
+                <div className="kcard-title">
+                  <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
+                    <button className="linkish" title="Open the card" onClick={() => openCard(c)}>
+                      {c.prNumber ? 'PR ' : ''}#{c.number}
+                    </button>
+                  </HoverCard>{' '}
+                  {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
+                  {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
+                </div>
+                {cls !== 'kcol-merged' && cls !== 'kcol-backlog' && (
+                  <TaskBar
+                    input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
+                    repoId={repo.id}
+                    since={taskSince(repo, c.number, c.prNumber ?? null)}
+                    name={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}
+                    compact
+                    {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
+                  />
+                )}
+                {c.prNumber != null && cls !== 'kcol-merged' && !c.untrusted && (
+                  <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
+                )}
+                {render(c)}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+  // side by side, a folded column's track is a strip; the open ones share the rest
+  const tracks = strips && COLUMN_IDS.some(folded) ? COLUMN_IDS.map((id) => (folded(id) ? 'var(--kc-shut)' : 'var(--kc-open, minmax(210px, 1fr))')).join(' ') : undefined;
 
   return (
     <Frame
@@ -268,9 +322,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       accent={repo.color}
       title={
         <span>
-          📋 {repo.fullName}{' '}
+          <Icon name="clipboard-list" /> {repo.fullName}{' '}
           <a className="small" href={repo.url} target="_blank" rel="noreferrer">
-            GitHub ↗
+            GitHub <Icon name="external-link" />
           </a>
           {!embedded && <InfoButton screen="kanban" />}
         </span>
@@ -282,29 +336,44 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         </button>
         <label className="toggle">
           <input type="checkbox" checked={repo.autoAssign} onChange={(e) => void api.updateRepo(repo.id, { autoAssign: e.target.checked }).catch(() => undefined)} />
-          ⚡ Auto-assign work to free agents
+          <Icon name="zap" /> Auto-assign work to free agents
         </label>
         <label className="toggle" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
           <input type="checkbox" checked={repo.autoMerge} onChange={(e) => void api.updateRepo(repo.id, { autoMerge: e.target.checked }).catch(() => undefined)} />
-          🔀 Auto-merge when QA and checks pass
+          <Icon name="git-merge" /> Auto-merge when QA and checks pass
         </label>
         <span className="spacer" />
         <button className="btn" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">
-          🖥️ View app
+          <Icon name="monitor" /> View app
         </button>
         <span className="muted small">{repo.lastSync ? `Synced ${new Date(repo.lastSync).toLocaleTimeString()}` : 'Syncing…'}</span>
         <button className="btn" disabled={pending === 'sync'} onClick={() => act('sync', () => api.syncRepo(repo.id))}>
-          ⟳ Sync
+          <Icon name="refresh-cw" /> Sync
         </button>
       </div>
-      {repo.syncError && <div className="term-error">⚠️ {repo.syncError}</div>}
+      {repo.syncError && (
+        <div className="term-error">
+          <Icon name="triangle-alert" /> {repo.syncError}
+        </div>
+      )}
       <CiOutageBanner repo={repo} />
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
-      <FloorBuilds repoId={repo.id} />
+      {!phone && <FloorBuilds repoId={repo.id} />}
 
-      <div className="kanban kanban-5">
+      {phone && (
+        <nav className="kanban-jump" aria-label="Kanban columns">
+          {COLUMN_IDS.map((id) => (
+            <button key={id} type="button" className="kanban-jump-btn" onClick={() => jump(id)}>
+              {SHORT[id]} <span className="count">{cols[id].length}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      <div className={`kanban kanban-5 ${strips ? 'kanban-strips' : ''}`} style={tracks ? { gridTemplateColumns: tracks } : undefined}>
         {column(
-          '📋 Backlog',
+          <>
+            <Icon name="clipboard-list" /> Backlog
+          </>,
           'kcol-backlog',
           cols.backlog,
           (c) =>
@@ -337,7 +406,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'backlog',
         )}
         {column(
-          '🔨 In progress',
+          <>
+            <Icon name="hammer" /> In progress
+          </>,
           'kcol-progress',
           cols.progress,
           (c) => (
@@ -351,7 +422,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'progress',
         )}
         {column(
-          '🔍 In QA',
+          <>
+            <Icon name="search" /> In QA
+          </>,
           'kcol-qa',
           cols.qa,
           (c) => {
@@ -397,7 +470,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'qa',
         )}
         {column(
-          '✅ Ready to merge',
+          <>
+            <Icon name="circle-check" /> Ready to merge
+          </>,
           'kcol-review',
           cols.ready,
           (c) => {
@@ -423,7 +498,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'ready',
         )}
         {column(
-          '🎉 Merged',
+          <>
+            <Icon name="party-popper" /> Merged
+          </>,
           'kcol-merged',
           cols.merged,
           (c) => (
@@ -434,6 +511,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'merged',
         )}
       </div>
+      {phone && <FloorBuilds repoId={repo.id} />}
     </Frame>
   );
 }

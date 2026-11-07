@@ -11,7 +11,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_ESTIMATES, gb, type HealthView, type HeldWork, type MemoryReading, type MemorySettings, type SessionKind } from '../shared/health.ts';
+import { browserNote, DEFAULT_ESTIMATES, gb, type HealthView, type HeldWork, type MemoryReading, type MemorySettings, type SessionKind } from '../shared/health.ts';
 import { HttpError } from './httpError.ts';
 
 export { DEFAULT_MEMORY, memorySettings, type SessionKind } from '../shared/health.ts';
@@ -43,12 +43,15 @@ function memoryFit(x: { memory: MemoryReading; estimateMb: number; headroomMb: n
   return { freeMb: x.memory.availableMb + x.memory.swapFreeMb - x.reservedMb, needMb: x.estimateMb + x.headroomMb };
 }
 
-/** Why a session of `kind` can't start now (null: it can). The CEO always can: its jobs are small and steer everyone. */
-export function admission(x: { kind: SessionKind; memory: MemoryReading | null; estimateMb: number; headroomMb: number; reservedMb: number }): string | null {
+/**
+ * Why a session of `kind` can't start now (null: it can). The CEO always can: its jobs are small and steer everyone.
+ * `browserMb`: what the test lab's browser uses now, named in the reason (#301).
+ */
+export function admission(x: { kind: SessionKind; memory: MemoryReading | null; estimateMb: number; headroomMb: number; reservedMb: number; browserMb?: number | null }): string | null {
   if (x.kind === 'ceo' || !x.memory) return null;
   const { freeMb: free, needMb } = memoryFit({ ...x, memory: x.memory });
   if (free >= needMb) return null;
-  return `Waiting for memory: ${gb(free)} free${x.reservedMb > 0 ? ' once running sessions grow' : ''}, a ${x.kind} session needs about ${gb(x.estimateMb)} and ${gb(x.headroomMb)} stays free.`;
+  return `Waiting for memory: ${gb(free)} free${x.reservedMb > 0 ? ' once running sessions grow' : ''}, a ${x.kind} session needs about ${gb(x.estimateMb)} and ${gb(x.headroomMb)} stays free.${browserNote(x.browserMb) && ` Of what's used, ${browserNote(x.browserMb)}.`}`;
 }
 
 /** A kind's next estimate after one of its sessions peaked at `peakMb`: quick to grow, slow to shrink. */
@@ -105,7 +108,7 @@ export function heldMessage(h: HeldWork, waitedMs: number): { title: string; bod
   const min = Math.max(1, Math.round(waitedMs / 60_000));
   return {
     title: `Work has waited ${min} min for memory`,
-    body: `${h.tasks} ${h.tasks === 1 ? 'task waits' : 'tasks wait'}: ${gb(h.freeMb)} free, ${gb(h.needMb)} needed. Nothing to do: it starts by itself once memory frees up. ${HELPS}`,
+    body: `${h.tasks} ${h.tasks === 1 ? 'task waits' : 'tasks wait'}: ${gb(h.freeMb)} free, ${gb(h.needMb)} needed${browserNote(h.browserMb) && ` (${browserNote(h.browserMb)})`}. Nothing to do: it starts by itself once memory frees up. ${HELPS}`,
   };
 }
 
@@ -147,6 +150,8 @@ export interface ResourceProbe {
   usage(dirs: string[]): Promise<Map<string, TreeUsage>>;
   /** Stop those processes at once. */
   kill(pids: number[]): void;
+  /** What the test lab's browser uses (its whole process tree), MB; null when it isn't running or can't be measured. */
+  browser?(): Promise<number | null>;
   /** The demo only: pretend memory is low, or back. */
   simulate?(low: boolean): void;
 }
@@ -186,6 +191,49 @@ async function procUsage(dirs: string[]): Promise<Map<string, TreeUsage>> {
   return out;
 }
 
+/** A process as browserTreeMb reads it: its parent, resident memory and (for the office's own children) command line. */
+interface ProcInfo {
+  pid: number;
+  ppid: number;
+  rssMb: number;
+  cmd: string;
+}
+
+/**
+ * The lab's browser (#301): the office's own child Playwright launched (it talks over --remote-debugging-pipe) and
+ * every process under it (renderers, GPU, utility), summed. Null when there's none.
+ */
+export function browserTreeMb(procs: readonly ProcInfo[], officePid: number): number | null {
+  const kids = new Map<number, ProcInfo[]>();
+  for (const p of procs) kids.set(p.ppid, [...(kids.get(p.ppid) ?? []), p]);
+  const roots = (kids.get(officePid) ?? []).filter((p) => p.cmd.includes('--remote-debugging-pipe'));
+  if (!roots.length) return null;
+  let mb = 0;
+  const stack = [...roots];
+  for (let p = stack.pop(); p; p = stack.pop()) {
+    mb += p.rssMb;
+    stack.push(...(kids.get(p.pid) ?? []));
+  }
+  return Math.round(mb);
+}
+
+/** Linux: browserTreeMb from /proc for this office process; null elsewhere. */
+export async function labBrowserMb(officePid = process.pid): Promise<number | null> {
+  if (process.platform !== 'linux') return null;
+  const pids = (await fs.readdir('/proc').catch(() => [] as string[])).filter((n) => /^\d+$/.test(n));
+  const procs = await Promise.all(
+    pids.map(async (pid): Promise<ProcInfo | null> => {
+      const status = await fs.readFile(`/proc/${pid}/status`, 'utf8').catch(() => '');
+      const ppid = Number(status.match(/^PPid:\s+(\d+)/m)?.[1] ?? NaN);
+      if (!Number.isFinite(ppid)) return null;
+      // Only the office's own children need their command line: that's where the browser starts.
+      const cmd = ppid === officePid ? (await fs.readFile(`/proc/${pid}/cmdline`, 'utf8').catch(() => '')).replace(/\0/g, ' ') : '';
+      return { pid: Number(pid), ppid, rssMb: Number(status.match(/^VmRSS:\s+(\d+)/m)?.[1] ?? 0) / 1024, cmd };
+    }),
+  );
+  return browserTreeMb(procs.filter((p): p is ProcInfo => !!p), officePid);
+}
+
 function killPids(pids: number[]) {
   for (const pid of pids) {
     try {
@@ -196,7 +244,7 @@ function killPids(pids: number[]) {
   }
 }
 
-export const realResources: ResourceProbe = { memory: readMemory, usage: procUsage, kill: killPids };
+export const realResources: ResourceProbe = { memory: readMemory, usage: procUsage, kill: killPids, browser: () => labBrowserMb() };
 
 // ---------- the office's side ----------
 
@@ -245,6 +293,7 @@ export class OfficeHealth {
   private lastKey = '';
   private ticking = false;
   private previewRss = new Map<string, number>(); // preview key → what its processes use, MB
+  private browserMb: number | null = null; // what the test lab's browser uses, MB (#301)
 
   constructor(private host: HealthHost) {}
 
@@ -253,7 +302,7 @@ export class OfficeHealth {
   /** Why a session of `kind` can't start now, or null. */
   refusal(kind: SessionKind, now = Date.now()): string | null {
     const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: now - s.startedAt }));
-    return admission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate) });
+    return admission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate), browserMb: this.browserMb });
   }
 
   /** May the scheduler start a session of `kind` (for `floor`)? When not, the work waits and the health strip says why. */
@@ -335,6 +384,10 @@ export class OfficeHealth {
       const usage = await this.host.probe().usage([...sessions.flatMap((s) => (s.dir ? [s.dir] : [])), ...previews.map((p) => p.dir)]);
       this.previewRss = new Map(previews.flatMap((p) => (usage.has(p.dir) ? [[p.key, usage.get(p.dir)!.rssMb] as const] : [])));
       this.host.previewMem?.(this.previewRss.size ? Math.round([...this.previewRss.values()].reduce((n, mb) => n + mb, 0)) : null);
+      // The lab's browser jobs are measured as the browser's whole process tree (#301), not by a folder.
+      this.browserMb = (await this.host.probe().browser?.().catch(() => null)) ?? null;
+      for (const id of this.rss.keys()) if (id.startsWith('lab:') && !sessions.some((s) => s.id === id)) this.rss.delete(id);
+      for (const s of sessions) if (s.kind === 'labBrowser' && this.browserMb !== null) this.rss.set(s.id, this.browserMb);
       const measured: { id: string; rssMb: number; pids: number[] }[] = [];
       for (const s of sessions) {
         const u = s.dir ? usage.get(s.dir) : undefined;
@@ -392,7 +445,7 @@ export class OfficeHealth {
     const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: Date.now() - s.startedAt }));
     const reserved = reservedMb(sessions, this.estimate);
     const fits = kinds.map((k) => memoryFit({ memory: this.memory!, estimateMb: this.estimate(k), headroomMb: this.host.settings().headroomMb, reservedMb: reserved }));
-    return { tasks: kinds.length, freeMb: Math.max(0, fits[0].freeMb), needMb: Math.min(...fits.map((f) => f.needMb)) };
+    return { tasks: kinds.length, freeMb: Math.max(0, fits[0].freeMb), needMb: Math.min(...fits.map((f) => f.needMb)), ...(this.browserMb ? { browserMb: this.browserMb } : {}) };
   }
 
   private retryWaiting() {

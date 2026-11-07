@@ -62,7 +62,7 @@ describe('micErrorLine', () => {
     expect(micErrorLine('audio-capture')).toMatch(/No microphone/);
     expect(micErrorLine('NotFoundError')).toMatch(/No microphone/);
     expect(micErrorLine('network')).toMatch(/ElevenLabs/);
-    expect(micErrorLine('weird')).toBe('🎙️ Listening stopped (weird).');
+    expect(micErrorLine('weird')).toBe('Listening stopped (weird).');
   });
 });
 

@@ -5,45 +5,55 @@ import { useMemo, useState } from 'react';
 import { agentsOnRepo, floorPrCounts, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { floorRows, type FloorRow } from './floorRows';
+import { Icon } from './Icon';
 import { Panel } from './Panel';
 
 function People({ rows, caption }: { rows: FloorRow[]; caption: string }) {
   const openOverlay = useStore((s) => s.openOverlay);
   if (!rows.length) return <p className="muted">Nobody works here yet.</p>;
   return (
-    <table className="floor-table">
-      <caption className="sr-only">{caption}</caption>
-      <thead>
-        <tr>
-          <th scope="col">Name</th>
-          <th scope="col">Agent</th>
-          <th scope="col">Status</th>
-          <th scope="col">Doing</th>
-          <th scope="col">
-            <span className="sr-only">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.id}>
-            <th scope="row">{r.name}</th>
-            <td>{r.agent}</td>
-            <td>
-              <span className={`status-kind status-kind-${r.kind}`}>
-                <span aria-hidden>{r.icon}</span> {r.status}
-              </span>
-            </td>
-            <td>{r.doing}</td>
-            <td>
-              <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: r.id })} aria-label={r.signIn ? `Sign ${r.name}'s ${r.signIn} in, in their terminal` : `Open ${r.name}'s terminal`}>
-                {r.signIn ? '🔑 Sign in' : 'Terminal'}
-              </button>
-            </td>
+    // its own box scrolls sideways on a narrow screen, never the panel (#149)
+    <div className="ops-table-wrap" tabIndex={0} role="region" aria-label={caption}>
+      <table className="floor-table">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Agent</th>
+            <th scope="col">Status</th>
+            <th scope="col">Doing</th>
+            <th scope="col">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <th scope="row">{r.name}</th>
+              <td>{r.agent}</td>
+              <td>
+                <span className={`status-kind status-kind-${r.kind}`}>
+                  <Icon name={r.icon} /> {r.status}
+                </span>
+              </td>
+              <td>{r.doing}</td>
+              <td>
+                <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: r.id })} aria-label={r.signIn ? `Sign ${r.name}'s ${r.signIn} in, in their terminal` : `Open ${r.name}'s terminal`}>
+                  {r.signIn ? (
+                    <>
+                      <Icon name="key-round" /> Sign in
+                    </>
+                  ) : (
+                    'Terminal'
+                  )}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -66,7 +76,14 @@ export function FloorList() {
   const busy = rows.filter((r) => r.kind === 'busy' || r.kind === 'waiting').length;
 
   return (
-    <Panel title={repo ? `👥 Floor ${repo.floor}: ${repo.fullName}` : '👥 Lobby'} className="floor-list">
+    <Panel
+      title={
+        <span>
+          <Icon name="users" /> {repo ? `Floor ${repo.floor}: ${repo.fullName}` : 'Lobby'}
+        </span>
+      }
+      className="floor-list"
+    >
       <div className="row wrap">
         <label className="field-inline">
           <span>Floor</span>
@@ -82,16 +99,16 @@ export function FloorList() {
         <span className="spacer" />
         {shown !== floor && (
           <button className="btn btn-small" onClick={() => goToFloor(shown)}>
-            🛗 Go there
+            <Icon name="door-open" /> Go there
           </button>
         )}
         {repo && (
           <>
             <button className="btn btn-small" onClick={() => openOverlay({ kind: 'kanban', repoId: repo.id })}>
-              📋 Kanban
+              <Icon name="clipboard-list" /> Kanban
             </button>
             <button className="btn btn-small" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })}>
-              🖥️ App
+              <Icon name="monitor" /> App
             </button>
           </>
         )}

@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { AppViewer } from './AppViewer';
+import { Icon } from './Icon';
 import { stopsLabel } from './channels';
 import { Panel } from './Panel';
 import { Sheet } from './Sheet';
@@ -162,7 +163,7 @@ function StatsBar({ now }: { now: number }) {
 }
 
 /** The page. `repoId`/`pr`: what to show first (a floor card, a tile or a link); else the first running preview, else floor 1's live app. */
-export function PreviewsPage({ repoId, pr, qa, merged }: { repoId?: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } }) {
+export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string }) {
   const repos = useStore((s) => s.repos);
   const prPreviews = useStore((s) => s.prPreviews);
   const runningPr = Object.values(prPreviews).find((x) => x.status === 'running');
@@ -194,7 +195,15 @@ export function PreviewsPage({ repoId, pr, qa, merged }: { repoId?: string; pr?:
   const list = <PreviewList selected={selected} pick={choose} now={now} />;
   const name = repo && (shown?.pr == null ? `${repo.fullName.split('/')[1]} · live app` : `${repo.fullName.split('/')[1]} · PR #${shown.pr}`);
   return (
-    <Panel wide title="🖥️ Previews" className="panel-previews">
+    <Panel
+      wide
+      title={
+        <>
+          <Icon name="monitor" /> Previews
+        </>
+      }
+      className="panel-previews"
+    >
       <div className="pv" ref={ref}>
         <div className="pv-top">
           {narrow && (
@@ -212,7 +221,7 @@ export function PreviewsPage({ repoId, pr, qa, merged }: { repoId?: string; pr?:
           )}
           <div className="pv-stage">
             {repo && shown ? (
-              <AppViewer key={repo.id} repoId={repo.id} pr={shown.pr} qa={qa && shown.repoId === repoId && shown.pr === (pr ?? null)} merged={shown.repoId === repoId && shown.pr == null ? merged : undefined} bare />
+              <AppViewer key={repo.id} repoId={repo.id} pr={shown.pr} qa={qa && shown.repoId === repoId && shown.pr === (pr ?? null)} merged={shown.repoId === repoId && shown.pr == null ? merged : undefined} path={shown.repoId === repoId && shown.pr === (pr ?? null) ? path : undefined} bare />
             ) : (
               <p className="muted pv-empty">No projects yet: move one in from Floors &amp; repos and its live app shows here.</p>
             )}
