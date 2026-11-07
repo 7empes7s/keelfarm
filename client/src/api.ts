@@ -94,7 +94,7 @@ export const api = {
       practices?: { [K in keyof PracticeOverrides]?: PracticeOverrides[K] | null }; // null: inherit Every project's again
     },
   ) => call('PATCH', r(repoId), patch),
-  startPreview: (repoId: string, pr?: number) => call<PreviewView>('POST', `${r(repoId)}/preview`, pr ? { pr } : {}),
+  startPreview: (repoId: string, pr?: number, otherPort?: boolean) => call<PreviewView>('POST', `${r(repoId)}/preview`, { ...(pr ? { pr } : {}), ...(otherPort ? { otherPort } : {}) }),
   stopPreview: (repoId: string) => call<PreviewView>('DELETE', `${r(repoId)}/preview`),
   startPrPreview: (repoId: string, pr: number, restart = false) => call<PrPreviewView>('POST', `${r(repoId)}/pr-previews/${pr}`, { restart }),
   stopPrPreview: (repoId: string, pr: number) => call('DELETE', `${r(repoId)}/pr-previews/${pr}`),
