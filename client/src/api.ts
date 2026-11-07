@@ -3,10 +3,11 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { HistoryDetail, HistoryFilter, HistoryPage, HistoryUsage } from '../../shared/history';
+import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -55,6 +56,7 @@ export interface AgentSetupPatch {
   model?: string;
   effort?: EffortLevel | '';
   host?: MachineHost | '';
+  account?: string; // an account id or tag (#247); '' for the rotation
 }
 
 /** Choices made when a project moves in: a brief for the CEO, and whether work starts on its own. */
@@ -86,6 +88,7 @@ export const api = {
       summary?: string;
       qaBrief?: string;
       playbook?: string;
+      trustedAuthors?: string[];
       previewCommand?: string | null;
       previewEnv?: Record<string, string>;
       practices?: { [K in keyof PracticeOverrides]?: PracticeOverrides[K] | null }; // null: inherit Every project's again
@@ -103,6 +106,7 @@ export const api = {
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
   closeIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/close`),
+  trustIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/trust`),
   planFloor: (repoId: string, mission?: string, research = false) => call('POST', `${r(repoId)}/plan`, { mission, research }),
   onboardFloor: (repoId: string) => call('POST', `${r(repoId)}/onboard`),
   setCharter: (repoId: string, charter: Charter) => call<RepoView>('PUT', `${r(repoId)}/charter`, { charter }),
@@ -125,14 +129,17 @@ export const api = {
   stop: (id: string) => call('POST', `/api/agents/${id}/stop`),
   reset: (id: string) => call('POST', `/api/agents/${id}/reset`),
   message: (id: string, text: string) => call('POST', `/api/agents/${id}/message`, { text }),
+  react: (id: string, itemId: number, reaction: string) => call<{ sent: boolean; note: boolean }>('POST', `/api/agents/${id}/react`, { itemId, reaction }),
   /** Start a cloud agent's sign-in again in their terminal (docs/cloud.md). */
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
+  careerTimeline: (id: string) => call<TimelineView>('GET', `/api/agents/${id}/timeline`, undefined, false),
   updateSettings: (patch: Partial<SwarmSettings>) => call('PATCH', '/api/settings', patch),
   /** Settings → effort per kind of task; '' puts the kind back on the default. */
   setTaskEffort: (kind: TaskKind, effort: EffortLevel | '') => call('PATCH', '/api/settings', { taskEffort: { [kind]: effort } }),
   /** Tools & skills: scan the manager's Claude Code setup again. */
   refreshTools: () => call('POST', '/api/tools/refresh'),
+  refreshModels: () => call('POST', '/api/models/refresh'),
   /** One switch for 'everyone', 'ceo' or an agent's id; on null follows Everyone. */
   switchTool: (scope: string, id: string, on: boolean | null) => call('POST', '/api/tools/switch', { scope, id, on }),
   updateOffice: async (action: 'now' | 'later') => {
@@ -152,7 +159,7 @@ export const api = {
   /** The demo only: the office doctor's scenarios. */
   demoDoctor: (action: 'restart' | 'stuck' | 'later' | 'unclosed' | 'check') => call<{ text: string; doctor: DoctorFinding[] }>('POST', '/api/doctor/demo', { action }),
   /** A message for the CEO, replying to message `replyTo` if given; answers with the posted message's id. */
-  messageCeo: (text: string, replyTo?: number, files?: string[]) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }) }),
+  messageCeo: (text: string, replyTo?: number, files?: string[], clientId?: string) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }), ...(clientId && { clientId }) }),
   ceoPicks: () => call<QuickPicks>('GET', '/api/ceo/picks', undefined, false),
   keepFile: (id: string, keep: boolean) => call('POST', `/api/files/${id}/keep`, { keep }),
   deleteFile: (id: string, toast = true) => call('DELETE', `/api/files/${id}`, undefined, toast),
@@ -181,16 +188,17 @@ export const api = {
   /** Decides a team change: a hire with the manager's changes to the new agent, if any. */
   approveRequest: (id: string, overrides: AgentSetupPatch & { name?: string; note?: string } = {}) => call('POST', `/api/requests/${id}/approve`, overrides),
   rejectRequest: (id: string, note?: string) => call('POST', `/api/requests/${id}/reject`, { note }),
-  decideOpen: (id: string, action: 'snooze' | 'drop') => call('POST', `/api/decisions/${encodeURIComponent(id)}`, { action }),
+  decideOpen: (id: string, action: 'snooze' | 'drop' | 'answered' | 'open' | 'reopen') => call('POST', `/api/decisions/${encodeURIComponent(id)}`, { action }),
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
+  demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
   voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`),
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
-  history: (f: HistoryFilter) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`),
+  history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
   historyEntry: (id: string) => call<HistoryDetail>('GET', `/api/history/${encodeURIComponent(id)}`),
   historyUsage: () => call<HistoryUsage>('GET', '/api/history/usage'),
   costs: (days: number, repo?: string) => call<CostsView>('GET', `/api/costs?days=${days}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`),
@@ -210,6 +218,14 @@ export const api = {
   deleteCloudOrphans: () => call<{ deleted: number }>('POST', '/api/cloud/orphans'),
   /** The demo only: every cloud agent's sign-in expires. */
   expireSignIns: () => call('POST', '/api/cloud/demo-expire'),
+  // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
+  addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
+  updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),
+  moveAccount: (id: string, by: -1 | 1) => call('POST', `/api/accounts/${encodeURIComponent(id)}/move`, { by }),
+  setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
+  testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
+  signInAccount: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`),
+  removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
   pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),
   pushUnsubscribe: (endpoint: string) => call<NotifyChannelsView>('DELETE', '/api/notify/push/devices', { endpoint }),
@@ -223,9 +239,10 @@ export const api = {
   // The manager's Telegram bot. No toasts: the settings show why a token was refused.
   setTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/notify/telegram', { token }, false),
   telegramLink: () => call<{ startUrl: string }>('POST', '/api/notify/telegram/link', {}, false),
+  retryTelegram: () => call<TelegramView>('POST', '/api/notify/telegram/retry', {}),
   removeTelegram: () => call<TelegramView>('DELETE', '/api/notify/telegram'),
   /** The demo only: the fake manager on Telegram presses Start, writes, replies, or presses a team change's button. */
-  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
+  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline' | 'outage' | 'online', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
   // office progression (#210)
   buyDecor: (repoId: string, item: DecorItem) => call<ProgressView>('POST', `${r(repoId)}/decor/buy`, { item }),
   placeDecor: (repoId: string, body: { item: DecorItem; slot: string | null; from: string | null }) => call<ProgressView>('POST', `${r(repoId)}/decor/place`, body),

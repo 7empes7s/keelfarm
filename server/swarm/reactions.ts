@@ -1,14 +1,30 @@
 // The CEO chat's reactions (#118): the status reaction under the manager's messages as the CEO's job on them moves,
 // the CEO's react and reply tools, the manager's reactions (👍 / 👎 on a CEO reply become feedback for its next job),
-// and their Telegram side.
+// and their Telegram side; and the threads' edits and library (#132).
 import { HttpError } from '../httpError.ts';
 import { CEO_REACTIONS, feedbackLine, isOpen, isReaction, nextStatus, react, reactTarget, telegramReaction, type StatusEvent } from '../../shared/reactions.ts';
 import { nextDelivery } from '../../shared/chat.ts';
-import type { MessageReaction, PhoneMessage, ServerDelivery, StatusReaction } from '../../shared/types.ts';
+import { conversationPatch, conversationsView, editConversation } from '../../shared/conversations.ts';
+import type { CeoChat } from '../ceoChat.ts';
+import type { MessageReaction, PhoneMessage, ServerDelivery, ServerEvent, StatusReaction } from '../../shared/types.ts';
 import { SwarmUpdate } from './update.ts';
 
 export abstract class SwarmReactions extends SwarmUpdate {
   protected ceoFeedback: string[] = []; // for the CEO's next job: the manager's 👍 / 👎 on its replies
+
+  /** Read on one device: the notifications are cancelled or cleared on every other (#210). */
+  protected override observe(ev: ServerEvent) {
+    super.observe(ev);
+    if (ev.type === 'noticesRead') this.notifier.readNotices(ev.ids);
+    else if (ev.type === 'phoneRead') this.notifier.readTab('chat');
+  }
+
+  /** CEO messages whose notification wasn't sent, as the manager was in the app: their bubbles say so (#210). */
+  protected markQuiet(messageIds: number[]) {
+    const quiet = this.state.messages.filter((m) => messageIds.includes(m.id) && !m.quiet);
+    for (const m of quiet) this.broadcast({ type: 'ceoChat', message: Object.assign(m, { quiet: true }) });
+    if (quiet.length) this.save();
+  }
 
   /** Moves the manager's messages along (shared/chat.ts nextDelivery; read: their status too) and tells the phones which ones moved. */
   protected markDelivery(ids: readonly number[] | 'all', ev: 'read' | 'replied') {
@@ -28,8 +44,9 @@ export abstract class SwarmReactions extends SwarmUpdate {
     this.save();
   }
 
-  /** Moves the status reaction of the manager's messages (`open`: those the CEO has in hand; shared/reactions.ts) and tells the phones and Telegram. */
+  /** Moves the status reaction of the manager's messages (`open`: those the CEO has in hand; shared/reactions.ts) and tells the phones and Telegram. Off unless Settings → Status reactions (#193). */
   protected markStatus(ids: readonly number[] | 'open', ev: StatusEvent) {
+    if (!this.state.settings.statusReactions) return;
     const moved = new Map<StatusReaction, PhoneMessage[]>();
     for (const m of this.state.messages) {
       if (m.from !== 'manager' || (ids === 'open' ? !isOpen(m) : !ids.includes(m.id))) continue;
@@ -78,6 +95,22 @@ export abstract class SwarmReactions extends SwarmUpdate {
     this.markDelivery([m.id], 'replied');
     this.markStatus([m.id], 'replied');
     return `Answered message ${m.id} on the phone. Don't repeat it in your final message; end with no text when every message is answered.`;
+  }
+
+  /** POST /api/ceo/conversations/:id/edit (and /pin): a thread renamed, pinned, archived or moved to another project (#132). */
+  editConversation(id: string, raw: unknown) {
+    try {
+      editConversation(this.state.ceo.chats, id, conversationPatch(raw, this.state.repos.map((r) => r.id)));
+    } catch (err) {
+      throw new HttpError(this.state.ceo.chats.list.some((c) => c.id === id) ? 400 : 404, (err as Error).message);
+    }
+    this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
+    this.save();
+  }
+
+  /** GET /api/ceo/library: a project's, the Company's or the whole office's artifacts and files, a page at a time (#132). */
+  library(q: Parameters<CeoChat['library']>[3]) {
+    return this.ceoChat.library(this.state.ceo.chats, this.state.messages, this.files.list(), q, this.state.repos.map((r) => r.id));
   }
 
   /** POST /api/ceo/messages/:id/react: the manager adds or removes a reaction on a CEO message; a new 👍 / 👎 (with what was wrong) reaches the CEO's next job. */

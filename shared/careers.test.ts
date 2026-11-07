@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avgFixRounds, badges, compareToFloor, costPerMerge, DAY_MS, deskItems, deskToy, durationText, firstRoundRate, keyStats, knownFor, medianToPr, mvpOfWeek, newCareer, passRate, plantGrowth, profileStats, rank, roundsPerMerge, weeklyMerges, WEEK_MS, type CareerView } from './careers.ts';
+import { avgFixRounds, badges, compareToFloor, costPerMerge, DAY_MS, deskItems, deskToy, durationText, firstRoundRate, highlights, keyStats, knownFor, legacyCareer, medianToPr, mvpOfWeek, newCareer, passRate, plantGrowth, profileStats, rank, roundsPerMerge, spendShare, tenureDays, wasteShare, addWeek, weekOf, weekOfRow, weeklySeries, WEEK_MS, workIdle, type CareerView } from './careers.ts';
 import { CATALOGUE, DECOR_SLOTS, priceOf, slotKind, stored } from './progress.ts';
 
 const NOW = Date.UTC(2026, 9, 4, 12);
@@ -17,9 +17,17 @@ describe('the profile (#117)', () => {
     expect([durationText(5 * 60_000), durationText(90 * 60_000), durationText(2 * DAY_MS)]).toEqual(['5m', '1.5h', '2d']);
   });
 
-  it('counts merges per week over four weeks, oldest first', () => {
-    const week = [NOW - 60_000, NOW - DAY_MS, NOW - WEEK_MS - DAY_MS, NOW - 3 * WEEK_MS - DAY_MS, NOW - 5 * WEEK_MS, NOW + DAY_MS];
-    expect(weeklyMerges(career({ week }), NOW)).toEqual([1, 0, 1, 2]);
+  it('keeps eight weeks of totals and draws them oldest first, gaps where a week had no data', () => {
+    const c = career();
+    for (const ago of [0, 0, 1, 3, 9]) addWeek(c, NOW - ago * WEEK_MS, { merged: 1 });
+    addWeek(c, NOW, { usd: 6 });
+    addWeek(c, NOW - WEEK_MS, { firstQa: 2, firstPass: 1 });
+    expect(c.weeks.map((r) => r[0])).toEqual([weekOf(NOW) - 3, weekOf(NOW) - 1, weekOf(NOW)]); // nine weeks back fell off
+    expect(weekOfRow(c.weeks[2])).toEqual({ w: weekOf(NOW), merged: 2, usd: 6, waste: 0, sessions: 0, firstQa: 0, firstPass: 0, min: 0 });
+    const s = weeklySeries(c, NOW);
+    expect(s.merges).toEqual([0, 0, 0, 0, 1, 0, 1, 2]);
+    expect(s.costPerMerge.slice(-2)).toEqual([0, 3]);
+    expect(s.firstPass.slice(-3)).toEqual([null, 0.5, null]);
   });
 
   it('compares with the floor: higher or lower is better per stat, within 5% is even', () => {
@@ -49,6 +57,62 @@ describe('the profile (#117)', () => {
     expect(badges(career({ firstPass: 10, best: 4, merged: 10 }))).toEqual(['⭐ 10 first-time passes', '🔥 4 in a row', '✨ Never needed a fix']);
     expect(keyStats(career(), NOW)).toBe('0 merged this week');
     expect(keyStats(career({ merged: 2, firstPass: 1, firstQa: 2, costUsd: 3, week: [NOW - DAY_MS] }), NOW)).toBe('1 merged this week · 50% first-round QA · $1.50 / merge');
+  });
+});
+
+describe('usage and cost (#205)', () => {
+  it('compares cost per merge and waste share with the floor average', () => {
+    const me = career({ merged: 4, costUsd: 4, wasteUsd: 0.4 }); // $1 a merge, 10% waste
+    const floor = [me, career({ merged: 2, costUsd: 6, wasteUsd: 1.5 }), career({ merged: 1, costUsd: 2, wasteUsd: 0.5 })]; // $3 and $2, 25% each
+    expect(wasteShare(me)).toBeCloseTo(0.1);
+    expect(wasteShare(career())).toBeNull();
+    const stats = profileStats(me, floor, 2, NOW);
+    const cost = stats.find((x) => x.key === 'cost')!;
+    const waste = stats.find((x) => x.key === 'waste')!;
+    expect(cost).toMatchObject({ text: '$1.00', verdict: 'better', vsFloor: "↑ better than floor 2's $2.00" });
+    expect(waste).toMatchObject({ text: '10%', verdict: 'better', vsFloor: "↑ better than floor 2's 20%" });
+    const spendy = profileStats(floor[1], floor, 2, NOW);
+    expect(spendy.find((x) => x.key === 'waste')!.verdict).toBe('worse');
+  });
+
+  it('sums time working and idle over every stint, never more work than time on the team', () => {
+    const c = career({ since: NOW - 2 * DAY_MS, served: 3 * DAY_MS, workMs: 30 * 3_600_000 });
+    expect(tenureDays(c, NOW)).toBe(5);
+    expect(workIdle(c, NOW)).toEqual({ work: 30 * 3_600_000, idle: 5 * DAY_MS - 30 * 3_600_000 });
+    expect(workIdle(career({ since: NOW - 3_600_000, workMs: 2 * 3_600_000 }), NOW)).toEqual({ work: 3_600_000, idle: 0 });
+  });
+
+  it("shares this week's spend across everyone", () => {
+    const a = career();
+    const b = career();
+    addWeek(a, NOW, { usd: 3 });
+    addWeek(b, NOW, { usd: 1 });
+    addWeek(b, NOW - WEEK_MS, { usd: 50 }); // last week doesn't count
+    expect(spendShare(a, [a, b], NOW)).toBe(0.75);
+    expect(spendShare(career(), [career()], NOW)).toBeNull();
+  });
+
+  it('picks the highlights, leaving out cards without a candidate', () => {
+    const people = [
+      { id: 'a', name: 'Ada', idleSince: null, career: career({ merged: 4, costUsd: 8, firstQa: 4, firstPass: 4, reviews: 1, wasteUsd: 2, wasted: 3, week: [NOW - DAY_MS] }) },
+      { id: 'b', name: 'Bob', idleSince: NOW - 2 * 3_600_000, career: career({ merged: 2, costUsd: 2, firstQa: 2, firstPass: 2, reviews: 5 }) },
+      { id: 'c', name: 'Cy', idleSince: NOW - 3_600_000, career: null },
+    ];
+    expect(highlights(people, NOW).map((h) => [h.key, h.name, h.text])).toEqual([
+      ['mvp', 'Ada', '1 merge this week'],
+      ['cheapest', 'Bob', '$1.00 / merge'],
+      ['firstPass', 'Ada', '100% of 4 PRs'], // Bob's 2 are too few
+      ['reviews', 'Bob', '5 QA reviews'],
+      ['waste', 'Ada', '$2.00 on 3 sessions that came to nothing'],
+      ['idle', 'Bob', 'idle for 2h'],
+    ]);
+    expect(highlights([{ id: 'x', name: 'X', idleSince: null, career: career() }], NOW)).toEqual([]);
+  });
+
+  it('reads an older career with its numbers kept and the new fields empty', () => {
+    const old = legacyCareer({ since: NOW - DAY_MS, merged: 7, costUsd: 3.5, recent: [{ n: 1, title: 'x', at: NOW }], bySpecialty: { dev: 1 }, hires: 'two' });
+    expect(old).toEqual({ ...newCareer(NOW - DAY_MS), merged: 7, costUsd: 3.5, recent: [[1, 'x', NOW]] }); // merged PRs become rows
+    expect(legacyCareer({ rig: ['claude', 'opus', 'high', NOW] }).rig).toEqual(['claude', 'opus', 'high', NOW]); // a replay keeps what they run
   });
 });
 
@@ -93,7 +157,7 @@ describe('career stats', () => {
 
 describe('the desk', () => {
   it('shows a plaque per recent merge, a +N for the rest and the star at ten first-time passes', () => {
-    const recent = Array.from({ length: 8 }, (_, i) => ({ n: 40 - i, title: '', at: NOW }));
+    const recent = Array.from({ length: 8 }, (_, i): [number, string, number] => [40 - i, '', NOW]);
     const items = deskItems(career({ merged: 11, firstPass: 10, recent }), 'ada', NOW);
     expect(items.plaques).toEqual([40, 39, 38, 37, 36, 35, 34, 33]);
     expect(items.more).toBe(3);

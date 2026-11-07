@@ -2,20 +2,24 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { agentsOnRepo, kanbanFor, unreadMessages, useStore, type Overlay } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
+import { UpdatePill } from '../ui/UpdatePill';
+import { loadUpdate } from '../updateLoad';
+import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
+import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
-import { Chat } from '../ui/Phone';
+import { Chat } from '../ui/Chat';
 import { ThreadsColumn } from '../ui/ChatHistory';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';
 import { useKeyName } from '../ui/controls';
-import { approvalsBadge, pipelineOf, waitingOnYou, type Pipeline } from './pocketData';
+import { approvalsBadge, ceoChatHint, pipelineOf, POCKET_TABS, railTabs, waitingOnYou, type Pipeline, type PocketTab } from './pocketData';
 import { Approvals } from './PocketApprovals';
 import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
@@ -30,9 +34,15 @@ import { SearchButton, SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
+import { useChatMode } from '../ui/chatMode';
+import { useChatFull, useChatFullBack } from '../ui/chatFull';
+import { FullButton } from '../ui/ChatActionsSheet';
+import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
+import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
+import { DockGrip, useDockWidth } from './DockGrip';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -42,9 +52,8 @@ const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.C
 // The console's tabs, loaded when ⚙️ is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
-export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
 const HELP: Record<Exclude<PocketTab, 'chat'>, ScreenId> = { company: 'company', kanban: 'kanban', team: 'pocket-team', approvals: 'approvals' };
-const TABS: PocketTab[] = ['company', 'chat', 'kanban', 'team', 'approvals'];
+const TABS: readonly PocketTab[] = POCKET_TABS;
 
 /** The tab a link (a notification's ?tab=) asks for. */
 function tabFrom(url: string | null | undefined): PocketTab | null {
@@ -52,7 +61,7 @@ function tabFrom(url: string | null | undefined): PocketTab | null {
   return TABS.includes(t as PocketTab) ? (t as PocketTab) : null;
 }
 
-/** Keys 1-5 (or Alt+1-5) open the tabs, in the order the bar or the rail shows them. */
+/** Keys 1-5 (or Alt+1-5) open the tabs, in the order the bar shows them (wide, 2 opens the chat from the header). */
 const TAB_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
 
 // The docked chat's open or hidden, remembered on this device (on wide screens; at medium widths it's a drawer).
@@ -167,7 +176,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       <GuideCard />
       <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
         <b className="small">🤖 Claude usage</b>
-        <UsageBars />
+        <UsageBars link={false} />
       </button>
       <button className="btn pk-wide" onClick={() => settings('map')}>
         🗺️ Memory map
@@ -217,6 +226,8 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
               </div>
             ))}
           </div>
+          <BacklogBar repo={repo} onOpen={() => go('kanban', repo.id)} compact />
+          <CiOutageBanner repo={repo} />
           <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
             <span className="muted">
@@ -272,10 +283,56 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 
 // ---------- the shell ----------
 
+/** The overlays that open in the pane: an agent's terminal, a floor's app, a card and the notification centre. */
+const inPane = (o: Overlay | null) => (o?.kind === 'terminal' && o.agentId !== CEO_ID) || o?.kind === 'app' || o?.kind === 'card' || o?.kind === 'notices';
+
+/** The pane's overlay for the panel manager (#212): its key, and what the back chip says. */
+function paneEntry(o: Overlay): PanelEntry<Overlay> {
+  const s = useStore.getState();
+  const floor = (repoId: string) => s.repos.find((r) => r.id === repoId)?.floor;
+  if (o.kind === 'terminal') return { key: `terminal:${o.agentId}`, slot: 'pane', label: `${s.agents[o.agentId]?.name ?? 'Agent'}'s ${o.view === 'chat' ? 'chat' : 'window'}`, value: o };
+  if (o.kind === 'app') return { key: `app:${o.repoId}:${o.pr ?? ''}`, slot: 'pane', label: o.pr ? `PR #${o.pr} preview` : `Floor ${floor(o.repoId) ?? ''} preview`, value: o };
+  if (o.kind === 'card') return { key: `card:${o.repoId}:${o.key}`, slot: 'pane', label: `${o.pr ? 'PR' : 'Issue'} #${o.number}`, value: o };
+  return { key: o.kind, slot: 'pane', label: 'Notifications', value: o };
+}
+
+/** A slot's place in the panel manager's order: the host's z-index wide, its panel's (pocket.css) on a phone. */
+const layer = (order: Panels, slot: string) => {
+  const n = layerOf(order, slot);
+  return n ? { zIndex: n, ['--pk-layer' as string]: n } : undefined;
+};
+
+/** Wide, the CEO chat is a window, opened from the header like 🔔 (#214): the CEO's avatar, unread badge and a working dot. */
+function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
+  const ceo = useStore((s) => s.agents[CEO_ID]);
+  const job = useStore((s) => s.ceo.job?.label);
+  const unread = useStore((s) => unreadMessages(s.messages, s.phoneReadAt));
+  const last = useStore((s) => s.messages.findLast((m) => m.from === 'ceo')?.text);
+  const name = ceo?.name ?? 'CEO';
+  const working = ceo?.status === 'working';
+  return (
+    <button
+      data-tour="chat"
+      className={`btn btn-small pk-switch pk-chat-btn ${open ? 'pk-chat-btn-on' : ''}`}
+      aria-pressed={open}
+      aria-label={`Chat with ${name}${unread && !open ? `, ${unread} unread` : ''}`}
+      title={ceoChatHint(name, working ? (job ?? 'Working') : 'Free', last, '/')}
+      onClick={toggle}
+    >
+      <span className="avatar pk-chat-avatar" style={{ background: ceo?.color }} aria-hidden>
+        {name[0]}
+        {working && <span className="pk-chat-working" />}
+      </span>
+      {name}
+      {unread > 0 && !open && <span className="badge badge-dot">{unread}</span>}
+    </button>
+  );
+}
+
 /** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
-  if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} />;
+  if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} profile={overlay.profile} />;
   if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
@@ -294,6 +351,8 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
 
 export default function Pocket() {
   const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? 'company');
+  // a tab change is a safe moment for the office's new client (#216): it opens on the tab picked
+  useEffect(() => void loadUpdate({ kind: 'nav' }, () => window.history.replaceState(window.history.state, '', `?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), tab })}`)), [tab]);
   const [repoId, setRepoId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
   const company = useStore((s) => s.settings.companyName);
@@ -312,6 +371,9 @@ export default function Pocket() {
   const track = trackFor('pocket', layout);
   // The chat beside the pages: on wide screens open unless hidden (remembered), at medium widths a drawer, closed at first.
   const [dockPref, setDockPref] = useState(savedDock);
+  const [dockW, setDockW] = useDockWidth();
+  // the chat's width for what opens beside the docked chat and its threads column (pocket.css, #132)
+  useEffect(() => document.documentElement.style.setProperty('--pk-dock-w', `${dockW}px`), [dockW]);
   const [drawer, setDrawer] = useState(false);
   const dock = layout === 'expanded' ? dockPref : layout === 'medium' && drawer;
   const setDock = useCallback(
@@ -322,21 +384,52 @@ export default function Pocket() {
     },
     [layout],
   );
+  // The chat full screen (#201): the docked chat over the rail and the pages, or the phone's chat without the tab bar.
+  const full = useChatFull((s) => s.on) && (wide ? dock : tab === 'chat') && !(loaded && !setupDone);
+  useChatFullBack(full);
   const openChat = () => {
     if (wide) setDock(true);
     else setTab('chat');
     focusChatBox();
   };
 
+  // The panel manager (#212): the console and the pane in the order they were opened or touched, the top one in front.
+  const order = usePanels();
+  const top = topPanel(order);
+  const consoleHost = useRef<HTMLDivElement>(null);
+  const paneHost = useRef<HTMLDivElement>(null);
+  const pane = useStore((s) => (inPane(s.overlay) ? s.overlay : null));
+  useEffect(() => (pane ? panels.open(paneEntry(pane)) : panels.closeSlot('pane')), [pane]);
+  useEffect(() => (settings ? panels.open({ key: 'console', slot: 'main', label: 'Console', value: settings }) : panels.closeSlot('main')), [settings]);
+  useEffect(() => () => usePanels.setState({ open: [], back: null }), []);
+  // What comes to the top takes the focus (Esc and Back then close it first), and the chat drawer makes way for it.
+  const topKey = top?.key;
+  const topSlot = top?.slot;
+  useEffect(() => {
+    if (!topSlot) return;
+    const panel = (topSlot === 'main' ? consoleHost : paneHost).current?.querySelector<HTMLElement>('.panel');
+    if (panel && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+    setDrawer(false);
+  }, [topKey, topSlot]);
+  const reopen = (p: PanelEntry) => (p.slot === 'main' ? setSettings(p.value as ConsoleSection) : useStore.getState().openOverlay(p.value as Overlay));
+  // The rail and links to a page bring the page to the front: the console closes, and a pane covering the page too.
+  const show = (t: PocketTab) => {
+    setTab(t);
+    setSettings(null);
+    const p = paneHost.current;
+    if (useStore.getState().overlay && inPane(useStore.getState().overlay) && (!wide || (p && getComputedStyle(p).position === 'absolute'))) useStore.getState().openOverlay(null);
+  };
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
-    setTab(t);
+    show(t);
   };
   // A tapped notification (here, or through the service worker) opens what it's about.
   useEffect(() => {
     const onOpen = (e: Event) => {
       const t = tabFrom((e as CustomEvent<string>).detail);
-      if (t) setTab(t);
+      if (!t) return;
+      setTab(t);
+      setSettings(null); // the page it's about comes to the front
     };
     window.addEventListener('cubefarm:open', onOpen);
     return () => window.removeEventListener('cubefarm:open', onOpen);
@@ -363,7 +456,8 @@ export default function Pocket() {
     if (!kanban) return;
     useStore.getState().openOverlay(null);
     setSettings(null);
-    go('kanban', kanban);
+    setRepoId(kanban);
+    setTab('kanban');
   }, [kanban]);
   // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
@@ -375,6 +469,7 @@ export default function Pocket() {
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
+    panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
   // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
   const guide = useFinder((s) => s.guide);
@@ -397,12 +492,16 @@ export default function Pocket() {
   // The keyboard (#104): 1-5 the tabs, / the chat's box, Esc the chat drawer; never while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && full && !e.defaultPrevented && !isConfirmOpen()) {
+        e.preventDefault();
+        return useChatFull.getState().set(false);
+      }
       if (e.ctrlKey || e.metaKey || e.repeat || e.defaultPrevented || typingIn(e.target) || isConfirmOpen()) return;
       const n = TAB_KEYS.indexOf(e.code);
       if (n >= 0) {
         e.preventDefault();
         if (TABS[n] === 'chat') openChat();
-        else setTab(TABS[n]);
+        else show(TABS[n]);
       } else if (e.key === '/' && !e.altKey) {
         e.preventDefault();
         openChat();
@@ -423,23 +522,29 @@ export default function Pocket() {
     return () => void (document.title = 'cubefarm');
   }, [company]);
 
-  const tabs: [PocketTab, string, string, number][] = [
-    ['company', '📊', 'Company', 0],
-    ['chat', '💬', ceoName, tab === 'chat' || (wide && dock) ? 0 : unread],
-    ['kanban', '📋', 'Kanban', 0],
-    ['team', '👥', 'Team', 0],
-    ['approvals', '✋', 'Approvals', waiting],
-  ];
+  const entries: Record<PocketTab, [string, string, number]> = {
+    company: ['📊', 'Company', 0],
+    chat: ['💬', ceoName, tab === 'chat' ? 0 : unread],
+    kanban: ['📋', 'Kanban', 0],
+    team: ['👥', 'Team', 0],
+    approvals: ['✋', 'Approvals', waiting],
+  };
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} />;
+  const chatMode = useChatMode();
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} />;
   return (
-    <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''}`}>
+    <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''} ${full ? 'pk-chat-full' : ''}`}>
       <header className="pk-head">
         <span className="pk-logo" aria-hidden>
           ✻
         </span>
         <b className="pk-title">{company || 'cubefarm'}</b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
+        {wide && order.back && (
+          <button className="btn btn-small pk-back-chip" onClick={() => reopen(order.back!)} title={`Back to ${order.back.label}`}>
+            ‹ <span className="pk-ellipsis">{order.back.label}</span>
+          </button>
+        )}
         <span className="spacer" />
         {publicDemo && tab !== 'chat' && (
           <span className="chip" title={`Demo office: it resets every ${publicDemo.resetHours} h`}>
@@ -453,36 +558,44 @@ export default function Pocket() {
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
+        <UpdatePill className="btn btn-small btn-good pk-update" short={!wide} />
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
+        {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
+        {!wide && tab === 'chat' && <FullButton />}
+        {wide && (
+          <button className="btn btn-small pk-switch" aria-pressed={chatMode.on} onClick={() => chatMode.set(!chatMode.on)} title={`Chat mode (#120): agents' windows open on their ${chatMode.on ? 'chat' : 'terminal'}. Click to switch`}>
+            💬 Chat {chatMode.on ? 'on' : 'off'}
+          </button>
+        )}
+        {wide && <ChatButton open={dock} toggle={() => setDock(!dock)} />}
         {wide ? (
           <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>
           </button>
         ) : (
-          <button data-tour="console" className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
+          <button data-tour="console" className="pk-icon-btn xbtn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
             ⚙️
+            <XLabel text="Settings" />
           </button>
         )}
       </header>
       <NoticeToasts max={2} />
       <div className="pk-body">
         <nav className="pk-tabs" aria-label="Pocket office" data-tour="pocket-tabs">
-          {tabs.map(([k, icon, label, badge], i) => {
-            // wide, the chat's entry shows and hides its pane
-            const docked = wide && k === 'chat';
-            const on = docked ? dock : tab === k;
+          {railTabs(layout).map((k) => {
+            const [icon, label, badge] = entries[k];
+            const on = tab === k;
             return (
               <button
                 key={k}
                 data-tour={k === 'chat' ? 'chat' : undefined}
                 className={`pk-tab ${on ? 'pk-tab-on' : ''}`}
-                aria-current={!docked && on ? 'page' : undefined}
-                aria-pressed={docked ? dock : undefined}
-                title={wide ? `${label} (${i + 1})` : undefined}
-                onClick={() => (docked ? setDock(!dock) : setTab(k))}
+                aria-current={on ? 'page' : undefined}
+                title={wide ? `${label} (${TABS.indexOf(k) + 1})` : undefined}
+                onClick={() => show(k)}
               >
                 <span className="pk-tab-icon">
                   {icon}
@@ -493,13 +606,13 @@ export default function Pocket() {
             );
           })}
           {wide && (
-            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => setSettings(settings ? null : 'menu')} title="Settings and notifications">
+            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => (!settings ? setSettings('menu') : top?.slot === 'main' ? setSettings(null) : panels.focus('console'))} title="Settings and notifications">
               <span className="pk-tab-icon">⚙️</span>
               <span className="pk-tab-label">Console</span>
             </button>
           )}
         </nav>
-        <div className="pk-work">
+        <div className={`pk-work ${settings ? 'pk-work-console' : ''}`}>
           <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`}>
             {loaded && !setupDone ? (
               <div className="pk-page">
@@ -518,23 +631,27 @@ export default function Pocket() {
               </>
             )}
           </main>
-          {/* wide, the console covers the pages and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
-          <div className="pk-console-host">{settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}</div>
-          {/* after the console, so a terminal or app opened from it shows over it */}
-          <div className="pk-pane">
+          {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
+          <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
+            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
+          </div>
+          {/* beside the console when there's room, else over it: whichever was opened or touched last is in front */}
+          <div ref={paneHost} className="pk-pane" style={layer(order, 'pane')} onFocus={() => pane && panels.focus(paneEntry(pane).key)}>
             <Suspense fallback={null}>
               <PocketOverlay />
             </Suspense>
           </div>
         </div>
         {wide && dock && (
-          <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`}>
+          <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
+            {layout === 'expanded' && !full && <DockGrip width={dockW} onWidth={setDockW} />}
             <div className="pk-dock-head">
               <b className="pk-ellipsis">💬 {ceoName}</b>
               <span className="spacer" />
               <div className="pk-head-tools" ref={setChatTools} />
-              <button className="pk-icon-btn pk-dock-x" onClick={() => setDock(false)} aria-label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'}>
+              <button className="pk-icon-btn pk-dock-x xbtn" onClick={() => setDock(false)} aria-label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'}>
                 ✕
+                <XLabel text="Hide the chat" keys={layout === 'medium' ? 'Esc' : undefined} />
               </button>
             </div>
             {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}

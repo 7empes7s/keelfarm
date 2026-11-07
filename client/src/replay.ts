@@ -83,6 +83,7 @@ function frameSnapshot(f: JournalFrame): WorldSnapshot {
     notifyChannels: s.notifyChannels,
     ticker: f.ticker ?? [],
     prPreviews: [], // the PR theatre is live-only: off while replaying
+    previewStats: s.previewStats,
     progress: s.progress, // coins and decorations are the office's own, now
     pong: s.pong, // so are the ping-pong leaderboards
     weather: s.weather, // the real local weather is live, like the settings

@@ -13,7 +13,6 @@ import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecover
 import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
-import { pruneQaShots } from './qaShots.ts';
 import { mergeReadings } from '../shared/usage.ts';
 import { clampPacingSessions } from './pacing.ts';
 import { loadHistory } from './metrics.ts';
@@ -22,7 +21,7 @@ import { isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
 import { loadLab } from './experiments.ts';
-import { apply as applyLedger, loadLedger } from './ledger.ts';
+import { apply as applyLedger, backfillWork, loadLedger } from './ledger.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, voiceSettings } from './voice.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { keepNotices, markRead, NOTICES_KEEP } from '../shared/notices.ts';
@@ -31,10 +30,10 @@ import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/to
 import { describePractices, emptyEveryProject, everyProjectSettings } from '../shared/practices.ts';
 import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
-import { conversationPatch, conversationsView, currentConversation, editConversation, loadChats, openConversation, projectLine, searchConversations, startConversation, unfilled } from '../shared/conversations.ts';
+import { conversationsView, currentConversation, editConversation, loadChats, openConversation, projectLine, searchConversations, startConversation, unfilled } from '../shared/conversations.ts';
 import { loadMemory, removeNote, saveNote, type MemoryNote } from '../shared/ceoMemory.ts';
 import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
-import { forwardText } from '../shared/chat.ts';
+import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
@@ -61,7 +60,6 @@ import {
   BUSY,
   OPS_TICK_MS,
   WATCHDOG_MS,
-  QA_SHOTS_DIR,
   CEO_DIR,
   CONVERSATIONS_DIR,
   TERMINAL_SAVE_MS,
@@ -132,15 +130,17 @@ export class Swarm extends SwarmCeoTools {
           qaChecks: q.qaChecks ?? null,
           stuckWhy: q.stuckWhy ?? null,
           triages: q.triages ?? 0,
+          labRetryRound: q.labRetryRound ?? null,
           escalated: q.escalated ?? q.status === 'needs-human', // stuck before triage existed: the manager was told
           mergeNote: null,
         })),
         requests: (loaded.requests ?? []).map((raw) => legacyRequest<HireRequestView>(raw)),
         ceo: { ...this.state.ceo, ...loaded.ceo, followups: loadFollowups(loaded.ceo?.followups), chats: loadChats(loaded.ceo?.chats, loaded.messages ?? [], Date.now()), remember: loadMemory(loaded.ceo?.remember) },
-        messages: loaded.messages ?? [],
+        messages: hideHarness(loaded.messages ?? []),
         phoneReadAt: loaded.phoneReadAt ?? 0,
         notices: keepNotices(loaded.notices, Date.now()),
         prLimits: loaded.prLimits ?? 1,
+        outageReleased: loaded.outageReleased ?? false,
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
         questions: Array.isArray(loaded.questions) ? loaded.questions : [],
@@ -205,11 +205,13 @@ export class Swarm extends SwarmCeoTools {
     } catch {
       // first run
     }
+    if (this.backend.demoNoTour) Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
+    if (this.state.settings.testLab.enabled) void Promise.resolve().then(() => this.backend.testLab.warm()).catch(() => false); // never takes start-up down
     await this.voice.init();
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await this.cloud.init();
+    await Promise.all([this.cloud.init(), this.accounts.init()]);
     if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
@@ -313,12 +315,14 @@ export class Swarm extends SwarmCeoTools {
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
     if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
-    void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
+    for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber); // a CI outage's banner (#191)
+    void this.cleanPreviews();
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
     // A PR the restart left in "testing" with nobody on it: test it again (the result, if any, was lost).
     for (const rec of orphanedQa(this.state.qa, this.state.agents, BUSY)) this.setQa(rec, { status: 'queued', qaAgentId: null });
     if (this.state.prLimits < PR_LIMITS_VERSION) this.catchUpPrs();
+    if (!this.state.outageReleased) this.releaseOutageStuck();
     this.officeHead = await this.backend.office.head();
     const updated = await this.backend.office.takeLastUpdate().catch(() => null);
     if (updated) await this.reportUpdate(updated);
@@ -326,11 +330,12 @@ export class Swarm extends SwarmCeoTools {
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
     setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
-    setInterval(() => this.previews.sweepPrs(), 15_000);
+    setInterval(() => this.sweepPreviews(), 15_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
     setInterval(() => {
       void this.trimIdleDesks();
+      void this.cleanPreviews();
       void this.voice.prune();
       void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
       void this.spend.ledger.prune();
@@ -357,14 +362,14 @@ export class Swarm extends SwarmCeoTools {
         this.broadcast({ type: 'clis', clis });
       })
       .catch((err) => console.warn('could not look for agent CLIs', err));
-    void this.refreshTooling();
+    void Promise.all([this.refreshTooling(), this.startModels()]); // Tools & skills, and the model catalog (#198)
     await this.journal.start();
-    await this.spend.ledger.load();
+    await this.spend.ledger.load().then(() => backfillWork(this.state.progress, this.spend.ledger.all(), this.state.agents)); // careers from before #205
     await this.history.load();
     void this.sweepHistory();
-    // A fresh demo office has a week of spending to look at.
-    if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) {
-      void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
+    // A fresh demo office has a month of spending to look at (the first sync may have written its merges already).
+    if (this.backend.demo && !this.spend.ledger.all().some((r) => r.type === 'session') && this.backend.seedCosts) {
+      void this.seedCareerPast(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now())); // and the careers' past (#205)
       for (const r of this.state.repos) this.seedCharterLog(r); // and the Charter tab's numbers over it
     }
     if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
@@ -495,13 +500,15 @@ export class Swarm extends SwarmCeoTools {
     const rt = this.agentRt.get(id)!;
     if (rt.session) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
+      this.chatSay(a, text, who);
       if (!typed) rt.session.send(text);
       return;
     }
     if (a.status === 'preparing') throw new HttpError(409, `${a.name} is still setting up; try again in a moment`);
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
-    this.ensureSlot(sessionKind(a));
+    this.ensureSlot(sessionKind(a), a);
     this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
+    this.chatSay(a, text, who);
     const cwd = this.deskOf(a, repo);
     a.lastError = null;
     a.startedAt = Date.now();
@@ -624,22 +631,6 @@ export class Swarm extends SwarmCeoTools {
     this.switchThread(thread, openConversation(s, id, this.ceo().sessionId));
   }
 
-  /** POST /api/ceo/conversations/:id/edit (and /pin): a thread renamed, pinned, archived or moved to another project (#132). */
-  editConversation(id: string, raw: unknown) {
-    try {
-      editConversation(this.state.ceo.chats, id, conversationPatch(raw, this.state.repos.map((r) => r.id)));
-    } catch (err) {
-      throw new HttpError(this.state.ceo.chats.list.some((c) => c.id === id) ? 400 : 404, (err as Error).message);
-    }
-    this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
-    this.save();
-  }
-
-  /** GET /api/ceo/library: a project's, the Company's or the whole office's artifacts and files, a page at a time (#132). */
-  library(q: Parameters<CeoChat['library']>[3]) {
-    return this.ceoChat.library(this.state.ceo.chats, this.state.messages, this.files.list(), q, this.state.repos.map((r) => r.id));
-  }
-
   /** GET /api/ceo/conversations/search?q=: conversations whose title or messages match, with a snippet each. */
   async searchConversations(q: string) {
     const s = this.state.ceo.chats;
@@ -703,13 +694,14 @@ export class Swarm extends SwarmCeoTools {
     if (typeof patch.projectsDir === 'string' && patch.projectsDir.trim()) s.projectsDir = path.resolve(patch.projectsDir.trim());
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
-    if (typeof patch.autoUpdate === 'boolean') s.autoUpdate = patch.autoUpdate;
+    for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
       setTimeout(() => void this.trimIdleDesks(), 1000);
     }
+    this.previewSettings(patch);
     if (typeof patch.dailyLogDir === 'string') s.dailyLogDir = patch.dailyLogDir.trim() ? path.resolve(patch.dailyLogDir.trim()) : '';
     if (patch.historyDays !== undefined) {
       s.historyDays = clampHistoryDays(patch.historyDays);
@@ -734,6 +726,7 @@ export class Swarm extends SwarmCeoTools {
       const url = (patch.notify as { officeUrl?: unknown } | null)?.officeUrl;
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
+      this.telegram.refresh(); // the switch: Off stops reading the bot at once, On resumes it
     }
     if (patch.everyProject !== undefined) {
       try {

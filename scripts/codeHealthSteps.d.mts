@@ -21,6 +21,7 @@ export const SOURCE_DIRS: string[];
 export const SOURCE_EXTENSIONS: string[];
 export const NEW_FILE_MAX_LINES: number;
 export const GROWTH_ALLOWANCE: number;
+export const FOLDER_MAX_LINES: Record<string, number>;
 export function normalizePath(file: string): string;
 export function lineCount(text: string): number;
 export function isSourceFile(file: string): boolean;

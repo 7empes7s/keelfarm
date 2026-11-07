@@ -90,15 +90,15 @@ code {
   transition: transform 0.06s, box-shadow 0.06s;
   white-space: nowrap;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled, [aria-disabled='true']) {
   transform: translateY(-1px);
   box-shadow: 0 4px 0 var(--ds-shadow-color);
 }
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(2px);
   box-shadow: 0 1px 0 var(--ds-shadow-color);
 }
-.btn:disabled {
+.btn:is(:disabled, [aria-disabled='true']) {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -133,11 +133,6 @@ code {
   color: var(--ds-on-color);
   box-shadow: 0 5px 0 var(--ds-shadow-color);
 }
-a.btn {
-  display: inline-block;
-  text-decoration: none;
-}
-
 button {
   font-family: var(--font);
 }
@@ -330,7 +325,7 @@ input.inline:focus {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: var(--ds-z-base);
 }
 .hud > * {
   pointer-events: auto;
@@ -1025,7 +1020,7 @@ input.inline:focus {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 60;
+  z-index: var(--ds-z-modal);
   padding: 1px 8px;
   font: 10px/1.2 var(--mono);
   color: #7cffb2;
@@ -1061,7 +1056,7 @@ input.inline:focus {
   gap: 8px;
   align-items: flex-end;
   max-width: min(420px, calc(100vw - 32px));
-  z-index: 40;
+  z-index: var(--ds-z-toast);
 }
 .toast {
   background: var(--paper);
@@ -1091,7 +1086,7 @@ input.inline:focus {
 .start {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--ds-z-sheet);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -1153,7 +1148,7 @@ input.inline:focus {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -1618,7 +1613,7 @@ input.inline:focus {
   position: fixed;
   left: 0;
   right: 0;
-  z-index: var(--ds-z-menu);
+  z-index: var(--ds-z-popover);
 }
 .term-keys-row,
 .term-keys-more {
@@ -1975,7 +1970,7 @@ input.inline:focus {
   flex: 0 2 auto;
   font-weight: 500;
   color: var(--ink);
-  opacity: 0.75;
+  opacity: 0.8; /* 4.5:1 on the floor's colour */
 }
 .app-title .status {
   flex: none;
@@ -2099,22 +2094,9 @@ input.inline:focus {
   animation: spin 2.4s linear infinite;
 }
 .app-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  inline-size: 100%;
+  max-inline-size: 24rem;
   text-align: left;
-  font-weight: 500;
-  color: var(--muted);
-}
-.app-steps li {
-  padding: 2px 0;
-}
-.app-step-done {
-  color: #1b873a;
-}
-.app-step-now {
-  color: var(--ink);
-  font-weight: 700;
 }
 .app-log {
   width: 100%;
@@ -2297,23 +2279,6 @@ input.inline:focus {
   color: #1b873a;
   font-weight: 600;
 }
-.qa-side {
-  flex: 0 0 300px;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  background: var(--ds-surface-raised);
-  border: 3px solid var(--ds-outline);
-  border-radius: 14px;
-}
-.qa-side-title {
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
 .qa-side-meta,
 .qa-side-status {
   display: flex;
@@ -2396,10 +2361,6 @@ input.inline:focus {
 @media (max-width: 900px) {
   .app-body {
     flex-direction: column;
-  }
-  .qa-side {
-    flex: 0 0 auto;
-    max-height: 40%;
   }
   .compare-sides {
     grid-template-columns: 1fr;
@@ -2509,6 +2470,14 @@ input.inline:focus {
 }
 .office-card .grow {
   min-width: 190px; /* narrow screens: the buttons wrap below instead of squeezing the status */
+}
+.mc-changes {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+.mc-changes li + li {
+  margin-top: 4px;
 }
 .office-state {
   font-weight: 600;
@@ -2784,7 +2753,7 @@ input.inline:focus {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  z-index: 45;
+  z-index: var(--ds-z-tour);
   width: min(390px, calc(100vw - 32px));
   background: var(--paper);
   border: 3px solid var(--ds-outline);
@@ -2797,7 +2766,7 @@ input.inline:focus {
 /* On a phone: clear of the phone button, and under the panels, which fill the screen there (#83). */
 @media (max-width: 760px) {
   .tour {
-    z-index: 20;
+    z-index: calc(var(--ds-z-base) + 10);
     bottom: calc(96px + var(--ds-safe-bottom));
   }
 }
@@ -2987,7 +2956,7 @@ input.inline:focus {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--ds-z-modal);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -3160,6 +3129,49 @@ input.inline:focus {
 .phone-x {
   display: none;
 }
+/* the CEO chat full screen (#201): the phone becomes the whole window, its ✕ in the chat's header row */
+.phone-overlay-full {
+  place-items: stretch;
+  padding: 0;
+  background: var(--paper);
+}
+:root .phone-full {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--ds-safe-top) var(--ds-safe-right) var(--ds-safe-bottom) var(--ds-safe-left);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--paper);
+}
+.phone-full :is(.phone-status, .phone-tabs, .phone-hint) {
+  display: none;
+}
+.phone-full .phone-screen {
+  border-radius: 0;
+}
+.phone-full .phone-x {
+  position: absolute;
+  top: calc(var(--ds-safe-top) + 4px);
+  right: calc(var(--ds-safe-right) + 12px);
+  z-index: 2;
+  display: block;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  margin: 0;
+  border: 2px solid var(--ds-outline);
+  border-radius: 12px;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.phone-full .chat-head {
+  padding-right: calc(12px + var(--ds-target) + 8px);
+}
 .phone-status {
   display: flex;
   justify-content: space-between;
@@ -3283,7 +3295,7 @@ input.inline:focus {
 /* the log, its "jump to latest" button and the message actions sit in one box */
 .chat-log-wrap {
   flex: 1;
-  min-height: 0;
+  min-height: 72px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3580,7 +3592,7 @@ input.inline:focus {
 .artifact-back {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--ds-z-sheet);
   display: flex;
   justify-content: flex-end;
   background: rgba(31, 29, 43, 0.35);
@@ -4655,29 +4667,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .usage-pill-bad {
   background: #ffc2d1;
 }
-.usage-gauge {
-  height: 14px;
-  border: 2px solid var(--ds-outline);
-  border-radius: 999px;
-  background: var(--ds-surface-sunken);
-  overflow: hidden;
-}
-.usage-gauge > div {
-  height: 100%;
-}
 .usage-bars {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.usage-gauge-good > div {
-  background: var(--good);
-}
-.usage-gauge-warn > div {
-  background: var(--warn);
-}
-.usage-gauge-bad > div {
-  background: var(--bad);
 }
 /* The card the console was opened at (an alarm, or the usage meter). */
 .ops-card-hot {
@@ -5224,6 +5217,23 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .notify-events .toggle.block {
   margin: 4px 0;
 }
+.notify-today {
+  margin: 4px 0 10px;
+}
+.notify-today-bar {
+  display: flex;
+  height: 6px;
+  margin-bottom: 4px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+}
+.notify-today-sent {
+  background: var(--ds-accent);
+}
+.notify-today-skipped {
+  background: var(--ds-good-fill);
+}
 .notify-hook {
   padding: 8px 0;
   border-top: 2px dashed rgba(31, 29, 43, 0.15);
@@ -5340,6 +5350,13 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .telegram-demo input {
   min-width: 0;
 }
+.telegram-off {
+  margin: var(--ds-space-2) 0;
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--ds-line);
+}
 .bubble-via {
   opacity: 0.8;
 }
@@ -5440,7 +5457,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   left: 50%;
   width: 0;
   height: 0;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
 }
 .emote-hub {
   position: absolute;
@@ -5800,7 +5817,7 @@ summary:focus-visible,
   left: 50%;
   bottom: 84px;
   transform: translateX(-50%);
-  z-index: 70;
+  z-index: var(--ds-z-modal);
   width: min(860px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -6154,7 +6171,7 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
 /* The floating joystick: a faint ring where the finger landed and the knob under it, only while it walks. */
 .touch-stick {
   position: fixed;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
   margin: 0;
   transform: translate(-50%, -50%);
   border: 3px solid rgba(255, 255, 255, 0.55);
@@ -6184,7 +6201,7 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
 }
 .touch-armed {
   position: fixed;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
   width: 88px;
   height: 88px;
   transform: translate(-50%, -50%);
@@ -6228,7 +6245,7 @@ html[data-high-contrast] .touch-knob {
 .hold-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--ds-z-sheet);
   background: rgba(31, 29, 43, 0.35);
   display: flex;
   align-items: flex-end;

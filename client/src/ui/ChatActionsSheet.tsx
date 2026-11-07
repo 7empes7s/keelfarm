@@ -5,9 +5,16 @@ import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
+import { openTextPill } from './ChatZoom';
+import { canGoFullscreen, goFullscreen, useChatFull } from './chatFull';
+import { Menu } from './Menu';
+import { keyLabel } from './keymap';
+import { useControls } from './controls';
+import { XLabel } from './HoverCard';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; hands-free).
+// prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; text size; hands-free; full
+// screen and its ⋯).
 
 interface PlusProps {
   text: string;
@@ -95,25 +102,71 @@ interface ToolsProps {
   onFiles: () => void;
   /** Where to draw them: pocket mode's header (null until it's there); undefined draws them in place. */
   into?: HTMLElement | null;
+  /** ⛶ and ⋯ here: off where the screen draws ⛶ itself (pocket mode on a phone, in its top bar). */
+  full?: boolean;
 }
 
-/** Icon buttons with their counts as badges: threads and search, files & artifacts, hands-free. */
-export function ChatTools({ ceoName, files, onChats, onFiles, into }: ToolsProps) {
+/** Icon buttons with their counts as badges: threads and search, files & artifacts, text size, hands-free, full screen. */
+export function ChatTools({ ceoName, files, onChats, onFiles, into, full = true }: ToolsProps) {
   const tools = (
     <>
-      <button type="button" className="chat-tool" onClick={onChats} aria-haspopup="dialog" aria-label="Threads and search" title="Threads: a new one, an earlier one, search them all, and what the CEO remembers">
+      <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Threads and search" title="Threads: a new one, an earlier one, search them all, and what the CEO remembers">
         🔍
+        <XLabel text="Threads" />
       </button>
       {files > 0 && (
-        <button type="button" className="chat-tool" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
-          📎<span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
+        <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
+          📎
+          <XLabel text="Files" />
+          <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
         </button>
       )}
+      <button type="button" className="chat-tool xbtn" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
+        Aa
+        <XLabel text="Text size" />
+      </button>
       <HandsFreeToggle ceoName={ceoName} />
+      {full && (
+        <>
+          <FullButton />
+          <FullMenu />
+        </>
+      )}
     </>
   );
   if (into === undefined) return tools;
   return into ? createPortal(tools, into) : null;
+}
+
+// Lucide's maximize-2 and minimize-2 (ISC, lucide.dev).
+const MAXIMIZE = 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7';
+const MINIMIZE = 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7';
+
+/** ⛶ (#201): the chat fills the window, or on a phone hides the tab bar. */
+export function FullButton() {
+  const { on, set } = useChatFull();
+  const key = keyLabel(useControls((s) => s.bindings.chatFull)[0] ?? '');
+  const label = on ? 'Leave full screen' : 'Full screen';
+  return (
+    <button type="button" data-tour="chat-full" className="chat-tool chat-full-btn xbtn" aria-pressed={on} aria-label={label} title={`${label}${key ? ` (${key})` : ''}`} onClick={() => set(!on)}>
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d={on ? MINIMIZE : MAXIMIZE} />
+      </svg>
+      <XLabel text={label} keys={key || undefined} />
+    </button>
+  );
+}
+
+/** The chat's ⋯: full screen, and where the browser allows it the real one. */
+function FullMenu() {
+  const { on, set } = useChatFull();
+  return (
+    <Menu
+      label="More for the chat"
+      className="chat-more"
+      items={[{ label: on ? 'Leave full screen' : 'Full screen', onSelect: () => set(!on) }, canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen }]}
+    />
+  );
 }
 
 function HandsFreeToggle({ ceoName }: { ceoName: string }) {
@@ -125,13 +178,14 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
   return (
     <button
       type="button"
-      className={`chat-tool ${on ? 'hands-free-on' : ''}`}
+      className={`chat-tool xbtn ${on ? 'hands-free-on' : ''}`}
       aria-pressed={on}
       aria-label={on ? 'Hands-free on' : 'Hands-free'}
       title={on ? `Hands-free is on: after ${ceoName}'s spoken reply the phone listens for up to 8 s and sends what you say. Esc or M closes the mic.` : why || `Hands-free: talk with ${ceoName} without touching anything`}
       onClick={() => void setHandsFree(!on, ceoName)}
     >
       🎧
+      <XLabel text={on ? 'Hands-free on' : 'Hands-free'} />
     </button>
   );
 }

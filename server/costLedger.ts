@@ -24,6 +24,7 @@ import {
   type SessionOutcome,
   type TaskKind,
 } from '../shared/costs.ts';
+import { causeCounts, roundsByCause, roundsView, type RoundCause } from '../shared/rounds.ts';
 import { DAY_MS, startOfDay } from './metrics.ts';
 import { HttpError } from './httpError.ts';
 
@@ -50,6 +51,13 @@ export function parseLedger(text: string): CostRecord[] {
 
 /** What's younger than `keepDays`. */
 export const pruneLedger = (records: CostRecord[], now: number, keepDays = KEEP_DAYS) => records.filter((r) => now - r.at <= keepDays * DAY_MS);
+
+/** The sessions and merges of the last `days` days (today counts as one), for one floor or all of them. */
+function inWindow(records: CostRecord[], o: { now: number; days: number; repoId?: string }) {
+  const since = startOfDay(o.now) - (o.days - 1) * DAY_MS;
+  const inView = records.filter((r) => r.at >= since && r.at <= o.now && (o.repoId === undefined || r.repoId === o.repoId));
+  return { since, sessions: inView.filter((r): r is CostSession => r.type === 'session'), merges: inView.filter((r): r is CostMerge => r.type === 'merge') };
+}
 
 const mergeKey = (repoId: string, pr: number) => `${repoId}#${pr}`;
 
@@ -79,10 +87,7 @@ const workKey = (s: Pick<CostSession, 'repoId' | 'issue' | 'pr'>) => (s.issue !=
  * of task averaged at each effort.
  */
 export function costsView(records: CostRecord[], o: { now: number; days: number; repoId?: string }): CostsView {
-  const since = startOfDay(o.now) - (o.days - 1) * DAY_MS;
-  const inView = records.filter((r) => r.at >= since && r.at <= o.now && (o.repoId === undefined || r.repoId === o.repoId));
-  const sessions = inView.filter((r): r is CostSession => r.type === 'session');
-  const merges = inView.filter((r): r is CostMerge => r.type === 'merge');
+  const { since, sessions, merges } = inWindow(records, o);
 
   const repos = [...new Set([...sessions.map((s) => s.repoId), ...merges.map((m) => m.repoId)])].sort();
   const floors: CostFloorRow[] = repos.map((repoId) => ({
@@ -155,7 +160,8 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
     });
   }
 
-  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions) };
+  const mine = o.repoId === undefined ? records : records.filter((r) => r.repoId === o.repoId);
+  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions), rounds: roundsView(mine, startOfDay(o.now), o.now) };
 }
 
 /** GET /api/costs' query: `days` from 1 to 30 (7 when unset), `repoId` a floor (`isFloor`) or unset for all of them. */
@@ -168,9 +174,18 @@ export function costsRequest(records: CostRecord[], days: unknown, repoId: unkno
 
 /** company_status's spend numbers for one floor: today's cost and waste, and cost per merged PR over 7 days. */
 export function floorSpend(records: CostRecord[], repoId: string, now: number) {
-  const today = costsView(records, { now, days: 1, repoId }).total;
-  const week = costsView(records, { now, days: 7, repoId }).total;
+  const total = (days: number) => {
+    const w = inWindow(records, { now, days, repoId });
+    return split(w.sessions, w.merges.length);
+  };
+  const today = total(1);
+  const week = total(7);
   return { costToday: today.usd, costPerMerge: week.perMerge, wasteToday: today.wasteUsd };
+}
+
+/** company_status's failed QA rounds and fixes by cause on one floor over 7 days (#188). */
+export function floorRoundsByCause(records: CostRecord[], repoId: string, now: number) {
+  return causeCounts(roundsByCause(records.filter((r) => r.repoId === repoId), startOfDay(now) - 6 * DAY_MS, now));
 }
 
 /** The ledger file, with its last 30 days in memory (company_status reads it synchronously). Writes go one at a time. */
@@ -260,6 +275,7 @@ export interface CostRun {
   model: string;
   startedAt: number;
   round: number | null;
+  cause?: RoundCause | null; // a fix's cause, known when it starts (#188)
   exp?: string | null; // the experiment variant it runs (shared/experiments.ts)
   /** The office's texts the session starts with, sized (shared/startup.ts); the measured startup once it's known. */
   known?: StartupPart[];
@@ -268,6 +284,7 @@ export interface CostRun {
   cwd?: string;
   sessionId?: string | null;
   title?: string;
+  account?: string; // the account it ran on (#247)
 }
 
 /** The agent fields a session's line is made from. */
@@ -288,6 +305,7 @@ interface RunAgent {
 export class SessionCosts {
   private runs = new Map<string, CostRun>();
   private outcomes = new Map<string, SessionOutcome>();
+  private causes = new Map<string, RoundCause>();
   private watchdogStops = new Set<string>();
   /** Changes the CEO made in the current job (team changes, triage actions…); issues filed are counted apart. */
   ceoActs = 0;
@@ -309,6 +327,7 @@ export class SessionCosts {
     const run = this.runs.get(agentId) ?? null;
     this.runs.delete(agentId);
     this.outcomes.delete(agentId);
+    this.causes.delete(agentId);
     return run;
   }
 
@@ -318,9 +337,16 @@ export class SessionCosts {
     if (run && !run.startup) run.startup = startupParts(tokens, [...(run.known ?? []), { label: 'CLAUDE.md files', tokens: charTokens(memoryChars) }]);
   }
 
-  /** What the task's handler made of the session that just ended. */
-  outcome(agentId: string, o: SessionOutcome) {
+  /** What the task's handler made of the session that just ended, and why its round failed (#188). */
+  outcome(agentId: string, o: SessionOutcome, cause?: RoundCause) {
     this.outcomes.set(agentId, o);
+    if (cause) this.causes.set(agentId, cause);
+  }
+
+  /** The account the agent's running session is on (#247). */
+  account(agentId: string, id: string) {
+    const run = this.runs.get(agentId);
+    if (run) run.account = id;
   }
 
   watchdogStopped(agentId: string) {
@@ -341,6 +367,8 @@ export class SessionCosts {
   record(a: RunAgent, repoId: string, run: CostRun | null, fallbackKind: TaskKind, result: { costUsd: number; ok: boolean; interrupted?: boolean }, how: { stopped: boolean; ceoHint?: SessionOutcome }) {
     const hint = how.ceoHint ?? this.outcomes.get(a.id) ?? null;
     this.outcomes.delete(a.id);
+    const cause = this.causes.get(a.id) ?? run?.cause;
+    this.causes.delete(a.id);
     const watchdog = this.watchdogStops.delete(a.id);
     const now = Date.now();
     const line: Omit<CostSession, 'type'> = {
@@ -359,7 +387,9 @@ export class SessionCosts {
       tokens: null,
       outcome: sessionOutcome({ interrupted: !!result.interrupted, watchdog, stopped: how.stopped, limited: this.limited(), ok: result.ok, hint }),
       ...(run?.exp ? { exp: run.exp } : {}),
+      ...(cause ? { cause } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
+      ...(run?.account ? { account: run.account } : {}),
     };
     this.onSession({ type: 'session', ...line }, run);
     return this.ledger.session(line);

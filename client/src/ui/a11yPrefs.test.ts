@@ -20,6 +20,7 @@ describe('parseA11yPrefs', () => {
       reduceMotion: 'on',
       centerDot: true,
       uiScale: 135,
+      chatText: 160,
       readableFont: true,
       highContrast: true,
     };
@@ -80,5 +81,20 @@ describe('touch defaults', () => {
   it('keeps a scale the player chose on a touch screen', () => {
     expect(parseA11yPrefs(JSON.stringify({ uiScale: 100 }), true).uiScale).toBe(100);
     expect(parseA11yPrefs(JSON.stringify({ fov: 80 }), true)).toEqual({ ...DEFAULT_A11Y, uiScale: TOUCH_UI_SCALE, fov: 80 });
+  });
+});
+
+describe('chat text size (#135)', () => {
+  it("starts at the phone's text size and keeps a size the manager chose", () => {
+    expect(parseA11yPrefs(null, true, 135).chatText).toBe(135);
+    expect(parseA11yPrefs(null).chatText).toBe(100);
+    expect(parseA11yPrefs(JSON.stringify({ chatText: 120 }), true, 135).chatText).toBe(120);
+  });
+
+  it('keeps it between 80% and 200%, in 5% steps', () => {
+    expect(normalizeA11yPrefs({ chatText: 250 }).chatText).toBe(100);
+    expect(normalizeA11yPrefs({ chatText: 70 }).chatText).toBe(100);
+    expect(normalizeA11yPrefs({ chatText: 147 }).chatText).toBe(145);
+    expect(normalizeA11yPrefs({ chatText: 200 }).chatText).toBe(200);
   });
 });

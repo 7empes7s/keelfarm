@@ -1,112 +1,146 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIVE_MS,
   due,
+  GRACE_MS,
+  group,
+  inApp,
   nextDue,
   note,
-  NOTE_WINDOW_MS,
   noteText,
   ntfyPayload,
   ntfyTarget,
-  offer,
+  parseAttention,
   parseWebhook,
   plainText,
+  queue,
+  read,
+  readNotes,
   redact,
   secretValues,
   STUCK_ERROR_MS,
   stuckAgents,
-  summarize,
+  THREAD_GAP_MS,
   webhookHint,
-  type Gates,
   type Note,
+  type Step,
+  type Threads,
 } from './notify.ts';
 
 const merge = (n: number) => note('merge', `Merged PR #${n}`, `pixel-todo: Change ${n}`, `pixel-todo #${n} Change ${n}`);
+const said = (n: number) => note('ceoMessage', 'Mimoun', `Line ${n}`, `Mimoun: Line ${n}`, undefined, `m${n}`);
 
-/** Offers every note at its time, then runs the summary timer up to `until`; returns what went out, with when. */
-function run(notes: [number, Note][], until: number) {
-  let gates: Gates = {};
+/** Queues every note at its time (the manager in the app when `present` says so), running the timer every second up to `until`. */
+function run(notes: [number, Note][], until: number, present: (t: number) => boolean = () => false, reads: [number, string[]][] = []) {
+  let threads: Threads = {};
   const sent: [number, Note][] = [];
-  const tick = (t: number) => {
-    const r = due(gates, t);
-    gates = r.gates;
+  const skipped: Note[] = [];
+  const cleared: [number, string][] = [];
+  const take = (t: number, r: Step) => {
+    threads = r.threads;
     for (const n of r.send) sent.push([t, n]);
+    skipped.push(...r.skipped);
+    for (const e of r.clear) cleared.push([t, e]);
   };
-  for (const [t, n] of notes) {
-    tick(t);
-    const r = offer(gates, n, t);
-    gates = r.gates;
-    if (r.send) sent.push([t, r.send]);
+  for (let t = 0; t <= until; t += 1000) {
+    for (const [at, n] of notes) if (at >= t - 1000 && at < t) take(at, queue(threads, n, at, present(at)));
+    for (const [at, events] of reads) if (at >= t - 1000 && at < t) take(at, read(threads, events));
+    take(t, due(threads, t, present(t)));
   }
-  for (let t = 0; t <= until; t += 1000) tick(t);
-  return { sent, gates };
+  return { sent, skipped, cleared, threads };
 }
 
-describe('the rate limit', () => {
-  it('holds under a burst of 10 merges: one at once, one summary of the other 9 a minute later, nothing in between', () => {
-    const burst: [number, Note][] = Array.from({ length: 10 }, (_, i) => [i * 100, merge(i + 1)]);
-    const { sent } = run(burst, 5 * 60_000);
-    expect(sent).toHaveLength(2);
-    expect(sent[0][0]).toBe(0);
-    expect(sent[0][1].title).toBe('🔀 Merged PR #1');
-    expect(sent[1][0]).toBe(NOTE_WINDOW_MS);
-    expect(sent[1][1].title).toBe('🔀 9 more merges');
-    expect(sent[1][1].body.split('\n')).toEqual(['• pixel-todo #2 Change 2', '• pixel-todo #3 Change 3', '• pixel-todo #4 Change 4', '• pixel-todo #5 Change 5', '• pixel-todo #6 Change 6', '…and 4 more']);
+describe('quiet while in the app (#210)', () => {
+  it('sends nothing to any device while the manager is in the app on one of them', () => {
+    const { sent, skipped } = run([[100, said(1)], [200, merge(1)]], 10 * 60_000, () => true);
+    expect(sent).toEqual([]);
+    expect(skipped.map((n) => n.title)).toEqual(['💬 Mimoun', '🔀 Merged PR #1']);
   });
 
-  it('never sends more than one per event type in any minute', () => {
-    // A merge every 7 seconds for 10 minutes.
-    const steady: [number, Note][] = Array.from({ length: 86 }, (_, i) => [i * 7000, merge(i + 1)]);
-    const { sent } = run(steady, 12 * 60_000);
+  it('knows "in the app" as a tab on screen and used in the last minute, on any device', () => {
+    expect(inApp([], 0)).toBe(false);
+    expect(inApp([{ visible: false, at: 1000 }], 1000)).toBe(false); // a hidden tab (the phone in a pocket)
+    expect(inApp([{ visible: true, at: 0 }], ACTIVE_MS)).toBe(false); // on screen but left alone for a minute
+    expect(inApp([{ visible: false, at: 0 }, { visible: true, at: 5000 }], ACTIVE_MS)).toBe(true);
+  });
+
+  it('sends one notification after the grace when nobody is in the app', () => {
+    const { sent } = run([[0, said(1)]], 5 * 60_000);
+    expect(sent.map(([t, n]) => [t, n.title, n.body])).toEqual([[GRACE_MS, '💬 Mimoun', 'Line 1']]);
+  });
+
+  it('cancels a note read on a device within the grace, and clears nothing it never sent', () => {
+    const { sent, cleared } = run([[0, said(1)]], 5 * 60_000, () => false, [[5_000, ['ceoMessage']]]);
+    expect(sent).toEqual([]);
+    expect(cleared).toEqual([]);
+  });
+
+  it('skips what waits if the manager opens the app during the grace', () => {
+    const { sent, skipped } = run([[0, said(1)]], 5 * 60_000, (t) => t >= 10_000);
+    expect(sent).toEqual([]);
+    expect(skipped.map((n) => n.id)).toEqual(['m1']);
+  });
+
+  it('turns a burst of 10 messages into one notification with a count of 10 and the latest line', () => {
+    const burst: [number, Note][] = Array.from({ length: 10 }, (_, i) => [i * 500, said(i + 1)]);
+    const { sent } = run(burst, 10 * 60_000);
+    expect(sent).toHaveLength(1);
+    expect(sent[0][1]).toMatchObject({ title: '💬 Mimoun: 10 new messages', body: 'Line 10', count: 10, id: 'm10' });
+  });
+
+  it('sends at most one per thread every two minutes while unread, the count going up in place', () => {
+    const steady: [number, Note][] = Array.from({ length: 30 }, (_, i) => [i * 10_000, said(i + 1)]);
+    const { sent } = run(steady, 10 * 60_000);
     const times = sent.map(([t]) => t);
-    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(NOTE_WINDOW_MS);
-    const covered = sent.reduce((n, [, s]) => n + (s.title.match(/(\d+) more/) ? Number(s.title.match(/(\d+) more/)![1]) : 1), 0);
-    expect(covered).toBe(86); // nothing lost: every merge is in a notification or a summary
+    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(THREAD_GAP_MS);
+    expect(sent.at(-1)![1].count).toBe(30); // nothing read: every message is still in the count
   });
 
-  it('limits each event type on its own', () => {
-    const { sent } = run(
-      [
-        [0, merge(1)],
-        [10, note('needsHuman', 'PR #4 needs you', 'x')],
-        [20, merge(2)],
-        [30, note('ceoMessage', 'Morgan', 'Hi')],
-      ],
-      NOTE_WINDOW_MS,
-    );
-    expect(sent.map(([t, n]) => [t, n.title])).toEqual([
-      [0, '🔀 Merged PR #1'],
-      [10, '⚠️ PR #4 needs you'],
-      [30, '💬 Morgan'],
-      [NOTE_WINDOW_MS, '🔀 Merged PR #2'], // a single held note goes out as itself
-    ]);
+  it('keeps each event its own thread', () => {
+    const { sent } = run([[0, merge(1)], [10, note('needsHuman', 'PR #4 needs you', 'x')], [20, merge(2)]], 60_000);
+    expect(sent.map(([, n]) => n.title)).toEqual(['🔀 2 merges', '⚠️ PR #4 needs you']);
+    expect(sent[0][1].body).toBe('• pixel-todo #2 Change 2\n• pixel-todo #1 Change 1');
   });
 
-  it('sends a quiet event straight away once its minute is over', () => {
-    const { sent } = run(
-      [
-        [0, merge(1)],
-        [NOTE_WINDOW_MS + 5, merge(2)],
-      ],
-      3 * NOTE_WINDOW_MS,
-    );
-    expect(sent.map(([t]) => t)).toEqual([0, NOTE_WINDOW_MS + 5]);
+  it('clears a sent notification on every device once it is read on one', () => {
+    const { sent, cleared, threads } = run([[0, said(1)]], 60_000, () => false, [[30_000, ['ceoMessage']]]);
+    expect(sent).toHaveLength(1);
+    expect(cleared).toEqual([[30_000, 'ceoMessage']]);
+    expect(threads.ceoMessage).toBeUndefined();
   });
 
-  it('knows when the next summary is due', () => {
-    let gates: Gates = {};
-    expect(nextDue(gates)).toBeNull();
-    gates = offer(gates, merge(1), 1000).gates;
-    expect(nextDue(gates)).toBeNull();
-    gates = offer(gates, merge(2), 2000).gates;
-    expect(nextDue(gates)).toBe(1000 + NOTE_WINDOW_MS);
+  it('reads a thread once all its notices are read', () => {
+    let threads = queue({}, said(1), 0, false).threads;
+    threads = queue(threads, said(2), 1, false).threads;
+    threads = due(threads, GRACE_MS, false).threads;
+    expect(readNotes(threads, ['m1']).clear).toEqual([]);
+    expect(readNotes(threads, ['m1', 'm2']).clear).toEqual(['ceoMessage']);
+  });
+
+  it('knows when the next thread is due', () => {
+    let threads: Threads = {};
+    expect(nextDue(threads)).toBeNull();
+    threads = queue(threads, merge(1), 1000, false).threads;
+    expect(nextDue(threads)).toBe(1000 + GRACE_MS);
+    threads = due(threads, 1000 + GRACE_MS, false).threads;
+    expect(nextDue(threads)).toBeNull();
+    threads = queue(threads, merge(2), 20_000, false).threads;
+    expect(nextDue(threads)).toBe(1000 + GRACE_MS + THREAD_GAP_MS);
   });
 
   it('keeps counting what it had no room to keep', () => {
-    let gates: Gates = offer({}, merge(0), 0).gates;
-    for (let i = 1; i <= 80; i++) gates = offer(gates, merge(i), i).gates;
-    const [s] = due(gates, NOTE_WINDOW_MS).send;
-    expect(s.title).toBe('🔀 80 more merges');
-    expect(s.body).toMatch(/…and 75 more$/);
+    let threads: Threads = {};
+    for (let i = 1; i <= 80; i++) threads = queue(threads, merge(i), i, false).threads;
+    const [s] = due(threads, GRACE_MS + 100, false).send;
+    expect(s.title).toBe('🔀 80 merges');
+    expect(s.body).toMatch(/^• pixel-todo #80 Change 80\n[\s\S]*…and 75 more$/);
+  });
+
+  it("reads a tab's attention from /ws and ignores anything else", () => {
+    expect(parseAttention(JSON.stringify({ type: 'attention', visible: true }))).toEqual({ type: 'attention', visible: true });
+    expect(parseAttention(JSON.stringify({ type: 'attention', visible: 'yes' }))).toBeNull();
+    expect(parseAttention(JSON.stringify({ type: 'lines', floor: 1 }))).toBeNull();
+    expect(parseAttention('not json')).toBeNull();
   });
 });
 
@@ -129,15 +163,10 @@ describe('what a note says', () => {
     expect(plainText('Both are *easy to get wrong* for _keyboard_ users; snake_case stays.')).toBe('Both are easy to get wrong for keyboard users; snake_case stays.');
   });
 
-  it('summarises a burst, and leaves a single note alone', () => {
+  it('groups a thread, and leaves a single note alone', () => {
     const one = merge(1);
-    expect(summarize([one])).toBe(one);
-    expect(summarize([note('ceoMessage', 'Morgan', 'a', 'Morgan: a'), note('ceoMessage', 'Morgan', 'b', 'Morgan: b')])).toEqual({
-      event: 'ceoMessage',
-      title: '💬 2 more messages from the CEO',
-      body: '• Morgan: a\n• Morgan: b',
-      line: '2 more messages from the CEO',
-    });
+    expect(group([one])).toBe(one);
+    expect(group([said(1), said(2)])).toEqual({ event: 'ceoMessage', title: '💬 Mimoun: 2 new messages', body: 'Line 2', line: 'Mimoun: Line 2', count: 2, id: 'm2' });
   });
 });
 
