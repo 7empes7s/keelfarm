@@ -1569,6 +1569,27 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
       return needs.length ? needs.join(' ') : 'Nothing to do.';
     },
+    // The manager's changes touched running work (#207): a closed issue stops its builder, a closed PR's author is told to wrap up, the rest finish.
+    async changes(lines: string[]) {
+      const out: string[] = [];
+      for (const l of lines) {
+        const floor = Number(l.match(/^- floor (\d+)/)?.[1] ?? 0);
+        for (const [, name, id, state] of (l.split(' · touched: ')[1] ?? '').matchAll(/([^,(]+?) \(([\w-]+), ([^)]*)\)/g)) {
+          const who = name.trim();
+          if (state === 'finished it already') {
+            out.push(`${who} had already finished, so there was nothing to stop.`);
+            continue;
+          }
+          await use('agent_log', { agent_id: id, lines: 30 });
+          const stop = /: closed #/.test(l) ? await use('stop_agent', { agent_id: id, reason: 'you closed their issue' }) : '';
+          if (/isn't running/.test(stop)) out.push(`${who} had already finished, so there was nothing to stop.`);
+          else if (stop && !stop.startsWith('Refused')) out.push(`Stopped ${who}: you closed their issue.`);
+          else if (/: closed PR/.test(l) && !(await use('message_agent', { floor, agent_id: id, text: 'The manager closed your PR: push nothing more, wrap up and say what is left.' })).startsWith('Refused')) out.push(`Redirected ${who}: they wrap up, since you closed their PR.`);
+          else out.push(`Let ${who} finish: your change doesn't undo their work.`);
+        }
+      }
+      return out.join('\n') || 'Nothing to do: that work had already ended.';
+    },
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
@@ -1701,13 +1722,16 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo) and pinned notes (ceoMemory.ts)
+  const [asked, changed = ''] = opts.prompt.split("\n\nYour changes since last time"); // the manager's changes (#207), after the rest
+  const prompt = asked.split('\n\nSince you last looked:')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
     : prompt.startsWith('Research for the manager:')
       ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
+    : prompt.startsWith('The manager changed work')
+      ? () => scripts.changes(changed.split('\n').filter((l) => l.startsWith('- floor ')))
     : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)

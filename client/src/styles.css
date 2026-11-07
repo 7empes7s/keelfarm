@@ -2492,6 +2492,14 @@ input.inline:focus {
 .office-card .grow {
   min-width: 190px; /* narrow screens: the buttons wrap below instead of squeezing the status */
 }
+.mc-changes {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+.mc-changes li + li {
+  margin-top: 4px;
+}
 .office-state {
   font-weight: 600;
   overflow-wrap: anywhere;

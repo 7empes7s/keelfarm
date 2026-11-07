@@ -11,8 +11,10 @@ import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveSt
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import { cleanTrustedAuthors, markTrust, trustContext, TRUST_LABEL, type TrustContext } from '../../shared/trust.ts';
-import type { PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
-import { type PersistedRepo, type FloorOptions, type RepoRuntime, QA_SHOTS_DIR } from './model.ts';
+import type { ManagerChangeKind, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
+import { recordChange } from '../../shared/managerChanges.ts';
+import { issuesResolvedBy } from '../issueClaims.ts';
+import { type PersistedRepo, type FloorOptions, type RepoRuntime, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { FLOOR_COLORS } from './flavour.ts';
 import { SwarmCore } from './core.ts';
 
@@ -477,22 +479,25 @@ export abstract class SwarmRepos extends SwarmCore {
     this.refuseOutside(repo, number);
     const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === number) ?? (await this.backend.prDetails(repo.fullName, number));
     await this.backend.mergePull(repo.fullName, number, method);
+    const issues = issuesResolvedBy(pr);
+    this.managerChange(repo, 'merge', { pr: number, issue: issues[0] ?? null }, `merged PR #${number} "${clip(pr.title, 60)}"`, this.runningOn(repo, { pr: number, branch: pr.headRefName, issues }));
     this.notifyMerge(repo, number, pr.title);
     await this.closeResolvedIssues(repo, number, pr);
     await this.syncRepo(repo.id);
     setTimeout(() => this.schedule(), 200);
   }
 
-  /** The manager's Close on a PR: closed on GitHub, and its QA, fix and anyone working on it stop now. */
+  /** The manager's Close on a PR: closed on GitHub; whoever still works on it carries on until the CEO decides (#207). */
   async closePull(repoId: string, number: number) {
     const repo = this.repo(repoId);
     const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === number) ?? (await this.backend.prDetails(repo.fullName, number).catch(() => null));
     await this.backend.closePull(repo.fullName, number);
+    this.managerChange(repo, 'close-pr', { pr: number }, `closed PR #${number}${pr ? ` "${clip(pr.title, 60)}"` : ''} without merging`, this.runningOn(repo, { pr: number, branch: pr?.headRefName }));
     this.learnPull(repo, { number, headRefName: pr?.headRefName ?? '', closesIssues: pr?.closesIssues ?? [] }, 'CLOSED');
     await this.syncRepo(repo.id);
   }
 
-  /** The manager's Close on an issue: closed on GitHub as not planned, and whoever works on it stops now. */
+  /** The manager's Close on an issue: closed on GitHub as not planned; whoever builds it carries on until the CEO decides (#207). */
   async closeIssueByManager(repoId: string, number: number, resolvedBy?: number) {
     const repo = this.repo(repoId);
     const rt = this.repoRt.get(repo.id);
@@ -502,8 +507,36 @@ export abstract class SwarmRepos extends SwarmCore {
     // From the office doctor, for an issue a merged PR resolved: closed as completed, not as not planned.
     if (resolvedBy) await this.backend.closeIssue(repo.fullName, number, `Resolved by #${resolvedBy}; closed by ${by} from the cubefarm office.`, 'completed');
     else await this.backend.closeIssue(repo.fullName, number, `Closed as not planned by ${by} from the cubefarm office.`, 'not planned');
-    this.toast('info', `Closed #${number} on ${repo.fullName}`);
+    const title = rt?.issues.find((i) => i.number === number)?.title;
+    const affects = this.runningOn(repo, { issues: [number] });
+    this.managerChange(repo, 'close-issue', { issue: number }, `closed #${number}${title ? ` "${clip(title, 60)}"` : ''}${resolvedBy ? ` as resolved by #${resolvedBy}` : ' as not planned'}`, affects);
+    this.toast('info', `Closed #${number} on ${repo.fullName}${affects.length ? ` · ${this.state.agents.find((a) => a.role === 'ceo')?.name ?? 'the CEO'} decides whether the running work stops` : ''}`);
     this.learnIssueClosed(repo, number);
     await this.syncRepo(repo.id);
+  }
+  // ---------- the manager's changes (#207, shared/managerChanges.ts) ----------
+
+  /** Agents in a session on the floor's issue(s) or PR: the running work a board action touches. */
+  protected runningOn(repo: PersistedRepo, on: { issues?: number[]; pr?: number; branch?: string }): string[] {
+    const hit = (a: (typeof this.state.agents)[number]) =>
+      (a.task === 'issue' && a.issueNumber != null && !!on.issues?.includes(a.issueNumber)) || (on.pr != null && a.prNumber === on.pr) || (!!on.branch && a.task !== 'qa' && a.branch === on.branch);
+    return this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && BUSY.includes(a.status) && hit(a)).map((a) => a.id);
+  }
+
+  /** A board action of the manager's: it never stops anyone itself; the CEO hears of it and decides. */
+  protected managerChange(repo: PersistedRepo, kind: ManagerChangeKind, on: { issue?: number | null; pr?: number | null }, detail: string, affects: string[]) {
+    const now = Date.now();
+    recordChange(this.state.ceo.changes, { id: crypto.randomUUID(), at: now, kind, repoId: repo.id, floor: repo.floor, issue: on.issue ?? null, pr: on.pr ?? null, detail, affects, told: false, verdict: null }, now);
+    this.emitChanges(affects);
+    this.save();
+  }
+
+  /** The changes went out of date: every tab gets the list, and the touched agents' cards their note. */
+  protected emitChanges(agentIds: readonly string[] = []) {
+    this.broadcast({ type: 'managerChanges', changes: this.state.ceo.changes.list });
+    for (const id of agentIds) {
+      const a = this.state.agents.find((x) => x.id === id);
+      if (a) this.emitAgent(a);
+    }
   }
 }

@@ -46,6 +46,7 @@ import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '..
 import { WeatherService } from '../weather.ts';
 import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
+import { emptyChanges } from '../../shared/managerChanges.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
@@ -134,7 +135,7 @@ export abstract class SwarmCore extends SwarmContract {
     agents: [],
     qa: [],
     requests: [],
-    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
+    ceo: { queue: [], job: null, lastReviewAt: null, lastFingerprint: null, followups: emptyFollowups(), changes: emptyChanges(), kept: { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }, chats: { current: '', list: [] }, remember: [] }, // chats: the first conversation starts on first use
     messages: [],
     phoneReadAt: 0,
     notices: [],
@@ -531,6 +532,7 @@ export abstract class SwarmCore extends SwarmContract {
       files: this.files.list(),
       tooling: this.tooling,
       experiments: this.lab.view(),
+      managerChanges: this.state.ceo.changes.list,
     };
   }
 
