@@ -1,0 +1,117 @@
+/* Open decisions (#114, ui/Decisions.tsx): the chat's tray above the message box, and the approvals' cards. */
+.decision-tray {
+  flex: none;
+  padding: var(--ds-space-2) 10px 0;
+  background: var(--ds-surface-raised);
+  border-top: 1px solid var(--ds-line);
+  min-width: 0;
+}
+.decision-tray-closed {
+  padding-bottom: 0;
+}
+.decision-tray-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.decision-pill,
+.decision-collapse {
+  min-height: var(--ds-target);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+.decision-pill {
+  padding: 0 var(--ds-space-4);
+}
+.decision-collapse {
+  min-width: var(--ds-target);
+  font-size: var(--ds-text-lg);
+  line-height: 1;
+  background: var(--ds-surface-raised);
+}
+/* a compact row that scrolls sideways inside itself: the page never does */
+.decision-row {
+  display: flex;
+  gap: var(--ds-space-2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: var(--ds-space-1) 0 var(--ds-space-2);
+}
+.decision-row .decision-card {
+  flex: 0 0 min(280px, 82%);
+  scroll-snap-align: start;
+}
+.decision-list {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.decision-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.decision-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.decision-head .grow {
+  min-width: 0;
+}
+.decision-icon {
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-tight);
+}
+.decision-q {
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.decision-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+}
+.decision-option {
+  min-height: var(--ds-target);
+  max-width: 100%;
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-accent);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.decision-yes {
+  background: var(--ds-good-fill);
+  border-color: var(--ds-outline);
+  color: var(--ds-on-color);
+}
+.decision-option:focus-visible,
+.decision-pill:focus-visible,
+.decision-collapse:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}

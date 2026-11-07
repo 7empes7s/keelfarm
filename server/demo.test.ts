@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LogEntry, SessionOptions, SessionResult } from './agentRunner.ts';
 import { demoPrompts } from './demoPrompts.ts';
-import { answerReply, createDemoBackend, demoGrow, demoRefsLine, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
-import { demoRepoFile } from './demoReads.ts';
+import { answerReply, createDemoBackend, demoGrow, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { parseRefs } from '../shared/chatRefs.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { forwardText, parseForwarded } from '../shared/chat.ts';
