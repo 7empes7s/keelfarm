@@ -60,15 +60,15 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
   }, [items, working]);
 
   const [flash, setFlash] = useState<number | null>(null);
-  const jumped = useRef(false);
+  const jumped = useRef<number | undefined>(undefined);
   useLayoutEffect(() => {
-    if (jump === undefined || jumped.current) return;
+    if (jump === undefined || jumped.current === jump) return;
     const at = rows.findIndex((r) => r.kind !== 'steps' && r.item.id === jump);
     if (at < 0) return; // not loaded yet, or no longer kept
     if (rows.length - at > shown) return setShown(rows.length - at);
     const el = scroller.current?.querySelector(`[data-chat-id="${jump}"]`);
     if (!el) return;
-    jumped.current = true;
+    jumped.current = jump;
     stick.current = false;
     el.scrollIntoView({ block: 'center' });
     setFlash(jump);

@@ -373,9 +373,11 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     const a = repo && this.state.agents.find((x) => x.repoId === repo.id && x.role !== 'ceo');
     if (!a) return;
     const item = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: 'The checkout test is flaky on CI: rerun it once before digging in.', who: `${this.ceo().name} (CEO)` });
+    const followup = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: 'Also check that the empty checkout shows the right message.', who: `${this.ceo().name} (CEO)` });
     const size = this.state.agents.filter((x) => x.repoId === repo.id).length;
     const calls = [
       { tool: 'message_agent', ok: true, out: `Sent: ${a.name} reads it after their current step.`, args: { floor: repo.floor, agent_id: a.id }, ...(item && { messageId: item.id }) },
+      { tool: 'message_agent', ok: true, out: `Sent a follow-up to ${a.name}.`, args: { floor: repo.floor, agent_id: a.id }, ...(followup && { messageId: followup.id }) },
       { tool: 'scale_team', ok: true, out: `Floor ${repo.floor} goes from ${size} to ${size + 1} agents once you agree: a hire request.`, args: { floor: repo.floor, size: size + 1 } },
     ];
     const m = this.postMessage('ceo', `Told ${a.name} the checkout test is flaky, and asked for one more agent on floor ${repo.floor}.`, undefined, { actions: actionCards(calls, () => repo.id) });

@@ -128,6 +128,14 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
   const [keysOn, setKeysOn] = useTermKeysPref(false);
   const chatMode = useChatMode();
   const [opened, setOpened] = useState(view);
+  useEffect(() => {
+    setOpened(view);
+    if (openOn) {
+      setTab(openOn);
+      setSheet(true);
+      setSide(true);
+    }
+  }, [agentId, view, jump, openOn]);
   const [liveLine, setLiveLine] = useState('');
   const onStatus = useCallback((line: string) => setLiveLine(line), []);
   const [, tick] = useState(0);
