@@ -327,7 +327,7 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
 }
 
 export default function Pocket() {
-  const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? (TABS.find((t) => t === resumedTab()) || 'company'));
+  const [tab, setTab] = useState<PocketTab>(() => TABS.find((t) => t === resumedTab()) ?? tabFrom(location.href) ?? 'company');
   const [repoId, setRepoId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
   const company = useStore((s) => s.settings.companyName);
