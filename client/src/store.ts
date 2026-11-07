@@ -864,7 +864,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
     const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
-    const card = { ...base, ...(p.untrusted ? { note: `🛡 ${OUTSIDE_PR}`, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
+    const card = { ...base, ...(p.untrusted ? { note: OUTSIDE_PR, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
   }
@@ -879,7 +879,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       const waits = blockers(i.body, open);
       const labels = i.labels.slice(0, 2).join(', ');
       const card = { key: `i-${i.number}`, number: i.number, title: i.title, url: i.url };
-      if (i.untrusted) return { ...card, note: `🛡 ${UNTRUSTED_ISSUE} · @${i.author ?? 'ghost'}`, tone: 'warn' as const, untrusted: true };
+      if (i.untrusted) return { ...card, note: `${UNTRUSTED_ISSUE} · @${i.author ?? 'ghost'}`, tone: 'warn' as const, untrusted: true };
       // Its PR was closed: it waits for the manager rather than going back to auto-assign.
       if (held.has(i.number)) return { ...card, note: `PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
       return { ...card, note: (waits.length ? `after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };

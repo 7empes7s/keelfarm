@@ -184,7 +184,7 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
         {action ??
           (office && (
             <button type="button" className="btn mm-filter-btn" onClick={() => useStore.getState().openOverlay({ kind: 'mapRoom' })} aria-label="Walk into the map room: the map in 3D">
-              🌌 3D
+              <Icon name="orbit" /> 3D
             </button>
           ))}
       </div>

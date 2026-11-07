@@ -8,7 +8,6 @@ import type { PreviewStatus, PreviewView, RepoView } from '../../../shared/types
 import { atPath, comparePath, newPathSync, onOfficeComputer, prAsPreview, qaShotUrl, reachable, relayPath, type Side } from './channels';
 import { sendToCeo } from './chatSend';
 import { Icon } from './Icon';
-import type { IconName } from './icons';
 import { Menu } from './Menu';
 import { ChannelBar, HeldNote, PreviewStats } from './PreviewChannels';
 import { closeOverlay, Panel } from './Panel';
@@ -647,7 +646,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
           )}
           {/* one element running or not: a link without an href is disabled (aria-disabled), never a <button> twin */}
           <a className="btn btn-small" href={openUrl || undefined} aria-disabled={!openUrl || undefined} target="_blank" rel="noreferrer">
-            Open in new tab ↗
+            Open in new tab <Icon name="external-link" />
           </a>
         </div>}
       </div>

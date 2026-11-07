@@ -51,7 +51,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
     <div className="decision-options decision-probably">
       <span className="decision-probably-what small muted">Answered? {d.probably.done}</span>
       <button type="button" className="decision-option decision-yes" onClick={() => void attempt(() => api.decideOpen(d.id, 'answered'))} aria-label={`Yes, answered: ${d.probably.done}`}>
-        ✓ Yes
+        <Icon name="check" /> Yes
       </button>
       <button type="button" className="decision-option" onClick={() => void attempt(() => api.decideOpen(d.id, 'open'))}>
         Still open
@@ -123,7 +123,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
                 onJump(d.messageId!);
               }}
             >
-              ↪ Jump to the message
+              <Icon name="redo-2" /> Jump to the message
             </button>
           )}
         </Sheet>

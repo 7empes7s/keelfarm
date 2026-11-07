@@ -24,7 +24,7 @@ import './cardView.css';
 // it is, its history and what it cost. The office's state as it stands (it follows the card as it moves), plus the
 // session history for this work, read when it opens and again when a session ends.
 
-const QA_ICON = { pass: '✓', fail: '✗', skip: '–' } as const;
+const QA_ICON: Record<'pass' | 'fail' | 'skip', IconName | null> = { pass: 'check', fail: 'x', skip: null };
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const day = (t: number) => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -127,23 +127,23 @@ function Card({ repo, card, col, ceo }: { repo: RepoView; card: KanbanCard; col:
       <div className="cardview-strip">
         <Who card={card} col={col} filed={issue?.createdAt} opened={pull?.createdAt} mergedAt={pull?.mergedAt} />
         {waits.map((n) => (
-          <Stat key={`w${n}`} icon="⏳" title="Waits for" tone="warn" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
+          <Stat key={`w${n}`} icon={<Icon name="hourglass" />} title="Waits for" tone="warn" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
             #{n} {repo.issues.find((i) => i.number === n)?.title}
           </Stat>
         ))}
         {waiters.map((n) => (
-          <Stat key={`h${n}`} icon="🔗" title="Holds up" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
+          <Stat key={`h${n}`} icon={<Icon name="link" />} title="Holds up" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
             #{n} {repo.issues.find((i) => i.number === n)?.title}
           </Stat>
         ))}
         {pull && (
-          <Stat icon="🔀" title={`PR #${pull.number}`} tone={pull.checks === 'failing' || card.qa?.status === 'failed' ? 'bad' : undefined} href={card.qa?.commentUrl ?? pull.url}>
+          <Stat icon={<Icon name="git-merge" />} title={`PR #${pull.number}`} tone={pull.checks === 'failing' || card.qa?.status === 'failed' ? 'bad' : undefined} href={card.qa?.commentUrl ?? pull.url}>
             {checksWord(pull)}
             {card.qa ? ` · QA round ${card.qa.round}: ${card.qa.status}` : ' · not in QA yet'}
           </Stat>
         )}
         {pull?.state === 'OPEN' && !pull.untrusted && (
-          <Stat icon="▶" title="Preview" onTap={() => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number } })}>
+          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number } })}>
             Run PR #{pull.number} beside {repo.defaultBranch}
           </Stat>
         )}
@@ -183,7 +183,7 @@ function Card({ repo, card, col, ceo }: { repo: RepoView; card: KanbanCard; col:
           <ol className="cardview-timeline">
             {timeline.map((e, i) => (
               <li key={i} className={e.tone ? `cardview-tl-${e.tone}` : undefined}>
-                <span aria-hidden>{e.icon}</span>
+                <Icon name={e.icon} />
                 <span className="grow">{e.text}</span>
                 <time className="muted small" dateTime={new Date(e.at).toISOString()}>
                   {day(e.at)} {clock(e.at)}
@@ -207,7 +207,7 @@ function Card({ repo, card, col, ceo }: { repo: RepoView; card: KanbanCard; col:
       <div className="cardview-foot">
         {url && (
           <a className="btn" href={url} target="_blank" rel="noreferrer">
-            Open on GitHub ↗
+            Open on GitHub <Icon name="external-link" />
           </a>
         )}
         <button type="button" className="btn" onClick={() => go({ kind: 'ceo', text: ask })}>
@@ -232,7 +232,7 @@ function Card({ repo, card, col, ceo }: { repo: RepoView; card: KanbanCard; col:
 }
 
 const checksWord = (p: Pick<PullInfo, 'checks' | 'mergeable'>) =>
-  `${p.checks === 'passing' ? '✓ checks pass' : p.checks === 'failing' ? '✗ checks failing' : p.checks === 'pending' ? '… checks running' : 'no checks'}${p.mergeable === 'CONFLICTING' ? ' · conflicts' : ''}`;
+  `${p.checks === 'passing' ? 'checks pass' : p.checks === 'failing' ? 'checks failing' : p.checks === 'pending' ? 'checks running' : 'no checks'}${p.mergeable === 'CONFLICTING' ? ' · conflicts' : ''}`;
 
 /** One card of the status strip: a 44 px button or link to what it's about. */
 function Stat({ icon, title, tone, onTap, href, label, children }: { icon: ReactNode; title: string; tone?: 'warn' | 'bad'; onTap?: () => void; href?: string; label?: string; children: ReactNode }) {
@@ -286,7 +286,7 @@ function Who({ card, col, filed, opened, mergedAt }: { card: KanbanCard; col: Co
       {a.name[0]}
     </span>
   ) : (
-    '👤'
+    <Icon name="user" />
   );
   return (
     <Stat icon={avatar} title={title} onTap={a ? () => go({ kind: 'overlay', overlay: { kind: 'terminal', agentId: a.id } }) : undefined} label={a ? `${line(title, sub)}: open their terminal` : undefined}>
@@ -318,7 +318,7 @@ function PrDetails({ card, pull }: { card: KanbanCard; pull?: Pick<PullInfo, 'ch
         )}
         {q?.commentUrl && (
           <a href={q.commentUrl} target="_blank" rel="noreferrer" className="small">
-            Open the QA report ↗
+            Open the QA report <Icon name="external-link" />
           </a>
         )}
       </div>

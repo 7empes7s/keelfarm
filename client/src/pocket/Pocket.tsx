@@ -40,7 +40,7 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
-import { CloseButton, Icon, IconText } from '../ui/Icon';
+import { Icon, IconText } from '../ui/Icon';
 import type { IconName } from '../ui/icons';
 import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
 import { DockGrip, useDockWidth } from './DockGrip';
@@ -567,7 +567,7 @@ export default function Pocket() {
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
         {wide && order.back && (
           <button className="btn btn-small pk-back-chip" onClick={() => reopen(order.back!)} title={`Back to ${order.back.label}`}>
-            ‹ <span className="pk-ellipsis">{order.back.label}</span>
+            <Icon name="chevron-left" /> <span className="pk-ellipsis">{order.back.label}</span>
           </button>
         )}
         <span className="spacer" />
@@ -592,7 +592,7 @@ export default function Pocket() {
         {!wide && tab === 'chat' && <FullButton />}
         {wide && (
           <button className="btn btn-small pk-switch" aria-pressed={chatMode.on} onClick={() => chatMode.set(!chatMode.on)} title={`Chat mode (#120): agents' windows open on their ${chatMode.on ? 'chat' : 'terminal'}. Click to switch`}>
-            💬 Chat {chatMode.on ? 'on' : 'off'}
+            <Icon name="message-circle" /> Chat {chatMode.on ? 'on' : 'off'}
           </button>
         )}
         {wide && <ChatButton open={dock} toggle={() => setDock(!dock)} />}

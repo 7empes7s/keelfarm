@@ -349,7 +349,7 @@ export function TeamStats() {
                   <span className="dot" style={{ background: a.color }} /> <b>{a.name}</b>
                   <span className="muted small">floor {floor(a) || '—'}</span>
                   <span className="cr-chev" aria-hidden>
-                    ›
+                    <Icon name="chevron-right" />
                   </span>
                 </span>
                 <span className="cr-card-stats">

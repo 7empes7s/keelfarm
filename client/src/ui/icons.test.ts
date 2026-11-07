@@ -56,6 +56,7 @@ const CONTENT: Record<string, string> = {
   'world/themes/newyear.tsx': 'holiday screens and speech bubbles in the 3D scene',
   'world/themes/valentines.tsx': 'holiday screens and speech bubbles in the 3D scene',
   'world/fridge.ts': "the fridge's snacks",
+  'world/MapTable.tsx': "drawn into the 3D scene's canvas textures",
 };
 
 // Emoji, plus the text glyphs the UI used as icons. × stays: it is the multiplication sign in "4×" and "600× speed".

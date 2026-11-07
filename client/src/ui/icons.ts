@@ -139,6 +139,7 @@ import {
   Send,
   Server,
   Settings,
+  Shield,
   ShoppingBag,
   Signal,
   Siren,
@@ -322,6 +323,7 @@ export const ICONS = {
   send: Send,
   server: Server,
   settings: Settings,
+  shield: Shield,
   'shopping-bag': ShoppingBag,
   signal: Signal,
   siren: Siren,
@@ -394,7 +396,7 @@ export const EMOJI_ICONS: Record<string, IconName> = {
   '📞': 'phone', '🏷': 'tag', '🪪': 'id-card', '🛍': 'shopping-bag', '🎂': 'cake', '☕': 'coffee', '🪑': 'armchair',
   '♪': 'music', '🎵': 'music', '🎼': 'music', '👀': 'eye', '👁': 'eye', '💼': 'briefcase-business', '🌀': 'orbit',
   '👍': 'thumbs-up', '❤': 'heart', '♥': 'heart', '🚩': 'flag', '📘': 'book-open', '🛑': 'circle-stop', '💥': 'circle-alert',
-  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info', '☺': 'smile-plus',
+  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info', '☺': 'smile-plus', '🛡': 'shield',
 };
 
 /** An emoji or icon glyph that still arrives as data (shared/ helpers, saved messages) → its icon, else `fallback`. */

@@ -112,7 +112,7 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
         <div className="row wrap">
           <span className="muted small">Demo:</span>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
-            ⟳ Simulate an office update
+            <Icon name="refresh-cw" /> Simulate an office update
           </button>
         </div>
       )}

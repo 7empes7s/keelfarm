@@ -170,7 +170,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const trust = async (c: KanbanCard) => {
     const ok = await confirmDialog({
       tone: 'warn',
-      icon: '🛡',
+      icon: 'shield',
       title: `Trust issue #${c.number}?`,
       body: `“${c.title}” is from someone outside the team. Agents will build it as written, with a shell on this server: read it on GitHub first. The office adds the ${TRUST_LABEL} label, and the chat records that you let it in.`,
       confirm: 'Trust this issue',
@@ -179,7 +179,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   };
   const reviewOnGitHub = (c: KanbanCard) => (
     <a className="btn btn-small" href={c.url} target="_blank" rel="noreferrer">
-      Review on GitHub ↗
+      Review on GitHub <Icon name="external-link" />
     </a>
   );
   const closePr = async (c: KanbanCard) => {

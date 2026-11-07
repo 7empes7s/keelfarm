@@ -12,6 +12,8 @@ import { LobbyNudge, TeamChanges } from './TeamChanges';
 import { clock } from './phoneParts';
 import { useMode } from '../pocket/mode';
 import { useChatFull, useChatFullBack } from './chatFull';
+import { CloseButton, Icon } from './Icon';
+import type { IconName } from './icons';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -114,7 +116,7 @@ function Shortcuts() {
       </button>
       {office && (
         <button className="btn btn-small" onClick={() => openOverlay({ kind: 'mapRoom' })}>
-          🌌 Map room
+          <Icon name="orbit" /> Map room
         </button>
       )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
@@ -262,7 +264,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   return (
     <div className={`overlay phone-overlay ${full ? 'phone-overlay-full' : ''}`} {...backdropClose(closeOverlay)}>
       <div className={`phone ds-screen ${full ? 'phone-full' : ''}`} ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
-        <button className="phone-x" onClick={closeOverlay} aria-label="Close">✕</button>
+        <CloseButton className="phone-x" onClick={closeOverlay} label="Close" />
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />

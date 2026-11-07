@@ -217,7 +217,7 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
         {pull ? `${pull.state.toLowerCase()} · checks ${pull.checks}` : issue ? 'open' : 'Not on the board: opens on GitHub.'}
         {qa ? ` · QA ${qa.status}${qa.round > 1 ? ` (round ${qa.round})` : ''}` : ''}
       </p>
-      {(pull || issue) && <p className="small">👤 {who.length ? who.join(', ') : 'Nobody on it yet'}</p>}
+      {(pull || issue) && <p className="small"><Icon name="user" /> {who.length ? who.join(', ') : 'Nobody on it yet'}</p>}
       {fail && <p className="small ref-peek-clip">✗ {fail.name}: {fail.line}</p>}
       {qa?.summary && <p className="small ref-peek-clip">{qa.summary}</p>}
       {chip.kind === 'qa' && n !== undefined && qa?.shots?.length ? <img className="ref-peek-shot" src={qaShotUrl(repo.id, n, 0, qa.updatedAt)} alt={qa.shots[0].caption} /> : null}

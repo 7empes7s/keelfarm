@@ -3,6 +3,7 @@
 // the session history, and what the work cost against the floor's median. CardView.tsx draws them.
 import { kindLabel, type HistoryEntry } from '../../../shared/history';
 import type { Col } from '../world/stickies';
+import type { IconName } from './icons';
 
 // ---------- the body ----------
 
@@ -92,7 +93,7 @@ export const STATUS: Record<Col, string> = { backlog: 'Backlog', progress: 'Buil
 
 export interface TimelineEvent {
   at: number;
-  icon: string;
+  icon: IconName;
   text: string;
   tone?: 'good' | 'bad';
 }
@@ -114,28 +115,28 @@ export function issueTimeline(x: {
 }): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   const filed = time(x.issue?.createdAt);
-  if (filed !== null) out.push({ at: filed, icon: '📝', text: x.issue?.author ? `Filed by @${x.issue.author}` : 'Filed' });
+  if (filed !== null) out.push({ at: filed, icon: 'notebook-pen', text: x.issue?.author ? `Filed by @${x.issue.author}` : 'Filed' });
   const sessions = [...x.entries].sort((a, b) => a.at - b.at);
   const first = sessions.find((e) => e.kind === 'issue');
-  if (first) out.push({ at: first.startedAt, icon: '🔨', text: `${first.agent} started building` });
-  else if (x.live && Number.isFinite(x.live.at)) out.push({ at: x.live.at, icon: '🔨', text: `${x.live.agent} started building` });
+  if (first) out.push({ at: first.startedAt, icon: 'hammer', text: `${first.agent} started building` });
+  else if (x.live && Number.isFinite(x.live.at)) out.push({ at: x.live.at, icon: 'hammer', text: `${x.live.agent} started building` });
   const opened = time(x.pull?.createdAt);
-  if (x.pull && opened !== null) out.push({ at: opened, icon: '🔀', text: `PR #${x.pull.number} opened` });
+  if (x.pull && opened !== null) out.push({ at: opened, icon: 'git-merge', text: `PR #${x.pull.number} opened` });
   let round = 0;
   for (const e of sessions) {
     if (e.kind === 'qa') {
       round++;
       const pass = e.outcome === 'qa-pass';
       const fail = e.outcome === 'qa-fail';
-      out.push({ at: e.at, icon: '🔍', text: `QA round ${round} ${pass ? 'passed' : fail ? 'failed' : 'ended'} · ${e.agent}`, tone: pass ? 'good' : fail ? 'bad' : undefined });
+      out.push({ at: e.at, icon: 'search', text: `QA round ${round} ${pass ? 'passed' : fail ? 'failed' : 'ended'} · ${e.agent}`, tone: pass ? 'good' : fail ? 'bad' : undefined });
     } else if (e.kind.startsWith('fix-')) {
       const label = kindLabel(e.kind);
-      out.push({ at: e.at, icon: '🔧', text: `${e.agent}: ${label[0].toLowerCase()}${label.slice(1)}${e.outcome === 'commit' ? ', pushed' : ''}` });
+      out.push({ at: e.at, icon: 'wrench', text: `${e.agent}: ${label[0].toLowerCase()}${label.slice(1)}${e.outcome === 'commit' ? ', pushed' : ''}` });
     }
-    else if (e.kind === 'issue' && e.outcome !== 'pr') out.push({ at: e.at, icon: '⚠️', text: `${e.agent}'s build ended without a PR`, tone: 'bad' });
+    else if (e.kind === 'issue' && e.outcome !== 'pr') out.push({ at: e.at, icon: 'triangle-alert', text: `${e.agent}'s build ended without a PR`, tone: 'bad' });
   }
   const merged = time(x.pull?.mergedAt);
-  if (merged !== null) out.push({ at: merged, icon: '🎉', text: 'Merged', tone: 'good' });
+  if (merged !== null) out.push({ at: merged, icon: 'party-popper', text: 'Merged', tone: 'good' });
   return out.sort((a, b) => a.at - b.at);
 }
 

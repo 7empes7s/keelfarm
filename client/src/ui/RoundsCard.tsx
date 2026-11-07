@@ -4,6 +4,7 @@ import { KIND_GROUP_LABELS, kindShares, type CostsView } from '../../../shared/c
 import { excludedCause, O2_FIRST_PASS, O2_ROUNDS_PER_MERGE, ROUND_CAUSE_LABELS, type RoundCause, type RoundStats } from '../../../shared/rounds';
 import type { RepoView } from '../../../shared/types';
 import './rounds.css';
+import { Icon } from './Icon';
 
 // Mission control → Rounds (#188): QA rounds per merge and the first-round pass rate against O2's targets, the failed
 // rounds by cause (a cause opens to its PRs), each floor over 7 and 30 days, and cost per merge by build, QA and fix.
@@ -64,7 +65,7 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
   return (
     <section id="ops-card-rounds" className="rounds" aria-labelledby="rounds-title">
       <h3 id="rounds-title" className="section">
-        🔁 Rounds
+        <Icon name="repeat" /> Rounds
       </h3>
       <div className="rounds-seg" role="group" aria-label="Rounds over">
         {([7, 30] as const).map((d) => (
@@ -145,7 +146,7 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
                           <li key={`${p.repoId}#${p.pr}:${p.issue}`}>
                             {href ? (
                               <a className="rounds-pr" href={href} target="_blank" rel="noreferrer" style={{ ['--accent' as string]: rp?.color }}>
-                                <span>{label} ↗</span>
+                                <span>{label} <Icon name="external-link" /></span>
                                 <span className="muted small">
                                   {floorName(p.repoId)} · {p.rounds}×
                                 </span>

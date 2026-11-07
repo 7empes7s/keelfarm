@@ -241,7 +241,7 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
   const closeSearch = useCallback(() => setSearching(false), []);
   const searchButton = (
     <button className="btn btn-ghost cn-search-open" onClick={() => setSearching(true)} aria-label="Search settings" data-tour="console-search">
-      <span aria-hidden>🔍</span>
+      <Icon name="search" />
     </button>
   );
   return (

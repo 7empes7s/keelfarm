@@ -141,7 +141,7 @@ function ChatModeButton() {
   const { on, set } = useChatMode();
   return (
     <button className="pill pill-switch" aria-pressed={on} onClick={() => set(!on)} title={`Chat mode is ${on ? 'on' : 'off'}: desks open an agent's ${on ? 'chat, their steps in plain words' : 'terminal'}. Click to switch`}>
-      💬 Chat {on ? 'on' : 'off'}
+      <Icon name="message-circle" /> Chat {on ? 'on' : 'off'}
     </button>
   );
 }

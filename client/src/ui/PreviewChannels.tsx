@@ -8,6 +8,7 @@ import { busyPrs, channelLabel, channelLed, liveChannels, previewingPrs, PR_PREV
 import { sendToCeo } from './chatSend';
 import { ProgressBar } from './ProgressBar';
 import { Sheet } from './Sheet';
+import { Icon } from './Icon';
 
 /** Re-render every minute, for "stops in N min". */
 function useMinute(): number {
@@ -71,7 +72,7 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
                     onPick(p.number);
                   }}
                 >
-                  ▶ Preview
+                  <Icon name="play" /> Preview
                 </button>
               </li>
             ))}
@@ -89,7 +90,7 @@ export function HeldNote({ preview, label, repo }: { preview: PreviewView; label
   return (
     <div className="held-note small" role="note">
       <span>
-        🔒 @{preview.heldBy} is testing in this
+        <Icon name="lock" /> @{preview.heldBy} is testing in this
       </span>
       <button
         className="btn btn-small"

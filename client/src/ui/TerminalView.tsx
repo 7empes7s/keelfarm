@@ -371,14 +371,14 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
       {!noChat && phone && (
         // one button for the other pane: the two-button pill doesn't fit beside ■, ⋯ and × at 390px
         <button type="button" className="aw-icon aw-pane-toggle" aria-label={pane === 'chat' ? 'Terminal' : 'Chat'} title={pane === 'chat' ? 'Their terminal' : 'Their work as a conversation'} onClick={() => choose(pane === 'chat' ? 'terminal' : 'chat')}>
-          <span aria-hidden>{pane === 'chat' ? '⌨' : '💬'}</span>
+          <Icon name={pane === 'chat' ? 'keyboard' : 'message-circle'} />
         </button>
       )}
       {!noChat && !phone && (
         <div className="aw-panes" role="group" aria-label="Show">
           {(['chat', 'terminal'] as const).map((p) => (
             <button key={p} type="button" aria-pressed={pane === p} aria-label={p === 'chat' ? 'Chat' : 'Terminal'} title={p === 'chat' ? 'Their work as a conversation' : 'Their terminal'} onClick={() => choose(p)}>
-              <span aria-hidden>{p === 'chat' ? '💬' : '⌨'}</span>
+              <Icon name={p === 'chat' ? 'message-circle' : 'keyboard'} />
               <span className="aw-pane-label">{p === 'chat' ? ' Chat' : ' Terminal'}</span>
             </button>
           ))}

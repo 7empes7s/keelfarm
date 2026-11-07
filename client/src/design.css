@@ -194,37 +194,6 @@ html[data-reduce-motion] {
   --ds-icon: var(--ds-icon-md);
 }
 
-/* ---------- icons (ui/Icon.tsx) ---------- */
-
-.ds-icon {
-  width: var(--ds-icon, 1.2em);
-  height: var(--ds-icon, 1.2em);
-  flex: none;
-  vertical-align: -0.22em;
-}
-/* The shared close button: a soft round fill, no outline, the x at 24px. */
-.ds-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: var(--ds-target);
-  height: var(--ds-target);
-  padding: 0;
-  border: 0;
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-line);
-  color: var(--ds-text);
-  cursor: pointer;
-  --ds-icon: var(--ds-icon-md);
-  transition: background var(--ds-dur-fast);
-}
-.ds-close:hover {
-  background: var(--ds-line-strong);
-}
-.ds-close:active {
-  transform: scale(0.94);
-}
 .ds-menu-dots {
   font-size: 1.25rem;
   font-weight: 700;

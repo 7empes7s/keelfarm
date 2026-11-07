@@ -14,6 +14,7 @@ import { AwakeSettings, FollowupSettings } from './CeoFollowups';
 import { useChatMode } from './chatMode';
 import { openWhatsNew, useTour } from './tour';
 import { Icon } from './Icon';
+import { STATUS_EMOJI } from '../../../shared/reactions';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
 const set = (p: SettingsPatch) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
@@ -151,7 +152,7 @@ export function CeoSettings() {
       <label className="toggle block">
         <input type="checkbox" checked={!!settings.statusReactions} onChange={(e) => set({ statusReactions: e.target.checked })} />
         <span>
-          <b>Status reactions</b>: 👀 ⏳ ✅ under your messages while the CEO or an agent works on them. Off, the working strip shows it.
+          <b>Status reactions</b>: {[STATUS_EMOJI.seen, STATUS_EMOJI.working, STATUS_EMOJI.done].join(' ')} under your messages while the CEO or an agent works on them. Off, the working strip shows it.
         </span>
       </label>
       <FollowupSettings />
