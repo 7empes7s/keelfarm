@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { colourStats, decodePng } from './png';
+import { TOUR } from '../client/src/ui/tourSteps';
 
 // What every e2e spec shares: the `test` that fails on console errors and failed requests, walking into the office,
 // placing the player and looking at the 3D view. Specs import `test` and `expect` from here, not from Playwright.
@@ -8,6 +9,7 @@ import { colourStats, decodePng } from './png';
 export { expect };
 
 export const VIEW_KEY = 'cubefarm:view'; // where the client remembers the player's spot (store.ts saveView)
+export const TOUR_SEEN_KEY = 'cubefarm:tour-seen'; // the tour steps this device has seen (ui/tour.ts)
 
 export interface SavedView {
   floor: number;
@@ -27,6 +29,8 @@ export const test = base.extend<{ page: Page }>({
       (url) => !url.href.startsWith(baseURL!) && !url.protocol.startsWith('data'),
       (route) => route.fulfill({ status: 200, body: '' }),
     );
+    // Every tour step counts as seen, so no "What's new" card sits over what a test looks at (tour.spec.ts clears it).
+    await page.addInitScript(([key, ids]) => localStorage.getItem(key) === null && localStorage.setItem(key, ids), [TOUR_SEEN_KEY, JSON.stringify(TOUR.map((e) => e.id))] as const);
     page.on('console', (m) => {
       if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
     });

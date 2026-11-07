@@ -223,7 +223,7 @@ export function NoticeBell({ className }: { className: string }) {
   const unread = useStore((s) => unreadCount(s.notices));
   const label = unread ? `Notifications, ${unread} unread` : 'Notifications';
   return (
-    <button type="button" className={`notice-bell ${className}`} onClick={() => useStore.getState().openOverlay({ kind: 'notices' })} aria-label={label} title={label}>
+    <button type="button" data-tour="bell" className={`notice-bell ${className}`} onClick={() => useStore.getState().openOverlay({ kind: 'notices' })} aria-label={label} title={label}>
       🔔
       {unread > 0 && <span className="badge badge-dot">{unread > 99 ? '99+' : unread}</span>}
     </button>

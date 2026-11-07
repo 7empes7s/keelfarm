@@ -59,6 +59,33 @@ Touch-only screens keep the phone's layout below 1024 px. Keys, never while typi
 **Alt+1**-**5**) the tabs in the rail's order, **/** the chat's message box, **Esc** closes the open panel, then the
 chat drawer.
 
+### The tour and What's new
+
+Every screen has a short tour, one sentence per step with a ring around the real control, **Next**, **← Back**,
+**Skip tour** and progress dots; where it's harmless a step has a **Try it** (open the bell or search, put a /plan in
+the chat's box without sending it). The 3D office starts it after setup; pocket mode offers it on the Company tab
+(**🧭 Take the tour**). The track follows the screen: the phone's layout, pocket mode on a desktop or the 3D office.
+After an update adds steps, Company (or a card in the 3D office's corner) says **✨ N new things since you last
+looked** and replays only those; this device remembers what it has seen. **✨ What's new** in Settings → Company and
+in every ⓘ sheet brings them back, and **🧭 Replay the tour** starts it over.
+
+The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with its id here:
+
+| Step | Phone | Desktop pocket | 3D office |
+| --- | --- | --- | --- |
+| `look`, `phone`, `phone-tour`, `ceo`, `hires`, `upstairs`, `whiteboard`, `watch`, `office`: walking the building | | | ✓ |
+| `pocket-tabs`: the five tabs | ✓ | ✓ | |
+| `desk-keys`: 1-5, / and 🏢 3D office | | ✓ | |
+| `search`: 🔍 search everything | ✓ | ✓ | ✓ |
+| `guide`: the ✅ guide checklist | ✓ | ✓ | ✓ |
+| `bell`: 🔔 the notification centre | ✓ | ✓ | ✓ |
+| `chat-cards`: starters, / commands, action cards with live steps | ✓ | ✓ | ✓ |
+| `console`: the console's tabs, side menus and search | ✓ | ✓ | ✓ |
+| `charter`: the charter page and its numbers | ✓ | ✓ | ✓ |
+| `costs`: Mission control's cost insights and cards | ✓ | ✓ | ✓ |
+| `info`: every screen's ⓘ | ✓ | ✓ | |
+| `switch`: the 2D office | | | ✓ |
+
 ## Install it
 
 The office is an installable web app: Chrome and Edge offer **Install** in the address bar (on Android: ⋮ → **Add
