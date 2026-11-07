@@ -142,8 +142,9 @@ Do:
   anything) in a ⋯ menu's danger section, then `confirmDialog({ tone: 'danger' })`. Shared ones: `ui/dangerActions.ts`.
 - Keep the primary action visible; at most two or three visible buttons per card, the rest in ⋯.
 - Write labels as verbs ("Let Ada go…", "Close as not planned…"), sentence case, no jargon.
-- Check every screen you change at 360, 390, 430 and 1280 px, light and dark, and add it to `e2e/layout.spec.ts`'s
-  `SCREENS`.
+- Check every screen you change at 360, 390, 430 and 1280 px, light and dark, and add it to the `SCREENS` of its
+  screen's file in `e2e/layout/` (`chat.spec.ts`, `kanban.spec.ts`, `console.spec.ts`, …). New layout tests go in their
+  screen's file, never a catch-all: each stays under 300 lines (the lint ratchet checks it), so parallel PRs don't collide.
 
 Don't:
 - Put a destructive button next to a safe one, or anywhere one tap does it.
@@ -154,7 +155,8 @@ Don't:
 
 ## Checking a screen
 
-`e2e/layout.spec.ts` opens each screen in `SCREENS` at its widths in light and dark, walks its tabs and fails on:
+Each `e2e/layout/<screen>.spec.ts` opens each screen in its `SCREENS` (the checks are `checkScreens` in
+`e2e/layout/helpers.ts`) at its widths in light and dark, walks its tabs and fails on:
 sideways page scroll or an element wider than the viewport (outside a scroller), a button that can't be scrolled
 into view or is covered (`elementFromPoint`), a button under 44×44, anything styled `.btn`/`.ds-btn` under 44 px
 tall, with its label off centre or a different height from the buttons beside it, a destructive button outside a menu, a ⋯ menu

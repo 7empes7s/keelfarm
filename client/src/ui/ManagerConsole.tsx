@@ -8,7 +8,8 @@ import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore } from '../store';
 import { CEO_ID, PLAYBOOK_MAX, type AgentCli, type EffortLevel, type OfficeUpdateView, type RepoView } from '../../../shared/types';
-import { modelSuggestions } from '../../../shared/models';
+import { CLAUDE_MODELS, effectiveModel, modelAfterCliChange } from '../../../shared/models';
+import { ModelMissing, ModelPicker } from './ModelPicker';
 import { CliOptions, CliSelect, cliName, EFFORTS, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
@@ -17,10 +18,11 @@ import { IssueForm } from './KanbanView';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { Menu } from './Menu';
-import { Resume } from './Phone';
+import { Resume, setupLine } from './TeamChanges';
 import { ProjectPicker } from './ProjectPicker';
 import { badgeStatus, StatusPill } from './StatusPill';
 import { agentPhrase } from './statusPhrase';
+import { workerCli } from './floorRows';
 import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
@@ -448,6 +450,7 @@ const NO_SETUP: NewAgent = { name: '', cli: '', model: '', effort: '' };
 function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
+  const models = useStore((s) => s.models);
   const [draft, setDraft] = useState<NewAgent>(NO_SETUP);
   const [busy, setBusy] = useState(false);
   const terminal = settings.runtime === 'terminal';
@@ -465,17 +468,19 @@ function AddAgent({ repo, size }: { repo: RepoView; size: number }) {
     <div className="ds-fields add-agent" id={`add-agent-${repo.floor}`}>
       <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name (optional)" maxLength={24} aria-label={`New agent's name on floor ${repo.floor}`} />
       {terminal && (
-        <select value={draft.cli} onChange={(e) => edit({ cli: e.target.value as AgentCli | '' })} aria-label="New agent's coding agent">
+        <select
+          value={draft.cli}
+          onChange={(e) => {
+            const next = e.target.value as AgentCli | '';
+            edit({ cli: next, model: modelAfterCliChange(draft.model, next || settings.defaultCli, models) });
+          }}
+          aria-label="New agent's coding agent"
+        >
           <option value="">{cliName(clis, settings.defaultCli)} (default)</option>
           <CliOptions clis={clis} />
         </select>
       )}
-      <input value={draft.model} onChange={(e) => edit({ model: e.target.value })} list={`new-agent-models-${repo.floor}`} placeholder="default model" aria-label="New agent's model" />
-      <datalist id={`new-agent-models-${repo.floor}`}>
-        {modelSuggestions(cli).map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
+      <ModelPicker cli={cli} value={draft.model} label="New agent's model" resolvedDefault={effectiveModel('', cli, settings, CLAUDE_MODELS[0])} onChange={(model) => edit({ model })} />
       <select value={draft.effort} onChange={(e) => edit({ effort: e.target.value as EffortLevel | '' })} aria-label="New agent's effort">
         <option value="">default effort ({settings.defaultEffort})</option>
         {EFFORTS.map((x) => (
@@ -497,6 +502,8 @@ export function TeamTab() {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const settings = useStore((s) => s.settings);
+  const clis = useStore((s) => s.clis);
+  const models = useStore((s) => s.models);
   const openOverlay = useStore((s) => s.openOverlay);
   const terminal = settings.runtime === 'terminal';
   const [openLook, setOpenLook] = useState<string | null>(null);
@@ -534,19 +541,29 @@ export function TeamTab() {
                         <StatusPill status={badgeStatus(a)} phrase={agentPhrase(a, { autoAssign: repo.autoAssign })} />
                       </td>
                       <td className="small ds-cell-full roster-doing">
+                        <div className="roster-line">
+                          {setupLine(a, settings, clis, models)} <ModelMissing model={a.model} cli={workerCli(a, settings)} />
+                        </div>
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
                         {a.career && <div className="aw-stats-line">{keyStats(a.career, Date.now())}</div>}
                       </td>
-                      {terminal && (
-                        <td data-label="Coding agent">
-                          <CliSelect agent={a} />
-                        </td>
-                      )}
-                      <td data-label="Model">
-                        <ModelInput agent={a} className="" />
-                      </td>
-                      <td data-label="Effort">
-                        <EffortSelect agent={a} />
+                      <td className="ds-cell-full">
+                        <div className="roster-setup">
+                          {terminal && (
+                            <label className="field" htmlFor={`${a.id}-cli`}>
+                              <span>Coding agent</span>
+                              <CliSelect agent={a} id={`${a.id}-cli`} />
+                            </label>
+                          )}
+                          <label className="field" htmlFor={`${a.id}-model`}>
+                            <span>Model</span>
+                            <ModelInput agent={a} id={`${a.id}-model`} />
+                          </label>
+                          <label className="field" htmlFor={`${a.id}-effort`}>
+                            <span>Effort</span>
+                            <EffortSelect agent={a} id={`${a.id}-effort`} />
+                          </label>
+                        </div>
                       </td>
                       <td className="ds-cell-full">
                         <div className="ds-row-actions">
@@ -567,7 +584,7 @@ export function TeamTab() {
                     </tr>
                     {openLook === a.id && (
                       <tr className="roster-look">
-                        <td className="ds-cell-full" colSpan={terminal ? 6 : 5}>
+                        <td className="ds-cell-full" colSpan={4}>
                           <label className="row small">
                             <span>Drawn as</span>
                             <LookSelect agent={a} />

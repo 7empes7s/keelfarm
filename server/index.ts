@@ -259,6 +259,7 @@ app.get('/api/agents/:id/screen', (req, res) => {
 
 app.patch('/api/settings', route((req) => swarm.updateSettings(req.body ?? {})));
 app.post('/api/tools/refresh', route(() => swarm.refreshTooling()));
+app.post('/api/models/refresh', route(() => swarm.refreshModels()));
 app.post('/api/tools/switch', route((req) => swarm.setToolSwitch(str(req.body?.scope), req.body?.id, req.body?.on)));
 
 // Phone messages read aloud (docs/voice.md). The key goes in and never comes back out.
