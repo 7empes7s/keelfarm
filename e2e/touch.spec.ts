@@ -110,6 +110,29 @@ test('one finger in each half walks and turns at once', async ({ page }) => {
   });
 });
 
+// The thumb zones (#123): the stick in the lower-left corner, the look in the lower-right, both at once.
+const THUMB_WALK = { from: { x: 90, y: 790 }, to: { x: 90, y: 720 } };
+const THUMB_LOOK = { from: { x: 330, y: 560 }, to: { x: 230, y: 560 } };
+
+test('thumbs: the stick in the lower-left and the look in the lower-right work at once', async ({ page }) => {
+  chromiumOnly();
+  const { cdp, from } = await inside(page);
+  await expect(page.getByTestId('stick-ghost')).toBeVisible();
+  await drag(cdp, [THUMB_WALK, THUMB_LOOK], async () => {
+    await expect(page.getByTestId('stick-ghost')).toBeHidden(); // the stick came up under the thumb
+    await expect.poll(() => moved(page, from), { message: 'metres walked', timeout: 60_000 }).toBeGreaterThan(0.1);
+    await expect.poll(() => turned(page, from), { message: 'radians turned', timeout: 60_000 }).toBeGreaterThan(0.1);
+  });
+});
+
+test('thumbs: a tap on the floor above them walks there', async ({ page }) => {
+  chromiumOnly();
+  const { from } = await inside(page);
+  await page.evaluate((yaw) => (window as unknown as { __swarmPlayer: { face: (y: number, p: number) => void } }).__swarmPlayer.face(yaw, -0.6), from.yaw);
+  await page.touchscreen.tap(195, 300);
+  await expect.poll(() => moved(page, from), { message: 'metres walked', timeout: 60_000 }).toBeGreaterThan(0.5);
+});
+
 test('the start screen: Enter the office answers one tap', async ({ page }) => {
   await page.goto('/?pocket=0');
   const enter = page.getByRole('button', { name: 'Enter the office' });

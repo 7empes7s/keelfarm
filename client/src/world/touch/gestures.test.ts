@@ -197,3 +197,20 @@ describe('slopFor', () => {
     expect(slopFor(0)).toBe(GESTURE.minSlopDevicePx);
   });
 });
+
+describe('pinch (#123)', () => {
+  it('two looking fingers moving apart pinch instead of turning', () => {
+    const g = createGestures(2);
+    fingerDown(g, 1, 100, 300, 0, 'look');
+    fingerDown(g, 2, 200, 300, 10, 'look');
+    expect(fingerMove(g, 2, 300, 300)).toEqual([{ type: 'pinch', scale: 2 }]);
+    expect(fingerMove(g, 1, 200, 300)).toEqual([{ type: 'pinch', scale: 0.5 }]);
+  });
+
+  it('a walking finger and a looking one still walk and look', () => {
+    const g = createGestures(2);
+    fingerDown(g, 1, 100, 700, 0, 'stick');
+    fingerDown(g, 2, 300, 700, 10, 'look');
+    expect(types(fingerMove(g, 2, 320, 700))).toEqual(['look']);
+  });
+});

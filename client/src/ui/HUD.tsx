@@ -26,7 +26,8 @@ import { GuideButton } from './GuideCard';
 import { NoticeBell, NoticeToasts } from './Notices';
 import { usageChip } from '../ops';
 import { togglePhoto, usePhotoGate } from '../photo/gate';
-import { isTouch, openHoldMenu, useTouchStick } from '../world/touch/touchState';
+import { isTouch, openHoldMenu, useTouchLook, useTouchStick } from '../world/touch/touchState';
+import { TouchZoneHints } from './TouchZoneHints';
 import { switchOffice } from '../pocket/switchOffice';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
@@ -162,6 +163,7 @@ export function HUD() {
   const centerDot = useA11y((s) => s.prefs.centerDot);
   const walked = useTouchStick((s) => s.walked);
   const looked = useTouchStick((s) => s.looked);
+  const touchClassic = useTouchLook((s) => s.classic);
   // In the overview, the building view and the follow cam there's no crosshair to aim (camera/rig.ts).
   const onFoot = useCameraView((s) => s.mode) === 'first';
 
@@ -248,10 +250,9 @@ export function HUD() {
       )}
       {started && !overlay && !travel && onFoot && <HeldHint />}
       {started && !overlay && !locked && !travel && onFoot && !isTouch && <div className="hud-resume">Click to look around</div>}
-      {started && !overlay && !travel && onFoot && isTouch && !looked && <div className="touch-zone-hint touch-zone-look">Drag here to look</div>}
-      {started && !overlay && !travel && onFoot && isTouch && !walked && <div className="touch-zone-hint touch-zone-move">Drag here to move</div>}
+      {started && !overlay && !travel && onFoot && isTouch && <TouchZoneHints walked={walked} looked={looked} />}
       {started && !(settings.setupDone && settings.tutorialStep >= 0) && isTouch && (
-        <div className="hud-help">Drag low to walk (far to run) · drag high to look · tap to use · hold, then let go, for more · 📱 for the phone</div>
+        <div className="hud-help">{touchClassic ? 'Drag low to walk (far to run) · drag high to look' : 'Thumb on the ghost stick walks (far to run) · the other bottom corner looks · tap things to go there'} · hold, then let go, for more · 📱 for the phone</div>
       )}
       {started && !(settings.setupDone && settings.tutorialStep >= 0) && !isTouch && (
         <div className="hud-help">

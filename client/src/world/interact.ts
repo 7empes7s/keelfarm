@@ -24,6 +24,20 @@ export function pickFocus(ray: THREE.Raycaster): Focus | null {
   return null;
 }
 
+/** What `ray` lands on first among the interactables within `far`, in range or not: a tap's target to walk up to. */
+export function pickFar(ray: THREE.Raycaster, far: number): { focus: Focus; point: THREE.Vector3; range: number } | null {
+  ray.far = far;
+  for (const h of ray.intersectObjects([...interactables.keys()], true)) {
+    let o: THREE.Object3D | null = h.object;
+    while (o && !interactables.has(o)) o = o.parent;
+    if (!o) continue;
+    const info = interactables.get(o)!;
+    const focus = info.pick?.(h.point, o) ?? { id: info.id, label: info.label, action: info.action };
+    return focus && { focus, point: h.point.clone(), range: info.range };
+  }
+  return null;
+}
+
 export function useInteractable<T extends THREE.Object3D>(focus: Focus | null, range = 3.2, pick?: Pick) {
   const ref = useRef<T>(null);
   const key = focus ? `${focus.id}|${focus.label}` : '';
