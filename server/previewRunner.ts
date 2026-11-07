@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { depsCurrent, INSTALL_TIMEOUT_MS, killTree, readDeps, writeMarker } from './deps.ts';
-import { git } from './exec.ts';
+import { git, run } from './exec.ts';
+import type { ProcInfo } from './previewPids.ts';
 import * as workspace from './workspace.ts';
 
 // A floor's app, run for the preview monitor: checked out in its own worktree (never the floor's main checkout,
@@ -33,6 +34,8 @@ export interface PreviewCallbacks {
   status(status: 'preparing' | 'installing' | 'starting' | 'running'): void;
   commit(sha: string): void;
   log(lines: string[]): void;
+  /** The app's process started (detached: its pid is its process group), for the office to own it across restarts. */
+  spawned?(pid: number): void;
   /** The run ended by itself: failed to start, or the app exited. unconfigured: there was nothing to run. */
   failed(message: string, unconfigured?: boolean): void;
 }
@@ -46,6 +49,12 @@ export interface PreviewBackend {
   start(job: PreviewJob, cb: PreviewCallbacks): PreviewHandle;
   /** Whether there is something to run with no command set (a package.json in the floor's checkout). */
   hasDefault(fullName: string): Promise<boolean>;
+  /** The process listening on a port, or null (#225). */
+  portOwner(port: number): Promise<ProcInfo | null>;
+  /** A process as the OS describes it now, or null when it's gone. */
+  proc(pid: number): Promise<ProcInfo | null>;
+  /** Kill a process's group (its tree on Windows). */
+  kill(p: Pick<ProcInfo, 'pid' | 'pgid'>): Promise<void>;
 }
 
 /** Replace {port} and {tmp}. */
@@ -168,6 +177,7 @@ class RealPreview implements PreviewHandle {
     const cmd = fillPlaceholders(command, job.port, tmp);
     cb.log([`$ ${cmd}`]);
     const exited = this.spawn(cmd, wt, env);
+    if (this.child?.pid) cb.spawned?.(this.child.pid);
     const deadline = Date.now() + START_TIMEOUT_MS;
     let exitCode: number | null | undefined;
     void exited.then((code) => (exitCode = code));
@@ -235,6 +245,63 @@ class RealPreview implements PreviewHandle {
   }
 }
 
+// ---------- the processes on preview ports (#225) ----------
+
+/** What Windows says about a process (or the one listening on a port): "pid|parent|name|created ms". */
+const winProc = (select: string) => `
+$ErrorActionPreference = 'SilentlyContinue'
+$id = ${select}
+$p = if ($id) { Get-CimInstance Win32_Process -Filter "ProcessId=$id" }
+if ($p) { "$($p.ProcessId)|$($p.ParentProcessId)|$($p.Name)|$([int64](($p.CreationDate.ToUniversalTime() - [datetime]'1970-01-01').TotalMilliseconds))" }`;
+
+async function winInfo(select: string): Promise<ProcInfo | null> {
+  const out = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', winProc(select)], { timeoutMs: 30_000 }).catch(() => '');
+  const [pid, parent, name, created] = out.trim().split('|');
+  if (!Number(pid)) return null;
+  return { pid: Number(pid), pgid: Number(parent) || Number(pid), command: name || '?', startedAt: Number(created) || null, cwd: null };
+}
+
+/** A process from ps (pgid, start, command) and, on Linux, its working folder from /proc. */
+async function procInfo(pid: number): Promise<ProcInfo | null> {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (process.platform === 'win32') return winInfo(String(pid));
+  const out = await run('ps', ['-o', 'pgid=,lstart=,comm=', '-p', String(pid)]).catch(() => '');
+  const m = out.trim().match(/^(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/);
+  if (!m) return null;
+  const cwd = process.platform === 'linux' ? await fs.readlink(`/proc/${pid}/cwd`).catch(() => null) : null;
+  return { pid, pgid: Number(m[1]), command: path.basename(m[3].trim()), startedAt: Date.parse(m[2]) || null, cwd };
+}
+
+async function portOwner(port: number): Promise<ProcInfo | null> {
+  if (process.platform === 'win32') return winInfo(`(Get-NetTCPConnection -LocalPort ${port} -State Listen | Select-Object -First 1).OwningProcess`);
+  const lsof = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t']).catch(() => '');
+  let pid = Number(lsof.trim().split(/\s+/)[0]);
+  if (!pid) pid = Number((await run('ss', ['-ltnpH', `sport = :${port}`]).catch(() => '')).match(/pid=(\d+)/)?.[1]);
+  return pid ? procInfo(pid) : null;
+}
+
+let ownGroup: Promise<number | null> | null = null;
+
+/** Kill a process group, never the office's own (then only the process); a process tree on Windows. */
+async function killProc(p: Pick<ProcInfo, 'pid' | 'pgid'>): Promise<void> {
+  if (p.pid === process.pid) return;
+  if (process.platform === 'win32') {
+    await run('taskkill', ['/PID', String(p.pid), '/T', '/F']).catch(() => undefined);
+    return;
+  }
+  ownGroup ??= procInfo(process.pid).then((x) => x?.pgid ?? null);
+  const group = p.pgid > 1 && p.pgid !== (await ownGroup);
+  try {
+    process.kill(group ? -p.pgid : p.pid, 'SIGKILL');
+  } catch {
+    try {
+      process.kill(p.pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+  }
+}
+
 export const realPreviews: PreviewBackend = {
   start: (job, cb) => new RealPreview(job, cb),
   hasDefault: async (fullName) =>
@@ -242,6 +309,9 @@ export const realPreviews: PreviewBackend = {
       .access(path.join(workspace.mainDir(fullName), 'package.json'))
       .then(() => true)
       .catch(() => false),
+  portOwner,
+  proc: procInfo,
+  kill: killProc,
 };
 
 /** The preview desks in a floor's desks folder (desks/preview, desks/preview-pr-N) and their size on disk (#204). */

@@ -14,6 +14,8 @@ import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
 import { DEMO_DECISION_MESSAGES, DEMO_REASK } from '../demoDecisions.ts';
 import type { SampleFloor } from '../chatSample.ts';
+import { designDecision } from '../../shared/designs.ts';
+import type { ProposeDesignInput } from '../designTool.ts';
 
 export abstract class SwarmTeam extends SwarmUpkeep {
   // ---------- team changes ----------
@@ -354,6 +356,7 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     this.postMessage('ceo', DEMO_REASK.reAsk);
     this.postMessage('manager', DEMO_REASK.answer, undefined, { replyTo: asked.id, delivery: 'read' });
     for (const text of DEMO_DECISION_MESSAGES) this.postMessage('ceo', text);
+    void this.backend.demoDesign?.().then((a) => this.proposeDesign(a)).catch(() => undefined); // and a design proposal (#209)
     for (const kind of ['hire', 'let-go']) {
       try {
         return void this.demoPropose(kind);
@@ -361,6 +364,17 @@ export abstract class SwarmTeam extends SwarmUpkeep {
         // no floor has room for this one: try the other
       }
     }
+  }
+
+  /** propose_design (#209): the options' shots into the files store, the proposal in the chat, an open 'design' decision. */
+  protected async proposeDesign(x: ProposeDesignInput) {
+    const repo = this.floorRepo(x.floor);
+    const options = [];
+    for (const o of x.options) options.push({ label: o.label.trim(), shots: await this.ceoFiles.addShots(o.shots), previewUrl: o.previewUrl ?? null });
+    const m = this.postMessage('ceo', `🎨 ${x.title}: ${x.question} (${options.length} options with screenshots in Approvals)`);
+    const d = designDecision({ floor: repo.floor, title: x.title, question: x.question, issue: x.issue ?? null, options, repoId: repo.id }, m.id, m.at);
+    this.setDecisions([...this.state.decisions.list, d]);
+    return `Proposed "${x.title}" as decision ${d.id}: it waits in the manager's Approvals, and their pick comes back as a reply to message ${m.id}.`;
   }
 
   /** resolve_decision: the CEO closes one the manager answered in words, or one a newer question replaced. */
