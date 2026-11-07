@@ -20,7 +20,7 @@ describe("a fresh demo office's chat", () => {
   it('has the reactions sample and the edits next to the open decisions', { timeout: 60_000 }, async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     for (const m of ['log', 'warn', 'info'] as const) vi.spyOn(console, m).mockImplementation(() => undefined);
-    const swarm = new Swarm(createDemoBackend({ floors: 1, agents: 2 }));
+    const swarm = new Swarm(createDemoBackend());
     const init = swarm.init();
     await vi.advanceTimersByTimeAsync(5_000);
     await init;
@@ -38,6 +38,7 @@ describe("a fresh demo office's chat", () => {
       ['Did you raise the limit, or shall I drop the Windows CI job?', 'open'],
       ['Raised the limit or drop the Windows CI job?', 'superseded'],
     ]); // #183's phone, the older one replaced
+    expect(payment.map((d) => d.repoIds)).toEqual([['demo-co/recipe-box'], ['demo-co/recipe-box']]); // both on floor 3
 
     const ids = messages.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
