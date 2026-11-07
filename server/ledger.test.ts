@@ -175,7 +175,8 @@ describe('careers', () => {
     run(s, { kind: 'rig', agentId: 'ada', cli: 'claude', model: 'opus', effort: 'high', at: NOON });
     expect(run(s, { kind: 'rig', agentId: 'ada', cli: 'claude', model: 'opus', effort: 'high', at: NOON + 1 }).changed).toBe(false);
     run(s, { kind: 'rig', agentId: 'ada', cli: 'claude', model: 'sonnet', effort: 'high', at: NOON + 2 });
-    expect(s.careers.ada.rig).toEqual({ cli: 'claude', model: 'sonnet', effort: 'high', since: NOON + 2 });
+    expect(s.careers.ada.rig).toEqual(['claude', 'sonnet', 'high', NOON + 2]);
+    expect(loadLedger(JSON.parse(JSON.stringify(s))).careers.ada.rig).toEqual(['claude', 'sonnet', 'high', NOON + 2]);
   });
 
   it('time issues from the build to the merge (#205)', () => {

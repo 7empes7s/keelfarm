@@ -112,6 +112,7 @@ describe('usage and cost (#205)', () => {
   it('reads an older career with its numbers kept and the new fields empty', () => {
     const old = legacyCareer({ since: NOW - DAY_MS, merged: 7, costUsd: 3.5, recent: [{ n: 1, title: 'x', at: NOW }], bySpecialty: { dev: 1 }, hires: 'two' });
     expect(old).toEqual({ ...newCareer(NOW - DAY_MS), merged: 7, costUsd: 3.5, recent: [{ n: 1, title: 'x', at: NOW }] });
+    expect(legacyCareer({ rig: ['claude', 'opus', 'high', NOW] }).rig).toEqual(['claude', 'opus', 'high', NOW]); // a replay keeps what they run
   });
 });
 

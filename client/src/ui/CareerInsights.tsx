@@ -17,9 +17,10 @@ const pctText = (x: number | null) => (x === null ? '—' : `${Math.round(x * 10
 /** "Claude Code · opus · high, since 3d ago": what they run. */
 export function rigText(c: CareerView, clis: Parameters<typeof cliName>[0], now: number, short = false): string {
   if (!c.rig) return '—';
-  const model = c.rig.model.replace(/^claude-/, '') || 'default model';
-  const what = short ? model : [cliName(clis, c.rig.cli as Parameters<typeof cliName>[1]), model, c.rig.effort || 'default effort'].join(' · ');
-  return short ? what : `${what}, for ${durationText(Math.max(60_000, now - c.rig.since))}`;
+  const [cli, rawModel, effort, since] = c.rig;
+  const model = rawModel.replace(/^claude-/, '') || 'default model';
+  const what = short ? model : [cliName(clis, cli as Parameters<typeof cliName>[1]), model, effort || 'default effort'].join(' · ');
+  return short ? what : `${what}, for ${durationText(Math.max(60_000, now - since))}`;
 }
 
 /** Tokens when their coding agent reports them, else turns. */

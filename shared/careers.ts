@@ -50,8 +50,8 @@ export interface CareerView {
   toMerge: number[];
   /** The last WEEKS weeks with any work, oldest first, as rows (weekRow): the sparklines and this week's cost. */
   weeks: WeekRow[];
-  /** The coding agent, model and effort they run now, and since when (#198 lets them change). */
-  rig: { cli: string; model: string; effort: string; since: number } | null;
+  /** The coding agent, model and effort they run now, and since when (#198 lets them change); a row, to keep the snapshot small. */
+  rig: [cli: string, model: string, effort: string, since: number] | null;
 }
 
 /** One week of an agent's work (#205). */
@@ -104,7 +104,7 @@ export function legacyCareer(raw: Record<string, unknown>): CareerView {
   const into = out as unknown as Record<string, unknown>;
   for (const [k, d] of Object.entries(into)) {
     const v = raw[k];
-    if (Array.isArray(d) ? Array.isArray(v) : typeof v === typeof d && v !== null && !Array.isArray(v)) into[k] = v;
+    if (Array.isArray(d) ? Array.isArray(v) : d === null ? Array.isArray(v) : typeof v === typeof d && v !== null && !Array.isArray(v)) into[k] = v;
   }
   return out;
 }

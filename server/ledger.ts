@@ -355,8 +355,8 @@ export function apply(s: LedgerState, ev: LedgerEvent): Effects {
     case 'rig': {
       const c = s.careers[ev.agentId];
       const r = c?.rig;
-      if (!c || (r && r.cli === ev.cli && r.model === ev.model && r.effort === ev.effort)) break;
-      c.rig = { cli: ev.cli, model: ev.model, effort: ev.effort, since: ev.at };
+      if (!c || (r && r[0] === ev.cli && r[1] === ev.model && r[2] === ev.effort)) break;
+      c.rig = [ev.cli, ev.model, ev.effort, ev.at];
       careerOf(s, ev.agentId, out);
       out.changed = true;
       break;
@@ -587,8 +587,8 @@ function loadCareer(x: Record<string, unknown>): CareerView {
   c.rehired = c.rehired.filter((t): t is number => typeof t === 'number').slice(0, RECENT_KEEP);
   c.weeks = c.weeks.filter((r): r is number[] => Array.isArray(r) && r.length > 0 && r.every((n) => typeof n === 'number'));
   if (!Array.isArray(x.weeks)) for (const at of c.week) addWeek(c, at, { merged: 1 }); // a record from before #205: its merges' weeks
-  const rig = obj(c.rig);
-  c.rig = typeof rig.cli === 'string' ? { cli: rig.cli, model: String(rig.model ?? ''), effort: String(rig.effort ?? ''), since: num(rig.since) } : null;
+  const rig: unknown[] = c.rig ?? [];
+  c.rig = typeof rig[0] === 'string' ? [rig[0], String(rig[1] ?? ''), String(rig[2] ?? ''), num(rig[3])] : null;
   c.hires = Math.max(1, c.hires);
   return c;
 }

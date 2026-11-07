@@ -77,7 +77,7 @@ export function sampleCareers(agentIds: string[], now: number): Record<string, C
       week,
       recent,
       toPr: s.toPr.map((m) => m * MIN),
-      toMerge: s.toPr.map((m) => (m * 2.6 + 25) * MIN),
+      toMerge: s.toPr.map((m) => Math.round((m * 2.6 + 25) * MIN)),
       hires: 1 + (s.rehired?.length ?? 0),
       rehired: (s.rehired ?? []).map((d) => now - d * DAY_MS),
       served: (s.served ?? 0) * DAY_MS,
@@ -86,7 +86,7 @@ export function sampleCareers(agentIds: string[], now: number): Record<string, C
       wasteUsd: Math.round(s.costUsd * s.waste * 100) / 100,
       workMs,
       weeks: sampleWeeks(s, now),
-      rig: { cli: s.rig[0], model: s.rig[1], effort: s.rig[2], since: now - Math.min(s.days, 4) * DAY_MS },
+      rig: [...s.rig, now - Math.min(s.days, 4) * DAY_MS],
     };
   });
   return out;
