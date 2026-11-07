@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_TEST_LAB } from '../shared/testLab.ts';
 import { heldNote } from '../shared/health.ts';
+import { demoPrDiff } from './demoReads.ts';
 import { admission, browserTreeMb } from './health.ts';
 import { fullQualityLine, needsFullQualityPass } from './qaPrompt.ts';
 import { LAB_BROWSER_MAX_MB, labInitScript, labLaunchArgs, pickNext, restartBrowser, TestLab, type LabRunner, type Requester } from './testLab.ts';
@@ -124,5 +125,11 @@ describe('a PR that changes 3D code needs a full-quality pass (#301)', () => {
     expect(fullQualityLine(['client/src/world/Desk.tsx'], false)).toBe('');
     expect(fullQualityLine(['server/swarm.ts'], true)).toBe('');
     expect(fullQualityLine(null, true)).toBe('');
+  });
+
+  it("shows in the demo: a visual feature's PR changes 3D code, others don't", () => {
+    const files = (title: string) => demoPrDiff({ title, additions: 40, deletions: 4 }, false).files.map((f) => f.path);
+    expect(needsFullQualityPass(files('Empty state illustration'))).toBe(true);
+    expect(needsFullQualityPass(files('Keyboard shortcuts'))).toBe(false);
   });
 });
