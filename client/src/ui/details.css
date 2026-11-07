@@ -141,6 +141,9 @@
 .dp-section.dp-bad {
   border-left: 6px solid var(--ds-bad-fill);
 }
+.dp-section.dp-warn {
+  border-left: 6px solid var(--ds-warn-fill);
+}
 .dp-h {
   margin: 0;
   font-size: var(--ds-text-md);
