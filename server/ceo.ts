@@ -46,7 +46,7 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   const same = q.findIndex(
     (j) =>
       j.kind === job.kind &&
-      (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
+      (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || job.kind === 'changes' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
   );
   if (same < 0) q.push(job);
   else if (job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
@@ -54,7 +54,7 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
 }
 
-const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, changes: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
 
 /** The CEO's next job among those `ready`: replies to the manager first (#46: a preempted job never comes before the reply), then triage, reviews and follow-ups last. */
 export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
@@ -175,6 +175,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
+  stopAgent(a: { agent_id: string; reason: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
   answerAgent(a: { agent_id: string; text: string }): Promise<string>;
   askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
@@ -438,6 +439,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.restartAgent(a)),
     ),
     tool(
+      'stop_agent',
+      "Stop an agent's running session, e.g. when the manager closed the issue or PR they work on. Their desk is cleared once it ends.",
+      { agent_id: z.string().describe('An id (or name) from company_status'), reason: z.string().min(1).max(200).describe('Why, in a few words: shown on their card') },
+      (a) => run(() => h.stopAgent(a)),
+    ),
+    tool(
       'message_agent',
       'Send guidance into an agent\'s session, e.g. "the test is flaky, rerun it". Typed in after their current step if they are working, else their session resumes with it. Only to an agent on the floor you name.',
       { floor: z.number().int(), agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000) },
@@ -580,6 +587,7 @@ export function ceoSystemPrompt(o: {
     '- Charters: each issue names its objective ("Objective: O2"); ask the manager before filing a non-goal. Change charters only with propose_charter.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
+    "- The manager's board actions never stop agents: you stop_agent, redirect or let finish the work they touched.",
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
@@ -600,6 +608,8 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       return researchPrompt(job.topic ?? '', floor, researchMin);
     case 'followup':
       return followupPrompt(job.events ?? [], mandates);
+    case 'changes':
+      return 'The manager changed work agents are still running (below). For each agent still on it: read agent_log, then stop_agent (the work is no longer wanted), message_agent (redirect it) or let them finish. Your final message: one line per agent, stopped, redirected or let finish, and why.';
     case 'triage':
       if (!floor || !pr) return `Pull request #${job.prNumber ?? '?'} no longer needs triage. Reply "Nothing to do."`;
       return [
@@ -680,6 +690,8 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
       return `Following up on ${followupLabel(job.events ?? [])}`;
     case 'research':
       return `Researching "${short(job.topic ?? '')}"`;
+    case 'changes':
+      return 'Looking at your changes';
   }
 }
 

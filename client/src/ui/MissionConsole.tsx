@@ -8,6 +8,7 @@ import { CostsSection } from './CostsSection';
 import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
 import { FloorProgress } from './FloorProgress';
+import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { HealthStrip } from './HealthStrip';
@@ -353,6 +354,7 @@ export function OpsTab({ card }: { card?: string }) {
           <AlarmCard key={a.id} alarm={a} repo={repos.find((r) => r.id === a.repoId)} hot={a.id === card} />
         ))}
         <DoctorSection hot={card === 'doctor'} />
+        <ManagerChangesCard />
       </div>
       <div>
         <FloorProgress />

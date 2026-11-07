@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HireRequestView, PullInfo, QaStatus, QaView, RepoView } from '../../../shared/types';
 import type { Agent, KanbanCard, KanbanColumns } from '../store';
-import { agentActions, approvalsBadge, assignChoices, doing, pipelineOf, waitingOnYou } from './pocketData';
+import { agentActions, approvalsBadge, assignChoices, ceoChatHint, doing, pipelineOf, railTabs, waitingOnYou } from './pocketData';
 
 const qa = (prNumber: number, status: QaStatus, extra: Partial<QaView> = {}) => ({ repoId: 'acme/app', prNumber, status, ceoLooking: false, updatedAt: prNumber, ...extra }) as QaView;
 const card = (n: number, rec?: QaView): KanbanCard => ({ key: `k${n}`, number: n, title: `T${n}`, qa: rec });
@@ -67,5 +67,21 @@ describe('what waits on the manager', () => {
     expect(w.ready.map((s) => s.qa.prNumber)).toEqual([3]);
     expect(approvalsBadge(w)).toBe(2); // the proposal and #1; the CEO is still on #2
     expect(waitingOnYou([repo(true, pr(3))], { c: qa(3, 'passed') }, []).ready).toEqual([]); // it merges itself
+  });
+});
+
+describe('the tabs per layout (#214)', () => {
+  it('has the chat as a tab on a phone, and only pages in the rail wide (the chat opens from the header)', () => {
+    expect(railTabs('compact')).toEqual(['company', 'chat', 'kanban', 'team', 'approvals']);
+    expect(railTabs('medium')).toEqual(['company', 'kanban', 'team', 'approvals']);
+    expect(railTabs('expanded')).toEqual(['company', 'kanban', 'team', 'approvals']);
+  });
+
+  it("says what the CEO is doing and their last message, cut short, in the chat button's hint", () => {
+    expect(ceoChatHint('Mimoun', 'Free', undefined, '/')).toBe('Chat with Mimoun (/) · Free');
+    const hint = ceoChatHint('Mimoun', 'Triage', 'x'.repeat(100), '/');
+    expect(hint).toContain('Chat with Mimoun (/) · Triage\n“');
+    expect(hint.endsWith('…”')).toBe(true);
+    expect(hint.length).toBeLessThan(120);
   });
 });
