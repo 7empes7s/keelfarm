@@ -1718,7 +1718,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo) and pinned notes (ceoMemory.ts)
+  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].split('\n\nOpen decisions from the last 24 h')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo), open decisions (#208) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage

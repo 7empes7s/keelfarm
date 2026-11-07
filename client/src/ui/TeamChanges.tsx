@@ -4,6 +4,7 @@ import { pendingRequests, useStore } from '../store';
 import type { AgentCli, CliView, EffortLevel, HireRequestView, MachineHost, ModelCatalogView, SwarmSettings } from '../../../shared/types';
 import { Markdown } from './Markdown';
 import { DecisionList } from './Decisions';
+import { DecisionLog } from './DecisionLog';
 import { CLAUDE_MODELS, effectiveModel, labelOf, modelAfterCliChange } from '../../../shared/models';
 import { ModelPicker } from './ModelPicker';
 import { attempt, Avatar } from './phoneParts';
@@ -229,6 +230,7 @@ export function TeamChanges({ focusId }: { focusId?: string }) {
         <Resume key={r.id} req={r} highlight={r.id === focusId} />
       ))}
       <DecisionList heading={(t) => <h3 className="phone-h">{t}</h3>} />
+      <DecisionLog heading={(t) => <h3 className="phone-h">{t}</h3>} />
       {demo && (
         <div className="row wrap">
           <span className="muted small">Demo:</span>

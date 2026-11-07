@@ -12,6 +12,16 @@ type DecisionKind = 'suggestion' | 'question' | 'team' | 'charter' | 'design';
 type DecisionStatus = 'open' | 'resolved' | 'dropped' | 'archived' | 'superseded';
 /** What a suggestion is about: when every one of them is gone (closed, merged, left), so is the question. */
 export type DecisionAbout = { kind: 'issue'; repoId: string; number: number } | { kind: 'agent'; agentId: string };
+/** How a decision closed (#208), for the decision log. Decisions saved before it have none. */
+type DecisionClosedBy =
+  | { kind: 'option'; messageId: number } // the manager tapped or typed one of its options, in message messageId
+  | { kind: 'reply'; messageId: number; to: number } // the manager replied to message `to` (the one that asked)
+  | { kind: 'reask'; messageId: number; via: string } // the manager answered its re-ask, or the question it re-asks (`via`)
+  | { kind: 'confirmed'; done: string } // the manager confirmed a "probably answered"
+  | { kind: 'ceo' } // the CEO's resolve_decision
+  | { kind: 'action'; done: string; link?: DecisionAbout } // the CEO did what it asked
+  | { kind: 'dropped' }
+  | { kind: 'auto' }; // decided elsewhere, what it was about is gone, replaced, or a week without an answer
 
 export interface Decision {
   id: string; // msg:<message id> · ask:<question id> · team:<request id> · charter:<repo id>:<proposed at>
@@ -30,6 +40,11 @@ export interface Decision {
   closedAt: number | null;
   outcome: string | null; // the answer, or why it closed
   design?: DesignProposal; // kind 'design': the options and their screenshots (#209, shared/designs.ts)
+  /** The earlier open question this one asks again (#208): answering either closes both. */
+  reAskOf?: string;
+  /** A CEO action that probably answered it (#208): it stays open until the manager or the CEO says so. */
+  probably?: { done: string; at: number; link?: DecisionAbout };
+  closedBy?: DecisionClosedBy;
 }
 
 export interface DecisionsState {
@@ -49,6 +64,9 @@ const KEEP_CLOSED = 50;
 const QUESTION_MAX = 140;
 const CONTEXT_MAX = 400;
 const OUTCOME_MAX = 200;
+const DAY_MS = 24 * 3_600_000;
+/** Closed ones the tabs get for the decision log: the last week's, at most this many. */
+const LOG_MAX = 30;
 
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 const plain = (s: string) => s.replace(/^\s*#+\s+/, '').replace(/[*_`>|]/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim();
@@ -88,9 +106,19 @@ const words = (s: string) => norm(s).split(' ').filter((w) => w.length >= 4 && !
  * when neither names one, a stronger match) and ask much the same: two words in common between their questions and
  * options (three with no floor), and three in common overall (four, or a third of the shorter one's).
  */
+const key = (a: DecisionAbout) => (a.kind === 'issue' ? `${a.repoId}#${a.number}` : `@${a.agentId}`);
+const sharesAbout = (a: readonly DecisionAbout[], b: readonly DecisionAbout[]) => {
+  const keys = new Set(b.map(key));
+  return a.some((x) => keys.has(key(x)));
+};
+const shared = (a: string, b: string) => {
+  const bs = new Set(words(b));
+  return new Set(words(a).filter((w) => bs.has(w))).size;
+};
+const askedText = (d: Decision) => `${d.question} ${d.options.join(' ')}`;
+
 function supersedes(newer: Decision, older: Decision): boolean {
   if (older.kind !== 'suggestion' || older.status !== 'open' || newer.id === older.id) return false;
-  const key = (a: DecisionAbout) => (a.kind === 'issue' ? `${a.repoId}#${a.number}` : `@${a.agentId}`);
   const about = new Set(older.about.map(key));
   const scope = newer.about.some((a) => about.has(key(a))) || newer.repoIds.some((r) => older.repoIds.includes(r));
   const unscoped = [newer, older].every((d) => !d.repoIds.length && !d.about.length);
@@ -104,11 +132,49 @@ function supersedes(newer: Decision, older: Decision): boolean {
   return sharedAsked >= (scope ? 2 : 3) && shared >= 3 && (shared >= 4 || shared >= Math.min(a.size, b.size) / 3);
 }
 
+// Answers every option list has: never what links two questions.
+const OPTION_STOP = new Set('drop skip keep later wait sure fine okay leave stop start pause both none'.split(' '));
+
+/**
+ * A newer question asks an older one again (#208) when the older is still open and asked in the last day, they are on
+ * the same floors (or neither names one), and they share a thing (an issue or an agent), an option keyword, or three
+ * words in all.
+ */
+function reAsks(newer: Decision, older: Decision, now: number): boolean {
+  if (older.kind !== 'suggestion' || older.status !== 'open' || newer.id === older.id || now - older.lastAskedAt > DAY_MS) return false;
+  const floors = newer.repoIds.length || older.repoIds.length ? newer.repoIds.some((r) => older.repoIds.includes(r)) : true;
+  if (!floors) return false;
+  if (sharesAbout(newer.about, older.about)) return true;
+  const opts = new Set(words(older.options.join(' ')).filter((w) => !OPTION_STOP.has(w)));
+  if (words(newer.options.join(' ')).some((w) => opts.has(w))) return true;
+  return shared(`${askedText(newer)} ${newer.context ?? ''}`, `${askedText(older)} ${older.context ?? ''}`) >= 3;
+}
+
+/** A decision and every one linked to it by re-asks, either way. */
+function linked(list: readonly Decision[], id: string): Set<string> {
+  const ids = new Set([id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const d of list) {
+      if (!d.reAskOf || ids.has(d.id) === ids.has(d.reAskOf)) continue;
+      ids.add(d.id);
+      ids.add(d.reAskOf);
+      grew = true;
+    }
+  }
+  return ids;
+}
+
 /** Loads saved decisions, dropping malformed ones. */
 export function loadDecisions(raw: unknown): DecisionsState {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<DecisionsState>;
   const list = Array.isArray(r.list) ? r.list.filter((d): d is Decision => !!d && typeof d.id === 'string' && typeof d.question === 'string' && Array.isArray(d.options) && Array.isArray(d.about)) : [];
-  return { list, digestAt: Number(r.digestAt) || 0 };
+  // Saved before #208: no closedBy (the log reads its status), and nothing malformed carried over.
+  const clean = (d: Decision): Decision => {
+    const { closedBy, probably, reAskOf, ...rest } = d;
+    return { ...rest, ...(typeof reAskOf === 'string' && { reAskOf }), ...(probably && typeof probably.done === 'string' && { probably }), ...(closedBy && typeof closedBy.kind === 'string' && { closedBy }) };
+  };
+  return { list: list.map(clean), digestAt: Number(r.digestAt) || 0 };
 }
 
 /** A CEO message with suggestions becomes an open decision, or raises the open one with the same options again. */
@@ -124,24 +190,115 @@ export function fromCeoMessage(list: Decision[], m: PhoneMessage, now: number): 
   const refs = m.refs ?? [];
   const about = refs.flatMap((r): DecisionAbout[] => (r.kind === 'issue' ? [{ kind: 'issue', repoId: r.repoId, number: r.number }] : r.kind === 'agent' ? [{ kind: 'agent', agentId: r.agentId }] : []));
   const repoIds = [...new Set(refs.flatMap((r) => ('repoId' in r ? [r.repoId] : [])))];
-  const d: Decision = { id, kind: 'suggestion', question, context, options: [...m.suggestions], repoIds, about, messageId: m.id, askedAt: now, lastAskedAt: now, raised: 1, status: 'open', snoozedUntil: null, closedAt: null, outcome: null };
-  return [...list.map((x) => (supersedes(d, x) ? close(x, 'superseded', `replaced by "${question}"`, now) : x)), d];
+  const fresh: Decision = { id, kind: 'suggestion', question, context, options: [...m.suggestions], repoIds, about, messageId: m.id, askedAt: now, lastAskedAt: now, raised: 1, status: 'open', snoozedUntil: null, closedAt: null, outcome: null };
+  const earlier = list.filter((x) => reAsks(fresh, x, now)).sort((a, b) => b.lastAskedAt - a.lastAskedAt)[0];
+  const d = earlier ? { ...fresh, reAskOf: earlier.id } : fresh;
+  return [...list.map((x) => (supersedes(d, x) ? close(x, 'superseded', `replaced by "${question}"`, now, { kind: 'auto' }) : x)), d];
 }
 
-/** The manager's message answers the open decisions it replies to, or whose option it says word for word. */
+/**
+ * The manager's message answers the decisions it replies to, or whose option it says word for word, and every one
+ * linked to those by re-asks (#208): a reply to a question that was asked again closes the re-ask too, and the other way.
+ */
 export function onManagerMessage(list: Decision[], m: PhoneMessage, now: number): Decision[] {
   if (m.from !== 'manager' || !m.text.trim()) return list;
   const said = norm(m.text);
-  const answers = (d: Decision) => d.status === 'open' && ((d.messageId !== null && d.messageId === m.replyTo) || ((d.kind === 'suggestion' || d.kind === 'question') && d.options.some((o) => norm(o) === said)));
-  if (!list.some(answers)) return list;
-  return list.map((d) => (answers(d) ? close(d, 'resolved', m.text, now) : d));
+  const replied = (d: Decision) => d.messageId !== null && d.messageId === m.replyTo;
+  const picked = (d: Decision) => d.status === 'open' && (d.kind === 'suggestion' || d.kind === 'question') && d.options.some((o) => norm(o) === said);
+  const direct = new Map<string, DecisionClosedBy>();
+  for (const d of list) {
+    if (replied(d)) direct.set(d.id, { kind: 'reply', messageId: m.id, to: m.replyTo! });
+    else if (picked(d)) direct.set(d.id, { kind: 'option', messageId: m.id });
+  }
+  const via = new Map<string, string>();
+  for (const hit of direct.keys()) for (const id of linked(list, hit)) if (!direct.has(id) && !via.has(id)) via.set(id, hit);
+  let changed = false;
+  const out = list.map((d) => {
+    const by = direct.get(d.id) ?? (via.has(d.id) ? { kind: 'reask' as const, messageId: m.id, via: via.get(d.id)! } : null);
+    if (d.status !== 'open' || !by) return d;
+    changed = true;
+    return close(d, 'resolved', m.text, now, by);
+  });
+  return changed ? out : list;
 }
 
-const close = (d: Decision, status: Exclude<DecisionStatus, 'open'>, outcome: string, now: number): Decision => ({ ...d, status, closedAt: now, snoozedUntil: null, outcome: clip(plain(outcome), OUTCOME_MAX) || null });
+const close = (d: Decision, status: Exclude<DecisionStatus, 'open'>, outcome: string, now: number, closedBy: DecisionClosedBy): Decision => {
+  const { probably: _, ...rest } = d;
+  return { ...rest, status, closedAt: now, snoozedUntil: null, outcome: clip(plain(outcome), OUTCOME_MAX) || null, closedBy };
+};
 
 /** Resolves or supersedes (the CEO's resolve_decision) or drops (the manager's Drop it) an open decision. */
 export function closeDecision(list: Decision[], id: string, status: 'resolved' | 'dropped' | 'superseded', outcome: string, now: number): Decision[] {
-  return list.map((d) => (d.id === id && d.status === 'open' ? close(d, status, outcome, now) : d));
+  const by: DecisionClosedBy = status === 'dropped' ? { kind: 'dropped' } : status === 'superseded' ? { kind: 'auto' } : { kind: 'ceo' };
+  return list.map((d) => (d.id === id && d.status === 'open' ? close(d, status, outcome, now, by) : d));
+}
+
+// ---------- answered by doing (#208) ----------
+
+/** What the CEO just did in a job a manager's message started: filed an issue, closed one, changed a team or an agent. */
+export interface DecisionAct {
+  repoId: string;
+  about: DecisionAbout[]; // what it acted on
+  text: string; // its words: the issue's title, the reason
+  done: string; // "filed #207"
+  link?: DecisionAbout;
+}
+
+/**
+ * The open questions a CEO action answered: on what one is about, or on its floor with two of its question's words,
+ * it closes as done; on its floor (or a question naming none) with two words in all, it is only probably answered.
+ */
+export function onCeoAction(list: Decision[], act: DecisionAct, now: number): Decision[] {
+  let changed = false;
+  const out = list.map((d) => {
+    if (d.status !== 'open' || (d.kind !== 'suggestion' && d.kind !== 'question')) return d;
+    const floor = d.repoIds.includes(act.repoId);
+    if (sharesAbout(d.about, act.about) || (floor && shared(askedText(d), act.text) >= 2)) {
+      changed = true;
+      return close(d, 'resolved', `done: ${act.done}`, now, { kind: 'action', done: act.done, ...(act.link && { link: act.link }) });
+    }
+    if ((floor || !d.repoIds.length) && shared(`${askedText(d)} ${d.context ?? ''}`, act.text) >= 2 && d.probably?.done !== act.done) {
+      changed = true;
+      return { ...d, probably: { done: act.done, at: now, ...(act.link && { link: act.link }) } };
+    }
+    return d;
+  });
+  return changed ? out : list;
+}
+
+/** The manager's chip on a probably answered one: ✓ Yes closes it, Still open takes the mark away. */
+export function settleProbable(list: Decision[], id: string, answered: boolean, now: number): Decision[] {
+  return list.map((d) => {
+    if (d.id !== id || d.status !== 'open' || !d.probably) return d;
+    if (answered) return close(d, 'resolved', `done: ${d.probably.done}`, now, { kind: 'confirmed', done: d.probably.done });
+    const { probably: _, ...rest } = d;
+    return rest;
+  });
+}
+
+/** Reopen: a question closed by mistake waits again, as if just asked. */
+export function reopenDecision(list: Decision[], id: string, now: number): Decision[] {
+  return list.map((d) => {
+    if (d.id !== id || d.status === 'open') return d;
+    const { closedBy: _, probably: __, ...rest } = d;
+    return { ...rest, status: 'open', closedAt: null, outcome: null, snoozedUntil: null, lastAskedAt: now };
+  });
+}
+
+/** Every CEO job with a manager's message: the open questions of the last day, one line each ('' when none). */
+export function decisionsReminder(list: readonly Decision[], now: number, floorOf: (repoId: string) => number | null): string {
+  const recent = waitingDecisions(list, now).filter((d) => now - d.lastAskedAt <= DAY_MS);
+  if (!recent.length) return '';
+  const line = (d: Decision) => {
+    const floors = d.repoIds.map(floorOf).filter((f): f is number => f !== null);
+    return `- ${d.id}: ${d.question}${floors.length ? ` (floor ${floors.join(', ')})` : ''}${d.probably ? ` · probably answered: ${d.probably.done}` : ''}`;
+  };
+  return `\n\nOpen decisions from the last 24 h (resolve_decision any this message answered):\n${recent.map(line).join('\n')}`;
+}
+
+/** After a CEO job: the ones its actions probably answered that are still open, for its next job's "Since you last looked". */
+export function probablyLeft(list: readonly Decision[], since: number): string[] {
+  return list.filter((d) => d.status === 'open' && d.probably && d.probably.at >= since).map((d) => `${d.id} "${d.question}" looks answered (${d.probably!.done}) but is still open: resolve_decision it, or leave it if it is not.`);
 }
 
 /** Not now: out of the tray and the CEO's list for SNOOZE_MS. */
@@ -162,11 +319,11 @@ export function syncDecisions(list: Decision[], world: { seeds: DecisionSeed[]; 
     if (d.status !== 'open') return d;
     const next =
       d.kind !== 'suggestion' && d.kind !== 'design' && !seeded.has(d.id)
-        ? close(d, 'resolved', 'decided', now)
+        ? close(d, 'resolved', 'decided', now, { kind: 'auto' })
         : d.kind === 'suggestion' && d.about.length && d.about.every(world.gone)
-          ? close(d, 'resolved', 'what it was about is gone', now)
+          ? close(d, 'resolved', 'what it was about is gone', now, { kind: 'auto' })
           : now - d.lastAskedAt > DECISION_TTL_MS
-            ? close(d, 'archived', 'no answer in 7 days', now)
+            ? close(d, 'archived', 'no answer in 7 days', now, { kind: 'auto' })
             : d;
     if (next !== d) changed = true;
     return next;
@@ -193,11 +350,55 @@ export function waitingDecisions(list: readonly Decision[], now: number): Decisi
 /** The chat's own questions, which the approvals list beside their team-change and charter cards. */
 export const chatDecisions = (list: readonly Decision[], now: number) => waitingDecisions(list, now).filter((d) => d.kind === 'suggestion' || d.kind === 'question');
 
-/** What the tabs get: everything open (snoozed too: the snooze ends on the client's clock) and the latest closed ones. */
-export function shownDecisions(list: readonly Decision[]): Decision[] {
+/** What the tabs get: everything open (snoozed too: the snooze ends on the client's clock) and the last week's closed ones, for the decision log. */
+export function shownDecisions(list: readonly Decision[], now = Date.now()): Decision[] {
   const open = list.filter((d) => d.status === 'open');
-  const closed = list.filter((d) => d.status !== 'open').sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0)).slice(0, 10);
+  const closed = list.filter((d) => d.status !== 'open' && now - (d.closedAt ?? 0) <= DECISION_TTL_MS).sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0)).slice(0, LOG_MAX);
   return [...open, ...closed];
+}
+
+// ---------- the decision log (#208) ----------
+
+/** Who closed it: the manager (an answer, a confirmation, Drop it), the CEO (resolve_decision or doing it), or the office by itself. */
+export type DecisionCloser = 'you' | 'ceo' | 'auto';
+
+export function closerOf(d: Decision): DecisionCloser {
+  const k = d.closedBy?.kind;
+  if (k) return k === 'ceo' || k === 'action' ? 'ceo' : k === 'auto' ? 'auto' : 'you';
+  // saved before #208: only its status and outcome say
+  return d.status === 'dropped' || (d.status === 'resolved' && d.outcome !== 'decided' && d.outcome !== 'what it was about is gone') ? 'you' : 'auto';
+}
+
+/** How it closed, in the log's words, with the message to jump to or the thing it was done on. */
+export function closedHow(d: Decision): { text: string; messageId?: number; link?: DecisionAbout } {
+  const by = d.closedBy;
+  switch (by?.kind) {
+    case 'reply':
+      return { text: `Replied to message ${by.to}`, messageId: by.to };
+    case 'option':
+      return { text: 'Tapped an option', messageId: by.messageId };
+    case 'reask':
+      return { text: `Answered by a re-ask (message ${by.messageId})`, messageId: by.messageId };
+    case 'confirmed':
+      return { text: `You confirmed: ${by.done}` };
+    case 'ceo':
+      return { text: 'Resolved by the CEO' };
+    case 'action':
+      return { text: `Done by the CEO: ${by.done}`, ...(by.link && { link: by.link }) };
+    case 'dropped':
+      return { text: 'Dropped' };
+  }
+  if (d.status === 'dropped') return { text: 'Dropped' };
+  if (d.status === 'superseded') return { text: 'Replaced by a newer question' };
+  if (d.status === 'archived') return { text: 'No answer in 7 days' };
+  return { text: closerOf(d) === 'you' ? 'Answered' : 'Closed by itself' };
+}
+
+/** The log's bar: open now, and this week's closed ones by who closed them. */
+export function decisionCounts(list: readonly Decision[], now: number) {
+  const week = list.filter((d) => d.status !== 'open' && now - (d.closedAt ?? 0) <= DECISION_TTL_MS);
+  const by = (c: DecisionCloser) => week.filter((d) => closerOf(d) === c).length;
+  return { open: list.filter((d) => d.status === 'open').length, you: by('you'), ceo: by('ceo'), auto: by('auto') };
 }
 
 /** company_status's openDecisions, short. trayOnly: asked QUIET_AFTER times already, so not again in a reply. */

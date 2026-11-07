@@ -39,6 +39,11 @@ describe("a fresh demo office's chat", () => {
       ['Raised the limit or drop the Windows CI job?', 'superseded'],
     ]); // #183's phone, the older one replaced
     expect(payment.map((d) => d.repoIds)).toEqual([['demo-co/recipe-box'], ['demo-co/recipe-box']]); // both on floor 3
+    const reAsk = (swarm.snapshot().decisions ?? []).filter((d) => /file (all three|C)/.test(d.question));
+    expect(reAsk.map((d) => [d.status, d.closedBy?.kind])).toEqual([
+      ['resolved', 'reply'],
+      ['resolved', 'reask'],
+    ]); // #208's phone: the answer to the first closed the re-ask too
 
     const ids = messages.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);

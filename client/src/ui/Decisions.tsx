@@ -44,6 +44,18 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
     else answer(d, option, approve);
   };
   const options = d.kind === 'team' || d.kind === 'charter' ? null : d.options;
+  // #208: a CEO action probably answered it: one tap clears it instead of the options
+  const probable = d.probably && (
+    <div className="decision-options decision-probably">
+      <span className="decision-probably-what small muted">Answered? {d.probably.done}</span>
+      <button type="button" className="decision-option decision-yes" onClick={() => void attempt(() => api.decideOpen(d.id, 'answered'))} aria-label={`Yes, answered: ${d.probably.done}`}>
+        ✓ Yes
+      </button>
+      <button type="button" className="decision-option" onClick={() => void attempt(() => api.decideOpen(d.id, 'open'))}>
+        Still open
+      </button>
+    </div>
+  );
   const asked = d.raised > 1 ? `asked ${d.raised}×` : '';
   const meta = [ago(d.lastAskedAt, now), floors.length ? `floor ${floors.join(', ')}` : '', asked].filter(Boolean).join(' · ');
   const buttons = (
@@ -85,7 +97,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
           ]}
         />
       </div>
-      {buttons}
+      {probable || buttons}
       {whole && (
         <Sheet title={`${ICON[d.kind]} Waiting on you`} onClose={() => setWhole(false)} className="decision-sheet">
           <p className="decision-sheet-q">{d.question}</p>
@@ -98,6 +110,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
             <span className="small muted">{[ago(d.lastAskedAt, now), asked].filter(Boolean).join(' · ')}</span>
           </div>
           {d.context && d.context !== d.question && <p className="decision-context">{d.context}</p>}
+          {probable}
           {buttons}
           {onJump && d.messageId !== null && (
             <button

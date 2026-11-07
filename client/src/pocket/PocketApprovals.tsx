@@ -9,6 +9,7 @@ import { Resume } from '../ui/TeamChanges';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
 import { DecisionCard, useMinute } from '../ui/Decisions';
+import { DecisionLog } from '../ui/DecisionLog';
 import { waitingDecisions } from '../../../shared/decisions';
 import { impactOf, impactScore, prWhy, waitLine, whySummary, WHY_LABELS, WHY_ORDER, type ApprovalWhy } from '../../../shared/approvals';
 import { EmptyState } from '../ui/EmptyState';
@@ -182,10 +183,12 @@ export function Approvals({ wide }: { wide?: boolean }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [by, setBy] = useState<'oldest' | 'impact'>('oldest');
   const items = sortItems(useItems(now), by);
+  const log = <DecisionLog heading={(t) => <h3 className="pk-h">{t}</h3>} />;
   if (items.length === 0) {
     return (
       <div className="pk-page">
         <EmptyState kind="approvals" />
+        {log}
       </div>
     );
   }
@@ -219,6 +222,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
           );
         })}
       </ul>
+      {log}
     </div>
   );
   if (!wide) return <div className="pk-page">{list}</div>;

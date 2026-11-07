@@ -42,7 +42,7 @@ import type { AgentView, HireRequestView, PhoneMessage } from '../../shared/type
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
-import { decisionsForCeo } from '../../shared/decisions.ts';
+import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
 import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
 import { parseRefs } from '../../shared/chatRefs.ts';
@@ -61,11 +61,11 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
       setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
-      scaleTeam: acts((a) => this.scaleTeam(a)),
-      configureAgent: acts((a) => this.configureAgent(a)),
+      scaleTeam: acts((a) => this.didFor(this.scaleTeam(a), a.floor, [], a.reason, `floor ${a.floor}'s team set to ${a.size}`)),
+      configureAgent: acts((a) => this.didForAgent(this.configureAgent(a), a.agent_id)),
       fileIssue: (a) => this.fileIssue(a),
       setDependencies: acts((a) => this.setDependencies(a)),
-      closeIssue: acts((a) => this.closeIssue(a)),
+      closeIssue: acts(async (a) => this.didFor(await this.closeIssue(a), a.floor, [Number(a.number)], a.reason, `closed #${a.number}`)),
       retryQa: acts((a) => this.triageRetryQa(a)),
       sendBack: acts((a) => this.triageSendBack(a)),
       rerunChecks: acts((a) => this.triageRerunChecks(a)),
@@ -98,6 +98,19 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   }
 
   // ---------- the CEO's office tools ----------
+
+  /** After a tool call that changed something on a floor: the open questions it answered (#208). Returns its output. */
+  protected didFor(out: string, floor: number, issues: number[], text: string, done: string, link?: DecisionAbout): string {
+    const repo = this.state.repos.find((r) => r.floor === Number(floor));
+    if (repo) this.decisionActedOn({ repoId: repo.id, about: issues.map((number) => ({ kind: 'issue', repoId: repo.id, number })), text, done, ...(link && { link }) });
+    return out;
+  }
+
+  private didForAgent(out: string, ref: string): string {
+    const a = this.state.agents.find((x) => x.id === ref || x.name.toLowerCase() === String(ref).trim().toLowerCase());
+    if (a?.repoId) this.decisionActedOn({ repoId: a.repoId, about: [{ kind: 'agent', agentId: a.id }], text: a.name, done: `changed ${a.name}'s setup` });
+    return out;
+  }
 
   /** A chat message's text replaced by its sender (#125): its old text kept as a version, its chips found again, every tab told. False when nothing changed. */
   protected replaceText(m: PhoneMessage, text: string, reason?: string): boolean {
@@ -334,6 +347,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const body = `${String(x.body ?? '').trim()}\n\n---\n_Filed by ${this.ceo().name}, the cubefarm CEO._`;
     const n = await this.backend.createIssue(repo.fullName, title, body);
     this.ceoIssues.record(repo.id);
+    this.didFor('', repo.floor, [], title, `filed #${n}`, { kind: 'issue', repoId: repo.id, number: n });
     return `Filed #${n} on floor ${repo.floor}: ${title}.`;
   }
 
