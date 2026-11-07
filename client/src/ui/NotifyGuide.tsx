@@ -11,6 +11,7 @@ import { allowNotifications, currentPush, enablePush, preparePush, pushSupport, 
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { EmptyState } from './EmptyState';
+import { Icon } from './Icon';
 import { deviceLabel, guideSteps, nextStep, platformOf, type GuideInput, type StepAction, type WorkerState } from './notifySteps';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -26,7 +27,7 @@ function readBrowser() {
   };
 }
 
-const MARK = { done: '✓', todo: '!', waiting: '·' } as const;
+const MARK = { todo: '!', waiting: '·' } as const;
 
 /** "Get notified on this device": the live checklist and its one button. */
 export function NotifyGuide() {
@@ -111,12 +112,14 @@ export function NotifyGuide() {
   const asking = test?.outcome === 'delivered' && arrived === null;
   return (
     <div className="notify-guide" aria-live="polite">
-      <b>📱 Get notified on this device</b>
+      <b>
+        <Icon name="smartphone" /> Get notified on this device
+      </b>
       <ol className="guide-steps">
         {steps.map((s) => (
           <li key={s.id} className={`guide-step guide-${s.state}`}>
             <span className="guide-mark" aria-label={s.state === 'done' ? 'Done' : s.state === 'todo' ? 'To do' : 'Waiting'}>
-              {MARK[s.state]}
+              {s.state === 'done' ? <Icon name="check" /> : MARK[s.state]}
             </span>
             <div className="grow">
               <div className="guide-title">{s.title}</div>
@@ -152,7 +155,11 @@ export function NotifyGuide() {
           {busy ? 'Working…' : next.action.label}
         </button>
       ) : (
-        !next && <p className="notify-ok">✓ All set: the office notifies this device.</p>
+        !next && (
+          <p className="notify-ok">
+            <Icon name="check" /> All set: the office notifies this device.
+          </p>
+        )
       )}
       {error && (
         <div className="term-error small" role="alert">
@@ -207,7 +214,9 @@ export function NtfyQuick() {
   };
   return (
     <div className="notify-hook ntfy-quick">
-      <b>🔔 Use the ntfy app instead</b>
+      <b>
+        <Icon name="bell" /> Use the ntfy app instead
+      </b>
       <p className="muted small">Works on any phone with no setup on this device: the office makes a private topic and the free ntfy app subscribes to it.</p>
       {!made && (
         <button className="btn btn-good" disabled={busy} onClick={() => void create()}>
@@ -234,7 +243,13 @@ export function NtfyQuick() {
             </div>
           </div>
           <p className={`small ${made.test.ok ? 'notify-ok' : 'term-error'}`} role="status">
-            {made.test.ok ? `✓ ${made.test.message}` : made.test.message}
+            {made.test.ok ? (
+              <>
+                <Icon name="check" /> {made.test.message}
+              </>
+            ) : (
+              made.test.message
+            )}
           </p>
           {arrived === null ? (
             <div className="row wrap">
@@ -247,7 +262,9 @@ export function NtfyQuick() {
               </button>
             </div>
           ) : arrived ? (
-            <p className="notify-ok small">✓ All set: the office notifies you through ntfy.</p>
+            <p className="notify-ok small">
+              <Icon name="check" /> All set: the office notifies you through ntfy.
+            </p>
           ) : (
             <div className="row wrap">
               <span className="grow small">Check the app subscribed to {links.topic} on ntfy.sh, and that its notifications are on.</span>
@@ -278,7 +295,15 @@ function ago(at: number, now: number) {
 function Health({ last }: { last: NotifyHealth | null }) {
   if (!last) return <span className="small muted">Nothing sent since the office started</span>;
   const when = ago(last.at, Date.now());
-  return last.ok ? <span className="small notify-ok">✓ Sent {when}</span> : <span className="small term-error">✗ {when}: {last.error}</span>;
+  return last.ok ? (
+    <span className="small notify-ok">
+      <Icon name="check" /> Sent {when}
+    </span>
+  ) : (
+    <span className="small term-error">
+      <Icon name="x" /> {when}: {last.error}
+    </span>
+  );
 }
 
 /** Each channel's last send; push devices can be tested, renamed and removed from here. */
@@ -319,7 +344,7 @@ export function ChannelHealth() {
         <li key={d.id}>
           <div className="row wrap">
             <b className="grow">
-              📱 {d.name}
+              <Icon name="smartphone" /> {d.name}
               {d.id === thisDevice && <span className="small muted"> (this device)</span>}
             </b>
             <button className="btn btn-small" onClick={() => void test(d.id)}>

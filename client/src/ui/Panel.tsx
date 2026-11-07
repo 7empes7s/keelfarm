@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, type MouseEvent, type PointerEvent, type Reac
 import { useStore } from '../store';
 import { pushLayer } from './backStack';
 import { focusRaises, isTopDialog, raiseDialog, useDialogFocus } from './dialogFocus';
+import { CloseButton } from './Icon';
 
 // Closing a panel grabs the mouse again right away (world/lookLock.ts; "Grab the mouse when panels
 // close" in help turns that off), and mouse presses are swallowed for a moment so a double click on
@@ -90,9 +91,7 @@ export function Panel({
           <h2 className="panel-title" id={titleId}>
             {title}
           </h2>
-          <button className="panel-x" onClick={() => (onClose ? onClose() : closeOverlay())} aria-label="Close">
-            ✕
-          </button>
+          <CloseButton className="panel-x" onClick={() => (onClose ? onClose() : closeOverlay())} label="Close" />
         </div>
         <div className="panel-body">{children}</div>
       </div>

@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { Backend } from './backend.ts';
 import { HOME_DIR, PORT, PR_PREVIEW_IDLE_MS, PREVIEW_PORT } from './config.ts';
 import { HttpError } from './httpError.ts';
+import { liveLaneRefusal } from './portLanes.ts';
 import { nextInLane, owned, portBusyText, PreviewPids, stillOurs, type PreviewPid, type ProcInfo } from './previewPids.ts';
 import { PREVIEW_BRANCH, PREVIEW_SLUG, portOpen, type PreviewHandle, type PreviewJob } from './previewRunner.ts';
 import { closedPrs, expired, freeSlot, leftoverPrDesks, mainExpired, mainKey, MAX_PR_PREVIEWS, onScreen, pickEviction, prBranch, prKey, prPortCandidates, prSlug, stopsAt, WATCH_MS, type PrRunInfo } from './prTheatre.ts';
@@ -608,6 +609,13 @@ export class Previews {
   /** Start a run's job; callbacks from an older run of it (an earlier start, or a stop since) are ignored. */
   private launch(r: Run, gen: number, job: PreviewJob, at: { key: string; floor: number; slot: number }, on: { emit(): void; emitSoon(): void; unconfigured?(): void }) {
     const live = () => gen === r.gen;
+    const refused = liveLaneRefusal(job.port, this.backend.demo);
+    if (refused) {
+      console.warn(`previews: ${refused}`);
+      Object.assign(r, { status: 'error', error: refused });
+      on.emit();
+      return;
+    }
     r.handle = this.backend.previews.start(job, {
       spawned: (pid) => {
         if (!live()) return;

@@ -7,6 +7,7 @@ import type { EffortLevel } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
 import { EmptyState } from './EmptyState';
 import { InsightStrip, TopIssues, WasteCards } from './CostCards';
+import { Icon } from './Icon';
 import { RoundsCard } from './RoundsCard';
 import './costs.css';
 
@@ -53,7 +54,9 @@ function StartupTable({ view }: { view: CostsView }) {
   if (!view.startup.length) return null;
   return (
     <>
-      <h3 className="section">📦 What sessions load at startup</h3>
+      <h3 className="section">
+        <Icon name="package" /> What sessions load at startup
+      </h3>
       <div className="ops-table-wrap" tabIndex={0} role="region" aria-label="Startup context per kind of task">
         <table className="ops-table costs-table">
           <thead>
@@ -101,7 +104,9 @@ export function CostsSection() {
   };
   return (
     <div id="ops-card-costs" className="costs" data-tour="costs">
-      <h3 className="section">💸 Where the plan goes</h3>
+      <h3 className="section">
+        <Icon name="wallet" /> Where the plan goes
+      </h3>
       <div className="row wrap">
         <select aria-label="Days" value={days} onChange={(e) => setDays(Number(e.target.value))}>
           {DAYS.map((d) => (
@@ -195,10 +200,12 @@ export function CostsSection() {
             </div>
           )}
           <StartupTable view={view} />
-          <h3 className="section">🏷️ Most expensive issues</h3>
+          <h3 className="section">
+            <Icon name="tag" /> Most expensive issues
+          </h3>
           <TopIssues top={view.top} repo={repo} />
           <h3 id="costs-waste" className="section">
-            🗑️ Waste {view.total.wasteSessions > 0 && <span className="badge">{view.total.wasteSessions}</span>}
+            <Icon name="trash-2" /> Waste {view.total.wasteSessions > 0 && <span className="badge">{view.total.wasteSessions}</span>}
           </h3>
           {view.waste.length === 0 ? (
             <EmptyState kind="waste" compact />

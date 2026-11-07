@@ -7,6 +7,7 @@ import { copyText } from './clipboard';
 import { COLLAPSE_LINES, codeLanguage, copiedText, isShell, languageLabel, shellLines } from './codeBlock';
 import './chat.css';
 import { REF_HREF } from '../../../shared/chatRefs';
+import { Icon } from './Icon';
 
 // Agent-written prose (the CEO's texts and reasons, issues, QA reports) rendered as Markdown.
 // Safe by default: raw HTML is shown as text, never parsed, and only http(s)/mailto links work.
@@ -125,10 +126,12 @@ const components: Components = {
   img: ({ src, alt }) =>
     typeof src === 'string' && src ? (
       <a href={src} target="_blank" rel="noopener noreferrer">
-        🖼 {alt || src}
+        <Icon name="image" /> {alt || src}
       </a>
     ) : (
-      <span>🖼 {alt}</span>
+      <span>
+        <Icon name="image" /> {alt}
+      </span>
     ),
   table: ({ children }) => (
     <div className="md-table" tabIndex={0}>

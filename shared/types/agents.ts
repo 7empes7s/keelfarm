@@ -39,6 +39,7 @@ export const DEFAULT_OFFICE_PLAYBOOK = [
   '- A fix comes with a test that fails without it.',
   "- Don't reformat, rename or move code you aren't changing.",
   '- Never run, edit or restart anything outside your worktree and reserved port: no live services, no other desks.',
+  '- A demo office you start must be stopped before you finish.',
 ].join('\n');
 
 /** A floor's most agents unless the manager changes it (Settings). */

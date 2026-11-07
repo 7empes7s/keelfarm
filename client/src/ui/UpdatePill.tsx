@@ -2,13 +2,20 @@
 // safe moment, updateLoad.ts) instead of a reload under the manager's fingers.
 import { useStore } from '../store';
 import { loadUpdate } from '../updateLoad';
+import { Icon } from './Icon';
 
 export function UpdatePill({ className, short }: { className: string; short?: boolean }) {
   const ready = useStore((s) => s.updateReady !== null);
   if (!ready) return null;
   return (
     <button className={className} onClick={() => loadUpdate({ kind: 'tap' })} aria-label="New version · Update" title="The office updated itself: load its new version (your drafts are kept)">
-      {short ? '⟳ Update' : 'New version · Update'}
+      {short ? (
+        <>
+          <Icon name="refresh-cw" /> Update
+        </>
+      ) : (
+        'New version · Update'
+      )}
     </button>
   );
 }

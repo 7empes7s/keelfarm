@@ -50,11 +50,11 @@ describe('statusLine', () => {
 
   it('one line through an update: updating, then back in a moment, never also a reconnect', () => {
     expect(statusLine({ ...base, update: '⟳ Updating the office…' })?.text).toBe('⟳ Updating the office…');
-    expect(statusLine({ ...base, connected: false, restarting: true, update: '⟳ Updating the office…' })).toEqual({ text: '⟳ Back in a moment…', bad: false });
+    expect(statusLine({ ...base, connected: false, restarting: true, update: '⟳ Updating the office…' })).toEqual({ text: 'Back in a moment…', bad: false, icon: 'refresh-cw' });
   });
 
   it('a drop nobody expected is a reconnect', () => {
-    expect(statusLine({ ...base, connected: false })).toEqual({ text: '📡 Reconnecting to the office…', bad: true });
-    expect(statusLine({ ...base, connected: false, loaded: false })?.text).toBe('📡 Connecting to the office…');
+    expect(statusLine({ ...base, connected: false })).toEqual({ text: 'Reconnecting to the office…', bad: true, icon: 'radio-tower' });
+    expect(statusLine({ ...base, connected: false, loaded: false })?.text).toBe('Connecting to the office…');
   });
 });

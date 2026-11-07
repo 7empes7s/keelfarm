@@ -264,7 +264,7 @@ const WRAPPERS = ['#ff7b00', '#9d4edd', '#06d6a0', '#ef476f', '#ffd166', '#4cc9f
 function takeCandy(at?: Spot) {
   candies++;
   crinkle(at ? { x: at.x, y: at.y + 0.1, z: at.z } : undefined);
-  useStore.getState().pushToast('info', `🍬 You took ${CANDY[(candies - 1) % CANDY.length]} (${candies} so far). Happy Halloween!`);
+  useStore.getState().pushToast('info', `You took ${CANDY[(candies - 1) % CANDY.length]} (${candies} so far). Happy Halloween!`);
 }
 
 function CandyBowl({ at }: { at: Spot[] }) {
@@ -290,7 +290,7 @@ function CandyBowl({ at }: { at: Spot[] }) {
   return (
     <>
       {at.map((s) => (
-        <Hotspot key={s.id} id="candy" label="Take a candy 🍬" position={[s.x, s.y, s.z]} rotationY={s.rotY}>
+        <Hotspot key={s.id} id="candy" label="Take a candy" position={[s.x, s.y, s.z]} rotationY={s.rotY}>
           <mesh geometry={geo} material={paintedToonDouble()} castShadow />
         </Hotspot>
       ))}

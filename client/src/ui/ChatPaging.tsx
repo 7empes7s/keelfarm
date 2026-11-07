@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
+import { Icon } from './Icon';
 import { anchoredTop, removal, UNDO_MS, wantsOlder, withOlder, type ChatPage } from '../../../shared/chatPage';
 import type { PhoneMessage } from '../../../shared/types';
 
@@ -92,11 +93,13 @@ export function useRemovals() {
     setPending((p) => p.filter((x) => x.id !== id));
   };
   /** The actions menu's entry: Delete, or Hide for the CEO's. */
-  const action = (m: Pick<PhoneMessage, 'id' | 'from'>) => ({ label: removal(m) === 'hide' ? '🙈 Hide' : '🗑 Delete', run: () => remove(m) });
+  const action = (m: Pick<PhoneMessage, 'id' | 'from'>) => (removal(m) === 'hide' ? { label: 'Hide', icon: 'eye-off' as const, run: () => remove(m) } : { label: 'Delete', icon: 'trash-2' as const, run: () => remove(m) });
   const last = pending[pending.length - 1];
   const bar = last && (
     <div className="chat-reply chat-undo" role="status">
-      <b className="grow small">{last.kind === 'hide' ? '🙈 Message hidden' : '🗑 Message deleted'}</b>
+      <b className="grow small">
+        <Icon name={last.kind === 'hide' ? 'eye-off' : 'trash-2'} /> {last.kind === 'hide' ? 'Message hidden' : 'Message deleted'}
+      </b>
       <button type="button" className="btn btn-small" onClick={() => undo(last.id)}>
         Undo
       </button>

@@ -5,6 +5,8 @@ import { excerpt, type OutgoingMessage } from '../../../shared/chat';
 import { retrySend } from './chatSend';
 import { copyText } from './clipboard';
 import { useDialogFocus } from './dialogFocus';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { ReactionBar } from './ChatReactions';
 
 // The actions on one chat message (ui/Phone.tsx): reactions on the CEO's (#118), Reply, Copy, Retry a failed send, and the chat's own (#51).
@@ -23,7 +25,7 @@ export const itemOf = (x: Item) => {
 export const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
 
 /** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, Retry for a failed send, and `more` (edit, retry, remember). */
-export function MessageActions({ item, ceoName, more, onReply, onClose }: { item: Item; ceoName: string; more: { label: string; run: () => void }[]; onReply: (id: number) => void; onClose: () => void }) {
+export function MessageActions({ item, ceoName, more, onReply, onClose }: { item: Item; ceoName: string; more: { label: string; icon?: IconName; run: () => void }[]; onReply: (id: number) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useDialogFocus(ref);
@@ -61,20 +63,20 @@ export function MessageActions({ item, ceoName, more, onReply, onClose }: { item
         <div className="chat-menu-actions">
           {item.m && (
             <button type="button" className="btn btn-small" onClick={act(() => onReply(item.m!.id))}>
-              ↩ Reply
+              <Icon name="reply" /> Reply
             </button>
           )}
           <button type="button" className="btn btn-small" onClick={act(copy)}>
-            📋 Copy text
+            <Icon name="clipboard-list" /> Copy text
           </button>
           {more.map((x) => (
             <button key={x.label} type="button" className="btn btn-small" onClick={act(x.run)}>
-              {x.label}
+              {x.icon && <Icon name={x.icon} />} {x.label}
             </button>
           ))}
           {item.out?.delivery === 'failed' && (
             <button type="button" className="btn btn-small btn-good" onClick={act(() => retrySend(item.out!.key))}>
-              ⟳ Retry
+              <Icon name="refresh-cw" /> Retry
             </button>
           )}
           <button type="button" className="btn btn-small" onClick={onClose}>

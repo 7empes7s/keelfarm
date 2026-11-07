@@ -106,7 +106,7 @@ function sitIn(i: number) {
   const s = useStore.getState();
   if (useRoof.getState().sitting === i) return;
   if (takenByVisitor(i)) {
-    s.pushToast('info', "🪑 Someone's sitting there: try another chair");
+    s.pushToast('info', "Someone's sitting there: try another chair");
     return;
   }
   const seat = deckChairSeat(i);

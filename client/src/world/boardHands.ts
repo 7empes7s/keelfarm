@@ -102,7 +102,7 @@ export function peelAimed(focus: Focus | null): boolean {
   if (a?.kind !== 'card' || !board || a.repoId !== board.repoId || s.held) return false;
   const at = findCard(board.cols, a.key);
   if (!at || !canPeel(at.col, at.card)) {
-    s.pushToast('info', '📌 Only Backlog issues, and PRs waiting to go to QA, come off the board');
+    s.pushToast('info', 'Only Backlog issues, and PRs waiting to go to QA, come off the board');
     return true;
   }
   if (!peelForPlayer(board.ctrl, at)) return true;
@@ -202,7 +202,7 @@ export function placeSticky(focus: Focus | null, anywhere: boolean): boolean {
       .sendToQa(b.repoId, n, drop.agentId)
       .then(() => {
         rec.result = 'ok';
-        s.pushToast('success', `📌 ${agent?.name ?? 'They'} will test PR #${n}`);
+        s.pushToast('success', `${agent?.name ?? 'They'} will test PR #${n}`);
       })
       .catch((err: Error) => Object.assign(rec, { result: 'refused', error: err.message }))
       .finally(() => returnMine(b.ctrl)); // it waits on the board for them to come and take it
@@ -217,7 +217,7 @@ export function placeSticky(focus: Focus | null, anywhere: boolean): boolean {
       rec.result = 'ok';
       if (agent) giveMine(b.ctrl, agent);
       else returnMine(b.ctrl);
-      s.pushToast('success', `📌 ${agent?.name ?? 'They'} started #${n}`);
+      s.pushToast('success', `${agent?.name ?? 'They'} started #${n}`);
     })
     .catch((err: Error) => {
       Object.assign(rec, { result: 'refused', error: err.message });

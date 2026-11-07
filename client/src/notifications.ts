@@ -25,7 +25,7 @@ export function showDesktopNote(note: NoteView, enabled: boolean) {
 
 /** Settings' Test: a notification right now, tab visible or not. */
 export function showTestNote() {
-  show({ id: `test-${Date.now()}`, event: 'test', title: '🔔 Test from cubefarm', body: 'Desktop notifications work in this browser.', at: Date.now(), url: '/' });
+  show({ id: `test-${Date.now()}`, event: 'test', title: 'Test from cubefarm', body: 'Desktop notifications work in this browser.', at: Date.now(), url: '/' });
 }
 
 /** Read or seen on some device (#210): closes this browser's notifications of those threads. */

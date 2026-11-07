@@ -27,7 +27,7 @@ async function walk(page: Page, track: Track) {
     await expect(card.locator('.tour-title')).toHaveText(s.title);
     if (s.targets && track !== 'office') {
       const ring = page.locator('.tour-ring');
-      if (!(await ring.isVisible()) && s.tryIt) await card.getByRole('button', { name: /^👆/ }).click();
+      if (!(await ring.isVisible()) && s.tryIt) await card.getByRole('button', { name: /^(Open|Start|Show) / }).click();
       await expect(ring, `${s.id} points at a control`).toBeVisible();
       await page.keyboard.press('Escape'); // closes what a Try it opened
       await page.keyboard.press('Escape');
@@ -81,7 +81,7 @@ test("What's new replays only the steps this device hasn't seen, and the ⓘ bri
   await expect(card).toBeHidden();
   // nothing new now; the ⓘ replays the newest steps
   await page.getByRole('button', { name: /What can I do on Company/ }).click();
-  await page.getByRole('button', { name: "✨ What's new" }).click();
+  await page.getByRole('button', { name: "What's new" }).click();
   await expect(replay.locator('.tour-count')).toBeVisible();
 });
 

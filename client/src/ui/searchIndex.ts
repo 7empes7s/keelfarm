@@ -4,6 +4,7 @@
 import { CEO_ID, type AgentView, type PhoneMessage, type QaView, type RepoView } from '../../../shared/types';
 import { SECTIONS, type Where } from './consoleNavRules';
 import type { Target } from './goTo';
+import type { IconName } from './icons';
 
 export type Kind = 'action' | 'floor' | 'agent' | 'issue' | 'pr' | 'qa' | 'setting' | 'objective' | 'message' | 'artifact';
 
@@ -25,7 +26,7 @@ const ORDER: Kind[] = ['action', 'floor', 'agent', 'issue', 'pr', 'qa', 'objecti
 export interface Item {
   id: string;
   kind: Kind;
-  icon: string;
+  icon: IconName;
   label: string;
   sub?: string;
   target: Target;
@@ -50,41 +51,41 @@ export function buildIndex(s: IndexInput): Item[] {
   const floors = [...s.repos].sort((a, b) => a.floor - b.floor);
   // ---------- actions ----------
   items.push(
-    { id: 'act:plan', kind: 'action', icon: '🧠', label: 'Ask the CEO to plan…', sub: 'A message ready to finish and send', target: { kind: 'ceo', text: 'Plan the next milestone for ' } },
-    { id: 'act:research', kind: 'action', icon: '🔎', label: 'Ask the CEO to research…', sub: 'Sources first, then options', target: { kind: 'ceo', text: 'Research ' } },
-    { id: 'act:telegram', kind: 'action', icon: '✈️', label: 'Turn on Telegram', sub: 'Settings · Notifications', target: { kind: 'section', section: 'notifications' } },
-    { id: 'act:notify', kind: 'action', icon: '🔔', label: 'Turn on notifications', sub: 'Settings · Notifications', target: { kind: 'section', section: 'notifications' } },
-    { id: 'act:mandate', kind: 'action', icon: '📜', label: 'Add a standing mandate', sub: 'CEO · The CEO', target: { kind: 'section', section: 'ceo' } },
-    { id: 'act:guide', kind: 'action', icon: '✅', label: 'Get the most out of the office', sub: 'The setup checklist', target: { kind: 'guide' } },
+    { id: 'act:plan', kind: 'action', icon: 'brain', label: 'Ask the CEO to plan…', sub: 'A message ready to finish and send', target: { kind: 'ceo', text: 'Plan the next milestone for ' } },
+    { id: 'act:research', kind: 'action', icon: 'search', label: 'Ask the CEO to research…', sub: 'Sources first, then options', target: { kind: 'ceo', text: 'Research ' } },
+    { id: 'act:telegram', kind: 'action', icon: 'plane', label: 'Turn on Telegram', sub: 'Settings · Notifications', target: { kind: 'section', section: 'notifications' } },
+    { id: 'act:notify', kind: 'action', icon: 'bell', label: 'Turn on notifications', sub: 'Settings · Notifications', target: { kind: 'section', section: 'notifications' } },
+    { id: 'act:mandate', kind: 'action', icon: 'scroll-text', label: 'Add a standing mandate', sub: 'CEO · The CEO', target: { kind: 'section', section: 'ceo' } },
+    { id: 'act:guide', kind: 'action', icon: 'circle-check', label: 'Get the most out of the office', sub: 'The setup checklist', target: { kind: 'guide' } },
   );
   for (const r of floors) {
     const n = `floor ${r.floor}`;
     items.push(
-      { id: `act:objective:${r.id}`, kind: 'action', icon: '🎯', label: `Add an objective to ${n}`, sub: short(r.fullName), target: { kind: 'section', section: 'charter', repoId: r.id } },
-      { id: `act:preview:${r.id}`, kind: 'action', icon: '🖥️', label: `Open ${n}'s preview`, sub: short(r.fullName), target: { kind: 'overlay', overlay: { kind: 'app', repoId: r.id } } },
+      { id: `act:objective:${r.id}`, kind: 'action', icon: 'target', label: `Add an objective to ${n}`, sub: short(r.fullName), target: { kind: 'section', section: 'charter', repoId: r.id } },
+      { id: `act:preview:${r.id}`, kind: 'action', icon: 'monitor', label: `Open ${n}'s preview`, sub: short(r.fullName), target: { kind: 'overlay', overlay: { kind: 'app', repoId: r.id } } },
     );
   }
   // ---------- the office's things ----------
   for (const r of floors) {
-    items.push({ id: `floor:${r.id}`, kind: 'floor', icon: '🏢', label: `Floor ${r.floor} · ${short(r.fullName)}`, sub: r.summary || r.fullName, target: { kind: 'overlay', overlay: { kind: 'kanban', repoId: r.id } } });
+    items.push({ id: `floor:${r.id}`, kind: 'floor', icon: 'building-2', label: `Floor ${r.floor} · ${short(r.fullName)}`, sub: r.summary || r.fullName, target: { kind: 'overlay', overlay: { kind: 'kanban', repoId: r.id } } });
     for (const i of r.issues)
-      items.push({ id: `issue:${r.id}#${i.number}`, kind: 'issue', icon: '📝', label: `#${i.number} ${i.title}`, sub: `Floor ${r.floor}`, target: { kind: 'overlay', overlay: { kind: 'card', repoId: r.id, key: `i-${i.number}`, number: i.number, pr: false } } });
+      items.push({ id: `issue:${r.id}#${i.number}`, kind: 'issue', icon: 'notebook-pen', label: `#${i.number} ${i.title}`, sub: `Floor ${r.floor}`, target: { kind: 'overlay', overlay: { kind: 'card', repoId: r.id, key: `i-${i.number}`, number: i.number, pr: false } } });
     for (const p of r.pulls)
       items.push({
         id: `pr:${r.id}#${p.number}`,
         kind: 'pr',
-        icon: p.state === 'MERGED' ? '🎉' : '🔀',
+        icon: p.state === 'MERGED' ? 'party-popper' : 'git-merge',
         label: `PR #${p.number} ${p.title}`,
         sub: `Floor ${r.floor}${p.state === 'MERGED' ? ' · merged' : ''}`,
         target: { kind: 'overlay', overlay: { kind: 'card', repoId: r.id, key: p.state === 'MERGED' ? `m-${p.number}` : `pr-${p.number}`, number: p.number, pr: true } },
       });
     for (const o of r.charter.objectives)
-      items.push({ id: `obj:${r.id}:${o.id}`, kind: 'objective', icon: '🎯', label: `${o.id}: ${clip(o.outcome)}`, sub: `Floor ${r.floor}${o.measure ? ` · ${clip(o.measure, 50)}` : ''}`, target: { kind: 'section', section: 'charter', repoId: r.id } });
+      items.push({ id: `obj:${r.id}:${o.id}`, kind: 'objective', icon: 'target', label: `${o.id}: ${clip(o.outcome)}`, sub: `Floor ${r.floor}${o.measure ? ` · ${clip(o.measure, 50)}` : ''}`, target: { kind: 'section', section: 'charter', repoId: r.id } });
   }
   for (const q of Object.values(s.qa)) {
     const r = s.repos.find((x) => x.id === q.repoId);
     if (!r) continue;
-    items.push({ id: `qa:${q.repoId}#${q.prNumber}`, kind: 'qa', icon: '🔍', label: `QA on PR #${q.prNumber} · ${QA_WORD[q.status] ?? q.status}`, sub: clip(q.summary ?? `Floor ${r.floor} · round ${q.round}`), target: { kind: 'overlay', overlay: { kind: 'app', repoId: q.repoId, pr: q.prNumber, qa: true } } });
+    items.push({ id: `qa:${q.repoId}#${q.prNumber}`, kind: 'qa', icon: 'search', label: `QA on PR #${q.prNumber} · ${QA_WORD[q.status] ?? q.status}`, sub: clip(q.summary ?? `Floor ${r.floor} · round ${q.round}`), target: { kind: 'overlay', overlay: { kind: 'app', repoId: q.repoId, pr: q.prNumber, qa: true } } });
   }
   for (const a of Object.values(s.agents)) {
     const r = s.repos.find((x) => x.id === a.repoId);
@@ -92,7 +93,7 @@ export function buildIndex(s: IndexInput): Item[] {
     items.push({
       id: `agent:${a.id}`,
       kind: 'agent',
-      icon: ceo ? '🧠' : '🧑‍💻',
+      icon: ceo ? 'brain' : 'laptop',
       label: a.name,
       sub: ceo ? 'CEO' : r ? `Floor ${r.floor} · ${short(r.fullName)}` : undefined,
       target: ceo ? { kind: 'ceo' } : { kind: 'overlay', overlay: { kind: 'terminal', agentId: a.id } },
@@ -104,8 +105,8 @@ export function buildIndex(s: IndexInput): Item[] {
     for (const f of sec.find) if (f !== sec.label) items.push({ id: `set:${sec.id}:${f}`, kind: 'setting', icon: sec.icon, label: f, sub: sec.label, target: { kind: 'section', section: sec.id } });
   }
   for (const m of s.messages.filter((x) => x.from === 'ceo').slice(-40)) {
-    items.push({ id: `msg:${m.id}`, kind: 'message', icon: '💬', label: clip(m.text.replace(/\s+/g, ' ')), target: { kind: 'ceo' } });
-    for (const a of m.artifacts ?? []) items.push({ id: `art:${a.id}`, kind: 'artifact', icon: '📄', label: a.title, sub: clip(a.lead, 60), target: { kind: 'ceo' } });
+    items.push({ id: `msg:${m.id}`, kind: 'message', icon: 'message-circle', label: clip(m.text.replace(/\s+/g, ' ')), target: { kind: 'ceo' } });
+    for (const a of m.artifacts ?? []) items.push({ id: `art:${a.id}`, kind: 'artifact', icon: 'file-text', label: a.title, sub: clip(a.lead, 60), target: { kind: 'ceo' } });
   }
   return items;
 }
