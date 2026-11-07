@@ -132,6 +132,8 @@ export type ServerEvent =
   | ({ type: 'toast'; level: 'info' | 'success' | 'error'; text: string } & Partial<Omit<NoticeView, 'level' | 'text'>>)
   /** Notices marked read (in any tab, or by opening their push). */
   | { type: 'noticesRead'; ids: string[] }
+  /** Notifications read or seen on some device (#210): the tabs close theirs, by their threads' events. */
+  | { type: 'notifyClear'; events: string[] }
   /** The office's heartbeat to every tab (shared/heartbeat.ts): never applied, it only says the socket is alive. */
   | { type: 'beat' }
   // Presence (shared/presence.ts): relayed between the office's tabs, never persisted.

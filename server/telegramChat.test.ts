@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDemoBackend } from './demo.ts';
+import { GRACE_MS } from './notify.ts';
 import { Swarm } from './swarm.ts';
 
 // Telegram in a demo office (docs/pocket.md): the fake manager links their chat, writes to the CEO from Telegram,
@@ -98,6 +99,9 @@ describe('Telegram in the office', () => {
     await until(() => swarm.snapshot().notifyChannels.telegram.linked);
     swarm.demoPropose('hire');
     const req = swarm.snapshot().requests.find((r) => r.status === 'pending')!;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + GRACE_MS);
+    swarm.notifier.flush(); // its notification's grace is over (#210)
+    now.mockRestore();
     await until(() => sent().some((l) => l.includes(`[✅ Hire ${req.name}] [✋ Decline]`)));
     swarm.telegramDemo({ kind: 'approve' });
     await until(() => swarm.snapshot().requests.find((r) => r.id === req.id)?.status === 'approved');

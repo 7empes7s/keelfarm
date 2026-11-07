@@ -15,6 +15,7 @@ export interface NotifySettings {
   channels: Record<NotifyChannel, boolean>; // a chat app also needs its webhook saved
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
   telegramMirror: boolean; // every CEO message also goes to Telegram (otherwise only replies to messages sent from there)
+  quietInApp: boolean; // nothing goes out while the manager is using the app on any device (#210)
 }
 
 /** A channel's last send since the office started: when, and whether it arrived (else why not). */
@@ -39,6 +40,8 @@ export interface NotifyChannelsView {
   devices: PushDeviceView[];
   desktop: NotifyHealth | null;
   telegram: TelegramView;
+  /** Today's notes (#210): sent, and not sent because the manager was in the app. */
+  today: { sent: number; skipped: number };
 }
 
 /** The manager's Telegram bot (docs/pocket.md): its token and their chat id stay on the server. */

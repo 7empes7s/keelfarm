@@ -213,6 +213,12 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     progress: { target: ask('What should {floor} work on next?') },
     merged: { target: ask('Which pull request on {floor} is closest to merging, and what does it need?') },
   };
+  // The card up close (CardView.tsx); closing it comes back to the board.
+  const openCard = (c: KanbanCard) => {
+    const back = useStore.getState().overlay;
+    openOverlay({ kind: 'card', repoId: repo.id, key: c.key, number: c.number, pr: !!c.prNumber });
+    useStore.setState({ back });
+  };
   const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: EmptyKind) => (
     <div className={`kcol ${cls}`}>
       <div className="kcol-head">
@@ -227,15 +233,11 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         {cards.map((c) => (
           <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
             <div className="kcard-title">
-              {c.url ? (
-                <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
-                  <a href={c.url} target="_blank" rel="noreferrer">
-                    {c.prNumber ? 'PR ' : ''}#{c.number}
-                  </a>
-                </HoverCard>
-              ) : (
-                <b>#{c.number}</b>
-              )}{' '}
+              <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
+                <button className="linkish" title="Open the card" onClick={() => openCard(c)}>
+                  {c.prNumber ? 'PR ' : ''}#{c.number}
+                </button>
+              </HoverCard>{' '}
               {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
               {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
             </div>
