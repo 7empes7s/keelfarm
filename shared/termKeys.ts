@@ -93,7 +93,7 @@ export type BarKey =
   | { label: string; title: string; key: NamedKey; mods?: Mod[]; repeat?: boolean }
   | { label: string; title: string; text: string; repeat?: boolean }
   | { label: string; title: string; mod: Mod }
-  | { label: string; title: string; paste: true };
+  | { label: string; title: string; paste: true; primary?: boolean };
 
 const k = (label: string, title: string, key: NamedKey, extra: { mods?: Mod[]; repeat?: boolean } = {}): BarKey => ({ label, title, key, ...extra });
 const t = (label: string, title: string, text: string, repeat = false): BarKey => ({ label, title, text, repeat });
@@ -115,10 +115,13 @@ const CLI_KEYS: Record<AgentCli, BarKey[]> = {
   opencode: [t('^C', 'Ctrl+C: interrupt', '\x03'), t('^X', 'Ctrl+X: the leader key', '\x18')],
 };
 
-/** The first row: always visible. */
-export function barKeys(cli: AgentCli): BarKey[] {
+const PASTE: BarKey = { label: 'Paste', title: 'Paste from the clipboard', paste: true };
+
+/** The first row: always visible. `signIn`: a sign-in terminal, where Paste (the code from the browser) is the key that matters (#278). */
+export function barKeys(cli: AgentCli, { signIn = false } = {}): BarKey[] {
   return [
     k('Esc', cli === 'claude' ? 'Esc: interrupt, or close a dialog' : 'Esc: interrupt', 'esc'),
+    signIn ? { ...PASTE, title: 'Paste the sign-in code from the clipboard', primary: true } : PASTE,
     k('Tab', 'Tab', 'tab'),
     ...ARROW_KEYS,
     k('⏎', 'Enter', 'enter'),
@@ -146,8 +149,27 @@ export const MORE_KEYS: BarKey[] = [
   t('~', 'Tilde', '~'),
   t('`', 'Backtick', '`'),
   t('-', 'Dash', '-'),
-  { label: 'Paste', title: 'Paste from the clipboard', paste: true },
+  PASTE,
 ];
+
+// ---------- paste (#278) ----------
+
+/** What goes in: the text without the whitespace and line breaks around it (a copied code often ends in a newline). */
+export const pasteText = (raw: string | null | undefined) => (raw ?? '').trim();
+
+/**
+ * Paste from the clipboard, or the paste sheet when it can't: no clipboard API (plain http), the browser refused the
+ * read (no user activation, a phone's permission prompt said no) or nothing usable on it.
+ */
+export async function clipboardPaste(clipboard: Pick<Clipboard, 'readText'> | undefined): Promise<{ text: string } | { sheet: true }> {
+  if (!clipboard?.readText) return { sheet: true };
+  try {
+    const text = pasteText(await clipboard.readText());
+    return text ? { text } : { sheet: true };
+  } catch {
+    return { sheet: true };
+  }
+}
 
 // ---------- names ----------
 
