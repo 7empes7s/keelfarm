@@ -81,12 +81,14 @@
   --ds-dur-slow: 240ms;
   --ds-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  /* layers */
-  --ds-z-hud: 10;
-  --ds-z-panel: 30;
-  --ds-z-menu: 50;
-  --ds-z-confirm: 60;
-  --ds-z-toast: 70;
+  /* layers (#212): every z-index over 10 is one of these, so what opens last can always come to the front */
+  --ds-z-base: 10; /* the HUD over the 3D view */
+  --ds-z-panel: 30; /* panels and windows */
+  --ds-z-sheet: 40; /* sheets over a panel or the chat, full-screen gates */
+  --ds-z-popover: 50; /* menus, previews, pickers */
+  --ds-z-toast: 60;
+  --ds-z-tour: 70; /* the tour's card and ring */
+  --ds-z-modal: 80; /* confirmations, and readouts over everything */
 
   /* the notch and the home bar */
   --ds-safe-top: env(safe-area-inset-top, 0px);
@@ -192,7 +194,7 @@ html[data-reduce-motion] {
 }
 .ds-menu {
   position: fixed;
-  z-index: var(--ds-z-menu);
+  z-index: var(--ds-z-popover);
   display: flex;
   flex-direction: column;
   min-width: 220px;
@@ -272,7 +274,7 @@ html[data-reduce-motion] {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: var(--ds-z-menu);
+    z-index: var(--ds-z-popover);
     background: var(--ds-scrim);
     animation: fadein var(--ds-dur) ease-out;
   }

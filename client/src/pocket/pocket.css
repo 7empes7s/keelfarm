@@ -208,12 +208,14 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   font-size: 0.7rem;
 }
 
-/* the pages, the console over them, and a terminal, app or card in a pane beside them */
+/* the pages (or the console in their place), and a terminal, app or card in a pane beside them; the panel manager
+   (ui/panels.ts, #212) sets the console's and the pane's z-index so the one opened or touched last is in front */
 .pk-railed .pk-work {
   position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
+  container: pkwork / inline-size;
 }
 .pk-railed .pk-main {
   flex: 1 1 0;
@@ -224,24 +226,33 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   max-width: none;
   padding: 16px 20px 24px;
 }
+.pk-railed .pk-work-console > .pk-main {
+  display: none;
+}
 .pk-railed .pk-console-host:not(:empty) {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
+  container: pkpanel / inline-size;
+  background: var(--paper);
 }
 .pk-railed .pk-pane:not(:empty) {
   position: relative;
-  z-index: 2;
   flex: 1.5 1 0;
   min-width: 0;
   display: flex;
+  container: pkpanel / inline-size;
   border-left: var(--ds-border-strong) solid var(--ds-outline);
+  background: var(--paper);
 }
-.pk-layout-medium .pk-pane:not(:empty) {
-  position: absolute;
-  inset: 0;
-  border-left: none;
+/* too narrow for two panels side by side (a tablet, or the chat docked on a small desktop): the pane covers the page */
+@container pkwork (max-width: 719px) {
+  .pk-railed .pk-pane:not(:empty) {
+    position: absolute;
+    inset: 0;
+    border-left: none;
+  }
 }
 .pk-railed :is(.pk-pane, .pk-console-host) > .overlay {
   position: absolute;
@@ -263,9 +274,31 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 
 /* the CEO's chat, docked on the right (medium widths: a drawer over the pages) */
+.pk-dock-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  z-index: 1;
+  width: 14px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pk-dock-grip:is(:hover, :focus-visible, :active) {
+  background: linear-gradient(90deg, transparent 5px, var(--ds-focus) 5px, var(--ds-focus) 9px, transparent 9px);
+  outline: none;
+}
+/* what the last panel replaced (#212): one tap brings it back */
+.pk-back-chip {
+  min-width: 0;
+  max-width: 220px;
+  min-height: var(--ds-target);
+}
 .pk-dock {
+  position: relative;
   flex: none;
-  width: clamp(340px, 28vw, 440px);
+  /* dragged between 360 and 520 px (DockGrip.tsx), never leaving the rail and pages under 600 px */
+  width: clamp(360px, var(--pk-dock-w, 380px), max(360px, 100% - 692px));
   min-height: 0;
   display: flex;
   flex-direction: column;

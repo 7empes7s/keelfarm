@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { wrapIndex } from './dialogFocus';
+import { raiseIn, wrapIndex } from './dialogFocus';
 
 describe('wrapIndex', () => {
   it('steps forward and back through a dialog, wrapping at the ends', () => {
@@ -16,5 +16,16 @@ describe('wrapIndex', () => {
 
   it('has nowhere to go in a dialog without controls', () => {
     expect(wrapIndex(-1, 0, false)).toBe(-1);
+  });
+});
+
+describe('raiseIn (#212)', () => {
+  it('moves a dialog or back layer to the top, so Esc and Back close the one last touched', () => {
+    const list = ['console', 'terminal', 'card'];
+    expect(raiseIn(list, 'console')).toBe(true);
+    expect(list).toEqual(['terminal', 'card', 'console']);
+    expect(raiseIn(list, 'console')).toBe(false);
+    expect(raiseIn(list, 'missing')).toBe(false);
+    expect(list).toEqual(['terminal', 'card', 'console']);
   });
 });

@@ -31,6 +31,21 @@ const open: HTMLElement[] = [];
 /** True while a dialog that traps focus is open. */
 export const dialogOpen = () => open.length > 0;
 
+/** Moves `list`'s `el` to its end (the top), in place; true when it moved. */
+export function raiseIn<T>(list: T[], el: T): boolean {
+  const i = list.indexOf(el);
+  if (i < 0 || i === list.length - 1) return false;
+  list.splice(i, 1);
+  list.push(el);
+  return true;
+}
+
+/** Makes an open dialog the top one (panels side by side: the one clicked or focused, #212). */
+export const raiseDialog = (el: HTMLElement) => void raiseIn(open, el);
+
+/** Whether `el` is the top dialog: the one Tab stays in and Esc closes. */
+export const isTopDialog = (el: HTMLElement | null) => !!el && open[open.length - 1] === el;
+
 /** Makes the element in `ref` a modal dialog for the keyboard (give it tabIndex={-1} so it can hold focus itself). */
 export function useDialogFocus(ref: RefObject<HTMLElement | null>) {
   // Who had focus before the dialog, noted while rendering: by the time effects run, an autofocused field inside has it.

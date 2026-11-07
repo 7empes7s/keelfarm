@@ -59,7 +59,7 @@
 
 .ref-peek {
   position: fixed;
-  z-index: 1100;
+  z-index: var(--ds-z-popover);
   width: min(300px, calc(100vw - 32px));
   max-height: 45vh;
   overflow: hidden;
