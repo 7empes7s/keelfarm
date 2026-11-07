@@ -1,4 +1,5 @@
 // The office's own update: settling, draining, the hand-over to the launcher, the result after a restart.
+import crypto from 'node:crypto';
 import { HttpError } from '../httpError.ts';
 import { drainDecision, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
@@ -22,6 +23,14 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   protected unkept(): PersistedAgent[] {
     const boxes = this.inBoxes();
     return this.state.agents.filter((a) => BUSY.includes(a.status) && !boxes.includes(a) && !(a.role !== 'ceo' && a.status === 'working' && this.agentRt.get(a.id)?.session?.kept));
+  }
+
+  /** Demo only (#216): the office "updated itself" to a made-up commit, so open tabs show their New version pill. */
+  demoNewCommit() {
+    if (!this.backend.demo || !this.officeHead) throw new HttpError(404, 'Only the demo office makes up office updates');
+    this.officeHead = crypto.randomBytes(20).toString('hex');
+    this.outbox.resendAll(JSON.stringify({ type: 'snapshot', data: this.snapshot() }));
+    return { commit: this.officeHead.slice(0, 7) };
   }
 
   protected drainInput(): DrainInput {

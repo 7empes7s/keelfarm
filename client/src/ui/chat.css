@@ -68,31 +68,93 @@
   cursor: pointer;
 }
 
-/* a code block's Copy, in its corner; its hit area reaches 44 px */
+/* a code block (#200): a dark card like the agent terminal, its language and Copy in a header above the code */
 .md-code {
-  position: relative;
+  --code-bg: #1b1b29;
+  --code-head: #24243a;
+  --code-ink: #e6e6f0;
+  --code-muted: #9a9ab8;
+  contain: inline-size;
   min-width: 0;
+  margin: 0 0 0.55em;
+  overflow: hidden;
+  border: var(--ds-border) solid #34344e;
+  border-radius: var(--ds-radius-md);
+  background: var(--code-bg);
+  color: var(--code-ink);
 }
-.md-code > pre {
-  padding-right: 4.5rem;
-}
-.md-copy {
-  position: absolute;
-  top: var(--ds-space-1);
-  right: var(--ds-space-1);
-  padding: 2px var(--ds-space-2);
-  border: var(--ds-border) solid var(--ds-outline);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-surface-raised);
-  color: var(--ds-text);
-  font: inherit;
+.md-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  padding-left: var(--ds-space-3);
+  background: var(--code-head);
+  color: var(--code-muted);
   font-size: var(--ds-text-xs);
-  cursor: pointer;
+  font-weight: 600;
 }
-.md-copy::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
+.md-copy,
+.md-code-more {
+  color: var(--code-muted);
+  font-size: var(--ds-text-xs);
+}
+.md-copy svg {
+  flex: none;
+}
+.md-code .ds-btn-ghost:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--code-ink);
+}
+.md .md-code pre {
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 0.86em;
+  line-height: 1.55;
+}
+.md .md-code pre code {
+  font-size: inherit;
+}
+.md-line {
+  display: block;
+}
+/* other languages keep their lines and scroll sideways, fading at an edge with more to see */
+.md-code pre[data-fade='r'] {
+  mask-image: linear-gradient(to left, transparent, #000 24px);
+}
+.md-code pre[data-fade='l'] {
+  mask-image: linear-gradient(to right, transparent, #000 24px);
+}
+.md-code pre[data-fade='lr'] {
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+/* shell commands wrap, with a hanging indent after a muted $ that is never selected or copied */
+.md .md-code-shell pre,
+.md .md-code-shell pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.md-code-shell .md-line {
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+.md-code-shell .md-line-cmd::before {
+  content: '$ ';
+  color: var(--code-muted);
+  user-select: none;
+}
+.md-code-folded {
+  mask-image: linear-gradient(to top, transparent, #000 2.5em);
+}
+.md-code .md-code-more {
+  width: 100%;
+  border-radius: 0;
+  border-top: var(--ds-border) solid #34344e;
+  background: var(--code-head);
 }
 
 /* conversations */
@@ -234,4 +296,87 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* the chat's text size (#135): pinch, Ctrl + wheel, A−/A+ or Settings scale what's in the messages and the readers,
+   which reflow to the narrower room; the page's own zoom stays locked */
+.chat-log > *,
+.artifact-body > * {
+  zoom: var(--chat-text, 1);
+}
+.artifact-sheet {
+  position: relative;
+}
+.chat-text-pill {
+  position: absolute;
+  top: var(--ds-space-2);
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 0 var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.artifact-sheet .chat-text-pill {
+  top: calc(var(--ds-target) + var(--ds-space-4));
+}
+.chat-text-step,
+.chat-text-reset {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: none;
+  color: var(--ds-link);
+  font: inherit;
+  cursor: pointer;
+}
+.chat-text-step:hover,
+.chat-text-reset:hover {
+  background: var(--ds-surface-hover);
+}
+.a11y-chat-preview {
+  border-radius: var(--ds-radius-md);
+}
+
+/* full screen (#201): ⛶'s icon at about 55% of its button; the messages in a reading column of about 760px, the CEO's
+   code, tables and charts running wider (up to about 1100px) when the window has room */
+.chat-full-btn svg {
+  width: 55%;
+  height: 55%;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-full .chat-log-wrap {
+  container-type: inline-size;
+}
+.chat-full .chat-log {
+  padding-inline: max(10px, calc((100cqi - 760px) / 2));
+}
+.chat-full .chat-log > .bubble-row:has(> .bubble-them :is(pre, table, .md-code, .viz-svg)) {
+  margin-inline: calc(-1 * min(170px, max(0px, (100cqi - 780px) / 2)));
+}
+/* the chat's ⋯ only where its header has room for it; ⛶ is always there */
+.phone-chat,
+.pk-dock {
+  container: chatbox / inline-size;
+}
+@container chatbox (max-width: 519px) {
+  .chat-more {
+    display: none;
+  }
 }

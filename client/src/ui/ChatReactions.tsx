@@ -25,13 +25,15 @@ export function Reactions({ m, ceoName }: { m: PhoneMessage; ceoName: string }) 
   const [open, setOpen] = useState(false);
   const live = useStore((s) => s.chat.live);
   const job = useStore((s) => s.ceo.job?.label);
+  const statuses = useStore((s) => s.settings.statusReactions); // #193: off by default, the working strip says it
   const counts = reactionCounts(m.reactions);
-  if (!m.status && !counts.length) return null;
+  const status = statuses ? m.status : undefined;
+  if (!status && !counts.length) return null;
   return (
     <div className="reactions">
-      {m.status && (
-        <button type="button" key={m.status} className="reaction reaction-status reaction-pop" aria-label={statusLabel(m.status, ceoName)} aria-expanded={open} onClick={() => setOpen(!open)}>
-          {STATUS_EMOJI[m.status]}
+      {status && (
+        <button type="button" key={status} className="reaction reaction-status reaction-pop" aria-label={statusLabel(status, ceoName)} aria-expanded={open} onClick={() => setOpen(!open)}>
+          {STATUS_EMOJI[status]}
         </button>
       )}
       {counts.map((c) =>
@@ -46,9 +48,9 @@ export function Reactions({ m, ceoName }: { m: PhoneMessage; ceoName: string }) 
           </span>
         ),
       )}
-      {open && m.status && (
+      {open && status && (
         <div className="reaction-note" role="status">
-          {statusNote(m.status, live, job)}
+          {statusNote(status, live, job)}
         </div>
       )}
     </div>

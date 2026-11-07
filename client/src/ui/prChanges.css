@@ -1,0 +1,266 @@
+/* "What this PR changes" (#203): the side column beside a PR's preview, a pull-up sheet on a phone. */
+
+.app-body {
+  position: relative; /* the phone's sheet sits over the preview's bottom */
+}
+.prc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  background: var(--ds-surface-raised);
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  color: var(--ds-text);
+}
+.prc-side {
+  flex: 0 0 320px;
+}
+@media (max-width: 900px) {
+  .prc-side {
+    flex: 0 0 auto;
+    max-height: 45%;
+  }
+}
+.prc section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.prc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.prc-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--ds-text-md);
+}
+.prc-h {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+}
+.prc-goal-title {
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-tight);
+}
+.prc-goal-text {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading);
+}
+
+/* ---------- stats ---------- */
+
+.prc-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--ds-space-2);
+}
+.prc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.prc-stat:hover {
+  background: var(--ds-surface-hover);
+}
+.prc-stat b {
+  font-size: var(--ds-text-lg);
+  line-height: 1.1;
+}
+.prc-stat span {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  white-space: nowrap;
+}
+
+/* ---------- the live agent ---------- */
+
+.prc .prc-live {
+  flex-direction: row;
+  align-items: center;
+  padding: var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-hover);
+}
+.prc-live-main {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ds-target);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.prc-live-main img {
+  width: 64px;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: top left;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-sm);
+  flex: none;
+}
+.prc-live-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ds-good-fill);
+  border: var(--ds-border) solid var(--ds-outline);
+  flex: none;
+}
+.prc-live-text {
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- pages ---------- */
+
+.prc-pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.prc-page {
+  width: 100%;
+  min-height: var(--ds-target);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.prc-page:hover {
+  background: var(--ds-surface-hover);
+}
+.prc-page-on {
+  border-color: var(--ds-outline);
+  background: var(--ds-surface-hover);
+  box-shadow: var(--ds-shadow-1);
+}
+.prc-page img,
+.prc-page-glyph {
+  width: 72px;
+  aspect-ratio: 16 / 10;
+  flex: none;
+  object-fit: cover;
+  object-position: top left;
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.prc-page-glyph {
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+}
+.prc-page-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--ds-text-sm);
+}
+.prc-page-text span,
+.prc-page-text code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prc-page-text code {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+.prc .btn code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 14em;
+}
+.prc-qa {
+  border-top: var(--ds-border) solid var(--ds-line);
+  padding-top: var(--ds-space-3);
+}
+
+/* ---------- the phone's pull-up sheet ---------- */
+
+.prc-sheet {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 72%;
+  border-radius: var(--ds-radius-xl) var(--ds-radius-xl) 0 0;
+  border-bottom: 0;
+  box-shadow: var(--ds-shadow-float);
+  padding-bottom: max(var(--ds-space-3), env(safe-area-inset-bottom));
+}
+.prc-sheet .prc-head {
+  position: relative;
+  padding-top: var(--ds-space-2);
+}
+.prc-grip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-line-strong);
+}
+/* the lowered sheet keeps clear of the preview's bottom */
+.app-body:has(> .prc-peek) > .app-main {
+  padding-bottom: 60px;
+}
+.prc-peek {
+  position: absolute;
+  min-height: 56px;
+  gap: 0;
+  padding-top: var(--ds-space-4);
+  align-items: flex-start;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.prc-peek .prc-grip {
+  top: var(--ds-space-2);
+}
+.prc-peek .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}

@@ -217,6 +217,12 @@ export class SessionHistory {
     return e;
   }
 
+  /** The demo's made-up past (#205): index lines only, no daily log or transcripts. */
+  async seed(entries: HistoryEntry[]) {
+    this.entries.push(...entries);
+    if (entries.length) await this.writes.append(this.index, () => entries.map((e) => `${JSON.stringify(e)}\n`).join(''));
+  }
+
   /** Gzips a transcript to `to`, through a temp file so a half-written copy never shows. */
   private async copy(from: string, to: string) {
     await fsp.mkdir(path.dirname(to), { recursive: true });
