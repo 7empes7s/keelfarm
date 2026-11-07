@@ -11,7 +11,7 @@ import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
-import { Chat } from '../ui/Phone';
+import { Chat } from '../ui/Chat';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';
@@ -32,6 +32,8 @@ import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { useChatMode } from '../ui/chatMode';
+import { useChatFull, useChatFullBack } from '../ui/chatFull';
+import { FullButton } from '../ui/ChatActionsSheet';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
@@ -326,6 +328,9 @@ export default function Pocket() {
     },
     [layout],
   );
+  // The chat full screen (#201): the docked chat over the rail and the pages, or the phone's chat without the tab bar.
+  const full = useChatFull((s) => s.on) && (wide ? dock : tab === 'chat') && !(loaded && !setupDone);
+  useChatFullBack(full);
   const openChat = () => {
     if (wide) setDock(true);
     else setTab('chat');
@@ -401,6 +406,10 @@ export default function Pocket() {
   // The keyboard (#104): 1-5 the tabs, / the chat's box, Esc the chat drawer; never while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && full && !e.defaultPrevented && !isConfirmOpen()) {
+        e.preventDefault();
+        return useChatFull.getState().set(false);
+      }
       if (e.ctrlKey || e.metaKey || e.repeat || e.defaultPrevented || typingIn(e.target) || isConfirmOpen()) return;
       const n = TAB_KEYS.indexOf(e.code);
       if (n >= 0) {
@@ -436,9 +445,9 @@ export default function Pocket() {
   ];
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
   const chatMode = useChatMode();
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} />;
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} />;
   return (
-    <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''}`}>
+    <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''} ${full ? 'pk-chat-full' : ''}`}>
       <header className="pk-head">
         <span className="pk-logo" aria-hidden>
           ✻
@@ -462,6 +471,8 @@ export default function Pocket() {
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
+        {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
+        {!wide && tab === 'chat' && <FullButton />}
         {wide && (
           <button className="btn btn-small pk-switch" aria-pressed={chatMode.on} onClick={() => chatMode.set(!chatMode.on)} title={`Chat mode (#120): agents' windows open on their ${chatMode.on ? 'chat' : 'terminal'}. Click to switch`}>
             💬 Chat {chatMode.on ? 'on' : 'off'}

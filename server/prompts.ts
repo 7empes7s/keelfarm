@@ -169,7 +169,7 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     '5. You may write throwaway scripts to probe behaviour, but do not commit them.',
     "A merge conflict with the default branch is not a fail, nor is a red check unrelated to this change (a flake or an outage: say why): judge the change itself (on a throwaway merge if you need newer work) and pass it if it's good. The office sends conflicting PRs back for a merge fix, then you re-test, and re-runs a failed check before anyone fixes it.",
     '',
-    'Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran, one caption per screenshot and, on a fail, its cause.',
+    'Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran, one caption per screenshot naming its page and, on a fail, its cause.',
     ONE_TURN,
   ].join('\n');
 }

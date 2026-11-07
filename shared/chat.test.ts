@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUOTE_CHARS, RESEARCH_PREFIX, excerpt, forwardText, isQuestion, nextDelivery, parseForwarded, researchTopic, settleOutbox, yesNoFor, type OutgoingMessage } from './chat.ts';
+import { QUOTE_CHARS, RESEARCH_PREFIX, excerpt, forwardText, hideHarness, isHarnessText, isQuestion, messageLook, nextDelivery, parseForwarded, researchTopic, settleOutbox, stripHarness, yesNoFor, type OutgoingMessage } from './chat.ts';
 import type { PhoneMessage } from './types.ts';
 
 describe('forwardText', () => {
@@ -103,5 +103,42 @@ describe('settleOutbox', () => {
 
   it('keeps failed sends for their retry', () => {
     expect(settleOutbox([out(1, 'hi', { delivery: 'failed' })], { from: 'manager', text: 'hi' })).toHaveLength(1);
+  });
+});
+
+describe('backend stays backend (#193)', () => {
+  // The exact text that reached the live chat as messages 989 and 1001.
+  const notice = '<task-notification>\n<task-id>ksyddpqvg</task-id>\n<status>completed</status>\n<summary>MCP task ksyddpqv (office/wait_for) completed.</summary>\n<result>\nThe job ended.\n</result>\n</task-notification>';
+  const msg = (id: number, from: PhoneMessage['from'], text: string, extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id, from, text, at: id, ...extra });
+
+  it('knows harness output from what a person wrote', () => {
+    expect(isHarnessText(notice)).toBe(true);
+    expect(isHarnessText(`  ${notice}\n<system-reminder>x</system-reminder>`)).toBe(true);
+    expect(isHarnessText('What does <task-notification> mean?')).toBe(false);
+    expect(isHarnessText(`${notice}\nAnd also check floor 2`)).toBe(false); // the manager's words stay
+    expect(stripHarness(`Done.\n${notice}`)).toBe('Done.');
+  });
+
+  it('hides stored task notifications and the CEO replies to them on load', () => {
+    const thread = [
+      msg(988, 'manager', 'Ship it'),
+      msg(989, 'manager', notice),
+      msg(990, 'ceo', 'Noted, the wait ended.'),
+      msg(991, 'office', '🧹 Freed 900 MB from 1 idle desk'),
+      msg(1001, 'manager', notice),
+      msg(1002, 'manager', 'How is floor 2?'),
+      msg(1003, 'ceo', 'The wait for the job ended.', { replyTo: 1001 }),
+      msg(1004, 'ceo', 'Floor 2 is fine.', { replyTo: 1002 }),
+    ];
+    expect(hideHarness(thread).map((m) => m.id)).toEqual([988, 991, 1002, 1004]);
+    expect(hideHarness(thread.slice(0, 1))).toEqual(thread.slice(0, 1));
+  });
+
+  it('shows an office notice as a pill, never a bubble, and harness output not at all', () => {
+    expect(messageLook(msg(1, 'office', '🧹 Freed 900 MB from 1 idle desk'))).toBe('pill');
+    expect(messageLook(msg(2, 'office', 'Update held back', { notice: { details: 'tests failed' } }))).toBe('card');
+    expect(messageLook(msg(3, 'manager', notice))).toBe('hidden');
+    expect(messageLook(msg(4, 'manager', 'Hi'))).toBe('bubble');
+    expect(messageLook(msg(5, 'ceo', 'Hello'))).toBe('bubble');
   });
 });
