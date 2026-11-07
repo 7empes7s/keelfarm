@@ -192,3 +192,105 @@
   outline: 3px solid var(--ds-focus);
   outline-offset: 2px;
 }
+/* #208: a CEO action probably answered it: one muted line and two taps instead of the options */
+.decision-probably {
+  align-items: center;
+}
+.decision-probably-what {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}
+/* the decision log (ui/DecisionLog.tsx): a bar of who closed what this week, then the closed questions */
+.decision-log {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.decision-log-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--ds-radius-pill);
+  overflow: hidden;
+  background: var(--ds-surface-sunken);
+}
+.decision-log-bar i {
+  flex-basis: 0;
+  min-width: 6px;
+}
+.decision-log-open {
+  background: var(--ds-accent);
+}
+.decision-log-bar .decision-log-you {
+  background: var(--ds-good-fill);
+}
+.decision-log-bar .decision-log-ceo {
+  background: var(--ds-link);
+}
+.decision-log-bar .decision-log-auto {
+  background: var(--ds-line-strong);
+}
+.decision-log-counts {
+  margin: 0;
+}
+.decision-log-list {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.decision-log-entry {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-line);
+  border-left-width: 4px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+.decision-log-entry.decision-log-you {
+  border-left-color: var(--ds-good-fill);
+}
+.decision-log-entry.decision-log-ceo {
+  border-left-color: var(--ds-link);
+}
+.decision-log-entry.decision-log-auto {
+  border-left-color: var(--ds-line-strong);
+}
+.decision-log-q {
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.decision-log-a {
+  overflow-wrap: anywhere;
+}
+.decision-log-how {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+}
+.decision-log-link {
+  min-height: var(--ds-target);
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-link);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  text-decoration: none;
+  cursor: pointer;
+}
+.decision-log-reopen {
+  margin-left: auto;
+}
+.decision-log-link:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}

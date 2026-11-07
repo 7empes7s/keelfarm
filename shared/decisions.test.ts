@@ -5,12 +5,19 @@ import {
   SNOOZE_MS,
   chatDecisions,
   closeDecision,
+  closedHow,
+  decisionCounts,
   decisionsForCeo,
+  decisionsReminder,
   digestDue,
   fromCeoMessage,
   loadDecisions,
+  onCeoAction,
   onManagerMessage,
+  probablyLeft,
   questionLine,
+  reopenDecision,
+  settleProbable,
   shownDecisions,
   snoozeDecision,
   syncDecisions,
@@ -183,7 +190,7 @@ describe('syncDecisions', () => {
     const list = syncDecisions(asked(1000), world(), 1000 + DECISION_TTL_MS + 1);
     expect(list).toHaveLength(1);
     expect(list[0].status).toBe('archived');
-    expect(shownDecisions(list)).toHaveLength(1);
+    expect(shownDecisions(list, 1000 + DECISION_TTL_MS + 1)).toHaveLength(1);
     expect(waitingDecisions(list, Date.now())).toEqual([]);
   });
 
@@ -220,5 +227,80 @@ describe('what the CEO and the tabs get', () => {
   it('loads saved state, dropping what is malformed', () => {
     expect(loadDecisions(undefined)).toEqual({ list: [], digestAt: 0 });
     expect(loadDecisions({ list: [...asked(), { id: 3 }], digestAt: 9 })).toEqual({ list: asked(), digestAt: 9 });
+  });
+});
+
+// #208: the manager's phone, msg 1054. Asked about A/B/C in 1048, C asked again in 1049, the reply went to 1048.
+describe('re-asks and answers by doing', () => {
+  const issue = (repoId: string, number: number) => ({ start: 0, end: 3, kind: 'issue' as const, repoId, number });
+  const ASK_ALL = ceo(1048, 'Three fixes came up on floor 1: A the quieter memory alert, B the retry button, C a dark mode toggle for the console. Shall I file all three?', ['Yes, file all three', 'Only A and B', 'Not now'], { refs: [issue('r1', 60)] });
+  const ASK_C = ceo(1049, 'Should I also file C, the dark mode toggle for the console?', ['Yes, file C', 'Not now'], { refs: [issue('r1', 60)] });
+  const both = () => fromCeoMessage(fromCeoMessage([], ASK_ALL, 1048_000), ASK_C, 1049_000);
+  const open = (list: Decision[]) => list.filter((d) => d.status === 'open');
+
+  it('the exact scenario (ask 1048, re-ask 1049, reply to 1048) leaves nothing open', () => {
+    const list = both();
+    expect(list.find((d) => d.id === 'msg:1049')?.reAskOf).toBe('msg:1048');
+    const after = onManagerMessage(list, manager(1052, 'Yes, file all three', 1048), 1052_000);
+    expect(open(after)).toEqual([]);
+    expect(after.find((d) => d.id === 'msg:1049')).toMatchObject({ status: 'resolved', closedBy: { kind: 'reask', messageId: 1052, via: 'msg:1048' } });
+  });
+
+  it('answering the re-ask closes the original', () => {
+    const after = onManagerMessage(both(), manager(1050, 'Yes, file C', 1049), 1050_000);
+    expect(open(after)).toEqual([]);
+    expect(after.find((d) => d.id === 'msg:1048')?.closedBy).toEqual({ kind: 'reask', messageId: 1050, via: 'msg:1049' });
+  });
+
+  it('links on shared words when neither names a thing, and also when the older was replaced', () => {
+    const a = ceo(1, 'Shall I file the dark mode toggle, the console search and the retry button?', ['File all', 'Not now']);
+    const b = ceo(2, 'Should I at least file the dark mode toggle for the console?', ['File the toggle', 'Later']);
+    const list = fromCeoMessage(fromCeoMessage([], a, 1000), b, 2000);
+    expect(list[1].reAskOf).toBe('msg:1');
+    expect(open(onManagerMessage(list, manager(3, 'yes', 1), 3000))).toEqual([]);
+  });
+
+  it('an unrelated decision on another floor stays open', () => {
+    const other = ceo(1047, 'Floor 2: shall I raise the memory margin for the console builds?', ['Raise it', 'Leave it'], { refs: [issue('r2', 9)] });
+    const list = fromCeoMessage(both(), other, 1049_500);
+    expect(list.find((d) => d.id === 'msg:1047')?.reAskOf).toBeUndefined();
+    const after = onManagerMessage(list, manager(1052, 'Yes, file all three', 1048), 1052_000);
+    expect(open(after).map((d) => d.id)).toEqual(['msg:1047']);
+    const acted = onCeoAction(after, { repoId: 'r1', about: [], text: 'Dark mode toggle for the console', done: 'filed #207' }, 1053_000);
+    expect(open(acted)).toEqual(open(after));
+  });
+
+  it('a sure action match closes it as done; an unsure one marks it probably answered, not closed', () => {
+    const c = fromCeoMessage([], ceo(5, 'Should I also file C, the dark mode toggle?', ['Yes, file C', 'Not now'], { refs: [issue('r1', 60)] }), 5000);
+    const sure = onCeoAction(c, { repoId: 'r1', about: [], text: 'Dark mode toggle for the console', done: 'filed #207', link: { kind: 'issue', repoId: 'r1', number: 207 } }, 6000);
+    expect(sure[0]).toMatchObject({ status: 'resolved', outcome: 'done: filed #207', closedBy: { kind: 'action', done: 'filed #207', link: { number: 207 } } });
+    // the question names no floor and shares only the message's words: unsure
+    const vague = fromCeoMessage([], ceo(6, 'C was the dark mode toggle. Want it?', ['Yes', 'No']), 6000);
+    const unsure = onCeoAction(vague, { repoId: 'r1', about: [], text: 'Dark mode toggle for the console', done: 'filed #207' }, 7000);
+    expect(unsure[0]).toMatchObject({ status: 'open', probably: { done: 'filed #207', at: 7000 } });
+    expect(probablyLeft(unsure, 7000)).toEqual([expect.stringContaining('msg:6')]);
+    expect(probablyLeft(unsure, 7001)).toEqual([]);
+    expect(decisionsReminder(unsure, 8000, () => 1)).toContain('- msg:6: Want it? · probably answered: filed #207');
+    expect(settleProbable(unsure, 'msg:6', false, 8000)[0].probably).toBeUndefined();
+    expect(settleProbable(unsure, 'msg:6', true, 8000)[0]).toMatchObject({ status: 'resolved', closedBy: { kind: 'confirmed', done: 'filed #207' } });
+  });
+
+  it('the decision log entry carries the closing kind and the message id; Reopen brings it back', () => {
+    const after = onManagerMessage(both(), manager(1052, 'Yes, file all three', 1048), 1052_000);
+    const d = after.find((x) => x.id === 'msg:1048')!;
+    expect(d.closedBy).toEqual({ kind: 'reply', messageId: 1052, to: 1048 });
+    expect(closedHow(d)).toEqual({ text: 'Replied to message 1048', messageId: 1048 });
+    expect(decisionCounts(after, 1053_000)).toEqual({ open: 0, you: 2, ceo: 0, auto: 0 });
+    const back = reopenDecision(after, 'msg:1048', 1060_000).find((x) => x.id === 'msg:1048')!;
+    expect(back).toMatchObject({ status: 'open', closedAt: null, outcome: null, lastAskedAt: 1060_000 });
+    expect(back.closedBy).toBeUndefined();
+  });
+
+  it('decisions saved before #208 load and read in the log by their status', () => {
+    const old = { id: 'msg:1', kind: 'suggestion', question: 'Q?', options: ['A'], repoIds: [], about: [], messageId: 1, askedAt: 1, lastAskedAt: 1, raised: 1, status: 'resolved', snoozedUntil: null, closedAt: 2, outcome: 'decided', closedBy: 'junk' };
+    const [d] = loadDecisions({ list: [old] }).list;
+    expect(d.closedBy).toBeUndefined();
+    expect(closedHow(d).text).toBe('Closed by itself');
+    expect(decisionCounts([d], 3)).toMatchObject({ auto: 1 });
   });
 });
