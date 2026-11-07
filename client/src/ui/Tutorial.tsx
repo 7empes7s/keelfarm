@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
@@ -104,7 +105,8 @@ function Spotlight({ targets }: { targets: readonly string[] }) {
   }, [targets]);
   if (!rect) return null;
   const pad = 4;
-  return <div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} />;
+  // on the body: inside a zoomed box (the UI scale) its place would be scaled again
+  return createPortal(<div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} />, document.body);
 }
 
 /** The tour on this screen: the full one while settings.tutorialStep says so, else a What's new replay. */
@@ -115,7 +117,6 @@ export function Tutorial({ track }: { track: Track }) {
   const pocketTour = useTour((s) => s.pocketTour);
   const replay = useTour((s) => s.replay);
   const [cheer, setCheer] = useState(false);
-  const moving = useRef(false);
   const shownAt = useRef(Date.now());
   useEffect(() => useTour.setState({ track }), [track]);
 
@@ -134,18 +135,14 @@ export function Tutorial({ track }: { track: Track }) {
       } else useTour.setState({ replay: { ids: replay!.ids, at: Math.max(0, to) } });
       return;
     }
-    if (moving.current) return;
-    moving.current = true;
     if (to >= all.length) {
       saveSeen(all);
       useTour.setState({ pocketTour: false });
     }
-    void api
-      .updateSettings({ tutorialStep: to >= all.length ? -1 : to })
-      .catch(() => undefined)
-      .finally(() => {
-        moving.current = false;
-      });
+    // at once here, so quick taps each count; the office's echo agrees
+    const tutorialStep = to >= all.length ? -1 : Math.max(0, to);
+    useStore.setState((st) => ({ settings: { ...st.settings, tutorialStep } }));
+    void api.updateSettings({ tutorialStep }).catch(() => undefined);
   };
 
   useEffect(() => {
@@ -160,7 +157,7 @@ export function Tutorial({ track }: { track: Track }) {
     if (!rule) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const check = () => {
-      if (timer || moving.current) return;
+      if (timer) return;
       if (!rule.done(useStore.getState())) return;
       const wait = Math.max(0, (rule.minMs ?? 0) - (Date.now() - shownAt.current));
       timer = setTimeout(() => {
@@ -212,6 +209,11 @@ export function Tutorial({ track }: { track: Track }) {
             <span key={x.id} className={`tour-dot ${i === at ? 'tour-dot-on' : i < at ? 'tour-dot-done' : ''}`} />
           ))}
         </div>
+        {s.tryIt && (
+          <button className="btn btn-small tour-try" onClick={() => tryIt(s.tryIt!)}>
+            👆 {TRY_LABEL[s.tryIt]}
+          </button>
+        )}
         <div className="tour-nav">
           {at > 0 && (
             <button className="btn btn-small btn-ghost" onClick={() => go(at - 1)}>
@@ -219,11 +221,6 @@ export function Tutorial({ track }: { track: Track }) {
             </button>
           )}
           <span className="spacer" />
-          {s.tryIt && (
-            <button className="btn btn-small" onClick={() => tryIt(s.tryIt!)}>
-              👆 {TRY_LABEL[s.tryIt]}
-            </button>
-          )}
           <button className="btn btn-small btn-good" onClick={() => go(at + 1)}>
             {last ? (tour ? 'Finish' : 'Done') : auto ? 'Skip step' : 'Next →'}
           </button>
