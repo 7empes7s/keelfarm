@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
@@ -38,6 +38,7 @@ import { HolidayStrip } from './HolidayStrip';
 import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
 import { useCeoDraft } from './goTo';
+import { useMode } from '../pocket/mode';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { ChatTextPill, isPinching, lastPinchAt, useChatPinch } from './ChatZoom';
@@ -45,6 +46,9 @@ import { pinchCancels } from './chatPinch';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
+
+// The CEO's charts, tables and dashboards (#146): their own chunk, loaded with the first message that has one.
+const ChatVisuals = lazy(() => import('./ChatVisuals'));
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
@@ -496,6 +500,11 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
         ))}
+        {!!m?.visuals?.length && (
+          <Suspense fallback={null}>
+            <ChatVisuals visuals={m.visuals} />
+          </Suspense>
+        )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
         {m?.used && <UsedLine used={m.used} />}
@@ -1013,6 +1022,7 @@ function useCompany() {
 function Shortcuts() {
   const openOverlay = useStore((s) => s.openOverlay);
   const repoId = useStore((s) => s.repos.find((r) => r.floor === s.floor)?.id);
+  const office = useMode((s) => s.mode === 'office'); // the map room is 3D: pocket mode has the 2D map
   return (
     <nav className="phone-links" aria-label="Open a panel">
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager' })}>
@@ -1026,6 +1036,11 @@ function Shortcuts() {
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
         👥 Floor list
       </button>
+      {office && (
+        <button className="btn btn-small" onClick={() => openOverlay({ kind: 'mapRoom' })}>
+          🌌 Map room
+        </button>
+      )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
         ❓ Help
       </button>

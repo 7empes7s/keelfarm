@@ -64,6 +64,10 @@
   --ds-series-2: var(--ds-good-fill);
   --ds-series-3: var(--ds-bad-fill);
   --ds-series-4: #8fb3ff;
+  --ds-series-5: #c9a7ff;
+  --ds-series-6: #ffad73;
+  --ds-series-7: #5fd4e0;
+  --ds-series-8: #c8c2b4; /* last: a donut's "Other" */
 
   /* elevation: the office's solid offset shadows */
   --ds-shadow-1: 0 2px 0 var(--ds-shadow-color);

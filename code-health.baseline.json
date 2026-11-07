@@ -586,9 +586,9 @@
     "types:shared/types.ts:PushDeviceView"
   ],
   "sizes": {
-    "client/src/store.ts": 854,
+    "client/src/store.ts": 855,
     "client/src/styles.css": 6341,
-    "client/src/ui/Phone.tsx": 1167,
+    "client/src/ui/Phone.tsx": 1231,
     "client/src/ui/sfx.ts": 838,
     "client/src/world/ErrandDirector.tsx": 851,
     "client/src/world/draw.ts": 911,

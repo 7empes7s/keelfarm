@@ -5,7 +5,7 @@ import { stillOpen } from '../closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from '../deps.ts';
 import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
-import { MAX_MERGE_FIXES } from '../mergeGate.ts';
+import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
 import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
 import { qaInstructions } from '../qaPrompt.ts';
@@ -589,4 +589,29 @@ export abstract class SwarmQa extends SwarmSessions {
     }
   }
   protected qaWaits = new Map<string, number>(); // `${repoId}#${pr}` -> how long its QA run in progress waited for a tester
+
+  // ---------- CI outages (#191) ----------
+
+  /** One-off (#191): PRs a CI outage left with the manager after QA passed them go back to the merge gate, which re-runs their checks once. */
+  protected releaseOutageStuck() {
+    const back: string[] = [];
+    for (const rec of this.state.qa.filter(releasedAfterOutage)) {
+      this.setQa(rec, { status: 'passed', rerunSha: null, rerunAt: null, stuckWhy: null, escalated: false, mergeNote: null, pendingSince: null, mergeRetryAt: null, alerted: false });
+      const repo = this.state.repos.find((r) => r.id === rec.repoId);
+      back.push(`#${rec.prNumber}${repo ? ` on ${repo.fullName}` : ''}`);
+    }
+    this.state.outageReleased = true;
+    if (back.length) this.postMessage('office', `↩️ ${back.join(', ')} only failed their checks because CI couldn't run: they re-run their checks and merge by themselves, no need to look at them.`);
+  }
+
+  /** The demo only: a QA-passed PR a CI outage holds, parked as the merge gate would. */
+  protected async seedParked(fullName: string, prNumber: number) {
+    const repo = this.state.repos.find((r) => r.fullName === fullName);
+    const pr = repo && this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber);
+    if (!repo || !pr) return;
+    this.queueQa(repo, prNumber, null, pr.closesIssues[0] ?? null);
+    const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber)!;
+    this.setQa(rec, { status: 'passed', passedSha: pr.headSha, summary: 'All checks passed.' });
+    await this.park(repo, rec, pr, NEVER_STARTED);
+  }
 }

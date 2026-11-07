@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CommandError, gh, ghJson } from './exec.ts';
+import { NEVER_STARTED_MS } from './mergeGate.ts';
 import { PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import { TRUST_LABEL } from '../shared/trust.ts';
@@ -161,6 +162,13 @@ const failed = (c: Check) => BAD.includes(c.conclusion ?? '') || BAD.includes(c.
 const pending = (c: Check) => (!!c.status && c.status !== 'COMPLETED') || c.state === 'PENDING' || c.state === 'EXPECTED';
 const checkName = (c: Check) => c.name || c.context || 'check';
 
+/** A check run GitHub ended without running it (#191): a startup failure, or finished within seconds of starting. */
+export function neverStartedCheck(c: Check): boolean {
+  if (c.conclusion === 'STARTUP_FAILURE') return true;
+  const ms = Date.parse(c.completedAt ?? '') - Date.parse(c.startedAt ?? '');
+  return c.status === 'COMPLETED' && Number.isFinite(ms) && ms < NEVER_STARTED_MS;
+}
+
 function checksOf(rollup: RawPull['statusCheckRollup']): PullInfo['checks'] {
   if (!rollup || rollup.length === 0) return 'none';
   if (rollup.some(failed)) return 'failing';
@@ -199,7 +207,7 @@ function toPull(p: RawPull): PullInfo {
     checks: checksOf(p.statusCheckRollup),
     headSha: p.headRefOid,
     mergeState: p.mergeStateStatus || 'UNKNOWN',
-    failedChecks: (p.statusCheckRollup ?? []).filter(failed).map((c) => ({ name: checkName(c), url: c.detailsUrl || c.targetUrl || null })),
+    failedChecks: (p.statusCheckRollup ?? []).filter(failed).map((c) => ({ name: checkName(c), url: c.detailsUrl || c.targetUrl || null, ...(neverStartedCheck(c) ? { neverStarted: true } : {}) })),
     pendingChecks: (p.statusCheckRollup ?? []).filter(pending).map(checkName),
     checkRun: checkRunOf(p.statusCheckRollup),
     files: (p.files ?? []).slice(0, PR_FILES_MAX).map((f) => f.path),
@@ -298,6 +306,14 @@ export async function failedRunLog(fullName: string, runId: string): Promise<str
 /** Re-run the failed jobs of these GitHub Actions runs (a flaky check or an outage). */
 export async function rerunFailedJobs(fullName: string, runIds: number[]): Promise<void> {
   for (const id of runIds) await gh(['run', 'rerun', String(id), '--failed', '-R', fullName], { timeoutMs: 60_000 });
+}
+
+/** The annotations' messages on GitHub Actions jobs, from their log URLs (…/job/<id>: a job is a check run), e.g. why GitHub wouldn't run them. */
+export async function checkAnnotations(fullName: string, urls: string[]): Promise<string[]> {
+  const ids = [...new Set(urls.map((u) => u.match(/\/job\/(\d+)/)?.[1]).filter((id): id is string => !!id))].slice(0, 3);
+  const out: string[] = [];
+  for (const id of ids) out.push(...(await ghJson<{ message?: string }[]>(['api', `repos/${fullName}/check-runs/${id}/annotations`], { timeoutMs: 30_000 })).map((a) => a.message ?? ''));
+  return out;
 }
 
 export async function closePull(fullName: string, number: number): Promise<void> {
