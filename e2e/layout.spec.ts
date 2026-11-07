@@ -324,6 +324,7 @@ const SCREENS: Screen[] = [
   { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /GitHub/, ON_FLOOR_1), tabs: [] },
   { name: 'floor list', widths: OFFICE, open: (page) => fromPhone(page, /Floor list/, /Floor|Lobby/), tabs: [] },
   { name: 'help', widths: OFFICE, open: (page) => fromPhone(page, /Help/, /How the office works/), tabs: ['The office', 'Controls'] },
+  { name: 'map room (#137)', widths: OFFICE, open: (page) => fromPhone(page, /Map room/, /Map room/), tabs: [] },
   {
     name: 'catalogue',
     widths: OFFICE,

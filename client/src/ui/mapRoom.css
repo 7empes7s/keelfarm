@@ -60,6 +60,16 @@
   .map-room .mr-hint {
     display: none;
   }
+  /* search keeps a full row; Filters and Open as 2D map share the one below */
+  .map-room .mm-bar {
+    flex-wrap: wrap;
+  }
+  .map-room .mm-search {
+    flex-basis: 100%;
+  }
+  .map-room .mm-filter-btn {
+    flex: 1;
+  }
   .map-room .mm-legend {
     flex-wrap: nowrap;
     overflow-x: auto;

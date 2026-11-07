@@ -14,8 +14,8 @@ export function MapRoom() {
       <MemoryMap
         Stage={Constellation}
         action={
-          <button type="button" className="btn mm-filter-btn" onClick={() => openOverlay({ kind: 'manager', tab: 'map' })}>
-            🗺️ Open as 2D map
+          <button type="button" className="btn mm-filter-btn" onClick={() => openOverlay({ kind: 'manager', tab: 'map' })} aria-label="Open as 2D map">
+            🗺️ 2D map
           </button>
         }
       />
