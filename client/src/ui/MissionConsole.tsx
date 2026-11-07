@@ -8,6 +8,8 @@ import { CostsSection } from './CostsSection';
 import { Actions, Chip, LinkButton, Section } from './DetailsPage';
 import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
+import { FloorProgress } from './FloorProgress';
+import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { HealthStrip } from './HealthStrip';
@@ -277,6 +279,7 @@ const COLUMNS: [string, (n: OpsNumbers) => string, string?][] = [
     (n) => (n.qaRoundsPerMerge === null ? fmtPct(n.qaFirstPass) : `${fmtPct(n.qaFirstPass)} · ${n.qaRoundsPerMerge.toFixed(1)} rounds/merge`),
     'Over 7 days: PRs whose first QA round passed · average QA rounds per merged PR',
   ],
+  ['Lab errors', (n) => String(n.qaLabErrors), 'QA rounds the test lab failed over 7 days (no browser, out of memory, went silent): not counted as failed rounds'],
   ['CI', (n) => (n.ciRuns ? `${fmtPct(n.ciPass)} · ${fmtDuration(n.ciMs)}` : '—'), "GitHub's checks over 7 days: pass rate · median time"],
   ['Team', (n) => `${n.busy} busy · ${n.idle} idle${n.errors ? ` · ${n.errors} error` : ''}`],
   ['Cost today', (n) => `~${fmtUsd(n.costToday)}`, "An estimate from finished sessions' reported cost"],
@@ -339,8 +342,10 @@ export function OpsTab({ card }: { card?: string }) {
           <AlarmCard key={a.id} alarm={a} repo={repos.find((r) => r.id === a.repoId)} hot={a.id === card} />
         ))}
         <DoctorSection hot={card === 'doctor'} />
+        <ManagerChangesCard />
       </div>
       <div>
+        <FloorProgress />
         <h3 className="section">🛰️ The numbers</h3>
         <OpsTable />
         <CostsSection />

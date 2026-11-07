@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveModel, isClaudeModel, localModel, modelSuggestions } from './models.ts';
+import { CLAUDE_MODELS, effectiveModel, inCatalog, isClaudeModel, labelOf, localModel, mergeCatalog, modelAfterCliChange, modelLabel, modelProblem, OTHER_MODEL, pickerOptions, resolveAlias } from './models.ts';
 
 const claudeOffice = { defaultCli: 'claude' as const, defaultModel: 'claude-sonnet-5' };
 const codexOffice = { defaultCli: 'codex' as const, defaultModel: 'gpt-5.5-codex' };
@@ -29,16 +29,6 @@ describe('effectiveModel', () => {
   });
 });
 
-describe('modelSuggestions', () => {
-  it('only suggests models the chosen coding agent understands', () => {
-    expect(modelSuggestions('claude').every(isClaudeModel)).toBe(true);
-    for (const cli of ['codex', 'opencode'] as const) {
-      expect(modelSuggestions(cli).length).toBeGreaterThan(0);
-      expect(modelSuggestions(cli).some(isClaudeModel)).toBe(false);
-    }
-  });
-});
-
 describe('localModel', () => {
   it('finds the local server in a model name, keeping the rest as the server names it', () => {
     expect(localModel('ollama/qwen3-coder:30b')).toMatchObject({ provider: { id: 'ollama' }, model: 'qwen3-coder:30b' });
@@ -49,5 +39,85 @@ describe('localModel', () => {
 
   it('leaves hosted models alone', () => {
     for (const m of ['', 'gpt-5.5', 'anthropic/claude-opus-5-5', 'openai/gpt-5.5', 'ollama/']) expect(localModel(m)).toBeNull();
+  });
+});
+
+const LIVE = mergeCatalog(
+  [
+    { cli: 'claude', models: [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5' }, { id: 'claude-sonnet-5', name: 'Claude Sonnet 5' }, { id: 'claude-opus-5', name: 'Claude Opus 5' }, { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' }] },
+    { cli: 'codex', models: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', isDefault: true }, { id: 'gpt-6-astra', name: 'GPT-6-Astra' }] },
+    { cli: 'opencode', models: null },
+    { local: 'ollama', models: ['qwen3-coder'] },
+  ],
+  1000,
+);
+
+describe('mergeCatalog', () => {
+  it("takes Anthropic's live list and adds Claude Code's aliases", () => {
+    const claude = LIVE.entries.filter((e) => e.cli === 'claude');
+    expect(claude.map((e) => e.id)).toEqual(['claude-opus-5-5', 'claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001', 'opus', 'sonnet', 'haiku']);
+    expect(claude.every((e) => e.source === 'live' && e.checkedAt === 1000)).toBe(true);
+    expect(claude[0].label).toBe('Opus 5.5');
+  });
+
+  it("falls back to the built-in list, marked built-in, when Anthropic's can't be read", () => {
+    const c = mergeCatalog([{ cli: 'claude', models: null }], 5);
+    expect(c.entries.map((e) => e.id)).toEqual([...CLAUDE_MODELS, 'opus', 'sonnet', 'haiku']);
+    expect(c.entries.every((e) => e.source === 'built-in')).toBe(true);
+  });
+
+  it("lists a local server's models for Codex and OpenCode, nothing for an agent whose list failed", () => {
+    expect(LIVE.entries.filter((e) => e.id === 'ollama/qwen3-coder').map((e) => e.cli)).toEqual(['codex', 'opencode']);
+    expect(LIVE.entries.filter((e) => e.cli === 'opencode').map((e) => e.id)).toEqual(['ollama/qwen3-coder']);
+  });
+});
+
+describe('model labels and aliases', () => {
+  it('names models plainly', () => {
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelLabel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelLabel('claude-sonnet-5')).toBe('Sonnet 5');
+  });
+
+  it('resolves an alias to the newest of its family in the catalog', () => {
+    expect(resolveAlias('opus', LIVE)).toBe('claude-opus-5-5');
+    expect(resolveAlias('haiku', LIVE)).toBe('claude-haiku-4-5-20251001');
+    expect(resolveAlias('claude-opus-5', LIVE)).toBe('claude-opus-5');
+    expect(labelOf('opus', 'claude', LIVE)).toBe('Opus 5.5 (opus)');
+  });
+});
+
+describe('model validation', () => {
+  it("accepts the default and the agent's own models, refusing others with the valid ids", () => {
+    expect(modelProblem(undefined, 'claude', LIVE)).toBeNull();
+    expect(modelProblem('', 'codex', LIVE)).toBeNull();
+    expect(modelProblem('sonnet', 'claude', LIVE)).toBeNull();
+    expect(modelProblem('gpt-5.5-codex', 'codex', LIVE)).toContain('Valid: gpt-6.1-sol, gpt-6-astra, ollama/qwen3-coder');
+    expect(modelProblem('claude-haiku-4-5', 'claude', LIVE)).toContain('claude-haiku-4-5-20251001');
+    expect(modelProblem('gpt-6.1-sol', 'claude', LIVE)).not.toBeNull();
+  });
+
+  it("can't check an agent whose list is empty", () => {
+    expect(inCatalog('anything', 'opencode', mergeCatalog([], 0))).toBe(true);
+  });
+});
+
+describe('modelAfterCliChange', () => {
+  it("keeps a model the new coding agent has, else resets it to the default", () => {
+    expect(modelAfterCliChange('claude-opus-5-5', 'codex', LIVE)).toBe('');
+    expect(modelAfterCliChange('ollama/qwen3-coder', 'opencode', LIVE)).toBe('ollama/qwen3-coder');
+    expect(modelAfterCliChange('gpt-6-astra', 'claude', LIVE)).toBe('');
+    expect(modelAfterCliChange('gpt-6-astra', 'codex', LIVE)).toBe('gpt-6-astra');
+  });
+});
+
+describe('pickerOptions', () => {
+  it('starts with the default named, marks the newest, ends with Other…', () => {
+    const o = pickerOptions('claude', LIVE, 'claude-opus-5-5');
+    expect(o[0]).toEqual({ value: '', label: 'Default (Opus 5.5)' });
+    expect(o.find((x) => x.value === 'claude-opus-5-5')?.label).toBe('Opus 5.5 · newest');
+    expect(o.find((x) => x.value === 'claude-opus-5')?.label).toBe('Opus 5');
+    expect(o.at(-1)).toEqual({ value: OTHER_MODEL, label: 'Other…' });
+    expect(pickerOptions('codex', LIVE, '')[0].label).toBe('Default (GPT-6.1-Sol)');
   });
 });

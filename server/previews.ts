@@ -2,14 +2,15 @@ import type { Backend } from './backend.ts';
 import { PORT, PR_PREVIEW_IDLE_MS, PREVIEW_PORT } from './config.ts';
 import { HttpError } from './httpError.ts';
 import { PREVIEW_BRANCH, PREVIEW_SLUG, portOpen, type PreviewHandle, type PreviewJob } from './previewRunner.ts';
-import { closedPrs, expired, freeSlot, MAX_PR_PREVIEWS, onScreen, pickEviction, prBranch, prKey, prPortCandidates, prSlug, WATCH_MS, type PrRunInfo } from './prTheatre.ts';
+import { closedPrs, expired, freeSlot, leftoverPrDesks, mainExpired, mainKey, MAX_PR_PREVIEWS, onScreen, pickEviction, prBranch, prKey, prPortCandidates, prSlug, stopsAt, WATCH_MS, type PrRunInfo } from './prTheatre.ts';
 import { SyncProxies } from './syncProxy.ts';
 import { previewEnvTooBig } from '../shared/previewEnv.ts';
 import type { PreviewConfig, PreviewStatus, PreviewView, PrPreviewView, PullInfo } from '../shared/types.ts';
 
 // One preview per floor: the floor's app, run from its own worktree on a port reserved for the floor. Beside them, the
 // PR theatre: up to MAX_PR_PREVIEWS open PRs at once, each from a slot worktree of its own on its slot's ports.
-// Only the config is persisted; after a restart every preview reads 'stopped' and the PR previews are gone.
+// Only the config is persisted; after a restart every preview reads 'stopped' and the PR previews are gone. A main
+// preview stops after its own idle time too, and one an agent's QA lab or fix session holds can't be stopped (#204).
 
 /** What the previews need to know about a floor. */
 export interface PreviewFloor {
@@ -31,6 +32,7 @@ interface Run {
   log: string[];
   handle: PreviewHandle | null;
   gen: number; // bumped by every start / stop; callbacks from older runs are ignored
+  viewedAt: number; // when a viewer last had it on screen (or it started)
 }
 
 /** A PR preview: which floor and slot it runs in, and when a viewer last had it on screen. */
@@ -40,7 +42,6 @@ interface PrRun extends Run {
   pr: number;
   slot: number;
   startedAt: number;
-  viewedAt: number;
 }
 
 const LOG_KEEP = 200;
@@ -101,13 +102,19 @@ export class Previews {
       prRemoved(repoId: string, pr: number): void;
       /** Something the manager should hear about (a toast). */
       note(text: string): void;
+      /** The agent whose QA lab or fix session uses this preview (pr null: the floor's main one), or null. */
+      holder?(repoId: string, pr: number | null): string | null;
+      /** How long a main preview may sit unwatched before it stops; 0: never. */
+      mainIdleMs?(): number;
+      /** The floors, for the sweep's main previews. */
+      floors?(): PreviewFloor[];
     },
   ) {}
 
   private run(id: string): Run {
     let r = this.runs.get(id);
     if (!r) {
-      r = { status: 'stopped', port: null, ref: null, pr: null, commit: null, startedAt: null, error: null, log: [], handle: null, gen: 0 };
+      r = { status: 'stopped', port: null, ref: null, pr: null, commit: null, startedAt: null, error: null, log: [], handle: null, gen: 0, viewedAt: Date.now() };
       this.runs.set(id, r);
     }
     return r;
@@ -133,6 +140,7 @@ export class Previews {
     let status: PreviewStatus = r?.status ?? 'stopped';
     if (status === 'stopped' && !f.preview.command && this.hasDefault.get(f.id) === false) status = 'unconfigured';
     const port = r?.port ?? this.portFor(f);
+    const heldBy = this.holder(f.id, null);
     return {
       status,
       port,
@@ -143,7 +151,19 @@ export class Previews {
       startedAt: r?.startedAt ?? null,
       error: r?.error ?? null,
       logTail: (r?.log ?? []).slice(-LOG_VIEW),
+      stopsAt: r ? stopsAt({ active: ACTIVE.includes(status), viewedAt: r.viewedAt, watched: this.shown.has(mainKey(f.id)), held: !!heldBy }, this.hooks.mainIdleMs?.() ?? 0) : null,
+      heldBy,
     };
+  }
+
+  private holder(repoId: string, pr: number | null): string | null {
+    return this.hooks.holder?.(repoId, pr) ?? null;
+  }
+
+  /** The manager's stop or restart of a preview an agent is testing in: refused, saying who (#204). */
+  private refuseHeld(repoId: string, pr: number | null) {
+    const who = this.holder(repoId, pr);
+    if (who) throw new HttpError(409, `@${who} is testing in ${pr ? `PR #${pr}'s preview` : "the floor's preview"}: it can't be stopped or restarted until they're done. Tell the CEO instead.`);
   }
 
   /** The floor's preview is being set up or running: its worktree is in use. */
@@ -164,13 +184,14 @@ export class Previews {
     if (pr !== undefined && pr !== null && (!Number.isInteger(pr) || pr <= 0)) throw new HttpError(400, `Invalid pull request number: ${pr}`);
     if (pr) await this.checkOpen(f, pr);
     const r = this.run(f.id);
+    if (ACTIVE.includes(r.status)) this.refuseHeld(f.id, null);
     const gen = ++r.gen;
     await this.halt(f.fullName, r, PREVIEW_SLUG);
     if (gen !== r.gen) return this.view(f); // another start or a stop came in meanwhile
 
     const port = this.portFor(f);
     const ref = pr ? `PR #${pr}` : f.defaultBranch;
-    Object.assign(r, { port, ref, pr: pr ?? null, commit: null, startedAt: Date.now(), error: null, log: [] });
+    Object.assign(r, { port, ref, pr: pr ?? null, commit: null, startedAt: Date.now(), viewedAt: Date.now(), error: null, log: [] });
     if (await portOpen(port)) {
       if (gen !== r.gen) return this.view(f);
       Object.assign(r, { status: 'error', error: `Port ${port} is already in use by another program. The office won't stop it; free the port and try again.` });
@@ -191,6 +212,11 @@ export class Previews {
 
   /** Stop the floor's preview and free its port. */
   async stop(f: PreviewFloor): Promise<PreviewView> {
+    this.refuseHeld(f.id, null);
+    return this.halted(f);
+  }
+
+  private async halted(f: PreviewFloor): Promise<PreviewView> {
     const r = this.run(f.id);
     r.gen++;
     await this.halt(f.fullName, r, PREVIEW_SLUG);
@@ -266,6 +292,7 @@ export class Previews {
     await this.checkOpen(f, pr);
     const key = prKey(f.id, pr);
     const known = this.prRuns.get(key);
+    if (known && ACTIVE.includes(known.status) && restart) this.refuseHeld(f.id, pr);
     if (known && ACTIVE.includes(known.status) && !restart) {
       known.viewedAt = Date.now();
       this.emitPr(known);
@@ -303,29 +330,89 @@ export class Previews {
 
   /** Stop a PR preview and clear its worktree away. */
   async stopPr(f: PreviewFloor, pr: number) {
+    this.refuseHeld(f.id, pr);
     const r = this.prRuns.get(prKey(f.id, pr));
     if (r) await this.endPr(r);
   }
 
-  /** A viewer says which PR preview it has on screen (null: none). One on screen never stops for being idle. */
+  /** A viewer says which preview it has on screen: a PR's, the floor's main one (pr null), or none (repoId null). One on screen never stops for being idle. */
   watch(viewer: string, repoId: string | null, pr: number | null) {
-    const key = repoId && pr ? prKey(repoId, pr) : null;
+    const key = repoId ? (pr ? prKey(repoId, pr) : mainKey(repoId)) : null;
     const now = Date.now();
     this.watches.set(viewer, { key, at: now });
-    const watched = key ? this.prRuns.get(key) : undefined;
+    const watched = repoId ? (pr ? this.prRuns.get(prKey(repoId, pr)) : this.runs.get(repoId)) : undefined;
     if (watched) watched.viewedAt = now;
     this.tellScreen(watched);
   }
 
-  /** Every few seconds: forget viewers that went quiet, and stop PR previews nobody has watched for the idle time. */
+  /** Every few seconds: forget viewers that went quiet, and stop previews nobody has watched for their idle time. */
   sweepPrs(now = Date.now()) {
     for (const [viewer, w] of this.watches) if (now - w.at > WATCH_MS) this.watches.delete(viewer);
-    for (const key of expired(this.prInfos(), this.screen(now), now, PR_PREVIEW_IDLE_MS)) {
+    const screen = this.screen(now);
+    for (const key of expired(this.prInfos(), screen, now, PR_PREVIEW_IDLE_MS)) {
       const r = this.prRuns.get(key)!;
       console.log(`PR theatre: PR #${r.pr} of ${r.fullName} stopped after ${+(PR_PREVIEW_IDLE_MS / 60_000).toFixed(2)} minutes off screen`);
       void this.endPr(r);
     }
+    const idleMs = this.hooks.mainIdleMs?.() ?? 0;
+    for (const f of this.hooks.floors?.() ?? []) {
+      const r = this.runs.get(f.id);
+      if (!r || !mainExpired({ active: ACTIVE.includes(r.status), viewedAt: r.viewedAt, watched: screen.has(mainKey(f.id)), held: !!this.holder(f.id, null) }, now, idleMs)) continue;
+      console.log(`preview: ${f.fullName}'s app stopped after ${+(idleMs / 60_000).toFixed(2)} minutes off screen`);
+      void this.halted(f);
+    }
     this.tellScreen();
+  }
+
+  /**
+   * Every preview being set up or running, with its desk folder for memory measurement (#204). idle: nobody watches it
+   * and no agent holds it, so memory pressure may stop it before refusing agents' sessions.
+   */
+  running(): { key: string; dir: string; idle: boolean }[] {
+    const screen = this.screen();
+    const mains = (this.hooks.floors?.() ?? [])
+      .filter((f) => this.active(f))
+      .map((f) => ({ key: mainKey(f.id), dir: this.backend.deskDir(f.fullName, PREVIEW_SLUG), idle: !screen.has(mainKey(f.id)) && !this.holder(f.id, null) }));
+    const prs = this.prInfos()
+      .filter((r) => r.active)
+      .map((r) => ({ key: r.key, dir: this.backend.deskDir(this.prRuns.get(r.key)!.fullName, prSlug(r.slot)), idle: !r.held && !screen.has(r.key) }));
+    return [...mains, ...prs];
+  }
+
+  /** Stop an idle preview to free memory (a key from idle()). */
+  stopIdle(key: string) {
+    const pr = this.prRuns.get(key);
+    if (pr) {
+      this.hooks.note(`PR #${pr.pr}'s preview stopped to free memory: nobody was watching it.`);
+      void this.endPr(pr);
+      return;
+    }
+    const f = (this.hooks.floors?.() ?? []).find((x) => mainKey(x.id) === key);
+    if (!f) return;
+    this.hooks.note(`${f.fullName.split('/')[1]}'s preview stopped to free memory: nobody was watching it.`);
+    void this.halted(f);
+  }
+
+  /**
+   * Upkeep: remove PR slot desks no PR preview runs from (left by a hard stop or a failed removal), and measure what the
+   * preview desks hold on disk. Returns their total size.
+   */
+  async cleanLeftovers(floors: PreviewFloor[]): Promise<number> {
+    let bytes = 0;
+    for (const f of floors) {
+      const desks = await this.backend.previewDesks(f.fullName).catch(() => []);
+      const busy = [...this.prSlugs(f), ...Array.from({ length: MAX_PR_PREVIEWS }, (_, i) => i + 1).filter((slot) => this.cleaning.has(deskKey(f.id, slot))).map(prSlug)];
+      const gone = leftoverPrDesks(
+        desks.map((d) => d.slug),
+        busy,
+      );
+      for (const slug of gone) {
+        const slot = Number(slug.slice('preview-pr-'.length));
+        await this.clean(f.id, slot, () => this.backend.removeDesk(f.fullName, slug));
+      }
+      bytes += desks.filter((d) => !gone.includes(d.slug)).reduce((n, d) => n + d.bytes, 0);
+    }
+    return bytes;
   }
 
   /** The floor's PRs as the office knows them now: previews of PRs that merged or closed stop. */
@@ -351,6 +438,7 @@ export class Previews {
   }
 
   private prView(r: PrRun): PrPreviewView {
+    const heldBy = this.holder(r.repoId, r.pr);
     const port = r.port ?? prPortCandidates(PREVIEW_PORT, r.slot)[0];
     return {
       repoId: r.repoId,
@@ -364,6 +452,8 @@ export class Previews {
       watched: this.shown.has(prKey(r.repoId, r.pr)),
       error: r.error,
       logTail: r.log.slice(-LOG_VIEW),
+      stopsAt: stopsAt({ active: ACTIVE.includes(r.status), viewedAt: r.viewedAt, watched: this.shown.has(prKey(r.repoId, r.pr)), held: !!heldBy }, PR_PREVIEW_IDLE_MS),
+      heldBy,
     };
   }
 
@@ -375,15 +465,23 @@ export class Previews {
     return onScreen(this.watches.values(), now);
   }
 
-  /** Tell the clients about PR previews that came on or went off screen (and `also`, whose viewing time moved). */
-  private tellScreen(also?: PrRun) {
+  /** Tell the clients about previews that came on or went off screen (and `also`, whose viewing time moved). */
+  private tellScreen(also?: Run) {
     const before = this.shown;
     this.shown = this.screen();
     for (const [k, r] of this.prRuns) if (r === also || before.has(k) !== this.shown.has(k)) this.emitPr(r);
+    for (const [id, r] of this.runs) if (r === also || before.has(mainKey(id)) !== this.shown.has(mainKey(id))) this.hooks.emit(id);
+  }
+
+  /** A preview's holder changed (an agent's lab started or let go of it): tell the clients. */
+  heldChanged(repoId: string, pr: number | null) {
+    const r = pr ? this.prRuns.get(prKey(repoId, pr)) : undefined;
+    if (r) this.emitPr(r);
+    else if (!pr && this.runs.has(repoId)) this.hooks.emit(repoId);
   }
 
   private prInfos(): PrRunInfo[] {
-    return [...this.prRuns.entries()].map(([key, r]) => ({ key, repoId: r.repoId, pr: r.pr, slot: r.slot, active: ACTIVE.includes(r.status), viewedAt: r.viewedAt }));
+    return [...this.prRuns.entries()].map(([key, r]) => ({ key, repoId: r.repoId, pr: r.pr, slot: r.slot, active: ACTIVE.includes(r.status), viewedAt: r.viewedAt, held: !!this.holder(r.repoId, r.pr) }));
   }
 
   /** A slot for a new PR preview, stopping the one nobody has watched the longest when they're all taken. */
@@ -391,7 +489,7 @@ export class Previews {
     const free = freeSlot([...this.prRuns.values()]);
     if (free) return free;
     const key = pickEviction(this.prInfos(), this.screen());
-    if (!key) throw new HttpError(409, `${MAX_PR_PREVIEWS} PR previews are on screen already, the most that run at once. Close one of them first.`);
+    if (!key) throw new HttpError(409, `${MAX_PR_PREVIEWS} PR previews are on screen already or in use by agents, the most that run at once. Close one of them first.`);
     const old = this.prRuns.get(key)!;
     this.hooks.note(`PR #${old.pr}'s preview stopped to make room: at most ${MAX_PR_PREVIEWS} PR previews run at once.`);
     // The same floor takes its worktree over as it is (so the install can be skipped); another floor's is cleared away.

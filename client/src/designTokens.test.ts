@@ -31,3 +31,20 @@ describe('stylesheets use design tokens', () => {
     });
   }
 });
+
+/** `z-index` values over 10 written as numbers, comments left out: they belong on design.css's layer tokens (#212). */
+const rawLayers = (css: string) => [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/z-index:\s*(-?\d+)\s*[;}]/g)].map((m) => Number(m[1])).filter((n) => n > 10);
+
+const stylesheets = (dir: string): string[] =>
+  fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? stylesheets(path.join(dir, e.name)) : e.name.endsWith('.css') ? [path.join(dir, e.name)] : []));
+
+describe('one stacking scale (#212)', () => {
+  it('finds raw layers, not tokens or small local ones', () => {
+    expect(rawLayers('a { z-index: 30; } b { z-index: var(--ds-z-panel); } c { z-index: 2; } d { z-index: calc(var(--ds-z-base) + 1); } /* z-index: 99; */ e{z-index:1000}')).toEqual([30, 1000]);
+  });
+  for (const file of stylesheets(here)) {
+    it(`${path.relative(here, file).replace(/\\/g, '/')} layers on the tokens`, () => {
+      expect(rawLayers(fs.readFileSync(file, 'utf8'))).toEqual([]);
+    });
+  }
+});

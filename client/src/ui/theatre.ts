@@ -41,10 +41,10 @@ const VIEWER = (() => {
   }
 })();
 
-/** While the app viewer is open: tell the office which PR preview is on screen, and that nothing is once it closes. */
+/** While the app viewer is open: tell the office which preview is on screen (main too, #204), and that nothing is once it closes. */
 export function useWatch(repoId: string, pr: Channel) {
   useEffect(() => {
-    const say = () => void api.watchPreview(VIEWER, pr == null ? null : repoId, pr).catch(() => undefined);
+    const say = () => void api.watchPreview(VIEWER, repoId, pr).catch(() => undefined);
     say();
     const t = setInterval(say, WATCH_EVERY_MS);
     return () => clearInterval(t);

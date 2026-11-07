@@ -6,12 +6,14 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
+import { mergeCatalog } from '../shared/models.ts';
 import { DEMO_PICKS, demoMakeFiles, sentFiles, wantsFile } from './demoFiles.ts';
 import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
 import { charTokens } from '../shared/startup.ts';
 import { FLOOR_SEATS, type GhRepoSummary, type IssueInfo, type PullInfo, type UsageReading } from '../shared/types.ts';
 import { parseForwarded } from '../shared/chat.ts';
+import { TRUST_LABEL } from '../shared/trust.ts';
 import { keyName } from '../shared/termKeys.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
@@ -32,8 +34,9 @@ import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { sampleCareers } from './careerSample.ts';
-import { demoPrFiles, pastPulls } from './demoMap.ts';
+import { sampleCareers, sampleHistory, samplePastCareers } from './careerSample.ts';
+import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
+import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -44,6 +47,8 @@ import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
+import { withDemoChat } from './demoAgentChat.ts';
+import { demoAccounts } from './demoAccounts.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -114,6 +119,7 @@ let runSeq = 1000; // fake Actions run ids, so the office can re-run a failed on
  */
 function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
   Object.assign(pr, { checks: 'pending', pendingChecks: ['CI / build', 'Vercel'], failedChecks: [], checkRun: null });
+  if (ciDown(pr.url)) return void setTimeout(() => Object.assign(pr, refusedChecks(pr.url)), 3_000);
   setTimeout(() => {
     Object.assign(pr, {
       checks: fail ? 'failing' : 'passing',
@@ -123,6 +129,19 @@ function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
     });
   }, 12_000 + Math.random() * 10_000);
 }
+
+// A CI outage (#191): GitHub refuses to start recipe-box's checks for the demo's first 20 minutes, with a QA-passed
+// PR parked at the start, so the floor's banner shows and then clears as its PRs merge by themselves.
+const CI_DOWN_REPO = 'demo-co/recipe-box';
+const CI_DOWN_UNTIL = Date.now() + 20 * 60_000;
+const CI_DOWN_NOTE = "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings.";
+const ciDown = (url: string) => url.includes(`/${CI_DOWN_REPO}/`) && Date.now() < CI_DOWN_UNTIL;
+const refusedChecks = (url: string): Partial<PullInfo> => ({
+  checks: 'failing',
+  pendingChecks: [],
+  failedChecks: [{ name: 'CI / build', url: `${url.replace(/\/pull\/\d+$/, '')}/actions/runs/${++runSeq}/job/1`, neverStarted: true }],
+  checkRun: { ms: 1_000, doneAt: Date.now() },
+});
 
 function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
@@ -156,14 +175,47 @@ function shippedPull(fullName: string, number: number, title: string, agoMs: num
   };
 }
 
+// The demo's long issue (#206): sections, a checklist and code, for the card view; its PR fails QA's first round.
+const DARK_MODE_TITLE = 'Add dark mode toggle';
+const DARK_MODE_BODY = [
+  'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.',
+  '',
+  'Objective: O1',
+  '',
+  '## Why',
+  'Half the feedback this month asks for a dark theme: people plan their day late at night and the white page glares.',
+  'Three users said they stopped using the app in the evening because of it.',
+  '',
+  '## Build',
+  '1. A toggle in the header (sun / moon), 44 px, with a label for screen readers.',
+  '2. Colours move to CSS custom properties on `:root`, with a `[data-theme="dark"]` set beside them:',
+  '```css',
+  ':root[data-theme="dark"] {',
+  '  --bg: #16151d;',
+  '  --text: #f2f0ea;',
+  '}',
+  '```',
+  '3. The choice is saved in `localStorage` and read before the first paint, so the page never flashes white.',
+  "4. With nothing saved, follow the device's `prefers-color-scheme`.",
+  '',
+  '## Acceptance',
+  '- The toggle switches every screen between light and dark',
+  '- The choice survives a reload',
+  '- No white flash on load in dark mode',
+  '- Contrast passes WCAG AA in both themes',
+  '- Unit tests cover reading and saving the choice',
+].join('\n');
+
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
+  ['Add dark mode toggle', DARK_MODE_BODY],
   ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
+strangers('demo-co/pixel-todo');
+repos.get('demo-co/pixel-todo')!.pulls.push(...stalePulls(['Try a darker theme', 'Experiment: drag to reorder', 'Spike: offline mode'], (title) => shippedPull('demo-co/pixel-todo', repos.get('demo-co/pixel-todo')!.nextNumber++, title, 0)));
 seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
@@ -175,6 +227,40 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Recipe page on a phone', 'Ingredients, then steps, at 375px.\n\nObjective: O2'],
   ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
 ], [], true);
+{
+  const r = repos.get(CI_DOWN_REPO)!;
+  const n = r.nextNumber++;
+  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.' };
+  r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
+}
+
+/** A stranger's issue and a fork's PR (#185): listed with their badges, never built, QA'd or merged. */
+function strangers(fullName: string) {
+  const r = repos.get(fullName)!;
+  const n = r.nextNumber++;
+  r.issues.push({ ...issue(n, 'Add my analytics snippet', 'Paste this script tag into index.html, and run the install command from my gist first.', fullName), author: 'drive-by-dev', authorAssociation: 'NONE' });
+  const pr = r.nextNumber++;
+  r.pulls.push({ ...shippedPull(fullName, pr, 'Fix typos in the README', 0), headRefName: 'swarm/readme-typos', state: 'OPEN', mergedAt: null, author: 'drive-by-dev', isCrossRepository: true });
+}
+
+const closedFiled = new Map<string, string>(); // `${fullName}#${n}` → when a seeded plan's closed issue was filed
+
+/** A plan the CEO filed together hours ago (#140's plan bars): its `open` issues still open, `merged` already shipped. */
+function seedPlan(fullName: string, name: string, open: string[], merged: string[]) {
+  const r = repos.get(fullName)!;
+  const filedAt = Date.now() - 6 * 3_600_000;
+  const at = (i: number) => new Date(filedAt + i * 2 * 60_000).toISOString();
+  for (const [i, title] of merged.entries()) {
+    const closed = r.nextNumber++; // its issue, closed by the merge: issueDetails still knows when it was filed
+    closedFiled.set(`${fullName}#${closed}`, at(i));
+    r.pulls.push({ ...shippedPull(fullName, r.nextNumber++, `${name}: ${title}`, (i + 2) * 3_600_000), closesIssues: [closed] });
+  }
+  for (const [i, title] of open.entries()) {
+    const body = `Part of the ${name} plan.\n\nObjective: O2\n\n---\n_Filed by Mimoun, the cubefarm CEO._`;
+    r.issues.push({ ...issue(r.nextNumber++, `${name}: ${title}`, body, fullName), createdAt: at(merged.length + i) });
+  }
+}
+seedPlan('demo-co/weather-api', 'API polish', ['Units in every response', 'ETag on /forecast'], ['Consistent error bodies']);
 
 // ---------- the big company (--floors / --agents, #228) ----------
 
@@ -324,9 +410,10 @@ function qaScript(cb: SessionCallbacks, pr: number, title: string, round: number
     [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
     () => cb.screenshot(Buffer.from(screenshotSvg(`QA · ${title}`, `localhost:${port}`, hue)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
-    [{ kind: 'tool', tool: 'mcp__playwright__browser_click', text: '⏺ 🌐 click "Add todo" button' }, { kind: 'result', text: '  ⎿ Clicked' }],
+    () => cb.browserUrl(`http://localhost:${port}${demoQaPage(pr)}`),
+    [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}${demoQaPage(pr)}` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}${demoQaPage(pr)}` }],
     [{ kind: 'tool', tool: 'mcp__playwright__browser_resize', text: '⏺ 🌐 resize 375x740' }, { kind: 'result', text: '  ⎿ Resized' }],
-    () => cb.screenshot(Buffer.from(screenshotSvg(`QA · mobile · ${title}`, `localhost:${port}`, (hue + 40) % 360)), 'image/svg+xml'),
+    () => cb.screenshot(Buffer.from(screenshotSvg(`QA · mobile · ${demoQaPage(pr)}`, `localhost:${port}${demoQaPage(pr)}`, (hue + 40) % 360)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
     [{ kind: 'tool', tool: 'mcp__playwright__browser_console_messages', text: '⏺ 🌐 console_messages' }, { kind: 'result', text: '  ⎿ No errors' }],
   ];
@@ -456,7 +543,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     cb.tool(null);
     if (kind === 'qa') {
       // Most first rounds pass; some fail so the fix loop can be seen in action.
-      const pass = round > 1 || Math.random() > 0.35;
+      const pass = round > 1 || (title !== DARK_MODE_TITLE && Math.random() > 0.35);
       cb.log([{ kind: 'text', text: pass ? '● Everything checks out. Writing up the report.' : '● The toolbar overflows on a 375px screen. Failing this round.' }]);
       cb.finished({
         ok: true,
@@ -480,7 +567,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
             { command: 'npm test -- --run', result: '41 passed' },
             { command: 'npm run lint && npm run build', result: 'clean, built in 1.84s' },
           ],
-          screenshots: ['Desktop view after the change', 'Mobile view at 375px'],
+          screenshots: ['Home page', 'The changed page at 375px'],
           fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
         },
       });
@@ -528,6 +615,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
         failedChecks: [],
         pendingChecks: [],
         files: demoPrFiles(fullName, repo.issues.find((i) => i.number === number), number),
+        summary: demoPrSummary(repo.issues.find((i) => i.number === number)),
       });
       runChecks(repo.pulls[0]);
       cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);
@@ -649,6 +737,23 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
 }
 
 /**
+ * The model catalog, made up (#198): Anthropic's list, Codex's, OpenCode's and an Ollama with one model;
+ * SWARM_DEMO_MODELS=fail shows Claude Code's built-in list, as when its login can't read Anthropic's.
+ */
+export function demoCatalog(now: number) {
+  const claude = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5'].map((id) => ({ id }));
+  return mergeCatalog(
+    [
+      { cli: 'claude', models: process.env.SWARM_DEMO_MODELS === 'fail' ? null : claude },
+      { cli: 'codex', models: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', isDefault: true }, { id: 'gpt-6-astra', name: 'GPT-6-Astra' }, { id: 'gpt-6.1-terra', name: 'GPT-6.1 Terra' }] },
+      { cli: 'opencode', models: [{ id: 'anthropic/claude-opus-5-5' }, { id: 'openai/gpt-6.1-sol' }, { id: 'opencode/big-pickle' }] },
+      { local: 'ollama', models: ['qwen3-coder:30b'] },
+    ],
+    now,
+  );
+}
+
+/**
  * Claude's usage on demand (the manager's console → Mission control, in the demo): a weekly-limit warning at 91% that
  * resets at midnight, or the 5-hour limit reached for 3 minutes.
  */
@@ -711,7 +816,7 @@ async function fakeTrim(stillIdle: () => boolean) {
 }
 
 /** The demo's fake world; `scale` (--floors / --agents) makes it the big company instead of the usual two floors. */
-export function createDemoBackend(scale: DemoScale | null = null): Backend {
+export function createDemoBackend(scale: DemoScale | null = null, noTour = false): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
   // Tie each fake session back to its repo via the desk directory name.
@@ -767,13 +872,17 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     listIssues: async (fullName) => {
       const r = repos.get(fullName);
       if (r && scale) topUp(r, scale.agents * 2);
+      // GitHub's fields for trust (#185), set on the fake's own objects: the office keeps them as they are, like before.
+      for (const i of r?.issues ?? []) i.authorAssociation ??= 'OWNER';
       return [...(r?.issues ?? [])];
     },
     // Like GitHub's list: the open PRs and the 8 latest merges, never closed ones, so the office asks about those.
     listPulls: async (fullName) => {
       const pulls = repos.get(fullName)?.pulls ?? [];
+      for (const p of pulls) Object.assign(p, { author: p.author ?? 'demo-manager', isCrossRepository: p.isCrossRepository ?? false });
       return [...pulls.filter((p) => p.state === 'OPEN'), ...pulls.filter((p) => p.state === 'MERGED').slice(0, 8)];
     },
+    writers: async () => ['demo-manager'],
     exportCharter: async (fullName) => {
       if (!repos.has(fullName)) throw new Error('Unknown repo');
       return `https://github.com/${fullName}/compare/main...cubefarm/charter`; // the demo writes nothing
@@ -793,6 +902,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
       if (!i) throw new Error(`Unknown issue #${number}`);
       if (edit.body !== undefined) i.body = edit.body;
+      if (edit.addLabels?.includes(TRUST_LABEL)) i.trustedBy = 'demo-manager';
       i.labels = [...i.labels.filter((l) => !edit.removeLabels?.includes(l)), ...(edit.addLabels ?? []).filter((l) => !i.labels.includes(l))];
     },
     mergePull: async (fullName, number, _method, headSha) => {
@@ -833,6 +943,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
         'build\tRun npm test\t2025-01-01T00:00:02Z Test Files  1 failed | 7 passed (8)',
         'build\tRun npm test\t2025-01-01T00:00:02Z ##[error]Process completed with exit code 1.',
       ].join('\n'),
+    checkAnnotations: async (fullName) => (ciDown(`/${fullName}/`) ? [CI_DOWN_NOTE] : []),
+    demoParked: () => repos.get(CI_DOWN_REPO)?.pulls.filter((p) => p.state === 'OPEN' && ciDown(p.url)).map((p) => ({ fullName: CI_DOWN_REPO, prNumber: p.number })) ?? [],
     rerunFailedJobs: async (fullName, runIds) => {
       // The re-run passes: a flake, as the office hoped.
       for (const pr of repos.get(fullName)?.pulls ?? []) {
@@ -896,7 +1008,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     readRepoFile: async (fullName, _branch, rel) => demoRepoFile(fullName, rel) ?? Promise.reject(new Error(`${rel} isn't on the default branch.`)),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
-      return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
+      return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt ?? closedFiled.get(`${fullName}#${number}`) };
     },
     commentPull: async (fullName, number) => `https://github.com/${fullName}/pull/${number}#issuecomment-${Date.now()}`,
     uploadEvidence: async (fullName, filePath) => `https://github.com/${fullName}/raw/swarm-qa-evidence/${filePath}`,
@@ -948,7 +1060,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       installedDesks.add(dir);
       return 'installed';
     },
-    removeDesk: async () => undefined,
+    ...demoPreviewDesks(), // removeDesk and previewDesks (#204)
     sweepDesks: async () => ({ desks: 0, folders: 0, branches: 0, patches: [], skipped: [] }),
     trimDesk: (_fullName, _slug, stillIdle) => fakeTrim(stillIdle),
     releaseDesk: async () => undefined,
@@ -959,7 +1071,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
       // connectors and plugins unless the session is lean.
       if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
-      return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withLab(opts, c), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
+      return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
     },
     sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
     terminals: true,
@@ -971,6 +1083,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
     quickPicks: async () => DEMO_PICKS,
     toolInventory: async (projects) => demoTooling(projects),
+    modelCatalog: async () => demoCatalog(Date.now()),
     // The idle check (#89) reads the made-up numbers; SWARM_DEMO_USAGE_CHECK=fail shows a check that can't read them.
     usageCheck: async () => (process.env.SWARM_DEMO_USAGE_CHECK === 'fail' ? { error: 'failed' } : { readings: demoReadings(Date.now()) }),
     survivalSignals: demoSurvival,
@@ -982,11 +1095,13 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     notify: demoNotify,
     telegram: demoTelegram(),
     cloud: demoCloud(),
+    accounts: demoAccounts((o, exited) => demoSignIn({ ...o, boxId: 'accounts' }, new Map(), exited)),
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
-    seedCareers: sampleCareers,
+    seedCareers: sampleCareers, seedPastCareers: samplePastCareers, seedHistory: sampleHistory,
     demoTeam: (floor) => demoTeam(scale, floor),
+    demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
     seedChat: (now) => {
@@ -1270,6 +1385,26 @@ export function answerReply({ quote, reply }: { quote: string; reply: string }):
   return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
 }
 
+/** The demo CEO's answer to "where did the money go?": a dashboard of live sources, so it shows the demo's own costs. */
+export function demoMoneyAnswer(): string {
+  const dashboard = {
+    title: 'This week’s spend',
+    tiles: [
+      { label: 'Spend', source: 'costs:7d:total' },
+      { label: 'Per merge', source: 'costs:7d:costPerMerge' },
+      { label: 'Waste', source: 'costs:7d:waste' },
+      { label: 'Merges', source: 'costs:7d:merges' },
+    ],
+    charts: [
+      { type: 'bar', title: 'By floor', source: 'costs:7d:byFloor' },
+      { type: 'donut', title: 'By kind of work', source: 'costs:7d:byKind' },
+    ],
+  };
+  const trend = { type: 'line', title: 'Cost per merge, day by day', source: 'costs:7d:perMerge' };
+  const waste = { title: 'Waste by cause', columns: ['Cause'], source: 'costs:7d:wasteByCause' };
+  return ["Here's where this week's money went: by floor, by kind of work, the waste and the cost per merge. Tap a floor to open it.", '', '```dashboard', JSON.stringify(dashboard), '```', '', '```chart', JSON.stringify(trend), '```', '', '```table', JSON.stringify(waste), '```'].join('\n');
+}
+
 /** A floor in company_status, as far as the demo CEO reads it. */
 export interface DemoFloor {
   floor: number;
@@ -1480,6 +1615,27 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (events.some((e) => / merged /.test(e))) await think('The merged changes match their issues.');
       return needs.length ? needs.join(' ') : 'Nothing to do.';
     },
+    // The manager's changes touched running work (#207): a closed issue stops its builder, a closed PR's author is told to wrap up, the rest finish.
+    async changes(lines: string[]) {
+      const out: string[] = [];
+      for (const l of lines) {
+        const floor = Number(l.match(/^- floor (\d+)/)?.[1] ?? 0);
+        for (const [, name, id, state] of (l.split(' · touched: ')[1] ?? '').matchAll(/([^,(]+?) \(([\w-]+), ([^)]*)\)/g)) {
+          const who = name.trim();
+          if (state === 'finished it already') {
+            out.push(`${who} had already finished, so there was nothing to stop.`);
+            continue;
+          }
+          await use('agent_log', { agent_id: id, lines: 30 });
+          const stop = /: closed #/.test(l) ? await use('stop_agent', { agent_id: id, reason: 'you closed their issue' }) : '';
+          if (/isn't running/.test(stop)) out.push(`${who} had already finished, so there was nothing to stop.`);
+          else if (stop && !stop.startsWith('Refused')) out.push(`Stopped ${who}: you closed their issue.`);
+          else if (/: closed PR/.test(l) && !(await use('message_agent', { floor, agent_id: id, text: 'The manager closed your PR: push nothing more, wrap up and say what is left.' })).startsWith('Refused')) out.push(`Redirected ${who}: they wrap up, since you closed their PR.`);
+          else out.push(`Let ${who} finish: your change doesn't undo their work.`);
+        }
+      }
+      return out.join('\n') || 'Nothing to do: that work had already ended.';
+    },
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
@@ -1494,6 +1650,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (awake) return awake;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
+      // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
+      if (/\b(money|spend|spent|spending|costs?)\b/i.test(text)) return demoMoneyAnswer();
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
       if (/\btelegram\b/i.test(text)) {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
@@ -1610,13 +1768,16 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     },
   };
 
-  const prompt = opts.prompt.split('\n\nSince you last looked:')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo) and pinned notes (ceoMemory.ts)
+  const [asked, changed = ''] = opts.prompt.split("\n\nYour changes since last time"); // the manager's changes (#207), after the rest
+  const prompt = asked.split('\n\nSince you last looked:')[0].split('\n\nOpen decisions from the last 24 h')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo), open decisions (#208) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
   const run = triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
     : prompt.startsWith('Research for the manager:')
       ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
+    : prompt.startsWith('The manager changed work')
+      ? () => scripts.changes(changed.split('\n').filter((l) => l.startsWith('- floor ')))
     : prompt.startsWith('Follow-up:')
       ? () => scripts.followup(prompt.split('\n').filter((l) => /^- \[e\d+\]/.test(l)))
     : /no longer needs triage/.test(prompt)
@@ -1894,7 +2055,7 @@ const DEMO_SIGN_IN = { claude: 'https://example.com/cubefarm-demo/claude-sign-in
 function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal }, logins: Map<string, Set<string>>, exited: (code: number) => void): BoxSignIn {
   const { term } = o;
   const claude = o.cli === 'claude';
-  term.note(`── Signing ${claude ? 'Claude Code' : 'Codex'} in · ☁ cloud machine (demo) ──`);
+  term.note(`── Signing ${claude ? 'Claude Code' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
   term.write(
     (claude
       ? ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter.\x1b[0m', 'Paste code here if prompted > ']

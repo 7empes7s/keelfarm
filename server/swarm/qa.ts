@@ -5,15 +5,16 @@ import { stillOpen } from '../closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from '../deps.ts';
 import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
-import { MAX_MERGE_FIXES } from '../mergeGate.ts';
+import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
-import { conflictFixInstructions, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
 import { qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
 import { failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from '../prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from '../qaRetry.ts';
 import { recordQa } from '../metrics.ts';
+import { qaCause } from '../../shared/rounds.ts';
 import { clip } from '../notify.ts';
 import { followupEvents } from '../../shared/followups.ts';
 import { noteCheck } from '../../shared/charter.ts';
@@ -41,6 +42,7 @@ export abstract class SwarmQa extends SwarmSessions {
   protected queueQa(repo: PersistedRepo, prNumber: number, dev: PersistedAgent | null, issueNumber: number | null) {
     const rt = this.repoRt.get(repo.id);
     if (rt && !stillOpen({ kind: 'pr', number: prNumber }, this.floorState(rt))) return; // it closed: QA has nothing to test
+    if (this.outsidePull(repo.id, prNumber)) return; // a fork's or a stranger's: review on GitHub (#185)
     let rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     if (rec) {
       if (rec.status === 'testing') return;
@@ -78,6 +80,7 @@ export abstract class SwarmQa extends SwarmSessions {
         stuckWhy: null,
         triages: 0,
         escalated: false,
+        labRetryRound: null,
       };
       this.state.qa.push(rec);
       this.setQa(rec, {});
@@ -132,11 +135,12 @@ export abstract class SwarmQa extends SwarmSessions {
     }
   }
 
-  /** Manager's "send to QA" for any open PR (including ones opened by people); with `agentId`, that free agent tests it now. */
-  async sendToQa(repoId: string, prNumber: number, agentId?: string) {
+  /** Manager's "send to QA" for any open PR (including ones opened by people); with `agentId`, that free agent tests it now. byCeo: the CEO's triage, not a manager change. */
+  async sendToQa(repoId: string, prNumber: number, agentId?: string, byCeo = false) {
     const repo = this.repo(repoId);
     const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber && p.state === 'OPEN');
     if (!pr) throw new HttpError(404, `PR #${prNumber} is not open on ${repo.fullName}`);
+    this.refuseOutside(repo, prNumber);
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     if (rec?.status === 'testing' || rec?.status === 'fixing') throw new HttpError(409, `PR #${prNumber} is already ${rec.status}`);
     if (rec && (rec.status === 'needs-human' || rec.status === 'passed' || rec.status === 'failed')) {
@@ -151,9 +155,10 @@ export abstract class SwarmQa extends SwarmSessions {
     if (tester && (tester.repoId !== repo.id || tester.role === 'ceo')) throw new HttpError(400, `${tester.name} doesn't work on ${repo.fullName}`);
     if (tester && BUSY.includes(tester.status)) throw new HttpError(409, `${tester.name} is busy: ${this.agentDoing(tester)}`);
     if (tester && this.consulting(tester)) throw new HttpError(409, `${tester.name} is answering a consult`);
-    if (tester) this.ensureSlot('qa');
+    if (tester) this.ensureSlot('qa', tester);
     this.clearPrepStrikes(repo.id, prNumber);
     this.queueQa(repo, prNumber, dev ?? null, pr.closesIssues[0] ?? null);
+    if (!byCeo) this.managerChange(repo, 're-qa', { pr: prNumber }, `sent PR #${prNumber} to QA again`, this.runningOn(repo, { pr: prNumber, branch: pr.headRefName }));
     const queued = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber && q.status === 'queued');
     if (tester && queued) {
       void this.runQa(tester, repo, queued); // marks it testing at once, before the scheduler's next pass
@@ -166,6 +171,7 @@ export abstract class SwarmQa extends SwarmSessions {
     const repo = this.repo(repoId);
     const find = () => this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber);
     const listed = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber);
+    this.refuseOutside(repo, prNumber);
     sendBackPatch(prNumber, listed, find(), repo.defaultBranch, note, from); // refuse before asking GitHub
     // The last sync's mergeability may be stale or UNKNOWN: ask about the PR itself whether it conflicts now.
     const details = await this.backend.prDetails(repo.fullName, prNumber).catch(() => null);
@@ -174,6 +180,7 @@ export abstract class SwarmQa extends SwarmSessions {
     const patch = sendBackPatch(prNumber, pr, rec, repo.defaultBranch, note, from);
     this.clearPrepStrikes(repo.id, prNumber);
     this.setQa(rec!, { ...patch, preQa: null });
+    if (!from) this.managerChange(repo, 'send-back', { pr: prNumber }, `sent PR #${prNumber} back to a developer${note ? `: "${clip(note, 80)}"` : ''}`, this.runningOn(repo, { pr: prNumber, branch: listed?.headRefName }));
     setTimeout(() => this.schedule(), 200);
     this.toast('info', `PR #${prNumber} goes back to a developer${patch.fixReason === 'conflict' ? ' to resolve its conflicts' : ''}`);
   }
@@ -319,8 +326,26 @@ export abstract class SwarmQa extends SwarmSessions {
     }
 
     a.status = 'done';
+    if (report.verdict === 'lab-error') {
+      // The lab failed, not the code (#189): QA again by itself once, never a failed round or a developer's job.
+      this.spend.outcome(a.id, 'done');
+      this.appendLog(a, [{ kind: 'error', text: `🧪 Lab error on PR #${a.prNumber}: ${clip(report.summary, 160)} (not a failed round)` }]);
+      if (rec) {
+        const key = `${repo.id}#${rec.prNumber}`;
+        recordQa(this.state.ops, repo.id, false, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round, 'lab-error');
+        this.qaWaits.delete(key);
+        const patch = { qaAgentId: null, summary: `Lab error: ${report.summary}`, labRetryRound: rec.round };
+        if (labErrorNext(rec) === 'retry') this.setQa(rec, { ...patch, status: 'queued' });
+        else this.stuck(rec, patch, `the test lab failed twice while testing it: ${clip(report.summary, 160)}`);
+      }
+      return;
+    }
     const pass = report.verdict === 'pass';
-    this.spend.outcome(a.id, pass ? 'qa-pass' : 'qa-fail');
+    // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
+    // and the checks are recorded so a re-run of a red one can count as the fix. They name the cause QA didn't (#188).
+    const pull = !pass && rec ? await this.backend.prDetails(repo.fullName, rec.prNumber).catch(() => null) : null;
+    const cause = pass ? undefined : qaCause(report.cause, pull);
+    this.spend.outcome(a.id, pass ? 'qa-pass' : 'qa-fail', cause);
     if (rec) this.ledger({ kind: 'qa', repoId: repo.id, pr: rec.prNumber, round: rec.round, pass, tester: a.id, author: rec.devAgentId, at: Date.now() });
     this.appendLog(a, [{ kind: pass ? 'done' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${a.prNumber} · ${report.checks.length} checks · ${rt.shots.length} screenshots` }]);
 
@@ -335,12 +360,9 @@ export abstract class SwarmQa extends SwarmSessions {
         return [];
       });
       const key = `${repo.id}#${rec.prNumber}`;
-      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round);
+      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round, cause);
       if (report.charterCheck) noteCheck(repo.charter.log, { at: Date.now(), pr: rec.prNumber, ...citedRule(report.charterCheck, repo.charter) }, Date.now()); // the Charter tab's standards and non-goals (#105)
       this.qaWaits.delete(key);
-      // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
-      // and the checks are recorded so a re-run of a red one can count as the fix.
-      const pull = !pass ? await this.backend.prDetails(repo.fullName, rec.prNumber).catch(() => null) : null;
       const next = qaOutcome(pass, rec, pull);
       try {
         this.appendLog(a, [{ kind: 'system', text: '📎 Uploading evidence and posting the QA report on the PR…' }]);
@@ -361,6 +383,7 @@ export abstract class SwarmQa extends SwarmSessions {
         fixInstructions,
         sessionFailures: 0,
         fixReason: pass ? null : 'qa',
+        qaCause: cause ?? null,
         preQa: null,
         passedSha: pass ? rec.testedSha : null,
         mergeNote: null,
@@ -615,4 +638,29 @@ export abstract class SwarmQa extends SwarmSessions {
     }
   }
   protected qaWaits = new Map<string, number>(); // `${repoId}#${pr}` -> how long its QA run in progress waited for a tester
+
+  // ---------- CI outages (#191) ----------
+
+  /** One-off (#191): PRs a CI outage left with the manager after QA passed them go back to the merge gate, which re-runs their checks once. */
+  protected releaseOutageStuck() {
+    const back: string[] = [];
+    for (const rec of this.state.qa.filter(releasedAfterOutage)) {
+      this.setQa(rec, { status: 'passed', rerunSha: null, rerunAt: null, stuckWhy: null, escalated: false, mergeNote: null, pendingSince: null, mergeRetryAt: null, alerted: false });
+      const repo = this.state.repos.find((r) => r.id === rec.repoId);
+      back.push(`#${rec.prNumber}${repo ? ` on ${repo.fullName}` : ''}`);
+    }
+    this.state.outageReleased = true;
+    if (back.length) this.postMessage('office', `↩️ ${back.join(', ')} only failed their checks because CI couldn't run: they re-run their checks and merge by themselves, no need to look at them.`);
+  }
+
+  /** The demo only: a QA-passed PR a CI outage holds, parked as the merge gate would. */
+  protected async seedParked(fullName: string, prNumber: number) {
+    const repo = this.state.repos.find((r) => r.fullName === fullName);
+    const pr = repo && this.repoRt.get(repo.id)?.pulls.find((p) => p.number === prNumber);
+    if (!repo || !pr) return;
+    this.queueQa(repo, prNumber, null, pr.closesIssues[0] ?? null);
+    const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === prNumber)!;
+    this.setQa(rec, { status: 'passed', passedSha: pr.headSha, summary: 'All checks passed.' });
+    await this.park(repo, rec, pr, NEVER_STARTED);
+  }
 }

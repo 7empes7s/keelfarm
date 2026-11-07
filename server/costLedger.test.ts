@@ -243,6 +243,15 @@ describe('the demo’s made-up week', () => {
     expect(v.waste.some((w) => w.issue === 2 && w.cause === 'Fix ended without a commit')).toBe(true);
     expect(v.top.find((t) => t.repoId === 'demo/a' && t.issue === 2)).toMatchObject({ merged: false, qaRounds: 2 });
   });
+
+  it('seeds a month of rounds with mixed causes for the Rounds card (#188)', () => {
+    const floors = [{ repoId: 'demo/a', agents: [{ id: 'a', name: 'Ada' }, { id: 'b', name: 'Bob' }] }];
+    const v = costsView(sampleCosts(floors, { id: 'ceo', name: 'Morgan' }, NOW, seeded(7), 28), { now: NOW, days: 30 });
+    expect(v.rounds.month.byCause.map((c) => c.cause)).toEqual(expect.arrayContaining(['bug', 'nit', 'spec-missing', 'conflict', 'checks', 'lab-error']));
+    expect(v.rounds.month.excluded).toBeGreaterThan(0);
+    expect(v.rounds.month.perMerge).toBeGreaterThan(1);
+    expect(v.rounds.trend.perMerge.filter((p) => p !== null).length).toBeGreaterThan(20);
+  });
 });
 
 describe('effortHint', () => {
@@ -285,6 +294,20 @@ describe('SessionCosts', () => {
     expect(lines[0].startup).toEqual({ tokens: 33_000, parts: [{ label: REST_LABEL, tokens: 23_100 }, { label: 'CLAUDE.md files', tokens: 9_000 }, { label: 'Office instructions', tokens: 900 }] });
     const view = costsView([{ type: 'session', ...lines[0] }], { now: Date.now(), days: 1 });
     expect(view.startup).toEqual([{ kind: 'qa', sessions: 1, avg: 33_000, top: lines[0].startup!.parts }]);
+  });
+
+  it("records a failed round's cause from the handler, else the fix's from its run (#188)", () => {
+    const { spend, lines } = recorder();
+    spend.start('a1', { kind: 'qa', effort: 'low', model: 'm', startedAt: Date.now(), round: 1 });
+    let run = spend.take('a1');
+    spend.outcome('a1', 'qa-fail', 'spec-missing');
+    void spend.record(agent, 'acme/shop', run, 'qa', ok, { stopped: false });
+    spend.start('a1', { kind: 'fix-checks', effort: 'low', model: 'm', startedAt: Date.now(), round: null, cause: 'outage' });
+    run = spend.take('a1');
+    spend.outcome('a1', 'commit');
+    void spend.record(agent, 'acme/shop', run, 'fix-checks', ok, { stopped: false });
+    void spend.record(agent, 'acme/shop', spend.take('a1'), 'issue', ok, { stopped: false });
+    expect(lines.map((l) => l.cause)).toEqual(['spec-missing', 'outage', undefined]);
   });
 
   it('marks the session the watchdog stopped, and counts the CEO’s acts once a promise settles', async () => {

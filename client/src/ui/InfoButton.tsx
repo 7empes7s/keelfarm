@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { SCREEN_HELP, type ScreenId } from './screenHelp';
 import { Sheet } from './Sheet';
 import { openWhatsNew } from './tour';
+import { XLabel } from './HoverCard';
 
 /** `className`: the button's look, e.g. a back bar's shared icon button (docs/design.md) instead of the bare glyph. */
 export function InfoButton({ screen, className = 'info-btn' }: { screen: ScreenId; className?: string }) {
@@ -10,8 +11,9 @@ export function InfoButton({ screen, className = 'info-btn' }: { screen: ScreenI
   const h = SCREEN_HELP[screen];
   return (
     <>
-      <button className={className} data-tour="info" onClick={() => setOpen(true)} aria-label={`What can I do on ${h.title}?`} title="What can I do here?">
+      <button className={`${className} xbtn`} data-tour="info" onClick={() => setOpen(true)} aria-label={`What can I do on ${h.title}?`} title="What can I do here?">
         ⓘ
+        <XLabel text="What can I do here?" />
       </button>
       {open && (
         <Sheet title={`ⓘ ${h.title}`} onClose={() => setOpen(false)} className="info-sheet">
