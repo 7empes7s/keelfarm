@@ -98,10 +98,18 @@ function installChromium(cwd: string, cli: string[]): Promise<boolean> {
   });
 }
 
-/** At office start: the browser floors' Playwright suites need, installed once per machine so no session has to. */
-function warmLabBrowser(): Promise<boolean> {
-  const cli = createRequire(createRequire(import.meta.url).resolve('@playwright/mcp/package.json')).resolve('playwright-core/cli.js');
-  return installChromium(os.tmpdir(), [process.execPath, cli]);
+/** playwright-core's CLI: its package.json is exported, cli.js isn't, so it's found beside the package.json. */
+export function playwrightCli(resolve: (id: string) => string = createRequire(createRequire(import.meta.url).resolve('@playwright/mcp/package.json')).resolve): string {
+  return path.join(path.dirname(resolve('playwright-core/package.json')), 'cli.js');
+}
+
+/** At office start: the browser floors' Playwright suites need, installed once per machine so no session has to. Never throws. */
+async function warmLabBrowser(): Promise<boolean> {
+  try {
+    return await installChromium(os.tmpdir(), [process.execPath, playwrightCli()]);
+  } catch {
+    return false;
+  }
 }
 
 const clean = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\r/g, ''); // eslint-disable-line no-control-regex

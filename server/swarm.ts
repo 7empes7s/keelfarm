@@ -206,7 +206,7 @@ export class Swarm extends SwarmCeoTools {
       // first run
     }
     if (this.backend.demoNoTour) Object.assign(this.state.settings, { setupDone: true, tutorialStep: -1 });
-    if (this.state.settings.testLab.enabled) void this.backend.testLab.warm().catch(() => false);
+    if (this.state.settings.testLab.enabled) void Promise.resolve().then(() => this.backend.testLab.warm()).catch(() => false); // never takes start-up down
     await this.voice.init();
     await this.weather.init();
     await this.notifier.init();
