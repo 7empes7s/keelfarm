@@ -41,7 +41,8 @@ function StepBody({ step }: { step: ChatItem }) {
   );
 }
 
-export function AgentChat({ agent, repo, onTerminal, onSend, onStop }: { agent: Omit<AgentView, 'log'>; repo: RepoView; onTerminal: () => void; onSend: (text: string) => void; onStop: () => void }) {
+/** `jump`: an item to scroll to and highlight once it's here (a CEO action card's message, #215). */
+export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { agent: Omit<AgentView, 'log'>; repo: RepoView; jump?: number; onTerminal: () => void; onSend: (text: string) => void; onStop: () => void }) {
   const items = useStore((s) => s.agentChat[agent.id]) ?? NONE;
   const qaAll = useStore((s) => s.qa);
   const [shown, setShown] = useState(PAGE);
@@ -57,6 +58,21 @@ export function AgentChat({ agent, repo, onTerminal, onSend, onStop }: { agent: 
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [items, working]);
+
+  const [flash, setFlash] = useState<number | null>(null);
+  const jumped = useRef(false);
+  useLayoutEffect(() => {
+    if (jump === undefined || jumped.current) return;
+    const at = rows.findIndex((r) => r.kind !== 'steps' && r.item.id === jump);
+    if (at < 0) return; // not loaded yet, or no longer kept
+    if (rows.length - at > shown) return setShown(rows.length - at);
+    const el = scroller.current?.querySelector(`[data-chat-id="${jump}"]`);
+    if (!el) return;
+    jumped.current = true;
+    stick.current = false;
+    el.scrollIntoView({ block: 'center' });
+    setFlash(jump);
+  }, [jump, rows, shown]);
 
   const react = (it: ChatItem, r: Reaction) =>
     void api
@@ -104,7 +120,7 @@ export function AgentChat({ agent, repo, onTerminal, onSend, onStop }: { agent: 
     if (it.kind === 'manager') {
       const st = statusReaction(items, items.indexOf(it), working);
       return (
-        <div key={it.id} className="ac-me">
+        <div key={it.id} className={`ac-me ${flash === it.id ? 'ac-flash' : ''}`} data-chat-id={it.id}>
           <div className="ac-bubble ac-bubble-me">
             {it.who && it.who !== 'Manager' && <div className="ac-who">{it.who}</div>}
             {it.text}

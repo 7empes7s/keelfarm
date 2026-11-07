@@ -5,6 +5,7 @@ import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
 import { MANDATE_MAX_CHARS } from '../shared/followups.ts';
+import { actionCards, NOT_CARDS } from '../shared/ceoActions.ts';
 import {
   AGENT_LOG_DEFAULT,
   AGENT_LOG_MAX,
@@ -213,6 +214,46 @@ describe('office tools', () => {
       'wait_for',
       'worktree_file',
     ]);
+  });
+
+  // #215: a card that looks tappable but opens nothing. A new tool that changes something needs a sample here and a ref.
+  it('gives the card of every tool that changes something a destination', async () => {
+    const { client } = await connect();
+    const { tools } = await client.listTools();
+    const f = { floor: 1 };
+    const agent = { agent_id: 'Ada' };
+    const samples: Record<string, Record<string, unknown>> = {
+      set_floor_profile: { ...f, summary: 's' },
+      set_office_playbook: { playbook: 'p' },
+      scale_team: { ...f, size: 3, reason: 'r' },
+      configure_agent: { ...agent, model: 'm' },
+      file_issue: { ...f, title: 't', body: 'b' },
+      set_dependencies: { ...f, number: 4, depends_on: [] },
+      close_issue: { ...f, number: 4, reason: 'r' },
+      retry_qa: { ...f, pr: 7 },
+      send_back: { ...f, pr: 7, note: 'n' },
+      rerun_checks: { ...f, pr: 7 },
+      close_pull: { ...f, pr: 7, comment: 'c' },
+      escalate: { ...f, pr: 7, reason: 'r' },
+      set_mandate: { text: 't' },
+      propose_charter: { ...f },
+      resolve_decision: { id: 'msg:4', outcome: 'o' },
+      define_experiment: { name: 'n' },
+      restart_agent: agent,
+      stop_agent: { ...agent, reason: 'r' },
+      message_agent: { ...f, ...agent, text: 't' },
+      answer_agent: { ...agent, text: 't' },
+      ask_manager_choice: { ...agent, question: 'q' },
+      send_telegram: { text: 't' },
+      wait_for: { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }] },
+    };
+    const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
+    for (const name of acting) {
+      expect(samples[name], `${name}: a card sample (or NOT_CARDS)`).toBeDefined();
+      const [card] = actionCards([{ tool: name, ok: true, out: 'Done.', args: samples[name] }], () => 'acme/shop', () => 'a1');
+      expect(card?.ref, `${name}: its card opens nothing`).toBeDefined();
+    }
+    expect(acting.length).toBe(Object.keys(samples).length);
   });
 
   it("checks the new tools' inputs before the office sees them", async () => {

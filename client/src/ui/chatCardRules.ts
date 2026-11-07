@@ -7,7 +7,7 @@ import type { LiveStep } from '../../../shared/ceoStream';
 import { RESEARCH_PREFIX } from '../../../shared/chat';
 import { CEO_ID } from '../../../shared/types';
 import { matchPicks, pickText, type QuickPicks } from '../../../shared/used';
-import type { RefWorld } from './chatRefs';
+import { agentFor, type RefWorld } from './chatRefs';
 
 export interface ActionStatus {
   label: string;
@@ -19,8 +19,9 @@ const BUSY = new Set(['working', 'preparing']);
 
 /** Where an action card's issue, PR, floor or agent stands now, or null when it's gone from the office. */
 export function actionStatus(ref: ActionRef, w: RefWorld): ActionStatus | null {
+  if (ref.kind === 'decision' || (ref.kind === 'section' && (ref.section !== 'team' || !ref.repoId))) return null;
   if (ref.kind === 'agent') {
-    const a = w.agents[ref.agentId];
+    const a = agentFor(w, ref.agentId);
     if (!a) return null;
     const on = a.prNumber ?? a.issueNumber;
     return { label: `${a.status}${on && a.status !== 'idle' ? ` · #${on}` : ''}`, ...(a.status === 'error' ? { tone: 'bad' as const } : BUSY.has(a.status) && { tone: 'good' as const }) };
@@ -28,7 +29,7 @@ export function actionStatus(ref: ActionRef, w: RefWorld): ActionStatus | null {
   const repo = w.repos.find((r) => r.id === ref.repoId);
   if (!repo) return null;
   const team = Object.values(w.agents).filter((a) => a.repoId === repo.id && a.id !== CEO_ID);
-  if (ref.kind === 'floor') return { label: `${team.length} agent${team.length === 1 ? '' : 's'} · ${team.filter((a) => BUSY.has(a.status)).length} busy` };
+  if (ref.kind === 'floor' || ref.kind === 'section') return { label: `${team.length} agent${team.length === 1 ? '' : 's'} · ${team.filter((a) => BUSY.has(a.status)).length} busy` };
   const n = ref.number;
   // The PR itself, else the PR that closes the issue (a merged one first, then an open one).
   const closing = repo.pulls.filter((p) => p.closesIssues.includes(n) && p.state !== 'CLOSED').sort((a, b) => Number(b.state === 'MERGED') - Number(a.state === 'MERGED'));
