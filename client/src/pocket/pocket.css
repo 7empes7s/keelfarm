@@ -393,3 +393,18 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
 .pk-layout-compact .pk-head .chip-warn {
   display: none;
 }
+
+/* The memory note (#115): a banner you tap through to Mission control. */
+.pk-banner-tap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
