@@ -40,12 +40,14 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
+import { useRunningPreviews } from '../ui/PreviewsPage';
+import { parsePreviewsHash } from '../ui/previewGroups';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
-const AppViewer = lazy(() => import('../ui/AppViewer').then((m) => ({ default: m.AppViewer })));
 const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.CardView })));
+const PreviewsPage = lazy(() => import('../ui/PreviewsPage').then((m) => ({ default: m.PreviewsPage })));
 // The console's tabs, loaded when ⚙️ is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
@@ -311,10 +313,16 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} profile={overlay.profile} />;
-  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
   return null;
+}
+
+/** The Previews page (#226) over the pages beside the chat: from the menu, and wherever a floor's app is opened. */
+function PreviewsHost() {
+  const overlay = useStore((s) => s.overlay);
+  if (overlay?.kind !== 'app' && overlay?.kind !== 'previews') return null;
+  return <PreviewsPage key={`${overlay.repoId}:${overlay.pr}`} repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
 }
 
 function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {
@@ -342,6 +350,8 @@ export default function Pocket() {
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);
   const connected = useStore((s) => s.connected);
+  const previewsOpen = useStore((s) => s.overlay?.kind === 'previews' || s.overlay?.kind === 'app');
+  const runningPreviews = useRunningPreviews();
   const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the docked chat's header (#81)
   const switchKey = useKeyName('switchOffice');
   const layout = useLayout();
@@ -416,6 +426,13 @@ export default function Pocket() {
     setFocusRepo(wantsSection.repoId);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
   }, [wantsSection]);
+  // A link to the Previews page (#previews/3/pr-12) opens it once the floors are known.
+  useEffect(() => {
+    const link = loaded ? parsePreviewsHash(location.hash) : null;
+    if (!link) return;
+    const repo = useStore.getState().repos.find((r) => r.floor === link.floor);
+    useStore.getState().openOverlay({ kind: 'previews', repoId: repo?.id, pr: repo ? link.pr : null });
+  }, [loaded]);
   // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
   const guide = useFinder((s) => s.guide);
   useEffect(() => {
@@ -527,7 +544,7 @@ export default function Pocket() {
         <nav className="pk-tabs" aria-label="Pocket office" data-tour="pocket-tabs">
           {railTabs(layout).map((k) => {
             const [icon, label, badge] = entries[k];
-            const on = tab === k;
+            const on = tab === k && !previewsOpen; // the Previews page covers the tab
             return (
               <button
                 key={k}
@@ -535,7 +552,10 @@ export default function Pocket() {
                 className={`pk-tab ${on ? 'pk-tab-on' : ''}`}
                 aria-current={on ? 'page' : undefined}
                 title={wide ? `${label} (${TABS.indexOf(k) + 1})` : undefined}
-                onClick={() => setTab(k)}
+                onClick={() => {
+                  setTab(k);
+                  if (previewsOpen) useStore.getState().openOverlay(null); // the rail navigates: the page under it comes back
+                }}
               >
                 <span className="pk-tab-icon">
                   {icon}
@@ -546,7 +566,29 @@ export default function Pocket() {
             );
           })}
           {wide && (
-            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => setSettings(settings ? null : 'menu')} title="Settings and notifications">
+            <button
+              data-tour="previews"
+              className={`pk-tab ${previewsOpen ? 'pk-tab-on' : ''}`}
+              aria-pressed={previewsOpen}
+              onClick={() => useStore.getState().openOverlay(previewsOpen ? null : { kind: 'previews' })}
+              title="Previews: every live app and PR preview"
+            >
+              <span className="pk-tab-icon">
+                🖥️
+                {runningPreviews > 0 && (
+                  <span className="badge badge-dot" aria-label={`${runningPreviews} running`}>
+                    {runningPreviews}
+                  </span>
+                )}
+              </span>
+              <span className="pk-tab-label">Previews</span>
+            </button>
+          )}
+          {wide && (
+            <button data-tour="console" className={`pk-tab pk-tab-console ${settings && !previewsOpen ? 'pk-tab-on' : ''}`} aria-pressed={!!settings && !previewsOpen} onClick={() => {
+                if (previewsOpen) useStore.getState().openOverlay(null); // the console under the page comes back
+                setSettings(settings && !previewsOpen ? null : (settings ?? 'menu'));
+              }} title="Settings and notifications">
               <span className="pk-tab-icon">⚙️</span>
               <span className="pk-tab-label">Console</span>
             </button>
@@ -573,6 +615,12 @@ export default function Pocket() {
           </main>
           {/* wide, the console covers the pages and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
           <div className="pk-console-host">{settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}</div>
+          {/* the Previews page takes everything beside the chat, over the console it may have been opened from */}
+          <div className="pk-page-host">
+            <Suspense fallback={null}>
+              <PreviewsHost />
+            </Suspense>
+          </div>
           {/* after the console, so a terminal or app opened from it shows over it */}
           <div className="pk-pane">
             <Suspense fallback={null}>

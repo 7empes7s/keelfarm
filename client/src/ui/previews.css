@@ -1,0 +1,234 @@
+/* The Previews page (#226): the stats bar, the grouped list on the left (a sheet when narrow) and the stage. */
+
+.panel-previews .panel-body {
+  padding: var(--ds-space-3);
+}
+.pv {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.pv-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.pv-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.pv-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: var(--ds-space-3);
+}
+.pv-split-narrow {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pv-side {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--ds-space-2);
+  border-right: var(--ds-border) solid var(--ds-line-strong);
+}
+.pv-stage {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pv-empty {
+  margin: auto;
+  text-align: center;
+}
+
+/* ---------- the list ---------- */
+
+.pv-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.pv-search {
+  width: 100%;
+  min-height: var(--ds-target);
+  box-sizing: border-box;
+}
+.pv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+}
+.pv-chip {
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.pv-chip-on {
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+}
+.pv-chip:focus-visible,
+.pv-row:focus-visible,
+.pv-group-head:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.pv-group-head {
+  min-height: var(--ds-target);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.pv-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.pv-none {
+  margin: 0 0 var(--ds-space-2);
+}
+.pv-project-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-1) 2px;
+  font-weight: var(--ds-weight-strong);
+}
+.pv-row {
+  width: 100%;
+  min-height: var(--ds-target);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2);
+  border: var(--ds-border) solid transparent;
+  border-radius: var(--ds-radius-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pv-row:hover {
+  background: var(--ds-surface-hover);
+}
+.pv-row-on {
+  border-color: var(--ds-outline);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.pv-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* two lines at most, broken between words, never mid-word */
+.pv-row-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+}
+.pv-row-meta {
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+}
+.pv-word {
+  flex: none;
+  padding: 2px var(--ds-space-2);
+  border: 1.5px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+}
+.pv-word-building {
+  background: var(--ds-series-4);
+}
+.pv-word-testing {
+  background: var(--ds-warn-fill);
+}
+.pv-word-being-fixed {
+  background: var(--ds-series-6);
+}
+.pv-word-waiting-for-you {
+  background: var(--ds-bad-fill);
+}
+.pv-word-ready {
+  background: var(--ds-good-fill);
+}
+.pv-word-merged {
+  background: var(--ds-series-5);
+}
+.pv-word-closed {
+  color: var(--ds-text);
+}
+.pv-older {
+  align-self: flex-start;
+  min-height: var(--ds-target);
+}
+
+/* ---------- the stage: the app viewer without its window ---------- */
+
+.app-bare {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-bare-head {
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-text-md);
+  min-width: 0;
+}
+.app-bare.panel-app > .panel-body {
+  padding: 0;
+}
+/* Full screen from the page: the stage covers everything, the page's own header too. */
+.overlay:has(.app-bare.panel-app-immersive) {
+  padding: 0;
+  background: #000;
+}
+.panel:has(.app-bare.panel-app-immersive) > .panel-head {
+  display: none;
+}
+.app-bare.panel-app-immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  width: 100vw;
+  height: var(--app-height, 100dvh);
+  background: #000;
+}
+.app-bare.panel-app-immersive .app-bare-head {
+  display: none;
+}

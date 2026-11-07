@@ -14,6 +14,7 @@ import { HoldMenu } from './ui/HoldMenu';
 import { TouchStick } from './ui/TouchStick';
 import { useTouchPage } from './ui/touchMode';
 import { parseHash } from './ui/consoleNavRules';
+import { parsePreviewsHash } from './ui/previewGroups';
 import { SearchPalette } from './ui/SearchPalette';
 import { GuideSheet } from './ui/GuideCard';
 
@@ -30,8 +31,16 @@ const LINK_OPEN_MS = 2500;
 /** A link to a console section (#settings/cloud-agents) opens it once you're in. Returns its cancel. */
 function openLinkedSection() {
   const link = parseHash(location.hash, 'office');
-  if (!link) return () => undefined;
-  const t = setTimeout(() => !useStore.getState().overlay && useStore.getState().openOverlay({ kind: 'manager', tab: link.id }), LINK_OPEN_MS); // unless you opened something meanwhile
+  const previews = parsePreviewsHash(location.hash); // the Previews page (#226)
+  if (!link && !previews) return () => undefined;
+  const open = () => {
+    const s = useStore.getState();
+    if (s.overlay) return; // unless you opened something meanwhile
+    if (link) return s.openOverlay({ kind: 'manager', tab: link.id });
+    const repo = s.repos.find((r) => r.floor === previews?.floor);
+    s.openOverlay({ kind: 'previews', repoId: repo?.id, pr: repo ? previews?.pr : null });
+  };
+  const t = setTimeout(open, LINK_OPEN_MS);
   return () => clearTimeout(t);
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { api } from '../api';
 import { qaKey, useStore } from '../store';
 import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../../shared/previewEnv';
@@ -473,9 +473,19 @@ function CompareView({
 // Remembered while the page is open, so reopening the viewer keeps them.
 let lastCompare = false;
 
+/** The Previews page's stage (#226): the viewer without a window of its own, its title a heading. */
+function Bare({ title, className, accent, children }: { title: ReactNode; className?: string; accent?: string; children: ReactNode; wide?: boolean }) {
+  return (
+    <section className={`app-bare ${className ?? ''}`} style={{ ['--accent' as string]: accent }} aria-label="Preview">
+      <h3 className="app-bare-head">{title}</h3>
+      <div className="panel-body">{children}</div>
+    </section>
+  );
+}
+
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). */
-export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | null; qa?: boolean }) {
+/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `bare`: inside the Previews page, which lists the channels. */
+export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: number | null; qa?: boolean; bare?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
   const qaRecords = useStore((s) => s.qa);
@@ -508,11 +518,12 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
     if (!onOfficeComputer(location)) navigator.serviceWorker?.register('/preview/sw.js', { scope: '/preview/' }).catch(() => undefined);
   }, []);
 
+  const Frame = bare ? Bare : Panel;
   if (!repo) {
     return (
-      <Panel title="App">
+      <Frame title="App">
         <p className="muted">This floor no longer exists.</p>
-      </Panel>
+      </Frame>
     );
   }
 
@@ -601,7 +612,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   );
 
   return (
-    <Panel
+    <Frame
       wide
       className={`panel-app ${view.immersive ? 'panel-app-immersive' : ''}`}
       accent={repo.color}
@@ -619,7 +630,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
       }
     >
       <div ref={toolbar}>
-        <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />
+        {!bare && <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />}
         {active && <HeldNote preview={current} label={label} repo={repo} />}
         {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
           {active && (
@@ -693,6 +704,6 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
           {prView && ' A PR preview stops after a while with nobody watching it, and when its PR merges or closes.'}
         </p>
       )}
-    </Panel>
+    </Frame>
   );
 }

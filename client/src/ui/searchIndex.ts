@@ -56,6 +56,7 @@ export function buildIndex(s: IndexInput): Item[] {
     { id: 'act:notify', kind: 'action', icon: '🔔', label: 'Turn on notifications', sub: 'Settings · Notifications', target: { kind: 'section', section: 'notifications' } },
     { id: 'act:mandate', kind: 'action', icon: '📜', label: 'Add a standing mandate', sub: 'CEO · The CEO', target: { kind: 'section', section: 'ceo' } },
     { id: 'act:guide', kind: 'action', icon: '✅', label: 'Get the most out of the office', sub: 'The setup checklist', target: { kind: 'guide' } },
+    { id: 'act:previews', kind: 'action', icon: '🖥️', label: 'Previews', sub: 'Every live app and PR preview', target: { kind: 'overlay', overlay: { kind: 'previews' } } },
   );
   for (const r of floors) {
     const n = `floor ${r.floor}`;
