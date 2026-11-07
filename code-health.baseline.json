@@ -589,7 +589,7 @@
   ],
   "sizes": {
     "client/src/store.ts": 810,
-    "client/src/styles.css": 6034,
+    "client/src/styles.css": 6340,
     "client/src/ui/ManagerConsole.tsx": 882,
     "client/src/ui/Phone.tsx": 1167,
     "client/src/ui/sfx.ts": 838,
@@ -602,6 +602,6 @@
     "server/demo.ts": 1940,
     "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
-    "shared/types.ts": 900
+    "shared/types.ts": 947
   }
 }
