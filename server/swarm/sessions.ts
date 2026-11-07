@@ -24,6 +24,7 @@ import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
+import { knownUrl } from '../../shared/browserAddress.ts';
 import { AgentTerminal } from '../terminal.ts';
 import { INSTALL_STEP } from '../../shared/types.ts';
 import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo, WorldSnapshot } from '../../shared/types.ts';
@@ -353,7 +354,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     refusal: (kind) => this.health.refusal(kind),
     forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
     previewUrl: (repoId, pr, agentId) => this.labPreviewUrl(repoId, pr, agentId),
-    shot: (agentId, file) => this.labShot(agentId, file),
+    shot: (agentId, file, page) => this.labShot(agentId, file, page),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
   });
 
@@ -416,19 +417,21 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   /** A screenshot the lab took for an agent: their screen in the office, and QA's evidence, as a Playwright one would. */
-  protected labShot(agentId: string, file: string) {
+  protected labShot(agentId: string, file: string, page: string) {
     const a = this.state.agents.find((x) => x.id === agentId);
-    if (a) void fs.readFile(file).then((data) => this.screenTaken(a, data, 'image/png'), () => undefined);
+    if (a) void fs.readFile(file).then((data) => this.screenTaken(a, data, 'image/png', page), () => undefined);
   }
 
-  protected screenTaken(a: PersistedAgent, data: Buffer, mime: string) {
+  /** page: the address the screenshot is of, when known; else their last known one stays (#230). */
+  protected screenTaken(a: PersistedAgent, data: Buffer, mime: string, page?: string | null) {
     const rt = this.agentRt.get(a.id);
     if (!rt) return;
     const at = Date.now();
+    rt.browserUrl = knownUrl(rt.browserUrl, page);
     rt.screenshot = { data, mime, at };
     rt.shots.push({ data, mime, url: rt.browserUrl, at });
     if (rt.shots.length > 12) rt.shots.shift();
-    this.broadcast({ type: 'screen', agentId: a.id, url: rt.browserUrl, at });
+    this.broadcast({ type: 'screen', agentId: a.id, url: rt.browserUrl, at, earlier: rt.shots.slice(-6, -1).map((s) => s.at) });
     void removeScreens(a.id)
       .then(() => fs.mkdir(SCREENS_DIR, { recursive: true }))
       .then(() => fs.writeFile(screenFile(a.id, mime), data))

@@ -240,3 +240,17 @@ describe('pausesView (#83)', () => {
     expect(pausesView({ kind: 'phone', tab: 'chat' }, false)).toBe(false);
   });
 });
+
+describe('an agent’s screenshots (#230)', () => {
+  it('keeps the last known address through a screenshot without one, and the earlier shots for the filmstrip', () => {
+    const { apply } = useStore.getState();
+    const grace = { id: 'g1', name: 'Grace', role: 'agent', repoId: 'acme/floor1', browserUrl: null, log: [] } as Partial<AgentView>;
+    apply(snapshot([repo(1)], [grace]));
+    apply({ type: 'screen', agentId: 'g1', url: null, at: 1 });
+    expect(useStore.getState().agents.g1.browserUrl).toBeNull(); // unknown until a shot says
+    apply({ type: 'screen', agentId: 'g1', url: 'http://localhost:5200/settings', at: 2, earlier: [1] });
+    apply({ type: 'screen', agentId: 'g1', url: null, at: 3, earlier: [1, 2] });
+    expect(useStore.getState().agents.g1).toMatchObject({ browserUrl: 'http://localhost:5200/settings', screenshotAt: 3, hasScreenshot: true });
+    expect(useStore.getState().shotTimes.g1).toEqual([1, 2]);
+  });
+});

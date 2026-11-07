@@ -46,7 +46,7 @@ export type Overlay =
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
-  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } } // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so
+  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string } // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so; path: at that page (an agent's browser address, #230)
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string; full?: boolean }
@@ -137,6 +137,7 @@ interface State {
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
   peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
+  shotTimes: Record<string, number[]>; // agentId -> their session's earlier screenshots (#230), from the screen events this tab got
   qa: Record<string, QaView>; // `${repoId}#${prNumber}`
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
   previewStats: PreviewStatsView;
@@ -305,6 +306,7 @@ export const useStore = create<State>((set, get) => ({
   workersOpen: false,
   peek: null,
   screens: {},
+  shotTimes: {},
   qa: {},
   prPreviews: {},
   previewStats: { diskBytes: null, memMb: null, cleanedAt: null },
@@ -526,7 +528,8 @@ export const useStore = create<State>((set, get) => ({
         const a = get().agents[ev.agentId];
         set({
           screens: { ...get().screens, [ev.agentId]: ev.at },
-          agents: a ? { ...get().agents, [ev.agentId]: { ...a, hasScreenshot: true, screenshotAt: ev.at, browserUrl: ev.url ?? a.browserUrl } } : get().agents,
+          shotTimes: { ...get().shotTimes, [ev.agentId]: ev.earlier ?? [] },
+          agents: a ? { ...get().agents, [ev.agentId]: { ...a, hasScreenshot: true, screenshotAt: ev.at, browserUrl: ev.url || a.browserUrl } } : get().agents,
         });
         break;
       }

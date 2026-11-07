@@ -371,8 +371,11 @@ function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: nu
     ],
     [{ kind: 'tool', tool: 'Bash', text: '⏺ $ npm run typecheck' }, { kind: 'result', text: '  ⎿ (no output)' }],
     [{ kind: 'tool', tool: 'Bash', text: `⏺ $ npm run dev -- --port ${port} &` }, { kind: 'result', text: '  ⎿ VITE ready in 412 ms' }],
-    () => cb.browserUrl(`http://localhost:${port}/`),
-    [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
+    // Odd issues screenshot a page they never navigated to, so their browser card shows "address unknown" (#230).
+    () => issueNumber % 2 || cb.browserUrl(`http://localhost:${port}/`),
+    issueNumber % 2
+      ? [{ kind: 'tool', tool: 'mcp__playwright__browser_wait_for', text: '⏺ 🌐 wait_for "Ready"' }, { kind: 'result', text: '  ⎿ Waited for Ready' }]
+      : [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
     () => cb.screenshot(Buffer.from(screenshotSvg(issueTitle, `localhost:${port}`, hue)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
     [{ kind: 'text', text: '● Looks right in the browser. A production build, then the PR.' }],

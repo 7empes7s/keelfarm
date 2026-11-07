@@ -1057,6 +1057,22 @@ input.inline:focus {
   align-items: flex-end;
   max-width: min(420px, calc(100vw - 32px));
   z-index: var(--ds-z-toast);
+  /* a fixed width, so where useToastSpot.ts puts it (#230) never changes its size; only the toasts take taps */
+  width: min(420px, calc(100vw / var(--ui-scale, 1) - 24px));
+  pointer-events: none;
+}
+.hud > .toasts {
+  pointer-events: none;
+}
+.toasts > * {
+  pointer-events: auto;
+}
+/* two lines at most; the whole text is its tooltip, a click dismisses it */
+.toast:not(.notice-toast, .notice-more) {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .toast {
   background: var(--paper);
@@ -1677,36 +1693,6 @@ input.inline:focus {
   50% {
     opacity: 0.55;
   }
-}
-.browser {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-}
-.browser-bar {
-  background: var(--ds-surface-sunken);
-  border: 3px solid var(--ds-outline);
-  border-bottom: none;
-  border-radius: 14px 14px 0 0;
-  padding: 6px 12px;
-  font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.browser-view {
-  flex: 1;
-  min-height: 0;
-  border: 3px solid var(--ds-outline);
-  border-radius: 0 0 14px 14px;
-  background: var(--ds-surface-raised);
-  overflow: auto;
-  margin-top: -6px;
-}
-.browser-view img {
-  display: block;
-  width: 100%;
 }
 .term-input {
   display: flex;
@@ -5136,7 +5122,8 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   text-align: center;
   color: var(--muted);
 }
-/* at the top, two at most and two lines each, so they never cover the tabs or a message box */
+/* two at most and two lines each, full width on a phone; useToastSpot.ts places them clear of headers, tab rows and the
+   composer (#230) */
 .pocket .toasts {
   top: calc(66px + var(--ds-safe-top));
   bottom: auto;
