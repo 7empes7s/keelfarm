@@ -253,7 +253,7 @@ app.post('/api/experiments/:id/every-project', route((req) => swarm.adoptPractic
 app.get('/api/agents/:id/timeline', route((req) => swarm.careerTimeline(String(req.params.id))));
 app.get('/api/agents/:id/prompt', route((req) => swarm.agentPrompt(String(req.params.id))));
 app.get('/api/agents/:id/screen', (req, res) => {
-  const shot = swarm.screenshot(String(req.params.id));
+  const shot = swarm.screenshot(String(req.params.id), Number(req.query.at) || undefined);
   res.setHeader('Cache-Control', 'no-store');
   if (!shot) return void res.status(screenStatus(shot)).end();
   res.setHeader('Content-Type', shot.mime);

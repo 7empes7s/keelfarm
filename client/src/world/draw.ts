@@ -4,6 +4,7 @@ import { testingLabel } from '../qaCard';
 import { officeNow } from '../officeTime';
 import { chipRects } from '../ui/channels';
 import { inkOn } from '../ui/colorMath';
+import { addressBar } from '../ui/browserRules';
 import { KIND_ICON, kindStrong, STANDARD_LOOK, STATUS_KIND, TONE_KIND, toneFill, type StatusKind, type StatusLook } from '../ui/statusLook';
 import { statsChips, type BoardStats } from './boardStats';
 import type { Pair } from './whiteboard';
@@ -202,7 +203,7 @@ function drawBrowser(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.fillStyle = '#4a5160';
   ctx.font = `13px ${SANS}`;
   ctx.textBaseline = 'middle';
-  const u = (url ?? 'about:blank').replace(/^https?:\/\//, '');
+  const u = addressBar(url).text;
   ctx.fillText(`🔒 ${u.length > 42 ? `${u.slice(0, 41)}…` : u}`, x + 20, y + 18);
   const area = { x: x + 4, y: y + 38, w: w - 8, h: h - 42 };
   if (shot && shot.complete && shot.naturalWidth > 0) {

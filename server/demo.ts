@@ -48,6 +48,7 @@ import { demoThreads } from './demoThreads.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
+import { DEMO_QA_ISSUE, demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 import { withDemoChat } from './demoAgentChat.ts';
 import { demoAccounts } from './demoAccounts.ts';
@@ -386,8 +387,11 @@ function issueScript(opts: SessionOptions, cb: SessionCallbacks, issueNumber: nu
     ],
     [{ kind: 'tool', tool: 'Bash', text: '⏺ $ npm run typecheck' }, { kind: 'result', text: '  ⎿ (no output)' }],
     [{ kind: 'tool', tool: 'Bash', text: `⏺ $ npm run dev -- --port ${port} &` }, { kind: 'result', text: '  ⎿ VITE ready in 412 ms' }],
-    () => cb.browserUrl(`http://localhost:${port}/`),
-    [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
+    // Odd issues screenshot a page they never navigated to, so their browser card shows "address unknown" (#230).
+    () => issueNumber % 2 || cb.browserUrl(`http://localhost:${port}/`),
+    issueNumber % 2
+      ? [{ kind: 'tool', tool: 'mcp__playwright__browser_wait_for', text: '⏺ 🌐 wait_for "Ready"' }, { kind: 'result', text: '  ⎿ Waited for Ready' }]
+      : [{ kind: 'tool', tool: 'mcp__playwright__browser_navigate', text: `⏺ 🌐 navigate http://localhost:${port}/` }, { kind: 'result', text: `  ⎿ Page URL: http://localhost:${port}/` }],
     () => cb.screenshot(Buffer.from(screenshotSvg(issueTitle, `localhost:${port}`, hue)), 'image/svg+xml'),
     [{ kind: 'tool', tool: 'mcp__playwright__browser_take_screenshot', text: '⏺ 🌐 take_screenshot' }, { kind: 'result', text: '  ⎿ Took a screenshot of the current page' }],
     [{ kind: 'text', text: '● Looks right in the browser. A production build, then the PR.' }],
@@ -1128,6 +1132,16 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     },
     seedThreads: demoThreads,
     demoCharter,
+    seedQaReport: (fullName) => {
+      if (scale) return null; // the big company measures the office (scale.test.ts), not this example
+      const r = repos.get(fullName);
+      if (!r) return null;
+      const stuck = { ...issue(takeNumber(r), DEMO_QA_ISSUE.title, DEMO_QA_ISSUE.body, fullName), createdAt: new Date(Date.now() - 5 * 3_600_000).toISOString() };
+      r.issues.push(stuck);
+      const seeded = demoQaReport(fullName, takeNumber(r), stuck, 3 * 3_600_000, fakeSha());
+      r.pulls.unshift(seeded.pull);
+      return seeded;
+    },
     demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
