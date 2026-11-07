@@ -777,12 +777,15 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     listIssues: async (fullName) => {
       const r = repos.get(fullName);
       if (r && scale) topUp(r, scale.agents * 2);
-      return (r?.issues ?? []).map((i) => ({ author: 'demo-manager', authorAssociation: 'OWNER', ...i }));
+      // GitHub's fields for trust (#185), set on the fake's own objects: the office keeps them as they are, like before.
+      for (const i of r?.issues ?? []) i.authorAssociation ??= 'OWNER';
+      return [...(r?.issues ?? [])];
     },
     // Like GitHub's list: the open PRs and the 8 latest merges, never closed ones, so the office asks about those.
     listPulls: async (fullName) => {
       const pulls = repos.get(fullName)?.pulls ?? [];
-      return [...pulls.filter((p) => p.state === 'OPEN'), ...pulls.filter((p) => p.state === 'MERGED').slice(0, 8)].map((p) => ({ author: 'demo-manager', isCrossRepository: false, ...p }));
+      for (const p of pulls) Object.assign(p, { author: p.author ?? 'demo-manager', isCrossRepository: p.isCrossRepository ?? false });
+      return [...pulls.filter((p) => p.state === 'OPEN'), ...pulls.filter((p) => p.state === 'MERGED').slice(0, 8)];
     },
     writers: async () => ['demo-manager'],
     exportCharter: async (fullName) => {

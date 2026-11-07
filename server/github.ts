@@ -100,7 +100,7 @@ export function issueOf(i: RawIssue): IssueInfo {
 export async function listIssues(fullName: string): Promise<IssueInfo[]> {
   const [owner, name] = fullName.split('/');
   const raw = await readTwice(() =>
-    ghJson<{ data: { repository: { issues: { nodes: RawIssue[] } } | null } }>(['api', 'graphql', '-F', `owner=${owner}`, '-F', `name=${name}`, '-f', `query=${ISSUES_QUERY}`], SYNC_READ),
+    ghJson<{ data: { repository: { issues: { nodes: RawIssue[] } } | null } }>(['api', 'graphql', '-f', `owner=${owner}`, '-f', `name=${name}`, '-f', `query=${ISSUES_QUERY}`], SYNC_READ),
   );
   return (raw.data.repository?.issues.nodes ?? []).map(issueOf).sort((a, b) => a.number - b.number);
 }

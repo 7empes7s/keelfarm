@@ -20,8 +20,8 @@ async function office() {
   const repo = await swarm.connectRepo('demo-co/pixel-todo');
   const floor = () => swarm.snapshot().repos.find((r) => r.id === repo.id)!;
   await vi.waitFor(() => expect(floor().lastSync).not.toBeNull()); // connecting started the first sync
-  const stranger = floor().issues.find((i) => i.author === 'drive-by-dev')!;
-  const fork = floor().pulls.find((p) => p.isCrossRepository)!;
+  const stranger = floor().issues.find((i) => i.title === 'Add my analytics snippet')!;
+  const fork = floor().pulls.find((p) => p.untrusted)!;
   const inside = swarm as unknown as Inside;
   const persisted = inside.state.repos.find((r) => r.id === repo.id)!;
   return { backend, swarm, repo, floor, stranger, fork, inside, persisted };
@@ -43,6 +43,14 @@ describe('untrusted issues', () => {
     await expect(swarm.assign(agent.id, stranger.number)).rejects.toThrow(/isn't trusted/);
   });
 
+  it("can be trusted from the floor's allow-list", async () => {
+    const { swarm, repo, floor, stranger } = await office();
+    expect(stranger.untrusted).toBe(true);
+    swarm.updateRepo(repo.id, { trustedAuthors: 'drive-by-dev' } as never); // and syncs
+    await vi.waitFor(() => expect(floor().issues.find((i) => i.number === stranger.number)?.untrusted).toBeUndefined());
+    expect(() => swarm.updateRepo(repo.id, { trustedAuthors: ['no spaces'] } as never)).toThrow(/not a GitHub login/);
+  });
+
   it("let in by the manager's Trust this issue, which the office's own user labels", async () => {
     const { swarm, repo, floor, stranger, inside, persisted } = await office();
     await swarm.trustIssue(repo.id, stranger.number);
@@ -51,14 +59,6 @@ describe('untrusted issues', () => {
     expect(now.untrusted).toBeUndefined();
     expect(inside.readyIssues(persisted).map((r) => r.issue.number)).toContain(stranger.number);
     expect(swarm.snapshot().messages.at(-1)?.text).toMatch(/trusted #\d+ .* by @drive-by-dev/);
-  });
-
-  it("can be trusted from the floor's allow-list", async () => {
-    const { swarm, repo, floor, stranger } = await office();
-    swarm.updateRepo(repo.id, { trustedAuthors: 'drive-by-dev' } as never);
-    await swarm.syncRepo(repo.id);
-    expect(floor().issues.find((i) => i.number === stranger.number)?.untrusted).toBeUndefined();
-    expect(() => swarm.updateRepo(repo.id, { trustedAuthors: ['no spaces'] } as never)).toThrow(/not a GitHub login/);
   });
 });
 

@@ -45,7 +45,7 @@ export function pullTrusted(p: Pick<PullInfo, 'author' | 'isCrossRepository'>, c
   return p.isCrossRepository === false && trustedLogin(p.author, ctx);
 }
 
-/** A sync's fresh lists with `untrusted` set on what the office must leave alone. */
+/** A sync's fresh lists with `untrusted` set on what the office must leave alone; the rest are returned as they are. */
 export function markTrust(issues: IssueInfo[], pulls: PullInfo[], ctx: TrustContext): { issues: IssueInfo[]; pulls: PullInfo[] } {
   return {
     issues: issues.map((i) => (issueTrusted(i, ctx) ? i : { ...i, untrusted: true })),
