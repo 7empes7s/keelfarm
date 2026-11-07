@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './helpers';
 
 // The office updating itself never reloads the manager's page (#216): a draft and its file stay put, the new version
@@ -5,7 +6,7 @@ import { expect, test } from './helpers';
 
 /** A 1x1 PNG. */
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-const marked = (page: import('@playwright/test').Page) => page.evaluate(() => (window as { marker?: number }).marker === 1);
+const marked = (page: Page) => page.evaluate(() => (window as { marker?: number }).marker === 1);
 
 test('an office update keeps the draft and its file, then loads on the next tab change (#216)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
