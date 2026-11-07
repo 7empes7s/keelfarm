@@ -113,7 +113,7 @@ describe('the CEO chat', () => {
     await until(() => replies().some((m) => !m.requestId));
     const log = replies().find((m) => !m.requestId)!.log!;
     const labels = log.steps.map((st) => st.label);
-    expect(labels).toEqual(expect.arrayContaining(['Reading docs/how-it-works.md', 'Searching the web: mobile joystick UX', "Waiting for Claude's usage to be normal (up to 1 min)"]));
+    expect(labels).toEqual(expect.arrayContaining(['Reading client/src/pocket/touch/joystickThumbZone.tsx', 'Searching the web: mobile joystick UX', "Waiting for Claude's usage to be normal (up to 1 min)"]));
     expect(labels.some((l) => /^Filed floor 1 #\d+$/.test(l))).toBe(true);
     expect(log.steps.find((st) => st.label === 'Reading example.com')).toMatchObject({ state: 'failed', note: '403 Forbidden' });
     expect(log.steps.every((st) => st.state !== 'running' && typeof st.ms === 'number')).toBe(true);
