@@ -30,7 +30,7 @@ export function firstFailing(checks: QaCheck[] | undefined): { name: string; lin
 }
 
 /** A check's state as a word and a glyph (never colour alone). */
-export const checkWord = (r: QaCheck['result']) => (r === 'pass' ? '✓ passed' : r === 'fail' ? '✗ failed' : '– skipped');
+export const checkWord = (r: QaCheck['result']) => (r === 'pass' ? 'passed' : r === 'fail' ? 'failed' : 'skipped');
 
 /** An issue body's first `max` lines of prose: headings, list marks, images, comments and blank lines dropped. */
 export function bodyLines(body: string, max = 3): string[] {

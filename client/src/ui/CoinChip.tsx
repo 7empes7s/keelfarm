@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { repoOnFloor, useStore } from '../store';
 import { pling, watchCoffees } from '../world/decor/actions';
 import { onReward } from '../world/decor/rewards';
+import { Icon } from './Icon';
 
 const SHOW_MS = 1800;
 
@@ -32,7 +33,7 @@ export function CoinChip() {
   }, [gain]);
   return (
     <button className="pill coin-pill" title="Coins: merges earn them, the lobby kiosk spends them on decorations" onClick={() => openOverlay({ kind: 'catalogue', repoId: repoOnFloor(useStore.getState().repos, useStore.getState().floor)?.id })}>
-      🪙 {coins}
+      <Icon name="coins" /> {coins}
       {gain && (
         <span key={gain.at} className="coin-gain">
           +{gain.n}

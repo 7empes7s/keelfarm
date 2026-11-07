@@ -130,7 +130,7 @@ export default function Valentines({ kind, repoId }: ThemeProps) {
   }, [sendHeart]);
 
   useEffect(() => {
-    useThemeRuntime.setState({ status: '💘 Happy Valentine’s Day' + (stickies.length ? ` · ${stickies.length} heart${stickies.length === 1 ? '' : 's'} on monitors here` : '') });
+    useThemeRuntime.setState({ status: 'Happy Valentine’s Day' + (stickies.length ? ` · ${stickies.length} heart${stickies.length === 1 ? '' : 's'} on monitors here` : '') });
   }, [stickies.length]);
   useEffect(() => () => useThemeRuntime.setState({ status: null }), []);
   useEffect(() => addProbe({ heart: () => sendHeart(), hearts: () => stickies.map((s) => `${s.from}→${s.to.id}`) }), [sendHeart, stickies]);

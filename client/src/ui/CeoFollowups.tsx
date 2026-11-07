@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { DEFAULT_FOLLOWUPS, FOLLOWUP_KINDS, MANDATE_MAX_CHARS, mandateWhere } from '../../../shared/followups';
 import type { CeoMandate, FollowupSettings as Followups } from '../../../shared/followups';
@@ -90,7 +91,9 @@ export function CeoMandates() {
   };
   return (
     <>
-      <h3 className="section">📌 Standing mandates {mandates.length > 0 && <span className="badge">{mandates.length}</span>}</h3>
+      <h3 className="section">
+        <Icon name="pin" /> Standing mandates {mandates.length > 0 && <span className="badge">{mandates.length}</span>}
+      </h3>
       {mandates.length === 0 && <p className="muted small">None. Tell the CEO "keep working on floor 3 until it's perfected" and they record one; follow-ups then file issues there.</p>}
       {mandates.map((m) => (
         <MandateRow key={m.id} m={m} all={mandates} />

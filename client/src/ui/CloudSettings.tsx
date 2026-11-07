@@ -1,12 +1,13 @@
 // Settings → Cloud agents (docs/cloud.md): where new agents work, the Upstash account their Boxes run in, and what
 // they sign in with. Keys and tokens are write-only: the browser only sees whether each is there and where it's from.
-// Without a key, each cloud agent's coding agent signs in in their own terminal (the 🔑 Sign in on their card).
+// Without a key, each cloud agent's coding agent signs in in their own terminal (the Sign in on their card).
 import { useId, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { BOX_SIZE_INFO, BOX_SIZES, MAX_BOX_LIMIT } from '../../../shared/cloud';
 import type { CloudCredentialView, CloudSettings as Cloud, CloudView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { Menu } from './Menu';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/cloud.md';
@@ -57,7 +58,7 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
     return (
       <div className="row wrap">
         <span className="grow small">
-          🔑 {label} saved{hint && <code> …{hint}</code>}
+          <Icon name="key-round" /> {label} saved{hint && <code> …{hint}</code>}
         </span>
         <button className="btn btn-small btn-ghost" onClick={() => setEditing(true)}>
           Replace
@@ -129,23 +130,31 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
   );
 }
 
-/** ✓ or ⚠, and where the credential comes from. */
+/** Ready or not, and where the credential comes from. */
 function Status({ view, what }: { view: CloudCredentialView; what: Partial<Record<NonNullable<CloudCredentialView['source']>, string>> }) {
-  return view.ready ? <span className="small notify-ok">✓ {view.source ? what[view.source] : 'Ready'}</span> : <span className="small term-error">⚠ Not set up yet</span>;
+  return view.ready ? (
+    <span className="small notify-ok">
+      <Icon name="check" /> {view.source ? what[view.source] : 'Ready'}
+    </span>
+  ) : (
+    <span className="small term-error">
+      <Icon name="triangle-alert" /> Not set up yet
+    </span>
+  );
 }
 
 function Boxes({ cloud }: { cloud: CloudView }) {
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
   const b = cloud.boxes;
   const test = async () => {
     setBusy(true);
-    setNote('');
+    setNote(null);
     try {
       await api.testCloud();
-      setNote('✓ Connected');
+      setNote({ text: 'Connected', ok: true });
     } catch (err) {
-      setNote(err instanceof Error ? err.message : String(err));
+      setNote({ text: err instanceof Error ? err.message : String(err), ok: false });
     } finally {
       setBusy(false);
     }
@@ -180,8 +189,8 @@ function Boxes({ cloud }: { cloud: CloudView }) {
         />
       )}
       {note && (
-        <span className={`small ${note.startsWith('✓') ? 'notify-ok' : 'term-error'}`} role="status">
-          {note}
+        <span className={`small ${note.ok ? 'notify-ok' : 'term-error'}`} role="status">
+          {note.text}
         </span>
       )}
     </div>
@@ -199,7 +208,9 @@ export function CloudSettings() {
   };
   return (
     <div className="card notify-settings">
-      <h3>☁️ Cloud agents</h3>
+      <h3>
+        <Icon name="cloud" /> Cloud agents
+      </h3>
       <p className="muted small">
         Run agents in <a href="https://upstash.com/docs/box/overall/quickstart">Upstash Boxes</a> instead of on this computer. A cloud agent keeps working on its task when you close the office or shut your laptop, and
         the office catches up when it's back. Agents on this computer stay the default.
@@ -222,11 +233,15 @@ export function CloudSettings() {
       <div className="notify-hook" role="radiogroup" aria-label="Where new agents work">
         <label className="toggle block">
           <input type="radio" name="cloud-kind" checked={settings.machineKind === 'local'} onChange={() => save({ machineKind: 'local' })} />
-          <span>🖥️ This computer</span>
+          <span>
+            <Icon name="monitor" /> This computer
+          </span>
         </label>
         <label className="toggle block">
           <input type="radio" name="cloud-kind" checked={settings.machineKind === 'box'} disabled={!cloud.keySet} onChange={() => save({ machineKind: 'box' })} />
-          <span>☁️ An Upstash Box each{!cloud.keySet && ' (save your API key first)'}</span>
+          <span>
+            <Icon name="cloud" /> An Upstash Box each{!cloud.keySet && ' (save your API key first)'}
+          </span>
         </label>
         <p className="muted small">New hires work here; the lobby lets you pick for each one. Move an agent from their settings when they have no task.</p>
         <div className="row wrap">
@@ -283,8 +298,9 @@ export function CloudSettings() {
         </div>
         {cloud.claude.source === 'login' && (
           <p className="muted small">
-            With your Claude subscription (Pro or Max), each cloud agent signs in once, in their own terminal. When one needs it, their desk shows a 🔑 note and their card a 🔑 Sign in: open the link in their
-            terminal, approve it and paste the code back there. Their cloud machine keeps the sign-in; if it ever expires, the same steps sign them in again.
+            With your Claude subscription (Pro or Max), each cloud agent signs in once, in their own terminal. When one needs it, their desk shows a <Icon name="key-round" /> note and their card a{' '}
+            <Icon name="key-round" /> Sign in: open the link in their terminal, approve it and paste the code back there. Their cloud machine keeps the sign-in; if it ever expires, the same steps sign them in
+            again.
           </p>
         )}
         {cloud.claude.source !== 'subscription' && (
@@ -322,7 +338,7 @@ export function CloudSettings() {
         <div className="row wrap">
           <span className="grow muted small">Try what happens when a cloud agent's sign-in runs out: every Box is signed out, and its agent asks to be signed in again.</span>
           <button className="btn btn-small btn-ghost" onClick={() => void api.expireSignIns()}>
-            🔑 Expire sign-ins (demo)
+            <Icon name="key-round" /> Expire sign-ins (demo)
           </button>
         </div>
       )}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { useDialogFocus } from './dialogFocus';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 // The office's own confirmation box, instead of the browser's confirm():
 //   if (await confirmDialog({ title: 'Merge PR #12?', confirm: 'Merge' })) …
@@ -8,7 +10,7 @@ import { useDialogFocus } from './dialogFocus';
 interface Ask {
   title: string;
   body?: ReactNode;
-  icon?: string;
+  icon?: IconName;
   confirm?: string; // label of the confirm button
   cancel?: string;
   tone?: 'good' | 'danger' | 'warn';
@@ -63,7 +65,9 @@ function Question({ ask }: { ask: Ask }) {
   return (
     <div className="confirm-overlay" onMouseDown={(e) => e.target === e.currentTarget && answer(false)}>
       <div ref={box} className={`confirm confirm-${tone}`} role="alertdialog" aria-modal="true" aria-label={ask.title} tabIndex={-1}>
-        <div className="confirm-icon">{ask.icon ?? (tone === 'danger' ? '⚠️' : tone === 'warn' ? '🤔' : '✨')}</div>
+        <div className="confirm-icon">
+          <Icon name={ask.icon ?? (tone === 'danger' ? 'triangle-alert' : tone === 'warn' ? 'circle-help' : 'sparkles')} />
+        </div>
         <h3>{ask.title}</h3>
         {ask.body && <div className="confirm-body">{ask.body}</div>}
         <div className="confirm-actions">

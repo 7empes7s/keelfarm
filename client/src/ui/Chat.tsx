@@ -35,6 +35,7 @@ import { Bubble } from './ChatBubble';
 import { attempt, Avatar } from './phoneParts';
 import { isKey } from './controls';
 import { togglesFull, useChatFull } from './chatFull';
+import { CloseButton, Icon } from './Icon';
 
 // The chat with the CEO: the thread, its sheets and the message box (bubbles are in ChatBubble.tsx).
 
@@ -236,10 +237,10 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     const m = item.m;
     if (!m || m.from === 'office') return [];
     return [
-      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? '✏️ Edit and resend' : '✏️ Edit', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
-      ...(hasVersionsSheet(m) ? [{ label: `🕘 Versions (${(m.versions?.length ?? 0) + 1})`, run: () => setVersions(m) }] : []),
-      ...(m.id === last('ceo') ? [{ label: '⟳ Retry', run: () => void attempt(api.ceoRetry) }] : []),
-      { label: '📌 Remember this', run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (🧠 to see or edit)`)) },
+      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? 'Edit and resend' : 'Edit', icon: 'pencil' as const, run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
+      ...(hasVersionsSheet(m) ? [{ label: `Versions (${(m.versions?.length ?? 0) + 1})`, icon: 'clock' as const, run: () => setVersions(m) }] : []),
+      ...(m.id === last('ceo') ? [{ label: 'Retry', icon: 'refresh-cw' as const, run: () => void attempt(api.ceoRetry) }] : []),
+      { label: 'Remember this', icon: 'pin' as const, run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)) },
     ];
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
@@ -331,7 +332,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
                 <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
                   {offered.suggestions!.map((s) => (
                     <button key={s} type="button" className="suggestion-chip" onClick={() => send(s, offered.id)} aria-label={`Reply “${s}” to ${ceo.name}`}>
-                      ↩ {s}
+                      <Icon name="reply" /> {s}
                     </button>
                   ))}
                 </div>
@@ -384,40 +385,40 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
         {question !== null && !answered && (
           <>
             <button className="quick-chip quick-answer" onClick={() => send('Yes', question)} aria-label={`Reply Yes to ${ceo.name}'s question`}>
-              ↩ Yes
+              <Icon name="reply" /> Yes
             </button>
             <button className="quick-chip quick-answer" onClick={() => send('No', question)} aria-label={`Reply No to ${ceo.name}'s question`}>
-              ↩ No
+              <Icon name="reply" /> No
             </button>
           </>
         )}
         {!text && question === null && !offered && editing === null && ceo.status !== 'working' && <Starters onPick={fill} />}
         {(ceo.status === 'error' || ceo.status === 'stopped') && last('manager') !== undefined && (
-          <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
+          <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>
+            <Icon name="refresh-cw" /> Retry
+          </button>
         )}
       </div>
       {editing !== null && (
         <div className="chat-reply">
-          <b className="grow small">✏️ Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}</b>
-          <button type="button" className="chat-reply-x" aria-label="Cancel the edit" onClick={endEdit}>
-            ✕
-          </button>
+          <b className="grow small">
+            <Icon name="pencil" /> Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}
+          </b>
+          <CloseButton className="chat-reply-x" label="Cancel the edit" onClick={endEdit} />
         </div>
       )}
       {replyTo !== null && (
         <div className="chat-reply">
           <div className="grow chat-reply-body">
-            <b className="small">↩ Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'yourself' : who(quotedNow, ceo.name)) : 'a message'}</b>
+            <b className="small"><Icon name="reply" /> Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'yourself' : who(quotedNow, ceo.name)) : 'a message'}</b>
             <div className="chat-reply-text small">{quotedNow ? excerpt(quotedNow.text, 140) : 'The original message is no longer saved'}</div>
           </div>
-          <button type="button" className="chat-reply-x" aria-label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)}>
-            ✕
-          </button>
+          <CloseButton className="chat-reply-x" label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)} />
         </div>
       )}
       {chatQueued && info.held && (
         <div className="chat-held small" role="status">
-          ⏸ {heldBanner(info.held)}
+          <Icon name="pause" /> {heldBanner(info.held)}
         </div>
       )}
       <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
@@ -466,7 +467,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
         <MicButton kind="phone" value={text} onChange={setText} onSend={send} />
         {ceo.status === 'working' && editing === null && !text.trim() && !att.ready.length ? (
           <button type="button" className="btn btn-small btn-bad" onClick={stop} aria-label={`Stop ${ceo.name}`} title="Stop: what's done stays done, and the reply says what that was">
-            ■
+            <Icon name="square" />
           </button>
         ) : (
           <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>

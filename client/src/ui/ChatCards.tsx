@@ -4,6 +4,8 @@ import type { ChatAction } from '../../../shared/ceoActions';
 import { currentStep } from '../../../shared/ceoStream';
 import { CEO_ID, type ChatIdea, type ChatNotice } from '../../../shared/types';
 import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
+import { Icon } from './Icon';
+import { iconFor, type IconName } from './icons';
 import { useRefOpen } from './RefChips';
 import { StepLogList } from './ChatLive';
 import './chatCards.css';
@@ -20,7 +22,7 @@ function ActionCard({ action }: { action: ChatAction }) {
   const body = (
     <>
       <span className="action-card-icon" aria-hidden>
-        {action.icon}
+        <Icon name={iconFor(action.icon, 'zap')} />
       </span>
       <span className="grow action-card-text">{action.text}</span>
       {status && <span className={`action-chip ${status.tone ? `action-chip-${status.tone}` : ''}`}>{status.label}</span>}
@@ -48,7 +50,7 @@ export function ActionCards({ actions }: { actions: readonly ChatAction[] }) {
   );
 }
 
-const IDEA_ICON: Record<ChatIdea['kind'], string> = { objective: '🎯', focus: '🔭', mandate: '📜', experiment: '🧪', research: '🔎', charter: '🧭', team: '👥', plan: '🗺️' };
+const IDEA_ICON: Record<ChatIdea['kind'], IconName> = { objective: 'target', focus: 'telescope', mandate: 'scroll-text', experiment: 'flask-conical', research: 'search', charter: 'compass', team: 'users', plan: 'map' };
 
 /** The CEO's suggestion about how the office works: Accept sends its message, Edit puts it in the box, Not now hides it. */
 export function IdeaCard({ idea, ceoName, onAccept, onEdit }: { idea: ChatIdea; ceoName: string; onAccept: () => void; onEdit: () => void }) {
@@ -57,7 +59,7 @@ export function IdeaCard({ idea, ceoName, onAccept, onEdit }: { idea: ChatIdea; 
   return (
     <div className="idea-card" role="group" aria-label={`${ceoName} suggests: ${idea.title}`}>
       <div className="idea-card-head">
-        <span aria-hidden>{IDEA_ICON[idea.kind]}</span>
+        <span aria-hidden><Icon name={IDEA_ICON[idea.kind]} /></span>
         <span className="idea-card-kind">{idea.kind}</span>
       </div>
       <b className="idea-card-title">{idea.title}</b>
@@ -101,7 +103,7 @@ export function NoticeCard({ text, notice }: { text: string; notice: ChatNotice 
         <div className="notice-card-links">
           {notice.links.map((l) => (
             <a key={l.url} href={l.url} target="_blank" rel="noreferrer">
-              {l.label} ↗
+              {l.label} <Icon name="external-link" />
             </a>
           ))}
         </div>
@@ -140,7 +142,7 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
       <div className="working-row">
         <button type="button" className="working-main" aria-expanded={open} onClick={onToggle} disabled={!steps.length}>
           <span className="working-icon" aria-hidden>
-            {line.icon ?? '✻'}
+            <Icon name={line.icon ? iconFor(line.icon, 'sparkles') : 'sparkles'} />
           </span>
           <span className="grow working-text">
             <b className="working-now">{line.now}</b>
@@ -163,7 +165,7 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
           aria-label={confirm ? "Stop? Tap again: what's done stays done" : `Stop ${info.job?.label ?? 'the job'}`}
           title="Stop: what's done stays done"
         >
-          {confirm ? 'Stop?' : '■'}
+          {confirm ? 'Stop?' : <Icon name="square" />}
         </button>
       </div>
     </div>
@@ -179,7 +181,7 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
     <>
       {chips.map((c) => (
         <button key={c} type="button" className="quick-chip starter-chip" onClick={() => onPick(c)} aria-label={`Start a message: ${c}`}>
-          ✦ {c.trim()}
+          <Icon name="sparkle" /> {c.trim()}
           {c.endsWith(' ') && '…'}
         </button>
       ))}

@@ -7,6 +7,7 @@ import { runFocusAction } from '../world/Player';
 import { focusAgent, holdOptions, type HoldOptionId } from '../world/touch/holdOptions';
 import { closeHoldMenu, useHoldMenu } from '../world/touch/touchState';
 import { useDialogFocus } from './dialogFocus';
+import { Icon } from './Icon';
 
 // The hold menu: a bottom sheet of what you can do with the thing you held a finger on (or opened with the aim
 // card's ⋯ button), from holdOptions.ts. A tap on the dimmed view, or Cancel, closes it.
@@ -18,7 +19,7 @@ function run(id: HoldOptionId) {
   const agent = focusAgent(focus);
   if (id === 'use') runFocusAction(focus, 'click');
   else if (id === 'follow' && agent) followAgent(agent);
-  else if (id === 'greet' && agent && !greet(agent)) useStore.getState().pushToast('info', "👋 They're busy right now: say hi when they're free");
+  else if (id === 'greet' && agent && !greet(agent)) useStore.getState().pushToast('info', "They're busy right now: say hi when they're free");
   else if (id === 'carry') peelAimed(focus);
 }
 
@@ -46,7 +47,7 @@ function Sheet({ focus }: { focus: Focus }) {
         <div className="hold-title">{focus.label}</div>
         {holdOptions(focus).map((o) => (
           <button key={o.id} className="hold-option" onClick={() => run(o.id)}>
-            {o.label}
+            {o.icon && <Icon name={o.icon} />} {o.label}
           </button>
         ))}
         <button className="hold-option hold-cancel" onClick={closeHoldMenu}>

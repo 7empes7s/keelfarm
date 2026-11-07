@@ -115,7 +115,7 @@ export function Beacon({ on, size = 0.11 }: { on: boolean; size?: number }) {
 /** E on an alarm: the console at its card. The label is the alarm without its details ("PR #7 needs you"). */
 const alarmFocus = (id: string, a: OpsAlarm): Focus => ({
   id,
-  label: `🚨 ${a.text.split(':')[0]} on floor ${a.floor}: open it in the console`,
+  label: `${a.text.split(':')[0]} on floor ${a.floor}: open it in the console`,
   action: { kind: 'manager', tab: 'ops', card: a.id },
 });
 

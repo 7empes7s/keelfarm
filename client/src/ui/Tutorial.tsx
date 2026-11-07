@@ -10,6 +10,7 @@ import { matchCommands } from './chatCardRules';
 import { reduceMotion } from './a11y';
 import { newSince, stepsFor, textParts, TOUR, isStep, type TourStep, type Track, type TryIt } from './tourSteps';
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
+import { Icon } from './Icon';
 import './tour.css';
 import { useChatMode } from './chatMode';
 import { isTouch, useTouchStick } from '../world/touch/touchState';
@@ -73,7 +74,17 @@ function StepText({ text }: { text: string }) {
   return (
     <>
       {textParts(text).map((p, i) =>
-        'key' in p ? <Key key={i} action={p.key as ActionId} /> : 'move' in p ? <MoveKeys key={i} /> : 'name' in p ? <span key={i}>{p.name === 'ceo' ? ceo : company}</span> : <span key={i}>{p.text}</span>,
+        'key' in p ? (
+          <Key key={i} action={p.key as ActionId} />
+        ) : 'move' in p ? (
+          <MoveKeys key={i} />
+        ) : 'name' in p ? (
+          <span key={i}>{p.name === 'ceo' ? ceo : company}</span>
+        ) : 'icon' in p ? (
+          <Icon key={i} name={p.icon} />
+        ) : (
+          <span key={i}>{p.text}</span>
+        ),
       )}
     </>
   );
@@ -196,14 +207,31 @@ export function Tutorial({ track }: { track: Track }) {
       <section className={`tour tour-${track} ${cheer ? 'tour-cheer' : ''} ${reduceMotion() ? 'tour-still' : ''}`} aria-label={tour ? 'Tour' : "What's new"} aria-live="polite">
         <div className="tour-head">
           <span className="tour-count">
-            {tour ? '🧭 Tour' : "✨ What's new"} · {at + 1}/{steps.length}
+            {tour ? (
+              <>
+                <Icon name="compass" /> Tour
+              </>
+            ) : (
+              <>
+                <Icon name="sparkles" /> What's new
+              </>
+            )}{' '}
+            · {at + 1}/{steps.length}
           </span>
           <span className="spacer" />
           <button className="linkish small tour-skip" onClick={() => go(steps.length)}>
             {tour ? 'Skip tour' : 'Done'}
           </button>
         </div>
-        <div className="tour-title">{cheer ? `✅ ${s.title}` : s.title}</div>
+        <div className="tour-title">
+          {cheer ? (
+            <>
+              <Icon name="check" /> {s.title}
+            </>
+          ) : (
+            s.title
+          )}
+        </div>
         <div className="tour-body">
           <StepText text={(isTouch && s.touchText) || s.text} />
         </div>
@@ -214,18 +242,26 @@ export function Tutorial({ track }: { track: Track }) {
         </div>
         {s.tryIt && (
           <button className="btn btn-small tour-try" onClick={() => tryIt(s.tryIt!)}>
-            👆 {TRY_LABEL[s.tryIt]}
+            <Icon name="mouse-pointer-click" /> {TRY_LABEL[s.tryIt]}
           </button>
         )}
         <div className="tour-nav">
           {at > 0 && (
             <button className="btn btn-small btn-ghost" onClick={() => go(at - 1)}>
-              ← Back
+              <Icon name="chevron-left" /> Back
             </button>
           )}
           <span className="spacer" />
           <button className="btn btn-small btn-good" onClick={() => go(at + 1)}>
-            {last ? (tour ? 'Finish' : 'Done') : auto ? 'Skip step' : 'Next →'}
+            {last ? (
+              tour ? 'Finish' : 'Done'
+            ) : auto ? (
+              'Skip step'
+            ) : (
+              <>
+                Next <Icon name="chevron-right" />
+              </>
+            )}
           </button>
         </div>
       </section>
@@ -257,7 +293,17 @@ export function TourInvite({ track, floating = false }: { track: Track; floating
   return (
     <section className={`pk-card tour-invite ${floating ? 'tour-invite-float' : ''}`} aria-label={tourLeft ? 'Take the tour' : "What's new"}>
       <div className="grow">
-        <b>{tourLeft ? '🧭 Take the tour' : `✨ ${fresh.length} new thing${fresh.length === 1 ? '' : 's'} since you last looked`}</b>
+        <b>
+          {tourLeft ? (
+            <>
+              <Icon name="compass" /> Take the tour
+            </>
+          ) : (
+            <>
+              <Icon name="sparkles" /> {fresh.length} new thing{fresh.length === 1 ? '' : 's'} since you last looked
+            </>
+          )}
+        </b>
         <div className="muted small">{tourLeft ? `${all.length} short steps, each pointing at the real thing.` : fresh.map((s) => s.title).join(' · ')}</div>
       </div>
       <div className="tour-invite-nav">

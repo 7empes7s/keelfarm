@@ -16,7 +16,7 @@ const react = (id: number, emoji: string, note?: string) => void api.reactToMess
 function statusNote(s: StatusReaction, live: CeoLive | null, job: string | undefined): string {
   if (s === 'working') return `${STATUS_EMOJI[s]} ${live?.steps.at(-1)?.label ?? 'Working on it'}`;
   if (s === 'queued') return `${STATUS_EMOJI[s]} Next after: ${job ?? 'the job under way'}`;
-  if (s === 'failed') return `${STATUS_EMOJI[s]} It failed or was stopped: ⟳ Retry from the CEO's last message`;
+  if (s === 'failed') return `${STATUS_EMOJI[s]} It failed or was stopped: Retry from the CEO's last message`;
   return `${STATUS_EMOJI[s]} ${STATUS_WORDS[s][0].toUpperCase()}${STATUS_WORDS[s].slice(1)}`;
 }
 
