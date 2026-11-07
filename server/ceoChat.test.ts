@@ -49,10 +49,10 @@ describe('the CEO chat', () => {
     await swarm.messageCeo('How are things going?');
     await until(() => replies().length > 0);
     expect(prompts[0]).toContain('The manager asked you to always remember:\n- No releases on Fridays');
-    expect(lives.some((l) => l.steps.some((s) => s.label === 'Reading company status'))).toBe(true);
+    expect(lives.some((l) => l.steps.some((s) => s.label === 'Checking the floors'))).toBe(true);
     expect(lives.some((l) => l.open && l.blocks.length > 0)).toBe(true); // text arrived before the reply did
     const reply = replies()[0];
-    expect(reply.steps).toContain('Reading company status');
+    expect(reply.log?.steps.map((st) => st.label)).toContain('Checking the floors');
     await until(() => swarm.snapshot().chat?.live === null && ceo().status === 'done');
 
     // A new conversation starts empty, with a fresh CEO session; the old one is found and carried on.
@@ -107,6 +107,20 @@ describe('the CEO chat', () => {
     await swarm.stopCeo().catch(() => undefined);
   });
 
+  it("keeps the round's step log on the reply: plain words, timed, a failed step's reason (#150)", { timeout: 60_000 }, async () => {
+    const { swarm, replies } = await office();
+    await swarm.messageCeo('Look into the joystick on phones');
+    await until(() => replies().some((m) => !m.requestId));
+    const log = replies().find((m) => !m.requestId)!.log!;
+    const labels = log.steps.map((st) => st.label);
+    expect(labels).toEqual(expect.arrayContaining(['Reading docs/how-it-works.md', 'Searching the web: mobile joystick UX', "Waiting for Claude's usage to be normal (up to 1 min)"]));
+    expect(labels.some((l) => /^Filed floor 1 #\d+$/.test(l))).toBe(true);
+    expect(log.steps.find((st) => st.label === 'Reading example.com')).toMatchObject({ state: 'failed', note: '403 Forbidden' });
+    expect(log.steps.every((st) => st.state !== 'running' && typeof st.ms === 'number')).toBe(true);
+    expect(log.count).toBe(log.steps.length);
+    expect(log.ms).toBeGreaterThan(0);
+  });
+
   it('puts what a reply changed on it as action cards, with its artifact and idea (#108)', { timeout: 60_000 }, async () => {
     const { swarm, replies } = await office();
     await swarm.messageCeo('Plan the next milestone for floor 1');
@@ -115,7 +129,7 @@ describe('the CEO chat', () => {
     expect(reply.actions?.map((a) => a.tool)).toEqual(['file_issue', 'scale_team']);
     expect(reply.actions?.[0]).toMatchObject({ icon: '📝', text: expect.stringMatching(/^Filed floor 1 #\d+ · Polish: phone layout/), ref: { kind: 'issue', repoId: 'demo-co/pixel-todo' } });
     expect(reply.actions?.[1].ref).toEqual({ kind: 'floor', repoId: 'demo-co/pixel-todo' });
-    expect(reply.steps).toContain('Reading company status'); // the reads stay in the steps, not on cards
+    expect(reply.log?.steps.map((st) => st.label)).toContain('Checking the floors'); // the reads stay in the steps, not on cards
     expect(reply.artifacts?.map((a) => a.title)).toEqual(['Milestone plan']);
     expect(reply.idea).toMatchObject({ kind: 'objective', message: expect.stringContaining("floor 1's charter") });
   });

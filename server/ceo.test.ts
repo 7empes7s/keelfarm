@@ -1,6 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
+import { STEP_TOOLS, stepWords } from '../shared/ceoSteps.ts';
+import { describeOfficeTool } from './agentRunner.ts';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
@@ -211,6 +213,17 @@ describe('office tools', () => {
       'wait_for',
       'worktree_file',
     ]);
+  });
+
+  // #150: the phone shows each call as a sentence; none may fall back to the tool's raw name.
+  it('says every tool in plain words, with no raw tool name', async () => {
+    const { client } = await connect();
+    const { tools } = await client.listTools();
+    for (const t of tools) {
+      expect(STEP_TOOLS, t.name).toContain(t.name);
+      const text = stepWords(`mcp__office__${t.name}`, `⏺ ${describeOfficeTool(t.name, { floor: 2, pr: 7, number: 7, agent_id: 'Ada', title: 'X', question: 'Q?', conditions: [{ kind: 'pr_merged', floor: 2, pr: 7 }] })}`).text;
+      expect(text, t.name).not.toMatch(/_|\bmcp\b/);
+    }
   });
 
   it("checks the new tools' inputs before the office sees them", async () => {

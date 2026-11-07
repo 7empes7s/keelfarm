@@ -163,7 +163,7 @@ const SCREENS: Screen[] = [
       await expect(root.locator('.action-card').first()).toBeVisible();
       return root;
     },
-    tabs: [],
+    tabs: ['', { name: 'steps', go: (root) => root.locator('.steps-row').last().click() }], // the reply's step log (#150)
   },
   {
     // the questions waiting on the manager, in the tray above the message box, open and collapsed (#114)

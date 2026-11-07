@@ -3424,22 +3424,6 @@ input.inline:focus {
   font-weight: 700;
   cursor: pointer;
 }
-.floor-chip {
-  display: inline-block;
-  padding: 0 7px;
-  border: 1.5px solid var(--ds-outline);
-  border-radius: 999px;
-  background: #e7f0ff;
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.85em;
-  font-weight: 700;
-  cursor: pointer;
-}
-.floor-chip:hover,
-.floor-chip:focus-visible {
-  background: #ffe9a8;
-}
 .chat-unread {
   align-self: stretch;
   display: flex;

@@ -35,7 +35,7 @@ import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, pastPulls } from './demoMap.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
-import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoAwake, demoRound, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
@@ -1483,6 +1483,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
       if (awake) return awake;
+      const round = await demoRound(text, s.floors, use, (tool, line, out, error) => step([{ kind: 'tool', tool, text: `⏺ ${line}` }, { kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }])); // "look into …": the step log (#150)
+      if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.

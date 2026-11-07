@@ -97,14 +97,19 @@ export function Markdown({ text, className, onFloor, renderRef }: { text: string
       a: (props) => {
         const ref = props.href?.match(REF_HREF)?.[1];
         if (ref) return hasRef ? handlers.current.renderRef?.(Number(ref), props.children) : <span>{props.children}</span>;
-        const floor = props.href?.match(FLOOR_HREF)?.[1];
+        const [, floor, repo] = props.href?.match(FLOOR_HREF) ?? [];
         if (!floor) return <Link href={props.href}>{props.children}</Link>;
+        const name = repo && <span className="floor-chip-repo"> {repo}</span>;
         return hasFloor ? (
           <button type="button" className="floor-chip" onClick={() => handlers.current.onFloor?.(Number(floor))} title={`Open floor ${floor}`}>
             {props.children}
+            {name}
           </button>
         ) : (
-          <span>{props.children}</span>
+          <span>
+            {props.children}
+            {name}
+          </span>
         );
       },
     }),

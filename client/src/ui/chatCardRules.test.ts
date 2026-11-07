@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionStatus, continuesGroup, daySeparator, elapsed, matchCommands, slashItems, starterChips, workingLine } from './chatCardRules';
+import { actionStatus, continuesGroup, daySeparator, elapsed, matchCommands, replyLog, slashItems, starterChips, stepsSummary, stepTime, workingLine } from './chatCardRules';
 import type { RefWorld } from './chatRefs';
 import type { PullInfo } from '../../../shared/types';
 
@@ -35,8 +35,14 @@ describe("an action card's live status (#108)", () => {
 describe('the working strip', () => {
   it('says the running step, else the job, and the next job', () => {
     expect(workingLine(null, null, [])).toBeNull();
-    expect(workingLine({ label: 'Replying' }, { label: 'Filing an issue', state: 'running' }, [{ label: 'Review' }])).toEqual({ now: 'Filing an issue', next: 'Review' });
-    expect(workingLine({ label: 'Replying' }, { label: 'Filing #4', state: 'done' }, [])).toEqual({ now: 'Replying', next: null });
+    expect(workingLine({ label: 'Replying' }, { label: 'Filing an issue', icon: '📝', state: 'running', at: 1 }, [{ label: 'Review' }])).toEqual({ now: 'Filing an issue', icon: '📝', next: 'Review' });
+    expect(workingLine({ label: 'Replying' }, { label: 'Filed #4', icon: '📝', state: 'done', at: 1 }, [])).toEqual({ now: 'Replying', icon: null, next: null });
+  });
+
+  it("times a step: how long it took, or has been running", () => {
+    expect(stepTime({ label: 'x', icon: '•', state: 'done', at: 1, ms: 42_000 }, 0)).toBe('42 s');
+    expect(stepTime({ label: 'x', icon: '•', state: 'running', at: 1_000 }, 4_000)).toBe('3.0 s');
+    expect(stepTime({ label: 'x', icon: '•', state: 'done', at: 0 }, 9)).toBe('');
   });
 
   it('counts time plainly', () => {
@@ -81,5 +87,27 @@ describe("the thread's days and groups", () => {
     expect(continuesGroup({ from: 'ceo', at: now }, { from: 'ceo', at: now + 10 * 60_000 })).toBe(false);
     expect(continuesGroup({ from: 'office', at: now }, { from: 'office', at: now })).toBe(false);
     expect(continuesGroup(undefined, { from: 'ceo', at: now })).toBe(false);
+  });
+});
+
+describe("a reply's steps row (#150)", () => {
+  const log = { steps: [{ label: 'Checking the floors', icon: '🏢', state: 'done' as const, at: 1, ms: 900 }], count: 6, ms: 42_000 };
+
+  it('sums the round up in one line', () => {
+    expect(stepsSummary(log, 1)).toBe('6 steps · 1 action · 42 s');
+    expect(stepsSummary({ ...log, count: 1, ms: 0 }, 0)).toBe('1 step');
+  });
+
+  it("reads a reply's own log, else the labels an older reply kept, a failed one marked", () => {
+    expect(replyLog({ log })).toBe(log);
+    expect(replyLog({ steps: ['Reading company status', '✗ Searching the web'] })).toEqual({
+      steps: [
+        { label: 'Reading company status', icon: '•', state: 'done', at: 0 },
+        { label: 'Searching the web', icon: '•', state: 'failed', at: 0 },
+      ],
+      count: 2,
+      ms: 0,
+    });
+    expect(replyLog({})).toBeNull();
   });
 });

@@ -17,10 +17,10 @@ import { ArtifactCard, ArtifactList, ArtifactView } from './ChatArtifacts';
 import { MessageActions, who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { MessageBox } from './MessageBox';
-import { LiveBubble, LongText, StepsList } from './ChatLive';
+import { LiveBubble, LongText, StepsRow } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, NoticeCard, Starters, WorkingStrip } from './ChatCards';
 import { DecisionList, DecisionTray } from './Decisions';
-import { continuesGroup } from './chatCardRules';
+import { continuesGroup, replyLog } from './chatCardRules';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
@@ -400,6 +400,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const at = m ? m.at : item.out!.at;
   const id = m?.id;
   const files: FileRef[] = (m ? m.attachments : item.out!.files) ?? [];
+  const log = m ? replyLog(m) : null;
 
   // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click).
   const end = () => {
@@ -493,8 +494,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         ))}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
-        {m?.used && <UsedLine used={m.used} />}
-        {!!m?.steps?.length && <StepsList steps={m.steps} />}
+        {m && (log ? <StepsRow log={log} actions={m.actions?.length ?? 0} used={m.used} linked={linked} onFloor={onFloor} /> : m.used && <UsedLine used={m.used} />)}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
@@ -540,6 +540,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const [artifactList, setArtifactList] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false); // the working strip's live step log (#150)
   const att = useAttachments();
   const fileCount = useStore((s) => s.files.length);
   const drop = useDropZone(att.add);
@@ -787,7 +788,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} />}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} onOpenLog={() => setLogOpen(true)} />}
         </div>
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label={unseen ? `${unseen} new messages: jump to the latest` : 'Jump to the latest message'}>
@@ -865,7 +866,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           ⏸ {heldBanner(info.held)}
         </div>
       )}
-      <WorkingStrip onStop={stop} />
+      <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
       <AttachTray pending={att.pending} onRemove={att.remove} />
       {mention.picks}
       {slash.picks}

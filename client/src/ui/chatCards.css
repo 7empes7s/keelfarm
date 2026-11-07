@@ -143,44 +143,84 @@ html[data-reduce-motion] .action-confetti {
 }
 
 .working-strip {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
   margin: 0 var(--ds-space-2);
-  padding: var(--ds-space-1) var(--ds-space-1) var(--ds-space-1) var(--ds-space-3);
+  padding: 0 0 0 var(--ds-space-2);
   border: 1.5px solid var(--ds-line-strong);
   border-radius: var(--ds-radius-md);
   background: var(--ds-surface-raised);
   font-size: var(--ds-text-sm);
 }
-.working-strip .btn {
-  flex: none;
+.working-strip .step-log {
+  max-height: min(40vh, 18rem);
+  overflow-y: auto;
+  padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-1) 0;
+  border-bottom: 1px solid var(--ds-line);
+}
+.working-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.working-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
   min-height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.working-main:disabled {
+  cursor: default;
+}
+.working-icon {
+  flex: none;
+  width: 1.4em;
+  text-align: center;
 }
 .working-text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
   min-width: 0;
   line-height: var(--ds-leading-tight);
-  overflow-wrap: anywhere;
 }
-.working-next {
-  display: block;
-  font-size: var(--ds-text-xs);
-  white-space: nowrap;
+.working-now {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.working-dot {
+.working-meta {
   flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ds-accent);
-  animation: working-pulse 1.2s ease-in-out infinite;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
 }
-@keyframes working-pulse {
-  50% {
-    opacity: 0.3;
-  }
+.working-stop {
+  flex: none;
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: 0;
+  background: none;
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  cursor: pointer;
+}
+.working-stop-confirm {
+  color: var(--ds-danger-text);
+  font-weight: var(--ds-weight-strong);
 }
 /* the CEO's avatar breathes while it thinks */
 .ceo-thinking {

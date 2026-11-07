@@ -8,9 +8,21 @@ export interface FloorRef {
   prs?: readonly number[]; // its pull requests' numbers, so #N links to /pull/N rather than /issues/N
 }
 
-/** The href of a floor chip (ui/Markdown.tsx renders it as a button, never as a link). */
-export const floorHref = (floor: number) => `cubefarm:floor/${floor}`;
-export const FLOOR_HREF = /^cubefarm:floor\/(\d+)$/;
+/** The href of a floor chip (ui/Markdown.tsx renders it as a button, never as a link); `repo`: its name, shown inline. */
+export const floorHref = (floor: number, repo?: string) => `cubefarm:floor/${floor}${repo ? `/${repo}` : ''}`;
+export const FLOOR_HREF = /^cubefarm:floor\/(\d+)(?:\/([\w.-]+))?$/;
+
+// "floor 3 (`keelfarm`)", "floor 3 [keelfarm]", "floor 3 `keelfarm`": the floor's own repo name right after it joins
+// its chip (#150), so it reads as one line instead of a chip and a code pill.
+const FLOOR_REPO = /\bfloor\s+(\d+)\s*(?:\(\s*`?([\w.-]+)`?\s*\)|\[\s*`?([\w.-]+)`?\s*\](?!\()|`([\w.-]+)`)/gi;
+
+function withRepos(seg: string, floors: readonly FloorRef[]): string {
+  return seg.replace(FLOOR_REPO, (all, n: string, a?: string, b?: string, c?: string) => {
+    const repo = a ?? b ?? c;
+    const f = floors.find((x) => x.floor === Number(n));
+    return f && repo && f.fullName.split('/').pop()?.toLowerCase() === repo.toLowerCase() ? `[floor ${n}](${floorHref(Number(n), repo)})` : all;
+  });
+}
 
 const FLOOR_WORD = /\bfloor\s+(\d+)\b/gi;
 
@@ -44,8 +56,12 @@ function linkSegment(seg: string, whole: string, offset: number, floors: readonl
 }
 
 /** The CEO's Markdown with its `#N` linked to GitHub and its floor names as chips. Code (fenced or inline) is left alone. */
-export function linkCeoText(md: string, floors: readonly FloorRef[]): string {
-  if (!floors.length) return md;
+export function linkCeoText(raw: string, floors: readonly FloorRef[]): string {
+  if (!floors.length) return raw;
+  const md = raw
+    .split(/(```[\s\S]*?(?:```|$))/)
+    .map((p, i) => (i % 2 ? p : withRepos(p, floors)))
+    .join('');
   // Odd parts are code: fenced blocks first, then inline spans.
   const parts = md.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
   let offset = 0;

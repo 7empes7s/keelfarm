@@ -3,7 +3,8 @@
 // conversations, and the CEO's notes file for the memory screen. Kept out of swarm.ts like ceoFiles.ts.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { finishedSteps, foldStream, type CeoLive, type OfficeCall } from '../shared/ceoStream.ts';
+import { finishedLog, foldStream, type CeoLive, type OfficeCall } from '../shared/ceoStream.ts';
+import type { NameOf } from '../shared/ceoSteps.ts';
 import { actionCards } from '../shared/ceoActions.ts';
 import { NOTES_VIEW_MAX } from '../shared/ceoMemory.ts';
 import type { LogEntry } from './agentRunner.ts';
@@ -20,12 +21,13 @@ export class CeoChat {
   private lastReply = '';
   private timer: NodeJS.Timeout | undefined;
 
-  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id. */
+  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id; `nameOf`: an agent's name. */
   constructor(
     private readonly dir: string,
     private readonly notesFile: string,
     private readonly emitLive: (live: CeoLive | null) => void,
     private readonly repoOf: (floor: number) => string | null = () => null,
+    private readonly nameOf: NameOf = () => null,
   ) {}
 
   // ---------- the reply being written ----------
@@ -47,18 +49,18 @@ export class CeoChat {
   /** The session's log lines: its tool calls become steps. */
   log(entries: readonly LogEntry[]) {
     let live = this.live;
-    for (const entry of entries) if (entry.kind === 'tool' || entry.kind === 'result' || entry.kind === 'error') live = foldStream(live, { kind: 'log', entry }, Date.now());
+    for (const entry of entries) if (entry.kind === 'tool' || entry.kind === 'result' || entry.kind === 'error') live = foldStream(live, { kind: 'log', entry }, Date.now(), this.nameOf);
     if (live !== this.live) this.set(live, true);
   }
 
-  /** A turn's reply went to the phone: the steps and action cards it keeps (for its message); nothing is live until the next one. */
-  finishTurn(text: string): Pick<PhoneMessage, 'steps' | 'actions'> {
-    const steps = finishedSteps(this.live);
+  /** A turn's reply went to the phone: the step log and action cards it keeps (for its message); nothing is live until the next one. */
+  finishTurn(text: string): Pick<PhoneMessage, 'log' | 'actions'> {
+    const log = finishedLog(this.live, Date.now());
     const actions = this.turnActions(this.calls);
     this.turnFrom = this.calls.length;
     this.lastReply = text.trim();
     this.set(null);
-    return { ...(steps.length && { steps }), ...(actions.length && { actions }) };
+    return { ...(log && { log }), ...(actions.length && { actions }) };
   }
 
   /** The cards for the current turn's calls among `calls` (this job's, e.g. from settled()). */

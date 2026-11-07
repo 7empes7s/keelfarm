@@ -5,10 +5,11 @@ import { currentStep } from '../../../shared/ceoStream';
 import { CEO_ID, type ChatIdea, type ChatNotice } from '../../../shared/types';
 import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
 import { useRefOpen } from './RefChips';
+import { StepLogList } from './ChatLive';
 import './chatCards.css';
 
 // The CEO chat's cards (#108): what a reply did as action cards with a live status, its idea card (Accept / Edit /
-// Not now), the "working on it" strip with Stop, and the starter chips of an empty message box. Rules in chatCardRules.ts.
+// Not now), the "working on it" strip with Stop and the round's live log (#150), and the starter chips of an empty message box. Rules in chatCardRules.ts.
 
 /** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. */
 function ActionCard({ action }: { action: ChatAction }) {
@@ -75,7 +76,6 @@ export function IdeaCard({ idea, ceoName, onAccept, onEdit }: { idea: ChatIdea; 
   );
 }
 
-/** While the CEO is on a job: the step it's on in plain words, for how long, Stop, and the job waiting next. */
 /** A system notice from the office (#138): its line, the output behind it under Details, and links to the commits. */
 export function NoticeCard({ text, notice }: { text: string; notice: ChatNotice }) {
   return (
@@ -100,12 +100,14 @@ export function NoticeCard({ text, notice }: { text: string; notice: ChatNotice 
   );
 }
 
-export function WorkingStrip({ onStop }: { onStop: () => void }) {
+/** While the CEO is on a job: the step it's on in plain words, for how long, which step, Stop, and the job waiting next. A tap opens the round's live log. */
+export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onStop: () => void; open: boolean; onToggle: () => void; linked: (t: string) => string; onFloor: (n: number) => void }) {
   const info = useStore((s) => s.ceo);
   const live = useStore((s) => s.chat.live);
   const working = useStore((s) => s.agents[CEO_ID]?.status === 'working');
   const [start, setStart] = useState(() => Date.now()); // when this tab saw the job start; the live reply's own start wins
   const [now, setNow] = useState(() => Date.now());
+  const [confirm, setConfirm] = useState(false);
   const label = info.job?.label;
   useEffect(() => setStart(Date.now()), [label]);
   useEffect(() => {
@@ -113,19 +115,47 @@ export function WorkingStrip({ onStop }: { onStop: () => void }) {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [working]);
+  useEffect(() => {
+    if (!confirm) return;
+    const t = setTimeout(() => setConfirm(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirm]);
   const line = working ? workingLine(info.job, live && currentStep(live), info.queue) : null;
   if (!line) return null;
+  const steps = live?.steps ?? [];
+  const count = live?.stepCount ?? 0;
   return (
     <div className="working-strip" role="status">
-      <span className="working-dot" aria-hidden />
-      <span className="grow working-text">
-        <b>{line.now}</b>
-        <span className="muted"> · {elapsed(now - (live?.since ?? start))}</span>
-        {line.next && <span className="working-next muted">Next: {line.next}</span>}
-      </span>
-      <button type="button" className="btn btn-small btn-bad" onClick={onStop} title="Stop: what's done stays done">
-        ■ Stop
-      </button>
+      {open && steps.length > 0 && <StepLogList steps={steps} now={now} live linked={linked} onFloor={onFloor} />}
+      <div className="working-row">
+        <button type="button" className="working-main" aria-expanded={open} onClick={onToggle} aria-label={`${line.now}. ${open ? 'Hide' : 'Show'} the steps.`} disabled={!steps.length}>
+          <span className="working-icon" aria-hidden>
+            {line.icon ?? '✻'}
+          </span>
+          <span className="grow working-text">
+            <b className="working-now">{line.now}</b>
+            <span className="working-meta muted">
+              {elapsed(now - (live?.since ?? start))}
+              {count > 0 && ` · step ${count}`}
+              {line.next && ` · next: ${line.next}`}
+            </span>
+          </span>
+          {steps.length > 0 && (
+            <span className="working-chev" aria-hidden>
+              ▸
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={`working-stop ${confirm ? 'working-stop-confirm' : ''}`}
+          onClick={() => (confirm ? (setConfirm(false), onStop()) : setConfirm(true))}
+          aria-label={confirm ? "Tap again to stop: what's done stays done" : `Stop ${info.job?.label ?? 'the job'}`}
+          title="Stop: what's done stays done"
+        >
+          {confirm ? 'Stop?' : '■'}
+        </button>
+      </div>
     </div>
   );
 }
