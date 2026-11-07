@@ -174,7 +174,7 @@ interface CeoState {
   changes: ChangesState; // the manager's board actions for the CEO (#207, shared/managerChanges.ts)
   chats: ChatsState; // the chat's conversations; state.messages is the current one's thread (shared/conversations.ts)
   remember: MemoryNote[]; // the manager's pinned notes, in every CEO job's prompt (shared/ceoMemory.ts)
-  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null }; // its kept session (#28)
+  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null; model?: string }; // its kept session (#28) and the model it started on (#331)
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

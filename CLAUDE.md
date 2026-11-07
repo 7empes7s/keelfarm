@@ -85,6 +85,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |
   | `update.ts` | the office's own update: drain, hand-over to the launcher, the result after a restart |
   | `reactions.ts` | the chat's delivery and status reactions, the CEO's react and reply tools, the manager's reactions (#118) |
+  | `ceoModels.ts` | the CEO's model per kind of job, kept sessions on the same model, the retry on its own model (#331) |
   | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |

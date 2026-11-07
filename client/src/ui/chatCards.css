@@ -332,6 +332,30 @@ html[data-typing] .working-next {
 .chat-log code {
   word-break: break-word;
 }
+/* An upload in the tray (#148): its bar, then bytes, speed and time left. */
+.attach-uploading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.attach-uploading .attach-progress {
+  width: 100%;
+  min-width: 72px;
+}
+.attach-status {
+  max-width: 150px;
+  color: var(--ds-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+/* ↻ on a failed tray item: the shared 44 px icon button, the glyph kept small. */
+.attach-item .attach-btn {
+  font-size: var(--ds-text-sm);
+}
+.files-largest .link-btn {
+  overflow-wrap: anywhere;
+}
 
 /* the chat in pages (#145): the list keeps its own place when a page goes in above (ChatPaging.tsx), the spinner over
    it while one loads, an office note's row (hold it for Delete), and the Undo bar */

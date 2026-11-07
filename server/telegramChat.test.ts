@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ChatVisual } from '../shared/chatVisuals.ts';
+import type { FileRef } from '../shared/files.ts';
 import { createDemoBackend } from './demo.ts';
 import { GRACE_MS } from './notify.ts';
 import { Swarm } from './swarm.ts';
@@ -7,7 +9,7 @@ import { Swarm } from './swarm.ts';
 // gets the CEO's reply there, and decides a team change with the message's buttons.
 type Internals = {
   ensureCeo(interrupted: unknown[]): void;
-  postMessage(from: 'ceo', text: string): void;
+  postMessage(from: 'ceo', text: string, requestId?: string, opts?: { attachments?: FileRef[]; visuals?: ChatVisual[] }): void;
 };
 
 const TOKEN = '123456789:AAEdemoSECRETtokenSECRETtoken42424242';
@@ -66,6 +68,20 @@ describe('Telegram in the office', () => {
     await until(() => sent().some((l) => l.includes('The plan: ship it.')));
     expect(JSON.stringify(swarm.snapshot())).not.toContain('SECRET');
     expect(logs.join('\n')).not.toContain('SECRET');
+    await swarm.telegram.stop();
+  });
+
+  it("sends the CEO's files to Telegram as links to the office's downloads (#148)", async () => {
+    const { swarm, sent } = await office();
+    await swarm.telegram.setToken(TOKEN);
+    swarm.telegramDemo({ kind: 'start' });
+    await until(() => swarm.snapshot().notifyChannels.telegram.linked);
+    swarm.updateSettings({ notify: { ...swarm.snapshot().settings.notify, telegramMirror: true, officeUrl: 'http://office.tail1234.ts.net/' } });
+    const video: FileRef = { id: '0123456789abcdef01234567', name: 'demo.mp4', type: 'video/mp4', size: 450 * 1024 ** 2, from: 'ceo', at: Date.now(), keep: false };
+    (swarm as unknown as Internals).postMessage('ceo', 'The recording.', undefined, { attachments: [video], visuals: [{ kind: 'table', title: 'Encoding', columns: [{ label: 'Size', unit: '' }], rows: [['450 MB']] }] });
+    await until(() => sent().some((l) => l.includes('The recording.')));
+    expect(sent().find((l) => l.includes('The recording.'))).toContain('Encoding');
+    expect(sent().find((l) => l.includes('The recording.'))).toContain('📎 demo.mp4 (450 MB): http://office.tail1234.ts.net/api/files/0123456789abcdef01234567?download');
     await swarm.telegram.stop();
   });
 

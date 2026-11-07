@@ -3,8 +3,9 @@
 // own in the side menu (consoleNavRules.ts); the other sections are their own components.
 import { api } from '../api';
 import { useStore } from '../store';
-import { DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
-import { CLAUDE_MODELS } from '../../../shared/models';
+import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
+import { CLAUDE_MODELS, modelLabel } from '../../../shared/models';
+import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
 import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
 import { MemoryFields } from './HealthStrip';
@@ -114,6 +115,30 @@ export function AgentsSettings() {
   );
 }
 
+const JOB_NAMES: Record<CeoModelKind, string> = { chat: 'Chat with you', plan: 'Planning', research: 'Research', review: 'Company reviews', followup: 'Follow-ups', triage: 'Stuck PR triage' };
+
+/** CEO settings → Model per job (#331): routine jobs on a cheaper model, the rest on the CEO's own. */
+function CeoModelsByJob() {
+  const awake = useStore((s) => s.settings.ceoAwake);
+  const models = awake.models;
+  const ceoModel = useStore((s) => s.agents[CEO_ID]?.model) || CLAUDE_MODELS[0];
+  const same = `Same as the CEO model (${modelLabel(ceoModel)})`;
+  return (
+    <div>
+      <div className="small">
+        <b>Model per job</b>
+      </div>
+      {CEO_MODEL_KINDS.map((kind) => (
+        <label key={kind} className="field" htmlFor={`ceo-model-${kind}`}>
+          <span>{JOB_NAMES[kind]}</span>
+          <ModelPicker id={`ceo-model-${kind}`} cli="claude" value={models[kind]} resolvedDefault={ceoModel} defaultLabel={same} label={`${JOB_NAMES[kind]}: model`} onChange={(m) => set({ ceoAwake: { ...awake, models: { ...models, [kind]: m } } })} />
+        </label>
+      ))}
+      <p className="muted small">A job starts a fresh session when its model differs from the last one's. If a model isn't available, the job runs again on the CEO model and the office chat says so.</p>
+    </div>
+  );
+}
+
 export function CeoSettings() {
   const settings = useStore((s) => s.settings);
   return (
@@ -144,6 +169,7 @@ export function CeoSettings() {
         <input type="number" min={0} max={1440} defaultValue={settings.ceoHeartbeatMin} onBlur={(e) => set({ ceoHeartbeatMin: Number(e.target.value) })} />
       </label>
       <p className="muted small">A review checks team sizes, stuck PRs and floor profiles, and is skipped when nothing changed since the last one. It never files issues: new work only comes from you. The CEO's own model and effort are in The CEO.</p>
+      <CeoModelsByJob />
       <label className="field">
         <span>Research time budget (minutes)</span>
         <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />

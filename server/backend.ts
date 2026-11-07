@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import * as github from './github.ts';
 import * as workspace from './workspace.ts';
 import { startSession, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
+import type { DemoThread } from './ceoChat.ts';
 import { detachBoxClis, hooksReady, officeProcesses, reconnectBoxClis, reconnectClis, releaseClis, startBoxSignIn, startCliSession, terminalsAvailable, type BoxSignIn, type KeptBoxCli, type ReconnectedCli } from './cliRunner.ts';
 import { keeperHookUrl } from './ptyClient.ts';
 import { upstashBoxes, type BoxApi } from './box.ts';
@@ -196,6 +197,8 @@ export interface Backend {
   seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */
   seedChat?(now: number): PhoneMessage[];
+  /** The demo only: older CEO chat threads across the floors, with artifacts and images in them (#132). */
+  seedThreads?(repos: readonly { id: string; floor: number }[], now: number): DemoThread[];
   /** The demo only: a day of notifications of every kind (#107), when the notification centre is empty. */
   seedNotices?(repos: { id: string; floor: number }[], agents: { id: string; name: string; repoId: string; role: string }[], now: number): NoticeView[];
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */

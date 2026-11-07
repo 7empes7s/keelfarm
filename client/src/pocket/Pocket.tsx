@@ -14,6 +14,8 @@ import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Chat';
+import { ThreadsColumn } from '../ui/ChatHistory';
+import { useCall } from '../ui/voiceCallStore';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';
@@ -34,7 +36,7 @@ import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { useChatMode } from '../ui/chatMode';
-import { useChatFull, useChatFullBack } from '../ui/chatFull';
+import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
 import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
@@ -416,10 +418,14 @@ export default function Pocket() {
   // The chat beside the pages: on wide screens open unless hidden (remembered), at medium widths a drawer, closed at first.
   const [dockPref, setDockPref] = useState(savedDock);
   const [dockW, setDockW] = useDockWidth();
+  // the chat's width for what opens beside the docked chat and its threads column (pocket.css, #132)
+  useEffect(() => document.documentElement.style.setProperty('--pk-dock-w', `${dockW}px`), [dockW]);
   const [drawer, setDrawer] = useState(false);
-  const dock = layout === 'expanded' ? dockPref : layout === 'medium' && drawer;
+  const tucked = useCall((s) => s.chatTucked); // behind a voice call (#287)
+  const dock = (layout === 'expanded' ? dockPref : layout === 'medium' && drawer) && !tucked;
   const setDock = useCallback(
     (open: boolean) => {
+      if (open) useCall.setState({ chatTucked: false });
       if (layout !== 'expanded') return setDrawer(open);
       setDockPref(open);
       saveDock(open);
@@ -456,10 +462,18 @@ export default function Pocket() {
   const reopen = (p: PanelEntry) => (p.slot === 'main' ? setSettings(p.value as ConsoleSection) : useStore.getState().openOverlay(p.value as Overlay));
   // The rail and links to a page bring the page to the front: the console closes, and a pane covering the page too.
   const show = (t: PocketTab) => {
+    if (full) leaveFullFor(wide);
     setTab(t);
     setSettings(null);
     const p = paneHost.current;
     if (useStore.getState().overlay && inPane(useStore.getState().overlay) && (!wide || (p && getComputedStyle(p).position === 'absolute'))) useStore.getState().openOverlay(null);
+  };
+  // The rail's Console toggles it; from the full chat it shows it (#242).
+  const railConsole = () => {
+    if (full) leaveFullFor(wide);
+    if (!settings) setSettings('menu');
+    else if (top?.slot === 'main' && !full) setSettings(null);
+    else panels.focus('console');
   };
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
@@ -651,7 +665,7 @@ export default function Pocket() {
             );
           })}
           {wide && (
-            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => (!settings ? setSettings('menu') : top?.slot === 'main' ? setSettings(null) : panels.focus('console'))} title="Settings and notifications">
+            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={railConsole} title="Settings and notifications">
               <span className="pk-tab-icon">
                 <Icon name="settings" />
               </span>
@@ -691,7 +705,7 @@ export default function Pocket() {
           </div>
         </div>
         {wide && dock && (
-          <aside className="pk-dock" aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
+          <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
             {layout === 'expanded' && !full && <DockGrip width={dockW} onWidth={setDockW} />}
             <div className="pk-dock-head">
               <b className="pk-ellipsis">
@@ -704,7 +718,11 @@ export default function Pocket() {
                 <XLabel text="Hide the chat" keys={layout === 'medium' ? 'Esc' : undefined} />
               </button>
             </div>
-            {chat}
+            {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}
+            <div className="pk-dock-body">
+              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} />}
+              {chat}
+            </div>
           </aside>
         )}
       </div>

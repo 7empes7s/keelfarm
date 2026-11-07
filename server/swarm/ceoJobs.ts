@@ -13,7 +13,7 @@ import { recordCost } from '../metrics.ts';
 import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
 import { speaks } from '../voice.ts';
-import { teamKeyboard, telegramChat } from '../telegram.ts';
+import { teamKeyboard, telegramChat, telegramMessage } from '../telegram.ts';
 import { blockedNotice } from '../unblock.ts';
 import { clip, plainText, stuckAgents, type TeamChange } from '../notify.ts';
 import { redact as scrub } from '../../shared/journal.ts';
@@ -41,7 +41,7 @@ import { quickPicks } from '../ceoFiles.ts';
 import { ceoSessionStep } from '../ceoWaits.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
-import { conversationsView, touchConversation } from '../../shared/conversations.ts';
+import { conversationsView, projectLine, touchConversation } from '../../shared/conversations.ts';
 import { renotifyDue, toldCeo } from '../../shared/questions.ts';
 import { decisionsReminder, probablyLeft } from '../../shared/decisions.ts';
 import {
@@ -59,9 +59,9 @@ import {
   QA_SHOTS_DIR,
 } from './model.ts';
 import { SKIN, lookFor, pick } from './flavour.ts';
-import { SwarmReactions } from './reactions.ts';
+import { SwarmCeoModels } from './ceoModels.ts';
 
-export abstract class SwarmCeo extends SwarmReactions {
+export abstract class SwarmCeo extends SwarmCeoModels {
   protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
   // ---------- the CEO ----------
 
@@ -234,11 +234,12 @@ export abstract class SwarmCeo extends SwarmReactions {
     const rt = this.agentRt.get(a.id)!;
     const floor = this.ceoFloor(job.repoId);
     const label = jobLabel(job, floor);
+    const model = this.ceoJobModel(a, job);
     this.state.ceo.job = job;
     Object.assign(a, { status: 'working' as AgentStatus, task: null, issueNumber: null, issueTitle: label, startedAt: Date.now(), endedAt: null, costUsd: 0, turns: 0, lastError: null });
     this.appendLog(a, [
       { kind: 'system', text: '' },
-      { kind: 'system', text: `━━━ ${label} ━━━` },
+      { kind: 'system', text: `━━━ ${label} · ${model} ━━━` },
     ]);
     if (job.kind === 'chat') this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
     if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
@@ -267,14 +268,12 @@ export abstract class SwarmCeo extends SwarmReactions {
     // every job does until its context fills up or it sat idle too long (#28).
     const awake = this.state.settings.ceoAwake;
     const step = ceoSessionStep(awake, { sessionId: a.sessionId, turns: this.state.ceo.kept.turns, lastEndedAt: this.state.ceo.kept.lastEndedAt }, Date.now());
-    const resume = step.resume || (job.kind === 'chat' && !step.why);
-    if (!resume || !this.state.ceo.kept.startedAt) this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: Date.now(), lastEndedAt: null };
-    if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
+    const resume = this.ceoResume(a, { resume: step.resume || (job.kind === 'chat' && !step.why), why: step.why }, model);
     const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
     const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + memoryPrompt(this.state.ceo.remember) + this.takeChanges(job);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.startOnAccount(a,
       {
         cwd: CEO_DIR,
@@ -323,7 +322,7 @@ export abstract class SwarmCeo extends SwarmReactions {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        finished: (result) => this.onCeoFinished(a, result),
+        finished: (result) => this.onCeoFinished(a, this.spend.perTurn(a.id, this.spend.sid(a.id), result)), // its kept session reports a running total (#254)
       },
     );
     if (job.kind === 'research') this.researchGuard.start(this.state.settings.researchMin, job.topic ?? '', () => rt.session, (note) => { Object.assign(a, { status: 'stopped' as AgentStatus, lastError: note }); this.postMessage('office', `⏱ ${a.name}: ${note}`); });
@@ -347,7 +346,8 @@ export abstract class SwarmCeo extends SwarmReactions {
     this.researchGuard.clear();
     const preempted = !!job && job === this.ceoPreempted;
     this.ceoPreempted = null;
-    if (this.settleChanges(preempted) && job) this.state.ceo.queue.push(job); // a preempted job hears its changes again
+    const retry = this.retryOnCeoModel(a, job, result, preempted);
+    if (this.settleChanges(preempted || retry) && job) this.state.ceo.queue.push(job); // a preempted or retried job hears its changes again
     else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
     this.ceoFiles.endJob();
@@ -359,8 +359,8 @@ export abstract class SwarmCeo extends SwarmReactions {
     void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, run, 'ceo-chat', result, { stopped: a.status === 'stopped' || preempted, ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
-    } else if (preempted) {
-      a.status = 'idle'; // the manager's chat starts next
+    } else if (preempted || retry) {
+      a.status = 'idle'; // the manager's chat, or the retry, starts next
     } else if (!result.ok) {
       a.status = 'error';
       a.lastError = result.errors.join('; ') || 'Session failed';
@@ -372,7 +372,7 @@ export abstract class SwarmCeo extends SwarmReactions {
       const filed = this.ceoIssues.total ? ` · ${this.ceoIssues.total} issue${this.ceoIssues.total === 1 ? '' : 's'} filed` : '';
       this.appendLog(a, [{ kind: 'done', text: `✔ Done in ${this.minutes(a)}m · ${a.turns} turns${filed}` }]);
     }
-    if (this.ceoAsked || job?.messageIds?.length) this.markStatus('open', a.status === 'done' ? 'replied' : 'failed'); // ✅ or ⚠️ on the manager's messages it held
+    if (!retry && (this.ceoAsked || job?.messageIds?.length)) this.markStatus('open', a.status === 'done' ? 'replied' : 'failed'); // ✅ or ⚠️ on the manager's messages it held
     if (a.startedAt) this.ceoTold.push(...probablyLeft(this.state.decisions.list, a.startedAt)); // #208: back in its next job, not in the chat
     for (const id of this.ceoIssues.repos) void this.syncRepo(id);
     this.emitAgent(a);
@@ -392,7 +392,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via);
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), ...(clientId && { clientId }), delivery: 'sent', ...(via && { telegram: 'in' as const, ...(tg !== undefined && { tg }) }), ...(attachments.length && { attachments }) });
-    const forward = [forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const forward = [projectLine(this.state.ceo.chats, this.state.messages, m, this.state.repos), forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const asked = this.holds.answer(replyTo, [t, this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n')); // no quote: it answers the question asked
     if (asked && !asked.resume) {
       // ask_manager's answer: it goes to the waiting tool call, not into the session as a new message (#28).
@@ -660,7 +660,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, withVisualsText(m.text, m.visuals)), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      void this.telegram.send(telegramMessage(this.ceo().name, m, this.state.settings.notify.officeUrl), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }

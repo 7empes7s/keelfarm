@@ -28,6 +28,7 @@ import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
 import { claimVoice } from './ui/voiceClaim';
+import { callOn, callVoice, holdNote } from './ui/voiceCallStore';
 import { speakable } from './ui/voiceQueue';
 import { emitMerge, mergeBursts, recentQaRecord, rememberQa } from './world/confetti';
 import { takeEmote, takePing, takePose, takeRoster } from './world/presence/presenceState';
@@ -585,8 +586,8 @@ export const useStore = create<State>((set, get) => ({
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
-        // Read aloud, in this tab or another; the voice plays the chirp itself if it can't. Locked audio can't speak.
-        const speak = live && audioUnlocked() && speakable(ev.message, get().settings.voice, Date.now());
+        // Read aloud, in this tab or another (always in a voice call); the voice plays the chirp itself if it can't. Locked audio can't speak.
+        const speak = live && audioUnlocked() && speakable(ev.message, callVoice(get().settings.voice), Date.now());
         if (speak) {
           const arrived = Date.now();
           const wait = claimVoice(ev.message.id);
@@ -594,8 +595,7 @@ export const useStore = create<State>((set, get) => ({
         }
         // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
         if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
-        // Its toast is the office's notice (#107).
-        if (ev.message.from === 'ceo' && !reading && !speak) chirp();
+        if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
         break;
       }
       case 'ceoChat':
@@ -618,8 +618,8 @@ export const useStore = create<State>((set, get) => ({
         const n = noticeOf(ev);
         if (n && !replay) set({ notices: addNotice(get().notices, n, Date.now()) }); // the centre is live-only
         const o = get().overlay;
-        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read).
-        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat')) get().pushToast(ev.level, ev.text, n ?? undefined);
+        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read); a voice call holds it till its end.
+        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat') && !holdNote({ level: ev.level, text: ev.text, ...(n && { notice: n }) })) get().pushToast(ev.level, ev.text, n ?? undefined);
         break;
       }
       case 'noticesRead':
@@ -686,7 +686,7 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.
-        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false);
+        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false && !callOn());
         break;
       // Presence: the list is state; poses, emotes and pings go straight to the 3D view (world/presence/presence.ts).
       case 'visitors':
