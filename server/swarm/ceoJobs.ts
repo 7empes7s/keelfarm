@@ -30,7 +30,7 @@ import {
 import { dueGreeting } from '../../shared/themes.ts';
 import { charterOf, MISSION_MAX, renderCharter } from '../../shared/charter.ts';
 import { CEO_ID } from '../../shared/types.ts';
-import { forwardText } from '../../shared/chat.ts';
+import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
 import { feedbackPrompt, replyTarget, turnEnding } from '../../shared/reactions.ts';
 import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
@@ -43,6 +43,7 @@ import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView } from '../../shar
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
 import { conversationsView, touchConversation } from '../../shared/conversations.ts';
 import { renotifyDue, toldCeo } from '../../shared/questions.ts';
+import { decisionsReminder, probablyLeft } from '../../shared/decisions.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -271,7 +272,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (step.why) this.appendLog(a, [{ kind: 'system', text: `↻ A fresh session: ${step.why}.` }]);
     const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + memoryPrompt(this.state.ceo.remember) + this.takeChanges(job);
+    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + memoryPrompt(this.state.ceo.remember) + this.takeChanges(job);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
     const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model: a.model || CEO_MODEL, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
     rt.session = this.backend.startSession(
@@ -373,6 +374,7 @@ export abstract class SwarmCeo extends SwarmReactions {
       this.appendLog(a, [{ kind: 'done', text: `✔ Done in ${this.minutes(a)}m · ${a.turns} turns${filed}` }]);
     }
     if (this.ceoAsked || job?.messageIds?.length) this.markStatus('open', a.status === 'done' ? 'replied' : 'failed'); // ✅ or ⚠️ on the manager's messages it held
+    if (a.startedAt) this.ceoTold.push(...probablyLeft(this.state.decisions.list, a.startedAt)); // #208: back in its next job, not in the chat
     for (const id of this.ceoIssues.repos) void this.syncRepo(id);
     this.emitAgent(a);
     this.emitCeo();
@@ -385,6 +387,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     const t = text.trim().slice(0, 4000);
     const attachments = this.ceoFiles.managerFiles(fileIds);
     if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
+    if (isHarnessText(t)) throw new HttpError(400, "That's the CEO session's own output, not a message: it stays out of the chat.");
     const a = this.ceo();
     const agentAsked = replyTo === undefined ? undefined : this.state.questions.find((q) => q.messageId === replyTo);
     if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via);
@@ -405,13 +408,18 @@ export abstract class SwarmCeo extends SwarmReactions {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
-      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n(message ${m.id}) ${forward}`);
+      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n(message ${m.id}) ${forward}${this.openDecisionsLine()}`);
       this.markDelivery([m.id], 'read');
       return { id: m.id };
     }
     if (this.state.ceo.job) this.markStatus([m.id], 'queued'); // 🕓 behind the job under way
     this.enqueueCeo(research ?? { kind: 'chat', text: `(message ${m.id}) ${forward}`, messageIds: [m.id], at: Date.now() });
     return { id: m.id };
+  }
+
+  /** The open questions of the last day, for a job or message with the manager's words (#208). */
+  private openDecisionsLine() {
+    return decisionsReminder(this.state.decisions.list, Date.now(), (id) => this.state.repos.find((r) => r.id === id)?.floor ?? null);
   }
 
   requestReview() {
@@ -693,7 +701,8 @@ export abstract class SwarmCeo extends SwarmReactions {
   }
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
-  protected postCeoReply(text: string) {
+  protected postCeoReply(raw: string) {
+    const text = stripHarness(raw); // harness output it echoed stays backend (#193)
     const extra = { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...this.ceoChat.finishTurn(text) };
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
     if (turnEnding(text, extra) === 'reply') this.postMessage('ceo', text, undefined, { ...extra, ...(replyTo !== undefined && { replyTo }) }); // else a reaction said it, or nothing needed saying: no blank bubble, no push

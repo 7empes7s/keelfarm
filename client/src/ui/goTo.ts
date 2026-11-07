@@ -8,14 +8,14 @@ import type { SectionId } from './consoleNavRules';
 export type Target =
   | { kind: 'overlay'; overlay: Overlay }
   | { kind: 'section'; section: SectionId; repoId?: string }
-  /** The CEO chat; `text` waits in its box for the manager to send or change. */
-  | { kind: 'ceo'; text?: string }
+  /** The CEO chat; `text` waits in its box for the manager to send or change; `jump`: the message it scrolls to (#208). */
+  | { kind: 'ceo'; text?: string; jump?: number }
   | { kind: 'link'; url: string }
   /** The guide checklist (GuideCard.tsx). */
   | { kind: 'guide' };
 
-/** A message for the CEO chat's box, taken by the chat when it shows (Phone.tsx). */
-export const useCeoDraft = create<{ text: string | null }>(() => ({ text: null }));
+/** A message for the CEO chat's box, and a message to scroll to, taken by the chat when it shows (Chat.tsx). */
+export const useCeoDraft = create<{ text: string | null; jump?: number | null }>(() => ({ text: null }));
 
 /** The search palette and the 3D office's guide panel: open or not. */
 export const useFinder = create<{ search: boolean; guide: boolean }>(() => ({ search: false, guide: false }));
@@ -34,6 +34,7 @@ export function go(t: Target) {
       return s.openOverlay({ kind: 'manager', tab: t.section, repoId: t.repoId });
     case 'ceo':
       if (t.text) useCeoDraft.setState({ text: t.text });
+      if (t.jump !== undefined) useCeoDraft.setState({ jump: t.jump });
       return s.openOverlay({ kind: 'phone', tab: 'chat' });
     case 'link':
       return void window.open(t.url, '_blank', 'noopener');

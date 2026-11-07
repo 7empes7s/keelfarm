@@ -2279,23 +2279,6 @@ input.inline:focus {
   color: #1b873a;
   font-weight: 600;
 }
-.qa-side {
-  flex: 0 0 300px;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  background: var(--ds-surface-raised);
-  border: 3px solid var(--ds-outline);
-  border-radius: 14px;
-}
-.qa-side-title {
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
 .qa-side-meta,
 .qa-side-status {
   display: flex;
@@ -2378,10 +2361,6 @@ input.inline:focus {
 @media (max-width: 900px) {
   .app-body {
     flex-direction: column;
-  }
-  .qa-side {
-    flex: 0 0 auto;
-    max-height: 40%;
   }
   .compare-sides {
     grid-template-columns: 1fr;
@@ -3149,6 +3128,49 @@ input.inline:focus {
 }
 .phone-x {
   display: none;
+}
+/* the CEO chat full screen (#201): the phone becomes the whole window, its ✕ in the chat's header row */
+.phone-overlay-full {
+  place-items: stretch;
+  padding: 0;
+  background: var(--paper);
+}
+:root .phone-full {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--ds-safe-top) var(--ds-safe-right) var(--ds-safe-bottom) var(--ds-safe-left);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--paper);
+}
+.phone-full :is(.phone-status, .phone-tabs, .phone-hint) {
+  display: none;
+}
+.phone-full .phone-screen {
+  border-radius: 0;
+}
+.phone-full .phone-x {
+  position: absolute;
+  top: calc(var(--ds-safe-top) + 4px);
+  right: calc(var(--ds-safe-right) + 12px);
+  z-index: 2;
+  display: block;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  margin: 0;
+  border: 2px solid var(--ds-outline);
+  border-radius: 12px;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.phone-full .chat-head {
+  padding-right: calc(12px + var(--ds-target) + 8px);
 }
 .phone-status {
   display: flex;

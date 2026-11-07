@@ -48,6 +48,7 @@ export function AgentChat({ agent, repo, onTerminal, onSend, onStop }: { agent: 
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const working = isBusy(agent);
+  const statuses = useStore((s) => s.settings.statusReactions); // #193: off by default
   const rows = useMemo(() => chatRows(items), [items]);
   const visible = rows.slice(-shown);
   const last = items[items.length - 1];
@@ -108,7 +109,7 @@ export function AgentChat({ agent, repo, onTerminal, onSend, onStop }: { agent: 
             {it.who && it.who !== 'Manager' && <div className="ac-who">{it.who}</div>}
             {it.text}
           </div>
-          <ReactionChips status={st} statusLabel={`${agent.name}: ${STATUS_LABEL[st]}`} />
+          {statuses && <ReactionChips status={st} statusLabel={`${agent.name}: ${STATUS_LABEL[st]}`} />}
         </div>
       );
     }

@@ -1,6 +1,7 @@
 // The demo's past for the memory map (#136): each floor's merged PRs of the last weeks, with the files they changed, so
 // a fresh demo office has history to look at (hot files, the time slider), and the files its fake PRs change.
 import type { IssueInfo, PullInfo } from '../shared/types.ts';
+import { prSummary } from '../shared/prSummary.ts';
 
 /** A merged PR of a demo floor's past: its title, files, and how many days ago it merged. */
 interface PastWork {
@@ -80,3 +81,9 @@ export function demoPrFiles(fullName: string, issue: Pick<IssueInfo, 'number' | 
   const pool = POOL[name(fullName)] ?? ['src/App.tsx', 'src/index.ts', 'README.md'];
   return [pool[n % pool.length], pool[(n + 1) % pool.length]];
 }
+
+/** A fake PR's goal (#203): what its issue asks, as the summary a real PR body would give. */
+export const demoPrSummary = (issue: Pick<IssueInfo, 'number' | 'body'> | undefined) => prSummary(issue && `Closes #${issue.number}\n\n${issue.body}`);
+
+/** The page a demo QA session checks on a PR, after the home page (#203: the viewer's pages and live agent). */
+export const demoQaPage = (pr: number) => ['/settings', '/todos/new', '/lists/groceries', '/about#team'][pr % 4];

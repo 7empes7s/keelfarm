@@ -32,6 +32,8 @@ import { MessageVersions } from './MessageEdits';
 import { ChatTextPill, useChatPinch } from './ChatZoom';
 import { Bubble } from './ChatBubble';
 import { attempt, Avatar } from './phoneParts';
+import { isKey } from './controls';
+import { togglesFull, useChatFull } from './chatFull';
 
 // The chat with the CEO: the thread, its sheets and the message box (bubbles are in ChatBubble.tsx).
 
@@ -39,7 +41,7 @@ import { attempt, Avatar } from './phoneParts';
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
  * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
  */
-export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null }) {
+export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean }) {
   const messages = useStore((s) => s.messages);
   const outbox = useStore((s) => s.chatOutbox);
   const readAt = useStore((s) => s.phoneReadAt);
@@ -71,6 +73,13 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
     useCeoDraft.setState({ text: null });
     setTimeout(() => form.current?.querySelector('textarea')?.focus(), 0);
   }, [draft]);
+  // The decision log's "Replied to message N" (#208): that message, once the chat has laid out.
+  const jumpTo = useCeoDraft((s) => s.jump ?? null);
+  useEffect(() => {
+    if (jumpTo === null) return;
+    useCeoDraft.setState({ jump: null });
+    requestAnimationFrame(() => jump(jumpTo));
+  }, [jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
@@ -95,6 +104,20 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   };
   const refNav = useRefNav(scroller, openFloor);
   const mention = useMentions(text, setText, () => form.current?.querySelector('textarea')?.focus());
+  const full = useChatFull((s) => s.on);
+  const box = useRef<HTMLDivElement>(null);
+  // F (Help → Controls) toggles full screen while the chat has focus and nobody is typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if (!togglesFull(e, isKey('chatFull', e.code), !!el && !!box.current?.contains(el), typing)) return;
+      e.preventDefault();
+      useChatFull.getState().toggle();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Reading the thread marks it read.
   useEffect(() => {
@@ -255,7 +278,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   };
 
   return refNav.wrap(
-    <div className={`phone-chat ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
+    <div ref={box} className={`phone-chat ${full ? 'chat-full' : ''} ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
       <div className="chat-head">
         <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
           <Avatar name={ceo.name} color={ceo.color} size={28} />
@@ -263,7 +286,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         <div className="grow">
           <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
         </div>
-        <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} />
+        <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} full={fullButton} />
       </div>
       <div className="chat-log-wrap" ref={setLogWrap}>
         <ChatTextPill />

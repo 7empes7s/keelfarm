@@ -48,7 +48,7 @@ export type Overlay =
   | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean } // pr: open the viewer on that channel (null: main); qa: with its QA panel
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
-  | { kind: 'phone'; tab?: PhoneTab; requestId?: string }
+  | { kind: 'phone'; tab?: PhoneTab; requestId?: string; full?: boolean }
   /** A team change face to face: a new agent waiting in the lobby, or the CEO's let-go note on a desk. */
   | { kind: 'interview'; requestId: string }
   | { kind: 'help'; tab?: HelpTab }
@@ -753,7 +753,7 @@ export const agentsOnRepo = (agents: Record<string, Agent>, repoId: string) =>
  * Panels that hide the whole office (the wide ones: Kanban, terminals, the manager's console and the map room), so the
  * 3D view can stop drawing behind them. The phone, help, elevator panel and confirm dialogs are see-through.
  */
-export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager' || o?.kind === 'mapRoom';
+export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager' || o?.kind === 'mapRoom' || (o?.kind === 'phone' && !!o.full);
 
 /**
  * Whether the 3D view stops drawing under this panel: a full-screen one anywhere, and any panel on a touch screen
