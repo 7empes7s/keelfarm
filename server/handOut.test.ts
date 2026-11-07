@@ -98,7 +98,7 @@ describe('pickTester', () => {
 });
 
 describe('runnerFor (#263: Box agents and this computer\'s memory)', () => {
-  const ada = { id: 'ada' };
+  const ada: { id: string; host?: string } = { id: 'ada' };
   const radia = { id: 'radia', host: 'box' };
   const gate = (fits: boolean) => {
     const asked: string[] = [];
