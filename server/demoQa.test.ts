@@ -17,3 +17,14 @@ describe('demoQaReport', () => {
     expect(DEMO_QA_ISSUE.title.length).toBeGreaterThan(60);
   });
 });
+
+describe("the demo's seeded stuck PR", () => {
+  it("closes that issue of its own, not the floor's last one (a stranger's short title)", async () => {
+    const { createDemoBackend } = await import('./demo.ts');
+    const demo = createDemoBackend();
+    const seeded = demo.seedQaReport!('demo-co/pixel-todo')!;
+    const closes = (await demo.listIssues('demo-co/pixel-todo')).find((i) => i.number === seeded.pull.closesIssues[0])!;
+    expect(closes.title).toBe(DEMO_QA_ISSUE.title);
+    expect(closes.authorAssociation).not.toBe('NONE');
+  });
+});
