@@ -1,7 +1,7 @@
 // Agents' sessions: terminals, desk setup, prompts, starting and finishing a build session.
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
-import type { LogEntry, SessionResult } from '../agentRunner.ts';
+import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
 import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
 import { CloudError } from '../box.ts';
@@ -10,6 +10,7 @@ import { ceoSystemPrompt } from '../ceo.ts';
 import { stillOpen } from '../closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from '../deps.ts';
 import { setUpDesk } from '../deskSetup.ts';
+import { mainKey, prKey } from '../prTheatre.ts';
 import { MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { PREP_HOLD_MS, prepFailure } from '../handOut.ts';
 import { sessionStart } from '../reconcile.ts';
@@ -25,7 +26,7 @@ import { resolveEffort, type CostsView } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
 import { AgentTerminal } from '../terminal.ts';
 import { INSTALL_STEP } from '../../shared/types.ts';
-import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo } from '../../shared/types.ts';
+import type { AgentCli, AgentPromptView, AgentStatus, IssueInfo, WorldSnapshot } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -43,6 +44,7 @@ import { SwarmAgents } from './agents.ts';
 import { TestLab, type Requester } from '../testLab.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { createLabTools } from '../testLabTools.ts';
+import { fixCause } from '../../shared/rounds.ts';
 
 const LAB_VIEWER = 'testlab';
 const LAB_PREVIEW_MS = 5 * 60_000;
@@ -80,8 +82,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     }
   }
 
-  /** A browser opened an agent's terminal (/ws/term?agent=<id>). */
+  /** A browser opened an agent's terminal (/ws/term?agent=<id>), or an account's sign-in (agent=account:<id>, #247). */
   attachTerminal(agentId: string, ws: WebSocket) {
+    if (agentId.startsWith('account:')) {
+      const t = this.accounts.terminal(agentId.slice('account:'.length));
+      return t ? t.attach(ws) : ws.close(4404, 'No such account');
+    }
     const a = this.state.agents.find((x) => x.id === agentId);
     // Opening the terminal of a cloud agent who waits for a sign-in (at their desk, or 🔑 Sign in) starts one if none runs.
     if (a?.needsSignIn && a.host === 'box') {
@@ -346,7 +352,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     settings: () => this.state.settings.testLab,
     refusal: (kind) => this.health.refusal(kind),
     forbidden: () => [OFFICE_DIR, ...this.state.repos.map((r) => this.backend.mainDir(r.fullName))],
-    previewUrl: (repoId, pr) => this.labPreviewUrl(repoId, pr),
+    previewUrl: (repoId, pr, agentId) => this.labPreviewUrl(repoId, pr, agentId),
     shot: (agentId, file) => this.labShot(agentId, file),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
   });
@@ -376,11 +382,12 @@ export abstract class SwarmSessions extends SwarmAgents {
   }
 
   /** The address of a floor's app for the lab: the PR's preview (the PR theatre's), else the floor's, started if need be. */
-  protected async labPreviewUrl(repoId: string, pr: number | null): Promise<string> {
+  protected async labPreviewUrl(repoId: string, pr: number | null, agentId: string): Promise<string> {
     const repo = this.repo(repoId);
     const now = () => (pr ? this.previews.prViews().find((v) => v.repoId === repoId && v.pr === pr) : this.previews.view(repo));
     const v = now();
     if (!v || v.status === 'stopped' || v.status === 'error') await (pr ? this.startPrPreview(repoId, pr) : this.startPreview(repoId));
+    this.holdPreview(agentId, repoId, pr);
     for (const until = Date.now() + LAB_PREVIEW_MS; Date.now() < until; await new Promise((r) => setTimeout(r, 2000))) {
       this.previews.watch(LAB_VIEWER, repoId, pr); // kept up while the lab uses it; the theatre stops it once idle
       const x = now();
@@ -388,6 +395,24 @@ export abstract class SwarmSessions extends SwarmAgents {
       if (x?.status === 'error' || x?.status === 'unconfigured') throw new Error(`The ${pr ? `PR #${pr} ` : ''}preview didn't start: ${x.error ?? 'no command to run the app'}. Start your dev server and give its url instead.`);
     }
     throw new Error("The preview didn't start in 5 minutes: start your dev server and give its url instead.");
+  }
+
+  /** An agent's lab uses this preview: the manager can't stop, restart or evict it while their QA or fix session runs (#204). */
+  protected holdPreview(agentId: string, repoId: string, pr: number | null) {
+    const key = pr ? prKey(repoId, pr) : mainKey(repoId);
+    if (this.previewHolds.get(key)?.agentId === agentId) return;
+    this.previewHolds.set(key, { agentId, repoId, pr });
+    this.previews.heldChanged(repoId, pr);
+  }
+
+  /** Every 15 s: previews nobody watches stop, and holds whose agent's QA or fix session ended let go (the views say so). */
+  protected sweepPreviews() {
+    this.previews.sweepPrs();
+    for (const [key, { repoId, pr }] of this.previewHolds) {
+      if (this.previewHolder(repoId, pr)) continue;
+      this.previewHolds.delete(key);
+      this.previews.heldChanged(repoId, pr);
+    }
   }
 
   /** A screenshot the lab took for an agent: their screen in the office, and QA's evidence, as a Playwright one would. */
@@ -408,6 +433,46 @@ export abstract class SwarmSessions extends SwarmAgents {
       .then(() => fs.mkdir(SCREENS_DIR, { recursive: true }))
       .then(() => fs.writeFile(screenFile(a.id, mime), data))
       .catch((err) => console.warn('could not save screenshot', err));
+  }
+
+  // ---------- accounts (#247) ----------
+
+  override snapshot(): WorldSnapshot {
+    return { ...super.snapshot(), accounts: this.accounts.view() };
+  }
+
+  protected override secrets(): string[] {
+    return [...super.secrets(), ...this.accounts.secretValues()];
+  }
+
+  /**
+   * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
+   * into its environment, its usage and limit hits to the account, and its line in the cost ledger says which it was.
+   * A cloud agent's runs on the cloud's credentials (docs/cloud.md), OpenCode on its own setup.
+   */
+  protected startOnAccount(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
+    const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
+    const use = a.host === 'box' || cli === 'opencode' ? null : this.accounts.use(a.account, cli);
+    if (!use) return this.backend.startSession(opts, cb);
+    this.spend.account(a.id, use.id);
+    this.accounts.emit();
+    const env = { ...opts.env, ...use.env };
+    return this.backend.startSession(
+      { ...opts, ...(Object.keys(env).length ? { env } : {}), ...(use.keyEnv && cli === 'claude' ? { apiKeyEnv: use.keyEnv } : {}) },
+      {
+        ...cb,
+        usage: (readings) => (use.builtIn ? cb.usage?.(readings) : this.accounts.readings(use.id, readings)),
+        limited: (at) => {
+          this.accounts.limited(use.id, at);
+          // Only the login everyone shared stops the whole office: another account's limit is that account's.
+          if (use.builtIn) cb.limited?.(at);
+        },
+        finished: (result) => {
+          use.release();
+          cb.finished(result);
+        },
+      },
+    );
   }
 
   protected launchSession(
@@ -443,12 +508,16 @@ export abstract class SwarmSessions extends SwarmAgents {
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
     const system = [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n');
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
+    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(this.prRecord(a)) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
+    this.chatOf(a)?.session(); // its first prompt is their chat's task card
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
     };
-    rt.session = this.backend.startSession(
+    // The demo's QA tests in its PR's preview, as a real one's lab would (#204): the app viewer shows it held.
+    if (this.backend.demo && testLab && a.task === 'qa' && a.prNumber) void this.labPreviewUrl(repo.id, a.prNumber, a.id).catch(() => undefined);
+    rt.session = this.startOnAccount(
+      a,
       {
         cwd,
         prompt,
@@ -485,6 +554,7 @@ export abstract class SwarmSessions extends SwarmAgents {
           rt.currentTool = name;
           this.emitAgent(a);
         },
+        chat: (events) => this.chatEvents(a, events, cwd),
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? (how.cli ?? 'claude') : null;

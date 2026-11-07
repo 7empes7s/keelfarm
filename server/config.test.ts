@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { defaultProjectsDir, demoScale, envMinutes, envPort, isLoopback, localAddress, networkUrls } from './config.ts';
+import { defaultProjectsDir, demoNoTour, demoScale, envMinutes, envPort, isLoopback, localAddress, networkUrls } from './config.ts';
 
 let tmp: string;
 beforeEach(() => {
@@ -75,5 +75,13 @@ describe('demoScale', () => {
     expect(demoScale([], { SWARM_DEMO_FLOORS: '4', SWARM_DEMO_AGENTS: '9' })).toEqual({ floors: 4, agents: 9 });
     expect(demoScale(['--floors', '99', '--agents', '40'], {})).toEqual({ floors: 20, agents: 15 });
     expect(demoScale(['--agents', '0'], {})).toEqual({ floors: 2, agents: 1 });
+  });
+});
+
+describe('demoNoTour', () => {
+  it('opens a QA demo without the setup wizard or tour, from the command line or the environment', () => {
+    expect(demoNoTour(['--demo'], {})).toBe(false);
+    expect(demoNoTour(['--demo', '--no-tour'], {})).toBe(true);
+    expect(demoNoTour([], { SWARM_DEMO_NO_TOUR: '1' })).toBe(true);
   });
 });

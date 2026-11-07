@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { attachmentProblem, inlineType, type FileRef } from '../../../shared/files';
+import { readDraft, writeDraft } from '../drafts';
+import { markBusy } from '../updateGate';
 
 /** One file in the tray above the message box. */
 export interface Pending {
@@ -48,9 +50,13 @@ function uploadFile(file: File, onProgress: (loaded: number) => void): { done: P
 
 let seq = 0;
 
-/** The tray's files and what to do with them. */
-export function useAttachments() {
-  const [pending, setPending] = useState<Pending[]>([]);
+/** The tray's uploaded files saved with the draft, back in the tray. */
+const restored = (draftKey?: string): Pending[] =>
+  (draftKey ? (readDraft<FileRef[]>(`files:${draftKey}`) ?? []) : []).map((ref) => ({ key: ++seq, name: ref.name, type: ref.type, size: ref.size, preview: null, progress: 1, loaded: ref.size, startedAt: ref.at, ref }));
+
+/** The tray's files and what to do with them; with a `draftKey`, the uploaded ones come back after a reload (#216). */
+export function useAttachments(draftKey?: string) {
+  const [pending, setPending] = useState<Pending[]>(() => restored(draftKey));
   const aborts = useRef(new Map<number, () => void>());
   const patch = (key: number, p: Partial<Pending>) => setPending((all) => all.map((x) => (x.key === key ? { ...x, ...p } : x)));
   const latest = useRef(pending);
@@ -111,6 +117,17 @@ export function useAttachments() {
 
   const ready = pending.flatMap((p) => (p.ref ? [p.ref] : []));
   const busy = pending.some((p) => !p.ref && !p.error);
+  const saved = ready.map((r) => r.id).join();
+  useEffect(() => {
+    if (!draftKey) return;
+    writeDraft(`files:${draftKey}`, latest.current.flatMap((p) => (p.ref ? [p.ref] : [])));
+    markBusy(`files:${draftKey}`, 'draft', saved !== ''); // files in the tray are part of the message being written
+    markBusy(`upload:${draftKey}`, 'uploading', busy);
+    return () => {
+      markBusy(`files:${draftKey}`, 'draft', false);
+      markBusy(`upload:${draftKey}`, 'uploading', false);
+    };
+  }, [draftKey, saved, busy]);
   const failed = pending.some((p) => p.error);
   return { pending, add, remove, retry: send, clear, ready, busy, failed };
 }

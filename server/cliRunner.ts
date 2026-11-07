@@ -31,8 +31,9 @@ import { consultDeny } from './consult.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
+import { isHarnessText } from '../shared/chat.ts';
 import { transcriptStartup } from './tooling.ts';
-import { ANSWER_AFTER_MS, answerHook, cliEnv, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
@@ -447,6 +448,8 @@ export function detachBoxClis() {
   for (const l of lives.values()) if (l.box) (l.proc as BoxPty | null)?.detach();
 }
 
+const HARNESS_BLOCKED = { decision: 'block', reason: 'A background notice: the office keeps it out of the chat.' };
+
 /** A CLI waiting at its prompt: what the manager types there becomes a follow-up. */
 function idleHook(live: LiveCli, b: Record<string, unknown>): Record<string, unknown> {
   switch (String(b.hook_event_name ?? '')) {
@@ -454,6 +457,7 @@ function idleHook(live: LiveCli, b: Record<string, unknown>): Record<string, unk
       return ALLOW;
     case 'UserPromptSubmit': {
       const text = String(b.prompt ?? '').trim();
+      if (isHarnessText(text)) return HARNESS_BLOCKED; // a background task's notice, typed by the CLI itself: no follow-up, no turn (#193)
       if (!text || live.term.onIdlePrompt?.(text)) return {};
       return { decision: 'block', reason: "The office couldn't take that on as a follow-up right now (see the agent's panel). Nothing was sent." };
     }
@@ -514,7 +518,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
   let promptTimer: NodeJS.Timeout | undefined;
-  const tail = opts.stream && cli === 'claude' && !inBox ? new TranscriptTail(started, (t) => callbacks.text?.(t, true)) : null; // the CEO's text as it writes it
+  // The CEO's text as it writes it; everyone else's chat (#120).
+  const tail = cli === 'claude' && !inBox ? (opts.stream ? new TranscriptTail(started, (t) => callbacks.text?.(t, true)) : new TranscriptTail(started, undefined, (ev) => cb.chat?.(ev))) : null;
 
   const cb: SessionCallbacks = { ...callbacks };
   const log = (entries: LogEntry[]) => entries.length && cb.log(entries);
@@ -741,7 +746,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         const prompt = String(b.prompt ?? '').trim();
         const i = officePrompts.findIndex((p) => p.slice(0, 60) === prompt.slice(0, 60));
         if (i >= 0) officePrompts.splice(i, 1);
-        else if (prompt) log([{ kind: 'manager', text: `▶ Typed in the terminal: ${clip(prompt.split('\n')[0], 200)}` }]);
+        else if (prompt && !isHarnessText(prompt)) log([{ kind: 'manager', text: `▶ Typed in the terminal: ${clip(prompt.split('\n')[0], 200)}` }]);
         return {};
       }
       case 'Stop': {
@@ -900,7 +905,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       statusLine: box
         ? { type: 'command', command: `node ${BOX_BIN}/statusline.cjs ${events}`, padding: 0 }
         : { type: 'command', command: `${shellArg(process.execPath)} ${shellArg(path.join(BIN_DIR, 'statusline.cjs'))} ${shellArg(hookUrl)}`, padding: 0 },
-      ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : {}),
+      ...(box?.apiKeyHelper ? { apiKeyHelper: box.apiKeyHelper } : !box && opts.apiKeyEnv ? { apiKeyHelper: keyHelperCommand(opts.apiKeyEnv) } : {}),
       permissions: worktreePermissions(opts.cwd),
       // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
       ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),

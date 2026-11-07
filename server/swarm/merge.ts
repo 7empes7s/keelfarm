@@ -18,10 +18,11 @@ import {
   type LearnedPull,
 } from '../closeCleanup.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
-import { CHECKS_ALERT_MS, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeStep } from '../mergeGate.ts';
+import { CHECKS_ALERT_MS, failedRunIds, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeStep, NEVER_STARTED, OUTAGE_PROBE_MS, outageReason, outageRerun, parkedState, type ParkedPull } from '../mergeGate.ts';
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { rebaseHandOffs } from '../../shared/practices.ts';
+import { spared } from '../../shared/managerChanges.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
 import type { LogLine, PullInfo } from '../../shared/types.ts';
 import {
@@ -49,9 +50,10 @@ export abstract class SwarmMerge extends SwarmRepos {
     rt.merging = true;
     let merged = false;
     try {
-      for (const rec of this.state.qa.filter((q) => q.repoId === repo.id && q.status === 'passed')) {
+      await this.outageReruns(repo, rt);
+      for (const rec of this.state.qa.filter((q) => q.repoId === repo.id && q.status === 'passed' && q.ciOutage == null)) {
         const pr = rt.pulls.find((p) => p.number === rec.prNumber && p.state === 'OPEN');
-        if (!pr || !pr.headRefName.startsWith('swarm/')) continue; // people's own PRs are theirs to merge
+        if (!pr || pr.untrusted || !pr.headRefName.startsWith('swarm/')) continue; // people's own PRs are theirs to merge, outsiders' too (#185)
         // Only act on PR data fetched after the record last changed (a fix may have just pushed).
         if ((rt.fetchedAt ?? 0) < rec.updatedAt) continue;
         try {
@@ -85,7 +87,13 @@ export abstract class SwarmMerge extends SwarmRepos {
       const behind = await this.backend.behindBy(repo.fullName, repo.defaultBranch, pr.headSha);
       step = mergeStep(pr, rec, Date.now(), { ...opts, detailed: true, behind });
     }
+    if (step.do === 'send-back' && step.reason === 'checks') {
+      // Before a fix is spent: GitHub may have said it wouldn't run the jobs at all (billing, spending limit, #191).
+      const outage = outageReason(await this.backend.checkAnnotations(repo.fullName, pr.failedChecks.flatMap((c) => c.url ?? [])).catch(() => []));
+      if (outage) step = mergeStep(pr, rec, Date.now(), { ...opts, detailed: true, outage });
+    }
     Object.assign(rec, step.set);
+    if (step.do === 'outage') return this.park(repo, rec, pr, step.reason);
     if (step.do === 'requeue') {
       // Commits arrived after QA's sign-off: they get tested too.
       this.setQa(rec, { status: 'queued', round: rec.round + 1, retests: rec.retests + 1, mergeNote: null, pendingSince: null });
@@ -176,6 +184,69 @@ export abstract class SwarmMerge extends SwarmRepos {
         console.warn(`could not close ${repo.fullName}#${n} after merging #${prNumber}`, err);
       }
     }
+  }
+
+  // ---------- CI outages (#191) ----------
+
+  /** GitHub didn't run a QA-passed PR's checks: it waits for CI with the floor's other parked PRs, without a fix or the manager. */
+  protected async park(repo: PersistedRepo, rec: QaRecord, pr: PullInfo, reason: string) {
+    const now = Date.now();
+    if (!repo.ciOutage) {
+      if (reason === NEVER_STARTED) reason = outageReason(await this.backend.checkAnnotations(repo.fullName, pr.failedChecks.flatMap((c) => c.url ?? [])).catch(() => [])) ?? reason;
+      repo.ciOutage = { reason, since: now, probeAt: now, back: null };
+      this.postMessage('office', `🛑 CI can't run on ${repo.fullName}: ${reason}. PRs that passed QA wait for it instead of going back for fixes; the office re-runs one every ${OUTAGE_PROBE_MS / 60_000} minutes and merges them by itself once CI runs again. One question: is CI off on purpose? If not, fix it on GitHub (billing, spending limit or Actions settings); nothing else needs you.`);
+    }
+    rec.ciOutage = now;
+    this.emitRepo(repo);
+    this.save();
+    return this.mergeNote(rec, `waiting for CI to run again: ${repo.ciOutage.reason}`);
+  }
+
+  /**
+   * A floor's CI outage, each merge pass: parked PRs whose checks really started go back to the merge gate; one of the
+   * rest is re-run when due (outageRerun); the banner goes once none is parked.
+   */
+  protected async outageReruns(repo: PersistedRepo, rt: RepoRuntime) {
+    const out = repo.ciOutage;
+    if (!out) return;
+    const now = Date.now();
+    const before = JSON.stringify(out);
+    let changed = false;
+    const parked: ParkedPull[] = [];
+    for (const q of this.state.qa.filter((x) => x.repoId === repo.id && x.ciOutage != null)) {
+      const pr = rt.pulls.find((p) => p.number === q.prNumber && p.state === 'OPEN');
+      const state = pr && q.status === 'passed' ? parkedState(pr, q, now) : 'gone';
+      if (state === 'down' || state === 'rerunning') {
+        parked.push({ prNumber: q.prNumber, parkedAt: q.ciOutage!, rerunAt: q.rerunAt, state });
+        continue;
+      }
+      if (state === 'started') out.back = now; // CI runs again: the next re-run needn't wait for a probe
+      q.ciOutage = null;
+      changed = true;
+      this.mergeNote(q, null);
+    }
+    if (!parked.length) {
+      repo.ciOutage = null;
+      changed = true;
+      if (out.back != null) this.toast('success', `✅ CI runs again on ${repo.fullName}`);
+    } else {
+      const { rerun, back } = outageRerun(parked, out, now);
+      out.back = back;
+      const rec = rerun == null ? undefined : this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === rerun);
+      const pr = rt.pulls.find((p) => p.number === rerun);
+      if (rec && pr) {
+        out.probeAt = now;
+        try {
+          await this.backend.rerunFailedJobs(repo.fullName, failedRunIds(pr.failedChecks));
+        } catch (err) {
+          console.warn(`could not re-run the checks of ${repo.fullName}#${pr.number} in a CI outage`, err);
+        }
+        Object.assign(rec, { rerunSha: pr.headSha, rerunAt: now });
+        this.mergeNote(rec, back == null ? 're-running its checks: is CI back?' : 'CI is back: re-running its checks');
+      }
+    }
+    if (changed) this.emitRepo(repo);
+    if (changed || JSON.stringify(out) !== before) this.save();
   }
 
   /** Show where auto-merge stands on a PR's card. Doesn't count as a change to the record. */
@@ -361,7 +432,7 @@ export abstract class SwarmMerge extends SwarmRepos {
   }
 
   protected applyClosure(repo: PersistedRepo, c: Closure): string[] {
-    const plan = afterClose(c, this.holders(repo), this.state.qa.filter((q) => q.repoId === repo.id), BUSY);
+    const plan = afterClose(c, this.holders(repo), this.state.qa.filter((q) => q.repoId === repo.id), BUSY, spared(this.state.ceo.changes.list, repo.id, c));
     const agent = (id: string) => this.state.agents.find((a) => a.id === id)!;
     const why = closedWhy(c);
     const stopped = plan.stop.map(agent);

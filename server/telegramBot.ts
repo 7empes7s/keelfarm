@@ -16,12 +16,14 @@ import {
   parseDecision,
   parseToken,
   parseUpdate,
+  pollAdvice,
   pollBackoff,
   splitMessage,
   startCode,
   startCommand,
   startUrl,
   telegramError,
+  telegramPolls,
   type TelegramSecrets,
   type TgButton,
   type TgUpdate,
@@ -44,6 +46,8 @@ export interface TelegramApi {
   call(token: string, method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   /** The demo only: an update the fake bot hands out on its next getUpdates. */
   inject?(update: Record<string, unknown>): void;
+  /** The demo only: Telegram can't be reached (true) or can again. */
+  outage?(down: boolean): void;
 }
 
 /** getUpdates waits this long for something to happen (seconds): one request at a time, almost always idle. */
@@ -73,6 +77,8 @@ export const telegramHttp: TelegramApi = {
 export interface TelegramDeps {
   api: TelegramApi;
   secretsFile: string;
+  /** Settings' Telegram switch. Off: no polling, retries or sends; the token and chat stay saved. */
+  on(): boolean;
   /** A message from the manager's chat, for the CEO (as from the phone, marked "via Telegram"), with its Telegram id. */
   message(text: string, messageId: number): Promise<void>;
   /** A team-change button: approves or declines it through the office's own paths. Returns what to show; throws why not. */
@@ -98,6 +104,10 @@ export class TelegramBot {
   private pending: { code: string; expiresAt: number } | null = null;
   private offset = 0;
   private failures = 0;
+  private failStatus = 0;
+  private okAt: number | null = null;
+  /** Ends the wait between retries early (Retry now). */
+  private retryWake: (() => void) | null = null;
   private polling: { abort: AbortController; done: Promise<void> } | null = null;
   private pollError = '';
   private last: NotifyHealth | null = null;
@@ -109,26 +119,55 @@ export class TelegramBot {
 
   async init() {
     this.secrets = loadTelegram((await readSecrets(this.deps.secretsFile)).telegram);
-    if (this.secrets) this.start();
+    this.start();
+  }
+
+  /** The switch (or the token) changed: Off stops the poll and clears its error at once; On resumes it with the saved token and chat. */
+  refresh() {
+    if (telegramPolls(!!this.secrets, this.deps.on())) {
+      if (!this.polling) this.start();
+    } else {
+      void this.stop();
+      this.failures = 0;
+      this.pollError = '';
+    }
+    this.deps.changed();
+  }
+
+  /** POST /api/notify/telegram/retry: read again now instead of waiting out the backoff. */
+  retryNow(): TelegramView {
+    if (!telegramPolls(!!this.secrets, this.deps.on())) throw new HttpError(409, 'Telegram is off: turn it on first.');
+    this.retryWake?.();
+    return this.view();
   }
 
   view(): TelegramView {
     const s = this.secrets;
+    const on = this.deps.on();
+    const reading = telegramPolls(!!s, on);
     return {
       set: !!s,
       bot: s?.bot ?? '',
       linked: s?.chatId !== undefined,
       chat: s?.chatId !== undefined ? (s.chatName ?? 'your chat') : '',
       linking: !!this.pending && this.now() <= this.pending.expiresAt,
-      polling: !s ? 'off' : this.failures ? 'retrying' : 'ok',
-      error: this.pollError,
+      on,
+      polling: !reading ? 'off' : this.failures ? 'retrying' : 'ok',
+      error: reading ? this.pollError : '',
+      okAt: this.okAt,
+      advice: reading ? pollAdvice(this.failures, this.failStatus) : '',
       last: this.last,
     };
   }
 
-  /** The manager's chat is linked: notes, CEO replies and send_telegram can go there. */
+  /** The manager's chat is linked: notes, CEO replies and send_telegram can go there (while the switch is on). */
   linked(): boolean {
     return this.secrets?.chatId !== undefined;
+  }
+
+  /** Linked and switched on: something sent now would go out. */
+  active(): boolean {
+    return this.linked() && this.deps.on();
   }
 
   /** The token, for redacting anything that might echo it. */
@@ -180,6 +219,7 @@ export class TelegramBot {
   async send(text: string, keyboard?: TgButton[][], key?: number, replyTo?: number): Promise<string | null> {
     const s = this.secrets;
     if (!s || s.chatId === undefined) return 'Telegram isn\'t linked';
+    if (!this.deps.on()) return 'Telegram is off in Settings';
     const parts = splitMessage(text);
     let why: string | null = null;
     const pieces: { id: number; text: string }[] = [];
@@ -272,7 +312,10 @@ export class TelegramBot {
       const b = this.lastButtons;
       if (!b) throw new HttpError(409, 'The bot has sent no team change with buttons yet.');
       inject({ callback_query: { id: `demo-${this.now()}`, data: b.rows[0][body.kind === 'approve' ? 0 : 1].callback_data, message: { message_id: b.messageId, chat } } });
-    } else throw new HttpError(400, 'kind is start, message, reply, approve or decline');
+    } else if (body.kind === 'outage' || body.kind === 'online') {
+      this.deps.api.outage?.(body.kind === 'outage');
+      if (body.kind === 'online') this.retryWake?.();
+    } else throw new HttpError(400, 'kind is start, message, reply, approve, decline, outage or online');
     return { ok: true };
   }
 
@@ -280,18 +323,20 @@ export class TelegramBot {
 
   private start() {
     void this.stop().then(() => {
-      if (!this.secrets || this.polling) return;
+      if (!telegramPolls(!!this.secrets, this.deps.on()) || this.polling) return;
       const abort = new AbortController();
       this.polling = { abort, done: this.poll(abort.signal) };
     });
   }
 
   private async poll(signal: AbortSignal) {
-    while (!signal.aborted && this.secrets) {
+    while (!signal.aborted && this.secrets && this.deps.on()) {
       const token = this.secrets.token;
       try {
-        const updates = await this.deps.api.call(token, 'getUpdates', { offset: this.offset, timeout: POLL_S, allowed_updates: ['message', 'callback_query'] }, signal);
+        // After a failure, a quick read: back online shows at once, not after a 25 s wait.
+        const updates = await this.deps.api.call(token, 'getUpdates', { offset: this.offset, timeout: this.failures ? 0 : POLL_S, allowed_updates: ['message', 'callback_query'] }, signal);
         if (signal.aborted) break;
+        this.okAt = this.now();
         if (this.failures) {
           this.failures = 0;
           this.pollError = '';
@@ -307,10 +352,14 @@ export class TelegramBot {
         if (signal.aborted) break;
         const e = err instanceof TelegramCallError ? err : new TelegramCallError(0, '');
         this.failures++;
+        this.failStatus = e.status;
         if (e.message !== this.pollError) this.deps.log(`telegram: reading the bot's messages failed (retrying): ${e.message}`);
         this.pollError = e.message;
         this.deps.changed();
-        await sleep(pollBackoff(this.failures, e.retryAfter), signal);
+        const wake = new AbortController();
+        this.retryWake = () => wake.abort();
+        await sleep(pollBackoff(this.failures, e.retryAfter), AbortSignal.any([signal, wake.signal]));
+        this.retryWake = null;
       }
     }
   }

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { RepoView } from '../../../shared/types';
 import { qaKey, useStore, type Agent } from '../store';
 import { loadScreenshot } from '../screenshot';
-import { channelLabel, channelLed, channelPulls, chipRects, prAsPreview, qaShotUrl, stripPulls, type ChipRect } from '../ui/channels';
+import { busyPrs, channelLabel, channelLed, chipRects, liveChannels, prAsPreview, previewingPrs, qaShotUrl, stripPulls, type ChipRect } from '../ui/channels';
 import { useChannel } from '../ui/theatre';
 import { drawAppScreen, type ScreenChip } from './draw';
 import { useKeyName } from '../ui/controls';
@@ -59,8 +59,9 @@ export function AppMonitor({ repo, agents }: { repo: RepoView; agents: Agent[] }
   const live = p.status === 'running';
   const name = repo.fullName.split('/')[1] ?? repo.fullName;
 
-  // The channel strip: main, then the open PRs (as many as fit).
-  const pulls = channelPulls(repo.pulls);
+  // The channel strip: main, then the live PRs (as many as fit), by the app viewer's rule (#204).
+  const recentHours = useStore((s) => s.settings.previewRecentHours);
+  const pulls = liveChannels(repo.pulls, { busy: busyPrs(agents, repo.id), previewing: previewingPrs(prPreviews, repo.id), current: channel, now: Date.now(), recentHours }).live;
   const shown = stripPulls(
     pulls.map((x) => x.number),
     channel,

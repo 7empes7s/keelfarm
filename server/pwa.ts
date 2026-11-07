@@ -1,7 +1,8 @@
 // The installable app's service worker (docs/pocket.md), served by the office at /sw.js. Its version is the build's
 // index.html, the package version and the office's commit, so every office update makes a new worker, which drops the
 // old cache. It caches only the app shell (the page and its hashed /assets/, icons and manifest): never /api, the
-// websockets or anything else. It also shows Web Push notifications and opens the office when one is tapped.
+// websockets or anything else. It also shows Web Push notifications (not while an office window is in use, #210),
+// closes those read elsewhere, and opens the office when one is tapped.
 import crypto from 'node:crypto';
 
 /** A short version: changes when the built page, the package or the office's commit does. */
@@ -67,8 +68,21 @@ self.addEventListener('push', (event) => {
   try {
     n = Object.assign(n, event.data ? event.data.json() : {});
   } catch {}
-  event.waitUntil(self.registration.showNotification(n.title, { body: n.body, tag: n.tag, icon: '/icons/icon-192.png', badge: '/icons/badge-96.png', data: { url: n.url } }));
+  event.waitUntil(onPush(n));
 });
+
+/** A push: shown with its thread's tag, replacing the last; a clear closes that thread's; nothing while the office is in use here. */
+async function onPush(n) {
+  // Read on another device (server/notify.ts): close what this one still shows.
+  if (n.type === 'clear') {
+    for (const old of await self.registration.getNotifications({ tag: n.tag })) old.close();
+    return;
+  }
+  // A second guard to the office's own (#210): an office window here is on screen and focused, so it shows this already.
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  if (windows.some((c) => c.visibilityState === 'visible' && c.focused)) return;
+  await self.registration.showNotification(n.title, { body: n.body, tag: n.tag, renotify: true, icon: '/icons/icon-192.png', badge: '/icons/badge-96.png', data: { url: n.url } });
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

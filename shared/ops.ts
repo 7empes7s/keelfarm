@@ -46,6 +46,7 @@ export interface OpsNumbers {
   qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
   qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
   qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
+  qaLabErrors: number; // QA rounds the test lab failed over 7 days (#189): in none of the rates above
   // GitHub's checks, over 7 days
   ciPass: number | null; // share of check runs that passed, 0-1
   ciRuns: number;
