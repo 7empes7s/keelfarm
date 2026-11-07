@@ -1,0 +1,75 @@
+/* The map room (ui/MapRoom.tsx, Constellation.tsx): the memory map's layout filling the panel, over a night sky. */
+
+.map-room .panel-body {
+  padding: var(--ds-space-2);
+}
+.map-room .mm {
+  flex: 1;
+  min-height: 0;
+}
+.map-room .mm-stage {
+  flex: 1;
+  height: auto;
+  min-height: 260px;
+  background: #0b0d1a;
+}
+.map-room .mm-stats,
+.map-room .mm-local,
+.map-room .mm-peek {
+  z-index: 3;
+}
+.mr-canvas canvas {
+  touch-action: none;
+  cursor: grab;
+}
+.mr-hint {
+  position: absolute;
+  right: var(--ds-space-2);
+  top: var(--ds-space-2);
+  max-width: 50%;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  text-align: right;
+  pointer-events: none;
+}
+.mr-label {
+  padding: 1px 6px;
+  border-radius: var(--ds-radius-pill);
+  background: rgba(11, 13, 26, 0.72);
+  color: #f1f3ff;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}
+.mr-label-on {
+  background: #ff9f1c;
+  color: #1f1d2b;
+  font-weight: 700;
+}
+/* a phone: the stage gets the room, the legend and insights scroll sideways in one row */
+@media (max-width: 600px) {
+  .map-room .panel-body {
+    padding: var(--ds-space-1);
+  }
+  .map-room .mr-hint {
+    display: none;
+  }
+  .map-room .mm-legend {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .map-room .mm-insights {
+    display: flex;
+    overflow-x: auto;
+  }
+  .map-room .mm-insight {
+    flex: none;
+    max-width: 70%;
+  }
+}

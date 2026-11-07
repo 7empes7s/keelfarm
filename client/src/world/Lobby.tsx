@@ -12,6 +12,7 @@ import { Elevator } from './Elevator';
 import { ErrandDirector } from './ErrandDirector';
 import { useCanvasTexture, useInteractable } from './interact';
 import { Jukebox } from './Jukebox';
+import { MapTable } from './MapTable';
 import { MissionControl } from './MissionControl';
 import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, MANAGER_DESK, MANAGER_ROOM, RECEPTION } from './layout';
 import { glow, shade } from './materials';
@@ -288,6 +289,7 @@ function CeoOffice() {
       {ceo && <Desk agent={ceo} accent={CEO_ACCENT} repoId="" position={CEO_DESK_AT} />}
       {ceo && <ActivityIcon agent={ceo} />}
       <CeoBoard />
+      <MapTable />
       <Plant position={[c.maxX - 0.7, 0, c.maxZ - 0.7]} scale={1.1} pot={CEO_ACCENT} />
       <Plant position={[c.minX + 0.6, 0, c.maxZ - 0.6]} scale={0.9} />
     </group>
