@@ -14,6 +14,7 @@ import { ArtifactList, ArtifactView } from './ChatArtifacts';
 import { itemOf, MessageActions, who, type Item } from './ChatActions';
 import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
 import { firstUnread as firstUnreadId } from '../../../shared/chatPage';
+import { messageActions } from './chatMessageActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
 import { DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
@@ -246,13 +247,15 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const actionsFor = (item: Item) => {
     const m = item.m;
     if (!m) return [];
-    if (m.from === 'office') return [removals.action(m)];
-    return [
-      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? 'Edit and resend' : 'Edit', icon: 'pencil' as const, run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
-      ...(hasVersionsSheet(m) ? [{ label: `Versions (${(m.versions?.length ?? 0) + 1})`, icon: 'clock' as const, run: () => setVersions(m) }] : []),
-      ...(m.id === last('ceo') ? [{ label: 'Retry', icon: 'refresh-cw' as const, run: () => void attempt(api.ceoRetry) }] : []),
-      { label: 'Remember this', icon: 'pin' as const, run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)) },
-    ];
+    return messageActions(m, {
+      latest: m.from !== 'office' && m.id === last(m.from),
+      versions: hasVersionsSheet(m) ? (m.versions?.length ?? 0) + 1 : null,
+      edit: () => (setEditing(m.id), setReplyTo(null), setText(m.text)),
+      showVersions: () => setVersions(m),
+      retry: () => void attempt(api.ceoRetry),
+      remember: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)),
+      removal: removals.action(m),
+    });
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
   const presence =
