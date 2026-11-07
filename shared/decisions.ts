@@ -83,14 +83,14 @@ const words = (s: string) => norm(s).split(' ').filter((w) => w.length >= 4 && !
 
 /**
  * A newer question replaces an older open one (#183) when they cover the same ground (a floor or a thing in common,
- * or neither names any) and say much the same: at least three words in common (four, or a third of the shorter
+ * or either names no floor) and say much the same: at least three words in common (four, or a third of the shorter
  * one's), one of them in either's question or options.
  */
 function supersedes(newer: Decision, older: Decision): boolean {
   if (older.kind !== 'suggestion' || older.status !== 'open' || newer.id === older.id) return false;
   const key = (a: DecisionAbout) => (a.kind === 'issue' ? `${a.repoId}#${a.number}` : `@${a.agentId}`);
   const about = new Set(older.about.map(key));
-  const scope = newer.about.some((a) => about.has(key(a))) || newer.repoIds.some((r) => older.repoIds.includes(r)) || (!newer.repoIds.length && !older.repoIds.length);
+  const scope = newer.about.some((a) => about.has(key(a))) || newer.repoIds.some((r) => older.repoIds.includes(r)) || !newer.repoIds.length || !older.repoIds.length;
   if (!scope) return false;
   const asked = (d: Decision) => words(`${d.question} ${d.options.join(' ')}`);
   const all = (d: Decision) => new Set([...asked(d), ...words(d.context ?? '')]);

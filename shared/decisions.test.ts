@@ -93,6 +93,7 @@ describe('fromCeoMessage', () => {
     const one = fromCeoMessage([], ceo(1, pay, ['Raised it', 'Not yet'], r('r1')), 1000);
     expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No'], r('r2')), 2000), 2000)).toHaveLength(2);
     expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No'], r('r1')), 2000), 2000)).toHaveLength(1);
+    expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No']), 2000), 2000)).toHaveLength(1); // no floor named: any floor
   });
 
   it('never raises a dropped one again', () => {
