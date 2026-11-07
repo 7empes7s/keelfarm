@@ -97,7 +97,7 @@ export abstract class SwarmQa extends SwarmSessions {
         repoId: repo.id,
         prNumber: pr.number,
         status: 'needs-human',
-        round: 2,
+        round: MAX_QA_ROUNDS, // out of rounds: nothing moves it on its own (catchUp, rebaseHandOffs)
         devAgentId: dev?.id ?? null,
         qaAgentId: qa?.id ?? null,
         summary: seed.summary,
@@ -122,7 +122,7 @@ export abstract class SwarmQa extends SwarmSessions {
         rerunSha: null,
         rerunAt: null,
         qaChecks: pr.checks,
-        stuckWhy: 'QA failed it twice for the same reason',
+        stuckWhy: `it failed QA ${MAX_QA_ROUNDS} times, the most QA rounds a PR gets`,
         triages: 0,
         escalated: true, // with the manager already: no CEO triage
       };
