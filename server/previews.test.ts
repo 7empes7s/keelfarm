@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Backend } from './backend.ts';
 import { PR_PREVIEW_IDLE_MS, PREVIEW_PORT } from './config.ts';
+import type * as PreviewRunner from './previewRunner.ts';
 import type { PreviewCallbacks, PreviewJob } from './previewRunner.ts';
 import { parsePreviewPatch, Previews, type PreviewFloor } from './previews.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
@@ -8,6 +9,12 @@ import type { PrPreviewView, PullInfo } from '../shared/types.ts';
 
 // The PR theatre's previews against a fake backend: which worktree, branch and port each one gets, what makes room
 // for a new one, and that every way a PR preview ends stops its app and clears its worktree away.
+
+// This suite fakes every preview process; port availability is fake too. Reclaim tests exercise real sockets.
+vi.mock('./previewRunner.ts', async (original) => ({
+  ...(await original<typeof PreviewRunner>()),
+  portOpen: async () => false,
+}));
 
 interface Started {
   job: PreviewJob;
