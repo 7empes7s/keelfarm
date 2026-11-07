@@ -306,6 +306,26 @@ describe('a demo office short of memory', () => {
   });
 });
 
+describe('a demo office short of memory, with a cloud agent (#263)', () => {
+  it('gives the ready issue to the Box agent while local agents wait, and counts nothing as waiting', async () => {
+    const swarm = new Swarm(createDemoBackend());
+    await swarm.connectRepo('demo-co/pixel-todo');
+    const x = swarm as unknown as Internals;
+    const repo = x.state.repos[0];
+    repo.autoAssign = true;
+    swarm.hireAgent(repo.id, { name: 'Radia' });
+    const team = x.state.agents.filter((a) => a.role !== 'ceo');
+    const box = team.find((a) => a.name === 'Radia')! as (typeof team)[number] & { host?: string };
+    box.host = 'box'; // the demo has no Upstash account: what matters here is only where the scheduler thinks they work
+    await swarm.health.simulate(true);
+    expect(x.startIssueWork(repo)).toBe(true);
+    expect(team.filter((a) => a.status === 'preparing').map((a) => a.id)).toEqual([box.id]);
+    expect(swarm.snapshot().health?.heldWork).toBeNull();
+    expect(x.startIssueWork(repo)).toBe(false); // the local agents still wait
+    expect(heldNote(swarm.snapshot().health?.heldWork)).toMatch(/^⏳ 1 task waiting for memory/);
+  });
+});
+
 describe('an agent whose session was killed', () => {
   it('is never left in an error: it waits to resume, or its work goes back to the queue and they are free', async () => {
     const swarm = new Swarm(createDemoBackend());
