@@ -162,7 +162,8 @@ whatever you open: panels, sheets, Settings, other pages, the chat closed, the 3
   top ones sit below the panels' headers, so it never covers a ✕). Click it for the call card with the same controls
   and **Open chat**.
 - **Keys** (not while typing or in a terminal): **Space** pauses or resumes (or talks, in tap-to-talk), **→** skips
-  to the next sentence, **M** mutes the mic (not the office), **Esc** ends the call when no panel or sheet is open.
+  to the next sentence, **M** mutes the mic (not the office), **Esc** ends the call from the call screen or card (anywhere
+else it still closes what's open).
 - **Mute** turns the mic off; the CEO still talks. **Pause** stops the CEO's voice where it is and turns the mic off;
   **Resume** carries on from there (the browser's voice starts that sentence again). **Skip** moves to the next
   sentence. **Speaker** off reads at about a third of the volume, like a phone's earpiece. **End** hangs up and brings

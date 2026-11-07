@@ -44,6 +44,7 @@ for (const width of [390, 1280]) {
   test(`a call goes on through other pages, with barge-in, skip, mute and the pill, at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/?pocket=1&tab=chat');
+    await page.waitForFunction(() => '__swarmMic' in window);
     await page.evaluate(() => (window as unknown as CallWindow).__swarmMic.fake());
     await page.getByRole('button', { name: /^Call / }).first().click();
     await expect.poll(() => phase(page)).toBe('listening');
@@ -59,8 +60,8 @@ for (const width of [390, 1280]) {
       await page.getByRole('button', { name: 'Minimise the call' }).click();
       await expect(page.locator('.vcall-pill')).toBeVisible();
     }
-    await page.locator('.pk-tab-console').click();
-    for (const tab of await page.locator('.pk-tabs .pk-tab:not(.pk-tab-console)').all().then((t) => t.slice(0, 2))) await tab.click();
+    for (const tab of await page.locator('.pk-tabs .pk-tab:not(.pk-tab-console)').all().then((t) => t.slice(1, 3))) await tab.click();
+    await page.locator('.pk-tab-console, .pk-icon-btn[aria-label="Settings and notifications"]').first().click();
     const after = await position(page);
     expect((await call(page)).id).toBe(id);
     if (after) {
@@ -84,9 +85,10 @@ for (const width of [390, 1280]) {
 
     // Talking over the CEO stops the voice at once and becomes the next message.
     await turn(page, 'Anything blocked');
-    await say(page, 'wait', false);
-    await page.waitForTimeout(350);
-    await say(page, 'wait one second', false);
+    for (const words of ['wait', 'wait one', 'wait one sec', 'wait one second', 'wait one second']) {
+      await say(page, words, false); // interim results, as the recognition sends them while you talk
+      await page.waitForTimeout(100);
+    }
     await expect.poll(() => phase(page), { timeout: 1000 }).toBe('listening');
     expect(await position(page)).toBeNull();
     await say(page, 'wait one second');
@@ -111,10 +113,12 @@ for (const width of [390, 1280]) {
 }
 
 test('the 3D office on a desktop calls too: the chat tucks away behind the orb, and the keys work', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await enterOffice(page);
   await page.evaluate(() => (window as unknown as CallWindow).__swarmMic.fake());
   await page.keyboard.press('p');
   await expect(page.locator('.phone')).toBeVisible();
+  if (!(await page.locator('.chat-input').isVisible())) await page.locator('.phone-tab').first().click(); // it opens on Team when a team change waits there
   await page.getByRole('button', { name: /^Call / }).first().click();
   await expect(page.locator('.vcall-card')).toBeVisible();
   await expect(page.locator('.phone')).toBeHidden();
@@ -124,9 +128,11 @@ test('the 3D office on a desktop calls too: the chat tucks away behind the orb, 
   expect((await call(page)).muted).toBe(true);
   await page.keyboard.press('Space');
   expect((await call(page)).paused).toBe(true);
-  await page.getByRole('button', { name: 'Fold the call card' }).click();
+  await page.getByRole('button', { name: 'Fold the call card' }).focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.vcall-bubble')).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.locator('.vcall-bubble').focus();
+  await page.keyboard.press('Escape'); // Esc ends the call from the call's own controls
   expect(await phase(page)).toBe('ended');
   await expect(page.locator('.phone')).toBeVisible();
 });

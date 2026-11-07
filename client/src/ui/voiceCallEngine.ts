@@ -146,7 +146,7 @@ if (typeof window !== 'undefined') {
 
 // ---------- keys ----------
 
-/** Space talks or pauses, → skips, M mutes, Esc ends: never while typing or in a terminal, and Esc leaves open panels to close first. */
+/** Space talks or pauses, → skips, M mutes, Esc ends: never while typing or in a terminal; Esc only from the call's own screen, so it still closes panels. */
 function onKey(e: KeyboardEvent) {
   if (!callOn() || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
   const el = e.target as HTMLElement | null;
@@ -156,7 +156,7 @@ function onKey(e: KeyboardEvent) {
     Space: () => (useCall.getState().call.tapToTalk ? talkOnce() : togglePause()),
     ArrowRight: skipSentence,
     KeyM: toggleMute,
-    Escape: useStore.getState().overlay || document.querySelector('.sheet, [role="alertdialog"], [role="menu"]') ? undefined : endCall,
+    Escape: el?.closest?.('.vcall-screen, .vcall-card, .vcall-bubble, .vcall-pill') ? endCall : undefined,
   };
   const fn = act[e.code];
   if (!fn) return;
