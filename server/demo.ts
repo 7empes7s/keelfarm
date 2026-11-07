@@ -38,8 +38,9 @@ import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, 
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { logStreamed, writeReply } from './demoChat.ts';
+import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
+import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
@@ -987,6 +988,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     seedNotices: sampleNotices,
+    seedChat: (now) => {
+      const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
+      return [...edits, ...sampleChat(now, edits.length + 1)];
+    },
     demoCharter,
     demoHeldUpdate,
     simulateUsage: demoUsage,
@@ -1485,6 +1490,11 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
         const out = await use('send_telegram', { text: `Status: ${plural(s.floors.length, 'floor')}, ${plural(issues, 'open issue')}, ${plural(s.pendingChanges.length, 'team change')} waiting for you.` });
         return out.startsWith('Refused') ? `I couldn't send it: ${refused(out)}` : 'Sent: the status is on your Telegram.';
+      }
+      // "fix your last message": the CEO corrects its latest reply through the real tool (#125), struck through on the phone.
+      if (/\b(fix|correct|edit) your (last |latest )?(message|reply)\b/i.test(text)) {
+        const out = await use('edit_message', { text: `Correction: ${plural(s.floors.length, 'floor')} and ${plural(s.floors.reduce((n, f) => n + f.pullRequests.length, 0), 'pull request')} in flight, as of now.`, reason: 'the manager asked me to correct it' });
+        return out.startsWith('Refused') ? `I couldn't edit it: ${refused(out)}` : 'Corrected: my earlier message now shows what changed, struck through.';
       }
       // "add to the office playbook: run the linter first": a bullet through the real tool, refused past its cap.
       const rule = text.match(/\boffice playbook\b[^:]*:\s*(.+)/i)?.[1]?.trim();

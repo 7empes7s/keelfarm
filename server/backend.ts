@@ -166,10 +166,10 @@ export interface Backend {
   demoTeam?(floor: number): number;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
   seedLab?(repos: { id: string }[], now: number): LabState;
+  /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */
+  seedChat?(now: number): PhoneMessage[];
   /** The demo only: a day of notifications of every kind (#107), when the notification centre is empty. */
   seedNotices?(repos: { id: string; floor: number }[], agents: { id: string; name: string; repoId: string; role: string }[], now: number): NoticeView[];
-  /** The demo office only (server/index.ts): a chat with the CEO for a fresh office, showing reactions and quoted replies (#118). */
-  seedChat?(now: number): PhoneMessage[];
   /** The demo only: Claude's usage warning, or its limit, on demand, as a session would report it. */
   simulateUsage?(kind: 'warning' | 'limit', now: number): UsageWarning | { limitResetsAt: number };
   /** The demo only: the office doctor's scenarios (a restart with desks gone and work finished, a stuck session). */

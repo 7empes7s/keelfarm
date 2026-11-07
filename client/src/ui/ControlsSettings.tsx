@@ -1,7 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { SENSITIVITY_MAX, SENSITIVITY_MIN, useLookPrefs } from '../world/look';
 import { pad, padName, watchPads } from '../world/gamepad';
-import { isTouch, setTouchSensitivity, TOUCH_SENS_MAX, TOUCH_SENS_MIN, useTouchLook } from '../world/touch/touchState';
+import { isTouch, requestGyro, setTouchPrefs, useTouchLook } from '../world/touch/touchState';
+import { TOUCH_DEFAULTS, TOUCH_SENS_MAX, TOUCH_SENS_MIN, type StickSide, type StickSize } from '../world/touch/thumbs';
 import { clearBinding, resetControls, setBinding, setPadSensitivity, useControls } from './controls';
 import { ACTIONS, PAD_SENSITIVITY_MAX, PAD_SENSITIVITY_MIN, SLOTS, actionDef, exactKeyLabel, findConflicts, keyLabel, type ActionDef, type ActionId } from './keymap';
 
@@ -66,17 +67,63 @@ function GamepadSettings() {
   );
 }
 
+/** A choice of a few, as a segmented control. */
+function Seg<T extends string>({ label, value, options, onPick }: { label: string; value: T; options: [T, string][]; onPick: (v: T) => void }) {
+  return (
+    <div className="mouse-sens">
+      <span>{label}</span>
+      <div className="seg touch-seg" role="group" aria-label={label}>
+        {options.map(([v, text]) => (
+          <button key={v} className={`seg-btn ${value === v ? 'seg-on' : ''}`} aria-pressed={value === v} onClick={() => onPick(v)}>
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TouchSettings() {
-  const sens = useTouchLook((s) => s.sensitivity);
+  const p = useTouchLook();
+  const [gyroNote, setGyroNote] = useState<string | null>(null);
+  const toggleGyro = async (on: boolean) => {
+    setGyroNote(null);
+    if (on && !(await requestGyro())) return setGyroNote('Motion access was refused: allow it in the browser to look by tilting.');
+    setTouchPrefs({ gyro: on });
+  };
   return (
     <div className="mouse-settings">
       <label className="mouse-sens">
         <span>Look sensitivity</span>
-        <input type="range" min={TOUCH_SENS_MIN} max={TOUCH_SENS_MAX} step={0.05} value={sens} onChange={(e) => setTouchSensitivity(Number(e.target.value))} />
-        <b>{sens.toFixed(2)}×</b>
+        <input type="range" min={TOUCH_SENS_MIN} max={TOUCH_SENS_MAX} step={0.05} value={p.sensitivity} onChange={(e) => setTouchPrefs({ sensitivity: Number(e.target.value) })} />
+        <b>{p.sensitivity.toFixed(2)}×</b>
+      </label>
+      <Seg<StickSide> label="Stick side" value={p.stickSide} options={[['left', 'Left'], ['right', 'Right']]} onPick={(stickSide) => setTouchPrefs({ stickSide })} />
+      <Seg<StickSize> label="Stick size" value={p.stickSize} options={[['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']]} onPick={(stickSize) => setTouchPrefs({ stickSize })} />
+      <label className="toggle">
+        <input type="checkbox" checked={p.invertY} onChange={(e) => setTouchPrefs({ invertY: e.target.checked })} /> Invert Y (drag up to look down)
+      </label>
+      <label className="toggle">
+        <input type="checkbox" checked={p.follow} onChange={(e) => setTouchPrefs({ follow: e.target.checked })} /> Camera follows (levels out and turns your way as you walk)
+      </label>
+      <label className="toggle">
+        <input type="checkbox" checked={p.oneThumb} onChange={(e) => setTouchPrefs({ oneThumb: e.target.checked })} /> One thumb (the stick with a look strip above it, on the stick's side)
+      </label>
+      <label className="toggle">
+        <input type="checkbox" checked={p.gyro} onChange={(e) => void toggleGyro(e.target.checked)} /> Tilt the phone to look
+      </label>
+      {gyroNote && (
+        <p className="controls-note" role="status">
+          {gyroNote}
+        </p>
+      )}
+      <label className="toggle">
+        <input type="checkbox" checked={p.classic} onChange={(e) => setTouchPrefs({ classic: e.target.checked })} /> Classic halves (top half looks, bottom half walks)
       </label>
       <p className="muted small pad-map">
-        Drag in the bottom half to walk (push far to run) · drag in the top half to look around · tap something to use it · hold it, then let go, for more options.
+        {p.classic
+          ? 'Drag in the bottom half to walk (push far to run) · drag in the top half to look around · tap something to use it · hold it, then let go, for more options.'
+          : 'Touch near the ghost stick to walk (push far to run) · drag in the other bottom corner to look, let go mid-swipe to keep turning, double-tap there to level the view · pinch to zoom · tap a thing or the floor to walk there · hold a thing, then let go, for more options.'}
       </p>
     </div>
   );
@@ -113,6 +160,7 @@ export function ControlsSettings() {
   const reset = () => {
     resetControls();
     useLookPrefs.getState().set({ sensitivity: 1, invertY: false, grabOnClose: true });
+    setTouchPrefs(TOUCH_DEFAULTS);
     setListen(null);
     setNote('Every control is back to how it came.');
   };

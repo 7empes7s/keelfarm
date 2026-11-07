@@ -6,6 +6,8 @@ import { api } from '../api';
 import { EYE_HEIGHT, ROOF, SPAWN, collide, surfaceAt, type Rect } from './layout';
 import { pickFocus } from './interact';
 import { isTouch, TOUCH_LOOK, touchInput, useTouchLook } from './touch/touchState';
+import { touchCamera } from './touch/thumbs';
+import { cancelTapWalk, stickFor, tapWalking, walkStep } from './touch/tapWalk';
 import { shutDoorways } from './doors';
 import { LOOK_RADIANS_PER_PX, createLookFilter, filterLookDelta, resetLookFilter, useLookPrefs } from './look';
 import { confirmDialog, isConfirmOpen } from '../ui/Confirm';
@@ -485,9 +487,22 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     const k = keys.current;
     const b = bindings();
     const padOn = !s.overlay && !isConfirmOpen() && s.started;
+    // a tap's walk (touch/tapWalk.ts) pushes the stick for you, until any stick, key, panel or view takes over
+    const tw = tapWalking();
+    let auto = { x: 0, y: 0 };
+    let heading: number | null = null;
+    if (tw && (!padOn || touchInput.x || touchInput.y || pad.lx || pad.ly || [...MOVES].some((a) => anyHeld(b, a, k)) || s.travel || s.held?.kind === 'paddle' || rigOwnsCamera() || perch())) cancelTapWalk();
+    else if (tw) {
+      const step = walkStep(tw, { x: camera.position.x, z: camera.position.z }, dt, 3.6);
+      if (step.done) {
+        cancelTapWalk();
+        if (step.done === 'arrived') tw.aim?.arrive();
+      } else auto = stickFor(step.dx, step.dz, look.current.yaw);
+      heading = step.heading;
+    }
     // the touch joystick (touch/TouchControls.tsx) walks like the left stick
-    const px = padOn ? Math.max(-1, Math.min(1, pad.lx + touchInput.x)) : 0;
-    const py = padOn ? Math.max(-1, Math.min(1, pad.ly + touchInput.y)) : 0;
+    const px = padOn ? Math.max(-1, Math.min(1, pad.lx + touchInput.x + auto.x)) : 0;
+    const py = padOn ? Math.max(-1, Math.min(1, pad.ly + touchInput.y + auto.y)) : 0;
     if (!px && !py) padRun.current = false;
     const fwd = Math.max(-1, Math.min(1, (anyHeld(b, 'forward', k) ? 1 : 0) - (anyHeld(b, 'back', k) ? 1 : 0) - py));
     const strafe = Math.max(-1, Math.min(1, (anyHeld(b, 'right', k) ? 1 : 0) - (anyHeld(b, 'left', k) ? 1 : 0) + px));
@@ -499,6 +514,13 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     if (rigOwnsCamera() || s.held?.kind === 'paddle') {
       touchInput.lookX = 0; // a look drag here would turn you once you're back on foot
       touchInput.lookY = 0;
+      touchInput.flingX = 0;
+      touchInput.flingY = 0;
+      touchInput.zoom = 1; // a pinch's zoom is on foot only
+    }
+    if (camera instanceof THREE.PerspectiveCamera && camera.zoom !== touchInput.zoom) {
+      camera.zoom = touchInput.zoom;
+      camera.updateProjectionMatrix();
     }
     if (rigOwnsCamera()) {
       if (cameraMode() === 'follow' && (px || py)) exitView();
@@ -549,11 +571,14 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     }
     if (p && takePerchTurn()) look.current = { yaw: p.yaw, pitch: p.pitch };
 
-    // a drag in the top half looks around, like the mouse
+    // the touch camera: a look drag's fling, the gyro, a double tap's recentring, easing level as you walk (touch/thumbs.ts)
+    const touchPrefs = useTouchLook.getState();
+    if (isTouch && padOn) touchCamera(look.current, touchInput, touchPrefs.follow && !p, dt, (!!fwd || !!strafe) && !s.travel && !p, heading, { min: p?.minPitch ?? -1.35, max: p?.maxPitch ?? 1.35 });
+    // a look drag (touch/thumbs.ts's zones) looks around, like the mouse
     if (touchInput.lookX || touchInput.lookY) {
       if (padOn) {
-        const turn = TOUCH_LOOK * useTouchLook.getState().sensitivity * (p?.look ?? 1);
-        const flip = useLookPrefs.getState().invertY ? -1 : 1;
+        const turn = TOUCH_LOOK * touchPrefs.sensitivity * (p?.look ?? 1);
+        const flip = touchPrefs.invertY ? -1 : 1;
         look.current.yaw -= touchInput.lookX * turn;
         look.current.pitch = Math.max(p?.minPitch ?? -1.35, Math.min(p?.maxPitch ?? 1.35, look.current.pitch - touchInput.lookY * turn * flip));
       }

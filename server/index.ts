@@ -15,7 +15,6 @@ import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
 import { createDemoBackend } from './demo.ts';
-import { sampleChat } from './chatSample.ts';
 import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
@@ -37,7 +36,7 @@ if (PUBLIC_DEMO) {
   }
 }
 
-const swarm = new Swarm(DEMO ? { ...createDemoBackend(DEMO_SCALE), seedChat: sampleChat } : realBackend); // the chat sample only here: tests start from an empty chat
+const swarm = new Swarm(DEMO ? createDemoBackend(DEMO_SCALE) : realBackend);
 if (DEMO) seedDemoNotes(); // the demo CEO's NOTES.md, for "What the CEO remembers"
 // Who else is in the 3D office (shared presence): relayed between tabs over /ws, never saved. The demo adds fake visitors.
 const presence = new PresenceHub({ demo: DEMO });

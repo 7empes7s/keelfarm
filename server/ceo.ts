@@ -180,6 +180,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+  editMessage(a: { id?: number; text: string; reason?: string }): Promise<string>;
   sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
 
@@ -470,6 +471,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
       (a) => run(() => h.sendTelegram(a)),
     ),
+    tool('edit_message', "Correct one of your earlier replies to the manager (#N from the chat; default your latest): its text is replaced, and the manager sees your old words struck through next to the new ones, marked edited. Their Telegram copy follows. For a real mistake only; new information goes in a new message.", { id: z.number().int().optional(), text: z.string().min(1).max(6000).describe('The whole corrected message'), reason: z.string().max(200).optional().describe('Why, in a few words') }, (a) => run(() => h.editMessage(a))),
     ...waitTools(h, run),
     ...reactTools(h, run),
   ];
@@ -582,6 +584,7 @@ export function ceoSystemPrompt(o: {
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
     "- company_status's openDecisions wait in the manager's tray: bring one up only if it bears on this message or before acting on its topic, at most one per reply, none marked trayOnly, and don't re-ask it in text. Answered in words: resolve_decision.",
+    '- "[manager edited message #N: …]": they changed a message you already took. Redo or adjust only what changed, and say so in a line.',
     "- When it would help, end with one ```idea <kind> block (kind: objective, focus, mandate, experiment, research, charter, team or plan) suggesting a change to how the office works: a title line, then the message the manager sends by tapping Accept. At most one per reply.",
     '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
   ].join('\n');

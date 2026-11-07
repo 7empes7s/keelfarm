@@ -651,7 +651,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      void this.telegram.send(telegramChat(this.ceo().name, m.text), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }
@@ -668,7 +668,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     return m;
   }
 
-  private refContext(): RefContext {
+  protected refContext(): RefContext {
     return {
       floors: this.state.repos.map((r) => ({ floor: r.floor, repoId: r.id })),
       agents: this.state.agents.filter((a) => a.role !== 'ceo').map((a) => ({ id: a.id, name: a.name })),

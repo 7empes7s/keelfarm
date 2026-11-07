@@ -671,7 +671,8 @@ export interface PhoneMessage {
   steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
-  edited?: number; // the manager's: when they last edited it
+  edited?: number; // when its sender last edited it (#125: anyone's, shared/messageEdits.ts)
+  versions?: MessageVersion[]; // its earlier texts, oldest first (at most MESSAGE_VERSIONS_MAX with the current one)
   status?: StatusReaction; // the manager's: the office's reaction as the CEO's job on it moves (shared/reactions.ts)
   reactions?: MessageReaction[]; // the manager's and the CEO's, oldest first
   tg?: number; // its Telegram message id, for one the manager sent from there
@@ -681,6 +682,13 @@ export interface PhoneMessage {
 /** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */
 export type StatusReaction = 'queued' | 'seen' | 'working' | 'done' | 'failed';
 export interface MessageReaction { emoji: string; by: 'ceo' | 'manager' }
+
+/** An earlier text of an edited message: when it was written, and why its sender replaced it (the CEO's edit_message). */
+export interface MessageVersion {
+  text: string;
+  at: number;
+  reason?: string;
+}
 
 /** A system notice in the chat (#138), shown as a card headed by the message's text: the cleaned output behind it, and links to what it's about. */
 export interface ChatNotice {
