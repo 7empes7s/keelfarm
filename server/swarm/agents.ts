@@ -1,16 +1,20 @@
 // The staff: hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills.
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
+import path from 'node:path';
 import type { BoxCliRecord, BoxTarget } from '../boxCli.ts';
 import { redact } from '../cloud.ts';
 import { HttpError } from '../httpError.ts';
 import { issueTaken } from '../issueClaims.ts';
 import { cliLabel, isCli } from '../clis.ts';
-import { MODELS_FILE } from '../config.ts';
+import { Accounts } from '../accounts.ts';
+import { checkBinding } from '../../shared/accounts.ts';
+import { HOME_DIR, MODELS_FILE } from '../config.ts';
 import { CATALOG_MS, loadCatalog, saveCatalog } from '../modelCatalog.ts';
 import { machineName } from '../machines.ts';
 import type { SessionKind } from '../health.ts';
-import { apply as applyLedger } from '../ledger.ts';
+import { runsHere } from '../handOut.ts';
+import { apply as applyLedger, pastCareers } from '../ledger.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import {
   isToolId,
@@ -47,6 +51,22 @@ import { removeScreens } from './screens.ts';
 import { SwarmMerge } from './merge.ts';
 
 export abstract class SwarmAgents extends SwarmMerge {
+  /** Providers & accounts (#247, docs/accounts.md): the logins and keys agents and the CEO run on. */
+  readonly accounts = new Accounts({
+    secretsFile: path.join(HOME_DIR, this.backend.demo ? 'demo-accounts-secrets.json' : 'secrets.json'),
+    home: HOME_DIR,
+    env: process.env,
+    file: path.join(HOME_DIR, this.backend.demo ? 'demo-accounts.json' : 'accounts.json'),
+    check: (a, dir, secret) => this.backend.accounts.check(a, dir, secret),
+    signIn: (o, exited) => this.backend.accounts.signIn(o, exited),
+    spend: () => this.spend.ledger.all().filter((r) => r.type === 'session'),
+    agents: () => this.state.agents,
+    builtInUsage: () => this.state.claudeUsage,
+    changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
+    seed: this.backend.accounts.seed,
+    poll: !process.env.VITEST,
+  });
+
   // ---------- agents ----------
 
   /** Answering one of the CEO's consults (#28): working to everyone, though their saved status stays as it was. */
@@ -55,7 +75,7 @@ export abstract class SwarmAgents extends SwarmMerge {
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
-    const v = super.agentView(a, withLog);
+    const v = { ...super.agentView(a, withLog), ...(a.account ? { account: a.account } : {}) };
     return this.consulting(a) ? { ...v, status: 'working', issueTitle: `Consult for ${this.ceo().name}` } : v;
   }
 
@@ -123,7 +143,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       logTail: [],
     };
     this.state.agents.push(agent);
-    applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now() });
+    if (applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now(), name }).past) this.broadcast({ type: 'pastCareers', past: pastCareers(this.state.progress) });
     this.agentRt.set(agent.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
     this.appendLog(agent, [{ kind: 'system', text: `👋 ${name} joined floor ${repo.floor} (${repo.fullName})${host === 'box' ? ', working in the cloud' : ''}.` }]);
     this.save();
@@ -455,8 +475,12 @@ export abstract class SwarmAgents extends SwarmMerge {
     return !this.clis.length || this.clis.some((c) => c.id === cli && c.installed);
   }
 
-  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown }) {
+  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown; account?: unknown }) {
     const a = this.agent(id);
+    if (patch.account !== undefined) {
+      a.account = this.accountBinding(patch.account);
+      this.accounts.emit();
+    }
     if (patch.host !== undefined && a.role !== 'ceo' && (patch.host === 'box' || patch.host === 'local')) this.moveAgent(a, patch.host);
     if (patch.cli !== undefined && a.role !== 'ceo') {
       const cli = isCli(patch.cli) ? patch.cli : '';
@@ -479,6 +503,15 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (patch.effort !== undefined) a.effort = EFFORTS.includes(patch.effort as EffortLevel) ? (patch.effort as EffortLevel) : '';
     this.save();
     this.emitAgent(a);
+  }
+
+  /** An account id or tag to pin an agent or the CEO to, checked; undefined: the rotation. */
+  protected accountBinding(raw: unknown): string | undefined {
+    try {
+      return checkBinding(this.accounts.list(), String(raw ?? ''));
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
   }
 
   fireAgent(id: string, force = false) {
@@ -514,7 +547,7 @@ export abstract class SwarmAgents extends SwarmMerge {
         .then(() => this.sweepFloor(repo.id));
     }
     this.state.agents = this.state.agents.filter((x) => x.id !== id);
-    applyLedger(this.state.progress, { kind: 'let-go', agentId: id });
+    if (applyLedger(this.state.progress, { kind: 'let-go', agentId: id, name: a.name, at: Date.now() }).past) this.broadcast({ type: 'pastCareers', past: pastCareers(this.state.progress) });
     this.agentRt.delete(id);
     this.seenActivity.delete(id);
     this.shownActivity.delete(id);
@@ -580,8 +613,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     );
   }
 
-  protected ensureSlot(kind: SessionKind = 'build') {
-    this.health.ensure(kind);
+  protected ensureSlot(kind: SessionKind = 'build', a?: { host?: MachineHost }) {
+    if (!a || runsHere(a)) this.health.ensure(kind); // a Box agent's session doesn't use this computer's memory (#263)
     if (this.slotsFull()) {
       throw new HttpError(429, `All ${this.state.settings.sessionLimit} session slots are busy. Raise or clear the session limit in the manager's console, or wait.`);
     }
@@ -594,7 +627,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (a.role === 'ceo') throw new HttpError(400, `${a.name} runs the company; give issues to the agents on the floors.`);
     if (BUSY.includes(a.status)) throw new HttpError(409, `${a.name} is busy: ${this.agentDoing(a)}`);
     if (this.consulting(a)) throw new HttpError(409, `${a.name} is answering a consult`);
-    this.ensureSlot();
+    this.ensureSlot('build', a);
     const issues = this.repoRt.get(repo.id)?.issues ?? [];
     const issue = issues.find((i) => i.number === issueNumber);
     if (!issue) throw new HttpError(404, `Issue #${issueNumber} is not open on ${repo.fullName}`);

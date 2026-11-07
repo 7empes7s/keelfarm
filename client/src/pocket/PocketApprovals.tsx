@@ -16,6 +16,8 @@ import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';
 import { DecisionLog } from '../ui/DecisionLog';
 import { chatDecisions } from '../../../shared/decisions';
 import { EmptyState } from '../ui/EmptyState';
+import { HoverCard, PeekCard } from '../ui/HoverCard';
+import { agoText, prAdvice } from '../ui/peekFacts';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
   const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
@@ -108,6 +110,8 @@ interface Decision {
   group: string;
   label: string;
   card: ReactNode;
+  /** The list row's peek (#213): why it needs you, when it was asked, and what to do. */
+  peek: { why: string; at: number; recommend: string };
 }
 
 export function Approvals({ wide }: { wide?: boolean }) {
@@ -120,12 +124,13 @@ export function Approvals({ wide }: { wide?: boolean }) {
   const w = waitingOnYou(repos, qa, requests);
   const charters = repos.filter((r) => r.charter.proposal);
   const pr = (s: (typeof w.stuck)[number]) => `PR #${s.qa.prNumber} ${s.repo.pulls.find((p) => p.number === s.qa.prNumber)?.title ?? ''}`;
+  const prPeek = (s: (typeof w.stuck)[number], ready: boolean) => ({ ...prAdvice(s.qa, ready), at: s.qa.updatedAt });
   const items: Decision[] = [
-    ...w.requests.map((r) => ({ key: `req:${r.id}`, group: '👥 Team changes', label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} /> })),
-    ...chatDecisions(decisions, now).map((d) => ({ key: d.id, group: DECISIONS_GROUP, label: d.question, card: <DecisionCard key={d.id} d={d} now={now} /> })),
-    ...charters.map((r) => ({ key: `charter:${r.id}`, group: '🎯 Charter changes (edit them in ⚙️ → Charter)', label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
-    ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: '⚠️ Pull requests that need you', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} /> })),
-    ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
+    ...w.requests.map((r) => ({ key: `req:${r.id}`, group: '👥 Team changes', label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} />, peek: { why: r.reason || 'The CEO asked for this team change.', at: r.createdAt, recommend: r.kind === 'hire' ? 'Read the résumé, then Hire or Decline' : 'Let them go, or Keep them' } })),
+    ...chatDecisions(decisions, now).map((d) => ({ key: d.id, group: DECISIONS_GROUP, label: d.question, card: <DecisionCard key={d.id} d={d} now={now} />, peek: { why: d.context || 'The CEO asked you in the chat.', at: d.lastAskedAt, recommend: d.options.length ? `Answer: ${d.options.slice(0, 3).join(' / ')}` : 'Answer it in the chat' } })),
+    ...charters.map((r) => ({ key: `charter:${r.id}`, group: '🎯 Charter changes (edit them in ⚙️ → Charter)', label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />, peek: { why: r.charter.proposal!.reason || `${r.charter.proposal!.by} proposed a charter change.`, at: r.charter.proposal!.at, recommend: 'Read the change, then Approve or Dismiss' } })),
+    ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: '⚠️ Pull requests that need you', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} />, peek: prPeek(s, false) })),
+    ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready />, peek: prPeek(s, true) })),
   ];
   const heading = (d: Decision, i: number) => (i === 0 || items[i - 1].group !== d.group ? d.group : null);
   const log = <DecisionLog heading={(t) => <h3 className="pk-h">{t}</h3>} />;
@@ -158,9 +163,11 @@ export function Approvals({ wide }: { wide?: boolean }) {
           <Fragment key={d.key}>
             {heading(d, i) && <li className="pk-h">{d.group}</li>}
             <li>
-              <button className={`pk-split-item ${d === open ? 'pk-split-on' : ''}`} aria-current={d === open ? 'true' : undefined} onClick={() => setPicked(d.key)}>
-                {d.label}
-              </button>
+              <HoverCard label={d.label} peek={<PeekCard title={d.label} sub={`Asked ${agoText(d.peek.at, Date.now())}`} note={d.peek.why} stats={[['Recommended', d.peek.recommend]]} />}>
+                <button className={`pk-split-item ${d === open ? 'pk-split-on' : ''}`} aria-current={d === open ? 'true' : undefined} onClick={() => setPicked(d.key)}>
+                  {d.label}
+                </button>
+              </HoverCard>
             </li>
           </Fragment>
         ))}

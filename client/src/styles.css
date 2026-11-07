@@ -325,7 +325,7 @@ input.inline:focus {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: var(--ds-z-base);
 }
 .hud > * {
   pointer-events: auto;
@@ -1020,7 +1020,7 @@ input.inline:focus {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 60;
+  z-index: var(--ds-z-modal);
   padding: 1px 8px;
   font: 10px/1.2 var(--mono);
   color: #7cffb2;
@@ -1056,7 +1056,7 @@ input.inline:focus {
   gap: 8px;
   align-items: flex-end;
   max-width: min(420px, calc(100vw - 32px));
-  z-index: 40;
+  z-index: var(--ds-z-toast);
 }
 .toast {
   background: var(--paper);
@@ -1086,7 +1086,7 @@ input.inline:focus {
 .start {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--ds-z-sheet);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -1148,7 +1148,7 @@ input.inline:focus {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -1613,7 +1613,7 @@ input.inline:focus {
   position: fixed;
   left: 0;
   right: 0;
-  z-index: var(--ds-z-menu);
+  z-index: var(--ds-z-popover);
 }
 .term-keys-row,
 .term-keys-more {
@@ -2753,7 +2753,7 @@ input.inline:focus {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  z-index: 45;
+  z-index: var(--ds-z-tour);
   width: min(390px, calc(100vw - 32px));
   background: var(--paper);
   border: 3px solid var(--ds-outline);
@@ -2766,7 +2766,7 @@ input.inline:focus {
 /* On a phone: clear of the phone button, and under the panels, which fill the screen there (#83). */
 @media (max-width: 760px) {
   .tour {
-    z-index: 20;
+    z-index: calc(var(--ds-z-base) + 10);
     bottom: calc(96px + var(--ds-safe-bottom));
   }
 }
@@ -2956,7 +2956,7 @@ input.inline:focus {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--ds-z-modal);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -3592,7 +3592,7 @@ input.inline:focus {
 .artifact-back {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--ds-z-sheet);
   display: flex;
   justify-content: flex-end;
   background: rgba(31, 29, 43, 0.35);
@@ -4922,9 +4922,11 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-callout {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border: 3px solid var(--ds-outline);
   border-radius: 16px;
   background: #ffe0e6;
@@ -4933,6 +4935,28 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   color: var(--ink);
   cursor: pointer;
   text-align: left;
+}
+/* a ⚠ in a tinted circle, the count, and "Approvals ›" that never splits from its chevron (#223) */
+.pk-callout-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ds-bad-fill) 45%, var(--ds-surface-raised));
+  font-size: var(--ds-text-sm);
+}
+.pk-callout-text {
+  flex: 1 1 12em;
+  min-width: 0;
+  line-height: var(--ds-leading-tight);
+}
+.pk-callout-go {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+  font-weight: var(--ds-weight-strong);
 }
 .pk-ceo,
 .pk-floor-head,
@@ -4949,6 +4973,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   overflow-wrap: anywhere;
 }
 .pk-floor {
+  container: pkfloor / inline-size;
   border-left: 10px solid var(--accent);
 }
 .pk-floor-name {
@@ -4961,7 +4986,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-pipeline {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, auto); /* each chip as wide as its label needs, the rest shared */
   gap: 6px;
   margin: 10px 0 8px;
 }
@@ -4987,6 +5012,9 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-stage-label {
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.68rem;
   font-weight: 600;
   line-height: 1.15;
@@ -5003,7 +5031,29 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+}
+.pk-floor-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+/* one row, the people and backlog line on the left and Board · Team on the right, wrapping as a whole only on a narrow card */
+@container pkfloor (max-width: 300px) {
+  .pk-pipeline {
+    gap: var(--ds-space-1);
+  }
+  .pk-stage-label {
+    font-size: 0.62rem;
+  }
+}
+@container pkfloor (max-width: 239px) {
+  .pk-floor-foot {
+    flex-wrap: wrap;
+  }
+  .pk-floor-foot > .pk-ellipsis {
+    white-space: normal;
+  }
 }
 .pk-wide {
   width: 100%;
@@ -5469,7 +5519,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   left: 50%;
   width: 0;
   height: 0;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
 }
 .emote-hub {
   position: absolute;
@@ -5829,7 +5879,7 @@ summary:focus-visible,
   left: 50%;
   bottom: 84px;
   transform: translateX(-50%);
-  z-index: 70;
+  z-index: var(--ds-z-modal);
   width: min(860px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -6183,7 +6233,7 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
 /* The floating joystick: a faint ring where the finger landed and the knob under it, only while it walks. */
 .touch-stick {
   position: fixed;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
   margin: 0;
   transform: translate(-50%, -50%);
   border: 3px solid rgba(255, 255, 255, 0.55);
@@ -6213,7 +6263,7 @@ html[data-high-contrast] :is(button, a, input, select, textarea, summary, [tabin
 }
 .touch-armed {
   position: fixed;
-  z-index: 30;
+  z-index: var(--ds-z-panel);
   width: 88px;
   height: 88px;
   transform: translate(-50%, -50%);
@@ -6257,7 +6307,7 @@ html[data-high-contrast] .touch-knob {
 .hold-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--ds-z-sheet);
   background: rgba(31, 29, 43, 0.35);
   display: flex;
   align-items: flex-end;

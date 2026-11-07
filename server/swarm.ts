@@ -21,7 +21,7 @@ import { isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
 import { loadLab } from './experiments.ts';
-import { apply as applyLedger, loadLedger } from './ledger.ts';
+import { apply as applyLedger, backfillWork, loadLedger } from './ledger.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, listenSettings, voiceSettings } from './voice.ts';
 import { DEFAULT_NOTIFY, notifySettings, officeUrl } from '../shared/notify.ts';
 import { keepNotices, markRead, NOTICES_KEEP } from '../shared/notices.ts';
@@ -210,7 +210,7 @@ export class Swarm extends SwarmCeoTools {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await this.cloud.init();
+    await Promise.all([this.cloud.init(), this.accounts.init()]);
     if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
@@ -362,12 +362,12 @@ export class Swarm extends SwarmCeoTools {
       .catch((err) => console.warn('could not look for agent CLIs', err));
     void Promise.all([this.refreshTooling(), this.startModels()]); // Tools & skills, and the model catalog (#198)
     await this.journal.start();
-    await this.spend.ledger.load();
+    await this.spend.ledger.load().then(() => backfillWork(this.state.progress, this.spend.ledger.all(), this.state.agents)); // careers from before #205
     await this.history.load();
     void this.sweepHistory();
     // A fresh demo office has a month of spending to look at (the first sync may have written its merges already).
     if (this.backend.demo && !this.spend.ledger.all().some((r) => r.type === 'session') && this.backend.seedCosts) {
-      void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
+      void this.seedCareerPast(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now())); // and the careers' past (#205)
       for (const r of this.state.repos) this.seedCharterLog(r); // and the Charter tab's numbers over it
     }
     if (this.backend.demo && !this.state.experiments.assignments.length && this.backend.seedLab) this.state.experiments = this.backend.seedLab(this.state.repos, Date.now()); // and an experiment with results
@@ -504,7 +504,7 @@ export class Swarm extends SwarmCeoTools {
     }
     if (a.status === 'preparing') throw new HttpError(409, `${a.name} is still setting up; try again in a moment`);
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
-    this.ensureSlot(sessionKind(a));
+    this.ensureSlot(sessionKind(a), a);
     this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
     this.chatSay(a, text, who);
     const cwd = this.deskOf(a, repo);

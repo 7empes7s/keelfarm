@@ -9,14 +9,20 @@ export type ViewMode = 'pocket' | 'office';
 /** Pocket mode's layout (#104): the phone's (bottom tabs), a rail with icons and a chat drawer, or rail, pages and chat side by side. */
 export type PocketLayout = 'compact' | 'medium' | 'expanded';
 
-/** Widest phone layout, and narrowest expanded one, in CSS px. */
+/** Widest phone layout, narrowest touch tablet's rail and narrowest expanded one, in CSS px. */
 const COMPACT_MAX = 760;
+const TABLET_MIN = 768;
+const TABLET_HEIGHT = 600;
 const EXPANDED_MIN = 1024;
 
-/** The layout for a window `width` px wide; touch-only screens keep the phone's layout until they're expanded-wide (a tablet in landscape). */
-export function pickLayout(x: { width: number; touch: boolean }): PocketLayout {
+/**
+ * The layout for a window `width` x `height` px; a touch-only screen keeps the phone's layout until it's a tablet's
+ * (768 px wide and 600 tall: an iPad upright gets the rail and the chat drawer, #212; a phone on its side doesn't).
+ */
+export function pickLayout(x: { width: number; height: number; touch: boolean }): PocketLayout {
   if (x.width >= EXPANDED_MIN) return 'expanded';
-  return x.width <= COMPACT_MAX || x.touch ? 'compact' : 'medium';
+  if (x.width <= COMPACT_MAX) return 'compact';
+  return x.touch && (x.width < TABLET_MIN || x.height < TABLET_HEIGHT) ? 'compact' : 'medium';
 }
 
 const KEY = 'cubefarm:mode';
@@ -76,7 +82,10 @@ export const otherMode = (mode: ViewMode): ViewMode => (mode === 'pocket' ? 'off
 
 /** Pocket mode's layout for this window, following resizes (in the UI scale's px, like the page's CSS). */
 export function useLayout(): PocketLayout {
-  const read = () => pickLayout({ width: window.innerWidth / (Number(getComputedStyle(document.documentElement).getPropertyValue('--ui-scale')) || 1), touch: matchMedia('(hover: none) and (pointer: coarse)').matches });
+  const read = () => {
+    const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--ui-scale')) || 1;
+    return pickLayout({ width: window.innerWidth / scale, height: window.innerHeight / scale, touch: matchMedia('(hover: none) and (pointer: coarse)').matches });
+  };
   const [layout, setLayout] = useState(read);
   useEffect(() => {
     const onResize = () => setLayout(read());

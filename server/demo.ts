@@ -34,9 +34,10 @@ import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
-import { sampleCareers } from './careerSample.ts';
+import { sampleCareers, sampleHistory, samplePastCareers } from './careerSample.ts';
 import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
 import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
+import { demoKill, demoPortOwner, demoProc, holdDemoPort } from './demoLeftover.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -47,6 +48,7 @@ import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 import { withDemoChat } from './demoAgentChat.ts';
+import { demoAccounts } from './demoAccounts.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -817,6 +819,7 @@ async function fakeTrim(stillIdle: () => boolean) {
 export function createDemoBackend(scale: DemoScale | null = null, noTour = false): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
+  holdDemoPort(() => `/demo/${[...repos.keys()][0]}/desks/preview`);
   // Tie each fake session back to its repo via the desk directory name.
   const deskRepo = new Map<string, string>();
   // Desks whose pretend dependencies are installed: the first task on a desk installs, the next ones skip.
@@ -1093,10 +1096,11 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     notify: demoNotify,
     telegram: demoTelegram(),
     cloud: demoCloud(),
+    accounts: demoAccounts((o, exited) => demoSignIn({ ...o, boxId: 'accounts' }, new Map(), exited)),
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
-    seedCareers: sampleCareers,
+    seedCareers: sampleCareers, seedPastCareers: samplePastCareers, seedHistory: sampleHistory,
     demoTeam: (floor) => demoTeam(scale, floor),
     demoNoTour: noTour,
     seedLab: sampleLab,
@@ -1253,6 +1257,9 @@ const flakedOnce = new Set<string>();
 
 const demoPreviews: PreviewBackend = {
   hasDefault: async (fullName) => !bareRepos.has(fullName),
+  portOwner: demoPortOwner,
+  proc: demoProc,
+  kill: demoKill,
   start(job, cb) {
     let stopped = false;
     let server: http.Server | null = null;
@@ -2044,7 +2051,7 @@ const DEMO_SIGN_IN = { claude: 'https://example.com/cubefarm-demo/claude-sign-in
 function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal }, logins: Map<string, Set<string>>, exited: (code: number) => void): BoxSignIn {
   const { term } = o;
   const claude = o.cli === 'claude';
-  term.note(`── Signing ${claude ? 'Claude Code' : 'Codex'} in · ☁ cloud machine (demo) ──`);
+  term.note(`── Signing ${claude ? 'Claude Code' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
   term.write(
     (claude
       ? ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter.\x1b[0m', 'Paste code here if prompted > ']

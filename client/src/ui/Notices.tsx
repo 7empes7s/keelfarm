@@ -10,6 +10,7 @@ import type { NoticeKind, NoticeView } from '../../../shared/types';
 import { noticeJump, noticeStep, type NoticeStep } from './noticeNav';
 import { openFrom } from './RefChips';
 import { Panel } from './Panel';
+import { XLabel } from './HoverCard';
 import './notices.css';
 
 const SWIPE_PX = 80;
@@ -223,8 +224,9 @@ export function NoticeBell({ className }: { className: string }) {
   const unread = useStore((s) => unreadCount(s.notices));
   const label = unread ? `Notifications, ${unread} unread` : 'Notifications';
   return (
-    <button type="button" data-tour="bell" className={`notice-bell ${className}`} onClick={() => useStore.getState().openOverlay({ kind: 'notices' })} aria-label={label} title={label}>
+    <button type="button" data-tour="bell" className={`notice-bell xbtn ${className}`} onClick={() => useStore.getState().openOverlay({ kind: 'notices' })} aria-label={label} title={label}>
       🔔
+      <XLabel text="Notifications" />
       {unread > 0 && <span className="badge badge-dot">{unread > 99 ? '99+' : unread}</span>}
     </button>
   );

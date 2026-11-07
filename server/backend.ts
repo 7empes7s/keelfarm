@@ -14,6 +14,9 @@ import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { readCatalog } from './modelCatalog.ts';
+import { checkAccount } from './accountCheck.ts';
+import { startLocalSignIn } from './localSignIn.ts';
+import type { AccountsDeps } from './accounts.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { previewDesks, realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
@@ -28,7 +31,7 @@ import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { DemoCharter } from './demoCharters.ts';
-import type { CareerView } from '../shared/careers.ts';
+import type { CareerView, PastCareer } from '../shared/careers.ts';
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
@@ -38,7 +41,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, PullInfo } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
 export interface Backend {
@@ -159,12 +162,18 @@ export interface Backend {
   telegram: TelegramApi;
   /** Cloud agents (docs/cloud.md): Upstash's Box API (the demo's is fake), and picking their CLIs up after a restart. */
   cloud: CloudBackend;
+  /** Providers & accounts (#247, docs/accounts.md): testing them and their logins' sign-in terminals (the demo's are fake). */
+  accounts: AccountsBackend;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
   seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
   seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
+  /** The demo only: someone let go, under the Team tab's Past agents (#205). */
+  seedPastCareers?(now: number): Record<string, PastCareer>;
+  /** The demo only: the made-up cost ledger as session history (#205), so profiles have timelines. */
+  seedHistory?(records: readonly CostRecord[], repos: readonly { id: string; fullName: string; floor: number }[], now: number): HistoryEntry[];
   /** The demo only: an objective log over the made-up ledger (#105), so the Charter tab's numbers show from the start. */
   seedCharterLog?(charter: CharterParts, ledger: CostRecord[], now: number): ObjectiveLog;
   /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
@@ -206,6 +215,15 @@ export interface CloudBackend {
   signIn(o: { api: BoxApi; boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal; agentId: string }, exited: (code: number) => void): BoxSignIn;
   /** The demo only: every Box's sign-in expires, as a login Anthropic or OpenAI turned away would. */
   expireSignIns?(): void;
+}
+
+export interface AccountsBackend {
+  /** Test an account: a login in its folder (and its usage), or one free request with its key. Never throws. */
+  check: AccountsDeps['check'];
+  /** A login's CLI signing in, in the account's terminal, with the account's folder in `env`. */
+  signIn: AccountsDeps['signIn'];
+  /** The demo only: its made-up accounts and keys, added to a registry that has only the built-in ones. */
+  seed?(): { accounts: ProviderAccount[]; keys: Record<string, string> };
 }
 
 /** The real cloud: Upstash, the manager's gh and git. */
@@ -301,6 +319,7 @@ export const realBackend: Backend = {
   toolInventory: (projects) => scanTooling(projects),
   modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
+  accounts: { check: checkAccount, signIn: startLocalSignIn },
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

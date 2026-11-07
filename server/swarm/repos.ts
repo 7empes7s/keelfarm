@@ -262,12 +262,12 @@ export abstract class SwarmRepos extends SwarmCore {
 
   // ---------- the floor's app (preview monitor) ----------
 
-  /** Run the floor's app from its preview worktree: the default branch, or an open PR. Replaces what it is running now. */
-  async startPreview(id: string, pr?: number | null): Promise<PreviewView> {
+  /** Run the floor's app from its preview worktree: the default branch, or an open PR. Replaces what it is running now. otherPort: on the next free port in the floor's lane. */
+  async startPreview(id: string, pr?: number | null, otherPort = false): Promise<PreviewView> {
     const repo = this.repo(id);
     if (pr != null) this.refuseOutside(repo, pr);
     this.health.ensure('preview');
-    return this.previews.start(repo, `${repo.fullName.split('/')[1]} app`, pr);
+    return this.previews.start(repo, `${repo.fullName.split('/')[1]} app`, pr, otherPort);
   }
 
   stopPreview(id: string): Promise<PreviewView> {

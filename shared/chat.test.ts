@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUOTE_CHARS, RESEARCH_PREFIX, excerpt, forwardText, hideHarness, isHarnessText, isQuestion, messageLook, nextDelivery, parseForwarded, researchTopic, settleOutbox, stripHarness, yesNoFor, type OutgoingMessage } from './chat.ts';
+import { QUOTE_CHARS, RESEARCH_PREFIX, excerpt, forwardText, hideHarness, isHarnessText, isQuestion, messageLook, nextDelivery, parseForwarded, researchTopic, restoreOutbox, sentBefore, settleOutbox, stripHarness, yesNoFor, type OutgoingMessage } from './chat.ts';
 import type { PhoneMessage } from './types.ts';
 
 describe('forwardText', () => {
@@ -103,6 +103,24 @@ describe('settleOutbox', () => {
 
   it('keeps failed sends for their retry', () => {
     expect(settleOutbox([out(1, 'hi', { delivery: 'failed' })], { from: 'manager', text: 'hi' })).toHaveLength(1);
+  });
+
+  it('matches by client id first (#216): a resent copy settles its own send, failed or not', () => {
+    const box = [out(1, 'hi', { clientId: 'a' }), out(2, 'hi', { clientId: 'b', delivery: 'failed' })];
+    expect(settleOutbox(box, { from: 'manager', text: 'hi', clientId: 'b' }).map((o) => o.key)).toEqual([1]);
+  });
+});
+
+describe('restoreOutbox (#216)', () => {
+  const m = (id: number, from: PhoneMessage['from'], text: string, extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id, from, text, at: id, ...extra });
+  const out = (key: number, delivery: OutgoingMessage['delivery'], clientId?: string): OutgoingMessage => ({ key, text: `m${key}`, at: key, delivery, ...(clientId && { clientId }) });
+
+  it('drops what the office has, resends sends still on their way once, keeps failed ones for a retry', () => {
+    const saved = [out(1, 'sending', 'a'), out(2, 'sending', 'b'), out(3, 'failed', 'c')];
+    const { outbox, resend } = restoreOutbox(saved, [m(9, 'manager', 'm1', { clientId: 'a' }), m(10, 'ceo', 'x', { clientId: 'b' })]);
+    expect(outbox.map((o) => o.key)).toEqual([2, 3]);
+    expect(resend.map((o) => o.key)).toEqual([2]);
+    expect(sentBefore([m(9, 'manager', 'm1', { clientId: 'a' })], undefined)).toBeUndefined();
   });
 });
 

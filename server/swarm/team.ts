@@ -6,6 +6,7 @@ import { HttpError } from '../httpError.ts';
 import { cliLabel, isCli } from '../clis.ts';
 import { plainText } from '../notify.ts';
 import { modelProblem } from '../../shared/models.ts';
+import { sentBefore } from '../../shared/chat.ts';
 import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction, PhoneMessage, RepoView, WorldSnapshot } from '../../shared/types.ts';
 import { closeDecision, digestDue, fromCeoMessage, onCeoAction, onManagerMessage, reopenDecision, settleProbable, shownDecisions, snoozeDecision, syncDecisions, type Decision, type DecisionAbout, type DecisionAct, type DecisionSeed } from '../../shared/decisions.ts';
 import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS, BUSY, oneLine } from './model.ts';
@@ -269,6 +270,12 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     const list = this.state.decisions.list;
     this.setDecisions(m.from === 'manager' ? onManagerMessage(list, m, m.at) : fromCeoMessage(list, m, m.at));
     return m;
+  }
+
+  /** A phone resending after a reload (#216, `clientId`) gets back the message the office already took: taken once. */
+  override async messageCeo(...a: Parameters<SwarmUpkeep['messageCeo']>) {
+    const again = sentBefore(this.state.messages, a[5]);
+    return again ? { id: again.id } : super.messageCeo(...a);
   }
 
   override decideCharter(id: string, approve: boolean, edited?: unknown): RepoView {

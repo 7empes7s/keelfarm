@@ -1,5 +1,6 @@
 // The snapshot and what goes out on /ws: the events that keep a tab's state up to date. Imported through shared/types.ts.
 import type { ChatItem } from '../agentChat.ts';
+import type { PastCareer } from '../careers.ts';
 import type { Decision } from '../decisions.ts';
 import type { LabView } from '../experiments.ts';
 import type { FileView } from '../files.ts';
@@ -17,6 +18,7 @@ import type { DoctorFinding, ManagerChange, OfficeUpdateView, UsageCheckError, U
 import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
+import type { AccountsView } from './accounts.ts';
 import type { VoiceCacheView } from './voice.ts';
 
 export interface WorldSnapshot {
@@ -56,7 +58,9 @@ export interface WorldSnapshot {
   ticker?: TickerItem[]; // the floors' recent ticker lines, oldest first
   notifyChannels: NotifyChannelsView;
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
+  accounts?: AccountsView; // Settings → Providers & accounts (#247): no secrets
   progress: ProgressView; // coins, decorations and achievements (#210)
+  pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   files: FileView[]; // the chat's files store, newest first (metadata only)
   tooling?: ToolInventory; // Tools & skills: what a Claude Code session on this machine loads (server/tooling.ts)
@@ -121,6 +125,7 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
+  | { type: 'accounts'; accounts: AccountsView }
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
   | { type: 'managerChanges'; changes: ManagerChange[] }
@@ -128,6 +133,7 @@ export type ServerEvent =
   | { type: 'history'; entry: HistoryEntry }
   | { type: 'notify'; note: NoteView }
   | { type: 'progress'; progress: ProgressView }
+  | { type: 'pastCareers'; past: PastCareer[] }
   | { type: 'reward'; reward: RewardView }
   | { type: 'pong'; repoId: string; board: PongRow[] }
   /** A plain toast, or with the notice fields a rich one that also joins the notification centre. */

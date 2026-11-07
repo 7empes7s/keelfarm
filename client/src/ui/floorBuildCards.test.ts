@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { PrPreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
-import { floorBuilds } from './floorBuildCards';
+import { cardAction, cardActionLabel, floorBuilds, type BuildCard } from './floorBuildCards';
 
 const pull = (number: number, state: PullInfo['state'], at: string) =>
   ({ number, title: `PR ${number}`, state, createdAt: at, mergedAt: state === 'MERGED' ? at : null }) as PullInfo;
-const repo = (...pulls: PullInfo[]) => ({ id: 'acme/app', pulls, preview: { status: 'running' } }) as RepoView;
+const repo = (...pulls: PullInfo[]) => ({ id: 'acme/app', fullName: 'acme/app', pulls, preview: { status: 'running' } }) as RepoView;
 const agent = (id: string, over: Record<string, unknown> = {}) => ({ id, repoId: 'acme/app', role: 'agent', status: 'idle', task: null, issueNumber: null, issueTitle: null, prNumber: null, startedAt: null, ...over });
 
 describe("a floor's build cards", () => {
@@ -37,5 +37,33 @@ describe("a floor's build cards", () => {
   it('keep only the latest merges', () => {
     const r = repo(...[1, 2, 3, 4, 5].map((n) => pull(n, 'MERGED', `2026-11-0${n}T10:00:00Z`)));
     expect(floorBuilds(r, [], {}, {}).map((c) => c.pr)).toEqual([null, 5, 4, 3]);
+  });
+});
+
+describe('tapping a build card (#225)', () => {
+  const card = (over: Partial<BuildCard>): BuildCard => ({ key: 'k', pr: null, title: 't', status: 'open', agentId: null, shot: null, preview: 'stopped', at: 0, ...over });
+
+  it('opens something for every kind of card, or the card is not a button', () => {
+    const cases: [Partial<BuildCard>, ReturnType<typeof cardAction>, string | null][] = [
+      [{ status: 'live', preview: 'running' }, { kind: 'app', pr: null }, 'Open preview'],
+      [{ status: 'building', preview: null, agentId: 'ada' }, { kind: 'terminal', agentId: 'ada' }, 'Watch them build'],
+      [{ status: 'building', preview: null }, null, null], // nobody's terminal to watch: nothing to open
+      [{ status: 'qa', pr: 5, preview: 'starting' }, { kind: 'app', pr: 5 }, 'Starting…'],
+      [{ status: 'open', pr: 6, preview: 'error' }, { kind: 'app', pr: 6 }, "Didn't run: see why"],
+      [{ status: 'merged', pr: 3, preview: 'running', merged: { sha: 'abc1234', path: '/settings' } }, { kind: 'app', pr: null, merged: { pr: 3, sha: 'abc1234', path: '/settings' } }, 'Open on main'],
+      [{ status: 'merged', pr: 3, preview: 'error' }, { kind: 'app', pr: null, merged: { pr: 3, sha: '', path: '/' } }, "Didn't run: see why"], // main's error and log
+    ];
+    for (const [over, action, label] of cases) {
+      const c = card(over);
+      expect(cardAction(c)).toEqual(action);
+      expect(cardActionLabel(c, cardAction(c))).toBe(label);
+    }
+  });
+
+  it("gives a merged PR's card its commit and first changed page, where main opens", () => {
+    const p = { ...pull(3, 'MERGED', '2026-11-02T10:00:00Z'), headSha: 'abc1234def', files: ['client/src/pages/Settings.tsx'] };
+    const [, merged] = floorBuilds(repo(p), [], {}, {});
+    expect(merged.merged?.sha).toBe('abc1234');
+    expect(cardAction(merged)).toMatchObject({ kind: 'app', pr: null, merged: { pr: 3, sha: 'abc1234' } });
   });
 });

@@ -432,7 +432,7 @@ export function Overlays() {
   if (!overlay) return null;
   switch (overlay.kind) {
     case 'terminal':
-      return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} />;
+      return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} profile={overlay.profile} />;
     case 'phone':
       return <Phone tab={overlay.tab} requestId={overlay.requestId} />;
     case 'kanban':
@@ -440,7 +440,7 @@ export function Overlays() {
     case 'card':
       return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
     case 'app':
-      return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
+      return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
     case 'elevator':
       return <ElevatorPanel />;
     case 'manager':

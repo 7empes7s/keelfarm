@@ -135,6 +135,8 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `exec.ts`: `run` / `git` / `gh`: `execFile` without a shell, prompts disabled, `CommandError` with stderr.
 - `previews.ts`: one preview per floor: ports (6300 + floor), statuses, config validation; and the PR theatre's PR
   previews (`prTheatre.ts`: their slots, ports, eviction and idle stop, pure; `syncProxy.ts`: compare mode's synced scrolling).
+  `previewPids.ts`: the previews' processes in `<SWARM_HOME>/previews.json`, so a restart reclaims the office's own
+  leftovers and names anything else on a preview port (#225; the demo's `SWARM_DEMO_LEFTOVER=ours|foreign`, `demoLeftover.ts`).
   `previewGateway.ts`: previews through the office's own address at `/preview/<port>/` for other devices, with a
   service worker keeping the apps' root paths under it.
 - `qaShots.ts`: QA's screenshots of each PR's latest round, kept for the app viewer's QA panel.
@@ -142,6 +144,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `tooling.ts`: Settings → Tools & skills' inventory: what a Claude Code session here loads (`claude plugin list --json`,
   plugin folders, skills, MCP configs), read only, secrets masked. The switches (Everyone, the CEO, each agent) and how
   they become a session's `--disallowedTools` / `enabledPlugins` are pure, in `shared/tooling.ts`.
+- `accounts.ts`: Providers & accounts (#247, docs/accounts.md): the registry (`<SWARM_HOME>/accounts.json`, no secrets;
+  API keys in `secrets.json`), which account a session runs on and what it adds to its env (pure, `shared/accounts.ts`),
+  usage per login, sign-in terminals (`/ws/term?agent=account:<id>`); `accountCheck.ts` its Test, `demoAccounts.ts` the demo's.
 - `httpError.ts`: `HttpError(status, message)`.
 - `officeUpdate.ts`: the office's self-update: the drain decision, the launcher contract (IPC, `last-update.json`).
 - `pacing.ts`: pacing new work after Claude's usage warnings: the start/skip decision and the usage state.

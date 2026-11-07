@@ -3,10 +3,11 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { HistoryDetail, HistoryFilter, HistoryPage, HistoryUsage } from '../../shared/history';
+import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { DecorItem, ProgressView } from '../../shared/progress';
@@ -54,6 +55,7 @@ export interface AgentSetupPatch {
   model?: string;
   effort?: EffortLevel | '';
   host?: MachineHost | '';
+  account?: string; // an account id or tag (#247); '' for the rotation
 }
 
 /** Choices made when a project moves in: a brief for the CEO, and whether work starts on its own. */
@@ -91,7 +93,7 @@ export const api = {
       practices?: { [K in keyof PracticeOverrides]?: PracticeOverrides[K] | null }; // null: inherit Every project's again
     },
   ) => call('PATCH', r(repoId), patch),
-  startPreview: (repoId: string, pr?: number) => call<PreviewView>('POST', `${r(repoId)}/preview`, pr ? { pr } : {}),
+  startPreview: (repoId: string, pr?: number, otherPort?: boolean) => call<PreviewView>('POST', `${r(repoId)}/preview`, { ...(pr ? { pr } : {}), ...(otherPort ? { otherPort } : {}) }),
   stopPreview: (repoId: string) => call<PreviewView>('DELETE', `${r(repoId)}/preview`),
   startPrPreview: (repoId: string, pr: number, restart = false) => call<PrPreviewView>('POST', `${r(repoId)}/pr-previews/${pr}`, { restart }),
   stopPrPreview: (repoId: string, pr: number) => call('DELETE', `${r(repoId)}/pr-previews/${pr}`),
@@ -130,6 +132,7 @@ export const api = {
   /** Start a cloud agent's sign-in again in their terminal (docs/cloud.md). */
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
+  careerTimeline: (id: string) => call<TimelineView>('GET', `/api/agents/${id}/timeline`, undefined, false),
   updateSettings: (patch: Partial<SwarmSettings>) => call('PATCH', '/api/settings', patch),
   /** Settings → effort per kind of task; '' puts the kind back on the default. */
   setTaskEffort: (kind: TaskKind, effort: EffortLevel | '') => call('PATCH', '/api/settings', { taskEffort: { [kind]: effort } }),
@@ -155,7 +158,7 @@ export const api = {
   /** The demo only: the office doctor's scenarios. */
   demoDoctor: (action: 'restart' | 'stuck' | 'later' | 'unclosed' | 'check') => call<{ text: string; doctor: DoctorFinding[] }>('POST', '/api/doctor/demo', { action }),
   /** A message for the CEO, replying to message `replyTo` if given; answers with the posted message's id. */
-  messageCeo: (text: string, replyTo?: number, files?: string[]) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }) }),
+  messageCeo: (text: string, replyTo?: number, files?: string[], clientId?: string) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }), ...(clientId && { clientId }) }),
   ceoPicks: () => call<QuickPicks>('GET', '/api/ceo/picks', undefined, false),
   keepFile: (id: string, keep: boolean) => call('POST', `/api/files/${id}/keep`, { keep }),
   deleteFile: (id: string, toast = true) => call('DELETE', `/api/files/${id}`, undefined, toast),
@@ -186,6 +189,7 @@ export const api = {
   decideOpen: (id: string, action: 'snooze' | 'drop' | 'answered' | 'open' | 'reopen') => call('POST', `/api/decisions/${encodeURIComponent(id)}`, { action }),
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
+  demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
@@ -212,6 +216,14 @@ export const api = {
   deleteCloudOrphans: () => call<{ deleted: number }>('POST', '/api/cloud/orphans'),
   /** The demo only: every cloud agent's sign-in expires. */
   expireSignIns: () => call('POST', '/api/cloud/demo-expire'),
+  // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
+  addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
+  updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),
+  moveAccount: (id: string, by: -1 | 1) => call('POST', `/api/accounts/${encodeURIComponent(id)}/move`, { by }),
+  setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
+  testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
+  signInAccount: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`),
+  removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
   pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),
   pushUnsubscribe: (endpoint: string) => call<NotifyChannelsView>('DELETE', '/api/notify/push/devices', { endpoint }),

@@ -1,0 +1,110 @@
+/* Settings → Providers & accounts (#247, ProvidersSettings.tsx). Tokens only. */
+
+.acc-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--ds-space-2);
+}
+.acc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+}
+.acc-stat b {
+  font-size: var(--ds-text-lg);
+}
+.acc-stat span {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.acc-cli {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-3);
+}
+.acc-cli h4 {
+  margin: 0;
+}
+.acc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.acc-paused {
+  background: var(--ds-surface-sunken);
+}
+.acc-chip {
+  flex: none;
+  align-self: center;
+  white-space: nowrap;
+}
+.acc-good {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.acc-warn {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.acc-bad {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.acc-muted {
+  color: var(--ds-text-muted);
+}
+.acc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+}
+.acc-action {
+  align-self: flex-start;
+}
+.acc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.acc-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.acc-kind {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  cursor: pointer;
+}
+.acc-kind.on {
+  border-color: var(--ds-outline);
+  background: var(--ds-surface-hover);
+}
+.acc-kind > span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+.acc-signin .live-term {
+  height: 320px;
+}
+.acc-kinds-help ul {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: var(--ds-space-5);
+}
