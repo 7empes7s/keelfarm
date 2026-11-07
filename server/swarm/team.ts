@@ -348,13 +348,6 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     if (this.ceoAsked) this.setDecisions(onCeoAction(this.state.decisions.list, act, Date.now()));
   }
 
-  /** Demo only: the first floor and its newest agent, for the sample chat's action cards of every kind (#151). */
-  protected sampleCardFloor(): SampleFloor | undefined {
-    const floor = this.state.repos[0];
-    const team = floor ? this.state.agents.filter((a) => a.repoId === floor.id && a.role !== 'ceo') : [];
-    return floor && team.length ? { floor: floor.floor, repoId: floor.id, agent: team[team.length - 1], size: team.length } : undefined;
-  }
-
   /** Demo only: a fresh demo office opens with a question answered through its re-ask (#208), CEO questions left unanswered and a team change waiting. */
   protected seedDemoDecisions() {
     const asked = this.postMessage('ceo', DEMO_REASK.ask);
@@ -377,5 +370,12 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     if (d.status !== 'open') return `"${d.question}" was already ${d.status}.`;
     this.setDecisions(closeDecision(this.state.decisions.list, d.id, x.superseded ? 'superseded' : 'resolved', x.outcome, Date.now()));
     return `${x.superseded ? 'Superseded' : 'Closed'} "${d.question}": ${plainText(x.outcome, 120)}.`;
+  }
+
+  /** Demo only: the first floor and its newest agent, for the sample chat's action cards of every kind (#151). */
+  protected sampleCardFloor(): SampleFloor | undefined {
+    const floor = this.state.repos[0];
+    const team = floor ? this.state.agents.filter((a) => a.repoId === floor.id && a.role !== 'ceo') : [];
+    return floor && team.length ? { floor: floor.floor, repoId: floor.id, agent: team[team.length - 1], size: team.length } : undefined;
   }
 }
