@@ -14,6 +14,16 @@ export const DEMO_DECISION_MESSAGES = [
   'Morning report: every floor is busy, and nothing is stuck. Your open questions wait above the message box.',
 ];
 
+/**
+ * #208's phone (msg 1048, 1049, 1052): the CEO asks about three fixes, asks about the third again, and the manager
+ * answers the first: both close, and the decision log says "Replied to message …".
+ */
+export const DEMO_REASK = {
+  ask: 'Three small fixes came up on floor 1: A, the flaky upload test; B, the retry button on PR cards; C, a dark mode toggle for the console. Shall I file all three?\n```suggestions\nYes, file all three\nOnly A and B\nNot now\n```',
+  reAsk: 'Should I also file C, the dark mode toggle for the console on floor 1?\n```suggestions\nYes, file C\nNot now\n```',
+  answer: 'Yes, file all three',
+};
+
 /** An open decision in company_status, as far as the demo CEO reads it. */
 interface OpenDecision {
   id: string;

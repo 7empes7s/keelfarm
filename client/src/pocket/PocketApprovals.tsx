@@ -13,6 +13,7 @@ import { Resume } from '../ui/TeamChanges';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
 import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';
+import { DecisionLog } from '../ui/DecisionLog';
 import { chatDecisions } from '../../../shared/decisions';
 import { EmptyState } from '../ui/EmptyState';
 
@@ -127,10 +128,12 @@ export function Approvals({ wide }: { wide?: boolean }) {
     ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
   ];
   const heading = (d: Decision, i: number) => (i === 0 || items[i - 1].group !== d.group ? d.group : null);
+  const log = <DecisionLog heading={(t) => <h3 className="pk-h">{t}</h3>} />;
   if (items.length === 0) {
     return (
       <div className="pk-page">
         <EmptyState kind="approvals" />
+        {log}
       </div>
     );
   }
@@ -143,6 +146,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
             {d.card}
           </Fragment>
         ))}
+        {log}
       </div>
     );
   }
@@ -161,7 +165,10 @@ export function Approvals({ wide }: { wide?: boolean }) {
           </Fragment>
         ))}
       </ul>
-      <div className="pk-split-detail">{open.card}</div>
+      <div className="pk-split-detail">
+        {open.card}
+        {log}
+      </div>
     </div>
   );
 }
