@@ -4,8 +4,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../shared/types';
-import { activeMods, consumeMods, keySequence, NO_MODS, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
+import { activeMods, clipboardPaste, consumeMods, keySequence, NO_MODS, pasteText, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
+import { PasteSheet } from './PasteSheet';
 import { VIEWPORT_EVENT } from '../viewport';
 import { socketUrl } from '../socketUrl';
 import { liveStatus, TERM_FONT } from './termLayout';
@@ -42,7 +43,8 @@ const THEME: ITheme = {
 
 /**
  * `compact` is the phone window's terminal (#86): no footer (the window shows `onStatus`'s line and the ⌨ toggle, and
- * passes `keys`), and the key bar stays in the window, which already sits above the keyboard.
+ * passes `keys`), and the key bar stays in the window, which already sits above the keyboard. `signIn`: a sign-in
+ * terminal, its key bar leading with Paste (#278).
  */
 export function LiveTerminal({
   agentId,
@@ -52,6 +54,7 @@ export function LiveTerminal({
   compact,
   keys,
   onStatus,
+  signIn,
 }: {
   agentId: string;
   cli?: AgentCli;
@@ -60,11 +63,13 @@ export function LiveTerminal({
   compact?: boolean;
   keys?: boolean;
   onStatus?: (line: string) => void;
+  signIn?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState(false);
   const [connected, setConnected] = useState(true);
   const [focused, setFocused] = useState(false);
+  const [pasting, setPasting] = useState(false); // the paste sheet (#278)
   const [keysPref, setKeysOn] = useTermKeysPref();
   const keysOn = keys ?? keysPref;
   const fontRef = useRef(fontSize);
@@ -213,7 +218,7 @@ export function LiveTerminal({
       return;
     }
     if ('paste' in k) {
-      void navigator.clipboard?.readText().then((text) => text && termRef.current?.paste(text), () => undefined);
+      void clipboardPaste(navigator.clipboard).then((r) => ('text' in r ? termRef.current?.paste(r.text) : setPasting(true)));
       return;
     }
     const armed = activeMods(modsRef.current);
@@ -222,10 +227,20 @@ export function LiveTerminal({
     setMods(consumeMods(modsRef.current));
   };
 
+  // Through xterm's paste, so a CLI in bracketed paste mode gets it as one paste; never logged or kept.
+  const pasteIn = (raw: string, enter: boolean) => {
+    setPasting(false);
+    const text = pasteText(raw);
+    if (text) termRef.current?.paste(text);
+    if (enter) sendRef.current('\r');
+    termRef.current?.focus();
+  };
+
   return (
     <div className={`live-term ${className ?? ''}`}>
       <div className="live-term-screen" ref={host} />
-      {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} dock={!compact} />}
+      {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} dock={!compact} signIn={signIn} />}
+      {pasting && <PasteSheet onSend={pasteIn} onClose={() => setPasting(false)} />}
       {!compact && (
         <div className="live-term-foot">
           <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />

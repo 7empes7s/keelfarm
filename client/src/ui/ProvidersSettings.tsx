@@ -315,7 +315,7 @@ function SignInSheet({ a, close }: { a: AccountView; close: () => void }) {
   return (
     <Sheet title={`Sign in · ${a.label}`} onClose={close} className="acc-signin">
       <p className="muted small">{a.cli === 'claude' ? 'Open the link below, approve it, and paste the code back here.' : 'Open the link below and enter the one-time code it shows.'} It signs in only this account's folder.</p>
-      <LiveTerminal agentId={`account:${a.id}`} cli={a.cli} compact keys />
+      <LiveTerminal agentId={`account:${a.id}`} cli={a.cli} compact keys signIn />
       <div className="row wrap">
         <button className="btn" onClick={() => void api.testAccount(a.id).catch(() => undefined)}>
           🧪 Test
