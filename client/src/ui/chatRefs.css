@@ -57,20 +57,8 @@
   color: var(--ds-on-color);
 }
 
+/* inside the shared hover card (HoverCard.tsx): the whole card opens what the chip names */
 .ref-peek {
-  position: fixed;
-  z-index: var(--ds-z-popover);
-  width: min(300px, calc(100vw - 32px));
-  max-height: 45vh;
-  overflow: hidden;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border: var(--ds-border) solid var(--ds-outline);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-raised);
-  color: var(--ds-text);
-  box-shadow: var(--ds-shadow-float);
-  font-family: var(--font);
-  font-size: var(--ds-text-sm);
   cursor: pointer;
 }
 .ref-peek p {

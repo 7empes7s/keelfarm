@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { newCareer } from './careers.ts';
 import { emptyCharterView } from './charter.ts';
 import {
   applyRepoPatch,
@@ -456,7 +457,14 @@ describe('records from before agents were interchangeable', () => {
     expect(legacyAgent(old({ id: 'ceo', role: 'ceo', desk: 0 }))).toMatchObject({ role: 'ceo', desk: 0 });
     expect(legacyAgent(agent({ desk: 13 }))).toEqual(agent({ desk: 13 }));
     const career = { since: 1, opened: 2, merged: 1, firstPass: 1, qaPass: 1, qaFail: 0, fixRounds: 0, run: 1, best: 1, reviews: 0, costUsd: 0, turns: 0, recent: [], week: [] };
-    expect(legacyAgent(old({ role: 'dev', career: { ...career, bySpecialty: { audio: 1 } } })).career).toEqual(career);
+    expect(legacyAgent(old({ role: 'dev', career: { ...career, bySpecialty: { audio: 1 } } })).career).toEqual({ ...newCareer(1), ...career });
+  });
+
+  it("fills in what a career recorded before #205 lacks (rehires, weeks, usage), keeping its numbers", () => {
+    const career = { since: 1, opened: 2, merged: 1, firstPass: 1, qaPass: 1, qaFail: 0, fixRounds: 0, run: 1, best: 1, reviews: 0, costUsd: 3, turns: 9, recent: [], week: [], toPr: [] };
+    const back = legacyAgent(agent({ career: career as never })).career!;
+    expect(back).toEqual({ ...newCareer(1), ...career });
+    expect(back).toMatchObject({ hires: 1, served: 0, weeks: [], toMerge: [], rig: null, costUsd: 3 });
   });
 
   it('turns an old hire proposal into a team change: no role, title, specialty or brief, the default coding agent', () => {

@@ -142,6 +142,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `tooling.ts`: Settings → Tools & skills' inventory: what a Claude Code session here loads (`claude plugin list --json`,
   plugin folders, skills, MCP configs), read only, secrets masked. The switches (Everyone, the CEO, each agent) and how
   they become a session's `--disallowedTools` / `enabledPlugins` are pure, in `shared/tooling.ts`.
+- `accounts.ts`: Providers & accounts (#247, docs/accounts.md): the registry (`<SWARM_HOME>/accounts.json`, no secrets;
+  API keys in `secrets.json`), which account a session runs on and what it adds to its env (pure, `shared/accounts.ts`),
+  usage per login, sign-in terminals (`/ws/term?agent=account:<id>`); `accountCheck.ts` its Test, `demoAccounts.ts` the demo's.
 - `httpError.ts`: `HttpError(status, message)`.
 - `officeUpdate.ts`: the office's self-update: the drain decision, the launcher contract (IPC, `last-update.json`).
 - `pacing.ts`: pacing new work after Claude's usage warnings: the start/skip decision and the usage state.

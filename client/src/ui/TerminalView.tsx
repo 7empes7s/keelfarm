@@ -29,6 +29,7 @@ import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './term
 import { useA11y } from './a11y';
 import { useMode } from '../pocket/mode';
 import './termPhone.css';
+import { useDraft } from '../drafts';
 
 function elapsed(from: number | null, to: number | null) {
   if (!from) return '';
@@ -100,7 +101,7 @@ function useTermFont(phone: boolean): [number, (by: 1 | -1) => void] {
   return [size, step];
 }
 
-export function TerminalView({ agentId, view }: { agentId: string; view?: AgentPane }) {
+export function TerminalView({ agentId, view, profile = false }: { agentId: string; view?: AgentPane; profile?: boolean }) {
   const agent = useStore((s) => s.agents[agentId]);
   const log = useStore((s) => s.logs[agentId]) ?? [];
   const shotAt = useStore((s) => s.screens[agentId]);
@@ -109,15 +110,15 @@ export function TerminalView({ agentId, view }: { agentId: string; view?: AgentP
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
   const office = useMode((s) => s.mode) === 'office';
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`agent:${agentId}`); // kept through a reload (#216)
   const [busy, setBusy] = useState(false);
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState(profile);
   const [side, setSide] = useState(true);
   const details = phone ? sheet : side;
   const setDetails = phone ? setSheet : setSide;
-  const [tab, setTab] = useState<DetailsTab>('now');
+  const [tab, setTab] = useState<DetailsTab>(profile ? 'profile' : 'now');
   const swipe = useSwipe(details, setDetails);
   const [fontPx, stepFontSize] = useTermFont(phone);
   const uiScale = useA11y((s) => s.prefs.uiScale);

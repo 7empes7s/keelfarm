@@ -13,6 +13,7 @@ import { stickyDrop } from '../world/boardHands';
 import { WorkersPanel } from './WorkersPanel';
 import { PresenceHud } from './PresenceHud';
 import { officeUpdateChip } from '../officeUpdate';
+import { UpdatePill } from './UpdatePill';
 import { useA11y } from './a11y';
 import { useCameraView } from '../world/camera/rig';
 import { CameraHud, OverviewButton } from './CameraHud';
@@ -237,6 +238,7 @@ export function HUD() {
       <WorkersPanel />
       <div className="hud-chips">
         <OfficeUpdateChip />
+        <UpdatePill className="office-chip update-pill" />
         <UsageChip />
         <MemoryChip />
         <DoctorChip />

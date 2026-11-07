@@ -21,6 +21,7 @@ export type SectionId =
   | 'runtime'
   | 'office'
   | 'profile'
+  | 'accounts'
   | 'cloud-agents'
   | 'voice'
   | 'outside'
@@ -73,6 +74,7 @@ export const SECTIONS: Section[] = [
   { id: 'runtime', group: 'settings', icon: '⌨️', label: 'How agents run', find: ['Real terminals', 'Agent SDK', 'Chat mode'] },
   { id: 'office', group: 'settings', icon: '🏬', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
   { id: 'profile', group: 'settings', icon: '👤', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
+  { id: 'accounts', group: 'settings', icon: '🔑', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: '☁️', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
   { id: 'voice', group: 'settings', icon: '🔊', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text'] },
   { id: 'outside', group: 'settings', icon: '🌦️', label: 'Weather & world', find: ['Weather', 'Your city', 'Keep it calm', 'World events'] },

@@ -30,7 +30,7 @@ describe('a desk with a story', () => {
   it('shows what the career earned, and only that', () => {
     const fresh = deskLayout(deskItems(newCareer(NOW), 'ada', NOW));
     expect(fresh).toMatchObject({ shelf: false, plaques: [], more: null, star: null, photo: null, toy: null });
-    const recent = [12, 9, 4].map((n) => ({ n, title: '', at: NOW }));
+    const recent = [12, 9, 4].map((n): [number, string, number] => [n, '', NOW]);
     const career = { ...newCareer(NOW - 5 * DAY), merged: 3, firstPass: 10, recent };
     const busy = deskLayout(deskItems(career, 'ada', NOW));
     expect(busy.plaques.map((p) => p.n)).toEqual([12, 9, 4]);
