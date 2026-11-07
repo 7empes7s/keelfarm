@@ -1,5 +1,8 @@
 // The demo's made-up ops history: a past week of merges, QA rounds, check runs and cost for mission control.
-import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory } from './metrics.ts';
+import type { RoundCause } from '../shared/rounds.ts';
+import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory, type QaEntry } from './metrics.ts';
+
+const PAST_CAUSES: RoundCause[] = ['bug', 'nit', 'bug', 'spec-missing', 'nit', 'bug', 'outage']; // why QA failed it (#188)
 
 /**
  * A believable past week for mission control: each floor merged a few PRs every working day (the first floor more),
@@ -21,7 +24,10 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
         h.merges.push([at, repo, pr, Math.round((25 + rand() * 200) * min)]);
         for (let r = 0; r < rounds; r++) {
           const before = (rounds - r) * 20 * min;
-          h.qa.push([at - before, repo, r === rounds - 1, Math.round((1 + rand() * 14) * min), pr, r + 1]);
+          const pass = r === rounds - 1;
+          const entry: QaEntry = [at - before, repo, pass, Math.round((1 + rand() * 14) * min), pr, r + 1];
+          if (!pass) entry.push(PAST_CAUSES[n % PAST_CAUSES.length]);
+          h.qa.push(entry);
           h.checks.push([at - before - 6 * min, repo, `past${String(n++).padStart(4, '0')}`, rand() > 0.12, Math.round((2.5 + rand() * 5) * min)]);
           h.cost.push([at - before, repo, Math.round((0.3 + rand()) * 100) / 100], [at - before - 40 * min, repo, Math.round((0.4 + rand() * 1.2) * 100) / 100]);
         }
@@ -35,7 +41,7 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
   // One QA round the test lab failed (#189): before the first floor's latest merge's first round, counted apart.
   const last = h.merges.filter((m) => m[1] === repos[0]).sort((a, b) => b[0] - a[0])[0];
   const first = last && h.qa.find((q) => q[1] === last[1] && q[4] === last[2] && q[5] === 1);
-  if (first) h.qa.push([first[0] - 15 * min, first[1], false, first[3], last[2], 1, 1]);
+  if (first) h.qa.push([first[0] - 15 * min, first[1], false, first[3], last[2], 1, 'lab-error']);
   prune(h, now);
   return h;
 }

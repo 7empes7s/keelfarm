@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { FLOOR_HREF } from './chatLinks';
 import { copyText } from './clipboard';
+import { COLLAPSE_LINES, codeLanguage, copiedText, isShell, languageLabel, shellLines } from './codeBlock';
 import './chat.css';
 import { REF_HREF } from '../../../shared/chatRefs';
 
@@ -37,23 +38,83 @@ const Link = ({ href, children }: { href?: string; children?: ReactNode }) =>
     <span className="md-deadlink">{children}</span>
   );
 
-/** A code block with a Copy button. */
-function CodeBlock({ children }: { children?: ReactNode }) {
-  const ref = useRef<HTMLPreElement>(null);
+interface HastNode {
+  type: string;
+  value?: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+}
+
+const hastText = (n: HastNode): string => n.value ?? n.children?.map(hastText).join('') ?? '';
+
+const CopyGlyph = ({ done }: { done: boolean }) => (
+  // Lucide's copy and check (ISC)
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    {done ? <path d="M20 6 9 17l-5-5" /> : (
+      <>
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </>
+    )}
+  </svg>
+);
+
+/** A code block (#200): a header with its language and Copy above the code, shell commands wrapped after a `$`. */
+function CodeBlock({ node }: { node?: HastNode }) {
+  const code = node?.children?.find((c) => c.tagName === 'code');
+  const lang = codeLanguage(code?.properties?.className);
+  const raw = hastText(code ?? node ?? { type: 'text' }).replace(/\n+$/, '');
+  const shell = isShell(lang);
+  const lines = shell ? shellLines(raw) : raw.split('\n').map((text) => ({ text, prompt: false }));
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<boolean | null>(null);
+  const [edges, setEdges] = useState('');
+  const pre = useRef<HTMLPreElement>(null);
+  // the sideways edge fade, where there's more to scroll to
+  const fade = useCallback(() => {
+    const el = pre.current;
+    if (!el || shell) return;
+    const more = el.scrollWidth - el.clientWidth;
+    setEdges(`${el.scrollLeft > 1 ? 'l' : ''}${el.scrollLeft < more - 1 ? 'r' : ''}`);
+  }, [shell]);
+  useEffect(() => {
+    const el = pre.current;
+    if (!el || shell) return;
+    fade();
+    const watch = new ResizeObserver(fade);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [fade, shell, open, raw]);
   const copy = () =>
-    void copyText(ref.current?.innerText ?? '').then((ok) => {
+    void copyText(copiedText(raw, lang)).then((ok) => {
       setCopied(ok);
       setTimeout(() => setCopied(null), 1500);
     });
+  const long = lines.length > COLLAPSE_LINES;
   return (
-    <div className="md-code">
-      <pre ref={ref} tabIndex={0}>
-        {children}
+    <div className={`md-code${shell ? ' md-code-shell' : ''}`}>
+      <div className="md-code-head">
+        <span className="md-code-lang">{languageLabel(lang)}</span>
+        <button type="button" className={`ds-btn ds-btn-ghost md-copy${copied === null ? ' ds-btn-icon' : ''}`} onClick={copy} aria-label={copied === null ? 'Copy the code' : copied ? 'Copied' : "Couldn't copy"}>
+          <CopyGlyph done={copied === true} />
+          {copied !== null && <span aria-live="polite">{copied ? 'Copied' : "Couldn't copy"}</span>}
+        </button>
+      </div>
+      <pre ref={pre} tabIndex={0} onScroll={fade} data-fade={edges || undefined} className={long && !open ? 'md-code-folded' : undefined}>
+        <code>
+          {(long && !open ? lines.slice(0, COLLAPSE_LINES) : lines).map((l, i) => (
+            <span key={i} className={l.prompt ? 'md-line md-line-cmd' : 'md-line'}>
+              {l.text || '\n'}
+            </span>
+          ))}
+        </code>
       </pre>
-      <button type="button" className="md-copy" onClick={copy} aria-label="Copy the code">
-        {copied === null ? '📋 Copy' : copied ? '✓ Copied' : "Couldn't copy"}
-      </button>
+      {long && (
+        <button type="button" className="ds-btn ds-btn-ghost md-code-more" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {open ? 'Show less' : `Show all ${lines.length} lines`}
+        </button>
+      )}
     </div>
   );
 }
@@ -75,7 +136,7 @@ const components: Components = {
     </div>
   ),
   // Code blocks (and tables, above) scroll sideways: focusable, so the keyboard can scroll them too.
-  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  pre: ({ node }) => <CodeBlock node={node as HastNode | undefined} />,
 };
 
 // remark-breaks keeps single line breaks, as the phone showed them before Markdown.

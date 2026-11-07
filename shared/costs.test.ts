@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { costInsights, kindShares, perMergeTrend, spendVsAverage, topFloor, wasteCause, wasteGroups, type CostDayRow, type CostsView, type CostSplit, type CostWaste } from './costs.ts';
+import { roundsView } from './rounds.ts';
 
 const split = (o: Partial<CostSplit> = {}): CostSplit => ({ usd: 0, sessions: 0, merges: 0, perMerge: null, wasteUsd: 0, wasteSessions: 0, byKind: {}, ...o });
 const day = (d: string, o: Partial<CostSplit> = {}): CostDayRow => ({ day: d, ...split(o) });
@@ -16,7 +17,7 @@ const waste = (o: Partial<CostWaste> = {}): CostWaste => ({
   streak: 1,
   ...o,
 });
-const view = (o: Partial<CostsView> = {}): CostsView => ({ days: 7, since: 0, total: split(), floors: [], byDay: [], top: [], waste: [], kinds: [], startup: [], ...o });
+const view = (o: Partial<CostsView> = {}): CostsView => ({ days: 7, since: 0, total: split(), floors: [], byDay: [], top: [], waste: [], kinds: [], startup: [], rounds: roundsView([], 0, 0), ...o });
 
 describe('wasteCause', () => {
   it('names the cause by the kind of task and why', () => {

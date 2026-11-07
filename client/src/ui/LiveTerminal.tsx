@@ -7,6 +7,7 @@ import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../sh
 import { activeMods, consumeMods, keySequence, NO_MODS, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
 import { VIEWPORT_EVENT } from '../viewport';
+import { socketUrl } from '../socketUrl';
 import { liveStatus, TERM_FONT } from './termLayout';
 
 // An agent's real terminal: their CLI's screen streamed from the office (/ws/term), and what you type sent back to it.
@@ -117,8 +118,7 @@ export function LiveTerminal({
       if (ready) send({ t: 'resize', cols: term.cols, rows: term.rows });
     };
     const connect = () => {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const socket = new WebSocket(`${proto}://${location.host}/ws/term?agent=${encodeURIComponent(agentId)}`);
+      const socket = new WebSocket(socketUrl(`/ws/term?agent=${encodeURIComponent(agentId)}`));
       ws = socket;
       socket.onopen = () => setConnected(true);
       socket.onmessage = (e) => {
