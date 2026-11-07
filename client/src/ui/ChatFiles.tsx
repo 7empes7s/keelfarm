@@ -1,7 +1,7 @@
 import { useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
+import { daysLeft, fileKind, formatSize, inlineType, thumbnailable, uploadStatus, type FileKind, type FileRef, type FileView } from '../../../shared/files';
 import { usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
 import { slashItems } from './chatCardRules';
 import './chatCards.css';
@@ -13,7 +13,7 @@ import type { IconName } from './icons';
 // Files in the CEO chat (shared/files.ts): cards in the bubbles (a thumbnail for images, a chip for the rest), the
 // full-size viewer, the tray of files being attached, the Files list, "Used" under a CEO reply and the "/" picks.
 
-const FILE_ICONS: Record<FileKind, IconName> = { image: 'image', video: 'video', pdf: 'book-open', document: 'notebook-pen', slides: 'chart-column', sheet: 'trending-up', text: 'file-text', archive: 'archive' };
+export const FILE_ICONS: Record<FileKind, IconName> = { image: 'image', video: 'video', pdf: 'book-open', document: 'notebook-pen', slides: 'chart-column', sheet: 'trending-up', text: 'file-text', archive: 'archive' };
 const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => FILE_ICONS[fileKind(f.name, f.type) ?? 'text'];
 const url = (id: string, download = false) => `/api/files/${id}${download ? '?download' : ''}`;
 /** Images the browser can draw (HEIC is kept as it is and shown as a chip). */
@@ -54,7 +54,7 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
         <span aria-hidden><Icon name={fileIcon(file)} /></span> <span className="grow file-name">{file.name}</span> <span className="small">expired</span>
       </div>
     );
-  if (drawable(f.type))
+  if (drawable(f.type) && thumbnailable(f))
     return (
       <button type="button" className="file-thumb" onClick={() => onOpen(f.id)} aria-label={`${f.name}, ${formatSize(f.size)}: show full size`}>
         <img src={url(f.id)} alt={f.name} loading="lazy" />
@@ -97,8 +97,9 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
 }
 
 /** One file full size (images, PDFs, video) or its details, with Download, Share and Keep. */
-export function FileViewer({ id, onClose }: { id: string; onClose: () => void }) {
+export function FileViewer({ id, onClose, onOpenInThread }: { id: string; onClose: () => void; onOpenInThread?: () => void }) {
   const f = useStore((s) => s.files.find((x) => x.id === id));
+  const [zoom, setZoom] = useState(false);
   useEffect(() => {
     if (!f) onClose();
   }, [f, onClose]);
@@ -109,7 +110,10 @@ export function FileViewer({ id, onClose }: { id: string; onClose: () => void })
     <Sheet label={<><Icon name={fileIcon(f)} /> {f.name}</>} onClose={onClose} className="file-viewer">
       <div className="artifact-body file-view-body">
         {drawable(f.type) ? (
-          <img src={url(f.id)} alt={f.name} className="file-full" />
+          // a tap zooms to full size (scroll to pan), another fits it again
+          <button type="button" className={`file-zoom ${zoom ? 'file-zoomed' : ''}`} aria-pressed={zoom} aria-label={zoom ? 'Fit to the screen' : 'Zoom in'} onClick={() => setZoom(!zoom)}>
+            <img src={url(f.id)} alt={f.name} className="file-full" />
+          </button>
         ) : k === 'pdf' ? (
           <iframe src={url(f.id)} title={f.name} className="file-full file-pdf" />
         ) : k === 'video' ? (
@@ -131,6 +135,11 @@ export function FileViewer({ id, onClose }: { id: string; onClose: () => void })
           </button>
         )}
         <KeepButton f={f} />
+        {onOpenInThread && (
+          <button type="button" className="btn btn-small" onClick={() => (onClose(), onOpenInThread())}>
+            <Icon name="message-circle" /> Open in thread
+          </button>
+        )}
       </div>
     </Sheet>
   );
@@ -149,12 +158,27 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
   const [sure, setSure] = useState<string | null>(null);
   const now = Date.now();
   const total = files.reduce((n, f) => n + f.size, 0);
+  const largest = files.length > 1 ? [...files].sort((a, b) => b.size - a.size).slice(0, 3) : [];
   return (
     <Sheet label={`Files (${files.length})`} onClose={onClose} className="files-list">
       <div className="artifact-body">
         <p className="small muted">
           {formatSize(total)} on the office server. Files are deleted 30 days after upload unless kept (<Icon name="pin" />).
         </p>
+        {largest.length > 0 && (
+          <p className="small muted files-largest">
+            Largest:{' '}
+            {largest.map((f, i) => (
+              <span key={f.id}>
+                {i > 0 && ' · '}
+                <button type="button" className="link-btn" onClick={() => onOpen(f.id)}>
+                  {f.name}
+                </button>{' '}
+                {formatSize(f.size)}
+              </span>
+            ))}
+          </p>
+        )}
         {files.length === 0 ? (
           <p className="muted">
             No files yet. Attach one with <Icon name="paperclip" />, or ask the CEO for a document.
@@ -202,8 +226,8 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
   );
 }
 
-/** The files waiting to go with the message: thumbnails or chips, progress, ✕ to cancel or remove. */
-export function AttachTray({ pending, onRemove }: { pending: readonly Pending[]; onRemove: (key: number) => void }) {
+/** The files waiting to go with the message: thumbnails or chips, progress (bytes, speed, time left), ↻ to retry, ✕ to cancel or remove. */
+export function AttachTray({ pending, onRemove, onRetry }: { pending: readonly Pending[]; onRemove: (key: number) => void; onRetry: (key: number) => void }) {
   if (!pending.length) return null;
   return (
     <ul className="attach-tray" aria-label="Files to send">
@@ -212,11 +236,19 @@ export function AttachTray({ pending, onRemove }: { pending: readonly Pending[];
           {p.preview ? <img src={p.preview} alt="" className="attach-thumb" /> : <span aria-hidden><Icon name={fileIcon(p)} /></span>}
           <span className="attach-name">{p.name}</span>
           {p.error ? (
-            <span className="small attach-error">
-              <Icon name="triangle-alert" /> {p.error}
-            </span>
+            <>
+              <span className="small attach-error">
+                <Icon name="triangle-alert" /> {p.error}
+              </span>
+              <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon attach-btn" aria-label={`Retry the upload of ${p.name}`} onClick={() => onRetry(p.key)}>
+                <Icon name="rotate-cw" />
+              </button>
+            </>
           ) : !p.ref ? (
-            <progress className="attach-progress" max={1} value={p.progress} aria-label={`Uploading ${p.name}`} />
+            <span className="attach-uploading">
+              <progress className="attach-progress" max={1} value={p.progress} aria-label={`Uploading ${p.name}`} />
+              <span className="attach-status">{uploadStatus(p.loaded, p.size, Date.now() - p.startedAt)}</span>
+            </span>
           ) : (
             <span className="small muted">{formatSize(p.size)}</span>
           )}

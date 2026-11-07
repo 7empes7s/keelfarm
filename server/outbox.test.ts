@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LogLine, RepoView, ServerEvent } from '../shared/types.ts';
-import { agentPatch, FLUSH_MS, Outbox, type Agent, type Tab } from './outbox.ts';
+import { agentPatch, FLUSH_MS, Outbox, snapshotAgent, type Agent, type Tab } from './outbox.ts';
 
 const agent = (id: string, patch: Partial<Agent> = {}): Agent =>
   ({ id, name: id, repoId: 'r1', role: 'agent', status: 'working', currentTool: null, activity: null, desk: 0, color: '#fff', ...patch }) as Agent;
@@ -163,5 +163,22 @@ describe('agent chat (#120)', () => {
     o.flush();
     expect(panel.got).toEqual([{ type: 'agentChat', chats: { grace: [item(2, 'Ran x · done')] } }]);
     expect(floor2.got).toEqual([]);
+  });
+});
+
+describe('compact agent snapshots', () => {
+  it('omits empty optional defaults without changing the source used for patches', () => {
+    const raw = { ...agent('a'), log: [], waiting: null, reviewedBy: null, tools: {} };
+    const compact = snapshotAgent(raw);
+    expect(compact).not.toHaveProperty('waiting');
+    expect(compact).not.toHaveProperty('reviewedBy');
+    expect(compact).not.toHaveProperty('tools');
+    expect(raw).toMatchObject({ waiting: null, reviewedBy: null, tools: {} });
+    expect({ ...compact, waiting: compact.waiting ?? null, reviewedBy: compact.reviewedBy ?? null, tools: compact.tools ?? {} }).toEqual(raw);
+  });
+
+  it('keeps active questions, CEO reviews and explicit tool switches', () => {
+    const raw = { ...agent('a'), log: [], waiting: 'ceo' as const, reviewedBy: 'Morgan', tools: { browser: false } };
+    expect(snapshotAgent(raw)).toEqual(raw);
   });
 });

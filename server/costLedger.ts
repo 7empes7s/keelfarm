@@ -7,8 +7,10 @@ import { dayKey } from '../shared/journal.ts';
 import { charTokens, startupParts, startupRows, type StartupContext, type StartupPart } from '../shared/startup.ts';
 import type { EffortLevel, PullInfo } from '../shared/types.ts';
 import {
+  isCeoKind,
   isTaskKind,
   sessionOutcome,
+  turnCost,
   wasteCause,
   wasteReason,
   type CostDayRow,
@@ -52,6 +54,27 @@ export function parseLedger(text: string): CostRecord[] {
 /** What's younger than `keepDays`. */
 export const pruneLedger = (records: CostRecord[], now: number, keepDays = KEEP_DAYS) => records.filter((r) => now - r.at <= keepDays * DAY_MS);
 
+/**
+ * The one-off repair of lines booked before #254: the CEO's kept session reported its running total on every run, so
+ * its consecutive lines with rising totals become each run's part. Lines repaired keep that total (`total`), which also
+ * marks them done: a second pass changes nothing. `usd` is what came off, `before` the newest line it came off.
+ */
+export function repairRunningTotals(records: CostRecord[]): { records: CostRecord[]; usd: number; before: number | null } {
+  const last = new Map<string, number>(); // agent → its previous unrepaired line's total
+  let usd = 0;
+  let before: number | null = null;
+  const out = records.map((r): CostRecord => {
+    if (r.type !== 'session' || !isCeoKind(r.kind) || r.total !== undefined) return r;
+    const part = Math.round(turnCost(last.get(r.agentId), r.usd) * 10_000) / 10_000;
+    last.set(r.agentId, r.usd);
+    if (part === r.usd) return { ...r, total: r.usd };
+    usd += r.usd - part;
+    before = r.at;
+    return { ...r, usd: part, total: r.usd, corrected: Math.round((r.usd - part) * 10_000) / 10_000 };
+  });
+  return { records: out, usd: cents(usd), before };
+}
+
 /** The sessions and merges of the last `days` days (today counts as one), for one floor or all of them. */
 function inWindow(records: CostRecord[], o: { now: number; days: number; repoId?: string }) {
   const since = startOfDay(o.now) - (o.days - 1) * DAY_MS;
@@ -89,11 +112,13 @@ const workKey = (s: Pick<CostSession, 'repoId' | 'issue' | 'pr'>) => (s.issue !=
 export function costsView(records: CostRecord[], o: { now: number; days: number; repoId?: string }): CostsView {
   const { since, sessions, merges } = inWindow(records, o);
 
-  const repos = [...new Set([...sessions.map((s) => s.repoId), ...merges.map((m) => m.repoId)])].sort();
+  // The CEO's jobs are a row of their own ('', "CEO"), wherever they were about (#254).
+  const rowOf = (s: CostSession) => (isCeoKind(s.kind) ? '' : s.repoId);
+  const repos = [...new Set([...sessions.map(rowOf), ...merges.map((m) => m.repoId)])].sort();
   const floors: CostFloorRow[] = repos.map((repoId) => ({
     repoId,
     ...split(
-      sessions.filter((s) => s.repoId === repoId),
+      sessions.filter((s) => rowOf(s) === repoId),
       merges.filter((m) => m.repoId === repoId).length,
     ),
   }));
@@ -160,8 +185,11 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
     });
   }
 
+  const fixed = sessions.filter((s) => s.corrected);
+  const corrected = fixed.length ? { usd: cents(fixed.reduce((n, s) => n + s.corrected!, 0)), before: Math.max(...fixed.map((s) => s.at)) } : undefined;
+
   const mine = o.repoId === undefined ? records : records.filter((r) => r.repoId === o.repoId);
-  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions), rounds: roundsView(mine, startOfDay(o.now), o.now) };
+  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions), rounds: roundsView(mine, startOfDay(o.now), o.now), ...(corrected ? { corrected } : {}) };
 }
 
 /** GET /api/costs' query: `days` from 1 to 30 (7 when unset), `repoId` a floor (`isFloor`) or unset for all of them. */
@@ -172,15 +200,21 @@ export function costsRequest(records: CostRecord[], days: unknown, repoId: unkno
   return costsView(records, { now: Date.now(), days: n, repoId: floor });
 }
 
-/** company_status's spend numbers for one floor: today's cost and waste, and cost per merged PR over 7 days. */
+/** company_status's spend numbers for one floor: today's cost and waste, and cost per merged PR over 7 days. The CEO's jobs are ceoSpend's. */
 export function floorSpend(records: CostRecord[], repoId: string, now: number) {
   const total = (days: number) => {
     const w = inWindow(records, { now, days, repoId });
-    return split(w.sessions, w.merges.length);
+    return split(w.sessions.filter((s) => !isCeoKind(s.kind)), w.merges.length);
   };
   const today = total(1);
   const week = total(7);
   return { costToday: today.usd, costPerMerge: week.perMerge, wasteToday: today.wasteUsd };
+}
+
+/** company_status's CEO row (#254): what the CEO's jobs cost today and over 7 days, on every floor. */
+export function ceoSpend(records: CostRecord[], now: number) {
+  const usd = (days: number) => split(inWindow(records, { now, days }).sessions.filter((s) => isCeoKind(s.kind)), 0).usd;
+  return { costToday: usd(1), cost7d: usd(7) };
 }
 
 /** company_status's failed QA rounds and fixes by cause on one floor over 7 days (#188). */
@@ -193,18 +227,35 @@ export class CostLedger {
   private writing: Promise<void> = Promise.resolve();
   private records: CostRecord[] = [];
   private merged = new Set<string>(); // repo#pr of the merges in the ledger
+  private totals = new Map<string, number>(); // CLI session id → its running total at its last run (#254)
+  private legacy = new Map<string, number>(); // agent → the total of its newest repaired line, which has no session id
 
   constructor(
     private file: string,
     private now: () => number = Date.now,
   ) {}
 
-  /** Reads the file and rewrites it without what's older than 30 days (temp file + rename), when there is any. */
+  /** Reads the file and rewrites it without what's older than 30 days (temp file + rename), when there is any, and
+   *  with the CEO's running totals made into each run's part (repairRunningTotals, once). */
   async load() {
     const text = await fs.readFile(this.file, 'utf8').catch(() => null);
     const all = text === null ? [] : parseLedger(text);
-    this.set(pruneLedger(all, this.now()));
-    if (text !== null && (this.records.length !== all.length || (text && !text.endsWith('\n')))) await this.rewrite();
+    const kept = pruneLedger(all, this.now());
+    const repair = repairRunningTotals(kept);
+    this.set(repair.records);
+    if (repair.before !== null) console.log(`cost ledger: CEO costs before ${new Date(repair.before).toISOString()} corrected: -$${repair.usd.toFixed(2)} (#254)`);
+    if (text !== null && (repair.records.some((r, i) => r !== kept[i]) || kept.length !== all.length || (text && !text.endsWith('\n')))) await this.rewrite();
+  }
+
+  /** A CLI session's running total at its last run: by its id, else (a session from before #254) the agent's last repaired line. */
+  lastTotal(sid: string, agentId: string): number | undefined {
+    return this.totals.get(sid) ?? this.legacy.get(agentId);
+  }
+
+  /** A CLI session's running total now. */
+  noteTotal(sid: string, agentId: string, total: number) {
+    this.totals.set(sid, total);
+    this.legacy.delete(agentId);
   }
 
   /** Drops what's older than 30 days, from memory and the file. */
@@ -239,6 +290,13 @@ export class CostLedger {
   private set(records: CostRecord[]) {
     this.records = [...records].sort((a, b) => a.at - b.at);
     this.merged = new Set(this.records.filter((r): r is CostMerge => r.type === 'merge').map((m) => mergeKey(m.repoId, m.pr)));
+    this.totals.clear();
+    this.legacy.clear();
+    for (const r of this.records) {
+      if (r.type !== 'session' || r.total === undefined) continue;
+      if (r.sid) this.noteTotal(r.sid, r.agentId, r.total);
+      else this.legacy.set(r.agentId, r.total);
+    }
   }
 
   private append(records: CostRecord[]) {
@@ -331,6 +389,11 @@ export class SessionCosts {
     return run;
   }
 
+  /** The CLI session the agent's running session is (or resumes), when it's known. */
+  sid(agentId: string) {
+    return this.runs.get(agentId)?.sessionId ?? null;
+  }
+
   /** The session's first turn was measured: its startup context, split into the office's texts and the rest. */
   startup(agentId: string, tokens: number, memoryChars: number) {
     const run = this.runs.get(agentId);
@@ -363,8 +426,19 @@ export class SessionCosts {
       return r;
     };
 
+  /**
+   * A finished run's cost as its own part (#254): a CLI session kept or resumed across runs (the CEO's, a fix in the
+   * builder's CLI) reports its running total. `sid` is that session's id; without one the result is the run's own.
+   */
+  perTurn<R extends { costUsd: number }>(agentId: string, sid: string | null | undefined, result: R): R & { sid?: string; total?: number } {
+    if (!sid) return result;
+    const usd = turnCost(this.ledger.lastTotal(sid, agentId), result.costUsd);
+    this.ledger.noteTotal(sid, agentId, result.costUsd);
+    return { ...result, costUsd: Math.round(usd * 10_000) / 10_000, sid, total: result.costUsd };
+  }
+
   /** A finished session into the ledger, its outcome from the handler's hint (or the CEO's), the watchdog and the result. */
-  record(a: RunAgent, repoId: string, run: CostRun | null, fallbackKind: TaskKind, result: { costUsd: number; ok: boolean; interrupted?: boolean }, how: { stopped: boolean; ceoHint?: SessionOutcome }) {
+  record(a: RunAgent, repoId: string, run: CostRun | null, fallbackKind: TaskKind, result: { costUsd: number; ok: boolean; interrupted?: boolean; sid?: string; total?: number }, how: { stopped: boolean; ceoHint?: SessionOutcome }) {
     const hint = how.ceoHint ?? this.outcomes.get(a.id) ?? null;
     this.outcomes.delete(a.id);
     const cause = this.causes.get(a.id) ?? run?.cause;
@@ -390,6 +464,7 @@ export class SessionCosts {
       ...(cause ? { cause } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
       ...(run?.account ? { account: run.account } : {}),
+      ...(result.sid && result.total !== undefined ? { sid: result.sid, total: result.total } : {}),
     };
     this.onSession({ type: 'session', ...line }, run);
     return this.ledger.session(line);

@@ -1,10 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type TextareaHTMLAttributes } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { changedParts, charterOf, charterText, CHARTER_PROMPT_MAX, cleanCharter, OBJECTIVES_MAX, OUTCOME_MAX, FOCUS_MAX, isEmptyCharter } from '../../../shared/charter';
-import type { Charter, CharterProposal } from '../../../shared/charter';
+import type { Charter, CharterProposal, DriftGroup } from '../../../shared/charter';
 import { focusIds, STATS_WINDOWS, type StatsWindow } from '../../../shared/charterStats';
 import type { RepoView } from '../../../shared/types';
+import { jumpFor } from './chatRefs';
+import { chipRow } from './chipRow';
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { reduceMotion } from './a11y';
@@ -193,6 +195,36 @@ function Editor({ repo, start, fromProposal, onDone }: { repo: RepoView; start: 
   );
 }
 
+/** A drift group's PRs, newest first: chips that wrap in the card, the first few then "+N more" (#240). A tap opens the PR's card; GitHub when the office no longer has it. */
+function DriftPrs({ repo, label, prs }: { repo: RepoView; label: string; prs: DriftGroup['prs'] }) {
+  const [open, setOpen] = useState(false);
+  const row = chipRow(prs, open);
+  const openCard = (e: MouseEvent, number: number) => {
+    const s = useStore.getState();
+    const j = jumpFor({ kind: 'issue', repoId: repo.id, number, start: 0, end: 0 }, 'pocket', s); // 'pocket': no elevator ride, the card opens over this tab
+    if (j?.kind !== 'overlay') return; // a link to GitHub
+    e.preventDefault();
+    // closing the card comes back here, as the Kanban's does
+    const back = s.overlay;
+    s.openOverlay(j.overlay);
+    useStore.setState({ back });
+  };
+  return (
+    <div className="charter-chips" role="group" aria-label={`${label}: ${prs.length} merged PRs`}>
+      {row.shown.map((p) => (
+        <a key={p.number} className="charter-chip" href={`${repo.url}/pull/${p.number}`} target="_blank" rel="noreferrer" title={p.title} onClick={(e) => openCard(e, p.number)}>
+          <span>#{p.number}</span>
+        </a>
+      ))}
+      {(row.more > 0 || open) && (
+        <button className="btn btn-small btn-ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show fewer' : `+${row.more} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Drift({ repo }: { repo: RepoView }) {
   const groups = repo.charter.drift;
   const merged = groups.reduce((n, g) => n + g.prs.length, 0);
@@ -211,15 +243,7 @@ function Drift({ repo }: { repo: RepoView }) {
                 <span className="small">{g.prs.length}</span>
               </div>
               <div className="charter-drift-bar" style={{ ['--share' as string]: `${(g.prs.length / merged) * 100}%` }} aria-hidden />
-              {g.prs.length > 0 && (
-                <div className="muted small">
-                  {g.prs.map((p) => (
-                    <a key={p.number} href={`${repo.url}/pull/${p.number}`} target="_blank" rel="noreferrer" title={p.title}>
-                      #{p.number}
-                    </a>
-                  ))}
-                </div>
-              )}
+              {g.prs.length > 0 && <DriftPrs repo={repo} label={g.objective ?? 'No objective'} prs={g.prs} />}
             </li>
           ))}
         </ul>

@@ -13,6 +13,10 @@ export interface LabHandlers {
 
 const PROFILE = z.enum(['desktop', 'phone', 'iphone']).optional().describe('desktop (default), phone (Android Chromium) or iphone (iPhone size, touch, 3× pixels)');
 const THEME = z.enum(['light', 'dark']).optional().describe('prefers-color-scheme, default light');
+const GRAPHICS = z
+  .enum(['lab', 'full'])
+  .optional()
+  .describe("lab (default): the office's light 3D graphics, same UI and layout. full: the real graphics with shadows and lighting, for one pass on a PR that changes 3D/visual code; it runs alone and the browser restarts after");
 const SELECTOR = z.string().max(300);
 const TARGET = {
   url: z.string().max(2000).optional().describe('The page, e.g. http://localhost:5678/ (your own dev server)'),
@@ -51,11 +55,12 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         viewports: z.array(z.number().int().min(240).max(3840)).min(1).max(4).optional().describe('Widths, e.g. [390, 1280]; default [1280]'),
         profile: PROFILE,
         theme: THEME,
+        graphics: GRAPHICS,
         wait_for: SELECTOR.optional().describe('A selector to wait for before acting'),
         actions: z.array(ACTION).max(10).optional().describe('Done in order before the screenshot'),
         full_page: z.boolean().optional(),
       },
-      (a) => text(() => h.submit({ kind: 'screenshot', url: a.url, preview: a.preview, viewports: a.viewports ?? [1280], profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', waitFor: a.wait_for, actions: a.actions ?? [], fullPage: !!a.full_page })),
+      (a) => text(() => h.submit({ kind: 'screenshot', url: a.url, preview: a.preview, viewports: a.viewports ?? [1280], profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, waitFor: a.wait_for, actions: a.actions ?? [], fullPage: !!a.full_page })),
     ),
     tool(
       'lab_browser_check',
@@ -65,9 +70,10 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         viewport: z.number().int().min(240).max(3840).optional().describe('Width, default 1280'),
         profile: PROFILE,
         theme: THEME,
+        graphics: GRAPHICS,
         steps: z.array(STEP).min(1).max(30),
       },
-      (a) => text(() => h.submit({ kind: 'check', url: a.url, preview: a.preview, viewport: a.viewport ?? 1280, profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', steps: a.steps })),
+      (a) => text(() => h.submit({ kind: 'check', url: a.url, preview: a.preview, viewport: a.viewport ?? 1280, profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, steps: a.steps })),
     ),
     tool(
       'lab_run',

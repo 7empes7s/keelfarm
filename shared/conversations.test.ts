@@ -1,17 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conversationPatch,
   conversationsView,
   currentConversation,
+  editConversation,
+  groupThreads,
+  inScope,
   loadChats,
   MAX_CONVERSATIONS,
   openConversation,
   pinConversation,
+  projectLine,
   searchConversations,
   startConversation,
+  threadStats,
   titleFrom,
   touchConversation,
+  unfilled,
+  unreadThread,
   UNTITLED,
+  type Conversation,
 } from './conversations.ts';
+import { libraryItems } from './library.ts';
+import type { FileRef } from './files.ts';
 import type { PhoneMessage } from './types.ts';
 
 const msg = (id: number, from: PhoneMessage['from'], text: string, at = id): PhoneMessage => ({ id, from, text, at });
@@ -101,3 +112,102 @@ describe('the conversation store', () => {
     expect(titleFrom('')).toBe(UNTITLED);
   });
 });
+
+// ---------- threads (#132) ----------
+
+const shot: FileRef = { id: 'f1', name: 'shot.png', type: 'image/png', size: 2048, from: 'manager', at: 4, keep: false };
+const brief: FileRef = { id: 'f2', name: 'brief.pdf', type: 'application/pdf', size: 9000, from: 'ceo', at: 6, keep: false };
+const oldThread: PhoneMessage[] = [
+  { id: 1, from: 'manager', text: 'Look at floor 2', at: 4, attachments: [shot], refs: [{ kind: 'floor', repoId: 'r2', start: 8, end: 15 }] },
+  { id: 2, from: 'ceo', text: 'Here is the plan', at: 5, artifacts: [{ id: '2-0', title: 'Plan', lead: 'Three steps', markdown: '# Plan' }] },
+  { id: 3, from: 'ceo', text: 'And the brief', at: 6, attachments: [brief], refs: [{ kind: 'issue', repoId: 'r1', number: 3, start: 0, end: 3 }] },
+];
+
+describe('threads (#132)', () => {
+  it('migrates the conversation from before threads into the first thread, with nothing lost', () => {
+    // an office from before conversations: its thread becomes the first one
+    const s = loadChats(undefined, oldThread, 10);
+    expect(s.list).toHaveLength(1);
+    expect(currentConversation(s)).toMatchObject({ title: 'Look at floor 2', count: 3, repoId: null, floors: ['r2', 'r1'], files: 3, ceoAt: 6, archived: false });
+    // every artifact and attachment is in that thread's Files
+    const items = libraryItems([{ id: s.current, messages: oldThread }]);
+    expect(items.map((i) => i.title).sort()).toEqual(['Plan', 'brief.pdf', 'shot.png']);
+    // a conversation saved before #132: the open one is filled from its messages, the others are listed to fill from disk
+    const saved = { current: 'cnow', list: [{ id: 'cnow', title: 'Now', startedAt: 1, updatedAt: 6, pinned: false, count: 3, sessionId: 's1' }, { id: 'cold', title: 'Old', startedAt: 0, updatedAt: 1, pinned: true, count: 9, sessionId: null }] };
+    const loaded = loadChats(saved, oldThread, 10);
+    expect(loaded.list.find((c) => c.id === 'cnow')).toMatchObject({ title: 'Now', sessionId: 's1', floors: ['r2', 'r1'], files: 3, ceoAt: 6 });
+    expect(loaded.list.find((c) => c.id === 'cold')).toMatchObject({ title: 'Old', pinned: true, count: 9, floors: [], files: 0 });
+    expect(unfilled(saved)).toEqual(['cnow', 'cold']);
+    expect(unfilled(JSON.parse(JSON.stringify(loaded)))).toEqual([]);
+    expect(threadStats(oldThread)).toEqual({ floors: ['r2', 'r1'], files: 3, ceoAt: 6 });
+  });
+
+  it('keeps a new thread in its project, and tells the list about new floors, files and replies', () => {
+    const s = loadChats(undefined, [], 1);
+    startConversation(s, null, 2, 'r1');
+    expect(currentConversation(s).repoId).toBe('r1');
+    expect(touchConversation(s, oldThread[0])).toBe(true); // the title
+    expect(touchConversation(s, { from: 'manager', text: 'thanks', at: 7 })).toBe(false);
+    expect(touchConversation(s, oldThread[1])).toBe(true); // an artifact and a reply
+    expect(currentConversation(s)).toMatchObject({ floors: ['r2'], files: 2, ceoAt: 5 });
+    expect(unreadThread(currentConversation(s), 4)).toBe(true);
+    expect(unreadThread(currentConversation(s), 5)).toBe(false);
+    // the list in every snapshot carries a thread's project, floors, files and reply time, never their empty defaults
+    startConversation(s, null, 8);
+    const [fresh, used] = conversationsView(s);
+    expect(Object.keys(fresh)).toEqual(['id', 'title', 'startedAt', 'updatedAt', 'pinned', 'count']);
+    expect(used).toMatchObject({ repoId: 'r1', floors: ['r2'], files: 2, ceoAt: 5 });
+  });
+
+  it('renames, archives, pins and moves a thread, refusing what it cannot be', () => {
+    const s = loadChats(undefined, [], 1);
+    const id = s.current;
+    editConversation(s, id, conversationPatch({ title: '  Bakery launch\nmore  ', archived: true, repoId: 'r1' }, ['r1']));
+    expect(currentConversation(s)).toMatchObject({ title: 'Bakery launch', archived: true, repoId: 'r1' });
+    editConversation(s, id, conversationPatch({ repoId: null, archived: false, pinned: true }, ['r1']));
+    expect(currentConversation(s)).toMatchObject({ repoId: null, archived: false, pinned: true });
+    expect(() => conversationPatch({ title: ' ' }, [])).toThrow(/title/);
+    expect(() => conversationPatch({ repoId: 'gone' }, ['r1'])).toThrow(/no longer/);
+    expect(() => editConversation(s, 'cgone', {})).toThrow(/no longer saved/);
+    touchConversation(s, { from: 'manager', text: 'Something else', at: 3 });
+    expect(currentConversation(s).title).toBe('Bakery launch'); // a renamed thread keeps its name
+  });
+
+  it('groups the list into Pinned, Today, This week and Older, by project, archived apart', () => {
+    const now = new Date(2026, 10, 7, 15, 0).getTime();
+    const day = 24 * 3600_000;
+    const midnight = new Date(2026, 10, 7).getTime();
+    const t = (id: string, updatedAt: number, more: Partial<Conversation> = {}): Conversation => ({ id, title: id, startedAt: 0, updatedAt, pinned: false, count: 1, ...more });
+    const list = [
+      t('today', midnight + 60_000),
+      t('late', midnight - 60_000), // yesterday
+      t('week', midnight - 6 * day + 1),
+      t('old', midnight - 6 * day - 1),
+      t('pin', 0, { pinned: true, repoId: 'r1' }),
+      t('arch', now, { archived: true }),
+      t('named', now - 1, { floors: ['r1'] }),
+    ];
+    expect(groupThreads(list, now).map((g) => [g.group, g.threads.map((c) => c.id)])).toEqual([
+      ['Pinned', ['pin']],
+      ['Today', ['named', 'today']],
+      ['This week', ['late', 'week']],
+      ['Older', ['old']],
+    ]);
+    expect(groupThreads(list, now, { archived: true })).toEqual([{ group: 'Today', threads: [list[5]] }]);
+    expect(groupThreads(list, now, { scope: 'r1' }).flatMap((g) => g.threads.map((c) => c.id))).toEqual(['pin', 'named']);
+    expect(groupThreads(list, now, { scope: 'company', ids: ['today', 'pin'] }).flatMap((g) => g.threads.map((c) => c.id))).toEqual(['today']);
+    expect(inScope({ repoId: 'r2', floors: ['r1'] }, 'r1')).toBe(false); // another project's thread stays there
+  });
+
+  it("says a project thread's floor once, with its first message", () => {
+    const s = loadChats(undefined, [], 1);
+    startConversation(s, null, 2, 'r1');
+    const repos = [{ id: 'r1', floor: 1, fullName: 'acme/shop' }];
+    const thread = [msg(1, 'manager', 'Hi'), msg(2, 'ceo', 'Hello'), msg(3, 'manager', 'More')];
+    expect(projectLine(s, thread, thread[0], repos)).toBe('(This thread is in the project of floor 1, acme/shop.)');
+    expect(projectLine(s, thread, thread[2], repos)).toBe('');
+    startConversation(s, null, 3);
+    expect(projectLine(s, thread, thread[0], repos)).toBe('');
+  });
+});
+

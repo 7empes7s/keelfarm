@@ -138,6 +138,8 @@ describe('quiet while in the app (#210)', () => {
 
   it("reads a tab's attention from /ws and ignores anything else", () => {
     expect(parseAttention(JSON.stringify({ type: 'attention', visible: true }))).toEqual({ type: 'attention', visible: true });
+    expect(parseAttention(JSON.stringify({ type: 'attention', visible: false, call: true }))).toEqual({ type: 'attention', visible: false, call: true });
+    expect(parseAttention(JSON.stringify({ type: 'attention', visible: true, call: 'yes' }))).toEqual({ type: 'attention', visible: true });
     expect(parseAttention(JSON.stringify({ type: 'attention', visible: 'yes' }))).toBeNull();
     expect(parseAttention(JSON.stringify({ type: 'lines', floor: 1 }))).toBeNull();
     expect(parseAttention('not json')).toBeNull();

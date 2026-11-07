@@ -48,6 +48,42 @@ describe('the console map', () => {
     expect(sectionRow('history', 'pocket').map((s) => s.id)).toEqual(['history', 'daily-log']); // no time-lapse on a phone
   });
 
+  it('shows Team in the Settings row too, beside Agents, as the same section (#246)', () => {
+    for (const where of ['office', 'pocket'] as const) {
+      const ids = sectionRow('settings', where).map((s) => s.id);
+      expect(ids.slice(0, 2)).toEqual(['agents', 'team']);
+      expect(sectionRow('work', where).map((s) => s.id)).toContain('team');
+    }
+    expect(resolve('settings', 'office')?.id).toBe('agents'); // Settings still opens on Agents
+    const team = parseHash('#settings/team', 'office');
+    expect(team).toMatchObject({ id: 'team', group: 'settings' });
+    expect(hashFor(team!)).toBe('#settings/team');
+    expect(resolve('settings', 'office', { settings: 'team' })).toBe(team); // the row's tab stays picked
+    expect(resolve('team', 'office')?.group).toBe('work');
+    expect(parseHash('#work/team', 'office')?.group).toBe('work');
+  });
+
+  it("finds Team by its name, 'Add an agent' and 'agent'", () => {
+    expect(search('Team', 'office')[0]).toMatchObject({ label: 'Team', section: { id: 'team' } });
+    expect(search('add an agent', 'pocket')[0]).toMatchObject({ label: 'Add an agent', section: { id: 'team' } });
+    expect(search('agent', 'office').map((h) => h.section.id)).toContain('team');
+  });
+
+  it('keeps every section within one tap of the Settings row, the Work tab the console first opens on, or the top tabs, plus one row tap for the rest as before #224', () => {
+    for (const where of ['office', 'pocket'] as const) {
+      const oneTap = new Set([...sectionRow('settings', where), ...sectionRow('work', where), ...GROUPS.map((g) => sectionsIn(g.id, where)[0])].map((s) => s.id));
+      // Each of these is its top tab plus one tap in that tab's row, as it was in the side column before #224.
+      const tabThenRow = ['charter', 'map', 'ceo-settings', 'tools', 'daily-log', 'timelapse'];
+      for (const s of SECTIONS) {
+        if (s.only && s.only !== where) continue;
+        if (oneTap.has(s.id)) continue;
+        expect(tabThenRow, s.id).toContain(s.id);
+        expect(sectionRow(s.group, where).map((x) => x.id), s.id).toContain(s.id);
+      }
+    }
+    expect(opening(undefined, '', 'office', { sections: {} }).group).toBe('work');
+  });
+
   it('moves between tabs with the arrow keys, wrapping, and Home and End', () => {
     expect(stepTab(0, 3, 'ArrowRight')).toBe(1);
     expect(stepTab(2, 3, 'ArrowRight')).toBe(0);

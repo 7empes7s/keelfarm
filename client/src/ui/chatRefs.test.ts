@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRef, PullInfo } from '../../../shared/types';
-import { chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type RefWorld } from './chatRefs';
+import { actionJump, chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type RefWorld } from './chatRefs';
 
 const pull = (number: number, state: PullInfo['state'], checks: PullInfo['checks'] = 'passing') => ({ number, state, checks, title: `PR ${number}` }) as PullInfo;
 const world: RefWorld = {
@@ -92,5 +92,22 @@ describe('file previews', () => {
     expect(codeTokens("const a = 'x'; // hi", 'a.ts')).toEqual([{ text: 'const', kind: 'kw' }, { text: ' a = ' }, { text: "'x'", kind: 'str' }, { text: '; ' }, { text: '// hi', kind: 'com' }]);
     expect(codeTokens('# title 2', 'README.md')).toEqual([{ text: '# title ' }, { text: '2', kind: 'num' }]);
     expect(codeTokens('x = 1 # note', 'a.py')).toEqual([{ text: 'x = ' }, { text: '1', kind: 'num' }, { text: ' ' }, { text: '# note', kind: 'com' }]);
+  });
+});
+
+describe('actionJump (#215)', () => {
+  it("opens a message_agent card in the agent's chat at its message, by id or by the name an old card kept", () => {
+    expect(actionJump({ kind: 'agent', agentId: 'ada', messageId: 42 }, 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'ada', view: 'chat', jump: 42 }, floor: 2 });
+    expect(actionJump({ kind: 'agent', agentId: 'Ada' }, 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'ada', view: 'chat' } });
+    expect(actionJump({ kind: 'agent', agentId: 'Mo' }, 'pocket', world)).toBeNull(); // never the CEO
+    expect(actionJump({ kind: 'agent', agentId: 'gone' }, 'pocket', world)).toBeNull();
+  });
+
+  it("opens their details, a console section, the decision log, or what the chip would", () => {
+    expect(actionJump({ kind: 'agent', agentId: 'ada', details: 'setup' }, 'pocket', world)).toMatchObject({ overlay: { kind: 'terminal', agentId: 'ada', details: 'setup' } });
+    expect(actionJump({ kind: 'section', section: 'team', repoId: 'o/web' }, 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'manager', tab: 'team', repoId: 'o/web' } });
+    expect(actionJump({ kind: 'section', section: 'ops' }, 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'manager', tab: 'ops' } });
+    expect(actionJump({ kind: 'decision', id: 'msg:4' }, 'pocket', world)).toEqual({ kind: 'decisions' });
+    expect(actionJump({ kind: 'issue', repoId: 'o/web', number: 3 }, 'pocket', world)).toMatchObject({ overlay: { kind: 'card', key: 'i-3' } });
   });
 });

@@ -14,6 +14,7 @@ import { AppAttention } from './appAttention.ts';
 import {
   due,
   inApp,
+  inCall,
   nextDue,
   clip,
   note,
@@ -214,9 +215,10 @@ export class Notifier {
     this.step(readNotes(this.threads, ids));
   }
 
-  /** Whether the manager is using the app on some device right now (and wants quiet then). */
+  /** Whether the manager is using the app on some device right now (and wants quiet then), or is in a voice call. */
   private present(): boolean {
-    return this.deps.settings().quietInApp !== false && inApp(this.attention.all(), this.now());
+    const tabs = this.attention.all();
+    return inCall(tabs) || (this.deps.settings().quietInApp !== false && inApp(tabs, this.now()));
   }
 
   private step(r: Step) {
