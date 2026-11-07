@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeMods, barKeys, consumeMods, DOUBLE_TAP_MS, keyboardInset, keyName, keySequence, MORE_KEYS, NO_MODS, tapMod, textSequence, type BarKey, type Mod } from './termKeys';
+import { activeMods, barKeys, clipboardPaste, consumeMods, DOUBLE_TAP_MS, keyboardInset, keyName, keySequence, MORE_KEYS, NO_MODS, pasteText, tapMod, textSequence, type BarKey, type Mod } from './termKeys';
 
 const mods = (...m: Mod[]) => new Set(m);
 
@@ -134,6 +134,32 @@ describe('the bar', () => {
     }
     expect(MORE_KEYS.some((key) => 'paste' in key)).toBe(true);
     expect(labels(MORE_KEYS)).toEqual(expect.arrayContaining(['Alt', 'Shift', 'Home', 'End', 'PgUp', 'PgDn', 'Del', '^A', '^E', '^U', '^K', '^L', '^D', '^Z', 'F1', 'F12', '|', '~', '`']));
+  });
+});
+
+describe('Paste (#278)', () => {
+  it('is in the first row, right after Esc, for every coding agent', () => {
+    for (const cli of ['claude', 'codex', 'opencode'] as const) {
+      const row = barKeys(cli);
+      expect(row[0].label).toBe('Esc');
+      expect(row[1]).toMatchObject({ label: 'Paste', paste: true });
+      expect(row[1]).not.toHaveProperty('primary');
+    }
+  });
+
+  it('is the highlighted key on a sign-in terminal', () => {
+    expect(barKeys('claude', { signIn: true })[1]).toMatchObject({ label: 'Paste', paste: true, primary: true });
+  });
+
+  it('pastes what the clipboard has, trimmed', async () => {
+    expect(await clipboardPaste({ readText: async () => '  code-123#abc\n' })).toEqual({ text: 'code-123#abc' });
+    expect(pasteText(' a\nb \r\n')).toBe('a\nb');
+  });
+
+  it('opens the paste sheet when the clipboard is missing, refused or empty', async () => {
+    expect(await clipboardPaste(undefined)).toEqual({ sheet: true });
+    expect(await clipboardPaste({ readText: () => Promise.reject(new DOMException('Read permission denied.', 'NotAllowedError')) })).toEqual({ sheet: true });
+    expect(await clipboardPaste({ readText: async () => ' \n ' })).toEqual({ sheet: true });
   });
 });
 

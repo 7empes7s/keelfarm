@@ -264,7 +264,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
   ) : (
     <div className="term-split">
       {agent.terminal ? (
-        <LiveTerminal agentId={agent.id} cli={cli} fontSize={fontSize} compact={phone} keys={phone ? keysOn : undefined} onStatus={phone ? onStatus : undefined} />
+        <LiveTerminal agentId={agent.id} cli={cli} fontSize={fontSize} compact={phone} keys={phone ? keysOn : undefined} onStatus={phone ? onStatus : undefined} signIn={!!signIn} />
       ) : (
         <div
           className="term"
