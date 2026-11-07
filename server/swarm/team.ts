@@ -5,10 +5,12 @@ import { nameList } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
 import { cliLabel, isCli } from '../clis.ts';
 import { plainText } from '../notify.ts';
-import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction } from '../../shared/types.ts';
+import type { AgentCli, EffortLevel, HireRequestView, MachineHost, NoticeAction, PhoneMessage, RepoView, WorldSnapshot } from '../../shared/types.ts';
+import { closeDecision, digestDue, fromCeoMessage, onManagerMessage, shownDecisions, snoozeDecision, syncDecisions, type Decision, type DecisionAbout, type DecisionSeed } from '../../shared/decisions.ts';
 import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS, BUSY, oneLine } from './model.ts';
 import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
+import { DEMO_DECISION_MESSAGES } from '../demoDecisions.ts';
 
 export abstract class SwarmTeam extends SwarmUpkeep {
   // ---------- team changes ----------
@@ -22,12 +24,14 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     }
     this.broadcast({ type: 'request', request: req });
     this.save();
+    this.syncDecisions();
   }
 
   protected decide(req: HireRequestView, patch: Pick<HireRequestView, 'status' | 'note' | 'decidedBy'>) {
     Object.assign(req, patch, { decidedAt: Date.now() });
     this.broadcast({ type: 'request', request: req });
     this.save();
+    this.syncDecisions();
   }
 
   /** "Codex · gpt-6 · high": what an agent runs, where it isn't the office default ('' when it all is). */
@@ -240,5 +244,98 @@ export abstract class SwarmTeam extends SwarmUpkeep {
       }
     }
     throw new HttpError(409, kind === 'hire' ? 'Every floor already has its most agents' : 'No floor has an idle agent to let go');
+  }
+
+  // ---------- open decisions (#114, shared/decisions.ts) ----------
+
+  override snapshot(): WorldSnapshot {
+    return { ...super.snapshot(), decisions: shownDecisions(this.state.decisions.list) };
+  }
+
+  protected setDecisions(list: Decision[]) {
+    if (list === this.state.decisions.list) return;
+    this.state.decisions.list = list;
+    this.broadcast({ type: 'decisions', decisions: shownDecisions(list) });
+    this.save();
+  }
+
+  /** Every chat message: a CEO question with suggestions opens a decision, the manager's answer closes it. */
+  protected override postMessage(...a: Parameters<SwarmUpkeep['postMessage']>): PhoneMessage {
+    const m = super.postMessage(...a);
+    const list = this.state.decisions.list;
+    this.setDecisions(m.from === 'manager' ? onManagerMessage(list, m, m.at) : fromCeoMessage(list, m, m.at));
+    return m;
+  }
+
+  override decideCharter(id: string, approve: boolean, edited?: unknown): RepoView {
+    const view = super.decideCharter(id, approve, edited);
+    this.syncDecisions();
+    return view;
+  }
+
+  /** What the office itself waits on the manager for: team changes, charter proposals, agents' questions. */
+  private decisionSeeds(): DecisionSeed[] {
+    const floor = (repoId: string) => this.state.repos.find((r) => r.id === repoId)?.floor ?? '?';
+    const asked = (requestId: string) => this.state.messages.find((m) => m.requestId === requestId)?.id ?? null;
+    return [
+      ...this.state.requests
+        .filter((r) => r.status === 'pending')
+        .map((r): DecisionSeed => ({ id: `team:${r.id}`, kind: 'team', question: r.kind === 'hire' ? `Hire ${r.name} on floor ${floor(r.repoId)}?` : `Let ${r.name} go from floor ${floor(r.repoId)}?`, options: [], repoIds: [r.repoId], messageId: asked(r.id), at: r.createdAt })),
+      ...this.state.repos.flatMap((r) => {
+        const p = r.charter.proposal;
+        return p ? [{ id: `charter:${r.id}:${p.at}`, kind: 'charter' as const, question: `Floor ${r.floor}'s charter change: ${plainText(p.reason, 100) || 'approve it?'}`, options: [], repoIds: [r.id], messageId: null, at: p.at }] : [];
+      }),
+      ...this.state.questions
+        .filter((q) => q.to === 'manager')
+        .map((q): DecisionSeed => ({ id: `ask:${q.id}`, kind: 'question', question: `${q.agentName}: ${plainText(q.text, 120)}`, options: q.options, repoIds: [q.repoId], messageId: q.messageId, at: q.notifiedAt ?? q.at })),
+    ];
+  }
+
+  private decisionGone(x: DecisionAbout) {
+    if (x.kind === 'agent') return !this.state.agents.some((a) => a.id === x.agentId);
+    const rt = this.repoRt.get(x.repoId);
+    if (!rt) return !this.state.repos.some((r) => r.id === x.repoId);
+    return rt.closedIssues.has(x.number) || rt.closedPulls.has(x.number);
+  }
+
+  /** Brings the decisions up to date with the office, and sends the daily digest when the manager turned it on. */
+  protected syncDecisions() {
+    const now = Date.now();
+    this.setDecisions(syncDecisions(this.state.decisions.list, { seeds: this.decisionSeeds(), gone: (x) => this.decisionGone(x) }, now));
+    const n = this.state.settings.notify.events.decisions ? digestDue(this.state.decisions, now) : 0;
+    if (!n) return;
+    this.state.decisions.digestAt = now;
+    this.notice({ kind: 'approval', title: `🧭 ${n} decision${n === 1 ? '' : 's'} waiting`, text: 'Questions you have not answered yet wait in the chat and in Approvals.', actions: ['approvals'] }, { event: 'decisions' });
+  }
+
+  /** The manager's ⋯ on a decision: Not now (24 hours) or Drop it (never raised again). */
+  decideOpen(id: string, action: unknown) {
+    const d = this.state.decisions.list.find((x) => x.id === id);
+    if (!d || d.status !== 'open') throw new HttpError(404, 'That decision is no longer open');
+    if (action !== 'snooze' && action !== 'drop') throw new HttpError(400, 'action must be "snooze" or "drop"');
+    const now = Date.now(), list = this.state.decisions.list;
+    this.setDecisions(action === 'snooze' ? snoozeDecision(list, id, now) : closeDecision(list, id, 'dropped', 'dropped by the manager', now));
+    return { ok: true };
+  }
+
+  /** Demo only: a fresh demo office opens with a CEO question left unanswered and a team change waiting. */
+  protected seedDemoDecisions() {
+    for (const text of DEMO_DECISION_MESSAGES) this.postMessage('ceo', text);
+    for (const kind of ['hire', 'let-go']) {
+      try {
+        return void this.demoPropose(kind);
+      } catch {
+        // no floor has room for this one: try the other
+      }
+    }
+  }
+
+  /** resolve_decision: the CEO closes one the manager answered in words. */
+  protected resolveDecision(x: { id: string; outcome: string }) {
+    const d = this.state.decisions.list.find((y) => y.id === x.id);
+    if (!d) throw new Error(`No decision "${x.id}". Use an id from company_status's openDecisions.`);
+    if (d.status !== 'open') return `"${d.question}" was already ${d.status}.`;
+    this.setDecisions(closeDecision(this.state.decisions.list, d.id, 'resolved', x.outcome, Date.now()));
+    return `Closed "${d.question}": ${plainText(x.outcome, 120)}.`;
   }
 }

@@ -40,6 +40,7 @@ import type { AgentView, HireRequestView } from '../../shared/types.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
+import { decisionsForCeo } from '../../shared/decisions.ts';
 
 export abstract class SwarmCeoTools extends SwarmTeam {
   /**
@@ -68,6 +69,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       keepFile: (a) => this.ceoFiles.keep(a),
       setMandate: acts((a) => this.setMandate(a)),
       proposeCharter: acts((a) => this.proposeCharter(a)),
+      resolveDecision: acts((a) => this.resolveDecision(a)),
       defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
@@ -203,6 +205,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
         floors,
         pendingChanges: pending.map(req),
         recentDecisions: this.state.requests.filter((r) => r.status !== 'pending').slice(-10).map(req),
+        openDecisions: decisionsForCeo(this.state.decisions.list, Date.now(), (id) => this.state.repos.find((r) => r.id === id)?.floor ?? null),
       },
       null,
       1,
@@ -366,6 +369,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     repo.charter.proposal = { at: Date.now(), by: ceo, reason: String(x.reason ?? '').trim().slice(0, 600), charter };
     this.save();
     this.emitRepo(repo);
+    this.syncDecisions();
     this.toast('info', `${ceo} proposed a charter for floor ${repo.floor}: approve or edit it in the console's Charter tab.`);
     const size = charterText(charter).length;
     const long = size > CHARTER_PROMPT_MAX ? ` It is ${size} characters: agents get only the first ${CHARTER_PROMPT_MAX}, so tighten it.` : '';
@@ -427,6 +431,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     this.emitCeo();
     for (const a of this.state.agents) if (touched.has(a.id)) this.emitAgent(a);
     this.save();
+    this.syncDecisions();
   }
 
   /** The agent moved on (a new session, or their task cleared): their open question closes. */
