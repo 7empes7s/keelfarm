@@ -224,6 +224,7 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
           {m && !mine && <ReplayButton m={m} />}
           {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
           {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
+          {m?.quiet && m.telegram !== 'out' && <span className="bubble-via">📱 not sent: you were in the app · </span>}
           {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}

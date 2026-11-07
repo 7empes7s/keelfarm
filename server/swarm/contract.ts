@@ -54,6 +54,9 @@ export abstract class SwarmContract {
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
 
+  // reactions.ts (protected there)
+  protected abstract markQuiet(messageIds: number[]): void;
+
   // ceoJobs.ts
   protected abstract ceo(...a: Parameters<Swarm['ceo']>): ReturnType<Swarm['ceo']>;
   protected abstract ceoInfo(...a: Parameters<Swarm['ceoInfo']>): ReturnType<Swarm['ceoInfo']>;

@@ -26,6 +26,7 @@ export interface PhoneMessage {
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
+  quiet?: true; // the CEO's: its notification wasn't sent, as the manager was in the app (#210)
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)

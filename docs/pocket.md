@@ -110,8 +110,10 @@ about:
 - Claude's usage limit pauses the office, or a usage warning paces it
 - every merge (off unless you turn it on)
 
-You get at most one notification of each kind a minute. Whatever else of that kind happens in the minute arrives
-together as one summary ("🔀 9 more merges"), so a burst of merges is two notifications, not ten.
+Nothing is sent while you're using the app on any device (a tab on screen and touched in the last minute; Settings →
+Notifications → "Quiet while I'm using the app on any device"). Otherwise a note waits 15 seconds, and reading it on a
+device meanwhile cancels it. Each kind is one notification that updates in place ("💬 Morgan: 3 new messages"), at most
+once every two minutes while unread; reading it on one device clears it from the others.
 
 **Office address for links:** the address your phone opens the office at (for example your Tailscale Serve URL).
 Every ntfy message ends with it, so a tap takes you there. Opening the settings over HTTPS fills it in when it's empty.

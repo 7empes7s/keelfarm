@@ -5221,6 +5221,23 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .notify-events .toggle.block {
   margin: 4px 0;
 }
+.notify-today {
+  margin: 4px 0 10px;
+}
+.notify-today-bar {
+  display: flex;
+  height: 6px;
+  margin-bottom: 4px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+}
+.notify-today-sent {
+  background: var(--ds-accent);
+}
+.notify-today-skipped {
+  background: var(--ds-good-fill);
+}
 .notify-hook {
   padding: 8px 0;
   border-top: 2px dashed rgba(31, 29, 43, 0.15);
