@@ -19,6 +19,8 @@ import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 import { EmptyState } from '../ui/EmptyState';
+import { flashInto } from '../ui/jumpFlash';
+import { takeTeamLanding } from './pocketJump';
 import { Icon } from '../ui/Icon';
 import { useDraft } from '../drafts';
 import { Sheet } from '../ui/Sheet';
@@ -229,7 +231,8 @@ function AddAgentSheet({ repo, size, onClose, onAdded }: { repo: RepoView; size:
   );
 }
 
-export function Team({ focusRepo, top }: { focusRepo: string | null; top?: ReactNode }) {
+/** `flash`: bumped by a chat link to the focused floor's team (#151), which then scrolls there and lights up, once. */
+export function Team({ focusRepo, flash = 0, top }: { focusRepo: string | null; flash?: number; top?: ReactNode }) {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const pushToast = useStore((s) => s.pushToast);
@@ -237,7 +240,7 @@ export function Team({ focusRepo, top }: { focusRepo: string | null; top?: React
   const [adding, setAdding] = useState<RepoView | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const closeSheet = useCallback(() => setAdding(null), []);
-  useEffect(() => focus.current?.scrollIntoView({ block: 'start' }), []);
+  useEffect(() => (takeTeamLanding() ? flashInto(focus.current) : focus.current?.scrollIntoView({ block: 'start' })), [flash]);
   // The new agent's card shows up (from the websocket) highlighted and scrolled to, then settles.
   const freshShown = !!fresh && !!agents[fresh];
   useEffect(() => {

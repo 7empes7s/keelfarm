@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { CEO_ID, type PhoneMessage } from '../../../shared/types';
+import { CEO_ID, type ChatArtifact, type PhoneMessage } from '../../../shared/types';
 import { excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
 import { takeChatScroll, useMentions, useRefNav } from './RefChips';
@@ -10,7 +10,7 @@ import { sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { QuestionChips } from './QuestionChips';
-import { ArtifactList, ArtifactView } from './ChatArtifacts';
+import { ArtifactView } from './ChatArtifacts';
 import { MessageActions, who, type Item } from './ChatActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
@@ -21,7 +21,9 @@ import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
-import { AttachTray, FilesList, FileViewer, useDropZone, useSlash } from './ChatFiles';
+import { AttachTray, FileViewer, useDropZone, useSlash } from './ChatFiles';
+import { ChatLibrary, useThreadLibrary } from './ChatLibrary';
+import { ThreadBar, type ChatSegment } from './ChatThreadBar';
 import { useAttachments } from './chatUpload';
 import { useDraft } from '../drafts';
 import type { FileRef } from '../../../shared/files';
@@ -60,13 +62,13 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const endEdit = () => (setEditing(null), setText(''));
   const [sheet, setSheet] = useState<'chats' | 'memory' | null>(null);
   const [menu, setMenu] = useState<Item | null>(null);
-  const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
-  const [artifactList, setArtifactList] = useState(false);
-  const [viewing, setViewing] = useState<string | null>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
+  // an artifact or file to read; `doc`, `from`: one from another thread, with where it was sent (#132)
+  const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string; doc?: ChatArtifact; from?: string | null } | null>(null);
+  const [viewing, setViewing] = useState<{ id: string; messageId?: number | null; from?: string | null } | null>(null);
+  const [seg, setSeg] = useState<ChatSegment>('chat');
   const [logOpen, setLogOpen] = useState(false); // the working strip's live step log (#150)
   const att = useAttachments(draftKey);
-  const fileCount = useStore((s) => s.files.length);
+  const library = useThreadLibrary(messages);
   const drop = useDropZone(att.add);
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
   // A message the search, the guide or an empty list prepared for the CEO (goTo.ts): in the box, ready to finish and send.
@@ -262,8 +264,14 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const offered = offer !== null && !outbox.some((o) => o.replyTo === offer.id) ? offer : null;
   const question = offer ? null : yesNoFor(messages);
   const answered = question !== null && outbox.some((o) => o.replyTo === question);
-  const shown = artifact && byId.get(artifact.messageId)?.artifacts?.find((a) => a.id === artifact.artifactId);
-  const artifactCount = messages.reduce((n, m) => n + (m.artifacts?.length ?? 0), 0);
+  const shown = artifact && (artifact.doc ?? byId.get(artifact.messageId)?.artifacts?.find((a) => a.id === artifact.artifactId));
+  const thread = chat.conversations.find((c) => c.id === chat.current);
+  // Open in thread: this one's message, or that thread (#132).
+  const inThread = (from: string | null | undefined, id: number | null | undefined) => () => {
+    setSeg('chat');
+    if (from && from !== chat.current) void attempt(() => api.openConversation(from));
+    else if (id != null) setTimeout(() => jump(id), 0);
+  };
   const quotedNow = replyTo === null ? undefined : byId.get(replyTo);
   const bubble = (item: Item, key: string | number, cont = false) => {
     const to = item.m ? item.m.replyTo : item.out.replyTo;
@@ -280,14 +288,14 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
         onReply={reply}
         onActions={setMenu}
         onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
-        onFile={setViewing}
+        onFile={(id) => setViewing({ id })}
         cont={cont}
       />
     );
   };
 
   return refNav.wrap(
-    <div ref={box} className={`phone-chat ${full ? 'chat-full' : ''} ${drop.dragging ? 'chat-dropping' : ''}`} {...drop.props}>
+    <div ref={box} className={`phone-chat ${full ? 'chat-full' : ''} ${drop.dragging ? 'chat-dropping' : ''} ${seg === 'files' ? 'chat-on-files' : ''}`} {...drop.props}>
       <div className="chat-head">
         <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
           <Avatar name={ceo.name} color={ceo.color} size={28} />
@@ -295,8 +303,10 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
         <div className="grow">
           <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
         </div>
-        <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} full={fullButton} />
+        <ChatTools ceoName={ceo.name} files={library.length} onChats={() => setSheet('chats')} onFiles={() => setSeg('files')} into={tools} full={fullButton} />
       </div>
+      <ThreadBar thread={thread} seg={seg} onSeg={setSeg} files={library.length} onFloor={openFloor} />
+      {seg === 'files' && <ChatLibrary messages={messages} thread={thread} onArtifact={(i) => setArtifact({ messageId: i.messageId!, artifactId: i.artifact!.id, from: i.conversationId, ...(i.conversationId !== chat.current && { doc: i.artifact }) })} onFile={(i) => setViewing({ id: i.file!.id, messageId: i.messageId, from: i.conversationId })} />}
       <div className="chat-log-wrap" ref={setLogWrap}>
         <ChatTextPill />
         <div
@@ -355,29 +365,10 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
         {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => setSheet('memory')} />}
         {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
         {shown && artifact && (
-          <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={replyAbout} onClose={() => setArtifact(null)} />
+          <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={artifact.doc ? undefined : replyAbout} onOpenInThread={seg === 'files' ? inThread(artifact.from, artifact.messageId) : undefined} onClose={() => setArtifact(null)} />
         )}
-        {viewing && <FileViewer id={viewing} onClose={() => setViewing(null)} />}
+        {viewing && <FileViewer id={viewing.id} onOpenInThread={seg === 'files' && (viewing.from || viewing.messageId != null) ? inThread(viewing.from, viewing.messageId) : undefined} onClose={() => setViewing(null)} />}
         {refNav.viewer}
-        {filesOpen && (
-          <FilesList
-            onClose={() => setFilesOpen(false)}
-            onOpen={(id) => {
-              setFilesOpen(false);
-              setViewing(id);
-            }}
-          />
-        )}
-        {artifactList && (
-          <ArtifactList
-            messages={messages}
-            onClose={() => setArtifactList(false)}
-            onOpen={(messageId, artifactId) => {
-              setArtifactList(false);
-              setArtifact({ messageId, artifactId });
-            }}
-          />
-        )}
       </div>
       <DecisionTray hide={offered?.id} typing={!!text.trim()} onPick={(d, option) => send(option, d.messageId)} onJump={jump} />
       {/* answers to a pending question stay inline; everything else is behind the + */}

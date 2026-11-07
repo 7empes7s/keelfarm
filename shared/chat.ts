@@ -169,7 +169,7 @@ export function hideHarness(messages: readonly PhoneMessage[]): PhoneMessage[] {
 }
 
 /** How the chat shows a message: the office's notes as a one-line pill (a notice with buttons as a card), harness output not at all. */
-export function messageLook(m: Pick<PhoneMessage, 'from' | 'text' | 'notice'>): 'bubble' | 'pill' | 'card' | 'hidden' {
-  if (m.from === 'office') return m.notice ? 'card' : 'pill';
+export function messageLook(m: Pick<PhoneMessage, 'from' | 'text' | 'notice' | 'signIn'>): 'bubble' | 'pill' | 'card' | 'hidden' {
+  if (m.from === 'office') return m.notice || m.signIn ? 'card' : 'pill';
   return isHarnessText(m.text) ? 'hidden' : 'bubble';
 }

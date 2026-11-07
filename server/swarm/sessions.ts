@@ -42,7 +42,7 @@ import {
 } from './model.ts';
 import { slugify } from './flavour.ts';
 import { SCREENS_DIR, screenFile, removeScreens } from './screens.ts';
-import { SwarmAgents } from './agents.ts';
+import { SwarmCloudCredit } from './cloudCredit.ts';
 import { TestLab, type Requester } from '../testLab.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { createLabTools } from '../testLabTools.ts';
@@ -51,7 +51,7 @@ import { fixCause } from '../../shared/rounds.ts';
 const LAB_VIEWER = 'testlab';
 const LAB_PREVIEW_MS = 5 * 60_000;
 
-export abstract class SwarmSessions extends SwarmAgents {
+export abstract class SwarmSessions extends SwarmCloudCredit {
   // ---------- terminals ----------
 
   protected async loadTerminal(agentId: string): Promise<AgentTerminal | null> {
@@ -509,10 +509,14 @@ export abstract class SwarmSessions extends SwarmAgents {
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
     const practice = this.practicePrompt(a, repo, how.cli);
-    const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
+    const rec = a.task === 'fix' ? this.prRecord(a) : undefined;
+    // A conflict-only fix on the cheaper model (#256): Claude Code only, and never over an experiment's own model.
+    const cheap = rec?.cheapFix && (how.cli ?? 'claude') === 'claude' && !lab.model && !lab.effort ? rec.cheapFix : null;
+    if (rec && rec.cheapFix && !cheap) rec.cheapFix = null;
+    const model = cheap ? cheap.model : lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
     const system = [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n');
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(this.prRecord(a)) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
+    const run = this.spend.start(a.id, { kind, effort: (cheap?.effort || lab.effort) ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, cheap: !!cheap, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(rec) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
     this.chatOf(a)?.session(); // its first prompt is their chat's task card
     const active = (entries: LogEntry[]) => {
@@ -578,19 +582,24 @@ export abstract class SwarmSessions extends SwarmAgents {
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
-          if (a.host === 'box' && result.signedOut) void this.signedOutMidTask(a, repo, result, how.cli ?? 'claude', again);
+          if (a.host === 'box' && (result.signedOut || result.keyTrouble)) void this.signedOutMidTask(a, repo, result, how.cli ?? 'claude', again);
           else void this.onFinished(a, repo, result);
         },
       },
     );
   }
 
-  /** A cloud agent's session that ended because their CLI's login is gone (cliRunner's signedOut). */
+  /**
+   * A cloud agent's session that ended because their CLI's login is gone (cliRunner's signedOut), or the office's API
+   * key it ran on ran out of credit or was turned away (keyTrouble, #258): either way the task waits for a sign-in,
+   * with no round counted.
+   */
   protected async signedOutMidTask(a: PersistedAgent, repo: PersistedRepo, result: SessionResult, cli: AgentCli, again: () => void) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return;
-    const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli).catch(() => null);
-    if (cli === 'opencode' || !creds?.ownLogin || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
+    const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli, !!a.ownLogin).catch(() => null);
+    const keyStopped = !!creds?.onKey;
+    if (cli === 'opencode' || !(creds?.ownLogin || keyStopped) || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
       // A key from Settings that was turned away has nothing to sign in here: the session failed like any other.
       const errors = creds && !creds.ownLogin ? [`${cliLabel(cli)} turned the key it was given away: check it in Settings → Cloud agents.`] : result.errors;
       return this.onFinished(a, repo, { ...result, errors });
@@ -603,6 +612,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, turn.costUsd, Date.now());
     void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...turn, ok: false }, { stopped: false });
+    if (keyStopped) {
+      // Off the key onto their own login: straight back to work if their Box is signed in already, else the guided steps.
+      this.keyStopped(a, cli, result.keyTrouble ?? 'invalid');
+      if ((await this.boxMachines.signedIn(this.machineOf(a), cli).catch(() => null)) === true) return again();
+      return this.holdForSignIn(a, cli, again);
+    }
     // The login its servers turned away is forgotten, so the Box reads as signed out until the manager signs it in again.
     await this.boxMachines.signOut(this.machineOf(a), cli).catch(() => undefined);
     this.holdForSignIn(a, cli, again, true);

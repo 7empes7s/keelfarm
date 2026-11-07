@@ -4,16 +4,30 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { finishedLog, foldStream, type CeoLive, type OfficeCall } from '../shared/ceoStream.ts';
 import type { NameOf } from '../shared/ceoSteps.ts';
 import { actionCards } from '../shared/ceoActions.ts';
 import { NOTES_VIEW_MAX } from '../shared/ceoMemory.ts';
+import { inScope, startConversation, threadStats, touchConversation, type ChatsState, type ThreadScope } from '../shared/conversations.ts';
+import { filterLibrary, libraryCounts, libraryItems, pageLibrary, type LibraryFilter, type LibraryPage } from '../shared/library.ts';
+import type { FileRef } from '../shared/files.ts';
+import { HttpError } from './httpError.ts';
 import type { LogEntry } from './agentRunner.ts';
+import type { FileStore } from './files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 
 const EMIT_MS = 250;
 const ID = /^c[a-z0-9]{1,24}$/;
 const current = new AsyncLocalStorage<OfficeCall>(); // the office call a handler runs in, for noteMessage
+
+/** A demo thread (server/demoThreads.ts): its project, its messages (one may carry a made-up image) and its flags. */
+export interface DemoThread {
+  repoId: string | null;
+  pinned?: boolean;
+  archived?: boolean;
+  messages: (Omit<PhoneMessage, 'id' | 'attachments'> & { image?: { name: string; png: Buffer } })[];
+}
 
 export class CeoChat {
   live: CeoLive | null = null;
@@ -157,6 +171,52 @@ export class CeoChat {
     } catch {
       return [];
     }
+  }
+
+  /** Threads saved before #132 get their floors, files and CEO time from their messages; how many were filled. */
+  async backfill(s: ChatsState, ids: readonly string[]): Promise<number> {
+    const todo = s.list.filter((c) => ids.includes(c.id) && c.id !== s.current);
+    await Promise.all(todo.map(async (c) => Object.assign(c, threadStats(await this.loadThread(c.id)))));
+    return todo.length;
+  }
+
+  /**
+   * GET /api/ceo/library: the artifacts and files of a scope's threads (a floor's project, the Company's, or all, which
+   * adds the stored files no message carries), a page at a time, with their markdown. `current`: the open thread's messages;
+   * `repoIds`: the floors' projects, any other scope is a 400.
+   */
+  async library(s: ChatsState, current: readonly PhoneMessage[], stored: readonly FileRef[], q: { scope: ThreadScope; filter: LibraryFilter; after?: string }, repoIds: readonly string[]): Promise<LibraryPage> {
+    if (!['all', 'company', ...repoIds].includes(q.scope)) throw new HttpError(400, `No floor has the project ${q.scope}: use all, company or a floor's repo id.`);
+    const threads = await Promise.all(s.list.filter((c) => inScope(c, q.scope)).map(async (c) => ({ id: c.id, messages: c.id === s.current ? current : await this.loadThread(c.id) })));
+    const items = libraryItems(threads, q.scope === 'all' ? stored : [], true);
+    return { ...pageLibrary(filterLibrary(items, q.filter), q.after), counts: libraryCounts(items) };
+  }
+
+  /**
+   * The demo's threads across floors (#132): each saved as an older conversation, its messages numbered from `seq`
+   * (the next free id is returned) and `image` turned into a stored PNG. The current conversation, holding `open`
+   * (the demo's seeded chat), stays the one open.
+   */
+  async seed(s: ChatsState, open: readonly PhoneMessage[], seeds: readonly DemoThread[], store: Pick<FileStore, 'addStream'>, seq: number): Promise<number> {
+    for (const m of open) touchConversation(s, m);
+    const current = s.current;
+    for (const t of seeds) {
+      startConversation(s, null, t.messages[0]?.at ?? Date.now(), t.repoId);
+      const c = s.list.find((x) => x.id === s.current)!;
+      const messages: PhoneMessage[] = [];
+      for (const m of t.messages) {
+        const attachments = m.image ? [await store.addStream(Readable.from([m.image.png]), { name: m.image.name, type: 'image/png', from: 'ceo' })] : undefined;
+        const { image: _, ...rest } = m;
+        const id = seq++;
+        const msg: PhoneMessage = { ...rest, id, ...(attachments && { attachments }), ...(rest.artifacts && { artifacts: rest.artifacts.map((a, i) => ({ ...a, id: `${id}-${i}` })) }) };
+        messages.push(msg);
+        touchConversation(s, msg);
+      }
+      Object.assign(c, { pinned: !!t.pinned, archived: !!t.archived });
+      await this.saveThread(c.id, messages);
+    }
+    s.current = current;
+    return seq;
   }
 
   async dropThreads(ids: readonly string[]) {

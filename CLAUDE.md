@@ -80,6 +80,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `repos.ts` | connecting floors, syncing issues and PRs, previews, manager commands on GitHub |
   | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
   | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
+  | `cloudCredit.ts` | cloud agents off an API key out of credit (#258): own login, the sign-in card per burst, back on the key |
   | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
   | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |
   | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |
@@ -90,6 +91,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
+  | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.

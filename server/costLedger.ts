@@ -27,6 +27,7 @@ import {
   type TaskKind,
 } from '../shared/costs.ts';
 import { causeCounts, roundsByCause, roundsView, type RoundCause } from '../shared/rounds.ts';
+import { conflictStats } from '../shared/conflicts.ts';
 import { DAY_MS, startOfDay } from './metrics.ts';
 import { HttpError } from './httpError.ts';
 
@@ -189,7 +190,7 @@ export function costsView(records: CostRecord[], o: { now: number; days: number;
   const corrected = fixed.length ? { usd: cents(fixed.reduce((n, s) => n + s.corrected!, 0)), before: Math.max(...fixed.map((s) => s.at)) } : undefined;
 
   const mine = o.repoId === undefined ? records : records.filter((r) => r.repoId === o.repoId);
-  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions), rounds: roundsView(mine, startOfDay(o.now), o.now), ...(corrected ? { corrected } : {}) };
+  return { days: o.days, since, total: split(sessions, merges.length), floors, byDay, top, waste, kinds, startup: startupRows(sessions), rounds: roundsView(mine, startOfDay(o.now), o.now), conflicts: conflictStats(mine, startOfDay(o.now), o.now), ...(corrected ? { corrected } : {}) };
 }
 
 /** GET /api/costs' query: `days` from 1 to 30 (7 when unset), `repoId` a floor (`isFloor`) or unset for all of them. */
@@ -335,6 +336,7 @@ export interface CostRun {
   round: number | null;
   cause?: RoundCause | null; // a fix's cause, known when it starts (#188)
   exp?: string | null; // the experiment variant it runs (shared/experiments.ts)
+  cheap?: boolean; // a conflict-only fix on the cheaper model (#256)
   /** The office's texts the session starts with, sized (shared/startup.ts); the measured startup once it's known. */
   known?: StartupPart[];
   startup?: StartupContext;
@@ -461,6 +463,7 @@ export class SessionCosts {
       tokens: null,
       outcome: sessionOutcome({ interrupted: !!result.interrupted, watchdog, stopped: how.stopped, limited: this.limited(), ok: result.ok, hint }),
       ...(run?.exp ? { exp: run.exp } : {}),
+      ...(run?.cheap ? { cheap: true } : {}),
       ...(cause ? { cause } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
       ...(run?.account ? { account: run.account } : {}),

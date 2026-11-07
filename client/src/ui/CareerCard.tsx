@@ -7,6 +7,7 @@ import { agentsOnRepo, useStore, type Agent } from '../store';
 import { Icon, IconText } from './Icon';
 import { CareerTimeline, Highlights, hours, rigText, Spark, usageText, usd, UsageInsights } from './CareerInsights';
 import { drawPortrait } from './portrait';
+import { ProfileVoice } from './ProfileVoice';
 import './charter.css'; // the stat cards (docs/design.md)
 
 const PEEK_MS = 700;
@@ -119,7 +120,13 @@ export function AgentProfile({ agent }: { agent: Agent }) {
   const agents = useStore((s) => s.agents);
   const now = Date.now();
   const c = agent.career;
-  if (!c) return <p className="muted small">{agent.name} runs the company; their record is the whole office.</p>;
+  if (!c)
+    return (
+      <div className="pf">
+        <p className="muted small">{agent.name} runs the company; their record is the whole office.</p>
+        <ProfileVoice agent={agent} />
+      </div>
+    );
   const floor = agentsOnRepo(agents, agent.repoId).flatMap((a) => (a.career && a.role !== 'ceo' ? [a.career] : []));
   const everyone = Object.values(agents).flatMap((a) => (a.career && a.role !== 'ceo' ? [a.career] : []));
   const stats = profileStats(c, floor, repo?.floor ?? 0, now);
@@ -174,6 +181,7 @@ export function AgentProfile({ agent }: { agent: Agent }) {
         </div>
       )}
       <CareerTimeline agent={agent} />
+      <ProfileVoice agent={agent} />
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
 import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord } from './boxCli.ts';
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
-import { cliLabel, CLIS, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, signedOutScreen, STATUSLINE_SOURCE, trustKey } from './clis.ts';
+import { cliLabel, CLIS, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, lostLogin, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
 import {
@@ -558,10 +558,11 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     if (done) return;
     done = true;
     let r = result;
-    // A cloud agent's CLI that failed (or said nothing) because its login expired: the task waits for a new sign-in.
+    // A cloud agent's CLI that failed (or said nothing) as its login expired or its API key stopped working (#258): it waits.
     const cut = r.interrupted || r.signedOut || r.errors[0] === 'Stopped by manager';
-    if (inBox && !cut && (!r.ok || !r.text) && (signedOutScreen(term.screen()) || r.errors.some((e) => /authentication failed/i.test(e)))) {
-      r = { ...r, ok: false, signedOut: true, errors: [`${label}'s sign-in in their cloud machine expired or was turned away.`] };
+    const lost = inBox && !cut && (!r.ok || !r.text) ? lostLogin(term.screen(), r.errors, label) : null;
+    if (lost) {
+      r = { ...r, ok: false, ...lost };
       keep = false;
     }
     for (const t of [finishTimer, bootTimer]) clearTimeout(t);

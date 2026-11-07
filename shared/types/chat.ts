@@ -8,6 +8,7 @@ import type { Conversation } from '../conversations.ts';
 import type { FileRef } from '../files.ts';
 import type { AgentQuestion } from '../questions.ts';
 import type { UsedView } from '../used.ts';
+import type { KeyTrouble } from './agents.ts';
 import type { VoiceProvider } from './voice.ts';
 
 /**
@@ -49,6 +50,14 @@ export interface PhoneMessage {
   reactions?: MessageReaction[]; // the manager's and the CEO's, oldest first
   tg?: number; // its Telegram message id, for one the manager sent from there
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+  signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
+}
+
+/** Cloud agents whose API key ran out of credit or was turned away, and now wait for their own sign-in: one card per burst. */
+export interface ChatSignIn {
+  why: KeyTrouble;
+  cli: 'claude' | 'codex';
+  agents: { id: string; name: string }[];
 }
 
 /** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */

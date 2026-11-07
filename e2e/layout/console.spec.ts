@@ -66,6 +66,16 @@ const SCREENS: Screen[] = [
     },
     tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office')],
   },
+  {
+    name: 'pocket voice settings', // ElevenLabs on with a (demo) key: the voice picker with favourites, model and speed (#320)
+    widths: [390, 1280],
+    open: async (page) => {
+      await page.request.put('/api/voice/key', { data: { key: 'sk_demo_layout_1234' } });
+      await page.request.patch('/api/settings', { data: { voice: { provider: 'elevenlabs', favourites: ['demoV4Rowan00000002'] } } });
+      return pocketSettings(page);
+    },
+    tabs: [{ name: 'Voice', go: (root) => pocketSection(root, 'Voice') }],
+  },
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];
 

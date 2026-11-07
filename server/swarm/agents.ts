@@ -149,6 +149,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     this.save();
     this.broadcast({ type: 'agent', agent: this.agentView(agent, false) });
     if (host === 'box') this.bringUpBox(agent);
+    void this.voiceEveryone();
     setTimeout(() => this.schedule(), 200);
     return this.agentView(agent, true);
   }
@@ -232,7 +233,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (!api) throw new Error('Cloud agents need your Upstash Box API key: Settings → Cloud agents.');
     const machine = this.machineOf(a);
     const boxId = await this.boxMachines.ensure(machine, (text) => this.appendLog(a, [{ kind: 'system', text: `☁ ${text}` }]));
-    const creds = await this.cloud.credentials(cli);
+    const creds = await this.cloud.credentials(cli, this.offKey(a, cli));
     if (creds.missing.length) throw new Error(`Cloud agents can't sign in yet. Missing: ${creds.missing.join('; ')}.`);
     if (check && creds.ownLogin && cli !== 'opencode' && (await this.boxMachines.signedIn(machine, cli).catch(() => null)) === false) throw new SignInNeeded(cli);
     // The Box's own Chromium starts with a first tab; Playwright attaches to it.
@@ -298,7 +299,11 @@ export abstract class SwarmAgents extends SwarmMerge {
       };
       this.appendLog(a, [{ kind: 'system', text: `⏸ Their task waits until ${label} is signed in.` }]);
     }
-    if (!a.needsSignIn) {
+    if (!a.needsSignIn && a.ownLogin) {
+      a.needsSignIn = true; // off the office's key (#258): the manager gets the guided steps, one card per burst
+      this.appendLog(a, [{ kind: 'error', text: `🔑 Sign ${label} in with your own account in their terminal (at their desk, or 🔑 Sign in) to carry on.` }]);
+      this.creditSignIn(a, cli);
+    } else if (!a.needsSignIn) {
       a.needsSignIn = true;
       this.appendLog(a, [
         {
@@ -417,7 +422,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       if (s) s.run = null;
     }
     if (cli === 'opencode') return this.signedIn(a);
-    const creds = await this.cloud.credentials(cli).catch(() => null);
+    const creds = await this.cloud.credentials(cli, this.offKey(a, cli)).catch(() => null);
     const ok = !creds ? null : creds.ownLogin ? await this.boxMachines.signedIn(this.machineOf(a), cli).catch(() => null) : true;
     if (!this.state.agents.includes(a) || a.host !== 'box') return;
     if (ok === true) this.signedIn(a);
@@ -475,8 +480,9 @@ export abstract class SwarmAgents extends SwarmMerge {
     return !this.clis.length || this.clis.some((c) => c.id === cli && c.installed);
   }
 
-  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown; account?: unknown }) {
+  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown; account?: unknown; voiceId?: unknown; voiceName?: unknown }) {
     const a = this.agent(id);
+    if (patch.voiceId !== undefined) this.setAgentVoice(a, patch);
     if (patch.account !== undefined) {
       a.account = this.accountBinding(patch.account);
       this.accounts.emit();

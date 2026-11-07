@@ -9,6 +9,7 @@ import { EmptyState } from './EmptyState';
 import { InsightStrip, TopIssues, WasteCards } from './CostCards';
 import { Icon } from './Icon';
 import { RoundsCard } from './RoundsCard';
+import { ConflictsCard } from './ConflictsCard';
 import './costs.css';
 
 // Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). The
@@ -158,6 +159,7 @@ export function CostsSection() {
             )}
           </div>
           <RoundsCard view={view} repo={repo} floorName={floorName} />
+          <ConflictsCard view={view} repoId={repoId} />
           <div id="costs-floors" className="costs-stack" role="region" aria-label="Cost per floor">
             <table className="ops-table costs-table">
               <thead>

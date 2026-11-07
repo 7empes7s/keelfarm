@@ -2502,6 +2502,33 @@ input.inline:focus {
 .voice-labels {
   display: block;
 }
+.voice-row .ds-btn-icon {
+  flex: none;
+}
+.voice-fav-on {
+  color: var(--ds-warn-text);
+}
+.voice-fav-on .ds-icon {
+  fill: currentColor;
+}
+.voice-search {
+  width: 100%;
+}
+.profile-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.profile-voice h4 {
+  margin: 0;
+}
+.voice-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ---------- setup wizard ---------- */
 
@@ -3517,18 +3544,6 @@ input.inline:focus {
   padding: 10px 14px calc(10px + var(--ds-safe-bottom));
   border-top: 2px solid rgba(31, 29, 43, 0.12);
   background: var(--ds-surface-raised);
-}
-.artifact-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.artifact-items li {
-  margin-bottom: 10px;
-}
-.artifact-when {
-  display: block;
-  margin: 2px 0 0 4px;
 }
 /* files in the CEO chat (ui/ChatFiles.tsx) */
 .file-card {
