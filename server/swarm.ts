@@ -13,7 +13,6 @@ import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecover
 import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
-import { pruneQaShots } from './qaShots.ts';
 import { mergeReadings } from '../shared/usage.ts';
 import { clampPacingSessions } from './pacing.ts';
 import { loadHistory } from './metrics.ts';
@@ -61,7 +60,6 @@ import {
   BUSY,
   OPS_TICK_MS,
   WATCHDOG_MS,
-  QA_SHOTS_DIR,
   CEO_DIR,
   CONVERSATIONS_DIR,
   TERMINAL_SAVE_MS,
@@ -316,7 +314,7 @@ export class Swarm extends SwarmCeoTools {
     // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
     if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
     for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber, p.stuck); // a CI outage's banner (#191)
-    void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
+    void this.cleanPreviews();
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
     // A PR the restart left in "testing" with nobody on it: test it again (the result, if any, was lost).
@@ -330,11 +328,12 @@ export class Swarm extends SwarmCeoTools {
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
     setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
-    setInterval(() => this.previews.sweepPrs(), 15_000);
+    setInterval(() => this.sweepPreviews(), 15_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
     setInterval(() => {
       void this.trimIdleDesks();
+      void this.cleanPreviews();
       void this.voice.prune();
       void this.journal.prune().catch((err) => console.warn('could not prune the journal', err));
       void this.spend.ledger.prune();
@@ -709,6 +708,7 @@ export class Swarm extends SwarmCeoTools {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
       setTimeout(() => void this.trimIdleDesks(), 1000);
     }
+    this.previewSettings(patch);
     if (typeof patch.dailyLogDir === 'string') s.dailyLogDir = patch.dailyLogDir.trim() ? path.resolve(patch.dailyLogDir.trim()) : '';
     if (patch.historyDays !== undefined) {
       s.historyDays = clampHistoryDays(patch.historyDays);

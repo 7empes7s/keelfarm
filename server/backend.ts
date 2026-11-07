@@ -15,7 +15,7 @@ import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { readCatalog } from './modelCatalog.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
-import { realPreviews, type PreviewBackend } from './previewRunner.ts';
+import { previewDesks, realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import { elevenLabs } from './elevenlabs.ts';
 import { httpTransport, type NotifyTransport } from './notifier.ts';
@@ -114,6 +114,8 @@ export interface Backend {
   trimDesk(fullName: string, agentSlug: string, stillIdle: () => boolean): Promise<workspace.DeskTrim | null>;
   /** Stop processes an agent left running (dev servers on its port, anything started in its desk). */
   releaseDesk(fullName: string, agentSlug: string, port: number): Promise<void>;
+  /** The floor's preview desks (desks/preview, desks/preview-pr-N) and their size on disk, for cleanup and stats (#204). */
+  previewDesks(fullName: string): Promise<{ slug: string; bytes: number }[]>;
   /** An agent session: the real CLI in the agent's terminal when opts.terminal is set, else an Agent SDK session. */
   startSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle;
   /** A finished Claude Code session's transcript (#49): its file and session id; null when there's none on disk. */
@@ -285,6 +287,7 @@ export const realBackend: Backend = {
   sweepDesks: workspace.sweepDesks,
   trimDesk: workspace.trimDesk,
   releaseDesk: (fullName, agentSlug, port) => workspace.releaseDesk(fullName, agentSlug, port, officeProcesses()),
+  previewDesks,
   // A CLI started in the terminal keeper outlives an office restart (kept); a Box's is followed through its record.
   startSession: (opts, cb) => (opts.terminal ? Object.assign(startCliSession(opts, cb), { kept: !opts.box && keeperHookUrl() !== null }) : startSession(opts, cb)),
   sessionTranscript: async (cwd, sessionId) => {

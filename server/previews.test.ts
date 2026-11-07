@@ -20,12 +20,17 @@ let calls: string[];
 let views: Map<string, PrPreviewView>;
 let notes: string[];
 let pulls: Record<string, PullInfo[]>;
+let holders: Record<string, string>; // `${repoId}#${pr ?? 'main'}` → agent name
+let desks: Record<string, { slug: string; bytes: number }[]>;
+let mainIdleMs: number;
 
 const backend = {
   mainDir: (fullName: string) => `/work/${fullName}/main`,
   prDetails: async () => ({ state: 'OPEN' }),
   releaseDesk: async (fullName: string, slug: string) => void calls.push(`release ${fullName} ${slug}`),
   removeDesk: async (fullName: string, slug: string) => void calls.push(`remove ${fullName} ${slug}`),
+  deskDir: (fullName: string, slug: string) => `/work/${fullName}/desks/${slug}`,
+  previewDesks: async (fullName: string) => desks[fullName] ?? [],
   previews: {
     hasDefault: async () => true,
     start(job: PreviewJob, cb: PreviewCallbacks) {
@@ -51,12 +56,18 @@ beforeEach(() => {
   views = new Map();
   notes = [];
   pulls = { 'acme/app1': open(1, 2, 3, 4), 'acme/app2': open(7) };
+  holders = {};
+  desks = {};
+  mainIdleMs = 30 * 60_000;
   previews = new Previews(backend, {
     emit: () => undefined,
     pulls: (id) => pulls[id] ?? [],
     emitPr: (v) => void views.set(`${v.repoId}#${v.pr}`, v),
     prRemoved: (repoId, pr) => void views.delete(`${repoId}#${pr}`),
     note: (text) => void notes.push(text),
+    holder: (repoId, pr) => holders[`${repoId}#${pr ?? 'main'}`] ?? null,
+    mainIdleMs: () => mainIdleMs,
+    floors: () => [floor(1), floor(2)],
   });
 });
 
@@ -168,6 +179,67 @@ describe('a PR preview stops', () => {
     await previews.clearOrphans([floor(1)]);
     await settle();
     expect(calls).toEqual(expect.arrayContaining(['release acme/app1 preview', 'release acme/app1 preview-pr-1', 'release acme/app1 preview-pr-2', 'remove acme/app1 preview-pr-1', 'remove acme/app1 preview-pr-2']));
+  });
+});
+
+describe('previews in use and the main preview (#204)', () => {
+  it("refuses the manager's stop and restart of a preview an agent is testing in, and never evicts it", async () => {
+    await previews.startPr(floor(1), 1, 'x');
+    await previews.startPr(floor(1), 2, 'x');
+    started[0].cb.status('running');
+    holders['acme/app1#1'] = 'Ada';
+    previews.heldChanged('acme/app1', 1);
+    expect(views.get('acme/app1#1')).toMatchObject({ heldBy: 'Ada', stopsAt: null });
+    await expect(previews.stopPr(floor(1), 1)).rejects.toThrow(/@Ada is testing in PR #1's preview/);
+    await expect(previews.startPr(floor(1), 1, 'x', true)).rejects.toThrow(/@Ada/);
+    // PR 1 is the one unwatched the longest, but Ada holds it: PR 2 makes room.
+    await previews.startPr(floor(1), 3, 'x');
+    await settle();
+    expect(previews.prViews().map((v) => v.pr).sort((a, b) => a - b)).toEqual([1, 3]);
+    previews.sweepPrs(Date.now() + PR_PREVIEW_IDLE_MS * 2);
+    expect(previews.prViews().map((v) => v.pr)).toContain(1);
+  });
+
+  it('stops the main preview after its idle time unless someone watches it or an agent holds it', async () => {
+    await previews.start(floor(1), 'app1 app');
+    started[0].cb.status('running');
+    expect(previews.view(floor(1)).stopsAt).toBeGreaterThan(Date.now());
+    previews.sweepPrs(Date.now() + mainIdleMs / 2);
+    expect(previews.view(floor(1)).status).toBe('running');
+
+    holders['acme/app1#main'] = 'Ada';
+    previews.sweepPrs(Date.now() + mainIdleMs + 1000);
+    expect(previews.view(floor(1))).toMatchObject({ status: 'running', heldBy: 'Ada', stopsAt: null });
+    await expect(previews.stop(floor(1))).rejects.toThrow(/@Ada is testing in the floor's preview/);
+
+    delete holders['acme/app1#main'];
+    previews.sweepPrs(Date.now() + mainIdleMs + 1000);
+    await settle();
+    expect(started[0].stopped).toBe(true);
+    expect(previews.view(floor(1)).status).toBe('stopped');
+  });
+
+  it('keeps a watched main preview running', async () => {
+    mainIdleMs = 30_000;
+    await previews.start(floor(1), 'app1 app');
+    started[0].cb.status('running');
+    previews.watch('viewer-1234', 'acme/app1', null);
+    expect(previews.view(floor(1)).stopsAt).toBeNull();
+    previews.sweepPrs(Date.now() + 60_000); // past the idle time, but the viewer's last word is still fresh
+    expect(previews.view(floor(1)).status).toBe('running');
+    expect(previews.running().find((r) => r.key === 'acme/app1#main')).toMatchObject({ idle: false });
+  });
+
+  it('removes PR slot desks no preview runs from, and measures what the preview desks hold', async () => {
+    await previews.startPr(floor(1), 1, 'x');
+    desks['acme/app1'] = [
+      { slug: 'preview', bytes: 100 },
+      { slug: 'preview-pr-1', bytes: 50 },
+      { slug: 'preview-pr-2', bytes: 70 },
+    ];
+    calls = [];
+    expect(await previews.cleanLeftovers([floor(1), floor(2)])).toBe(150);
+    expect(calls).toEqual(['remove acme/app1 preview-pr-2']);
   });
 });
 

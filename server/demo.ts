@@ -36,6 +36,7 @@ import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
+import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
@@ -173,8 +174,39 @@ function shippedPull(fullName: string, number: number, title: string, agoMs: num
   };
 }
 
+// The demo's long issue (#206): sections, a checklist and code, for the card view; its PR fails QA's first round.
+const DARK_MODE_TITLE = 'Add dark mode toggle';
+const DARK_MODE_BODY = [
+  'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.',
+  '',
+  'Objective: O1',
+  '',
+  '## Why',
+  'Half the feedback this month asks for a dark theme: people plan their day late at night and the white page glares.',
+  'Three users said they stopped using the app in the evening because of it.',
+  '',
+  '## Build',
+  '1. A toggle in the header (sun / moon), 44 px, with a label for screen readers.',
+  '2. Colours move to CSS custom properties on `:root`, with a `[data-theme="dark"]` set beside them:',
+  '```css',
+  ':root[data-theme="dark"] {',
+  '  --bg: #16151d;',
+  '  --text: #f2f0ea;',
+  '}',
+  '```',
+  '3. The choice is saved in `localStorage` and read before the first paint, so the page never flashes white.',
+  "4. With nothing saved, follow the device's `prefers-color-scheme`.",
+  '',
+  '## Acceptance',
+  '- The toggle switches every screen between light and dark',
+  '- The choice survives a reload',
+  '- No white flash on load in dark mode',
+  '- Contrast passes WCAG AA in both themes',
+  '- Unit tests cover reading and saving the choice',
+].join('\n');
+
 seed('demo-co/pixel-todo', 'A cheerful todo app', [
-  ['Add dark mode toggle', 'Users want a dark theme. Persist the choice in localStorage. Touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
+  ['Add dark mode toggle', DARK_MODE_BODY],
   ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
@@ -182,6 +214,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
 strangers('demo-co/pixel-todo');
+repos.get('demo-co/pixel-todo')!.pulls.push(...stalePulls(['Try a darker theme', 'Experiment: drag to reorder', 'Spike: offline mode'], (title) => shippedPull('demo-co/pixel-todo', repos.get('demo-co/pixel-todo')!.nextNumber++, title, 0)));
 seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Add /forecast endpoint', 'Return a 5-day forecast for a city.\n\nObjective: O1'],
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
@@ -522,7 +555,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     cb.tool(null);
     if (kind === 'qa') {
       // Most first rounds pass; some fail so the fix loop can be seen in action.
-      const pass = round > 1 || Math.random() > 0.35;
+      const pass = round > 1 || (title !== DARK_MODE_TITLE && Math.random() > 0.35);
       cb.log([{ kind: 'text', text: pass ? '● Everything checks out. Writing up the report.' : '● The toolbar overflows on a 375px screen. Failing this round.' }]);
       cb.finished({
         ok: true,
@@ -1040,7 +1073,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       installedDesks.add(dir);
       return 'installed';
     },
-    removeDesk: async () => undefined,
+    ...demoPreviewDesks(), // removeDesk and previewDesks (#204)
     sweepDesks: async () => ({ desks: 0, folders: 0, branches: 0, patches: [], skipped: [] }),
     trimDesk: (_fullName, _slug, stillIdle) => fakeTrim(stillIdle),
     releaseDesk: async () => undefined,

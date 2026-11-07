@@ -29,6 +29,7 @@ export interface PullInfo {
   reviewDecision: string | null;
   closesIssues: number[];
   createdAt: string;
+  updatedAt?: string; // GitHub's last activity on it (absent: read as createdAt)
   mergedAt: string | null;
   additions: number;
   deletions: number;
@@ -121,6 +122,8 @@ export interface PreviewView {
   startedAt: number | null;
   error: string | null;
   logTail: string[]; // the last 40 lines of install / app output
+  stopsAt?: number | null; // running with nobody watching: when it stops for being idle (null: it won't)
+  heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop and restart are refused)
 }
 
 /**
@@ -139,6 +142,15 @@ export interface PrPreviewView {
   watched: boolean; // a viewer has it on screen now
   error: string | null;
   logTail: string[]; // the last 40 lines of install / app output
+  stopsAt?: number | null; // nobody watching: when it stops for being idle (null: it won't)
+  heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop, restart and eviction are refused)
+}
+
+/** The previews' upkeep, for the app viewer's stats: what their desks hold on disk and use in memory, and the last cleanup. */
+export interface PreviewStatsView {
+  diskBytes: number | null; // the preview desks' size on disk (null: not measured yet)
+  memMb: number | null; // what the previews' processes use (null: not measured, or not Linux)
+  cleanedAt: number | null; // the last cleanup of leftover preview desks
 }
 
 /** A folder in the manager's projects folder, as offered when adding a floor. */
