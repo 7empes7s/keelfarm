@@ -511,7 +511,7 @@ export abstract class SwarmCore extends SwarmContract {
       devAgentId: q.devAgentId,
       qaAgentId: q.qaAgentId,
       summary: q.summary,
-      checks: q.checks,
+      checks: q.checks, ...(q.status !== 'passed' && q.fixInstructions && { fixInstructions: q.fixInstructions }), // only while it's to do (scale.test.ts)
       commentUrl: q.commentUrl,
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,

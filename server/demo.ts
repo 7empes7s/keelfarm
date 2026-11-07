@@ -47,6 +47,7 @@ import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
+import { DEMO_QA_ISSUE, demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 import { withDemoChat } from './demoAgentChat.ts';
 import { demoAccounts } from './demoAccounts.ts';
@@ -1129,6 +1130,16 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       return [...edits, ...sampleChat(now, edits.length + 1)];
     },
     demoCharter,
+    seedQaReport: (fullName) => {
+      if (scale) return null; // the big company measures the office (scale.test.ts), not this example
+      const r = repos.get(fullName);
+      if (!r) return null;
+      const stuck = { ...issue(takeNumber(r), DEMO_QA_ISSUE.title, DEMO_QA_ISSUE.body, fullName), createdAt: new Date(Date.now() - 5 * 3_600_000).toISOString() };
+      r.issues.push(stuck);
+      const seeded = demoQaReport(fullName, takeNumber(r), stuck, 3 * 3_600_000, fakeSha());
+      r.pulls.unshift(seeded.pull);
+      return seeded;
+    },
     demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
