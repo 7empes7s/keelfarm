@@ -3,7 +3,7 @@
 // verdicts (preflight, probation, the pending marker at start). Used by office.mjs.
 import os from 'node:os';
 import path from 'node:path';
-import { parseArgs } from 'node:util';
+import { parseArgs, stripVTControlCharacters } from 'node:util';
 
 /** `--dev` (server + Vite, restarts on code changes), `--demo` (passed to the server), `--no-open` (start mode). */
 export function parseOfficeArgs(argv) {
@@ -97,6 +97,40 @@ export function preflightOutcome(steps, results) {
   const missing = steps.find((step) => !results.some((x) => x.step === step));
   if (missing) return { go: false, error: `${STEP_NAMES[missing] ?? missing} never ran` };
   return { go: true, error: null };
+}
+
+// ---------- the preflight's tests ----------
+
+/**
+ * How the preflight runs the suite: like CI, but on two workers. This box shares its memory and CPUs with every
+ * agent, and a full-width run there made a timing test miss its budget (#139).
+ */
+export const PREFLIGHT_TEST = ['test', '--', '--maxWorkers=2'];
+/** How long the preflight waits before trying failed tests again. */
+export const TEST_RETRY_WAIT_MS = 15_000;
+
+// Vitest's summary line for a failed test (" FAIL  file > suite > name") or file (" FAIL  file [ file ]").
+const FAIL_LINE = /^\s*FAIL\s+([\w./-]+\.test\.tsx?)(?:\s+>\s+(.+?))?\s*(?:\[.*\])?\s*$/;
+
+/** The failed tests in Vitest's output, ANSI codes removed: [{ file, name }] (name '' when the whole file failed). */
+export function failedTests(output) {
+  const seen = new Map();
+  for (const line of stripVTControlCharacters(String(output)).split(/\r?\n/)) {
+    const m = FAIL_LINE.exec(line);
+    if (m) seen.set(`${m[1]} > ${m[2] ?? ''}`, { file: m[1], name: m[2] ?? '' });
+  }
+  return [...seen.values()];
+}
+
+/** The retry's npm arguments: only the failed files, or the whole suite when the output named none. */
+export const testRetryArgs = (failed) => [...PREFLIGHT_TEST, ...new Set(failed.map((t) => t.file))];
+
+/** The refusal when tests failed again on the retry, naming them: "walkways.test.ts: findPath > plans … failed twice". */
+export function testsFailedError(failed, fallback) {
+  if (!failed.length) return `${fallback}, and again on the retry`;
+  const named = failed.slice(0, 3).map((t) => `${path.basename(t.file)}${t.name ? `: ${t.name}` : ''}`);
+  const more = failed.length > 3 ? ` and ${failed.length - 3} more` : '';
+  return `${named.join('; ')}${more} failed twice`;
 }
 
 /** Is this GET /api/state's JSON the office's snapshot? */

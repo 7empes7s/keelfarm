@@ -38,6 +38,7 @@ import { HolidayStrip } from './HolidayStrip';
 import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
 import { useCeoDraft } from './goTo';
+import { useMode } from '../pocket/mode';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { ChatTextPill, isPinching, lastPinchAt, useChatPinch } from './ChatZoom';
@@ -1013,6 +1014,7 @@ function useCompany() {
 function Shortcuts() {
   const openOverlay = useStore((s) => s.openOverlay);
   const repoId = useStore((s) => s.repos.find((r) => r.floor === s.floor)?.id);
+  const office = useMode((s) => s.mode === 'office'); // the map room is 3D: pocket mode has the 2D map
   return (
     <nav className="phone-links" aria-label="Open a panel">
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager' })}>
@@ -1026,6 +1028,11 @@ function Shortcuts() {
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
         👥 Floor list
       </button>
+      {office && (
+        <button className="btn btn-small" onClick={() => openOverlay({ kind: 'mapRoom' })}>
+          🌌 Map room
+        </button>
+      )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
         ❓ Help
       </button>
