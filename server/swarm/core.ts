@@ -32,11 +32,11 @@ import { Lab, loadLab } from '../experiments.ts';
 import { FloorPractice } from '../practiceState.ts';
 import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
-import { emptyLedger, pastCareers } from '../ledger.ts';
+import { emptyLedger, packCareers, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
-import { isResync, Outbox } from '../outbox.ts';
+import { isResync, Outbox, snapshotAgent } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
 import { Notifier } from '../notifier.ts';
 import { TelegramBot } from '../telegramBot.ts';
@@ -530,7 +530,7 @@ export abstract class SwarmCore extends SwarmContract {
       settings: this.state.settings,
       repos: this.state.repos.map((r) => this.repoView(r)),
       // no terminal lines: each tab asks for the ones it shows (shared/watch.ts)
-      agents: this.state.agents.map((a) => this.agentView(a, false)),
+      agents: this.state.agents.map((a) => snapshotAgent(this.agentView(a, false))),
       qa: this.state.qa.map((q) => this.qaView(q)),
       prPreviews: this.previews.prViews(),
       previewStats: this.previewStats,
@@ -589,11 +589,11 @@ export abstract class SwarmCore extends SwarmContract {
       // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
       // otherwise it's saying whether the manager is using it (#210) or what it shows (shared/watch.ts).
       if (isResync(raw)) {
-        this.send(ws, { type: 'snapshot', data: this.snapshot() });
+        this.send(ws, { type: 'snapshot', data: packCareers(this.snapshot()) });
         this.outbox.resync(ws);
       } else if (!this.notifier.attention.receive(ws, raw)) this.outbox.receive(ws, String(raw));
     });
-    this.send(ws, { type: 'snapshot', data: this.snapshot() });
+    this.send(ws, { type: 'snapshot', data: packCareers(this.snapshot()) });
   }
 
   /** The floor an agent's desk is on, for routing their terminal lines: 0 for the CEO in the lobby, null for none. */

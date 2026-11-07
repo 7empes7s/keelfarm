@@ -1,6 +1,9 @@
 // Telegram, the pure part (docs/pocket.md): the manager's own bot token checked, the one-time /start code that links
 // their chat, Bot API updates parsed (text, replies, button presses), what the bot sends (notes with the office link,
 // team-change buttons, messages split at Telegram's limit) and the long poll's backoff. telegramBot.ts does the calls.
+import { withVisualsText } from '../shared/chatVisuals.ts';
+import { fileLinks } from '../shared/files.ts';
+import type { PhoneMessage } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import { noteText, type Note } from './notify.ts';
 
@@ -169,6 +172,11 @@ export const telegramNote = (n: Note, officeUrl: string) => noteText(n, officeUr
 
 /** A CEO message on Telegram: their name, then what they wrote. */
 export const telegramChat = (ceoName: string, text: string) => `💬 ${ceoName}\n${text.trim()}`;
+
+/** Mirror visuals as text and large files as office download links, keeping the office URL's path prefix. */
+export function telegramMessage(ceoName: string, m: Pick<PhoneMessage, 'text' | 'visuals' | 'attachments'>, officeUrl: string): string {
+  return telegramChat(ceoName, [withVisualsText(m.text, m.visuals), fileLinks(m.attachments ?? [], officeUrl)].filter(Boolean).join('\n'));
+}
 
 // ---------- the long poll ----------
 

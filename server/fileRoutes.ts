@@ -1,5 +1,6 @@
 // The files store's REST routes, by id only (server/files.ts): uploads from the manager's phone as a raw body (the
-// name in X-File-Name), downloads, keep and delete. Served before the JSON body parser, so uploads stream to disk.
+// name in X-File-Name), downloads (with Range, for resuming and seeking videos), keep and delete. Served before the JSON
+// body parser, so uploads stream to disk.
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { formatSize, inlineType, isFileId, MAX_FILE_BYTES } from '../shared/files.ts';
@@ -35,7 +36,7 @@ export function fileRoutes(store: FileStore, opts: { max?: number; onDeleted?: (
   r.post(
     '/api/files',
     wrap(async (req, res) => {
-      const length = Number(req.headers['content-length'] ?? 0);
+      const length = Number(req.headers['content-length'] ?? 0) || 0;
       if (length > max) {
         // Say so before reading a byte; the connection closes so the rest of the body isn't waited for.
         res.set('Connection', 'close');
@@ -48,9 +49,9 @@ export function fileRoutes(store: FileStore, opts: { max?: number; onDeleted?: (
         // a malformed name: keep the default
       }
       try {
-        return await store.addStream(req, { name, type: String(req.headers['content-type'] ?? ''), from: 'manager' }, max);
+        return await store.addStream(req, { name, type: String(req.headers['content-type'] ?? ''), from: 'manager', length }, max);
       } catch (err) {
-        if (err instanceof HttpError && err.status === 413) res.set('Connection', 'close');
+        if (err instanceof HttpError && (err.status === 413 || err.status === 507)) res.set('Connection', 'close');
         throw err;
       }
     }),
@@ -69,8 +70,15 @@ export function fileRoutes(store: FileStore, opts: { max?: number; onDeleted?: (
         ...(f.type !== 'application/pdf' && { 'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox" }),
         'Cache-Control': 'private, max-age=86400',
       });
-      // dotfiles: the store lives under ~/.cubefarm
-      return new Promise<void>((resolve, reject) => res.sendFile(store.pathOf(f.id), { cacheControl: false, dotfiles: 'allow' }, (err) => (err && !res.headersSent ? reject(new HttpError(404, 'That file is no longer saved')) : resolve())));
+      // dotfiles: the store lives under ~/.cubefarm. send streams the file and answers Range requests with 206.
+      return new Promise<void>((resolve, reject) =>
+        res.sendFile(store.pathOf(f.id), { cacheControl: false, dotfiles: 'allow' }, (err: (Error & { status?: number }) | undefined) => {
+          if (!err || res.headersSent) return resolve();
+          if (err.status !== 416) return reject(new HttpError(404, 'That file is no longer saved'));
+          res.set('Content-Range', `bytes */${f.size}`);
+          reject(new HttpError(416, `That range is past the end of ${f.name} (${f.size} bytes).`));
+        }),
+      );
     }),
   );
 

@@ -63,6 +63,16 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    name: 'team: + Agent sheet (#243)',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'team');
+      await root.getByRole('button', { name: /^Add an agent to floor/ }).first().click();
+      return page.getByRole('dialog', { name: /New agent on floor/ });
+    },
+    tabs: [],
+  },
+  {
     // the agent window (#117): the header row, then its details' tabs (a sheet on phones, a side panel at 1280)
     name: 'terminal view',
     widths: [360, 375, 390, 430, 1280],
@@ -111,6 +121,21 @@ test('approvals: a PR low in the list opens at its top, Back returns to the list
   await root.getByRole('button', { name: '‹ Approvals' }).click();
   await expect(row).toBeInViewport();
   expect(await root.locator('.pk-main').evaluate((el) => el.scrollTop)).toBe(listTop);
+});
+
+test('team: + Agent adds them to that floor, highlighted, with a toast (#243)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await pocket(page, 'team');
+  const floor = root.locator('.pk-section').first();
+  const before = await floor.locator('.pk-agent').count();
+  await floor.getByRole('button', { name: /^Add an agent to floor/ }).click();
+  const sheet = page.getByRole('dialog', { name: /New agent on floor/ });
+  await sheet.getByRole('textbox', { name: /New agent's name/ }).fill('  Zelda ');
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(floor.locator('.pk-agent')).toHaveCount(before + 1);
+  await expect(floor.locator('.pk-agent-new', { hasText: 'Zelda' })).toBeVisible();
+  await expect(page.getByText(/Zelda joined floor \d+/)).toBeVisible();
 });
 
 // ---------- pocket mode on a desktop (#104) ----------

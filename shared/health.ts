@@ -57,6 +57,8 @@ export interface HeldWork {
   tasks: number;
   freeMb: number;
   needMb: number;
+  /** What the test lab's browser uses now, MB, when it's running and measured (#301). */
+  browserMb?: number;
 }
 
 export const gb = (mbs: number) => `${(Math.max(0, mbs) / 1024).toFixed(1)} GB`;
@@ -64,5 +66,10 @@ export const gb = (mbs: number) => `${(Math.max(0, mbs) / 1024).toFixed(1)} GB`;
 /** The quiet in-app note while work waits for memory (no push, no sound): "⏳ 2 tasks waiting for memory · …". */
 export function heldNote(h: HeldWork | null | undefined): string | null {
   if (!h) return null;
-  return `⏳ ${h.tasks} ${h.tasks === 1 ? 'task' : 'tasks'} waiting for memory · ${gb(h.freeMb)} free, ${gb(h.needMb)} needed`;
+  return `⏳ ${h.tasks} ${h.tasks === 1 ? 'task' : 'tasks'} waiting for memory · ${gb(h.freeMb)} free, ${gb(h.needMb)} needed${browserNote(h.browserMb) && ` · ${browserNote(h.browserMb)}`}`;
+}
+
+/** "the test browser is using 1.2 GB" (#301), when it uses enough to matter; '' otherwise. */
+export function browserNote(mb: number | null | undefined): string {
+  return mb && mb >= 100 ? `the test browser is using ${gb(mb)}` : '';
 }

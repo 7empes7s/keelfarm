@@ -132,6 +132,7 @@ function fakeRunner(log: string[], ms = 0, runs: Partial<RunResult>[] = []): Lab
     },
     installBrowser: async (dir) => (log.push(`install browser in ${dir}`), true),
     warm: async () => true,
+    browserMb: async () => null,
     close: async () => undefined,
     release() {
       const g = gate;
@@ -292,7 +293,7 @@ describe('the lab tools', () => {
     const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => 'Lab: 0 running, 0 waiting' });
     expect(await tools.call('lab_status', {})).toBe('Lab: 0 running, 0 waiting');
     expect(await tools.call('lab_screenshot', { url: 'http://localhost:5678/', viewports: [390, 1280], theme: 'dark' })).toBe('ok');
-    expect(asked[0]).toEqual({ kind: 'screenshot', url: 'http://localhost:5678/', preview: undefined, viewports: [390, 1280], profile: 'desktop', theme: 'dark', waitFor: undefined, actions: [], fullPage: false });
+    expect(asked[0]).toEqual({ kind: 'screenshot', url: 'http://localhost:5678/', preview: undefined, viewports: [390, 1280], profile: 'desktop', theme: 'dark', graphics: undefined, waitFor: undefined, actions: [], fullPage: false });
     expect(await tools.call('lab_run', { command: 'npm test' })).toBe('ok');
     const refused = createLabTools({ submit: () => Promise.reject(new Error('the queue is full')), status: () => '' });
     expect(await refused.call('lab_run', { command: 'npm test' })).toBe('Refused: the queue is full');
@@ -303,7 +304,7 @@ describe('the demo lab', () => {
   it('draws real PNGs for its fake screenshots', async () => {
     expect(fakeShot(4, 3, false).subarray(1, 4).toString()).toBe('PNG');
     const out = path.join(os.tmpdir(), `demolab-${process.pid}`, '.lab', 'j1');
-    const r = await demoLabRunner().screenshot({ url: 'http://x/', profile: 'desktop', theme: 'light', outDir: out, viewports: [390], actions: [], fullPage: false });
+    const r = await demoLabRunner().screenshot({ url: 'http://x/', profile: 'desktop', theme: 'light', graphics: 'lab', outDir: out, viewports: [390], actions: [], fullPage: false });
     expect(r.shots[0].file).toBe(path.join(out, 'desktop-390-light.png'));
   });
 });

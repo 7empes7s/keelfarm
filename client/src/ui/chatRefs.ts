@@ -4,6 +4,7 @@
 
 import { CEO_ID, type AgentView, type ChatRef, type QaView, type RepoView } from '../../../shared/types';
 import type { Overlay } from '../store';
+import type { ActionRef } from '../../../shared/ceoActions';
 import type { IconName } from './icons';
 
 export interface RefWorld {
@@ -17,7 +18,8 @@ export type Jump =
   | { kind: 'overlay'; overlay: Overlay; floor?: number }
   | { kind: 'floor'; floor: number; repoId: string }
   | { kind: 'file' }
-  | { kind: 'url'; url: string };
+  | { kind: 'url'; url: string }
+  | { kind: 'decisions' }; // the decision log under the approvals (#208)
 
 const ghUrl = (fullName: string, n: number, pull: boolean) => `https://github.com/${fullName}/${pull ? 'pull' : 'issues'}/${n}`;
 
@@ -55,6 +57,24 @@ export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): J
   }
   if (n !== undefined && !open) return { kind: 'url', url: ghUrl(repo.fullName, n, true) };
   return { kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: n ?? null }, ...ride(repo.id) };
+}
+
+/** An agent by id, else by name (old action cards kept the name the CEO gave). */
+export function agentFor(w: RefWorld, idOrName: string): RefWorld['agents'][string] | undefined {
+  const name = idOrName.trim().toLowerCase();
+  return w.agents[idOrName] ?? Object.values(w.agents).find((a) => a.id !== CEO_ID && a.name.toLowerCase() === name);
+}
+
+/** Where a CEO action card goes (#215): its agent's chat at the message or their details, a console section, the decision log, or as its chip would. */
+export function actionJump(ref: ActionRef, mode: 'office' | 'pocket', w: RefWorld): Jump | null {
+  if (ref.kind === 'decision' || ref.kind === 'approvals') return { kind: 'decisions' };
+  if (ref.kind === 'section') return { kind: 'overlay', overlay: { kind: 'manager', tab: ref.section, ...(ref.repoId && { repoId: ref.repoId }) } };
+  if (ref.kind !== 'agent') return jumpFor({ ...ref, start: 0, end: 0 }, mode, w);
+  const a = agentFor(w, ref.agentId);
+  if (!a) return null;
+  const floor = mode === 'office' ? w.repos.find((r) => r.id === a.repoId)?.floor : undefined;
+  const overlay: Overlay = { kind: 'terminal', agentId: a.id, view: 'chat', ...(ref.messageId !== undefined && { jump: ref.messageId }), ...(ref.details && { details: ref.details }) };
+  return { kind: 'overlay', overlay, ...(floor !== undefined && { floor }) };
 }
 
 /** A chip's icon, its status words and their tone, or null when what it names is gone (shown as text). */

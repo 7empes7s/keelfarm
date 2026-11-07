@@ -82,6 +82,7 @@ export interface OfficeCall {
   ok: boolean;
   out: string | null;
   args?: Record<string, unknown>; // its input, for the reply's action cards (shared/ceoActions.ts)
+  messageId?: number; // the agent chat item it posted (message_agent, answer_agent): its card opens the chat there
 }
 
 // The office tools that only read: a stopped job's reply leaves them out of what it did.

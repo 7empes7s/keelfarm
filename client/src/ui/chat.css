@@ -185,6 +185,33 @@
 .floor-chip:focus-visible {
   text-decoration-style: solid;
 }
+
+/* a bubble's meta row (#215): Used and the time on one compact line; an open fold takes the whole width */
+.bubble-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--ds-space-3);
+  margin-top: var(--ds-space-1);
+}
+.bubble-meta > .used {
+  margin: 0;
+}
+.bubble-meta > details[open] {
+  flex-basis: 100%;
+  order: 1;
+}
+.bubble-meta summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ds-target); /* a 44px tap, drawn as a short line */
+  margin-block: -12px;
+  padding: 0;
+}
+.bubble-meta > .bubble-time {
+  margin: 0 0 0 auto;
+}
+
 /* long messages: their start, then Show more */
 .long-folded {
   max-height: 16rem;

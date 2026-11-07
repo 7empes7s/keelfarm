@@ -562,6 +562,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     if (kind === 'qa') {
       // Most first rounds pass; some fail so the fix loop can be seen in action.
       const pass = round > 1 || (title !== DARK_MODE_TITLE && Math.random() > 0.35);
+      const full = opts.prompt.includes('graphics: "full"'); // a 3D PR (qaPrompt.ts fullQualityLine) reports its full pass
       cb.log([{ kind: 'text', text: pass ? '● Everything checks out. Writing up the report.' : '● The toolbar overflows on a 375px screen. Failing this round.' }]);
       cb.finished({
         ok: true,
@@ -580,12 +581,14 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
             { name: 'Feature works on desktop', result: 'pass', details: 'Clicked through the new flow at 1280x800' },
             { name: 'Mobile layout (375px)', result: pass ? 'pass' : 'fail', details: pass ? 'Layout wraps correctly' : 'Toolbar overflows horizontally; button unreachable' },
             { name: 'Console errors', result: 'pass', details: 'None' },
+            ...(full ? [{ name: 'Lab graphics profile', result: 'pass' as const, details: 'Canvas, controls, panels, 390px pocket mode, no console errors' }] : []),
+            ...(full ? [{ name: 'Full-quality pass', result: 'pass' as const, details: 'Real graphics at 1280px, shadows and lighting; ran alone, browser restarted after' }] : []),
           ],
           commands: [
             { command: 'npm test -- --run', result: '41 passed' },
             { command: 'npm run lint && npm run build', result: 'clean, built in 1.84s' },
           ],
-          screenshots: ['Home page', 'The changed page at 375px'],
+          screenshots: ['Home page', 'The changed page at 375px', ...(full ? ['Full quality · the changed scene at 1280px'] : [])],
           fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
         },
       });
@@ -868,7 +871,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
   let lowMemory = false; // the health strip's Simulate low memory: too little left for another session (a big company: a big server)
   return {
     demo: true,
-    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, simulate: (low) => void (lowMemory = low) },
+    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, browser: async () => (lowMemory ? 640 : null), simulate: (low) => void (lowMemory = low) },
     user: async () => 'demo-manager',
     listMyRepos: async (): Promise<GhRepoSummary[]> =>
       [...repos.values()].map((r) => ({ nameWithOwner: r.fullName, description: r.description, visibility: 'PUBLIC', updatedAt: now() })),
@@ -1673,8 +1676,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      if (awake) return awake;
-      const round = await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0]); // "look into …": the step log (#150)
+      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0])); // "look into …": the step log (#150)
       if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
@@ -1861,12 +1863,13 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
 // ---------- voice ----------
 
 /**
- * A short two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, a little longer for longer text, and
- * pitched by the voice, so a replayed clip is audibly the one made in the voice of its day.
+ * A two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, longer for longer text (up to 6 s, so a
+ * voice call can be paused, skipped and talked over mid-reply), and pitched by the voice, so a replayed clip is
+ * audibly the one made in the voice of its day.
  */
 export function demoChime(chars: number, voiceId = ''): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 400, 2);
+  const seconds = Math.min(0.4 + chars / 40, 6);
   const n = Math.round(rate * seconds);
   const wav = Buffer.alloc(44 + n);
   wav.write('RIFF', 0);

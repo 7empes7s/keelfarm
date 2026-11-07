@@ -25,12 +25,14 @@ export interface SampleFloor {
   agents: { id: string; name: string }[];
   /** Its open issues: today's work in flight is on them, so the usage view shows their titles, open ones and repeats. */
   open?: number[];
+  /** Twice the work: the first floor, so the Charter's drift view has an objective with 20+ PRs in a week (#240). */
+  busy?: boolean;
 }
 
 /** The sample for an office: its floors, their agents and open issues, and its CEO. */
 export function sampleOffice(repos: { id: string; open?: number[] }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number, rand: () => number, days = 7): CostRecord[] {
   const ceo = agents.find((a) => a.role === 'ceo') ?? { id: 'ceo', name: 'Morgan' };
-  return sampleCosts(repos.map((r) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id), open: r.open })), ceo, now, rand, days);
+  return sampleCosts(repos.map((r, i) => ({ repoId: r.id, agents: agents.filter((a) => a.repoId === r.id), open: r.open, busy: i === 0 })), ceo, now, rand, days);
 }
 
 export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: string }, now: number, rand: () => number, days = 7): CostRecord[] {
@@ -49,7 +51,7 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
     const at = () => Math.round(between(start, end));
     for (const f of floors) {
       if (!f.agents.length) continue;
-      const tasks = 2 + Math.floor(rand() * 4);
+      const tasks = (2 + Math.floor(rand() * 4)) * (f.busy ? 2 : 1);
       for (let t = 0; t < tasks; t++) {
         const issue = issueNo++;
         const dev = pick(f.agents);
@@ -82,7 +84,10 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
       const kind = pick<TaskKind>(['ceo-review', 'ceo-review', 'ceo-chat', 'ceo-triage']);
       const idle = kind === 'ceo-review' && rand() < 0.5;
       const ms = Math.round(between(2, 12) * 60_000);
-      session({ repoId: '', issue: null, pr: null, effort: 'xhigh', at: Math.min(now, at() + ms), ms, agentId: ceo.id, agent: ceo.name, kind, usd: between(0.3, 2.4), outcome: idle ? 'ceo-idle' : 'ceo-acted' });
+      const usd = Math.round(between(0.3, 2.4) * 100) / 100;
+      // Lines from before #254 were booked as the CEO session's running total: the repair took the rest off (and the costs view says so).
+      const corrected = d >= 2 && i > 0 ? Math.round(between(8, 20) * 100) / 100 : 0;
+      session({ repoId: '', issue: null, pr: null, effort: 'xhigh', at: Math.min(now, at() + ms), ms, agentId: ceo.id, agent: ceo.name, kind, usd, outcome: idle ? 'ceo-idle' : 'ceo-acted', total: usd + corrected, ...(corrected ? { corrected } : {}) });
     }
   }
   // Work in flight on open issues: one built three times in a row without a PR, one with an open PR back from QA.

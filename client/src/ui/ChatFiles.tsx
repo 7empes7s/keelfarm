@@ -1,7 +1,7 @@
 import { useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { daysLeft, fileKind, formatSize, inlineType, type FileKind, type FileRef, type FileView } from '../../../shared/files';
+import { daysLeft, fileKind, formatSize, inlineType, thumbnailable, uploadStatus, type FileKind, type FileRef, type FileView } from '../../../shared/files';
 import { usedLine, type QuickPicks, type UsedView } from '../../../shared/used';
 import { slashItems } from './chatCardRules';
 import './chatCards.css';
@@ -54,7 +54,7 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
         <span aria-hidden><Icon name={fileIcon(file)} /></span> <span className="grow file-name">{file.name}</span> <span className="small">expired</span>
       </div>
     );
-  if (drawable(f.type))
+  if (drawable(f.type) && thumbnailable(f))
     return (
       <button type="button" className="file-thumb" onClick={() => onOpen(f.id)} aria-label={`${f.name}, ${formatSize(f.size)}: show full size`}>
         <img src={url(f.id)} alt={f.name} loading="lazy" />
@@ -149,12 +149,27 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
   const [sure, setSure] = useState<string | null>(null);
   const now = Date.now();
   const total = files.reduce((n, f) => n + f.size, 0);
+  const largest = files.length > 1 ? [...files].sort((a, b) => b.size - a.size).slice(0, 3) : [];
   return (
     <Sheet label={`Files (${files.length})`} onClose={onClose} className="files-list">
       <div className="artifact-body">
         <p className="small muted">
           {formatSize(total)} on the office server. Files are deleted 30 days after upload unless kept (<Icon name="pin" />).
         </p>
+        {largest.length > 0 && (
+          <p className="small muted files-largest">
+            Largest:{' '}
+            {largest.map((f, i) => (
+              <span key={f.id}>
+                {i > 0 && ' · '}
+                <button type="button" className="link-btn" onClick={() => onOpen(f.id)}>
+                  {f.name}
+                </button>{' '}
+                {formatSize(f.size)}
+              </span>
+            ))}
+          </p>
+        )}
         {files.length === 0 ? (
           <p className="muted">
             No files yet. Attach one with <Icon name="paperclip" />, or ask the CEO for a document.
@@ -202,8 +217,8 @@ export function FilesList({ onOpen, onClose }: { onOpen: (id: string) => void; o
   );
 }
 
-/** The files waiting to go with the message: thumbnails or chips, progress, ✕ to cancel or remove. */
-export function AttachTray({ pending, onRemove }: { pending: readonly Pending[]; onRemove: (key: number) => void }) {
+/** The files waiting to go with the message: thumbnails or chips, progress (bytes, speed, time left), ↻ to retry, ✕ to cancel or remove. */
+export function AttachTray({ pending, onRemove, onRetry }: { pending: readonly Pending[]; onRemove: (key: number) => void; onRetry: (key: number) => void }) {
   if (!pending.length) return null;
   return (
     <ul className="attach-tray" aria-label="Files to send">
@@ -212,11 +227,19 @@ export function AttachTray({ pending, onRemove }: { pending: readonly Pending[];
           {p.preview ? <img src={p.preview} alt="" className="attach-thumb" /> : <span aria-hidden><Icon name={fileIcon(p)} /></span>}
           <span className="attach-name">{p.name}</span>
           {p.error ? (
-            <span className="small attach-error">
-              <Icon name="triangle-alert" /> {p.error}
-            </span>
+            <>
+              <span className="small attach-error">
+                <Icon name="triangle-alert" /> {p.error}
+              </span>
+              <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon attach-btn" aria-label={`Retry the upload of ${p.name}`} onClick={() => onRetry(p.key)}>
+                <Icon name="rotate-cw" />
+              </button>
+            </>
           ) : !p.ref ? (
-            <progress className="attach-progress" max={1} value={p.progress} aria-label={`Uploading ${p.name}`} />
+            <span className="attach-uploading">
+              <progress className="attach-progress" max={1} value={p.progress} aria-label={`Uploading ${p.name}`} />
+              <span className="attach-status">{uploadStatus(p.loaded, p.size, Date.now() - p.startedAt)}</span>
+            </span>
           ) : (
             <span className="small muted">{formatSize(p.size)}</span>
           )}

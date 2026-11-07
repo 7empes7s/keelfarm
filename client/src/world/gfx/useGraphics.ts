@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { hitchNote } from '../../hitches';
-import { DEVICE_PROFILE } from './device';
+import { DEVICE_PROFILE, LAB_GFX } from './device';
 import { DEFAULT_PRESET, effectNames, GRAPHICS_PRESETS, governorSample, governorSettle, newGovernor, normalizePreset, tierIndex, type GovernorChange, type GraphicsPreset, type Tier } from './quality';
 
 // The viewer's graphics quality (Help → Graphics, saved per browser) and, on Auto, the tier the governor (quality.ts)
@@ -40,7 +40,8 @@ let lastSample: { fps: number; ms: number } | null = null;
 /** What the running effects report about themselves (Effects.tsx): passes, blooming meshes, samples. */
 let pipelineStats: Record<string, unknown> | null = null;
 
-const initial = loadPreset();
+// The test lab's profile (#301) opens on Low whatever was saved; it can still be changed in Help → Graphics.
+const initial = LAB_GFX ? 'low' : loadPreset();
 export const useGfx = create<GfxState>(() => ({ preset: initial, tier: initial === 'auto' ? governor.tier : initial, shown: 'low', blocked: null }));
 
 /** The tier actually in force: Low whenever the effects are blocked. */

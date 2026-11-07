@@ -155,6 +155,8 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 
 .pk-railed .pk-body {
+  /* the rail's width, which the full-screen chat also starts at (#242) */
+  --pk-rail-w: 92px;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -166,7 +168,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   flex: none;
   flex-direction: column;
   gap: 4px;
-  width: 92px;
+  width: var(--pk-rail-w);
   padding: 8px 6px;
   border-top: none;
   border-right: var(--ds-border-strong) solid var(--ds-outline);
@@ -180,8 +182,8 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 .pk-railed .pk-tab-console {
   margin-top: auto;
 }
-.pk-layout-medium .pk-tabs {
-  width: 68px;
+.pk-layout-medium .pk-body {
+  --pk-rail-w: 68px;
 }
 .pk-layout-medium .pk-tab-label {
   position: absolute;
@@ -376,17 +378,18 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   width: 100%;
   background: var(--paper);
 }
-/* the chat full screen (#201): wide, the docked chat covers the rail and the pages, which keep their place behind it;
-   on a phone the tab bar and the working strip's second line step aside */
+/* the chat full screen (#201): wide, the docked chat covers the pages beside the rail (#242: the rail stays, and tapping
+   it leaves full screen), the pages keeping their place behind it; on a phone the tab bar and the working strip's
+   second line step aside */
 .pk-railed.pk-chat-full .pk-dock {
   position: absolute;
-  inset: 0;
+  inset: 0 0 0 var(--pk-rail-w);
   z-index: 4;
   width: auto;
   border-left: none;
   box-shadow: none;
 }
-.pk-railed.pk-chat-full :is(.pk-tabs, .pk-work) {
+.pk-railed.pk-chat-full .pk-work {
   visibility: hidden;
 }
 .pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
@@ -524,6 +527,17 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 .pk-railed .pk-section > :is(.pk-h, p) {
   grid-column: 1 / -1;
+}
+
+/* Team: a floor's "+ Agent" at the end of its header, and the card of someone just added (#243) */
+.pk-h .pk-add-agent {
+  margin-left: auto;
+}
+.pk-agent {
+  transition: box-shadow var(--ds-dur-slow) var(--ds-ease);
+}
+.pk-agent.pk-agent-new {
+  box-shadow: 0 0 0 var(--ds-border-strong) var(--ds-good-fill), var(--ds-shadow-2);
 }
 
 /* Approvals: the decisions as a list, the one picked beside it */

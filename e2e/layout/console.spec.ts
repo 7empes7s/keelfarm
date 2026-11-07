@@ -1,7 +1,8 @@
+import type { Page } from '@playwright/test';
 import type { Where } from '../../client/src/ui/consoleNavRules';
 import { expect, test } from '../helpers';
 import { telegramViews } from '../telegramViews';
-import { checkScreens, consoleSections, dialog, office, OFFICE, consoleSection, pocketSection, type Screen, type View } from './helpers';
+import { charterDrift, checkScreens, consoleSections, dialog, office, OFFICE, consoleSection, pocketSection, type Screen, type View } from './helpers';
 
 // Settings, the console and their sections: pocket mode's Settings and the 3D office's manager's console (#102).
 
@@ -38,15 +39,20 @@ const charterEditor: View = {
   },
 };
 
+/** Pocket mode's Settings. */
+async function pocketSettings(page: Page) {
+  await page.goto('/?pocket=1');
+  await page.getByRole('button', { name: 'Settings and notifications' }).click();
+  return dialog(page, /Settings/);
+}
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
     widths: [360, 390, 430, 768, 1280, 1440], // the phone's list, then the desktop's top tabs and sections row (#199)
     open: async (page) => {
       await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
-      await page.goto('/?pocket=1');
-      await page.getByRole('button', { name: 'Settings and notifications' }).click();
-      return dialog(page, /Settings/);
+      return pocketSettings(page);
     },
     tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
@@ -58,8 +64,9 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true)],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office')],
   },
+  { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];
 
 checkScreens(SCREENS);

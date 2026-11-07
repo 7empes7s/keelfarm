@@ -24,6 +24,8 @@ export function demoPrDiff(pr: { title: string; additions: number; deletions: nu
     { path: 'src/App.tsx', additions: Math.ceil(pr.additions * 0.6), deletions: Math.ceil(pr.deletions * 0.5) },
     { path: `src/${name}.tsx`, additions: Math.floor(pr.additions * 0.4), deletions: Math.floor(pr.deletions * 0.5) },
   ];
+  // A visual feature changes the 3D office's code too, so its QA takes a full-quality pass (#301).
+  if (/confetti|illustration/i.test(pr.title)) files.push({ path: `client/src/world/${name}.tsx`, additions: 12, deletions: 2 });
   return { files, diff: patch ? demoDiff(pr.title) : null };
 }
 

@@ -5,6 +5,7 @@
 import { objectiveTag } from './charter.ts';
 import { blockers } from './issues.ts';
 import type { LabView } from './experiments.ts';
+import type { ActionRef } from './ceoActions.ts';
 import type { AgentView, ChatRef, PhoneMessage, QaView, RepoView } from './types.ts';
 
 export type MapNodeType = 'company' | 'floor' | 'objective' | 'standard' | 'issue' | 'pr' | 'qa' | 'agent' | 'ceo' | 'decision' | 'artifact' | 'file' | 'experiment';
@@ -243,9 +244,9 @@ export function buildGraph(src: MapSource, caps: MapCaps = DEFAULT_CAPS): Memory
   // the CEO's chat: what its tools changed, and its artifacts with what they name
   const ceo = src.agents.find((a) => a.role === 'ceo');
   const ceoId = ceo ? nodeId.agent(ceo.id) : null;
-  const refNode = (r: Pick<ChatRef, 'kind'> & { repoId?: string; number?: number; agentId?: string }) => {
+  const refNode = (r: { kind: ChatRef['kind'] | ActionRef['kind']; repoId?: string; number?: number; agentId?: string }) => {
     if (r.kind === 'agent' && r.agentId) return nodeId.agent(r.agentId);
-    if (r.kind === 'floor' && r.repoId) return nodeId.floor(r.repoId);
+    if ((r.kind === 'floor' || r.kind === 'section') && r.repoId) return nodeId.floor(r.repoId); // a section of a floor (#215): the floor
     if ((r.kind === 'issue' || r.kind === 'qa') && r.repoId && r.number) return byRepoNumber.get(`${r.repoId}#${r.number}`) ?? null;
     return null;
   };
@@ -259,7 +260,7 @@ export function buildGraph(src: MapSource, caps: MapCaps = DEFAULT_CAPS): Memory
         continue;
       }
       const id = `decision:${m.id}-${i}`;
-      add({ id, type: 'decision', label: act.icon, title: act.text, repoId: act.ref && 'repoId' in act.ref ? act.ref.repoId : null, at: m.at, status: null, facts: [['Decided', day(m.at)], ['Tool', act.tool]] });
+      add({ id, type: 'decision', label: act.icon, title: act.text, repoId: act.ref && 'repoId' in act.ref ? (act.ref.repoId ?? null) : null, at: m.at, status: null, facts: [['Decided', day(m.at)], ['Tool', act.tool]] });
       link(ceoId, id, 'decided');
       if (to) link(id, to, 'decided');
     }

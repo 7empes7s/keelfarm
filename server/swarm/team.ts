@@ -13,6 +13,7 @@ import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS
 import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
 import { DEMO_DECISION_MESSAGES, DEMO_REASK } from '../demoDecisions.ts';
+import { actionCards } from '../../shared/ceoActions.ts';
 import { designDecision } from '../../shared/designs.ts';
 import type { ProposeDesignInput } from '../designTool.ts';
 
@@ -355,6 +356,7 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     this.postMessage('ceo', DEMO_REASK.reAsk);
     this.postMessage('manager', DEMO_REASK.answer, undefined, { replyTo: asked.id, delivery: 'read' });
     for (const text of DEMO_DECISION_MESSAGES) this.postMessage('ceo', text);
+    this.seedDemoActions();
     this.seedDemoQa();
     void this.backend.demoDesign?.().then((a) => this.proposeDesign(a)).catch(() => undefined); // and a design proposal (#209)
     for (const kind of ['hire', 'let-go']) {
@@ -364,6 +366,23 @@ export abstract class SwarmTeam extends SwarmUpkeep {
         // no floor has room for this one: try the other
       }
     }
+  }
+
+  /** Demo only (#215): a CEO reply with a message_agent card that opens the agent's chat at the message, and a scale_team card. */
+  private seedDemoActions() {
+    const repo = this.state.repos[0];
+    const a = repo && this.state.agents.find((x) => x.repoId === repo.id && x.role !== 'ceo');
+    if (!a) return;
+    const item = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: 'The checkout test is flaky on CI: rerun it once before digging in.', who: `${this.ceo().name} (CEO)` });
+    const followup = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: 'Also check that the empty checkout shows the right message.', who: `${this.ceo().name} (CEO)` });
+    const size = this.state.agents.filter((x) => x.repoId === repo.id).length;
+    const calls = [
+      { tool: 'message_agent', ok: true, out: `Sent: ${a.name} reads it after their current step.`, args: { floor: repo.floor, agent_id: a.id }, ...(item && { messageId: item.id }) },
+      { tool: 'message_agent', ok: true, out: `Sent a follow-up to ${a.name}.`, args: { floor: repo.floor, agent_id: a.id }, ...(followup && { messageId: followup.id }) },
+      { tool: 'scale_team', ok: true, out: `Floor ${repo.floor} goes from ${size} to ${size + 1} agents once you agree: a hire request.`, args: { floor: repo.floor, size: size + 1 } },
+    ];
+    const m = this.postMessage('ceo', `Told ${a.name} the checkout test is flaky, and asked for one more agent on floor ${repo.floor}.`, undefined, { actions: actionCards(calls, () => repo.id) });
+    m.reactions = [{ by: 'manager', emoji: '👍' }, { by: 'ceo', emoji: '👍' }];
   }
 
   /** propose_design (#209): the options' shots into the files store, the proposal in the chat, an open 'design' decision. */
