@@ -637,7 +637,7 @@ export class Swarm extends SwarmCeoTools {
 
   /** GET /api/ceo/library: a project's, the Company's or the whole office's artifacts and files, a page at a time (#132). */
   library(q: Parameters<CeoChat['library']>[3]) {
-    return this.ceoChat.library(this.state.ceo.chats, this.state.messages, this.files.list(), q);
+    return this.ceoChat.library(this.state.ceo.chats, this.state.messages, this.files.list(), q, this.state.repos.map((r) => r.id));
   }
 
   /** GET /api/ceo/conversations/search?q=: conversations whose title or messages match, with a snippet each. */

@@ -149,6 +149,7 @@ describe('threads (#132)', () => {
     expect(project.items.map((i) => [i.title, i.conversationId])).toEqual([['Milestone plan', first]]);
     expect(project.items[0].artifact?.markdown).toContain('##'); // another thread's: its text comes with it
     expect((await swarm.library({ scope: 'company', filter: 'all' })).items).toEqual([]);
+    await expect(swarm.library({ scope: 'demo-co/gone', filter: 'all' })).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/No floor/) });
   });
 
   it("fills threads saved before #132 from their messages, and seeds the demo's", async () => {

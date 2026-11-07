@@ -224,7 +224,7 @@ button.thread-project {
 /* wide: the threads in a column beside the chat (pocket mode's docked chat) */
 .threads-col {
   flex: none;
-  width: 250px;
+  width: 280px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -233,6 +233,18 @@ button.thread-project {
 }
 .threads-col > .conv-body {
   overflow-y: auto;
+}
+/* narrow column: titles (short, capped by titling) and the project chips wrap, so nothing is cut off */
+.threads-col .thread-top {
+  align-items: flex-start;
+}
+.threads-col .conv-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.threads-col .thread-scopes {
+  flex-wrap: wrap;
+  overflow-x: visible;
 }
 
 /* the image viewer's tap to zoom */

@@ -10,6 +10,7 @@ import { NOTES_VIEW_MAX } from '../shared/ceoMemory.ts';
 import { inScope, startConversation, threadStats, touchConversation, type ChatsState, type ThreadScope } from '../shared/conversations.ts';
 import { filterLibrary, libraryCounts, libraryItems, pageLibrary, type LibraryFilter, type LibraryPage } from '../shared/library.ts';
 import type { FileRef } from '../shared/files.ts';
+import { HttpError } from './httpError.ts';
 import type { LogEntry } from './agentRunner.ts';
 import type { FileStore } from './files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
@@ -170,9 +171,11 @@ export class CeoChat {
 
   /**
    * GET /api/ceo/library: the artifacts and files of a scope's threads (a floor's project, the Company's, or all, which
-   * adds the stored files no message carries), a page at a time, with their markdown. `current`: the open thread's messages.
+   * adds the stored files no message carries), a page at a time, with their markdown. `current`: the open thread's messages;
+   * `repoIds`: the floors' projects, any other scope is a 400.
    */
-  async library(s: ChatsState, current: readonly PhoneMessage[], stored: readonly FileRef[], q: { scope: ThreadScope; filter: LibraryFilter; after?: string }): Promise<LibraryPage> {
+  async library(s: ChatsState, current: readonly PhoneMessage[], stored: readonly FileRef[], q: { scope: ThreadScope; filter: LibraryFilter; after?: string }, repoIds: readonly string[]): Promise<LibraryPage> {
+    if (!['all', 'company', ...repoIds].includes(q.scope)) throw new HttpError(400, `No floor has the project ${q.scope}: use all, company or a floor's repo id.`);
     const threads = await Promise.all(s.list.filter((c) => inScope(c, q.scope)).map(async (c) => ({ id: c.id, messages: c.id === s.current ? current : await this.loadThread(c.id) })));
     const items = libraryItems(threads, q.scope === 'all' ? stored : [], true);
     return { ...pageLibrary(filterLibrary(items, q.filter), q.after), counts: libraryCounts(items) };
