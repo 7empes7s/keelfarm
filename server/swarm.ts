@@ -730,6 +730,7 @@ export class Swarm extends SwarmCeoTools {
       const url = (patch.notify as { officeUrl?: unknown } | null)?.officeUrl;
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
+      this.telegram.refresh(); // the switch: Off stops reading the bot at once, On resumes it
     }
     if (patch.everyProject !== undefined) {
       try {

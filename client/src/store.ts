@@ -324,7 +324,7 @@ export const useStore = create<State>((set, get) => ({
     pushDevices: 0,
     devices: [],
     desktop: null,
-    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null },
+    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null },
   },
   cloud: EMPTY_CLOUD,
   tooling: EMPTY_INVENTORY,

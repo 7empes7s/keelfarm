@@ -587,7 +587,7 @@
   ],
   "sizes": {
     "client/src/store.ts": 810,
-    "client/src/styles.css": 6034,
+    "client/src/styles.css": 6341,
     "client/src/ui/Phone.tsx": 1167,
     "client/src/ui/sfx.ts": 838,
     "client/src/world/ErrandDirector.tsx": 851,
@@ -601,6 +601,6 @@
     "server/demo.ts": 1925,
     "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
-    "shared/types.ts": 953
+    "shared/types.ts": 956
   }
 }

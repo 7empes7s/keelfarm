@@ -336,6 +336,7 @@ app.post('/api/notify/push/report', route((req) => swarm.notifier.report(req.bod
 app.post('/api/notify/ntfy/quick', route(() => swarm.notifier.quickNtfy()));
 app.put('/api/notify/telegram', route((req) => swarm.telegram.setToken(req.body?.token)));
 app.post('/api/notify/telegram/link', route(() => swarm.telegram.link()));
+app.post('/api/notify/telegram/retry', route(() => swarm.telegram.retryNow()));
 app.delete('/api/notify/telegram', route(() => swarm.telegram.remove()));
 app.post('/api/notify/telegram/demo', route((req) => swarm.telegramDemo(req.body ?? {})));
 // The office's own update: Update now / Later

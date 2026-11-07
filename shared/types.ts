@@ -484,8 +484,11 @@ export interface TelegramView {
   linked: boolean; // the manager pressed Start in their chat
   chat: string; // that chat's first name, for "Linked to …"
   linking: boolean; // a Start link is waiting to be pressed
-  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages
+  on: boolean; // Settings' Telegram switch: off, nothing is read, retried or sent; the token and chat are kept
+  polling: 'off' | 'ok' | 'retrying'; // reading the bot's messages ('off' while there's no token or the switch is off)
   error: string; // why the last read failed, while retrying
+  okAt: number | null; // when reading last worked
+  advice: string; // what to check after repeated failures
   last: NotifyHealth | null; // its last send
 }
 

@@ -275,6 +275,7 @@ export abstract class SwarmCore extends SwarmContract {
       api: backend.telegram,
       // As the demo's cloud: a file of its own, as its tests run beside the notifier's, which share demo-secrets.json.
       secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+      on: () => this.state.settings.notify.channels.telegram,
       message: async (text, id) => void (await this.messageCeo(text, undefined, 'telegram', [], id)),
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
