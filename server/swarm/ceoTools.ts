@@ -89,6 +89,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       askManager: (a) => this.askManager(a),
       consult: (a) => this.consult(a),
       sessionHistory: (a) => this.sessionHistory(a),
+      react: (a) => this.ceoReact(a),
+      reply: (a) => this.ceoReply(a),
     }, () => this.state.ceo.job?.kind === 'research')));
   }
 

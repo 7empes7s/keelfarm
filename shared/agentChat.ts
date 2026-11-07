@@ -3,7 +3,7 @@
 // bubbles, each tool call as a step in plain words, milestones like a pushed branch or an opened PR) and sends the
 // items that changed to the tabs with that agent's window open. The window groups runs of steps ("Explored 9 files").
 // Pure, for the server, the demo and the client.
-import type { Reaction, StatusReaction } from './reactions.ts';
+import type { AgentStatusReaction, Reaction } from './reactions.ts';
 
 type StepGroup = 'explore' | 'edit' | 'run' | 'browser' | 'plan' | 'helper' | 'other';
 
@@ -321,7 +321,7 @@ export function mergeChat(prev: readonly ChatItem[], fresh: readonly ChatItem[])
  * The office's own reaction on the manager's message at `index`: 👀 once it's in, ⏳ while they work on it, ✅ once
  * they've answered (a reply after it, and their turn is over or ended on that reply).
  */
-export function statusReaction(items: readonly ChatItem[], index: number, working: boolean): StatusReaction {
+export function statusReaction(items: readonly ChatItem[], index: number, working: boolean): AgentStatusReaction {
   const after = items.slice(index + 1).filter((x) => x.kind !== 'manager');
   if (!after.length) return '👀';
   const replied = after.some((x) => x.kind === 'text');

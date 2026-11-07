@@ -21,7 +21,7 @@ import {
 import { blockers, waitsMessage } from '../../shared/issues.ts';
 import { ChatLog, quoteOf, type TranscriptEvent } from '../../shared/agentChat.ts';
 import { redact as scrub } from '../../shared/journal.ts';
-import { isReaction, reactionNote } from '../../shared/reactions.ts';
+import { isAgentReaction, reactionNote } from '../../shared/reactions.ts';
 import { cleanStyle } from '../../shared/looks.ts';
 import { effectiveModel } from '../../shared/models.ts';
 import { FLOOR_SEATS } from '../../shared/types.ts';
@@ -714,7 +714,7 @@ export abstract class SwarmAgents extends SwarmMerge {
   /** POST /api/agents/:id/react: the manager's reaction on an item of their chat; one that asks for something is typed into their running session as a short note. */
   react(id: string, itemId: unknown, reaction: unknown) {
     const a = this.agent(id);
-    if (!isReaction(reaction)) throw new HttpError(400, 'Pick a reaction from the bar.');
+    if (!isAgentReaction(reaction)) throw new HttpError(400, 'Pick a reaction from the bar.');
     const hit = typeof itemId === 'number' ? this.chatOf(a)?.react(itemId, reaction) : null;
     if (!hit) throw new HttpError(404, 'That message is no longer in their chat.');
     this.outbox.chat(a.id, [hit.item]);
