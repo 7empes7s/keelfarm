@@ -4,6 +4,8 @@ import { useStore } from '../store';
 import { costInsights, KIND_GROUP_LABELS, kindGroup, wasteGroups, type CostItem, type CostsView, type CostWaste, type KindGroup, type WasteGroup } from '../../../shared/costs';
 import { dayKey } from '../../../shared/journal';
 import { ago } from '../../../shared/usage';
+import { spendLimit } from '../../../shared/progressBars';
+import { ProgressBar } from './ProgressBar';
 import type { RepoView } from '../../../shared/types';
 
 // Mission control → Where the plan goes (#106): the insight strip, the most expensive issues as ranked cards and the
@@ -51,6 +53,7 @@ const KIND_TONE: Record<KindGroup, string> = { build: 'var(--ds-series-1)', qa: 
 /** The strip over the costs: each stat taps through to the rows it counts. */
 export function InsightStrip({ view, floorName, onCause }: { view: CostsView; floorName: (id: string) => string; onCause: (cause: string) => void }) {
   const i = costInsights(view, dayKey(Date.now()));
+  const spend = i.today && spendLimit(i.today);
   return (
     <div className="costs-stats">
       {i.today && (
@@ -60,6 +63,7 @@ export function InsightStrip({ view, floorName, onCause }: { view: CostsView; fl
           <span className="costs-stat-note">
             <Change change={i.today.change} /> vs {fmtUsd(i.today.avg)} a day
           </span>
+          {spend && <ProgressBar label="Of a usual day" value={pct(i.today.usd / i.today.avg)} pct={spend.pct} tone={spend.tone} compact aria={`Today's spend: ${fmtUsd(i.today.usd)}, ${pct(i.today.usd / i.today.avg)} of the 7-day average`} />}
         </button>
       )}
       <button className="costs-stat" onClick={() => jump(view.byDay.length > 1 ? 'costs-days' : 'costs-floors')}>

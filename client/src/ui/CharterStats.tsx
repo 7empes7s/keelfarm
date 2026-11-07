@@ -3,6 +3,8 @@ import { api } from '../api';
 import { STATUS_LABELS, type CharterInsights, type ObjectiveInsight, type ObjectiveStatus, type StatsWindow } from '../../../shared/charterStats';
 import type { CharterParts } from '../../../shared/charter';
 import type { RepoView } from '../../../shared/types';
+import { focusProgress, objectiveParts, objectiveProgress, type ObjectiveProgress } from '../../../shared/progressBars';
+import { ProgressBar } from './ProgressBar';
 
 // The Charter tab's numbers (#105, shared/charterStats.ts): the floor's insight strip and each objective's card. Every
 // number is a button that lists what it counts (PRs or issues, linked to GitHub) under its card.
@@ -50,6 +52,25 @@ function Stat({ shown, open, onTap, title, children, tone }: { shown: Shown; ope
   );
 }
 
+/** How far along an objective (or the focus) is: merged in 30 days against its open issues; tapping lists them. */
+function ObjectiveBar({ id, label, p, open, onTap }: { id: string; label: string; p: ObjectiveProgress; open: Shown | null; onTap: (s: Shown | null) => void }) {
+  const left = p.progress.length + p.ready.length + p.waiting.length;
+  const name = id === 'focus' ? label : `${id} progress`;
+  const shown: Shown = { key: `progress-${id}`, label: `${name}: merged in 30 days, then open issues (in progress, ready, waiting)`, prs: p.merged, issues: [...p.progress, ...p.ready, ...p.waiting] };
+  const on = open?.key === shown.key;
+  return (
+    <ProgressBar
+      label={label}
+      value={p.share === null ? 'nothing yet' : `${p.merged.length} merged · ${left} open`}
+      parts={objectiveParts(p)}
+      aria={`${name}: ${p.merged.length} merged in 30 days, ${p.progress.length} in progress, ${p.ready.length} ready, ${p.waiting.length} waiting`}
+      onClick={() => onTap(on ? null : shown)}
+      tap={on ? 'Hide the list' : 'List them'}
+      expanded={on}
+    />
+  );
+}
+
 /** Merges per week, the last 4 weeks, as bars. */
 function Sparkline({ weeks }: { weeks: number[] }) {
   const top = Math.max(1, ...weeks);
@@ -71,8 +92,10 @@ export function InsightStrip({ repo, insights, days }: { repo: RepoView; insight
   const off = f.offCharter.reduce((n, g) => n + g.prs.length, 0);
   const worst = f.standards?.find((s) => s.prs.length > 0);
   const tap = (s: Shown | null) => setOpen(s);
+  const focusBar = focusProgress(insights.objectives, insights.focus);
   return (
     <div className="card cs-strip">
+      {focusBar && <ObjectiveBar id="focus" label={`Current focus (${insights.focus.join(', ')})`} p={focusBar} open={open} onTap={tap} />}
       <div className="cs-grid">
         <Stat title="In focus" open={open} onTap={tap} shown={{ key: 'focus', label: `Merges that served the focus (${insights.focus.join(', ') || 'none named'})`, prs: f.inFocus.prs }}>
           {insights.focus.length ? pct(f.inFocus.share) : 'no focus'}
@@ -138,7 +161,7 @@ export function ObjectiveCard({ repo, objective, insight, days, inFocus }: { rep
       </div>
       {n && insight ? (
         <>
-          <div className="charter-drift-bar" style={{ ['--share' as string]: `${(n.share ?? 0) * 100}%` }} aria-hidden />
+          <ObjectiveBar id={id} label="Progress" p={objectiveProgress(insight)} open={open} onTap={setOpen} />
           <div className="cs-grid">
             <Stat title="Merged" open={open} onTap={setOpen} shown={{ key: 'merged', label: `PRs that named ${id}`, prs: n.prs }}>
               {n.prs.length}

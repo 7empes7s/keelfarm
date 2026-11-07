@@ -109,17 +109,20 @@ const addProject = (mode: string): View => ({
   },
 });
 
-/** Mission control with the costs' first waste group (#106) or the Rounds card's first cause (#188) open. */
-const wasteGroup = (where: Where, rounds = false): View => ({
-  name: `Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`,
+/** A section with its first expandable row tapped open: Mission control's waste groups (#106), objectives' progress (#140). */
+const tapOpen = (name: string, group: string, section: string, row: string) => (where: Where): View => ({
+  name,
   go: async (root) => {
-    await (where === 'pocket' ? pocketSection(root, 'Mission control') : officeSection(root, 'Company', 'Mission control'));
-    const group = root.locator(rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head').first();
-    await group.scrollIntoViewIfNeeded();
-    await group.click();
-    await expect(group).toHaveAttribute('aria-expanded', 'true');
+    await (where === 'pocket' ? pocketSection(root, section) : officeSection(root, group, section));
+    const head = root.locator(row).first();
+    await head.scrollIntoViewIfNeeded();
+    await head.click();
+    await expect(head).toHaveAttribute('aria-expanded', 'true');
   },
 });
+const wasteGroup = (where: Where, rounds = false): View =>
+  tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
+const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
 
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
@@ -140,7 +143,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

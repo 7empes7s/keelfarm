@@ -7,6 +7,7 @@ import { confirmDialog } from './Confirm';
 import { CostsSection } from './CostsSection';
 import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
+import { FloorProgress } from './FloorProgress';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { HealthStrip } from './HealthStrip';
@@ -354,6 +355,7 @@ export function OpsTab({ card }: { card?: string }) {
         <DoctorSection hot={card === 'doctor'} />
       </div>
       <div>
+        <FloorProgress />
         <h3 className="section">🛰️ The numbers</h3>
         <OpsTable />
         <CostsSection />

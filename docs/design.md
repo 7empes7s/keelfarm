@@ -116,6 +116,12 @@ The manager's console has five top tabs, and each one shows a side menu of its s
   never in the text flow. Expandable groups are buttons with `aria-expanded`.
 - **Share bar** (`.costs-bar`): an 8 px pill, 1 px ink outline, segments in `--ds-series-1…4` in that order, with a
   legend of dots below when there's more than one; give it `role="img"` and an `aria-label` with the numbers.
+- **Progress bar** (`ui/ProgressBar.tsx`, #140): a label and its number above an 8 px pill track (6 px `compact`)
+  with a 1 px ink outline. Filled to a share (`pct`; `null` sweeps, for work of unknown length), stacked `parts`
+  (`--ds-series-*`, legend below), or `steps` (done ones filled, the current one pulsing). Tone good / warn / bad from
+  the state fills, neutral in `--ds-series-4`; the words say it too. With `onClick` or `href` the whole bar is a 44 px
+  button or link to what it counts (`tap` says what). Animations use the motion tokens and stop under reduce motion.
+  `ProgressRing` is its compact form for avatars and tight cards. Values come from pure `shared/progressBars.ts`.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
 
 ## Finding things and learning the office (#109)
