@@ -5,9 +5,10 @@ import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
+import { openTextPill } from './ChatZoom';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; hands-free).
+// prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; text size; hands-free).
 
 interface PlusProps {
   text: string;
@@ -99,7 +100,7 @@ interface ToolsProps {
   into?: HTMLElement | null;
 }
 
-/** Icon buttons with their counts as badges: conversations and search, artifacts, files, hands-free. */
+/** Icon buttons with their counts as badges: conversations and search, artifacts, files, text size, hands-free. */
 export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onFiles, into }: ToolsProps) {
   const tools = (
     <>
@@ -116,6 +117,9 @@ export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onF
           📎<span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
         </button>
       )}
+      <button type="button" className="chat-tool" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
+        Aa
+      </button>
       <HandsFreeToggle ceoName={ceoName} />
     </>
   );
