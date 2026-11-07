@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBackLayer } from './Panel';
+import { CloseButton } from './Icon';
 import { isTopDialog, useDialogFocus } from './dialogFocus';
 import './paste.css';
 
@@ -28,9 +29,7 @@ export function PasteSheet({ onSend, onClose }: { onSend: (text: string, enter: 
       <div ref={box} className="paste-sheet ds-screen" role="dialog" aria-modal="true" aria-label="Paste into the terminal" tabIndex={-1}>
         <div className="paste-sheet-head">
           <b className="grow">Paste into the terminal</b>
-          <button type="button" className="panel-x" aria-label="Close" onClick={onClose}>
-            ✕
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
         <p className="small muted">The clipboard couldn’t be read here. Long-press the box and choose Paste, or type it.</p>
         <textarea className="paste-sheet-field" aria-label="Text to paste" value={text} onChange={(e) => setText(e.target.value)} autoFocus rows={3} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
