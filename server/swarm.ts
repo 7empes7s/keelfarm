@@ -361,7 +361,7 @@ export class Swarm extends SwarmCeoTools {
         this.broadcast({ type: 'clis', clis });
       })
       .catch((err) => console.warn('could not look for agent CLIs', err));
-    void this.refreshTooling();
+    void Promise.all([this.refreshTooling(), this.startModels()]); // Tools & skills, and the model catalog (#198)
     await this.journal.start();
     await this.spend.ledger.load();
     await this.history.load();

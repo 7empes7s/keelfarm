@@ -9,7 +9,7 @@ import type { QaView, RepoView } from '../../../shared/types';
 import { qaCardNote } from '../qaCard';
 import { confirmDialog } from '../ui/Confirm';
 import { Menu } from '../ui/Menu';
-import { Resume } from '../ui/Phone';
+import { Resume } from '../ui/TeamChanges';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
 import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';

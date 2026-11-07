@@ -31,6 +31,24 @@ describe('questionLine', () => {
     expect(questionLine('Builds are **green**. Shall I keep the team on it? Say so.')).toBe('Shall I keep the team on it?');
     expect(questionLine('All quiet.\nPick one')).toBe('Pick one');
   });
+
+  // #183: the two cards on the manager's phone (IMG_1969)
+  it('drops list markers, bold and "What you need to do:" labels', () => {
+    expect(questionLine('GitHub Actions stopped.\n\n- **What you need to do:** raise the spending limit, or drop the Windows CI job.')).toBe('Raise the spending limit, or drop the Windows CI job.');
+    expect(questionLine('Status:\n1. **Next step:** shall I merge #12 now?')).toBe('Shall I merge #12 now?');
+    expect(questionLine('> **Decision needed:** keep floor 2 on it? Say so.')).toBe('Keep floor 2 on it?');
+  });
+
+  it("prefers the CEO's sentence ending in a question mark over a later line", () => {
+    expect(questionLine('Did you fix the GitHub payment?\n- The only blocker left is the failed GitHub payment.', ['Fixed it', 'Not yet'])).toBe('Did you fix the GitHub payment?');
+  });
+
+  it('without one, asks its options', () => {
+    const text = 'Floor 3 #177 passed QA round 3, and I have escalated it to you. The only blocker left is the failed GitHub payment.';
+    expect(questionLine(text, ['I fixed the payment', 'Skip Windows CI for now'])).toBe('I fixed the payment or skip Windows CI for now?');
+    expect(questionLine('- What you need to do: raise the spending limit for GitHub Actions', ['Raised the limit', 'Drop the Windows CI job'])).toBe('Raised the limit or drop the Windows CI job?');
+    expect(questionLine('Pick one.', ['CI on Windows', 'Ship it.'])).toBe('CI on Windows or ship it?');
+  });
 });
 
 describe('fromCeoMessage', () => {
@@ -52,6 +70,46 @@ describe('fromCeoMessage', () => {
     expect(again).toHaveLength(1);
     expect(again[0]).toMatchObject({ id: 'msg:1', messageId: 9, raised: 2, lastAskedAt: 9000, askedAt: 1000 });
     expect(fromCeoMessage(again, ceo(9, 'x', ALERT), 9500)).toBe(again); // the same message twice
+  });
+
+  it("uses the CEO's explicit question line, and keeps the message as the card's context", () => {
+    const [d] = fromCeoMessage([], ceo(3, '- **What you need to do:** raise the spending limit.', ['Raised it'], { ask: 'Did you fix the GitHub payment?' }), 3);
+    expect(d).toMatchObject({ question: 'Did you fix the GitHub payment?', context: 'Raise the spending limit.' });
+  });
+
+  it('a newer question on the same thing replaces the older one, which is marked superseded', () => {
+    const r1 = { refs: [{ start: 0, end: 7, kind: 'floor' as const, repoId: 'r1' }] };
+    const older = fromCeoMessage([], ceo(1, 'GitHub Actions stopped: the payment for the account failed, so CI is red on every floor.\n- What you need to do: raise the spending limit for GitHub Actions in the billing settings.', ['Raised the limit', 'Drop the Windows CI job'], r1), 1000);
+    const newer = fromCeoMessage(older, ceo(2, 'Floor 3 #177 passed QA round 3. The only blocker left is the failed GitHub payment, so its CI is red.', ['I fixed the payment', 'Skip Windows CI for now'], { ...r1, ask: 'Did you raise the spending limit, or skip Windows CI?' }), 2000);
+    expect(newer.map((d) => [d.id, d.status])).toEqual([['msg:1', 'superseded'], ['msg:2', 'open']]);
+    expect(waitingDecisions(newer, 2000).map((d) => d.id)).toEqual(['msg:2']);
+    expect(newer[0].outcome).toMatch(/^replaced by/);
+  });
+
+  it('leaves an older question on something else, or on other floors, open', () => {
+    const r = (repoId: string) => ({ refs: [{ start: 0, end: 7, kind: 'floor' as const, repoId }] });
+    const other = fromCeoMessage(asked(), ceo(2, 'The failed GitHub payment turned CI red. Did you raise the spending limit?', ['Raised it', 'Not yet']), 2000);
+    expect(waitingDecisions(other, 2000)).toHaveLength(2);
+    const pay = 'The failed GitHub payment turned CI red on this floor. Did you raise the spending limit?';
+    const one = fromCeoMessage([], ceo(1, pay, ['Raised it', 'Not yet'], r('r1')), 1000);
+    expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No'], r('r2')), 2000), 2000)).toHaveLength(2);
+    expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No'], r('r1')), 2000), 2000)).toHaveLength(1);
+    expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No']), 2000), 2000)).toHaveLength(2); // one names a floor, one doesn't
+    const bare = fromCeoMessage([], ceo(1, pay, ['Raised it', 'Not yet']), 1000);
+    expect(waitingDecisions(fromCeoMessage(bare, ceo(2, pay, ['Yes, raised', 'No']), 2000), 2000)).toHaveLength(1); // neither: a strong match
+  });
+
+  // QA's probe on #184: unrelated questions that share a word or two stay open
+  it.each([
+    [['Shall I file the quieter memory alert fix?', ['File it', 'Leave it']], ['Two builds ran together today and the build cache filled the disk. Shall I file a cache cleanup fix?', ['File it', 'Leave it alone']]],
+    [['PR #150 merged today. Shall I file a follow-up issue for the phone layout?', ['File it', 'Not now']], ['PR #151 merged today. Shall I file a follow-up issue for the docs?', ['File it', 'Skip it']]],
+    [['Shall I merge it now?', ['Merge it', 'Wait']], ['Should Ada fix the conflict or should I close it?', ['Ada fixes it', 'Close it']]],
+  ] as [string, string[]][][])('keeps "%s" open after an unrelated question', ([q1, o1], [q2, o2]) => {
+    const list = fromCeoMessage(fromCeoMessage([], ceo(1, q1, o1), 1000), ceo(2, q2, o2), 2000);
+    expect(waitingDecisions(list, 2000)).toHaveLength(2);
+    const r1 = { refs: [{ start: 0, end: 7, kind: 'floor' as const, repoId: 'r1' }] };
+    const onFloor = fromCeoMessage(fromCeoMessage([], ceo(1, q1, o1, r1), 1000), ceo(2, q2, o2, r1), 2000);
+    expect(waitingDecisions(onFloor, 2000)).toHaveLength(2);
   });
 
   it('never raises a dropped one again', () => {
@@ -86,7 +144,7 @@ describe('snooze, drop and resolve', () => {
   });
 
   it('Drop it and resolve_decision close it for good', () => {
-    for (const status of ['dropped', 'resolved'] as const) {
+    for (const status of ['dropped', 'resolved', 'superseded'] as const) {
       const list = closeDecision(asked(), 'msg:1', status, 'the CEO filed it', 2000);
       expect(list[0]).toMatchObject({ status, outcome: 'the CEO filed it' });
       expect(waitingDecisions(list, 3000)).toEqual([]);

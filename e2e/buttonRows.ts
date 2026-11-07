@@ -1,6 +1,6 @@
 import type { Locator } from '@playwright/test';
 
-// layout.spec.ts's check that everything styled as a button looks like one (#130), kept apart for its size budget.
+// The layout specs' check that everything styled as a button looks like one (#130), kept apart for its size budget.
 
 /** Everything styled as a button, whatever its element (#130): at least 44px tall, its label centred, and the same
  *  height as the buttons beside it in its row. */

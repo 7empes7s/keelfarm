@@ -6,6 +6,7 @@ import type { Backend } from './backend.ts';
 import type { PreviewBackend } from './previewRunner.ts';
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from './agentRunner.ts';
 import { CLIS } from './clis.ts';
+import { mergeCatalog } from '../shared/models.ts';
 import { DEMO_PICKS, demoMakeFiles, sentFiles, wantsFile } from './demoFiles.ts';
 import { buildInventory, memoryFs } from './tooling.ts';
 import { toolArgsLine, type ToolInventory } from '../shared/tooling.ts';
@@ -699,6 +700,23 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
 }
 
 /**
+ * The model catalog, made up (#198): Anthropic's list, Codex's, OpenCode's and an Ollama with one model;
+ * SWARM_DEMO_MODELS=fail shows Claude Code's built-in list, as when its login can't read Anthropic's.
+ */
+export function demoCatalog(now: number) {
+  const claude = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5'].map((id) => ({ id }));
+  return mergeCatalog(
+    [
+      { cli: 'claude', models: process.env.SWARM_DEMO_MODELS === 'fail' ? null : claude },
+      { cli: 'codex', models: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', isDefault: true }, { id: 'gpt-6-astra', name: 'GPT-6-Astra' }, { id: 'gpt-6.1-terra', name: 'GPT-6.1 Terra' }] },
+      { cli: 'opencode', models: [{ id: 'anthropic/claude-opus-5-5' }, { id: 'openai/gpt-6.1-sol' }, { id: 'opencode/big-pickle' }] },
+      { local: 'ollama', models: ['qwen3-coder:30b'] },
+    ],
+    now,
+  );
+}
+
+/**
  * Claude's usage on demand (the manager's console → Mission control, in the demo): a weekly-limit warning at 91% that
  * resets at midnight, or the 5-hour limit reached for 3 minutes.
  */
@@ -1028,6 +1046,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
     quickPicks: async () => DEMO_PICKS,
     toolInventory: async (projects) => demoTooling(projects),
+    modelCatalog: async () => demoCatalog(Date.now()),
     // The idle check (#89) reads the made-up numbers; SWARM_DEMO_USAGE_CHECK=fail shows a check that can't read them.
     usageCheck: async () => (process.env.SWARM_DEMO_USAGE_CHECK === 'fail' ? { error: 'failed' } : { readings: demoReadings(Date.now()) }),
     survivalSignals: demoSurvival,
