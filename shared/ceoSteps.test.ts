@@ -29,6 +29,7 @@ describe('steps in plain words (#150)', () => {
     expect(office('agent_log', `📜 agent_log ${ID}`, names)).toBe("Reading Ada's log");
     expect(office('agent_detail', `🔎 agent_detail ${ID}`)).toBe('Checking on an agent');
     expect(office('restart_agent', '🏢 restart_agent({"agent_id":"Grace"})')).toBe('Restarting Grace');
+    expect(office('propose_design', '🏢 propose_design({"floor":2,"title":"Cards"})')).toBe('Showing you design options for floor 2');
     expect(office('stop_agent', '🏢 stop_agent({"agent_id":"Grace","reason":"closed"})')).toBe('Stopping Grace');
   });
 

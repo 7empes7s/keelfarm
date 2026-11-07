@@ -4906,9 +4906,11 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-callout {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border: 3px solid var(--ds-outline);
   border-radius: 16px;
   background: #ffe0e6;
@@ -4917,6 +4919,28 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   color: var(--ink);
   cursor: pointer;
   text-align: left;
+}
+/* a ⚠ in a tinted circle, the count, and "Approvals ›" that never splits from its chevron (#223) */
+.pk-callout-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ds-bad-fill) 45%, var(--ds-surface-raised));
+  font-size: var(--ds-text-sm);
+}
+.pk-callout-text {
+  flex: 1 1 12em;
+  min-width: 0;
+  line-height: var(--ds-leading-tight);
+}
+.pk-callout-go {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+  font-weight: var(--ds-weight-strong);
 }
 .pk-ceo,
 .pk-floor-head,
@@ -4933,6 +4957,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   overflow-wrap: anywhere;
 }
 .pk-floor {
+  container: pkfloor / inline-size;
   border-left: 10px solid var(--accent);
 }
 .pk-floor-name {
@@ -4945,7 +4970,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-pipeline {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, auto); /* each chip as wide as its label needs, the rest shared */
   gap: 6px;
   margin: 10px 0 8px;
 }
@@ -4971,6 +4996,9 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-stage-label {
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.68rem;
   font-weight: 600;
   line-height: 1.15;
@@ -4987,7 +5015,29 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+}
+.pk-floor-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+/* one row, the people and backlog line on the left and Board · Team on the right, wrapping as a whole only on a narrow card */
+@container pkfloor (max-width: 300px) {
+  .pk-pipeline {
+    gap: var(--ds-space-1);
+  }
+  .pk-stage-label {
+    font-size: 0.62rem;
+  }
+}
+@container pkfloor (max-width: 239px) {
+  .pk-floor-foot {
+    flex-wrap: wrap;
+  }
+  .pk-floor-foot > .pk-ellipsis {
+    white-space: normal;
+  }
 }
 .pk-wide {
   width: 100%;

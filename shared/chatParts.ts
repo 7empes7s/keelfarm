@@ -20,7 +20,7 @@ const IDEA_MESSAGE_CHARS = 400;
 /** How much artifact markdown the snapshot carries, newest first; older bodies are fetched when opened. */
 export const SNAPSHOT_ARTIFACT_CHARS = 60_000;
 /** The CEO replies whose whole step log (#150) the snapshot carries, newest first; older ones keep their count and time. */
-const SNAPSHOT_LOGS = 3;
+const SNAPSHOT_LOGS = 2;
 
 export interface ParsedMessage {
   text: string;

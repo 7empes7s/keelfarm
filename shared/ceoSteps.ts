@@ -101,6 +101,7 @@ const OFFICE: Record<string, [string, Words]> = {
   keep_file: ['📌', () => 'Keeping a file'],
   set_mandate: ['📜', () => 'Setting a mandate'],
   propose_charter: ['🧭', (t) => `Proposing a charter${t.floor ? ` for floor ${t.floor}` : ''}`],
+  propose_design: ['🎨', (t) => `Showing you design options${t.floor ? ` for floor ${t.floor}` : ''}`],
   resolve_decision: ['✅', () => 'Settling a decision'],
   define_experiment: ['🧪', () => 'Setting up an experiment'],
   restart_agent: ['🔄', (t, n) => `Restarting ${who(t.agent, n)}`],
