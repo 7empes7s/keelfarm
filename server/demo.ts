@@ -37,6 +37,7 @@ import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers, sampleHistory, samplePastCareers } from './careerSample.ts';
 import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
 import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
+import { demoKill, demoPortOwner, demoProc, holdDemoPort } from './demoLeftover.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
@@ -818,6 +819,7 @@ async function fakeTrim(stillIdle: () => boolean) {
 export function createDemoBackend(scale: DemoScale | null = null, noTour = false): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
+  holdDemoPort(() => `/demo/${[...repos.keys()][0]}/desks/preview`);
   // Tie each fake session back to its repo via the desk directory name.
   const deskRepo = new Map<string, string>();
   // Desks whose pretend dependencies are installed: the first task on a desk installs, the next ones skip.
@@ -1255,6 +1257,9 @@ const flakedOnce = new Set<string>();
 
 const demoPreviews: PreviewBackend = {
   hasDefault: async (fullName) => !bareRepos.has(fullName),
+  portOwner: demoPortOwner,
+  proc: demoProc,
+  kill: demoKill,
   start(job, cb) {
     let stopped = false;
     let server: http.Server | null = null;
