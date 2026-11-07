@@ -84,7 +84,10 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
       const kind = pick<TaskKind>(['ceo-review', 'ceo-review', 'ceo-chat', 'ceo-triage']);
       const idle = kind === 'ceo-review' && rand() < 0.5;
       const ms = Math.round(between(2, 12) * 60_000);
-      session({ repoId: '', issue: null, pr: null, effort: 'xhigh', at: Math.min(now, at() + ms), ms, agentId: ceo.id, agent: ceo.name, kind, usd: between(0.3, 2.4), outcome: idle ? 'ceo-idle' : 'ceo-acted' });
+      const usd = Math.round(between(0.3, 2.4) * 100) / 100;
+      // Lines from before #254 were booked as the CEO session's running total: the repair took the rest off (and the costs view says so).
+      const corrected = d >= 2 && i > 0 ? Math.round(between(8, 20) * 100) / 100 : 0;
+      session({ repoId: '', issue: null, pr: null, effort: 'xhigh', at: Math.min(now, at() + ms), ms, agentId: ceo.id, agent: ceo.name, kind, usd, outcome: idle ? 'ceo-idle' : 'ceo-acted', total: usd + corrected, ...(corrected ? { corrected } : {}) });
     }
   }
   // Work in flight on open issues: one built three times in a row without a PR, one with an open PR back from QA.

@@ -14,6 +14,7 @@ import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Chat';
+import { ThreadsColumn } from '../ui/ChatHistory';
 import { useCall } from '../ui/voiceCallStore';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
@@ -419,6 +420,8 @@ export default function Pocket() {
   // The chat beside the pages: on wide screens open unless hidden (remembered), at medium widths a drawer, closed at first.
   const [dockPref, setDockPref] = useState(savedDock);
   const [dockW, setDockW] = useDockWidth();
+  // the chat's width for what opens beside the docked chat and its threads column (pocket.css, #132)
+  useEffect(() => document.documentElement.style.setProperty('--pk-dock-w', `${dockW}px`), [dockW]);
   const [drawer, setDrawer] = useState(false);
   const tucked = useCall((s) => s.chatTucked); // behind a voice call (#287)
   const dock = (layout === 'expanded' ? dockPref : layout === 'medium' && drawer) && !tucked;
@@ -737,7 +740,7 @@ export default function Pocket() {
           </div>
         </div>
         {wide && dock && (
-          <aside className="pk-dock" aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
+          <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
             {layout === 'expanded' && !full && <DockGrip width={dockW} onWidth={setDockW} />}
             <div className="pk-dock-head">
               <b className="pk-ellipsis">
@@ -750,7 +753,11 @@ export default function Pocket() {
                 <XLabel text="Hide the chat" keys={layout === 'medium' ? 'Esc' : undefined} />
               </button>
             </div>
-            {chat}
+            {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}
+            <div className="pk-dock-body">
+              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} />}
+              {chat}
+            </div>
           </aside>
         )}
       </div>

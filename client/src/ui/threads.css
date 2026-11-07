@@ -1,0 +1,268 @@
+/* The CEO chat's threads, their project bar, and Files & artifacts (#132): ChatHistory, ChatThreadBar, ChatLibrary. */
+
+/* the project bar and the Chat | Files segment */
+.thread-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: 2px var(--ds-space-3);
+  border-bottom: var(--ds-border) solid var(--ds-line);
+  background: var(--ds-surface-sunken);
+}
+.thread-project {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ds-target);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+}
+button.thread-project {
+  cursor: pointer;
+}
+.thread-project-name,
+.thread-project-meta,
+.lib-title,
+.lib-lead {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-seg {
+  flex: none;
+}
+.thread-seg .seg-btn,
+.lib-scopes .seg-btn {
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  font-size: var(--ds-text-sm);
+}
+/* Files shown: the chat's log, trays and composer step aside (sheets are portals, so they still open) */
+.chat-on-files > :not(.chat-head, .thread-bar, .chat-library) {
+  display: none !important;
+}
+
+/* Files & artifacts */
+.chat-library {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lib-bar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3) 0;
+}
+.lib-scopes {
+  display: flex;
+  align-self: stretch;
+}
+.lib-scopes .seg-btn {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-1) var(--ds-space-3) calc(var(--ds-space-3) + var(--ds-safe-bottom));
+}
+.lib-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--ds-space-2);
+}
+.lib-card {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lib-card:hover {
+  background: var(--ds-surface-hover);
+}
+.lib-thumb,
+.lib-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--ds-radius-sm);
+  object-fit: cover;
+}
+.lib-icon {
+  display: grid;
+  place-items: center;
+  font-size: 26px; /* about 55% of the tile */
+  background: var(--ds-surface-sunken);
+}
+.lib-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* the threads list */
+.thread-scopes {
+  display: flex;
+  gap: var(--ds-space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 2px 4px;
+}
+.thread-scope {
+  flex: none;
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.thread-scope-on {
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+}
+.thread-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.thread-group-head {
+  margin: var(--ds-space-1) 0 0;
+  font-size: var(--ds-text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-text-muted);
+}
+.thread-top {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-width: 0;
+}
+.thread-top .conv-title {
+  flex: 1;
+  min-width: 0;
+}
+.thread-when {
+  flex: none;
+}
+.thread-unread {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ds-link);
+}
+.thread-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--ds-space-2);
+}
+.thread-floor {
+  padding: 0 6px;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.thread-more {
+  flex: none;
+  align-self: center;
+  margin-right: var(--ds-space-1);
+}
+.thread-rename {
+  flex: 1;
+  display: flex;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2);
+}
+.thread-rename input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* wide: the threads in a column beside the chat (pocket mode's docked chat) */
+.threads-col {
+  flex: none;
+  width: 280px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: var(--ds-border) solid var(--ds-line-strong);
+  background: var(--ds-surface-sunken);
+}
+.threads-col > .conv-body {
+  overflow-y: auto;
+}
+/* narrow column: titles (short, capped by titling) and the project chips wrap, so nothing is cut off */
+.threads-col .thread-top {
+  align-items: flex-start;
+}
+.threads-col .conv-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.threads-col .thread-scopes {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+/* the image viewer's tap to zoom */
+.file-zoom {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.file-zoom.file-zoomed {
+  width: 100%;
+  max-height: 70vh;
+  overflow: auto;
+  cursor: zoom-out;
+}
+.file-zoomed .file-full {
+  max-width: none;
+  max-height: none;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costInsights, kindShares, perMergeTrend, spendVsAverage, topFloor, wasteCause, wasteGroups, type CostDayRow, type CostsView, type CostSplit, type CostWaste } from './costs.ts';
+import { costInsights, kindShares, perMergeTrend, spendVsAverage, topFloor, turnCost, wasteCause, wasteGroups, type CostDayRow, type CostsView, type CostSplit, type CostWaste } from './costs.ts';
 import { roundsView } from './rounds.ts';
 
 const split = (o: Partial<CostSplit> = {}): CostSplit => ({ usd: 0, sessions: 0, merges: 0, perMerge: null, wasteUsd: 0, wasteSessions: 0, byKind: {}, ...o });
@@ -18,6 +18,19 @@ const waste = (o: Partial<CostWaste> = {}): CostWaste => ({
   ...o,
 });
 const view = (o: Partial<CostsView> = {}): CostsView => ({ days: 7, since: 0, total: split(), floors: [], byDay: [], top: [], waste: [], kinds: [], startup: [], rounds: roundsView([], 0, 0), ...o });
+
+describe('turnCost (#254)', () => {
+  it("books a run's part of its session's running total; a session never seen, or one that started over, books the total", () => {
+    let last: number | undefined;
+    const parts = [18.04, 18.36, 18.68, 22.9, 0.85].map((total) => {
+      const part = turnCost(last, total);
+      last = total;
+      return Math.round(part * 100) / 100;
+    });
+    expect(parts).toEqual([18.04, 0.32, 0.32, 4.22, 0.85]);
+    expect(turnCost(undefined, 1.5)).toBe(1.5);
+  });
+});
 
 describe('wasteCause', () => {
   it('names the cause by the kind of task and why', () => {

@@ -43,7 +43,7 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { demoEditedChat, demoThreads, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
@@ -1132,6 +1132,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
       const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
       return [...edits, ...sampleChat(now, edits.length + 1, scale ? undefined : cards)]; // the big company measures the office (scale.test.ts), not the cards' example
     },
+    seedThreads: demoThreads,
     demoCharter,
     seedQaReport: (fullName) => {
       if (scale) return null; // the big company measures the office (scale.test.ts), not this example

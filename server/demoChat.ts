@@ -6,6 +6,8 @@ import { HOME_DIR } from './config.ts';
 import type { LogEntry, SessionCallbacks, SessionOptions } from './agentRunner.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 
+export { demoThreads } from './demoThreads.ts'; // the older threads beside the open chat (#132)
+
 const NOTES = `# Company notes
 
 ## The manager
