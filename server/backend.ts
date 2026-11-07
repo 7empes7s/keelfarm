@@ -223,8 +223,8 @@ export interface CloudBackend {
   detach(): void;
   /** A cloud agent's CLI signing in with its own login, in their terminal (docs/cloud.md). */
   signIn(o: { api: BoxApi; boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal; agentId: string }, exited: (code: number) => void): BoxSignIn;
-  /** The demo only: every Box's sign-in expires, as a login Anthropic or OpenAI turned away would. */
-  expireSignIns?(): void;
+  /** The demo only: every Box's sign-in expires, as a login Anthropic or OpenAI turned away would; `credit`: cloud agents' working sessions fail as an Anthropic key out of credit would instead (#258). */
+  expireSignIns?(credit?: boolean): void;
 }
 
 export interface AccountsBackend {

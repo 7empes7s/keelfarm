@@ -93,7 +93,11 @@ export interface CloudCredentialView {
   ready: boolean;
   source: CloudCredentialSource;
   hint: string; // the last 4 characters of a saved key or token, '' otherwise
+  trouble?: { kind: KeyTrouble; at: number }; // its API key ran out of credit or was turned away: cloud agents use their own login (shared/keyTrouble.ts)
 }
+
+/** An API key cloud agents were given that stopped working: out of credit (or a spend limit), or turned away as invalid. */
+export type KeyTrouble = 'out-of-credit' | 'invalid';
 
 /** The cloud account as the manager sees it in Settings → Cloud agents. Keys and tokens never leave the server. */
 export interface CloudView {
@@ -162,6 +166,7 @@ export interface AgentView {
   host?: MachineHost; // where their machine is: an Upstash Box, or this computer (absent: local; the CEO always is)
   cloud?: CloudMachineState; // their Box's state (absent for local agents)
   needsSignIn?: boolean; // a cloud agent whose coding agent waits for the manager to sign it in, in their terminal (docs/cloud.md)
+  signInWhy?: KeyTrouble; // while needsSignIn: the office's API key stopped working, so they switched to their own login
   terminal: boolean; // they have a terminal to watch (the terminal runtime); otherwise their log lines are the screen
   status: AgentStatus;
   issueNumber: number | null; // the issue being built, or the one the PR under test or fix closes

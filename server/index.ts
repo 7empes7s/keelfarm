@@ -241,6 +241,8 @@ app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.par
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
 app.post('/api/agents/:id/react', route((req) => swarm.react(String(req.params.id), req.body?.itemId, req.body?.reaction)));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
+app.post('/api/agents/:id/sign-in-check', route((req) => swarm.recheckSignIn(String(req.params.id))));
+app.get('/api/agents/:id/sign-in-link', route((req) => swarm.signInLinkOf(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 // The session history (#49): a page of entries, Settings' disk-usage line, and one entry with its transcript.
 app.get('/api/history', route((req) => swarm.history.page(historyFilter(req.query))));
@@ -290,6 +292,8 @@ app.put(
 app.post('/api/cloud/test', route(() => swarm.testCloud()));
 app.post('/api/cloud/orphans', route(() => swarm.deleteCloudOrphans()));
 app.post('/api/cloud/demo-expire', route(() => swarm.expireSignIns()));
+app.post('/api/cloud/key-again', route((req) => swarm.useKeyAgain(parse(z.object({ kind: z.enum(['anthropic', 'openai']) }), req.body).kind)));
+app.post('/api/cloud/demo-credit', route(() => swarm.simulateOutOfCredit()));
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
