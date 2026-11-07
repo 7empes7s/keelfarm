@@ -107,17 +107,19 @@ const addProject = (mode: string): View => ({
   },
 });
 
-/** Mission control with the costs' first waste group open (#106). */
-const wasteGroup = (where: Where): View => ({
-  name: 'Mission control: a waste group open',
+/** A section with its first expandable row tapped open: Mission control's waste groups (#106), objectives' progress (#140). */
+const tapOpen = (name: string, group: string, section: string, row: string) => (where: Where): View => ({
+  name,
   go: async (root) => {
-    await (where === 'pocket' ? pocketSection(root, 'Mission control') : officeSection(root, 'Company', 'Mission control'));
-    const group = root.locator('.costs-group-head').first();
-    await group.scrollIntoViewIfNeeded();
-    await group.click();
-    await expect(group).toHaveAttribute('aria-expanded', 'true');
+    await (where === 'pocket' ? pocketSection(root, section) : officeSection(root, group, section));
+    const head = root.locator(row).first();
+    await head.scrollIntoViewIfNeeded();
+    await head.click();
+    await expect(head).toHaveAttribute('aria-expanded', 'true');
   },
 });
+const wasteGroup = tapOpen('Mission control: a waste group open', 'Company', 'Mission control', '.costs-group-head');
+const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
 
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
@@ -125,18 +127,6 @@ const charterEditor: View = {
   go: async (root) => {
     await pocketSection(root, 'Charter');
     await root.getByRole('button', { name: '✏️ Edit', exact: true }).click();
-  },
-};
-
-/** Charter, with an objective's progress bar tapped open to the list it counts (#140). */
-const objectiveProgress: View = {
-  name: 'Charter: an objective’s progress listed',
-  go: async (root) => {
-    await pocketSection(root, 'Charter');
-    const bar = root.locator('.cs-objective .pb-tap').first();
-    await bar.scrollIntoViewIfNeeded();
-    await bar.click();
-    await expect(bar).toHaveAttribute('aria-expanded', 'true');
   },
 };
 
@@ -150,7 +140,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, objectiveProgress, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, objectiveProgress('pocket'), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
