@@ -563,8 +563,7 @@ async function chatProblems(page: Page, when: string): Promise<string[]> {
     probe.remove();
     const headPad = parseFloat(getComputedStyle(document.querySelector('.pk-head')!).paddingTop);
     const problems: string[] = [];
-    // Typing, the tab bar steps aside (#152) and the message box sits on the screen's bottom instead.
-    const floor = tabs.height ? tabs.top : innerHeight;
+    const floor = tabs.height ? tabs.top : innerHeight; // typing, the tab bar steps aside (#152): the box sits on the bottom
     if (!tabs.height && !document.documentElement.hasAttribute('data-typing')) problems.push('the tabs are hidden');
     if (Math.abs(input.bottom - floor) > 1) problems.push(`${Math.round(floor - input.bottom)}px between the message box and the ${tabs.height ? 'tabs' : 'screen bottom'}`);
     if (tabs.height && (tabs.bottom > innerHeight + 1 || tabs.bottom < innerHeight - 1)) problems.push(`the tabs end at ${Math.round(tabs.bottom)}, the screen at ${innerHeight}`);

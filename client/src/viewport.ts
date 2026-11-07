@@ -30,7 +30,7 @@ export function insetsCovered(userAgent: string, standalone: boolean): boolean {
 }
 
 /** A field that brings up the keyboard: a textarea, an editable box, or an input you type into (not a checkbox). */
-export function isTextField(el: Element | null): boolean {
+function isTextField(el: Element | null): boolean {
   if (!el) return false;
   if (el.matches('textarea, [contenteditable=""], [contenteditable="true"]')) return true;
   return el.matches('input') && !/^(button|checkbox|color|file|hidden|image|radio|range|reset|submit)$/.test((el as HTMLInputElement).type);
