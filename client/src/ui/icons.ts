@@ -146,6 +146,7 @@ import {
   SkipForward,
   SlidersHorizontal,
   Smartphone,
+  SmilePlus,
   Snail,
   Snowflake,
   Sparkle,
@@ -328,6 +329,7 @@ export const ICONS = {
   'skip-forward': SkipForward,
   'sliders-horizontal': SlidersHorizontal,
   smartphone: Smartphone,
+  'smile-plus': SmilePlus,
   snail: Snail,
   snowflake: Snowflake,
   sparkle: Sparkle,
@@ -392,7 +394,7 @@ export const EMOJI_ICONS: Record<string, IconName> = {
   '📞': 'phone', '🏷': 'tag', '🪪': 'id-card', '🛍': 'shopping-bag', '🎂': 'cake', '☕': 'coffee', '🪑': 'armchair',
   '♪': 'music', '🎵': 'music', '🎼': 'music', '👀': 'eye', '👁': 'eye', '💼': 'briefcase-business', '🌀': 'orbit',
   '👍': 'thumbs-up', '❤': 'heart', '♥': 'heart', '🚩': 'flag', '📘': 'book-open', '🛑': 'circle-stop', '💥': 'circle-alert',
-  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info',
+  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info', '☺': 'smile-plus',
 };
 
 /** An emoji or icon glyph that still arrives as data (shared/ helpers, saved messages) → its icon, else `fallback`. */

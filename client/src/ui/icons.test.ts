@@ -16,6 +16,7 @@ const CONTENT: Record<string, string> = {
   'photo/overlay.ts': 'the stamp drawn onto a saved photo',
   'ui/AccessibilitySettings.tsx': 'a sample caption, as the caption strip shows it',
   'ui/captionRules.ts': "captions' direction arrows, part of the caption text",
+  'ui/ChatReactions.tsx': 'the reactions people and the CEO pick',
   'ui/chatterLines.ts': "agents' chatter lines",
   'ui/statusLook.ts': 'status shapes drawn into canvas textures (KIND_ICON_NAME has the icons)',
   'ui/games/PetGame.tsx': "the desk pet's treats, toys and moods",

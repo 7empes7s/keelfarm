@@ -48,6 +48,8 @@ const OFFICE_STEPS: Record<string, string> = {
   worktree_file: "Reading an agent's file",
   pr_diff: 'Reading a pull request',
   send_telegram: 'Sending to Telegram',
+  react: 'Reacting to your message',
+  reply: 'Answering a message',
   session_history: 'Reading session history',
 };
 

@@ -39,6 +39,8 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { demoReactions } from './demoReactions.ts';
+import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
@@ -986,7 +988,10 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     seedNotices: sampleNotices,
-    seedChat: demoEditedChat,
+    seedChat: (now) => {
+      const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
+      return [...edits, ...sampleChat(now, edits.length + 1)];
+    },
     demoCharter,
     demoHeldUpdate,
     simulateUsage: demoUsage,
@@ -1469,6 +1474,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     async chat(text: string) {
       const s = await status();
       await think('Reading your message.');
+      const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
+      if (quick !== null) return quick;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
@@ -1638,7 +1645,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       timers.push(
         setTimeout(() => {
           if (stopped || done) return;
-          const said = text.split('\n').slice(1).join(' ').trim() || text;
+          const said = text.split('\n').slice(1).join(' ').replace(/^\(message \d+\) /, '').trim() || text;
           const reply = parseForwarded(said);
           cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
           cb.turn?.(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`);
