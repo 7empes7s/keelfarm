@@ -38,6 +38,7 @@ export interface CeoJob {
   topic?: string; // research: what to research
   pick?: string; // plan: the option the manager picked from the CEO's research
   brief?: string; // plan: where that research brief was saved
+  onCeoModel?: true; // its kind's model failed with a model error: the retry runs on the CEO's own (#331)
   at: number;
 }
 
