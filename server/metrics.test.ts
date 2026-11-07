@@ -199,6 +199,19 @@ describe('the numbers', () => {
     expect(a.floors[1]).toMatchObject({ qaFirstPass: null, qaRoundsPerMerge: null });
     expect(qaRoundsPerMerge([[NOW, 'o/b', 1, null]], h.qa)).toBeNull(); // the same number on another floor is another PR
   });
+
+  it('leave out rounds failed by a CI outage or the lab, which are not the PR’s (#188)', () => {
+    const h = emptyHistory();
+    recordQa(h, 'o/a', false, null, NOW - 3 * HOUR_MS, 1, 1, 'lab-error');
+    recordQa(h, 'o/a', false, null, NOW - 2 * HOUR_MS, 1, 2, 'outage');
+    recordQa(h, 'o/a', true, null, NOW - HOUR_MS, 1, 3);
+    recordQa(h, 'o/a', false, null, NOW - 3 * HOUR_MS, 2, 1, 'bug');
+    recordQa(h, 'o/a', true, null, NOW - HOUR_MS, 2, 2);
+    h.merges.push([NOW - HOUR_MS, 'o/a', 1, null], [NOW - HOUR_MS, 'o/a', 2, null]);
+    expect(qaRoundsPerMerge(h.merges, h.qa)).toBe(1.5);
+    expect(opsView([floor()], h, NOW).floors[0].qaFirstPass).toBe(0);
+    expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW).qa[0][6]).toBe('lab-error'); // kept through the state file
+  });
 });
 
 describe('alarms', () => {

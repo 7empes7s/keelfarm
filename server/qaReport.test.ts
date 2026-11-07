@@ -36,3 +36,12 @@ describe("QA's charter check (#48)", () => {
     expect(r.checks).toHaveLength(1);
   });
 });
+
+describe("QA's cause for a fail (#188)", () => {
+  it('is in the schema and read back on a fail only', () => {
+    expect((QA_SCHEMA.properties as Record<string, { enum?: string[] }>).cause.enum).toEqual(expect.arrayContaining(['bug', 'nit', 'spec-missing', 'lab-error', 'outage']));
+    expect(parseReport(result({ structured: report({ verdict: 'fail', cause: 'nit' }) }))!.cause).toBe('nit');
+    expect(parseReport(result({ structured: report({ verdict: 'pass', cause: 'nit' }) }))!.cause).toBeUndefined();
+    expect(parseReport(result({ structured: report({ verdict: 'fail', cause: 'typo' }) }))!.cause).toBeUndefined();
+  });
+});

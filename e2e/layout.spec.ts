@@ -107,12 +107,12 @@ const addProject = (mode: string): View => ({
   },
 });
 
-/** Mission control with the costs' first waste group open (#106). */
-const wasteGroup = (where: Where): View => ({
-  name: 'Mission control: a waste group open',
+/** Mission control with the costs' first waste group (#106) or the Rounds card's first cause (#188) open. */
+const wasteGroup = (where: Where, rounds = false): View => ({
+  name: `Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`,
   go: async (root) => {
     await (where === 'pocket' ? pocketSection(root, 'Mission control') : officeSection(root, 'Company', 'Mission control'));
-    const group = root.locator('.costs-group-head').first();
+    const group = root.locator(rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head').first();
     await group.scrollIntoViewIfNeeded();
     await group.click();
     await expect(group).toHaveAttribute('aria-expanded', 'true');
@@ -138,7 +138,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -148,7 +148,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office')],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true)],
   },
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },

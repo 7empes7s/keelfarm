@@ -26,7 +26,7 @@ import { qaShotFile, qaShotsDir } from '../qaShots.ts';
 import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
 import { readingsLabel } from '../../shared/usage.ts';
 import { usageLabel } from '../pacing.ts';
-import { floorSpend } from '../costLedger.ts';
+import { floorRoundsByCause, floorSpend } from '../costLedger.ts';
 import { checkRestart, sessionKind } from '../health.ts';
 import { labPattern } from '../testLab.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
@@ -180,6 +180,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
             qaPassRate: nums?.qaPass ?? null,
             qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
             qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
+            roundsByCause: floorRoundsByCause(this.spend.ledger.all(), r.id, Date.now()), // failed rounds, 7 days; outage and lab-error aren't in qaRoundsPerMerge
           },
           spend: floorSpend(this.spend.ledger.all(), r.id, Date.now()),
           capacity: {

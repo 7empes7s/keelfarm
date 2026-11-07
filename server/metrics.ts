@@ -1,4 +1,5 @@
 import { prStage } from '../shared/ops.ts';
+import { excludedCause, isRoundCause, type RoundCause } from '../shared/rounds.ts';
 import type { AgentRole, AgentStatus, OpsAlarm, OpsFloor, OpsNumbers, OpsView, PullInfo, QaView } from '../shared/types.ts';
 
 // Mission control's numbers (#216): pure functions over the office's state now, plus a compact rolling history of
@@ -17,9 +18,9 @@ const MAX_ENTRIES = 4000; // per list, however busy the week was
 export type MergeEntry = [at: number, repo: string, pr: number, leadMs: number | null];
 /**
  * A QA verdict: when, the repo, whether it passed, how long the PR waited for an agent to test it (null: unknown), and
- * the PR and its 1-based QA round (absent on entries from before they were recorded).
+ * the PR and its 1-based QA round (absent on entries from before they were recorded), and a fail's cause (#188).
  */
-export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null, pr?: number, round?: number];
+export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null, pr?: number, round?: number, cause?: RoundCause];
 /** GitHub's check runs on a commit, all finished: when, the repo, the commit (8 characters), passed, how long they took. */
 export type CheckEntry = [at: number, repo: string, sha: string, pass: boolean, ms: number];
 /** A finished session's reported cost: when, the repo ('' for the CEO), dollars. */
@@ -59,7 +60,7 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
     merges: list(r.merges).filter((e) => isNum(e[2]) && orNull(e[3])) as MergeEntry[],
     qa: list(r.qa)
       .filter((e) => typeof e[2] === 'boolean' && orNull(e[3]))
-      .map((e) => (isNum(e[4]) && isNum(e[5]) ? e.slice(0, 6) : e.slice(0, 4))) as QaEntry[],
+      .map((e) => (isNum(e[4]) && isNum(e[5]) ? e.slice(0, isRoundCause(e[6]) ? 7 : 6) : e.slice(0, 4))) as QaEntry[],
     checks: list(r.checks).filter((e) => typeof e[2] === 'string' && typeof e[3] === 'boolean' && isNum(e[4])) as CheckEntry[],
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
   };
@@ -104,8 +105,10 @@ export function recordChecks(h: OpsHistory, repo: string, pulls: Pick<PullInfo, 
   return added;
 }
 
-export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: number | null, now: number, pr: number, round: number) {
-  h.qa.push([now, repo, pass, waitMs === null ? null : Math.max(0, waitMs), pr, round]);
+export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: number | null, now: number, pr: number, round: number, cause?: RoundCause) {
+  const entry: QaEntry = [now, repo, pass, waitMs === null ? null : Math.max(0, waitMs), pr, round];
+  if (cause) entry.push(cause);
+  h.qa.push(entry);
   prune(h, now);
 }
 
@@ -148,11 +151,14 @@ export function hourlyCounts(times: number[], now: number, hours = 24): number[]
 
 const share = (hits: number, n: number) => (n ? hits / n : null);
 
-/** The average number of QA verdicts per PR merged in the history, over merges QA tested with their PR recorded. */
+/**
+ * The average number of QA verdicts per PR merged in the history, over merges QA tested with their PR recorded. Rounds
+ * failed by an outage or the lab aren't the PR's (#188) and are left out.
+ */
 export function qaRoundsPerMerge(merges: MergeEntry[], qa: QaEntry[]): number | null {
   const rounds = new Map<string, number>();
   for (const q of qa) {
-    if (q[4] === undefined) continue;
+    if (q[4] === undefined || excludedCause(q[6])) continue;
     const key = `${q[1]}#${q[4]}`;
     rounds.set(key, (rounds.get(key) ?? 0) + 1);
   }
@@ -176,7 +182,7 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
     leadMs: median(merges.filter(day).flatMap((m) => (m[3] === null ? [] : [m[3]]))),
     qaWaitMs: median(qa.filter(day).flatMap((q) => (q[3] === null ? [] : [q[3]]))),
     qaPass: share(qa.filter((q) => q[2]).length, qa.length),
-    qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1).length),
+    qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1 && !excludedCause(q[6])).length),
     qaRoundsPerMerge: qaRoundsPerMerge(merges, qa),
     ciPass: share(checks.filter((c) => c[3]).length, checks.length),
     ciRuns: checks.length,

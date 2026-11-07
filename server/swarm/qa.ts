@@ -14,6 +14,7 @@ import { qaShotsDir, saveQaShots } from '../qaShots.ts';
 import { failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from '../prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from '../qaRetry.ts';
 import { recordQa } from '../metrics.ts';
+import { qaCause } from '../../shared/rounds.ts';
 import { clip } from '../notify.ts';
 import { followupEvents } from '../../shared/followups.ts';
 import { noteCheck } from '../../shared/charter.ts';
@@ -273,7 +274,11 @@ export abstract class SwarmQa extends SwarmSessions {
 
     a.status = 'done';
     const pass = report.verdict === 'pass';
-    this.spend.outcome(a.id, pass ? 'qa-pass' : 'qa-fail');
+    // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
+    // and the checks are recorded so a re-run of a red one can count as the fix. They name the cause QA didn't (#188).
+    const pull = !pass && rec ? await this.backend.prDetails(repo.fullName, rec.prNumber).catch(() => null) : null;
+    const cause = pass ? undefined : qaCause(report.cause, pull);
+    this.spend.outcome(a.id, pass ? 'qa-pass' : 'qa-fail', cause);
     if (rec) this.ledger({ kind: 'qa', repoId: repo.id, pr: rec.prNumber, round: rec.round, pass, tester: a.id, author: rec.devAgentId, at: Date.now() });
     this.appendLog(a, [{ kind: pass ? 'done' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${a.prNumber} · ${report.checks.length} checks · ${rt.shots.length} screenshots` }]);
 
@@ -288,12 +293,9 @@ export abstract class SwarmQa extends SwarmSessions {
         return [];
       });
       const key = `${repo.id}#${rec.prNumber}`;
-      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round);
+      recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round, cause);
       if (report.charterCheck) noteCheck(repo.charter.log, { at: Date.now(), pr: rec.prNumber, ...citedRule(report.charterCheck, repo.charter) }, Date.now()); // the Charter tab's standards and non-goals (#105)
       this.qaWaits.delete(key);
-      // On a fail: a conflict with the default branch is the merge gate's job, not the manager's (on QA's last round),
-      // and the checks are recorded so a re-run of a red one can count as the fix.
-      const pull = !pass ? await this.backend.prDetails(repo.fullName, rec.prNumber).catch(() => null) : null;
       const next = qaOutcome(pass, rec, pull);
       try {
         this.appendLog(a, [{ kind: 'system', text: '📎 Uploading evidence and posting the QA report on the PR…' }]);
@@ -314,6 +316,7 @@ export abstract class SwarmQa extends SwarmSessions {
         fixInstructions,
         sessionFailures: 0,
         fixReason: pass ? null : 'qa',
+        qaCause: cause ?? null,
         preQa: null,
         passedSha: pass ? rec.testedSha : null,
         mergeNote: null,
