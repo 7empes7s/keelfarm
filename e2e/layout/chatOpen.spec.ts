@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../helpers';
-import { checkScreens, consoleSections, pocket, type Screen } from './helpers';
+import { charterDrift, checkScreens, consoleSections, pocket, type Screen } from './helpers';
 
 // Desktop and tablet with the CEO chat open (#212): every main screen beside the docked chat (1280) or under its drawer
 // (820), what a chat ref opens comes to the front of the console, and Esc closes only the top panel.
@@ -34,6 +34,16 @@ const SCREENS: Screen[] = [
       return work.locator('.pk-settings');
     },
     tabs: ['', ...consoleSections('pocket').slice(0, 4)], // '' first: the lazy console settles before its sections
+  },
+  {
+    name: 'chat open: charter',
+    widths: [...WIDTHS, 1920],
+    open: async (page) => {
+      const work = await beside(page, 'company');
+      await page.locator('.pk-tab-console').click();
+      return work.locator('.pk-settings');
+    },
+    tabs: ['', charterDrift('pocket')], // its PR chips wrap beside the docked chat (#240)
   },
   {
     name: 'chat open: terminal',
