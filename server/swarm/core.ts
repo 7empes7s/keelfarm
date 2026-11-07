@@ -127,6 +127,7 @@ export abstract class SwarmCore extends SwarmContract {
       cloud: { ...DEFAULT_CLOUD },
       tools: DEFAULT_TOOL_SETTINGS,
       everyProject: emptyEveryProject(),
+      statusReactions: false,
       officePlaybook: DEFAULT_OFFICE_PLAYBOOK,
     },
     repos: [],

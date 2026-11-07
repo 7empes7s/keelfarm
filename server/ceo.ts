@@ -580,7 +580,7 @@ export function ceoSystemPrompt(o: {
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
-    '- Nothing to say? react and end with no text. Several messages: reply to each.',
+    '- Reply only with something to say, else react or end silently; never answer system notices. Several: reply to each.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
     "- company_status's openDecisions wait in the manager's tray: bring one up only if it bears on this message or before acting on its topic, at most one per reply, none marked trayOnly, and don't re-ask it in text. Answered in words: resolve_decision.",

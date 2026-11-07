@@ -137,6 +137,12 @@ export function CeoSettings() {
         <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />
       </label>
       <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
+      <label className="toggle block">
+        <input type="checkbox" checked={!!settings.statusReactions} onChange={(e) => set({ statusReactions: e.target.checked })} />
+        <span>
+          <b>Status reactions</b>: 👀 ⏳ ✅ under your messages while the CEO or an agent works on them. Off, the working strip shows it.
+        </span>
+      </label>
       <FollowupSettings />
       <AwakeSettings />
     </div>

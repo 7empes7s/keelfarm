@@ -1,41 +1,55 @@
 /* Reactions in the CEO chat (#118): badges under a bubble, the bar in a message's actions, the 👎 note. */
 .reactions {
+  /* a tapback (#193): small pills on the bubble's top corner, the far one from where the bubble points */
+  position: absolute;
+  top: -14px;
+  right: -8px;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: var(--ds-space-1);
-  margin-top: var(--ds-space-1);
+  gap: 2px;
+  max-width: calc(100% + 8px);
 }
 .bubble-me .reactions {
-  justify-content: flex-end;
+  right: auto;
+  left: -8px;
+  justify-content: flex-start;
+}
+.bubble:has(> .reactions) {
+  margin-top: 14px;
 }
 .reaction {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  min-height: 28px;
-  padding: 0 var(--ds-space-2);
-  border: var(--ds-border) solid var(--ds-line-strong);
+  box-sizing: border-box;
+  height: 24px;
+  min-width: 28px;
+  padding: 0 6px;
+  border: 2px solid var(--ds-surface-sunken); /* cut out of the chat's background, like a tapback */
   border-radius: var(--ds-radius-pill);
   background: var(--ds-surface-raised);
+  box-shadow: 0 1px 2px rgba(31, 29, 43, 0.18);
   color: var(--ds-text);
   font: inherit;
-  font-size: var(--ds-text-sm);
+  font-size: 14px; /* the glyph at ~60% of the pill */
   line-height: 1;
 }
 /* the badge looks small but takes a 44px tap */
 button.reaction::after {
   content: '';
   position: absolute;
-  inset: -8px -4px;
+  inset: -10px -8px;
 }
 button.reaction {
   cursor: pointer;
 }
 .reaction-mine {
-  border-color: var(--ds-focus);
-  background: #e8edff;
+  background: #dfe6ff;
 }
 .reaction-count {
   font-size: var(--ds-text-xs);
@@ -43,6 +57,12 @@ button.reaction {
 }
 .reaction-note {
   flex-basis: 100%;
+  max-width: 16rem;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+  box-shadow: 0 1px 3px rgba(31, 29, 43, 0.2);
   color: var(--ds-text-muted);
   font-size: var(--ds-text-xs);
 }

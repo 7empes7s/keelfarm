@@ -30,7 +30,7 @@ import {
 import { dueGreeting } from '../../shared/themes.ts';
 import { charterOf, MISSION_MAX, renderCharter } from '../../shared/charter.ts';
 import { CEO_ID } from '../../shared/types.ts';
-import { forwardText } from '../../shared/chat.ts';
+import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
 import { feedbackPrompt, replyTarget, turnEnding } from '../../shared/reactions.ts';
 import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
@@ -383,6 +383,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     const t = text.trim().slice(0, 4000);
     const attachments = this.ceoFiles.managerFiles(fileIds);
     if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
+    if (isHarnessText(t)) throw new HttpError(400, "That's the CEO session's own output, not a message: it stays out of the chat.");
     const a = this.ceo();
     const agentAsked = replyTo === undefined ? undefined : this.state.questions.find((q) => q.messageId === replyTo);
     if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via);
@@ -691,7 +692,8 @@ export abstract class SwarmCeo extends SwarmReactions {
   }
 
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
-  protected postCeoReply(text: string) {
+  protected postCeoReply(raw: string) {
+    const text = stripHarness(raw); // harness output it echoed stays backend (#193)
     const extra = { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...this.ceoChat.finishTurn(text) };
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
     if (turnEnding(text, extra) === 'reply') this.postMessage('ceo', text, undefined, { ...extra, ...(replyTo !== undefined && { replyTo }) }); // else a reaction said it, or nothing needed saying: no blank bubble, no push

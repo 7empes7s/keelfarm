@@ -274,6 +274,40 @@ html[data-reduce-motion] .action-confetti {
   font-weight: var(--ds-weight-strong);
 }
 
+/* an office note (#193): one muted line, tap for the rest; the button around it is the 44px tap */
+.notice-pill {
+  display: flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  max-width: 92%;
+  min-width: 0;
+  min-height: var(--ds-target);
+  margin: -10px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.notice-pill > .bubble-office {
+  max-width: 100%;
+  color: var(--ds-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notice-pill-open > .bubble-office {
+  white-space: normal;
+  border-radius: var(--ds-radius-md);
+}
+.notice-pill:focus-visible {
+  outline: none;
+}
+.notice-pill:focus-visible > .bubble-office {
+  outline: 2px solid var(--ds-focus);
+}
+
 /* nothing in the chat is wider than it (#138): long unbroken strings wrap, code blocks scroll inside themselves */
 .chat-log {
   overflow-x: hidden;

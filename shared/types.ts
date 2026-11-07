@@ -434,6 +434,7 @@ export interface SwarmSettings {
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
   everyProject: EveryProject; // Settings → Every project: the practice switches every floor inherits (#24)
+  statusReactions?: boolean; // the office's 👀 ⏳ ✅ under the manager's messages as the CEO or an agent works on them (#193: off by default)
   officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }
 
