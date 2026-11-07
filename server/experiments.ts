@@ -27,6 +27,7 @@ export interface LabState {
   experiments: Experiment[];
   assignments: Assignment[];
   practiceStarters?: boolean; // the practices' starter experiments (#24) were added to an office that had experiments
+  busyStarter?: boolean; // conflict-aware scheduling's starter (#256) was added too
 }
 
 const KEEP_ASSIGNMENTS = 3000;
@@ -42,7 +43,8 @@ export function loadLab(raw: unknown, now: number): LabState {
   const assignments = Array.isArray(r.assignments) ? r.assignments.filter((a) => a && typeof a.experimentId === 'string' && typeof a.issue === 'number' && a.outcome) : [];
   // Offices from before #24 get its starters once; one the manager deleted since stays deleted.
   if (Array.isArray(r.experiments) && !r.practiceStarters) experiments.push(...practiceStarters(now).filter((s) => !experiments.some((e) => e.id === s.id)));
-  return { experiments, assignments, practiceStarters: true };
+  if (Array.isArray(r.experiments) && !r.busyStarter) experiments.push(...practiceStarters(now).filter((s) => s.id === 'busy-files' && !experiments.some((e) => e.id === s.id)));
+  return { experiments, assignments, practiceStarters: true, busyStarter: true };
 }
 
 /** The manager's and CEO's changes reach the tabs at once; assignments and outcomes, which grow with the company's
@@ -175,7 +177,7 @@ export class Lab {
   }
 
   /** Whether a running experiment covering the floor has a variant that turns this practice on. */
-  tries(repoId: string, key: 'leases' | 'upToDate' | 'autoRebase'): boolean {
+  tries(repoId: string, key: 'leases' | 'upToDate' | 'autoRebase' | 'busyFiles'): boolean {
     return this.experiments.some((e) => e.status === 'running' && (!e.floors.length || e.floors.includes(repoId)) && e.variants.some((v) => v.settings.practices?.[key] === true));
   }
 

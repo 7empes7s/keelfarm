@@ -9,6 +9,7 @@ import { EmptyState } from './EmptyState';
 import { InsightStrip, TopIssues, WasteCards } from './CostCards';
 import { Icon } from './Icon';
 import { RoundsCard } from './RoundsCard';
+import { ConflictsCard } from './ConflictsCard';
 import './costs.css';
 
 // Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). The
@@ -100,7 +101,7 @@ export function CostsSection() {
   const repo = (id: string) => repos.find((r) => r.id === id);
   const floorName = (id: string) => {
     const r = repo(id);
-    return id === '' ? 'The CEO' : r ? `${r.floor} · ${r.fullName.split('/')[1]}` : id;
+    return id === '' ? 'CEO' : r ? `${r.floor} · ${r.fullName.split('/')[1]}` : id;
   };
   return (
     <div id="ops-card-costs" className="costs" data-tour="costs">
@@ -151,8 +152,14 @@ export function CostsSection() {
               )}
             </div>
             <KindSplit split={view.total} />
+            {view.corrected && (
+              <div className="muted small">
+                CEO costs before {new Date(view.corrected.before).toLocaleDateString()} corrected: −{fmtUsd(view.corrected.usd)} (they were booked as the session's running total).
+              </div>
+            )}
           </div>
           <RoundsCard view={view} repo={repo} floorName={floorName} />
+          <ConflictsCard view={view} repoId={repoId} />
           <div id="costs-floors" className="costs-stack" role="region" aria-label="Cost per floor">
             <table className="ops-table costs-table">
               <thead>

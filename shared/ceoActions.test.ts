@@ -48,6 +48,32 @@ describe('actionCards (#108)', () => {
     expect(cards).toHaveLength(MAX_ACTIONS);
     expect(cards[0].text).toBe('Restarted.');
   });
+
+  // #151: every tool that makes a card, and the exact thing its card opens.
+  it.each([
+    ['file_issue', 'Filed #104 on floor 3: X.', { floor: 3 }, { kind: 'issue', repoId: 'acme/shop', number: 104 }],
+    ['close_issue', 'Closed #9.', { floor: 3, number: 9 }, { kind: 'issue', repoId: 'acme/shop', number: 9 }],
+    ['set_dependencies', 'Set.', { floor: 3, number: 9, depends_on: [4] }, { kind: 'issue', repoId: 'acme/shop', number: 9 }],
+    ['scale_team', 'Floor 3 goes from 4 to 5 agents: Linus joined.', { floor: 3, size: 5 }, { kind: 'section', section: 'team', repoId: 'acme/shop' }],
+    ['configure_agent', 'Grace uses opus from her next task.', { agent_id: 'grace', model: 'opus' }, { kind: 'agent', agentId: 'grace', details: 'setup' }],
+    ['message_agent', 'Sent.', { agent_id: 'grace' }, { kind: 'agent', agentId: 'grace' }],
+    ['answer_agent', 'Answered.', { agent_id: 'grace' }, { kind: 'agent', agentId: 'grace' }],
+    ['restart_agent', 'Restarted.', { agent_id: 'grace' }, { kind: 'agent', agentId: 'grace', details: 'now' }],
+    ['retry_qa', 'QA again.', { floor: 3, pr: 12 }, { kind: 'qa', repoId: 'acme/shop', number: 12 }],
+    ['send_back', 'Sent back.', { floor: 3, pr: 12 }, { kind: 'issue', repoId: 'acme/shop', number: 12 }],
+    ['rerun_checks', 'Rerun.', { floor: 3, pr: 12 }, { kind: 'issue', repoId: 'acme/shop', number: 12 }],
+    ['close_pull', 'Closed.', { floor: 3, pr: 12 }, { kind: 'issue', repoId: 'acme/shop', number: 12 }],
+    ['escalate', 'Escalated.', { floor: 3, pr: 12 }, { kind: 'issue', repoId: 'acme/shop', number: 12 }],
+    ['propose_charter', 'Proposed.', { floor: 3, reason: 'r' }, { kind: 'section', section: 'charter', repoId: 'acme/shop' }],
+    ['set_floor_profile', 'Saved.', { floor: 3, qa_brief: 'b' }, { kind: 'section', section: 'ceo', repoId: 'acme/shop' }],
+    ['set_mandate', 'Mandate set.', { text: 'x' }, { kind: 'section', section: 'ceo' }],
+    ['resolve_decision', 'Resolved.', { id: 'd1' }, { kind: 'decision', id: 'd1' }],
+    ['define_experiment', 'Defined.', { name: 'x' }, { kind: 'section', section: 'ops' }],
+    ['set_office_playbook', 'Saved.', { text: 'x' }, { kind: 'section', section: 'projects' }],
+    ['send_telegram', 'Sent.', { text: 'x' }, { kind: 'section', section: 'notifications' }],
+  ])('%s opens what it changed', (tool, out, args, ref) => {
+    expect(actionCards([call(tool, out, args)], repoOf)[0].ref).toEqual(ref);
+  });
 });
 
 describe('every action card opens what it is about (#215)', () => {

@@ -1,7 +1,11 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CeoChat } from './ceoChat.ts';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
-import { CeoChat } from './ceoChat.ts';
+import { loadChats } from '../shared/conversations.ts';
 import type { SessionOptions } from './agentRunner.ts';
 import type { CeoLive } from '../shared/ceoStream.ts';
 import type { AgentStatus, PhoneMessage, ServerEvent } from '../shared/types.ts';
@@ -132,6 +136,55 @@ describe('the CEO chat', () => {
   });
 });
 
+describe('threads (#132)', () => {
+  it('starts a thread in a project, tells the CEO its floor, and finds its artifacts from another thread', { timeout: 60_000 }, async () => {
+    const { swarm, prompts, replies, ceo } = await office();
+    await expect(swarm.newConversation('demo-co/nope')).rejects.toThrow(/no longer in the office/);
+    await swarm.newConversation('demo-co/pixel-todo');
+    const first = swarm.snapshot().chat!.current;
+    expect(swarm.snapshot().chat!.conversations.find((c) => c.id === first)?.repoId).toBe('demo-co/pixel-todo');
+    await swarm.messageCeo('Plan the next milestone for floor 1');
+    await until(() => replies().some((m) => m.artifacts?.length));
+    expect(prompts[0]).toContain('(This thread is in the project of floor 1, demo-co/pixel-todo.)');
+    await until(() => ceo().status === 'done');
+    expect(swarm.snapshot().chat!.conversations.find((c) => c.id === first)).toMatchObject({ files: 1, floors: ['demo-co/pixel-todo'] });
+
+    swarm.editConversation(first, { title: 'Milestones', archived: true });
+    expect(swarm.snapshot().chat!.conversations.find((c) => c.id === first)).toMatchObject({ title: 'Milestones', archived: true });
+    expect(() => swarm.editConversation(first, { title: '' })).toThrow(/title/);
+    expect(() => swarm.editConversation('cgone', { pinned: true })).toThrow(/no longer saved/);
+
+    await swarm.newConversation();
+    const project = await swarm.library({ scope: 'demo-co/pixel-todo', filter: 'artifact' });
+    expect(project.items.map((i) => [i.title, i.conversationId])).toEqual([['Milestone plan', first]]);
+    expect(project.items[0].artifact?.markdown).toContain('##'); // another thread's: its text comes with it
+    expect((await swarm.library({ scope: 'company', filter: 'all' })).items).toEqual([]);
+    await expect(swarm.library({ scope: 'demo-co/gone', filter: 'all' })).rejects.toMatchObject({ status: 400, message: expect.stringMatching(/No floor/) });
+  });
+
+  it("fills threads saved before #132 from their messages, and seeds the demo's", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'threads-'));
+    const chat = new CeoChat(dir, path.join(dir, 'NOTES.md'), () => undefined);
+    await chat.saveThread('cold', [{ id: 1, from: 'ceo', text: 'x', at: 5, artifacts: [{ id: '1-0', title: 'A', lead: '' }] }]);
+    const s = loadChats({ current: 'cnow', list: [{ id: 'cnow', title: 'Now' }, { id: 'cold', title: 'Old' }] }, [], 1);
+    expect(await chat.backfill(s, ['cnow', 'cold'])).toBe(1); // the open one came from state.messages
+    expect(s.list.find((c) => c.id === 'cold')).toMatchObject({ files: 1, ceoAt: 5 });
+
+    const added: string[] = [];
+    const store = { addStream: async (_: unknown, meta: { name: string; type: string; from: 'ceo' }) => (added.push(meta.name), { id: `f${added.length}`, ...meta, size: 3, at: 1, keep: false }) };
+    const open = [{ id: 0, from: 'manager' as const, text: 'Hello', at: 1 }];
+    const next = await chat.seed(s, open, [{ repoId: 'r1', pinned: true, messages: [{ from: 'ceo', text: 'Shot', at: 2, image: { name: 'a.png', png: Buffer.from('png') }, artifacts: [{ id: '', title: 'Plan', lead: '', markdown: '# P' }] }] }], store as never, 10);
+    expect(next).toBe(11);
+    expect(s.current).toBe('cnow');
+    expect(s.list.find((c) => c.id === 'cnow')).toMatchObject({ title: 'Now', count: 1 }); // the demo's open chat is counted, so switching away keeps it
+    const seeded = s.list.find((c) => c.repoId === 'r1')!;
+    expect(seeded).toMatchObject({ pinned: true, files: 2, count: 1 });
+    expect(await chat.loadThread(seeded.id)).toMatchObject([{ id: 10, attachments: [{ id: 'f1', name: 'a.png' }], artifacts: [{ id: '10-0', title: 'Plan' }] }]);
+    expect(added).toEqual(['a.png']);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+});
+
 describe('CeoChat.noteMessage (#215)', () => {
   it("keeps the agent chat item a tool call posted on that call's card, even with calls running at once", async () => {
     const chat = new CeoChat('', '', () => undefined, () => 'r1', (ref) => (ref === 'Linus' ? 'a7' : null));
@@ -150,3 +203,4 @@ describe('CeoChat.noteMessage (#215)', () => {
     ]);
   });
 });
+

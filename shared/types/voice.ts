@@ -10,6 +10,8 @@ export interface VoiceSettings {
   model: string; // ElevenLabs model id
   speakOffice: boolean; // read the office's own notes too, not just the CEO's messages
   keepDays: number; // saved clips older than this are deleted (1–90; the newest 20 CEO messages' clips always stay)
+  speed: number; // speech speed, 0.7–1.2 (ElevenLabs' voice_settings.speed, the browser voice's rate); shared/voices.ts
+  favourites: string[]; // ElevenLabs voice ids starred in any voice picker, shown first (ids only)
 }
 
 /** Who turns the manager's speech into text: nobody (no 🎙), the browser's own recognition, or ElevenLabs (with the key). */
@@ -37,4 +39,5 @@ export interface VoiceOption {
   labels: { accent: string; gender: string; age: string; description: string; use_case: string };
   previewUrl: string | null;
   recommended: boolean;
+  v4?: boolean; // made for Eleven v4 (the API's per-voice model metadata): shown first, after the favourites
 }

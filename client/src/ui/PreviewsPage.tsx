@@ -9,7 +9,7 @@ import { Icon } from './Icon';
 import { stopsLabel } from './channels';
 import { Panel } from './Panel';
 import { Sheet } from './Sheet';
-import { ago, FILTERS, previewLists, previewsHash, previewsStats, rowMatches, type PreviewFilter, type PreviewRow } from './previewGroups';
+import { ago, FILTERS, parsePreviewsHash, previewLists, previewsHash, previewsStats, rowMatches, type PreviewFilter, type PreviewRow } from './previewGroups';
 import './previews.css';
 
 /** Narrower than this, the list is a sheet and the stage has the page. */
@@ -23,14 +23,6 @@ function useNow(): number {
     return () => clearInterval(t);
   }, []);
   return now;
-}
-
-/** Previews starting or running, for the menu's badge. */
-export function useRunningPreviews(): number {
-  return useStore((s) => {
-    const st = previewsStats(s.repos, s.prPreviews);
-    return st.used + st.mainUp;
-  });
 }
 
 /** Whether `ref`'s box is narrower than `px` (the page is beside a docked chat, or on a phone). */
@@ -186,7 +178,17 @@ export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string
   useEffect(() => {
     history.replaceState(history.state, '', previewsHash(repo?.floor ?? null, shown?.pr ?? null));
   }, [repo?.floor, shown?.pr]);
-  useEffect(() => () => history.replaceState(history.state, '', location.pathname + location.search), []);
+  useEffect(
+    () => () => {
+      // Esc and × close it before the panel's history entry is popped, landing on the entry it opened over, which
+      // can carry a #previews address too (a deep link, or one written before the panel's entry was pushed).
+      const clear = () => void (parsePreviewsHash(location.hash) && history.replaceState(history.state, '', location.pathname + location.search));
+      clear();
+      addEventListener('popstate', clear, { once: true });
+      setTimeout(() => removeEventListener('popstate', clear), 1000);
+    },
+    [],
+  );
 
   const choose = (r: PreviewRow) => {
     setPick({ repoId: r.repoId, pr: r.pr });

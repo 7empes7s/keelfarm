@@ -78,7 +78,7 @@ export const SECTIONS: Section[] = [
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
   { id: 'accounts', group: 'settings', icon: 'key-round', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
-  { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text'] },
+  { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text', 'Speed', 'Favourite voices', 'Model'] },
   { id: 'outside', group: 'settings', icon: 'cloud-sun-rain', label: 'Weather & world', find: ['Weather', 'Your city', 'Keep it calm', 'World events'] },
   { id: 'notifications', group: 'settings', icon: 'bell', label: 'Notifications', find: ['Push to my devices', 'Desktop notifications', 'Tell me when', 'Office address for links', 'Telegram', 'Channels'] },
   { id: 'themes', group: 'settings', icon: 'party-popper', label: 'Themes', find: ['Holiday themes', 'Theme to show', 'Birthday'] },

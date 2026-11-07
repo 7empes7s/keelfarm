@@ -20,6 +20,7 @@ import { HOME_DIR, type DemoScale } from './config.ts';
 import { takeLastUpdate, underLauncher, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
+import { DEMO_VOICES } from './demoVoices.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
 import { demoTelegram } from './demoTelegram.ts';
@@ -43,7 +44,7 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { demoEditedChat, demoThreads, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
@@ -213,7 +214,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
-  ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
+  ['Keyboard shortcuts', 'N for new todo, / to search, ? for help. The help overlay touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
 strangers('demo-co/pixel-todo');
@@ -1128,10 +1129,11 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
-    seedChat: (now) => {
+    seedChat: (now, cards) => {
       const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
-      return [...edits, ...sampleChat(now, edits.length + 1)];
+      return [...edits, ...sampleChat(now, edits.length + 1, scale ? undefined : cards)]; // the big company measures the office (scale.test.ts), not the cards' example
     },
+    seedThreads: demoThreads,
     demoCharter,
     seedQaReport: (fullName) => {
       if (scale) return null; // the big company measures the office (scale.test.ts), not this example
@@ -1388,7 +1390,7 @@ const PROFILES: Record<string, Profile> = {
     summary: 'Todo web app · React + Vite + TypeScript',
     qa: '- Add, complete, edit and delete todos; they survive a reload\n- Keyboard only: every action reachable, focus always visible\n- Phone width (375px): nothing overflows or gets cut off\n- No errors in the browser console',
     playbook:
-      '## Map\n- src/components/: React views, no storage calls\n- src/store/: todo state and localStorage; components use its hooks only\n## Conventions\n- One component per file, tests next to it (*.test.tsx)\n## Skills\n- frontend-design for UI, test-driven-development for store changes\n## Traps\n- localStorage throws in private windows: wrap reads and writes',
+      '## Map\n- src/components/: React views, no storage calls\n- src/store/: todo state and localStorage; components use its hooks only\n- area theme: src/App.tsx, src/styles.css\n## Conventions\n- One component per file, tests next to it (*.test.tsx)\n## Skills\n- frontend-design for UI, test-driven-development for store changes\n## Traps\n- localStorage throws in private windows: wrap reads and writes',
   },
   'weather-api': {
     summary: 'REST API · Node + Express',
@@ -1864,11 +1866,11 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
 /**
  * A two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, longer for longer text (up to 6 s, so a
  * voice call can be paused, skipped and talked over mid-reply), and pitched by the voice, so a replayed clip is
- * audibly the one made in the voice of its day.
+ * audibly the one made in the voice of its day, and shorter when faster.
  */
-export function demoChime(chars: number, voiceId = ''): Buffer {
+export function demoChime(chars: number, voiceId = '', speed = 1): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 40, 6);
+  const seconds = Math.min(0.4 + chars / 40, 6) / speed;
   const n = Math.round(rate * seconds);
   const wav = Buffer.alloc(44 + n);
   wav.write('RIFF', 0);
@@ -1893,24 +1895,18 @@ export function demoChime(chars: number, voiceId = ''): Buffer {
   return wav;
 }
 
-const demoVoices = [
-  { id: 'demoVoiceAvery00001', name: 'Avery', category: 'premade', labels: { accent: 'american', gender: 'female', age: 'middle aged', description: 'calm', use_case: 'conversational' }, previewUrl: null },
-  { id: 'demoVoiceBasil00002', name: 'Basil', category: 'premade', labels: { accent: 'british', gender: 'male', age: 'middle aged', description: 'warm', use_case: 'narration' }, previewUrl: null },
-  { id: 'demoVoiceCleo000003', name: 'Cleo', category: 'premade', labels: { accent: 'australian', gender: 'female', age: 'young', description: 'friendly', use_case: 'conversational' }, previewUrl: null },
-];
-
 /** What the demo's Speech to Text hears in any recording (docs/voice.md). */
 export const DEMO_TRANSCRIPT = "What's everyone working on?";
 
-/** No network: any key works except one containing "bad", three voices, a chime for every message, and one fixed transcript. */
+/** No network: any key works except one containing "bad", nine voices (six of them v4), a chime for every message, and one fixed transcript. */
 const demoVoice: VoiceApi = {
   checkKey: async (key) => {
     if (/bad/i.test(key)) throw new VoiceApiError(401, '401: invalid_api_key (demo)');
   },
-  listVoices: async () => demoVoices,
-  synthesize: async (_key, { text, voiceId }) => {
+  listVoices: async () => DEMO_VOICES,
+  synthesize: async (_key, { text, voiceId, speed }) => {
     await new Promise((r) => setTimeout(r, 300));
-    return demoChime(text.length, voiceId);
+    return demoChime(text.length, voiceId, speed);
   },
   transcribe: async () => {
     await new Promise((r) => setTimeout(r, 400));

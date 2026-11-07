@@ -37,8 +37,9 @@ describe('defaults inheritance', () => {
     expect(() => cleanOverrides({ leases: 'yes' })).toThrow(/true or false/);
     expect(() => cleanOverrides({ diffBudget: -1 })).toThrow(/lines/);
     const e = everyProjectSettings(undefined, { practices: { upToDate: true } });
-    expect(e).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true } });
-    expect(everyProjectSettings(e, { practices: { leases: true } })).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true, leases: true } });
+    expect(e).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true }, conflictFix: expect.objectContaining({ model: 'claude-sonnet-5', effort: 'low' }) });
+    expect(everyProjectSettings(e, { practices: { leases: true } })).toEqual({ practices: { ...PRACTICES_OFF, upToDate: true, leases: true }, conflictFix: e.conflictFix });
+    expect(everyProjectSettings(e, { conflictFix: { model: '' } }).conflictFix?.model).toBe(''); // #256: Settings → Agents → Conflict-only fixes off
   });
 });
 

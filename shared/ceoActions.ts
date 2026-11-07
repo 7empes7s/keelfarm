@@ -9,6 +9,7 @@ type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifica
 /** What an action card opens, and whose live status it shows. */
 export type ActionRef =
   | { kind: 'issue'; repoId: string; number: number }
+  | { kind: 'qa'; repoId: string; number: number } // retry_qa's: its QA report (#151)
   | { kind: 'floor'; repoId: string }
   /** Their chat, at `messageId` when the call posted one; `details`: their window's details on that tab instead. */
   | { kind: 'agent'; agentId: string; messageId?: number; details?: 'now' | 'setup' }
@@ -76,7 +77,7 @@ const clip = (s: string) => {
 };
 const num = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null);
 
-/** What a call's card opens: its decision, its section, its issue or PR, else its agent, else its floor. */
+/** What a call's card opens: its decision, its section, its issue or PR (retry_qa: its QA report), else its agent, else its floor. */
 function refOf(call: OfficeCall, repoOf: (floor: number) => string | null, agentOf: (ref: string) => string | null): ActionRef | undefined {
   // wait_for: the thing its first condition waited on (the usage meter for usage).
   const wait = call.tool === 'wait_for' && Array.isArray(call.args?.conditions) ? (call.args.conditions[0] as Record<string, unknown> | undefined) : undefined;
@@ -90,7 +91,7 @@ function refOf(call: OfficeCall, repoOf: (floor: number) => string | null, agent
   if (section) return { kind: 'section', section, ...(repoId && { repoId }) };
   const filed = call.tool === 'file_issue' && call.ok ? num(Number(call.out?.match(/#(\d+)/)?.[1])) : null;
   const n = filed ?? num(a.number) ?? num(a.pr) ?? num(a.issue);
-  if (repoId && n) return { kind: 'issue', repoId, number: n };
+  if (repoId && n) return { kind: call.tool === 'retry_qa' ? 'qa' : 'issue', repoId, number: n };
   if (typeof a.agent_id === 'string' && a.agent_id) {
     const details = DETAILS[call.tool];
     return { kind: 'agent', agentId: agentOf(a.agent_id) ?? a.agent_id, ...(call.messageId !== undefined && { messageId: call.messageId }), ...(details && { details }) };

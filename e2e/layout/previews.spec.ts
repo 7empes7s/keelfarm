@@ -46,7 +46,7 @@ for (const width of [390, 1280, 1920]) {
         if (chat) expect(panel.x + panel.width).toBeLessThanOrEqual((await dock.boundingBox())!.x + 1);
       }
       const list = page.locator('.pv-list').last();
-      for (const g of ['Running now', 'By project', 'By agent', 'By PR']) await expect(list.locator('.pv-group-head', { hasText: g })).toBeVisible();
+      for (const g of ['Running now', 'By project', 'By agent', 'By PR']) await expect(list.locator('.pv-group-head', { hasText: new RegExp(`^${g} \\(`) })).toBeVisible();
       // open every group: each title is at most two lines, and no word is broken across them
       for (const d of await list.locator('details.pv-group:not([open]) > summary').all()) await d.click();
       const titles = await list.locator('.pv-row-title').evaluateAll((els) =>
@@ -68,8 +68,9 @@ test('the deep link opens the right preview, and picking one updates the address
   const dialog = page.getByRole('dialog', { name: /Previews/ });
   await expect(dialog.locator('.app-bare-head')).toBeVisible();
   await expect(dialog.locator('.pv-row-on').first()).toContainText('Live app');
-  const pr = dialog.locator('.pv-group', { hasText: 'By project' }).locator('.pv-row', { hasText: /PR #\d+/ }).first();
-  test.skip(!(await pr.count()), 'no open PR in the demo yet');
+  // a PR whose preview is up: picking one that isn't starts it, which the demo refuses once its PR slots are full
+  const pr = dialog.locator('.pv-project .pv-row', { hasText: /PR #\d+/, has: page.locator('.led-live, .led-busy') }).first();
+  test.skip(!(await pr.count()), 'no PR preview running in the demo yet');
   const n = (await pr.locator('.pv-row-meta').innerText()).match(/PR #(\d+)/)![1];
   const floor = await pr.evaluate((el) => el.closest('.pv-project')?.querySelector('.floor-badge')?.textContent);
   await pr.click();

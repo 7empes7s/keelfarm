@@ -1,6 +1,6 @@
 // The demo's made-up ops history: a past week of merges, QA rounds, check runs and cost for mission control.
 import type { RoundCause } from '../shared/rounds.ts';
-import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type OpsHistory, type QaEntry } from './metrics.ts';
+import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type AvoidedEntry, type OpsHistory, type QaEntry } from './metrics.ts';
 
 const PAST_CAUSES: RoundCause[] = ['bug', 'nit', 'bug', 'spec-missing', 'nit', 'bug', 'outage']; // why QA failed it (#188)
 
@@ -42,6 +42,8 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
   const last = h.merges.filter((m) => m[1] === repos[0]).sort((a, b) => b[0] - a[0])[0];
   const first = last && h.qa.find((q) => q[1] === last[1] && q[4] === last[2] && q[5] === 1);
   if (first) h.qa.push([first[0] - 15 * min, first[1], false, first[3], last[2], 1, 'lab-error']);
+  // Issues conflict-aware scheduling (on for the first floor) started instead of overlapping ones (#256): one or two a day.
+  if (repos[0]) h.avoided = Array.from({ length: 10 }, (_, i): AvoidedEntry => [now - (i * 15 + 2) * HOUR_MS, repos[0], 900 + i]).filter((e) => e[0] > now - 7 * DAY_MS);
   prune(h, now);
   return h;
 }

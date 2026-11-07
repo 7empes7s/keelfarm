@@ -7,7 +7,7 @@ import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLab
 import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import { InfoButton } from '../ui/InfoButton';
-import { useRunningPreviews } from '../ui/PreviewsPage';
+import { useRunningPreviews } from '../ui/runningPreviews';
 import { useStore } from '../store';
 import { Icon } from '../ui/Icon';
 

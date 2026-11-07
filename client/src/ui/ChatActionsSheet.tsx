@@ -15,8 +15,8 @@ import { XLabel } from './HoverCard';
 import { startCall } from './voiceCallEngine';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; text size; hands-free;
-// full screen and its ⋯).
+// prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; text size; hands-free; full
+// screen and its ⋯).
 
 interface PlusProps {
   text: string;
@@ -99,10 +99,8 @@ function Sheet({ actions, ceoName, onPick, onClose }: { actions: SheetAction[]; 
 
 interface ToolsProps {
   ceoName: string;
-  artifacts: number;
-  files: number;
+  files: number; // the thread's artifacts and files (#132)
   onChats: () => void;
-  onArtifacts: () => void;
   onFiles: () => void;
   /** Where to draw them: pocket mode's header (null until it's there); undefined draws them in place. */
   into?: HTMLElement | null;
@@ -110,23 +108,16 @@ interface ToolsProps {
   full?: boolean;
 }
 
-/** Icon buttons with their counts as badges: conversations and search, artifacts, files, text size, hands-free, full screen. */
-export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onFiles, into, full = true }: ToolsProps) {
+/** Icon buttons with their counts as badges: threads and search, files & artifacts, text size, hands-free, full screen. */
+export function ChatTools({ ceoName, files, onChats, onFiles, into, full = true }: ToolsProps) {
   const tools = (
     <>
-      <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Conversations and search" title="Conversations: a new one, an earlier one, search them all, and what the CEO remembers">
+      <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Threads and search" title="Threads: a new one, an earlier one, search them all, and what the CEO remembers">
         <Icon name="search" />
-        <XLabel text="Conversations" />
+        <XLabel text="Threads" />
       </button>
-      {artifacts > 0 && (
-        <button type="button" className="chat-tool xbtn" onClick={onArtifacts} aria-haspopup="dialog" aria-label={`Artifacts (${artifacts})`} title="Every artifact in this conversation, newest first">
-          <Icon name="file-text" />
-          <XLabel text="Artifacts" />
-          <span className="badge badge-dot chat-tool-n" aria-hidden>{artifacts}</span>
-        </button>
-      )}
       {files > 0 && (
-        <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-haspopup="dialog" aria-label={`Files (${files})`} title="Every file in this conversation: keep or delete them">
+        <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
           <Icon name="paperclip" />
           <XLabel text="Files" />
           <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>

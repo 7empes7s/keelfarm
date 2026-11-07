@@ -14,6 +14,7 @@ import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Chat';
+import { ThreadsColumn } from '../ui/ChatHistory';
 import { useCall } from '../ui/voiceCallStore';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
@@ -41,8 +42,10 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
-import { useRunningPreviews } from '../ui/PreviewsPage';
+import { useRunningPreviews } from '../ui/runningPreviews';
 import { parsePreviewsHash } from '../ui/previewGroups';
+import { pushLayer } from '../ui/backStack';
+import { markTeamLanding, pocketJump } from './pocketJump';
 import { Icon, IconText } from '../ui/Icon';
 import type { IconName } from '../ui/icons';
 import { floorColumns, statusLine } from './companyLayout';
@@ -425,6 +428,8 @@ export default function Pocket() {
   // The chat beside the pages: on wide screens open unless hidden (remembered), at medium widths a drawer, closed at first.
   const [dockPref, setDockPref] = useState(savedDock);
   const [dockW, setDockW] = useDockWidth();
+  // the chat's width for what opens beside the docked chat and its threads column (pocket.css, #132)
+  useEffect(() => document.documentElement.style.setProperty('--pk-dock-w', `${dockW}px`), [dockW]);
   const [drawer, setDrawer] = useState(false);
   const tucked = useCall((s) => s.chatTucked); // behind a voice call (#287)
   const dock = (layout === 'expanded' ? dockPref : layout === 'medium' && drawer) && !tucked;
@@ -530,9 +535,24 @@ export default function Pocket() {
   const [history, setHistory] = useState<HistoryFocus | undefined>();
   const [focusRepo, setFocusRepo] = useState<string | undefined>();
   const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
+  // A floor's team asked for (a chat link, #151) is the Team tab here, at that floor; from the Chat tab, with a Back to it.
+  const [teamJump, setTeamJump] = useState(0);
+  const [backToChat, setBackToChat] = useState(false);
+  const onChat = useRef(false);
+  onChat.current = tab === 'chat';
   useEffect(() => {
     if (!wantsSection) return;
+    const jump = pocketJump(wantsSection, onChat.current, useStore.getState().back);
+    if (jump.clearBack) useStore.setState({ back: null }); // the chat stays here, under the tab or the console
     useStore.getState().openOverlay(null);
+    if (jump.to === 'team') {
+      setSettings(null);
+      setBackToChat(jump.backToChat);
+      markTeamLanding();
+      setTeamJump((n) => n + 1);
+      setRepoId(jump.repoId);
+      return setTab('team'); // go()'s console and overlay closing is done above
+    }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
@@ -545,6 +565,11 @@ export default function Pocket() {
     const repo = useStore.getState().repos.find((r) => r.floor === link.floor);
     useStore.getState().openOverlay({ kind: 'previews', repoId: repo?.id, pr: repo ? link.pr : null });
   }, [loaded]);
+  useEffect(() => {
+    if (!backToChat) return;
+    if (tab !== 'team') return setBackToChat(false);
+    return pushLayer(() => setTab('chat'));
+  }, [backToChat, tab]);
   // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
   const guide = useFinder((s) => s.guide);
   useEffect(() => {
@@ -690,7 +715,7 @@ export default function Pocket() {
               <span className="pk-tab-icon">
                 <Icon name="monitor" />
                 {runningPreviews > 0 && (
-                  <span className="badge badge-dot" aria-label={`${runningPreviews} running`}>
+                  <span className="badge badge-dot" role="img" aria-label={`${runningPreviews} running`}>
                     {runningPreviews}
                   </span>
                 )}
@@ -721,7 +746,24 @@ export default function Pocket() {
                 {tab === 'company' && <Company go={go} settings={setSettings} track={track} />}
                 {tab === 'chat' && !wide && chat}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
-                {tab === 'team' && <Team focusRepo={repoId} top={<MemoryBanner open={() => setSettings('ops')} />} />}
+                {tab === 'team' && (
+                  <Team
+                    focusRepo={repoId}
+                    flash={teamJump}
+                    top={
+                      <>
+                        {backToChat && (
+                          <div className="pk-back-bar">
+                            <button className="btn btn-ghost cn-back" onClick={() => setTab('chat')} aria-label="Back to the chat">
+                              <Icon name="chevron-left" /> Chat
+                            </button>
+                          </div>
+                        )}
+                        <MemoryBanner open={() => setSettings('ops')} />
+                      </>
+                    }
+                  />
+                )}
                 {tab === 'approvals' && <Approvals wide={layout === 'expanded'} />}
               </>
             )}
@@ -744,7 +786,7 @@ export default function Pocket() {
           </div>
         </div>
         {wide && dock && (
-          <aside className="pk-dock" aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
+          <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
             {layout === 'expanded' && !full && <DockGrip width={dockW} onWidth={setDockW} />}
             <div className="pk-dock-head">
               <b className="pk-ellipsis">
@@ -757,7 +799,11 @@ export default function Pocket() {
                 <XLabel text="Hide the chat" keys={layout === 'medium' ? 'Esc' : undefined} />
               </button>
             </div>
-            {chat}
+            {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}
+            <div className="pk-dock-body">
+              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} />}
+              {chat}
+            </div>
           </aside>
         )}
       </div>

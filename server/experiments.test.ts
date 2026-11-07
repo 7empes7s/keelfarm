@@ -22,7 +22,7 @@ const pull = (over: Partial<PullInfo>): PullInfo =>
 describe('the lab', () => {
   it('starts with the starter experiments as drafts, and gives no issue a variant until one runs', () => {
     const { l, st } = lab();
-    expect(st.experiments).toHaveLength(9);
+    expect(st.experiments).toHaveLength(10);
     expect(l.assign('o/one', { number: 5, body: '', labels: [] })).toBeNull();
     expect(l.practice('o/one', 5, null, 'issue').tag).toBeNull();
   });
@@ -69,7 +69,9 @@ describe('the lab', () => {
     expect(() => l.variant('up-to-date', 'a')).toThrow(/no practice switches/);
 
     const old = loadLab({ experiments: [{ id: 'mine', variants: [] }], assignments: [] }, 0);
-    expect(old.experiments.map((e) => e.id)).toEqual(['mine', 'up-to-date', 'file-leases', 'auto-rebase', 'small-prs']);
+    expect(old.experiments.map((e) => e.id)).toEqual(['mine', 'up-to-date', 'file-leases', 'auto-rebase', 'busy-files', 'small-prs']);
+    const before256 = loadLab({ experiments: [{ id: 'mine', variants: [] }], assignments: [], practiceStarters: true }, 0);
+    expect(before256.experiments.map((e) => e.id)).toEqual(['mine', 'busy-files']); // #256's starter, once
     expect(loadLab({ ...old, experiments: [old.experiments[0]] }, 0).experiments).toHaveLength(1); // deleted stays deleted
   });
 

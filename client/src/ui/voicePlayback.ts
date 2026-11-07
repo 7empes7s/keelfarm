@@ -42,8 +42,8 @@ export function playClip(src: string | Blob): Promise<boolean> {
   });
 }
 
-/** Says `text` in the browser's own voice called `voiceName` (its default when there's none). */
-export function speakLine(text: string, voiceName: string): Promise<boolean> {
+/** Says `text` in the browser's own voice called `voiceName` (its default when there's none), at `rate` (Settings → Voice's speed). */
+export function speakLine(text: string, voiceName: string, rate = 1): Promise<boolean> {
   stopVoice();
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
   if (!synth) return Promise.resolve(false);
@@ -54,6 +54,7 @@ export function speakLine(text: string, voiceName: string): Promise<boolean> {
     u.lang = v.lang;
   }
   u.volume = playbackVolume(getAudioPrefs());
+  u.rate = rate;
   // An utterance's volume is fixed once it starts, so muting mid-sentence stops it instead.
   const unsubscribe = subscribeAudio(() => getAudioPrefs().muted && stopVoice());
   const unduck = holdMusicDuck();

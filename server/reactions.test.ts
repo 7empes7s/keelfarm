@@ -139,6 +139,20 @@ describe("the demo's chat sample", () => {
     const quotes = thread.filter((m) => m.from === 'ceo' && m.replyTo !== undefined).map((m) => thread.find((x) => x.id === m.replyTo)?.from);
     expect(quotes).toEqual(['manager', 'manager']);
   });
+
+  it('has a reply with one action card of each kind (#151)', () => {
+    const reply = sampleChat(Date.now(), 1, { floor: 3, repoId: 'o/shop', agent: { id: 'ada', name: 'Ada' }, size: 4 }).find((m) => m.actions)!;
+    expect(reply.actions!.map((a) => a.ref)).toEqual([
+      { kind: 'section', section: 'team', repoId: 'o/shop' },
+      { kind: 'agent', agentId: 'ada', details: 'setup' },
+      { kind: 'agent', agentId: 'ada' },
+      { kind: 'issue', repoId: 'o/shop', number: 1 },
+      { kind: 'issue', repoId: 'o/shop', number: 2 },
+      { kind: 'qa', repoId: 'o/shop', number: 2 },
+      { kind: 'section', section: 'charter', repoId: 'o/shop' },
+      { kind: 'section', section: 'ceo', repoId: 'o/shop' },
+    ]);
+  });
 });
 
 describe("the demo CEO's tagged messages", () => {
