@@ -514,6 +514,8 @@ export function progressView(s: LedgerState, repoIds: string[]): ProgressView {
 
 /** The Team tab's "Past agents" (#205): careers of people let go, the most recently gone first. */
 export const pastCareers = (s: LedgerState): PastCareer[] => Object.values(s.past).sort((a, b) => b.left - a.left);
+/** Careers in the snapshot a tab gets go as rows (#291). */
+export { packCareers } from '../shared/careers.ts';
 
 const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
