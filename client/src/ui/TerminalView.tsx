@@ -29,6 +29,7 @@ import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './term
 import { useA11y } from './a11y';
 import { useMode } from '../pocket/mode';
 import './termPhone.css';
+import { useDraft } from '../drafts';
 
 function elapsed(from: number | null, to: number | null) {
   if (!from) return '';
@@ -109,7 +110,7 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
   const office = useMode((s) => s.mode) === 'office';
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`agent:${agentId}`); // kept through a reload (#216)
   const [busy, setBusy] = useState(false);
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.

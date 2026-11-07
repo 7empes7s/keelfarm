@@ -141,6 +141,33 @@ export function EffortSelect({ agent, id, style }: FieldProps) {
   );
 }
 
+/** The account or tag they run on (#247, Settings → Providers & accounts), or the rotation. A cloud agent uses the cloud's. */
+export function AccountSelect({ agent, id, style }: FieldProps) {
+  const settings = useStore((s) => s.settings);
+  const accounts = useStore((s) => s.accounts.accounts);
+  const cli = workerCli(agent, settings);
+  const mine = accounts.filter((a) => a.cli === cli && !a.removing);
+  const tags = [...new Set(mine.flatMap((a) => a.tags))];
+  const value = agent.account ?? '';
+  return (
+    <select id={id} value={value} title={agent.role === 'ceo' ? 'The account the CEO runs on' : 'The account they run on'} aria-label={id ? undefined : 'Account'} style={style} onChange={(e) => void save(agent.id, { account: e.target.value })}>
+      <option value="">Rotation (default)</option>
+      {tags.map((t) => (
+        <option key={`t-${t}`} value={t}>
+          Any “{t}” account
+        </option>
+      ))}
+      {mine.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.label}
+          {a.enabled ? '' : ' (paused)'}
+        </option>
+      ))}
+      {value && !mine.some((a) => a.id === value) && !tags.includes(value) && <option value={value}>{value} (gone: runs on the rotation)</option>}
+    </select>
+  );
+}
+
 export function LookSelect({ agent, id }: FieldProps) {
   return (
     <select id={id} value={agent.look} title="Character look" aria-label={id ? undefined : 'Drawn as'} style={{ width: 'auto' }} onChange={(e) => void save(agent.id, { look: e.target.value as 'feminine' | 'masculine' })}>
@@ -350,6 +377,12 @@ export function AgentSetup({ agent }: { agent: Agent }) {
               Works on{agent.host === 'box' && agent.cloud && <span className="muted"> · {CLOUD_STATE[agent.cloud]}</span>}
             </span>
             <HostSelect agent={agent} id={`${id}-host`} />
+          </label>
+        )}
+        {agent.host !== 'box' && (
+          <label className="field" htmlFor={`${id}-account`}>
+            <span>Account</span>
+            <AccountSelect agent={agent} id={`${id}-account`} />
           </label>
         )}
         <label className="field" htmlFor={`${id}-model`}>

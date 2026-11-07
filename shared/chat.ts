@@ -107,6 +107,7 @@ export function yesNoFor(messages: readonly PhoneMessage[]): number | null {
 /** A message the phone is sending (or failed to send): shown at the end of the thread until the office has it. */
 export interface OutgoingMessage {
   key: number; // this phone's own id for it
+  clientId?: string; // sent with it, so a resend after a reload is taken once (#216)
   text: string;
   replyTo?: number;
   files?: FileRef[]; // uploaded already: the message carries their ids
@@ -114,12 +115,25 @@ export interface OutgoingMessage {
   delivery: Extract<Delivery, 'sending' | 'failed'>;
 }
 
-/** The outbox once the office's copy of a message arrived: the send it came from (same text, reply and files) is done. */
-export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments'>): OutgoingMessage[] {
+/** The outbox once the office's copy of a message arrived: the send it came from (its client id, else the same text, reply and files) is done. */
+export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments' | 'clientId'>): OutgoingMessage[] {
   if (m.from !== 'manager') return [...outbox];
   const ids = (fs?: readonly FileRef[]) => (fs ?? []).map((f) => f.id).join();
-  const i = outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo && ids(o.files) === ids(m.attachments));
+  const byId = m.clientId ? outbox.findIndex((o) => o.clientId === m.clientId) : -1;
+  const i = byId >= 0 ? byId : outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo && ids(o.files) === ids(m.attachments));
   return i < 0 ? [...outbox] : outbox.filter((_, j) => j !== i);
+}
+
+/** The manager's message the office already took with this client id: a resend gets it back instead of a second copy. */
+export const sentBefore = (messages: readonly PhoneMessage[], clientId: string | undefined) => (clientId ? messages.find((m) => m.from === 'manager' && m.clientId === clientId) : undefined);
+
+/**
+ * A saved outbox read back after a reload (#216): what the office already has is dropped, the rest shows as failed
+ * (tap to retry) except sends still on their way, which go again once each (`resend`).
+ */
+export function restoreOutbox(saved: readonly OutgoingMessage[], messages: readonly PhoneMessage[]): { outbox: OutgoingMessage[]; resend: OutgoingMessage[] } {
+  const outbox = saved.filter((o) => !sentBefore(messages, o.clientId));
+  return { outbox, resend: outbox.filter((o) => o.delivery === 'sending' && o.clientId) };
 }
 
 // ---------- backend stays backend (#193) ----------

@@ -10,6 +10,7 @@ import { canGoFullscreen, goFullscreen, useChatFull } from './chatFull';
 import { Menu } from './Menu';
 import { keyLabel } from './keymap';
 import { useControls } from './controls';
+import { XLabel } from './HoverCard';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
 // prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; text size; hands-free;
@@ -111,21 +112,27 @@ interface ToolsProps {
 export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onFiles, into, full = true }: ToolsProps) {
   const tools = (
     <>
-      <button type="button" className="chat-tool" onClick={onChats} aria-haspopup="dialog" aria-label="Conversations and search" title="Conversations: a new one, an earlier one, search them all, and what the CEO remembers">
+      <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Conversations and search" title="Conversations: a new one, an earlier one, search them all, and what the CEO remembers">
         🔍
+        <XLabel text="Conversations" />
       </button>
       {artifacts > 0 && (
-        <button type="button" className="chat-tool" onClick={onArtifacts} aria-haspopup="dialog" aria-label={`Artifacts (${artifacts})`} title="Every artifact in this conversation, newest first">
-          📄<span className="badge badge-dot chat-tool-n" aria-hidden>{artifacts}</span>
+        <button type="button" className="chat-tool xbtn" onClick={onArtifacts} aria-haspopup="dialog" aria-label={`Artifacts (${artifacts})`} title="Every artifact in this conversation, newest first">
+          📄
+          <XLabel text="Artifacts" />
+          <span className="badge badge-dot chat-tool-n" aria-hidden>{artifacts}</span>
         </button>
       )}
       {files > 0 && (
-        <button type="button" className="chat-tool" onClick={onFiles} aria-haspopup="dialog" aria-label={`Files (${files})`} title="Every file in this conversation: keep or delete them">
-          📎<span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
+        <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-haspopup="dialog" aria-label={`Files (${files})`} title="Every file in this conversation: keep or delete them">
+          📎
+          <XLabel text="Files" />
+          <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
         </button>
       )}
-      <button type="button" className="chat-tool" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
+      <button type="button" className="chat-tool xbtn" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
         Aa
+        <XLabel text="Text size" />
       </button>
       <HandsFreeToggle ceoName={ceoName} />
       {full && (
@@ -150,10 +157,11 @@ export function FullButton() {
   const key = keyLabel(useControls((s) => s.bindings.chatFull)[0] ?? '');
   const label = on ? 'Leave full screen' : 'Full screen';
   return (
-    <button type="button" data-tour="chat-full" className="chat-tool chat-full-btn" aria-pressed={on} aria-label={label} title={`${label}${key ? ` (${key})` : ''}`} onClick={() => set(!on)}>
+    <button type="button" data-tour="chat-full" className="chat-tool chat-full-btn xbtn" aria-pressed={on} aria-label={label} title={`${label}${key ? ` (${key})` : ''}`} onClick={() => set(!on)}>
       <svg viewBox="0 0 24 24" aria-hidden>
         <path d={on ? MINIMIZE : MAXIMIZE} />
       </svg>
+      <XLabel text={label} keys={key || undefined} />
     </button>
   );
 }
@@ -179,13 +187,14 @@ function HandsFreeToggle({ ceoName }: { ceoName: string }) {
   return (
     <button
       type="button"
-      className={`chat-tool ${on ? 'hands-free-on' : ''}`}
+      className={`chat-tool xbtn ${on ? 'hands-free-on' : ''}`}
       aria-pressed={on}
       aria-label={on ? 'Hands-free on' : 'Hands-free'}
       title={on ? `Hands-free is on: after ${ceoName}'s spoken reply the phone listens for up to 8 s and sends what you say. Esc or M closes the mic.` : why || `Hands-free: talk with ${ceoName} without touching anything`}
       onClick={() => void setHandsFree(!on, ceoName)}
     >
       🎧
+      <XLabel text={on ? 'Hands-free on' : 'Hands-free'} />
     </button>
   );
 }

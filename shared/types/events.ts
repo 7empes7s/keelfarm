@@ -18,6 +18,7 @@ import type { DoctorFinding, ManagerChange, OfficeUpdateView, UsageCheckError, U
 import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
+import type { AccountsView } from './accounts.ts';
 import type { VoiceCacheView } from './voice.ts';
 
 export interface WorldSnapshot {
@@ -57,6 +58,7 @@ export interface WorldSnapshot {
   ticker?: TickerItem[]; // the floors' recent ticker lines, oldest first
   notifyChannels: NotifyChannelsView;
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
+  accounts?: AccountsView; // Settings → Providers & accounts (#247): no secrets
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
@@ -123,6 +125,7 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
+  | { type: 'accounts'; accounts: AccountsView }
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
   | { type: 'managerChanges'; changes: ManagerChange[] }

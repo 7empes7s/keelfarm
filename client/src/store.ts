@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -169,12 +169,14 @@ interface State {
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
+  accounts: AccountsView; // Settings → Providers & accounts (#247): logins and keys (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
   managerChanges: ManagerChange[]; // the manager's board actions and what the CEO did about them (#207)
   historySeq: number; // bumped by each new history entry (#49): an open History tab reloads its page
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
+  updateReady: string | null; // the office came back on this commit: its client loads at a safe moment (updateLoad.ts, #216)
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
   replaying: boolean; // the time-lapse (replay.ts) is showing a recorded day: live events wait, live actions are off
 
@@ -339,12 +341,14 @@ export const useStore = create<State>((set, get) => ({
     today: { sent: 0, skipped: 0 },
   },
   cloud: EMPTY_CLOUD,
+  accounts: { accounts: [] },
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
   managerChanges: [],
   historySeq: 0,
   pong: {},
   restarting: false,
+  updateReady: null,
   visitors: [],
   replaying: false,
 
@@ -426,6 +430,7 @@ export const useStore = create<State>((set, get) => ({
           ticker: d.ticker ?? [],
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           cloud: d.cloud ?? EMPTY_CLOUD,
+          accounts: d.accounts ?? { accounts: [] },
           tooling: d.tooling ?? EMPTY_INVENTORY,
           experiments: d.experiments ?? emptyLabView(),
           managerChanges: d.managerChanges ?? [],
@@ -660,6 +665,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'cloud':
         set({ cloud: ev.cloud });
+        break;
+      case 'accounts':
+        set({ accounts: ev.accounts });
         break;
       case 'tooling':
         set({ tooling: ev.tooling });

@@ -184,6 +184,7 @@ export interface AgentView {
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's (absent for the CEO, whose are in settings)
+  account?: string; // the account (id) or tag they're pinned to (#247); absent: the rotation
 }
 
 /** The kinds of work the icon over a busy agent shows (shared/activity.ts maps tools and status to them). */

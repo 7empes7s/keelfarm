@@ -139,6 +139,15 @@ export class Outbox {
     if (next && prev && !sameWatch(prev, next)) this.watch(tab, prev, next);
   }
 
+  /** A fresh snapshot (JSON) to every tab, each caught up again on what it shows: the demo's new office commit (#216). */
+  resendAll(snapshot: string) {
+    for (const tab of this.tabs.keys()) {
+      if (tab.readyState !== tab.OPEN) continue;
+      tab.send(snapshot);
+      this.resync(tab);
+    }
+  }
+
   /** The tab was sent a fresh snapshot (it has no lines now): catch it up again on what it shows. */
   resync(tab: Tab) {
     const w = this.tabs.get(tab);

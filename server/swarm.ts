@@ -210,7 +210,7 @@ export class Swarm extends SwarmCeoTools {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await this.cloud.init();
+    await Promise.all([this.cloud.init(), this.accounts.init()]);
     if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
@@ -504,7 +504,7 @@ export class Swarm extends SwarmCeoTools {
     }
     if (a.status === 'preparing') throw new HttpError(409, `${a.name} is still setting up; try again in a moment`);
     if (!a.sessionId || !a.branch || a.task === 'qa') throw new HttpError(409, `${a.name} has no session to continue. Give them an issue or a PR to test instead.`);
-    this.ensureSlot(sessionKind(a));
+    this.ensureSlot(sessionKind(a), a);
     this.appendLog(a, [{ kind: 'manager', text: `▶ ${who}: ${text}` }]);
     this.chatSay(a, text, who);
     const cwd = this.deskOf(a, repo);
