@@ -89,6 +89,13 @@ async function swipeSideways(page: Page, box: Locator) {
 
 test.use({ hasTouch: true });
 
+test('a phone panel resists sideways dragging of oversized content', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await openConsole(page, 'pocket');
+  await expect(root.locator('.panel-body')).toBeVisible();
+  expect(await swipeSideways(page, root.locator('.panel-body'))).toBeLessThanOrEqual(1);
+});
+
 for (const [where, widths] of [
   ['pocket', [375, 390, 1280]],
   ['office', [390, 1280]], // the 3D office boots WebGL: two widths
