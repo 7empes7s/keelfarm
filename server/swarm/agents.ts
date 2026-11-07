@@ -764,7 +764,9 @@ export abstract class SwarmAgents extends SwarmMerge {
   /** A message to them, as a bubble in their chat. */
   protected chatSay(a: PersistedAgent, text: string, who: string) {
     const item = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: scrub(text, this.secrets()), who });
-    if (item) this.outbox.chat(a.id, [item]);
+    if (!item) return;
+    this.outbox.chat(a.id, [item]);
+    this.ceoChat.noteMessage(item.id); // a CEO tool's message: its action card opens the chat here (#215)
   }
 
   /** POST /api/agents/:id/react: the manager's reaction on an item of their chat; one that asks for something is typed into their running session as a short note. */

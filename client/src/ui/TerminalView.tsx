@@ -103,7 +103,9 @@ function useTermFont(phone: boolean): [number, (by: 1 | -1) => void] {
   return [size, step];
 }
 
-export function TerminalView({ agentId, view, profile = false }: { agentId: string; view?: AgentPane; profile?: boolean }) {
+/** `jump`: the chat item to show (a CEO action card's message, #215); `details`: open their details on that tab. */
+export function TerminalView({ agentId, view, jump, details: requestedDetails, profile = false }: { agentId: string; view?: AgentPane; jump?: number; details?: DetailsTab; profile?: boolean }) {
+  const openOn = requestedDetails ?? (profile ? 'profile' : undefined);
   const agent = useStore((s) => s.agents[agentId]);
   const log = useStore((s) => s.logs[agentId]) ?? [];
   const shotAt = useStore((s) => s.screens[agentId]);
@@ -116,11 +118,11 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
   const [busy, setBusy] = useState(false);
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.
-  const [sheet, setSheet] = useState(profile);
+  const [sheet, setSheet] = useState(!!openOn);
   const [side, setSide] = useState(true);
   const details = phone ? sheet : side;
   const setDetails = phone ? setSheet : setSide;
-  const [tab, setTab] = useState<DetailsTab>(profile ? 'profile' : 'now');
+  const [tab, setTab] = useState<DetailsTab>(openOn ?? 'now');
   const swipe = useSwipe(details, setDetails);
   const [fontPx, stepFontSize] = useTermFont(phone);
   const uiScale = useA11y((s) => s.prefs.uiScale);
@@ -128,6 +130,14 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
   const [keysOn, setKeysOn] = useTermKeysPref(false);
   const chatMode = useChatMode();
   const [opened, setOpened] = useState(view);
+  useEffect(() => {
+    setOpened(view);
+    if (openOn) {
+      setTab(openOn);
+      setSheet(true);
+      setSide(true);
+    }
+  }, [agentId, view, jump, openOn]);
   const [liveLine, setLiveLine] = useState('');
   const onStatus = useCallback((line: string) => setLiveLine(line), []);
   const [, tick] = useState(0);
@@ -239,7 +249,7 @@ export function TerminalView({ agentId, view, profile = false }: { agentId: stri
 
   const browser = agent.hasScreenshot && <BrowserCard agent={agent} img={shot?.agentId === agentId ? shot.img : null} />;
   const split = pane === 'chat' ? (
-    <AgentChat agent={agent} repo={repo} onTerminal={() => choose('terminal')} onSend={send} onStop={() => void stop()} />
+    <AgentChat agent={agent} repo={repo} jump={jump} onTerminal={() => choose('terminal')} onSend={send} onStop={() => void stop()} />
   ) : (
     <div className="term-split">
       {agent.terminal ? (

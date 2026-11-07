@@ -43,7 +43,7 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); profile: with their Profile open (#205)
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; jump?: number; details?: 'now' | 'profile' | 'setup'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); jump: their chat item to scroll to; details: the details tab to open (#215); profile: with their Profile open (#205)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
