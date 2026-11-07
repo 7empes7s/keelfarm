@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
@@ -21,6 +21,7 @@ import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, NoticeCard, NoticePill, Starters, WorkingStrip } from './ChatCards';
 import { DecisionList, DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
+import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
@@ -38,11 +39,17 @@ import { HolidayStrip } from './HolidayStrip';
 import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
 import { useCeoDraft } from './goTo';
+import { useMode } from '../pocket/mode';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
+import { ChatTextPill, isPinching, lastPinchAt, useChatPinch } from './ChatZoom';
+import { pinchCancels } from './chatPinch';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
+
+// The CEO's charts, tables and dashboards (#146): their own chunk, loaded with the first message that has one.
+const ChatVisuals = lazy(() => import('./ChatVisuals'));
 
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
@@ -391,7 +398,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
-  const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
+  const press = useRef<{ x: number; y: number; at: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   const look = m ? messageLook(m) : 'bubble';
   if (look === 'hidden') return null; // the CLI's own output (#193) stays backend
@@ -404,20 +411,22 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const id = m?.id;
   const files: FileRef[] = (m ? m.attachments : item.out!.files) ?? [];
 
-  // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click).
+  // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click). A second
+  // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu.
   const end = () => {
     const p = press.current;
     press.current = null;
     if (!p) return;
     clearTimeout(p.timer);
     setDx(0);
-    if (p.swipe && id !== undefined) onReply(id);
+    if (p.swipe && id !== undefined && !pinchCancels(p.at, lastPinchAt())) onReply(id);
   };
   const gestures = {
     onPointerDown: (e: ReactPointerEvent) => {
-      if (e.pointerType === 'mouse' || (e.target as HTMLElement).closest('a, button')) return;
-      const p = { x: e.clientX, y: e.clientY, long: false, swipe: false, timer: 0 };
+      if (e.pointerType === 'mouse' || isPinching() || (e.target as HTMLElement).closest('a, button')) return;
+      const p = { x: e.clientX, y: e.clientY, at: performance.now(), long: false, swipe: false, timer: 0 };
       p.timer = window.setTimeout(() => {
+        if (pinchCancels(p.at, lastPinchAt())) return;
         p.long = true;
         onActions(item);
       }, LONG_PRESS_MS);
@@ -426,6 +435,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
     onPointerMove: (e: ReactPointerEvent) => {
       const p = press.current;
       if (!p || p.long) return;
+      if (pinchCancels(p.at, lastPinchAt())) return (p.swipe = false), end();
       const mx = e.clientX - p.x;
       const my = e.clientY - p.y;
       if (Math.abs(mx) > 10 || Math.abs(my) > 10) clearTimeout(p.timer);
@@ -494,6 +504,11 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
         ))}
+        {!!m?.visuals?.length && (
+          <Suspense fallback={null}>
+            <ChatVisuals visuals={m.visuals} />
+          </Suspense>
+        )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
         {m?.used && <UsedLine used={m.used} />}
@@ -561,8 +576,11 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
   const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
   const scroller = useRef<HTMLDivElement>(null);
+  const [logWrap, setLogWrap] = useState<HTMLDivElement | null>(null);
+  useChatPinch(logWrap, useCallback(() => scroller.current, []));
   const form = useRef<HTMLFormElement>(null);
   const stick = useRef(true);
+  const lastTop = useRef(0);
   const opened = useRef(false);
 
   const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
@@ -746,7 +764,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         </div>
         <ChatTools ceoName={ceo.name} artifacts={artifactCount} files={fileCount} onChats={() => setSheet('chats')} onArtifacts={() => setArtifactList(true)} onFiles={() => setFilesOpen(true)} into={tools} />
       </div>
-      <div className="chat-log-wrap">
+      <div className="chat-log-wrap" ref={setLogWrap}>
+        <ChatTextPill />
         <div
           className="chat-log"
           ref={scroller}
@@ -754,7 +773,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           tabIndex={0}
           onScroll={(e) => {
             const el = e.currentTarget;
-            const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            const end = keepsFollowing(stick.current, el.scrollTop, lastTop.current, el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+            lastTop.current = el.scrollTop;
             stick.current = end;
             if (end === atEnd) return;
             setAtEnd(end);
@@ -1008,6 +1028,7 @@ function useCompany() {
 function Shortcuts() {
   const openOverlay = useStore((s) => s.openOverlay);
   const repoId = useStore((s) => s.repos.find((r) => r.floor === s.floor)?.id);
+  const office = useMode((s) => s.mode === 'office'); // the map room is 3D: pocket mode has the 2D map
   return (
     <nav className="phone-links" aria-label="Open a panel">
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager' })}>
@@ -1021,6 +1042,11 @@ function Shortcuts() {
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
         👥 Floor list
       </button>
+      {office && (
+        <button className="btn btn-small" onClick={() => openOverlay({ kind: 'mapRoom' })}>
+          🌌 Map room
+        </button>
+      )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
         ❓ Help
       </button>

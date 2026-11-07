@@ -142,6 +142,7 @@ export class Swarm extends SwarmCeoTools {
         phoneReadAt: loaded.phoneReadAt ?? 0,
         notices: keepNotices(loaded.notices, Date.now()),
         prLimits: loaded.prLimits ?? 1,
+        outageReleased: loaded.outageReleased ?? false,
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
         questions: Array.isArray(loaded.questions) ? loaded.questions : [],
@@ -314,12 +315,14 @@ export class Swarm extends SwarmCeoTools {
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
     if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
+    for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber); // a CI outage's banner (#191)
     void pruneQaShots(QA_SHOTS_DIR, new Set(this.state.qa.map((q) => `${q.repoId}#${q.prNumber}`)));
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);
     // A PR the restart left in "testing" with nobody on it: test it again (the result, if any, was lost).
     for (const rec of orphanedQa(this.state.qa, this.state.agents, BUSY)) this.setQa(rec, { status: 'queued', qaAgentId: null });
     if (this.state.prLimits < PR_LIMITS_VERSION) this.catchUpPrs();
+    if (!this.state.outageReleased) this.releaseOutageStuck();
     this.officeHead = await this.backend.office.head();
     const updated = await this.backend.office.takeLastUpdate().catch(() => null);
     if (updated) await this.reportUpdate(updated);

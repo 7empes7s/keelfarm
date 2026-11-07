@@ -139,6 +139,7 @@ export abstract class SwarmCore extends SwarmContract {
     phoneReadAt: 0,
     notices: [],
     prLimits: PR_LIMITS_VERSION,
+    outageReleased: true,
     ops: emptyHistory(),
     held: [],
     progress: emptyLedger(),
@@ -365,6 +366,7 @@ export abstract class SwarmCore extends SwarmContract {
       previewConfig: r.preview,
       preview: this.previews.view(r),
       charter: charterView(r.charter, Date.now(), rt.insights ?? null),
+      ciOutage: r.ciOutage ? { reason: r.ciOutage.reason, since: r.ciOutage.since, parked: this.state.qa.filter((q) => q.repoId === r.id && q.ciOutage != null).map((q) => q.prNumber) } : null,
       ...this.practiceView(r),
     };
   }

@@ -10,6 +10,7 @@ import type { TaskKind } from './costs.ts';
 import type { FileRef, FileView } from './files.ts';
 import type { UsedView } from './used.ts';
 import type { ChatAction } from './ceoActions.ts';
+import type { ChatVisual } from './chatVisuals.ts';
 import type { ToolInventory, ToolSettings, ToolSwitches } from './tooling.ts';
 import type { CeoMandate, FollowupSettings } from './followups.ts';
 import type { AgentQuestion } from './questions.ts';
@@ -78,7 +79,7 @@ export interface PullInfo {
   checks: 'pending' | 'passing' | 'failing' | 'none';
   headSha: string;
   mergeState: string; // GitHub's mergeStateStatus: CLEAN | BEHIND | BLOCKED | DIRTY | UNSTABLE | DRAFT | UNKNOWN …
-  failedChecks: { name: string; url: string | null }[];
+  failedChecks: { name: string; url: string | null; neverStarted?: boolean }[]; // neverStarted: GitHub ended it within seconds without running it (an outage, #191)
   pendingChecks: string[];
   issueCreatedAt?: string | null; // when the issue it closes was filed, as far as the office knows (the whiteboard's issue → merge time)
   /** GitHub's check runs on the head commit once all have finished: how long they took (first start to last finish) and when they finished. */
@@ -123,6 +124,14 @@ export interface RepoView extends FloorPracticeView {
   previewConfig: PreviewConfig;
   preview: PreviewView;
   charter: CharterView; // the rest of the floor's charter (#48); `mission` above is its mission
+  ciOutage?: CiOutageView | null; // GitHub won't run the floor's checks: QA-passed PRs wait for it, not for fixes (#191)
+}
+
+/** A floor's CI outage (#191): why, since when, and the QA-passed PRs parked until CI runs again. */
+interface CiOutageView {
+  reason: string;
+  since: number;
+  parked: number[];
 }
 
 /**
@@ -680,6 +689,7 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
+  visuals?: ChatVisual[]; // the CEO's charts, tables and dashboards (#146, shared/chatVisuals.ts)
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
