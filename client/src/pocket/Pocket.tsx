@@ -14,6 +14,7 @@ import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Chat';
+import { useCall } from '../ui/voiceCallStore';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';
@@ -417,9 +418,11 @@ export default function Pocket() {
   const [dockPref, setDockPref] = useState(savedDock);
   const [dockW, setDockW] = useDockWidth();
   const [drawer, setDrawer] = useState(false);
-  const dock = layout === 'expanded' ? dockPref : layout === 'medium' && drawer;
+  const tucked = useCall((s) => s.chatTucked); // behind a voice call (#287)
+  const dock = (layout === 'expanded' ? dockPref : layout === 'medium' && drawer) && !tucked;
   const setDock = useCallback(
     (open: boolean) => {
+      if (open) useCall.setState({ chatTucked: false });
       if (layout !== 'expanded') return setDrawer(open);
       setDockPref(open);
       saveDock(open);

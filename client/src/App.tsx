@@ -4,16 +4,20 @@ import { installSwitchKey } from './pocket/switchOffice';
 import { Captions, LiveRegions } from './ui/CaptionStrip';
 import { ConfirmDialog } from './ui/Confirm';
 import { OfficeBoundary } from './ui/OfficeBoundary';
+import { useCall } from './ui/voiceCallStore';
 
 // Each loads only when it's shown: a phone in pocket mode never fetches three.js.
 const loadOffice = () => lazy(() => import('./Office'));
 const Pocket = lazy(() => import('./pocket/Pocket'));
+// The voice call's screens sit over both offices, so switching between them never touches the call.
+const CallScreens = lazy(() => import('./ui/CallScreens'));
 
 export function App() {
   const mode = useMode((s) => s.mode);
   // A fresh lazy component per attempt: React keeps a failed import's error otherwise.
   const [attempt, setAttempt] = useState(0);
   const Office = useMemo(loadOffice, [attempt]);
+  const calling = useCall((s) => s.call.phase !== 'idle');
   useEffect(installSwitchKey, []);
   return (
     <>
@@ -26,6 +30,11 @@ export function App() {
           </OfficeBoundary>
         )}
       </Suspense>
+      {calling && (
+        <Suspense fallback={null}>
+          <CallScreens />
+        </Suspense>
+      )}
       <ConfirmDialog />
       <Captions />
       <LiveRegions />
