@@ -70,20 +70,24 @@ export const game = (name: string): View => ({
 
 const starts = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
 
-/** Pocket mode's Settings: back to the list if a section is open, then a section (#102). */
+/** Pocket mode's Settings: back to the list if a section is open, then a section (#102); on a desktop, its top tabs (#104). */
 export async function pocketSection(root: Locator, label: string) {
+  if (await root.locator('.cn-groups').isVisible()) return consoleSection(root, GROUPS.find((g) => sectionsIn(g.id, 'pocket').some((s) => s.label === label))!.label, label);
   const back = root.getByRole('button', { name: 'Back to settings' });
   if (await back.isVisible()) await back.click();
   await root.getByRole('button', { name: starts(label) }).click();
   await expect(root.getByRole('region', { name: label })).toBeVisible();
 }
 
-/** The 3D office's console: a top tab, then a section in its side menu (#102). */
-export async function officeSection(root: Locator, group: string, label: string) {
+/** The console's top tabs: a tab, then a section in the row under it (#199), the section at the console's full width. */
+export async function consoleSection(root: Locator, group: string, label: string) {
   await root.locator('.cn-groups').getByRole('tab', { name: new RegExp(group) }).click();
-  const t = root.locator('.cn-menu').getByRole('tab', { name: starts(label) });
+  const t = root.locator('.cn-sections').getByRole('tab', { name: starts(label) });
   await t.click();
   await expect(t).toHaveAttribute('aria-selected', 'true');
+  await expect(root.locator('.cn-side')).toHaveCount(0);
+  const [pane, split] = await Promise.all([root.locator('.cn-pane').boundingBox(), root.locator('.cn-split').boundingBox()]);
+  expect(pane!.width).toBeGreaterThanOrEqual(split!.width - 1); // no side column beside it
 }
 
 /** The agent window's details, opened from the header if they're closed, then one of their tabs (#117). */
@@ -96,7 +100,7 @@ export async function agentTab(root: Locator, tab: string) {
 /** Every section of the console, as views. */
 export const consoleSections = (where: Where): View[] =>
   GROUPS.flatMap((g) =>
-    sectionsIn(g.id, where).map((s) => ({ name: `${g.label} › ${s.label}`, go: (root: Locator) => (where === 'pocket' ? pocketSection(root, s.label) : officeSection(root, g.label, s.label)) })),
+    sectionsIn(g.id, where).map((s) => ({ name: `${g.label} › ${s.label}`, go: (root: Locator) => (where === 'pocket' ? pocketSection(root, s.label) : consoleSection(root, g.label, s.label)) })),
   );
 
 /** Labels starting with an action that's hard to undo ("Remove Telegram"): outside a ⋯ menu they mean one tap does it. */

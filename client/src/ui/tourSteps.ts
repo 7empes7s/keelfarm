@@ -57,7 +57,7 @@ export const TOUR: TourEntry[] = [
   { id: 'guide', tracks: ALL, title: 'Get the most out of it', text: 'The ✅ guide is a checklist that ticks itself, with a Do it on each open item.', targets: ['guide'], tryIt: 'guide', added: 1 },
   { id: 'bell', tracks: ALL, title: 'Notifications', text: "🔔 keeps every notification with its buttons, so you can approve or retry right from it.", targets: ['bell'], tryIt: 'bell', added: 2 },
   { id: 'chat-cards', tracks: ALL, title: 'Ask the CEO', text: "In the chat, tap a starter or type / for commands like /plan; action cards show each job's live steps.", targets: ['chat', 'phone'], tryIt: 'plan', added: 2 },
-  { id: 'console', tracks: ALL, title: "The manager's console", text: 'Five tabs, each with a side menu, and a search box that finds any setting.', targets: ['console-search', 'console'], tryIt: 'console', added: 2 },
+  { id: 'console', tracks: ALL, title: "The manager's console", text: 'Five tabs, each with a row of sections, and a 🔍 that finds any setting.', targets: ['console-search', 'console'], tryIt: 'console', added: 2 },
   { id: 'charter', tracks: ALL, title: 'Charters', text: "A floor's Charter leads with its numbers for each objective; editing is tucked away.", targets: ['charter', 'console'], tryIt: 'charter', added: 2 },
   { id: 'costs', tracks: ALL, title: 'Where the plan goes', text: "Mission control's costs: insights first, the priciest issues as cards and waste grouped by cause.", targets: ['costs', 'console'], tryIt: 'costs', added: 2 },
   { id: 'info', tracks: POCKET, title: 'What can I do here?', text: "Every screen's ⓘ says what you can do there, and brings back What's new.", targets: ['info'], added: 2 },

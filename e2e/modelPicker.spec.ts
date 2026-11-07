@@ -24,7 +24,7 @@ async function team(page: Page, width: number): Promise<Locator> {
   await page.keyboard.press('e');
   const root = dialog(page, /Manager's console/);
   await root.locator('.cn-groups').getByRole('tab', { name: /Work/ }).click();
-  await root.locator('.cn-menu').getByRole('tab', { name: /^Team/ }).click();
+  await root.locator('.cn-sections').getByRole('tab', { name: /^Team/ }).click();
   return root;
 }
 
