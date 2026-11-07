@@ -24,7 +24,7 @@ let watching = false;
 // Back from the time-lapse: everything waits for the fresh snapshot asked for, so nothing applies on top of the replay.
 let awaitingSnapshot = false;
 // Presence too: the other visitors are live people, there in a replay as much as in the live office.
-const OUTSIDE_REPLAY = new Set<ServerEvent['type']>(['notify', 'notifyChannels', 'settings', 'officeUpdate', 'clis', 'voiceKey', 'voiceCache', 'progress', 'visitors', 'visitorPose', 'visitorEmote', 'visitorPing']);
+const OUTSIDE_REPLAY = new Set<ServerEvent['type']>(['notify', 'notifyChannels', 'settings', 'officeUpdate', 'clis', 'models', 'voiceKey', 'voiceCache', 'progress', 'visitors', 'visitorPose', 'visitorEmote', 'visitorPing']);
 let opens = 0;
 /** Characters in and out on /ws since the page loaded, and in for presence alone (its probe turns them into rates). */
 export const wsTraffic = { in: 0, out: 0, presence: 0 };

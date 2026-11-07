@@ -292,7 +292,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
         size: z.number().int().min(1).max(FLOOR_SEATS).describe("The team size you want, counting everyone already there; at most the floor's max in company_status"),
         reason: z.string().min(1).max(600).describe("Why, from the floor's throughput. The manager reads this."),
         cli: CLI.optional().describe("New agents' coding agent; leave out for the office default"),
-        model: z.string().optional().describe("New agents' model; leave out for the default"),
+        model: z.string().optional().describe("New agents' model id (one of their coding agent's); leave out for the default"),
         effort: EFFORT.optional().describe("New agents' reasoning effort; leave out for the default"),
       },
       (a) => run(() => h.scaleTeam(a)),
@@ -303,7 +303,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       {
         agent_id: z.string(),
         cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
-        model: z.string().optional().describe('"" for the default'),
+        model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
         // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.
         tools_off: TOOL_REFS.describe('Plugins, skills, MCP servers or tools to switch off for them, when the manager asks'),

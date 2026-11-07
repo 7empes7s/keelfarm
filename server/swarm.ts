@@ -362,6 +362,7 @@ export class Swarm extends SwarmCeoTools {
       })
       .catch((err) => console.warn('could not look for agent CLIs', err));
     void this.refreshTooling();
+    await this.startModels();
     await this.journal.start();
     await this.spend.ledger.load();
     await this.history.load();

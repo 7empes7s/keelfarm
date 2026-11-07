@@ -698,10 +698,35 @@ html[data-reduce-motion] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* their coding agent, model and effort: labelled, side by side, wrapping before any gets cut (#198) */
+.ds-console .roster-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--ds-space-3);
+  min-width: min(100%, 300px);
+}
+.ds-console .roster-setup .field {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.ds-console .roster-setup .field > span {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.ds-console .roster-line {
+  font-weight: 600;
+  white-space: normal;
+}
 @container (max-width: 760px) {
   .ds-console .roster-doing {
     max-width: none;
     white-space: normal;
+  }
+  .ds-console .roster-setup {
+    flex-direction: column;
+  }
+  .ds-console .roster-setup .field {
+    flex-basis: auto;
   }
   .ds-console .roster .ds-row-actions {
     justify-content: flex-start;
