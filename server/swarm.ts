@@ -366,8 +366,8 @@ export class Swarm extends SwarmCeoTools {
     await this.spend.ledger.load();
     await this.history.load();
     void this.sweepHistory();
-    // A fresh demo office has a week of spending to look at.
-    if (this.backend.demo && !this.spend.ledger.all().length && this.backend.seedCosts) {
+    // A fresh demo office has a month of spending to look at (the first sync may have written its merges already).
+    if (this.backend.demo && !this.spend.ledger.all().some((r) => r.type === 'session') && this.backend.seedCosts) {
       void this.spend.ledger.replace(this.backend.seedCosts(this.state.repos, this.state.agents, Date.now()));
       for (const r of this.state.repos) this.seedCharterLog(r); // and the Charter tab's numbers over it
     }

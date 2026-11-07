@@ -1,6 +1,7 @@
 // The QA session's report: the JSON schema it answers in and the parser that reads it back from the session's result
 // (structured output, or the last ```json block of a terminal agent's message).
 
+import { isRoundCause, ROUND_CAUSES, type RoundCause } from '../shared/rounds.ts';
 import type { QaCheck } from '../shared/types.ts';
 import type { SessionResult } from './agentRunner.ts';
 import { LAB_PROBLEM_TEXT } from './testLab.ts';
@@ -15,6 +16,8 @@ export interface QaReport {
   fixInstructions?: string;
   /** The charter check (#48): "ok …" or "violation: …"; a violation fails the PR. */
   charterCheck?: string;
+  /** Why it failed (#188): QA's pick, absent on a pass or when QA gave none. */
+  cause?: RoundCause;
 }
 
 export const QA_SCHEMA: Record<string, unknown> = {
@@ -54,6 +57,11 @@ export const QA_SCHEMA: Record<string, unknown> = {
       items: { type: 'string' },
     },
     fixInstructions: { type: 'string', description: 'When the verdict is fail: precise, actionable instructions for the developer.' },
+    cause: {
+      type: 'string',
+      enum: ROUND_CAUSES,
+      description: 'When the verdict is fail, the main reason: bug (doesn\'t work), nit (small polish only), spec-missing (lacks a test or part the issue asks for), lab-error (the browser or test lab broke, not the PR), outage (CI never started), conflict, checks (CI red).',
+    },
     charterCheck: { type: 'string', description: 'When the project has a charter: one line, "ok" or "violation: <the standard broken>", on its standards and the issue\'s objective.' },
   },
 };
@@ -103,5 +111,6 @@ export function parseReport(result: SessionResult): QaReport | null {
     screenshots: Array.isArray(r.screenshots) ? r.screenshots.map(String) : [],
     fixInstructions,
     charterCheck,
+    ...((r.verdict === 'fail' || broken) && isRoundCause(r.cause) ? { cause: r.cause } : {}),
   };
 }

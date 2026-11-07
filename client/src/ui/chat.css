@@ -68,31 +68,93 @@
   cursor: pointer;
 }
 
-/* a code block's Copy, in its corner; its hit area reaches 44 px */
+/* a code block (#200): a dark card like the agent terminal, its language and Copy in a header above the code */
 .md-code {
-  position: relative;
+  --code-bg: #1b1b29;
+  --code-head: #24243a;
+  --code-ink: #e6e6f0;
+  --code-muted: #9a9ab8;
+  contain: inline-size;
   min-width: 0;
+  margin: 0 0 0.55em;
+  overflow: hidden;
+  border: var(--ds-border) solid #34344e;
+  border-radius: var(--ds-radius-md);
+  background: var(--code-bg);
+  color: var(--code-ink);
 }
-.md-code > pre {
-  padding-right: 4.5rem;
-}
-.md-copy {
-  position: absolute;
-  top: var(--ds-space-1);
-  right: var(--ds-space-1);
-  padding: 2px var(--ds-space-2);
-  border: var(--ds-border) solid var(--ds-outline);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-surface-raised);
-  color: var(--ds-text);
-  font: inherit;
+.md-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  padding-left: var(--ds-space-3);
+  background: var(--code-head);
+  color: var(--code-muted);
   font-size: var(--ds-text-xs);
-  cursor: pointer;
+  font-weight: 600;
 }
-.md-copy::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
+.md-copy,
+.md-code-more {
+  color: var(--code-muted);
+  font-size: var(--ds-text-xs);
+}
+.md-copy svg {
+  flex: none;
+}
+.md-code .ds-btn-ghost:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--code-ink);
+}
+.md .md-code pre {
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 0.86em;
+  line-height: 1.55;
+}
+.md .md-code pre code {
+  font-size: inherit;
+}
+.md-line {
+  display: block;
+}
+/* other languages keep their lines and scroll sideways, fading at an edge with more to see */
+.md-code pre[data-fade='r'] {
+  mask-image: linear-gradient(to left, transparent, #000 24px);
+}
+.md-code pre[data-fade='l'] {
+  mask-image: linear-gradient(to right, transparent, #000 24px);
+}
+.md-code pre[data-fade='lr'] {
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+/* shell commands wrap, with a hanging indent after a muted $ that is never selected or copied */
+.md .md-code-shell pre,
+.md .md-code-shell pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.md-code-shell .md-line {
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+.md-code-shell .md-line-cmd::before {
+  content: '$ ';
+  color: var(--code-muted);
+  user-select: none;
+}
+.md-code-folded {
+  mask-image: linear-gradient(to top, transparent, #000 2.5em);
+}
+.md-code .md-code-more {
+  width: 100%;
+  border-radius: 0;
+  border-top: var(--ds-border) solid #34344e;
+  background: var(--code-head);
 }
 
 /* conversations */

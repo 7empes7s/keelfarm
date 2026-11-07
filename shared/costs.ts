@@ -1,5 +1,6 @@
 // Where the Claude plan goes (#18): the kinds of task a session can be, what came of it, the cost ledger's view, and
 // which reasoning effort a session runs at. Pure, shared by the server (the ledger) and the client (the usage view).
+import type { RoundCause, RoundsView } from './rounds.ts';
 import type { StartupContext, StartupRow } from './startup.ts';
 import type { EffortLevel } from './types.ts';
 
@@ -66,6 +67,7 @@ export interface CostSession {
   issue: number | null;
   pr: number | null;
   round: number | null; // QA: the PR's QA round
+  cause?: RoundCause; // a failed QA round's or a fix's cause (#188, shared/rounds.ts)
   model: string;
   effort: EffortLevel | '';
   usd: number;
@@ -175,6 +177,7 @@ export interface CostsView {
   waste: CostWaste[]; // newest first
   kinds: CostKindRow[];
   startup: StartupRow[]; // what each kind of task loads before its first step (#50)
+  rounds: RoundsView; // QA rounds per merge and by cause over 7 and 30 days, whatever `days` is (#188)
 }
 
 /** Settings → effort per kind: what the ledger says this kind cost, e.g. "QA averaged $0.84 at medium (23), $0.40 at low (5)". */

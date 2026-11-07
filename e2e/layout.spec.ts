@@ -108,12 +108,12 @@ const addProject = (mode: string): View => ({
   },
 });
 
-/** Mission control with the costs' first waste group open (#106). */
-const wasteGroup = (where: Where): View => ({
-  name: 'Mission control: a waste group open',
+/** Mission control with the costs' first waste group (#106) or the Rounds card's first cause (#188) open. */
+const wasteGroup = (where: Where, rounds = false): View => ({
+  name: `Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`,
   go: async (root) => {
     await (where === 'pocket' ? pocketSection(root, 'Mission control') : officeSection(root, 'Company', 'Mission control'));
-    const group = root.locator('.costs-group-head').first();
+    const group = root.locator(rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head').first();
     await group.scrollIntoViewIfNeeded();
     await group.click();
     await expect(group).toHaveAttribute('aria-expanded', 'true');
@@ -139,7 +139,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -149,7 +149,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office')],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true)],
   },
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
@@ -728,6 +728,29 @@ for (const width of PHONES) {
         const status = chip.querySelector('.ref-chip-status')?.getBoundingClientRect();
         if (status && Math.abs(status.top + status.height / 2 - (r.top + r.height / 2)) > 1.5) out.push(`"${name}"'s status isn't centred`);
       }
+      return out;
+    });
+    expect(problems).toEqual([]);
+  });
+}
+
+// A code block (#200): a 150-character command wraps whole inside its card, Copy in the header above it, never over it.
+for (const width of [360, 390, 1280]) {
+  test(`chat code blocks are readable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/?pocket=1&tab=chat');
+    const block = page.locator('.md-code-shell').filter({ hasText: 'merge.ts server/swarm/qa.ts' }).last();
+    await expect(block.locator('.md-code-lang')).toHaveText('Terminal');
+    const problems = await block.evaluate((el) => {
+      const out: string[] = [];
+      const vw = document.documentElement.clientWidth;
+      if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
+      const pre = el.querySelector('pre')!;
+      const code = pre.getBoundingClientRect();
+      const copy = el.querySelector('.md-copy')!.getBoundingClientRect();
+      if (pre.scrollWidth > pre.clientWidth + 1) out.push(`the command is cut off (${pre.scrollWidth} > ${pre.clientWidth}px)`);
+      if (copy.bottom > code.top + 0.5) out.push('Copy overlaps the code');
+      if (el.getBoundingClientRect().right > vw + 1) out.push('the block sticks out of the screen');
       return out;
     });
     expect(problems).toEqual([]);
