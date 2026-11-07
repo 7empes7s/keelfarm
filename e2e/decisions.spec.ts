@@ -13,7 +13,7 @@ test('the decisions tray shows each long question whole at 390px', async ({ page
   await expect(tray).toBeVisible();
   const row = tray.locator('.decision-row');
   const cards = row.locator('.decision-card');
-  await expect(tray.getByText('I fixed the payment or skip Windows CI for now?')).toBeAttached();
+  await expect(tray.getByText('Did you raise the limit, or shall I drop the Windows CI job?')).toBeAttached();
   await expect(tray.getByText(/Raised the limit or/)).toHaveCount(0); // replaced by the newer one
   const n = await cards.count();
   expect(n).toBeGreaterThanOrEqual(2);
