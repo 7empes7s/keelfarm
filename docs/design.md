@@ -48,7 +48,7 @@ Rejected:
 | Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; chart series `--ds-series-1…8` (in order; charts group a donut's rest as "Other" in the 8th) |
 | Elevation | `--ds-shadow-1` (buttons), `-2` (cards), `-3` (panels), `--ds-shadow-float` (menus) |
 | Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`, `--ds-ease-spring`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
-| Layers | `--ds-z-hud` 10 · `-panel` 30 · `-menu` 50 · `-confirm` 60 · `-toast` 70 |
+| Layers | `--ds-z-base` 10 · `-panel` 30 · `-sheet` 40 · `-popover` 50 · `-toast` 60 · `-tour` 70 · `-modal` 80; no raw `z-index` over 10 (`designTokens.test.ts`) |
 | Safe areas | `--ds-safe-top/right/bottom/left` |
 
 The values equal the office's old colours, so moving a rule onto tokens changes nothing. There is no dark palette: don't
