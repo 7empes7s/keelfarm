@@ -7,7 +7,7 @@ import { expect, test } from './helpers';
 async function kanban(page: Page) {
   await page.goto('/?pocket=1&tab=kanban');
   const root = page.locator('.pocket');
-  await expect(root.locator('.pk-tab-on')).toBeVisible();
+  await expect(root.locator('.kcol-progress')).toBeVisible();
   return root;
 }
 
@@ -15,7 +15,8 @@ test('a phone folds the Backlog: In progress on the first screen, the choice kep
   await page.setViewportSize({ width: 390, height: 844 });
   const state = await (await page.request.get('/api/state')).json();
   const repo = state.repos[0] as { id: string; issues: unknown[] };
-  for (let i = repo.issues.length; i < 30; i++) await page.request.post(`/api/repos/${encodeURIComponent(repo.id)}/issues`, { data: { title: `Backlog filler ${i}`, body: '' } });
+  // a few over 30: auto-assign hands some to free agents
+  for (let i = repo.issues.length; i < 34; i++) await page.request.post(`/api/repos/${encodeURIComponent(repo.id)}/issues`, { data: { title: `Backlog filler ${i}`, body: '' } });
   const root = await kanban(page);
   const head = (cls: string) => root.locator(`.${cls} .kcol-head`);
   await expect(head('kcol-backlog')).toHaveAttribute('aria-expanded', 'false');
@@ -53,8 +54,9 @@ test('side by side, a folded column is a narrow strip', async ({ page }) => {
   await expect(backlog.locator('.kcol-head')).toHaveAttribute('aria-expanded', 'false');
   await expect.poll(async () => (await backlog.boundingBox())!.width).toBeLessThan(60);
   await expect(backlog.locator('.kcol-head')).toContainText('Backlog');
-  const progress = (await root.locator('.kcol-progress').boundingBox())!;
-  expect(progress.y).toBeLessThan(400); // still beside it, not under it
+  const [strip, progress] = [(await backlog.boundingBox())!, (await root.locator('.kcol-progress').boundingBox())!];
+  expect(Math.abs(progress.y - strip.y)).toBeLessThan(2); // still beside it, not under it
+  expect(progress.x).toBeGreaterThan(strip.x);
   await backlog.locator('.kcol-head').click();
   await expect.poll(async () => (await backlog.boundingBox())!.width).toBeGreaterThan(150);
 });
