@@ -123,7 +123,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
       const tester = pickTester(preferCli(free, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
       if (!tester) continue;
-      if (!this.health.admit('qa')) return false;
+      if (!this.health.admit('qa', repo.id)) return false;
       void this.runQa(tester, repo, rec);
       return true;
     }
@@ -132,7 +132,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
       const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
       if (to === 'wait') continue; // the author gets it when their session ends
-      if (!this.health.admit('fix')) return false;
+      if (!this.health.admit('fix', repo.id)) return false;
       void this.runFix(to === 'author' ? author! : (free.find((a) => !owed.has(a.id)) ?? free[0]), repo, rec);
       return true;
     }
@@ -151,7 +151,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     }
     const agent = this.available(repo)[0];
     const next = this.nextIssue(repo, !!agent);
-    if (!agent || !next || !this.health.admit('build')) return false;
+    if (!agent || !next || !this.health.admit('build', repo.id)) return false;
     // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
     void this.assign(agent.id, next.number).catch((err) => console.warn('auto-assign failed', err));
     return agent.status === 'preparing';
@@ -418,7 +418,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   /** A free agent on this floor takes the next consult (nextConsult). True: one started. */
   protected startConsultWork(repo: PersistedRepo): boolean {
     const free = this.available(repo).filter((a) => a.host !== 'box' && !this.agentRt.get(a.id)?.session);
-    const pick = nextConsult(this.consults, repo.id, free.map((a) => a.id), this.state.settings.ceoAwake.consultMax, () => this.health.admit('consult'));
+    const pick = nextConsult(this.consults, repo.id, free.map((a) => a.id), this.state.settings.ceoAwake.consultMax, () => this.health.admit('consult', repo.id));
     const a = pick && this.state.agents.find((x) => x.id === pick.agentId);
     if (!pick || !a) return false;
     this.startConsult(a, pick.consult, repo);

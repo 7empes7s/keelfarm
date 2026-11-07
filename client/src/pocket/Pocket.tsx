@@ -30,6 +30,7 @@ import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { useChatMode } from '../ui/chatMode';
+import { heldNote } from '../../../shared/health';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -89,7 +90,19 @@ const STAGES: [keyof Pipeline, string, string][] = [
   ['needsYou', '⚠️', 'Needs you'],
 ];
 
-function Banners() {
+/** While work waits for memory (#115): a quiet note, no sound; a tap opens Mission control (the server's health). */
+function MemoryBanner({ open }: { open: () => void }) {
+  const text = useStore((s) => heldNote(s.health?.heldWork));
+  if (!text) return null;
+  return (
+    <button className="pk-banner pk-banner-tap" onClick={open} title="It starts by itself. Open Mission control">
+      <span>{text}</span>
+      <span aria-hidden>›</span>
+    </button>
+  );
+}
+
+function Banners({ settings }: { settings: (section: ConsoleSection) => void }) {
   const connected = useStore((s) => s.connected);
   const loaded = useStore((s) => s.loaded);
   const usage = useStore((s) => s.usage);
@@ -110,6 +123,7 @@ function Banners() {
       {usage.state === 'paused' && <div className="pk-banner pk-banner-bad">⏸ Claude's usage limit was reached: no new work starts{until ? ` until ${until}` : ''}.</div>}
       {usage.state === 'pacing' && <div className="pk-banner">🐢 Pacing new work after a usage warning{until ? ` until ${until}` : ''}.</div>}
       {update && <div className="pk-banner">{update}</div>}
+      <MemoryBanner open={() => settings('ops')} />
     </>
   );
 }
@@ -136,7 +150,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
   const waiting = approvalsBadge(waitingOnYou(repos, qa, requests)) + chatDecisions(decisions, Date.now()).length;
   return (
     <div className="pk-page">
-      <Banners />
+      <Banners settings={settings} />
       <div className="pk-company">
       <div className="pk-company-side">
       {waiting > 0 && (
@@ -500,7 +514,7 @@ export default function Pocket() {
                 {tab === 'company' && <Company go={go} settings={setSettings} />}
                 {tab === 'chat' && !wide && chat}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
-                {tab === 'team' && <Team focusRepo={repoId} />}
+                {tab === 'team' && <Team focusRepo={repoId} top={<MemoryBanner open={() => setSettings('ops')} />} />}
                 {tab === 'approvals' && <Approvals wide={layout === 'expanded'} />}
               </>
             )}
