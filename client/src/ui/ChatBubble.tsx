@@ -226,25 +226,28 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
-        {m?.used && <UsedLine used={m.used} />}
-        {!!m?.steps?.length && <StepsList steps={m.steps} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
-        <div className="bubble-time">
-          {m && !mine && <ReplayButton m={m} />}
-          {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
-          {m?.telegram === 'out' && (
-            <span className="bubble-via">
-              <Icon name="plane" /> sent to Telegram ·{' '}
-            </span>
-          )}
-          {m?.quiet && m.telegram !== 'out' && (
-            <span className="bubble-via">
-              <Icon name="smartphone" /> not sent: you were in the app ·{' '}
-            </span>
-          )}
-          {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
-          {clock(at)}
-          {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
+        {/* one compact meta row (#215): Used and Steps fold open across it, the time on its right */}
+        <div className="bubble-meta">
+          {m?.used && <UsedLine used={m.used} />}
+          {!!m?.steps?.length && <StepsList steps={m.steps} />}
+          <div className="bubble-time">
+            {m && !mine && <ReplayButton m={m} />}
+            {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
+            {m?.telegram === 'out' && (
+              <span className="bubble-via">
+                <Icon name="plane" /> sent to Telegram ·{' '}
+              </span>
+            )}
+            {m?.quiet && m.telegram !== 'out' && (
+              <span className="bubble-via">
+                <Icon name="smartphone" /> not sent: you were in the app ·{' '}
+              </span>
+            )}
+            {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
+            {clock(at)}
+            {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
+          </div>
         </div>
         {m && <Reactions m={m} ceoName={ceoName} />}
         {delivery === 'failed' && (
