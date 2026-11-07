@@ -10,6 +10,16 @@ export const CHECKS_ALERT_MS = 30 * 60_000;
 export const MERGE_RETRY_MS = 10 * 60_000;
 export const RERUN_GRACE_MS = 2 * 60_000;
 
+// CI outages (#191): GitHub ending a check run within seconds without running it (billing, spending limit, Actions
+// off) says nothing about the PR. QA-passed PRs it hits are parked: no fix, no fix count, no escalation. One parked PR
+// is re-run every OUTAGE_PROBE_MS; once a run really starts (still running OUTAGE_STARTED_MS after its re-run, or
+// finished), the rest are re-run oldest first, one at a time, and merge through the normal gate.
+export const NEVER_STARTED_MS = 5_000;
+export const OUTAGE_PROBE_MS = 5 * 60_000;
+export const OUTAGE_STARTED_MS = 60_000;
+export const NEVER_STARTED = 'GitHub ended the checks without starting them';
+const OUTAGE_TEXT = /billing|spending limit|payments? (have|has) failed/i;
+
 /** The parts of a QA record the merge gate reads. */
 export interface MergeRecord {
   passedSha: string | null;
@@ -20,6 +30,7 @@ export interface MergeRecord {
   rerunSha: string | null; // the head commit whose failed checks the office re-ran
   rerunAt: number | null; // when it did
   updatedSha?: string | null; // the head the office made by bringing the PR up to date with its base (#24)
+  ciOutage?: number | null; // parked by a CI outage since then (#191)
 }
 
 /** Bookkeeping the caller writes onto the record as it is (it doesn't count as a change to the record). */
@@ -34,6 +45,7 @@ export type MergeStep = { set: MergeBookkeeping } & (
   | { do: 'requeue' } // commits arrived after QA's sign-off: QA tests them too
   | { do: 'rerun'; runIds: number[]; reason: 'checks'; instructions: string; needsHuman: boolean } // re-run these Actions runs' failed jobs; the rest is the send-back if that can't be done
   | { do: 'send-back'; reason: 'checks' | 'conflict'; instructions: string; needsHuman: boolean } // needsHuman: the fix budget ran out
+  | { do: 'outage'; runIds: number[]; reason: string } // GitHub didn't run its checks: park it until CI is back (#191)
   | { do: 'update-branch' } // the repo only merges up-to-date branches, or the floor wants every PR up to date (#24)
   | { do: 'behind' } // up to date before merge: ask how far behind its base it is, then decide again with `behind`
   | { do: 'merge' }
@@ -43,7 +55,7 @@ export type MergeStep = { set: MergeBookkeeping } & (
  * Decide the next step toward merging a PR QA has passed. Pure: advanceMerge (swarm.ts) does the talking to GitHub
  * and the office. `detailed` means the PR's mergeability has already been asked for, so UNKNOWN is waited out.
  */
-export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { base: string; detailed?: boolean; upToDate?: boolean; behind?: number | null }): MergeStep {
+export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { base: string; detailed?: boolean; upToDate?: boolean; behind?: number | null; outage?: string | null }): MergeStep {
   if (pr.isDraft) return { do: 'wait', note: 'a draft: waiting', set: {} };
   if (!opts.detailed && (pr.mergeable === 'UNKNOWN' || pr.mergeState === 'UNKNOWN')) return { do: 'details', set: {} };
   const set: MergeBookkeeping = {};
@@ -57,8 +69,10 @@ export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { 
   if (pr.checks === 'failing') {
     const instructions = pr.failedChecks.map((c) => `- ${c.name}${c.url ? `: ${c.url}` : ''}`).join('\n');
     const runIds = failedRunIds(pr.failedChecks);
-    if (!rerun && runIds.length) return { do: 'rerun', runIds, reason: 'checks', instructions, needsHuman, set };
     if (rerun && rec.rerunAt != null && now - rec.rerunAt < RERUN_GRACE_MS) return { do: 'wait', note: 're-running a failed check', set };
+    const outage = opts.outage ?? (neverStarted(pr) ? NEVER_STARTED : null);
+    if (outage) return { do: 'outage', runIds, reason: outage, set };
+    if (!rerun && runIds.length) return { do: 'rerun', runIds, reason: 'checks', instructions, needsHuman, set };
     // It only fails on the office's merge of the base: the change conflicts with newer work there, not QA's verdict.
     if (opts.upToDate && rec.updatedSha === pr.headSha) return { do: 'send-back', reason: 'conflict', instructions: `It conflicts with ${opts.base}: after merging ${opts.base} into it, these checks fail:\n${instructions}`, needsHuman, set };
     return { do: 'send-back', reason: 'checks', instructions, needsHuman, set };
@@ -87,4 +101,56 @@ export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { 
 export function failedRunIds(failed: MergePull['failedChecks']): number[] {
   const ids = failed.map((c) => c.url?.match(/\/actions\/runs\/(\d+)/)?.[1]).filter((id): id is string => !!id);
   return [...new Set(ids)].map(Number);
+}
+
+// ---------- CI outages (#191) ----------
+
+/** Every failed check is one GitHub never started. */
+function neverStarted(pr: Pick<MergePull, 'checks' | 'failedChecks'>): boolean {
+  return pr.checks === 'failing' && pr.failedChecks.length > 0 && pr.failedChecks.every((c) => c.neverStarted);
+}
+
+/** GitHub's annotation saying it wouldn't run a job (billing, spending limit), clipped for the banner; else null. */
+export function outageReason(messages: string[]): string | null {
+  const m = messages.find((t) => OUTAGE_TEXT.test(t));
+  return m ? m.replace(/\s+/g, ' ').trim().slice(0, 200) : null;
+}
+
+/** Where a parked PR's checks stand: still refused, a re-run not yet known to have started, or really running/finished. */
+export function parkedState(pr: Pick<MergePull, 'checks' | 'failedChecks'>, rec: Pick<MergeRecord, 'rerunAt'>, now: number): ParkedPull['state'] | 'started' {
+  const since = now - (rec.rerunAt ?? 0);
+  if (pr.checks === 'failing') return since < RERUN_GRACE_MS ? 'rerunning' : neverStarted(pr) ? 'down' : 'started';
+  if (pr.checks === 'pending') return since < OUTAGE_STARTED_MS ? 'rerunning' : 'started';
+  return 'started';
+}
+
+export interface ParkedPull {
+  prNumber: number;
+  parkedAt: number;
+  rerunAt: number | null;
+  state: 'down' | 'rerunning';
+}
+
+/** A floor's outage clock: its last probe, and when a run was last seen really starting (null: CI still down). */
+export interface OutageClock {
+  probeAt: number | null;
+  back: number | null;
+}
+
+/**
+ * Which parked PR to re-run now, oldest first and one at a time: a probe every OUTAGE_PROBE_MS while CI is down, the
+ * next one as soon as the last re-run started once CI is back. A re-run refused again after CI came back means it's down again.
+ */
+export function outageRerun(parked: ParkedPull[], clock: OutageClock, now: number): { rerun: number | null; back: number | null } {
+  let back = clock.back;
+  if (back != null && parked.some((p) => p.state === 'down' && p.rerunAt != null && p.rerunAt >= back!)) back = null;
+  if (!parked.length || parked.some((p) => p.state === 'rerunning')) return { rerun: null, back };
+  if (back == null && clock.probeAt != null && now - clock.probeAt < OUTAGE_PROBE_MS) return { rerun: null, back };
+  const next = [...parked].sort((a, b) => a.parkedAt - b.parkedAt || a.prNumber - b.prNumber)[0];
+  return { rerun: next.prNumber, back };
+}
+
+/** Needs-human only because its checks kept failing after QA passed it (as in the outage before #191): back to the merge gate, which re-runs them once. */
+export function releasedAfterOutage(rec: { status: string; passedSha: string | null; fixReason: string | null; stuckWhy: string | null }): boolean {
+  return rec.status === 'needs-human' && !!rec.passedSha && rec.fixReason === 'checks' && /fails its checks after/.test(rec.stuckWhy ?? '');
 }

@@ -46,9 +46,9 @@ export interface AssignChoice {
 /** What can be handed to an agent: backlog issues, then untested, queued or stuck PRs. */
 export function assignChoices(cols: KanbanColumns | null): AssignChoice[] {
   if (!cols) return [];
-  const testable = cols.qa.filter((c) => !c.qa || c.qa.status === 'needs-human' || c.qa.status === 'queued');
+  const testable = cols.qa.filter((c) => !c.untrusted && (!c.qa || c.qa.status === 'needs-human' || c.qa.status === 'queued'));
   return [
-    ...cols.backlog.map((c) => ({ key: c.key, kind: 'issue' as const, number: c.number, title: c.title })),
+    ...cols.backlog.filter((c) => !c.untrusted).map((c) => ({ key: c.key, kind: 'issue' as const, number: c.number, title: c.title })),
     ...testable.map((c) => ({ key: c.key, kind: 'qa' as const, number: c.number, title: c.title })),
   ];
 }

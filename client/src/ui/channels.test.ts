@@ -14,6 +14,7 @@ describe('PR theatre channels', () => {
 
   it('lists open PRs only, in number order', () => {
     expect(channelPulls([pull(9), pull(3, 'MERGED'), pull(4), pull(5, 'CLOSED')]).map((p) => p.number)).toEqual([4, 9]);
+    expect(channelPulls([pull(4), { ...pull(6), untrusted: true }]).map((p) => p.number)).toEqual([4]); // from outside (#185)
   });
 
   it('falls back to main once the picked PR is no longer open', () => {

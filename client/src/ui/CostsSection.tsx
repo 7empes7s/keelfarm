@@ -7,11 +7,12 @@ import type { EffortLevel } from '../../../shared/types';
 import { EFFORTS } from './AgentSettings';
 import { EmptyState } from './EmptyState';
 import { InsightStrip, TopIssues, WasteCards } from './CostCards';
+import { RoundsCard } from './RoundsCard';
 import './costs.css';
 
 // Mission control → Where the plan goes (#18): the cost ledger, loaded on demand (it's never in the snapshot). The
-// insight strip, cost per merged PR per floor and per day, split by task kind; the most expensive issues; and the waste
-// by cause (CostCards.tsx), each linking to its issue or PR.
+// insight strip, cost per merged PR per floor and per day, split by task kind; QA rounds by cause (RoundsCard.tsx); the
+// most expensive issues; and the waste by cause (CostCards.tsx), each linking to its issue or PR.
 
 const DAYS = [1, 7, 30];
 
@@ -146,6 +147,7 @@ export function CostsSection() {
             </div>
             <KindSplit split={view.total} />
           </div>
+          <RoundsCard view={view} repo={repo} floorName={floorName} />
           <div id="costs-floors" className="costs-stack" role="region" aria-label="Cost per floor">
             <table className="ops-table costs-table">
               <thead>

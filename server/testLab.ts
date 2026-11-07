@@ -85,6 +85,69 @@ export function labCommand(command: string, extra: readonly string[] = []): stri
   return argv;
 }
 
+/** A Playwright suite: `npx playwright test …` or a package script named like e2e. */
+function isE2e(argv: readonly string[]): boolean {
+  return (argv[0] === 'npx' && argv[1] === 'playwright') || (argv[0] === 'npm' && argv[1] === 'run' && /e2e/i.test(argv[2] ?? ''));
+}
+
+/**
+ * What the lab actually runs: a Playwright suite gets `--reporter=line` (unless it names its own reporter), so it prints
+ * each test as it goes rather than only at the end (CI=1 picks quiet reporters in many configs).
+ */
+export function labArgv(argv: readonly string[]): string[] {
+  if (!isE2e(argv) || argv.some((a) => a.startsWith('--reporter'))) return [...argv];
+  return argv[0] === 'npm' && !argv.includes('--') ? [...argv, '--', '--reporter=line'] : [...argv, '--reporter=line'];
+}
+
+/**
+ * How long a Playwright suite may print nothing before the lab stops it as hung (with the line reporter it prints every
+ * test). null: other commands only have their timeout, since a typecheck or build can be quiet for minutes.
+ */
+export function silenceMs(argv: readonly string[]): number | null {
+  return isE2e(argv) ? 600_000 : null;
+}
+
+export type LabProblem = 'silent' | 'browser' | 'oom' | 'port';
+
+const PROBLEMS: [LabProblem, RegExp][] = [
+  ['browser', /Executable doesn't exist|npx playwright install|no Playwright browser|browserType\.launch: .*(not found|missing)/i],
+  ['oom', /heap out of memory|ENOMEM|Cannot allocate memory|out of memory/i],
+  ['port', /EADDRINUSE|address already in use|port \d+ is (already )?in use/i],
+];
+
+/** Words that mark a lab problem in a report: what runReport writes, and the usual causes' own messages. */
+export const LAB_PROBLEM_TEXT = new RegExp(`LAB ERROR|went silent for \\d+ ?s|${PROBLEMS.map(([, re]) => re.source).join('|')}`, 'i');
+
+/** A failed run whose cause is the lab, not the code under test: the silence watchdog, a missing browser, OOM, a busy port. */
+export function labProblem(r: Pick<RunResult, 'code' | 'silent' | 'tail'>): LabProblem | null {
+  if (r.silent) return 'silent';
+  if (r.code === 0) return null;
+  if (r.code === 137) return 'oom'; // SIGKILL: the kernel's OOM killer, as a shell reports it
+  const text = r.tail.slice(-60).join('\n');
+  return PROBLEMS.find(([, re]) => re.test(text))?.[0] ?? null;
+}
+
+const PROBLEM_TEXT: Record<LabProblem, string> = {
+  silent: 'it printed nothing for too long and the lab stopped it',
+  browser: 'the lab has no Playwright browser for it',
+  oom: 'it ran out of memory',
+  port: 'a port it needs is already in use',
+};
+
+/** Installing a browser needs this much free memory: it unpacks a few hundred MB next to running agents. */
+export const BROWSER_INSTALL_MIN_MB = 2048;
+
+/**
+ * The one Playwright browser cache every lab run (and the office's start-up install) shares: PLAYWRIGHT_BROWSERS_PATH
+ * when set, else Playwright's own default for the platform.
+ */
+export function browsersPath(env: Readonly<Record<string, string | undefined>>, home: string, platform: string): string {
+  if (env.PLAYWRIGHT_BROWSERS_PATH && env.PLAYWRIGHT_BROWSERS_PATH !== '0') return env.PLAYWRIGHT_BROWSERS_PATH;
+  if (platform === 'win32') return path.join(env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local'), 'ms-playwright');
+  if (platform === 'darwin') return path.join(home, 'Library', 'Caches', 'ms-playwright');
+  return path.join(env.XDG_CACHE_HOME ?? path.join(home, '.cache'), 'ms-playwright');
+}
+
 /** A floor's own allowlist entry (set_floor_profile lab_commands), normalised; throws when it isn't plain words. */
 export function labPattern(entry: string): string {
   const words = entry.trim().split(/\s+/);
@@ -154,6 +217,7 @@ export interface RunResult {
   ms: number;
   tail: string[]; // the last lines of output
   timedOut: boolean;
+  silent?: boolean; // stopped by the silence watchdog (silenceMs)
   artifacts: string[]; // files the run left in its report folders, relative to the checkout
 }
 
@@ -180,8 +244,10 @@ function checkReport(r: CheckResult): string {
 
 /** lab_run's answer: exit code, duration, the output's last lines (at most 200) and the artifacts. */
 function runReport(command: string, r: RunResult): string {
+  const problem = labProblem(r);
   return [
-    `${command}: ${r.timedOut ? 'timed out' : `exit code ${r.code}`} after ${Math.round(r.ms / 1000)} s.`,
+    `${command}: ${r.silent ? `went silent for ${Math.round((silenceMs(command.split(' ')) ?? 0) / 1000)} s and was stopped` : r.timedOut ? 'timed out' : `exit code ${r.code}`} after ${Math.round(r.ms / 1000)} s.`,
+    ...(problem ? [`LAB ERROR (${problem}): ${PROBLEM_TEXT[problem]}. This is the lab, not the code: QA reports verdict "lab-error" if it can't judge the PR without this run.`] : []),
     ...few('Artifacts', r.artifacts, 20),
     `Last ${Math.min(200, r.tail.length)} lines of output:`,
     ...r.tail.slice(-200),
@@ -228,7 +294,12 @@ export interface LabRunner {
   check(o: BrowserOpts & { viewport: number; steps: LabStep[] }): Promise<CheckResult>;
   /** The floor's lab checkout at the requester's committed HEAD (`worktree`) or a branch on origin, dependencies installed. */
   checkout(o: { fullName: string; defaultBranch: string; worktree: string; branch?: string }): Promise<string>;
-  run(o: { dir: string; argv: string[]; timeoutMs: number }): Promise<RunResult>;
+  /** silenceMs: stop it when it prints nothing for this long (RunResult.silent); null: never. */
+  run(o: { dir: string; argv: string[]; timeoutMs: number; silenceMs: number | null }): Promise<RunResult>;
+  /** Install Playwright's Chromium for the checkout's own Playwright, into the shared cache; false when it couldn't. */
+  installBrowser(dir: string): Promise<boolean>;
+  /** At office start: install that browser with the office's own Playwright, so no session has to. */
+  warm(): Promise<boolean>;
   /** Close the browser (idle, or the office stops). */
   close(): Promise<void>;
 }
@@ -397,11 +468,15 @@ export class TestLab {
       const outDir = labOutDir(j.who.worktree, j.id, this.host.forbidden());
       const input = j.input;
       if (input.kind === 'run') {
-        const argv = labCommand(input.command, j.who.labCommands);
+        const argv = labArgv(labCommand(input.command, j.who.labCommands));
         const dir = await runner.checkout({ fullName: j.who.fullName, defaultBranch: j.who.defaultBranch, worktree: j.who.worktree, branch: input.branch });
-        const r = await runner.run({ dir, argv, timeoutMs: Math.max(1, Math.min(30, input.timeoutMin ?? DEFAULT_RUN_MIN)) * 60_000 });
-        ok = r.code === 0 && !r.timedOut;
-        summary = r.timedOut ? 'timed out' : `exit ${r.code}`;
+        const go = () => runner.run({ dir, argv, timeoutMs: Math.max(1, Math.min(30, input.timeoutMin ?? DEFAULT_RUN_MIN)) * 60_000, silenceMs: silenceMs(argv) });
+        let r = await go();
+        // The checkout's Playwright wants a browser build the shared cache lacks: install it once and run again.
+        if (labProblem(r) === 'browser' && (await runner.installBrowser(dir))) r = await go();
+        ok = r.code === 0 && !r.timedOut && !r.silent;
+        const problem = labProblem(r);
+        summary = problem ? `lab error: ${problem}` : r.timedOut ? 'timed out' : `exit ${r.code}`;
         text = runReport(argv.join(' '), r);
       } else {
         const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr);

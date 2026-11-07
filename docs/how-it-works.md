@@ -90,6 +90,14 @@ Nobody may be watching to answer a permission question, so the office approves e
 
 Agents can do anything your own coding agent in a terminal can. Run the office where you'd run those.
 
+### Whose work the office takes (public repos)
+
+Because agents act on what an issue says, the office only works for the team, on every floor, private or public. An issue counts when its author is the repo's owner, the office's own `gh` user, a collaborator with write access, an org member (GitHub's `OWNER` / `MEMBER` / `COLLABORATOR`) or on the floor's **Trusted authors** list (Manager's console → the floor). Anyone else's issue shows on the Kanban as "Untrusted: not built": it is never auto-assigned, and neither the manager's Assign nor the CEO's tools can start it until the manager taps **Trust this issue**. That adds the `office-trusted` label as the office's user; the label only counts when a trusted user added it (GitHub's timeline says who), and the chat records who let it in.
+
+A pull request from a fork, or from anyone untrusted, is "From outside: review on GitHub": no QA or fix session, no preview and no merge from the office (its code would otherwise run with an agent's shell, and a merge on the office's own floor updates the live office). An outsider's "Closes #N" doesn't hold #N back either. The office reads no GitHub comments as instructions: QA's findings and fix notes come from its own records.
+
+Before making a floor's repo public, set GitHub → Settings → Moderation options → Interaction limits to collaborators only ("Limit to repository collaborators") until your office runs a version with these checks.
+
 ## Where things live
 
 - `~/.cubefarm/state.json`: floors, agents, settings, terminal history, mission control's last 7 days, and the ledger behind the coins, decorations, trophies and agents' careers (`SWARM_HOME` overrides the folder)
