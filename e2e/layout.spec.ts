@@ -4,6 +4,7 @@ import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
+import { telegramViews } from './telegramViews';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
 // viewport, every button on screen, unobstructed and at least 44px, no destructive action one tap away, and axe clean.
@@ -128,24 +129,6 @@ const charterEditor: View = {
   },
 };
 
-/** Settings → Notifications with the demo bot linked and Telegram on, off, or on but unreachable (#126). */
-const telegramState = (state: 'on' | 'off' | 'error'): View => ({
-  name: `Notifications: Telegram ${state}`,
-  go: async (root) => {
-    const req = root.page().request;
-    if (!(await (await req.get('/api/state')).json()).notifyChannels?.telegram?.linked) {
-      await req.post('/api/notify/telegram/link');
-      await req.post('/api/notify/telegram/demo', { data: { kind: 'start' } });
-    }
-    await req.patch('/api/settings', { data: { notify: { channels: { telegram: state !== 'off' } } } });
-    if (state !== 'off') await req.post('/api/notify/telegram/demo', { data: { kind: state === 'error' ? 'outage' : 'online' } });
-    await pocketSection(root, 'Notifications');
-    const shows = { on: root.getByRole('button', { name: 'Send test' }), off: root.getByRole('button', { name: 'Turn on', exact: true }), error: root.getByRole('button', { name: 'Retry now' }) }[state];
-    await shows.scrollIntoViewIfNeeded();
-    await expect(shows).toBeVisible();
-  },
-});
-
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -156,7 +139,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, telegramState('on'), telegramState('off'), telegramState('error'), telegramState('on'), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
