@@ -1,0 +1,120 @@
+/* Folding the Kanban's columns (#154, KanbanView.tsx): each header is a disclosure row, › turning down when open */
+.kcol-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--ds-target);
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  border-bottom: 3px solid var(--ds-outline);
+  cursor: pointer;
+}
+.kcol-name {
+  white-space: nowrap;
+}
+.kcol-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-text-sm);
+  font-weight: 500;
+  opacity: 0.85;
+}
+.kcol-chev {
+  margin-left: auto;
+  font-size: 1.3rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform var(--ds-dur) var(--ds-ease);
+}
+.kcol-shut .kcol-chev {
+  transform: none;
+}
+.kcol-shut .kcol-head {
+  border-bottom-color: transparent;
+}
+/* the height animates through the grid row (reduced motion stops it, styles.css) */
+.kcol-fold {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  transition: grid-template-rows var(--ds-dur-slow) var(--ds-ease);
+}
+.kcol-fold > .kcol-body {
+  min-height: 0;
+  transition:
+    padding var(--ds-dur-slow) var(--ds-ease),
+    visibility var(--ds-dur-slow);
+}
+.kcol-shut .kcol-fold {
+  grid-template-rows: 0fr;
+}
+.kcol-shut .kcol-body {
+  padding-block: 0;
+  visibility: hidden;
+}
+.kanban-embedded .kcol {
+  scroll-margin-top: 64px;
+}
+
+/* side by side, a folded column is a narrow strip: its chevron, name and count, read downwards */
+.kanban-strips {
+  --kc-shut: 52px;
+  transition: grid-template-columns var(--ds-dur-slow) var(--ds-ease);
+}
+@media (max-width: 900px) {
+  .kanban-strips {
+    --kc-open: 250px;
+  }
+}
+.kanban-strips .kcol-shut .kcol-head {
+  flex: 1;
+  padding: 12px 0;
+  border-bottom: 0;
+  writing-mode: vertical-rl;
+}
+.kanban-strips .kcol-shut :is(.kcol-fold, .kcol-summary) {
+  display: none;
+}
+.kanban-strips .kcol-shut .kcol-chev {
+  margin: 0 0 6px;
+  order: -1;
+}
+
+/* a phone's jump row: each column's name and count, scrolling to it and opening it */
+.kanban-jump {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--ds-surface);
+}
+.kanban-jump-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ds-target);
+  padding: 0 12px;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  font-weight: 700;
+  color: inherit;
+  border: 2.5px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  cursor: pointer;
+}

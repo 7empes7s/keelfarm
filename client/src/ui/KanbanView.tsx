@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { LabChip } from './ExperimentsSection';
 import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
@@ -13,6 +13,10 @@ import type { EmptyKind } from './emptyStates';
 import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
+import { COLUMN_IDS, foldSummary, isFolded, parseFolds, withFold, type ColumnId, type FoldMap } from './kanbanFold';
+import { useLayout } from '../pocket/mode';
+import { reduceMotion } from './a11y';
+import './kanbanFold.css';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
@@ -82,6 +86,25 @@ function Frame({ embedded, ...props }: Parameters<typeof Panel>[0] & { embedded?
   );
 }
 
+const FOLD_KEY = 'cubefarm:kanban-fold';
+const SHORT: Record<ColumnId, string> = { backlog: 'Backlog', progress: 'In progress', qa: 'In QA', ready: 'Ready', merged: 'Merged' };
+
+function loadFolds(): FoldMap {
+  try {
+    return parseFolds(localStorage.getItem(FOLD_KEY));
+  } catch {
+    return {};
+  }
+}
+
+function saveFolds(map: FoldMap) {
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify(map));
+  } catch {
+    // remembered for this visit only
+  }
+}
+
 function QaLink({ card }: { card: KanbanCard }) {
   if (!card.qa?.commentUrl) return null;
   return (
@@ -101,6 +124,14 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const cols = useMemo(() => (repo ? kanbanFor(repo, agents, qaRecords, { state: usageState }) : null), [repo, agents, qaRecords, usageState]);
   const [showForm, setShowForm] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  // Folding (#154): a phone stacks the columns, so a folded one is its header (and the board comes before the builds);
+  // side by side it's a narrow strip.
+  const layout = useLayout();
+  const phone = !!embedded && layout === 'compact';
+  const strips = !embedded || layout === 'expanded';
+  const [folds, setFolds] = useState(loadFolds);
+  const foldId = useId();
+  const colEls = useRef<Partial<Record<ColumnId, HTMLDivElement | null>>>({});
 
   if (!repo || !cols) {
     return (
@@ -189,39 +220,61 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     progress: { target: ask('What should {floor} work on next?') },
     merged: { target: ask('Which pull request on {floor} is closest to merging, and what does it need?') },
   };
-  const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, empty: EmptyKind) => (
-    <div className={`kcol ${cls}`}>
-      <div className="kcol-head">
-        {title} <span className="count">{cards.length}</span>
-      </div>
-      <div className="kcol-body">
-        {cards.length === 0 && (
-          <div className="kempty">
-            <EmptyState kind={empty} compact {...emptyAction[empty]} />
-          </div>
-        )}
-        {cards.map((c) => (
-          <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
-            <div className="kcard-title">
-              {c.url ? (
-                <a href={c.url} target="_blank" rel="noreferrer">
-                  {c.prNumber ? 'PR ' : ''}#{c.number}
-                </a>
-              ) : (
-                <b>#{c.number}</b>
-              )}{' '}
-              {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
-              {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
-            </div>
-            {c.prNumber != null && cls !== 'kcol-merged' && (
-              <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
+  const folded = (id: ColumnId) => isFolded(folds, repo.id, id, phone);
+  const fold = (id: ColumnId, shut: boolean) => {
+    const next = withFold(folds, repo.id, id, shut);
+    setFolds(next);
+    saveFolds(next);
+  };
+  const jump = (id: ColumnId) => {
+    fold(id, false);
+    requestAnimationFrame(() => colEls.current[id]?.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' }));
+  };
+  const column = (title: string, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, id: EmptyKind & ColumnId) => {
+    const shut = folded(id);
+    const summary = shut && foldSummary(id, cards);
+    return (
+      <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''}`} ref={(el) => void (colEls.current[id] = el)}>
+        <button type="button" className="kcol-head" aria-expanded={!shut} aria-controls={`${foldId}-${id}`} onClick={() => fold(id, !shut)}>
+          <span className="kcol-name">{title}</span> <span className="count">{cards.length}</span>
+          {summary && <span className="kcol-summary">{summary}</span>}
+          <span className="kcol-chev" aria-hidden="true">
+            ›
+          </span>
+        </button>
+        <div className="kcol-fold" id={`${foldId}-${id}`}>
+          <div className="kcol-body">
+            {cards.length === 0 && (
+              <div className="kempty">
+                <EmptyState kind={id} compact {...emptyAction[id]} />
+              </div>
             )}
-            {render(c)}
+            {cards.map((c) => (
+              <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
+                <div className="kcard-title">
+                  {c.url ? (
+                    <a href={c.url} target="_blank" rel="noreferrer">
+                      {c.prNumber ? 'PR ' : ''}#{c.number}
+                    </a>
+                  ) : (
+                    <b>#{c.number}</b>
+                  )}{' '}
+                  {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
+                  {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
+                </div>
+                {c.prNumber != null && cls !== 'kcol-merged' && (
+                  <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
+                )}
+                {render(c)}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+  // side by side, a folded column's track is a strip; the open ones share the rest
+  const tracks = strips && COLUMN_IDS.some(folded) ? COLUMN_IDS.map((id) => (folded(id) ? 'var(--kc-shut)' : 'var(--kc-open, minmax(210px, 1fr))')).join(' ') : undefined;
 
   return (
     <Frame
@@ -261,9 +314,18 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       </div>
       {repo.syncError && <div className="term-error">⚠️ {repo.syncError}</div>}
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
-      <FloorBuilds repoId={repo.id} />
+      {!phone && <FloorBuilds repoId={repo.id} />}
 
-      <div className="kanban kanban-5">
+      {phone && (
+        <nav className="kanban-jump" aria-label="Kanban columns">
+          {COLUMN_IDS.map((id) => (
+            <button key={id} type="button" className="kanban-jump-btn" onClick={() => jump(id)}>
+              {SHORT[id]} <span className="count">{cols[id].length}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      <div className={`kanban kanban-5 ${strips ? 'kanban-strips' : ''}`} style={tracks ? { gridTemplateColumns: tracks } : undefined}>
         {column(
           '📋 Backlog',
           'kcol-backlog',
@@ -376,6 +438,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'merged',
         )}
       </div>
+      {phone && <FloorBuilds repoId={repo.id} />}
     </Frame>
   );
 }

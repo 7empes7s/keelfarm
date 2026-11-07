@@ -329,6 +329,7 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
   overflow-x: auto;
 }
 .pk-layout-expanded .kanban-embedded .kanban-5 {
+  --kc-open: minmax(200px, 1fr);
   grid-template-columns: repeat(5, minmax(200px, 1fr));
 }
 
