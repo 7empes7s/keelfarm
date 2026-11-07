@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { markTeamLanding, pocketJump, takeTeamLanding } from './pocketJump';
 
+const phone = { kind: 'phone' };
+
 describe('pocketJump', () => {
-  it('opens a floor team in the Team tab and drops the saved back panel', () => {
-    expect(pocketJump({ tab: 'team', repoId: 'r1' }, true)).toEqual({ to: 'team', repoId: 'r1', backToChat: true, clearBack: true });
-    expect(pocketJump({ tab: 'team', repoId: 'r1' }, false)).toMatchObject({ backToChat: false });
+  it('opens a floor team in the Team tab, replacing the chat', () => {
+    expect(pocketJump({ tab: 'team', repoId: 'r1' }, true, phone)).toEqual({ to: 'team', repoId: 'r1', backToChat: true, clearBack: true });
+    expect(pocketJump({ tab: 'team', repoId: 'r1' }, false, null)).toMatchObject({ backToChat: false });
   });
 
-  it('keeps the saved back panel for every other console jump', () => {
+  it('drops the saved chat for a console jump too, so closing the link does not go back to the Chat tab', () => {
     for (const want of [{ tab: 'charter', repoId: 'r1' }, { tab: 'ceo', repoId: 'r1' }, { tab: 'team' }, {}]) {
-      expect(pocketJump(want, true)).toEqual({ to: 'console', clearBack: false });
+      expect(pocketJump(want, true, phone)).toEqual({ to: 'console', clearBack: true });
     }
+  });
+
+  it('keeps a saved panel the jump does not replace', () => {
+    expect(pocketJump({ tab: 'charter', repoId: 'r1' }, false, null).clearBack).toBe(false);
+    expect(pocketJump({ tab: 'charter', repoId: 'r1' }, false, { kind: 'terminal' }).clearBack).toBe(false);
   });
 });
 

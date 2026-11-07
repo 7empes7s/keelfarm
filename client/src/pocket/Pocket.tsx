@@ -377,8 +377,8 @@ export default function Pocket() {
   onChat.current = tab === 'chat';
   useEffect(() => {
     if (!wantsSection) return;
-    const jump = pocketJump(wantsSection, onChat.current);
-    if (jump.clearBack) useStore.setState({ back: null }); // the chat stays here, under the tab
+    const jump = pocketJump(wantsSection, onChat.current, useStore.getState().back);
+    if (jump.clearBack) useStore.setState({ back: null }); // the chat stays here, under the tab or the console
     useStore.getState().openOverlay(null);
     if (jump.to === 'team') {
       setSettings(null);
