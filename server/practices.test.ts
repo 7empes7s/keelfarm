@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
 import { PRACTICES_OFF } from '../shared/practices.ts';
@@ -9,8 +9,8 @@ import { PRACTICES_OFF } from '../shared/practices.ts';
 async function office() {
   const swarm = new Swarm(createDemoBackend());
   const repo = await swarm.connectRepo('demo-co/pixel-todo');
-  await swarm.syncRepo(repo.id);
   const floor = () => swarm.snapshot().repos.find((r) => r.id === repo.id)!;
+  await vi.waitFor(() => expect(floor().lastSync).not.toBeNull()); // connecting started the first sync
   return { swarm, repo, floor };
 }
 

@@ -67,6 +67,7 @@ export interface PersistedRepo {
   summary: string;
   qaBrief: string;
   playbook: string;
+  trustedAuthors?: string[]; // the floor's allow-list besides the owner, the office and write collaborators (#185)
   labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
@@ -222,6 +223,7 @@ export interface RepoRuntime {
   closedPulls: Map<number, LearnedPull>; // PRs it learned are closed or merged
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
   insights?: CharterInsights; // the Charter tab's numbers, worked out at each sync and charter change (refreshInsights)
+  writers?: { logins: string[]; at: number }; // collaborators with write access, as last asked (#185)
 }
 
 /** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */

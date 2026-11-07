@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkRunOf, readTwice } from './github.ts';
+import { checkRunOf, issueOf, readTwice } from './github.ts';
 
 describe('readTwice', () => {
   it('tries a failed read once more', async () => {
@@ -39,5 +39,24 @@ describe('checkRunOf', () => {
     expect(checkRunOf([{ context: 'Vercel', state: 'SUCCESS' }])).toBeNull();
     expect(checkRunOf([])).toBeNull();
     expect(checkRunOf(null)).toBeNull();
+  });
+});
+
+describe('issueOf', () => {
+  it('reads the author and who last added the office-trusted label (#185)', () => {
+    const labelled = (label: string, actor: string | null) => ({ label: { name: label }, actor: actor ? { login: actor } : null });
+    const i = issueOf({
+      number: 7,
+      title: 'Hi',
+      body: null,
+      url: 'u',
+      createdAt: 'c',
+      author: { login: 'stranger' },
+      authorAssociation: 'NONE',
+      labels: { nodes: [{ name: 'office-trusted' }] },
+      timelineItems: { nodes: [labelled('office-trusted', 'owner'), labelled('bug', 'x'), null, labelled('office-trusted', 'stranger')] },
+    });
+    expect(i).toMatchObject({ number: 7, body: '', labels: ['office-trusted'], author: 'stranger', authorAssociation: 'NONE', trustedBy: 'stranger' });
+    expect(issueOf({ ...i, body: '', author: null, labels: null, timelineItems: null } as never)).toMatchObject({ author: null, labels: [], trustedBy: null });
   });
 });

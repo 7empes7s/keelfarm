@@ -26,8 +26,8 @@ export function channelLabel(pull: Pick<PullInfo, 'number' | 'title'>, qa?: Pick
   return [`PR #${pull.number}`, clip(pull.title.trim(), max), qaBadge(qa)].filter(Boolean).join(' · ');
 }
 
-/** A floor's open PRs, in channel order (oldest first, like channel numbers). */
-export const channelPulls = (pulls: PullInfo[]) => pulls.filter((p) => p.state === 'OPEN').sort((a, b) => a.number - b.number);
+/** A floor's open PRs, in channel order (oldest first, like channel numbers). Never an outsider's: it isn't previewed (#185). */
+export const channelPulls = (pulls: PullInfo[]) => pulls.filter((p) => p.state === 'OPEN' && !p.untrusted).sort((a, b) => a.number - b.number);
 
 /** The channel on screen: the picked PR while it's still open, otherwise main. */
 export function currentChannel(picked: Channel | undefined, pulls: Pick<PullInfo, 'number' | 'state'>[]): Channel {
