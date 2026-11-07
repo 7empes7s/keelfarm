@@ -78,8 +78,9 @@ describe('fromCeoMessage', () => {
   });
 
   it('a newer question on the same thing replaces the older one, which is marked superseded', () => {
-    const older = fromCeoMessage([], ceo(1, 'GitHub Actions stopped: the payment for the account failed, so CI is red on every floor.\n- What you need to do: raise the spending limit for GitHub Actions in the billing settings.', ['Raised the limit', 'Drop the Windows CI job']), 1000);
-    const newer = fromCeoMessage(older, ceo(2, 'Floor 3 #177 passed QA round 3. The only blocker left is the failed GitHub payment, so its CI is red.', ['I fixed the payment', 'Skip Windows CI for now']), 2000);
+    const r1 = { refs: [{ start: 0, end: 7, kind: 'floor' as const, repoId: 'r1' }] };
+    const older = fromCeoMessage([], ceo(1, 'GitHub Actions stopped: the payment for the account failed, so CI is red on every floor.\n- What you need to do: raise the spending limit for GitHub Actions in the billing settings.', ['Raised the limit', 'Drop the Windows CI job'], r1), 1000);
+    const newer = fromCeoMessage(older, ceo(2, 'Floor 3 #177 passed QA round 3. The only blocker left is the failed GitHub payment, so its CI is red.', ['I fixed the payment', 'Skip Windows CI for now'], { ...r1, ask: 'Did you raise the spending limit, or skip Windows CI?' }), 2000);
     expect(newer.map((d) => [d.id, d.status])).toEqual([['msg:1', 'superseded'], ['msg:2', 'open']]);
     expect(waitingDecisions(newer, 2000).map((d) => d.id)).toEqual(['msg:2']);
     expect(newer[0].outcome).toMatch(/^replaced by/);
@@ -93,7 +94,22 @@ describe('fromCeoMessage', () => {
     const one = fromCeoMessage([], ceo(1, pay, ['Raised it', 'Not yet'], r('r1')), 1000);
     expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No'], r('r2')), 2000), 2000)).toHaveLength(2);
     expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No'], r('r1')), 2000), 2000)).toHaveLength(1);
-    expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No']), 2000), 2000)).toHaveLength(1); // no floor named: any floor
+    expect(waitingDecisions(fromCeoMessage(one, ceo(2, pay, ['Yes, raised', 'No']), 2000), 2000)).toHaveLength(2); // one names a floor, one doesn't
+    const bare = fromCeoMessage([], ceo(1, pay, ['Raised it', 'Not yet']), 1000);
+    expect(waitingDecisions(fromCeoMessage(bare, ceo(2, pay, ['Yes, raised', 'No']), 2000), 2000)).toHaveLength(1); // neither: a strong match
+  });
+
+  // QA's probe on #184: unrelated questions that share a word or two stay open
+  it.each([
+    [['Shall I file the quieter memory alert fix?', ['File it', 'Leave it']], ['Two builds ran together today and the build cache filled the disk. Shall I file a cache cleanup fix?', ['File it', 'Leave it alone']]],
+    [['PR #150 merged today. Shall I file a follow-up issue for the phone layout?', ['File it', 'Not now']], ['PR #151 merged today. Shall I file a follow-up issue for the docs?', ['File it', 'Skip it']]],
+    [['Shall I merge it now?', ['Merge it', 'Wait']], ['Should Ada fix the conflict or should I close it?', ['Ada fixes it', 'Close it']]],
+  ] as [string, string[]][][])('keeps "%s" open after an unrelated question', ([q1, o1], [q2, o2]) => {
+    const list = fromCeoMessage(fromCeoMessage([], ceo(1, q1, o1), 1000), ceo(2, q2, o2), 2000);
+    expect(waitingDecisions(list, 2000)).toHaveLength(2);
+    const r1 = { refs: [{ start: 0, end: 7, kind: 'floor' as const, repoId: 'r1' }] };
+    const onFloor = fromCeoMessage(fromCeoMessage([], ceo(1, q1, o1, r1), 1000), ceo(2, q2, o2, r1), 2000);
+    expect(waitingDecisions(onFloor, 2000)).toHaveLength(2);
   });
 
   it('never raises a dropped one again', () => {

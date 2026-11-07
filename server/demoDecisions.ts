@@ -9,7 +9,7 @@
  */
 export const DEMO_DECISION_MESSAGES = [
   "GitHub Actions stopped: the account's payment failed, so every CI run on floors 3, 1 and 2 is red.\n\n- **What you need to do:** raise the spending limit for GitHub Actions in GitHub's billing settings, or drop the Windows CI job.\n```suggestions\nRaised the limit\nDrop the Windows CI job\n```",
-  "Floor 3 #177 passed QA round 3, and I've escalated it to you. The team card now opens that floor's team, the back buttons work, and a new test guards the earlier bug. The only blocker left is the failed GitHub payment.\n```suggestions\nI fixed the payment\nSkip Windows CI for now\n```",
+  "Floor 3 #177 passed QA round 3, and I've escalated it to you. The team card now opens that floor's team, the back buttons work, and a new test guards the earlier bug. The only blocker left is the failed GitHub payment.\n```suggestions\n? Did you raise the limit, or shall I drop the Windows CI job?\nI fixed the payment\nSkip Windows CI for now\n```",
   'The memory alert fired three times today while two builds ran together. Shall I file the quieter memory alert fix, or lower the margin?\n```suggestions\nFile the quieter alert fix\nLower the margin\nLeave it as it is\n```',
   'Morning report: every floor is busy, and nothing is stuck. Your open questions wait above the message box.',
 ];

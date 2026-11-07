@@ -78,26 +78,28 @@ export function questionLine(text: string, options: readonly string[] = []): str
 /** The message's words for the card's sheet: plain, its lines joined, short. */
 const contextOf = (text: string) => clip(text.split('\n').map(cleanLine).filter(Boolean).join(' '), CONTEXT_MAX);
 
-const STOP = new Set('about after again also because been before being could does done from have here into just like more must need only other over said shall should some still than that their them then there these they this those very want were what when where which while will with would your yours floor floors team agent agents issue issues office'.split(' '));
+const STOP = new Set('about after again also because been before being could does done from have here into just like more must need only other over said shall should some still than that their them then there these they this those very want were what when where which while will with would your yours floor floors team agent agents issue issues office file filed follow merge merged close leave keep today'.split(' '));
 const words = (s: string) => norm(s).split(' ').filter((w) => w.length >= 4 && !STOP.has(w));
 
 /**
- * A newer question replaces an older open one (#183) when they cover the same ground (a floor or a thing in common,
- * or either names no floor) and say much the same: at least three words in common (four, or a third of the shorter
- * one's), one of them in either's question or options.
+ * A newer question replaces an older open one (#183) when they cover the same ground (a floor or a thing in common;
+ * when neither names one, a stronger match) and ask much the same: two words in common between their questions and
+ * options (three with no floor), and three in common overall (four, or a third of the shorter one's).
  */
 function supersedes(newer: Decision, older: Decision): boolean {
   if (older.kind !== 'suggestion' || older.status !== 'open' || newer.id === older.id) return false;
   const key = (a: DecisionAbout) => (a.kind === 'issue' ? `${a.repoId}#${a.number}` : `@${a.agentId}`);
   const about = new Set(older.about.map(key));
-  const scope = newer.about.some((a) => about.has(key(a))) || newer.repoIds.some((r) => older.repoIds.includes(r)) || !newer.repoIds.length || !older.repoIds.length;
-  if (!scope) return false;
-  const asked = (d: Decision) => words(`${d.question} ${d.options.join(' ')}`);
+  const scope = newer.about.some((a) => about.has(key(a))) || newer.repoIds.some((r) => older.repoIds.includes(r));
+  const unscoped = [newer, older].every((d) => !d.repoIds.length && !d.about.length);
+  if (!scope && !unscoped) return false;
+  const asked = (d: Decision) => new Set(words(`${d.question} ${d.options.join(' ')}`));
+  const askedB = asked(older);
+  const sharedAsked = [...asked(newer)].filter((w) => askedB.has(w)).length;
   const all = (d: Decision) => new Set([...asked(d), ...words(d.context ?? '')]);
   const a = all(newer), b = all(older);
-  const shared = [...a].filter((w) => b.has(w));
-  const pointed = new Set([...asked(newer), ...asked(older)]);
-  return shared.length >= 3 && (shared.length >= 4 || shared.length >= Math.min(a.size, b.size) / 3) && shared.some((w) => pointed.has(w));
+  const shared = [...a].filter((w) => b.has(w)).length;
+  return sharedAsked >= (scope ? 2 : 3) && shared >= 3 && (shared >= 4 || shared >= Math.min(a.size, b.size) / 3);
 }
 
 /** Loads saved decisions, dropping malformed ones. */
