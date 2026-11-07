@@ -128,6 +128,7 @@ export abstract class SwarmQa extends SwarmSessions {
         stuckWhy: `it failed QA ${MAX_QA_ROUNDS} times, the most QA rounds a PR gets`,
         triages: 0,
         escalated: true, // with the manager already: no CEO triage
+        labRetryRound: null,
       };
       this.state.qa.push(rec);
       this.setQa(rec, {});
