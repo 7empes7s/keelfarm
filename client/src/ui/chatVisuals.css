@@ -1,0 +1,369 @@
+/* The CEO's charts, tables and dashboards in the chat (ui/ChatVisuals.tsx, #146). Tokens only; nothing here may
+   widen the bubble: tables scroll inside their own box. */
+
+.viz-card {
+  min-width: 0;
+  max-width: 100%;
+  margin: var(--ds-space-2) 0 var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-2);
+  color: var(--ds-text);
+  overflow: hidden;
+}
+.viz-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.viz-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--ds-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viz-live {
+  flex: none;
+  padding: 0 var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.viz-expand {
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  margin: calc(-1 * var(--ds-space-2)) calc(-1 * var(--ds-space-2)) calc(-1 * var(--ds-space-2)) 0;
+  border: 0;
+  border-radius: var(--ds-radius-md);
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-lg);
+  cursor: pointer;
+}
+.viz-expand:hover {
+  background: var(--ds-surface-hover);
+}
+.viz-missing {
+  margin: var(--ds-space-2) 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+/* ---------- charts ---------- */
+
+.viz-chart {
+  min-width: 0;
+}
+.viz-plot {
+  margin-top: var(--ds-space-1);
+}
+.viz-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.viz-big .viz-svg {
+  max-height: 50vh;
+}
+.viz-donut {
+  max-width: 180px;
+  margin: 0 auto;
+}
+.viz-big .viz-donut {
+  max-width: 280px;
+}
+.viz-axis line {
+  stroke: var(--ds-line);
+  stroke-width: 1;
+}
+.viz-axis text {
+  fill: var(--ds-text-muted);
+  font-size: 11px;
+}
+.viz-hit {
+  fill: transparent;
+}
+.viz-slot,
+.viz-slice {
+  cursor: pointer;
+}
+.viz-mark {
+  stroke: var(--ds-outline);
+  stroke-width: 1.5;
+}
+.viz-slot.viz-on .viz-hit {
+  fill: var(--ds-surface-hover);
+}
+.viz-cursor {
+  stroke: var(--ds-line-strong);
+  stroke-width: 1;
+}
+.viz-donut-track {
+  fill: none;
+  stroke: var(--ds-surface-sunken);
+  stroke-width: 18;
+}
+.viz-donut-total {
+  fill: var(--ds-text);
+  font-size: 16px;
+  font-weight: var(--ds-weight-strong);
+}
+.viz-donut-sub {
+  fill: var(--ds-text-muted);
+  font-size: 10px;
+}
+.viz-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin-top: var(--ds-space-2);
+}
+.viz-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 6em) 1fr auto;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-1);
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.viz-progress-row.viz-on {
+  background: var(--ds-surface-hover);
+}
+.viz-progress-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viz-progress-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--ds-weight-strong);
+}
+.viz-meter {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border: 1.5px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.viz-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--ds-series-2);
+}
+.viz-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  margin-top: var(--ds-space-1);
+}
+.viz-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target);
+  max-width: 100%;
+  padding: 0 var(--ds-space-2);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  cursor: pointer;
+}
+.viz-legend-chip[aria-pressed='false'] {
+  color: var(--ds-text-muted);
+  text-decoration: line-through;
+}
+.viz-legend-chip[aria-pressed='false'] .viz-swatch {
+  opacity: 0.3;
+}
+.viz-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ds-outline);
+  border-radius: 3px;
+}
+.viz-tip {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  font-size: var(--ds-text-sm);
+}
+.viz-tip-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.viz-tip-open {
+  flex: none;
+  min-height: var(--ds-target);
+}
+.viz-data {
+  width: 100%;
+  margin-top: var(--ds-space-3);
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+}
+.viz-data th,
+.viz-data td {
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-line);
+  text-align: left;
+}
+.viz-data td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- tables ---------- */
+
+.viz-table {
+  max-width: 100%;
+  max-height: 320px;
+  margin-top: var(--ds-space-2);
+  overflow: auto;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-sm);
+  overscroll-behavior-x: contain;
+}
+.viz-table.viz-big {
+  max-height: none;
+}
+.viz-table table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--ds-text-sm);
+}
+.viz-table th,
+.viz-table td {
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-line);
+  text-align: left;
+  white-space: nowrap;
+}
+.viz-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  background: var(--ds-surface-sunken);
+}
+.viz-table th button {
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  text-align: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.viz-table .viz-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- dashboards ---------- */
+
+.viz-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(108px, 100%), 1fr));
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+.viz-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+}
+.viz-tile-tap {
+  cursor: pointer;
+}
+.viz-tile-tap:hover {
+  background: var(--ds-surface-hover);
+}
+.viz-tile-label {
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viz-tile-value {
+  font-size: var(--ds-text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+}
+.viz-tile-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: 20px;
+}
+.viz-tile-note {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.viz-delta {
+  flex: none;
+  padding: 0 var(--ds-space-1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.viz-delta-good {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.viz-delta-bad {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.viz-spark {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  stroke: var(--ds-text-muted);
+}
+.viz-sub {
+  margin-top: var(--ds-space-3);
+}
+.viz-sub-title {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+}
