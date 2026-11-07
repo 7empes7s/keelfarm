@@ -391,11 +391,14 @@ export abstract class SwarmRepos extends SwarmCore {
 
   /** Who a floor trusts (#185): its owner, the office's gh user, write collaborators (asked every 10 minutes) and its allow-list. */
   protected async trustOf(repo: PersistedRepo, rt: RepoRuntime): Promise<TrustContext> {
-    this.user ??= await this.backend.user().catch(() => null);
-    if (!rt.writers || Date.now() - rt.writers.at > 10 * 60_000) {
-      rt.writers = { logins: await this.backend.writers(repo.fullName).catch(() => rt.writers?.logins ?? []), at: Date.now() };
-    }
-    return trustContext(repo.fullName, this.user, rt.writers.logins, repo.trustedAuthors);
+    const stale = !rt.writers || Date.now() - rt.writers.at > 10 * 60_000;
+    const [user, writers] = await Promise.all([
+      this.user ?? this.backend.user().catch(() => null),
+      stale ? this.backend.writers(repo.fullName).catch(() => rt.writers?.logins ?? []) : rt.writers!.logins,
+    ]);
+    this.user = user;
+    if (stale) rt.writers = { logins: writers, at: Date.now() };
+    return trustContext(repo.fullName, user, writers, repo.trustedAuthors);
   }
 
   /** An open PR the office must leave alone: from a fork or an untrusted author (#185). */

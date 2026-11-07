@@ -11,7 +11,7 @@ export const TRUST_LABEL = 'office-trusted';
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 export const UNTRUSTED_ISSUE = 'Untrusted: not built';
 export const OUTSIDE_PR = 'From outside: review on GitHub';
-export const TRUSTED_AUTHORS_MAX = 50;
+const TRUSTED_AUTHORS_MAX = 50;
 
 export interface TrustContext {
   /** The repo's owner (a user or an organisation). */
