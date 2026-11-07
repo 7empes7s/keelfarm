@@ -212,7 +212,7 @@ export class Swarm extends SwarmVoices {
     await this.notifier.init();
     await this.telegram.init();
     await Promise.all([this.cloud.init(), this.accounts.init()]);
-    if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
+    if (this.state.settings.cloud.machineKind !== 'local' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
     for (const a of this.state.agents) {
@@ -329,7 +329,7 @@ export class Swarm extends SwarmVoices {
     const held = seeded ? this.backend.demoHeldUpdate?.() : undefined;
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
-    setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
+    setInterval(() => (this.schedule(), this.hybridTick()), SCHEDULER_INTERVAL_MS);
     setInterval(() => this.sweepPreviews(), 15_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
@@ -740,7 +740,7 @@ export class Swarm extends SwarmVoices {
     if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
       const next: CloudSettings = cloudSettings(s.cloud, patch.cloud);
-      if (next.machineKind === 'box' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
+      if (next.machineKind !== 'local' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
       s.cloud = next;
     }
     this.save();

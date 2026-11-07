@@ -5327,6 +5327,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   font-weight: 700;
   white-space: nowrap;
 }
+.cloud-badge.host-local {
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+}
 /* A cloud agent waiting for the manager to sign their coding agent in: a sticky-note yellow, like the note on their monitor. */
 .sign-in-note {
   display: flex;
