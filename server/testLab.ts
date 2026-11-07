@@ -339,8 +339,8 @@ export interface TestLabHost {
   refusal(kind: SessionKind): string | null;
   /** Folders the lab never writes to: the office's own and every floor's checkout. */
   forbidden(): string[];
-  /** The address of the requester's floor's app: their PR's preview (started on demand), else the floor's. */
-  previewUrl(repoId: string, pr: number | null): Promise<string>;
+  /** The address of the requester's floor's app: their PR's preview (started on demand), else the floor's; held for agentId while they work. */
+  previewUrl(repoId: string, pr: number | null, agentId: string): Promise<string>;
   /** A screenshot the lab took for an agent: their screen in the office shows it, and QA's evidence keeps it. */
   shot(agentId: string, file: string): void;
   emit(view: TestLabView): void;
@@ -479,7 +479,7 @@ export class TestLab {
         summary = problem ? `lab error: ${problem}` : r.timedOut ? 'timed out' : `exit ${r.code}`;
         text = runReport(argv.join(' '), r);
       } else {
-        const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr);
+        const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr, j.who.agentId);
         const base = { url, profile: input.profile, theme: input.theme, outDir };
         if (input.kind === 'screenshot') {
           const r = await runner.screenshot({ ...base, viewports: input.viewports, waitFor: input.waitFor, actions: input.actions, fullPage: input.fullPage });

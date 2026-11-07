@@ -285,7 +285,7 @@ export abstract class SwarmRepos extends SwarmCore {
     return this.previews.stopPr(this.repo(id), pr);
   }
 
-  /** An open app viewer's heartbeat: the PR preview it has on screen (null: none). */
+  /** An open app viewer's heartbeat: the preview it has on screen (a PR's, the floor's main one with pr null; repoId null: none). */
   watchPreview(viewer: string, repoId: string | null, pr: number | null) {
     if (repoId) this.repo(repoId);
     this.previews.watch(viewer, repoId, pr);

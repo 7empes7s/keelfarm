@@ -154,3 +154,55 @@
 .app-float-hidden {
   opacity: 0.15;
 }
+
+/* ---------- live channels, in-use previews and their stats (#204) ---------- */
+
+.channel-stops {
+  font-weight: 400;
+  opacity: 0.75;
+}
+.channel-older {
+  border-style: dashed;
+}
+.held-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-2);
+}
+.older-prs {
+  list-style: none;
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ds-space-2);
+}
+.older-pr {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 2px solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+.older-pr-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  margin: var(--ds-space-3) 0 0;
+}
+.preview-stats dd {
+  margin: 0;
+  text-align: right;
+}

@@ -15,7 +15,7 @@ import type { CeoChatView, CeoInfo, PhoneMessage, ServerDelivery, StatusReaction
 import type { NoteView, NoticeView, NotifyChannelsView } from './notify.ts';
 import type { DoctorFinding, ManagerChange, OfficeUpdateView, UsageCheckError, UsageReading, UsageView } from './office.ts';
 import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
-import type { PongRow, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
+import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
 import type { VoiceCacheView } from './voice.ts';
 
@@ -30,6 +30,7 @@ export interface WorldSnapshot {
   agents: AgentView[];
   qa: QaView[];
   prPreviews: PrPreviewView[];
+  previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
@@ -89,6 +90,7 @@ export type ServerEvent =
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
   | { type: 'prPreview'; preview: PrPreviewView }
+  | { type: 'previewStats'; stats: PreviewStatsView }
   | { type: 'prPreviewRemoved'; repoId: string; pr: number }
   | { type: 'settings'; settings: SwarmSettings }
   | { type: 'request'; request: HireRequestView }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrPreviewView, PullInfo } from '../../../shared/types';
-import { atPath, channelLabel, channelLed, channelPulls, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
+import { atPath, busyPrs, channelLabel, channelLed, channelPulls, liveChannels, previewingPrs, stopsLabel, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
 
 const pull = (number: number, state: PullInfo['state'] = 'OPEN', title = `Change ${number}`) => ({ number, state, title }) as PullInfo;
 
@@ -29,7 +29,7 @@ describe('PR theatre channels', () => {
   it('shows a PR preview like the main one, stopped until it exists', () => {
     expect(prAsPreview(undefined, 12)).toMatchObject({ status: 'stopped', url: null, ref: 'PR #12', pr: 12, logTail: [] });
     const p = { repoId: 'o/r', pr: 12, status: 'running', port: 6401, url: 'http://localhost:6401/', commit: 'abc1234', startedAt: 5, viewedAt: 6, watched: true, error: null, logTail: ['ok'] } as PrPreviewView;
-    expect(prAsPreview(p, 12)).toEqual({ status: 'running', port: 6401, url: 'http://localhost:6401/', ref: 'PR #12', pr: 12, commit: 'abc1234', startedAt: 5, error: null, logTail: ['ok'] });
+    expect(prAsPreview(p, 12)).toEqual({ status: 'running', port: 6401, url: 'http://localhost:6401/', ref: 'PR #12', pr: 12, commit: 'abc1234', startedAt: 5, error: null, logTail: ['ok'], stopsAt: null, heldBy: null });
   });
 
   it('lights a chip by the preview status', () => {
@@ -112,5 +112,45 @@ describe("compare mode's path sync", () => {
     const sent = ['/a', '/b', '/c', '/d', '/e', '/f'].map((p, i) => relayPath(s, i % 2 ? 'pr' : 'main', p, i * 100));
     expect(sent).toEqual([true, true, true, true, false, false]);
     expect(relayPath(s, 'main', '/g', 5000)).toBe(true);
+  });
+});
+
+describe('live channels (#204)', () => {
+  const H = 3_600_000;
+  const now = 100 * H;
+  const at = (hoursAgo: number) => new Date(now - hoursAgo * H).toISOString();
+  const pr = (number: number, hoursAgo: number, state: PullInfo['state'] = 'OPEN') => ({ ...pull(number, state), createdAt: at(hoursAgo + 1), updatedAt: at(hoursAgo) }) as PullInfo;
+  const base = { busy: new Set<number>(), previewing: new Set<number>(), current: null, now, recentHours: 48 };
+
+  it('gives a chip to PRs worked on, previewing, on screen or updated lately; folds the rest under Older', () => {
+    const pulls = [pr(1, 2), pr(2, 72), pr(3, 90), pr(4, 80), pr(5, 70), pr(6, 1, 'MERGED'), pr(7, 99, 'CLOSED')];
+    const { live, older } = liveChannels(pulls, { ...base, busy: new Set([2]), previewing: new Set([3]), current: 4 });
+    expect(live.map((p) => p.number)).toEqual([1, 2, 3, 4]);
+    expect(older.map((p) => p.number)).toEqual([5]);
+    expect(liveChannels(pulls, base).older.map((p) => p.number)).toEqual([2, 3, 4, 5]);
+    expect(liveChannels(pulls, { ...base, recentHours: 96 }).older).toEqual([]);
+  });
+
+  it('reads a PR without an update time by when it was opened', () => {
+    const old = { ...pull(9), createdAt: at(60) } as PullInfo;
+    expect(liveChannels([old], base).older.map((p) => p.number)).toEqual([9]);
+  });
+
+  it("knows the floor's PRs agents are on and those with a preview up", () => {
+    const agents = [
+      { repoId: 'o/r', status: 'working', prNumber: 4 },
+      { repoId: 'o/r', status: 'idle', prNumber: 5 },
+      { repoId: 'o/x', status: 'working', prNumber: 6 },
+      { repoId: 'o/r', status: 'preparing', prNumber: null },
+    ] as Parameters<typeof busyPrs>[0];
+    expect([...busyPrs(agents, 'o/r')]).toEqual([4]);
+    const previews = { a: { repoId: 'o/r', pr: 1, status: 'starting' }, b: { repoId: 'o/r', pr: 2, status: 'error' }, c: { repoId: 'o/r', pr: 3, status: 'running' }, d: { repoId: 'o/x', pr: 8, status: 'running' } } as Parameters<typeof previewingPrs>[0];
+    expect([...previewingPrs(previews, 'o/r')].sort((a, b) => a - b)).toEqual([1, 3]);
+  });
+
+  it('says when an unwatched preview stops', () => {
+    expect(stopsLabel(now + 12 * 60_000 - 5000, now)).toBe('stops in 12 min');
+    expect(stopsLabel(now - 1, now)).toBe('stops in 1 min');
+    expect(stopsLabel(null, now)).toBe('');
   });
 });
