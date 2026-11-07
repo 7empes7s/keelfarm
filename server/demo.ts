@@ -115,6 +115,7 @@ let runSeq = 1000; // fake Actions run ids, so the office can re-run a failed on
  */
 function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
   Object.assign(pr, { checks: 'pending', pendingChecks: ['CI / build', 'Vercel'], failedChecks: [], checkRun: null });
+  if (ciDown(pr.url)) return void setTimeout(() => Object.assign(pr, refusedChecks(pr.url)), 3_000);
   setTimeout(() => {
     Object.assign(pr, {
       checks: fail ? 'failing' : 'passing',
@@ -124,6 +125,19 @@ function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
     });
   }, 12_000 + Math.random() * 10_000);
 }
+
+// A CI outage (#191): GitHub refuses to start recipe-box's checks for the demo's first 20 minutes, with a QA-passed
+// PR parked at the start, so the floor's banner shows and then clears as its PRs merge by themselves.
+const CI_DOWN_REPO = 'demo-co/recipe-box';
+const CI_DOWN_UNTIL = Date.now() + 20 * 60_000;
+const CI_DOWN_NOTE = "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings.";
+const ciDown = (url: string) => url.includes(`/${CI_DOWN_REPO}/`) && Date.now() < CI_DOWN_UNTIL;
+const refusedChecks = (url: string): Partial<PullInfo> => ({
+  checks: 'failing',
+  pendingChecks: [],
+  failedChecks: [{ name: 'CI / build', url: `${url.replace(/\/pull\/\d+$/, '')}/actions/runs/${++runSeq}/job/1`, neverStarted: true }],
+  checkRun: { ms: 1_000, doneAt: Date.now() },
+});
 
 function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
@@ -177,6 +191,12 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Recipe page on a phone', 'Ingredients, then steps, at 375px.\n\nObjective: O2'],
   ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
 ], [], true);
+{
+  const r = repos.get(CI_DOWN_REPO)!;
+  const n = r.nextNumber++;
+  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3] };
+  r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
+}
 
 /** A stranger's issue and a fork's PR (#185): listed with their badges, never built, QA'd or merged. */
 function strangers(fullName: string) {
@@ -849,6 +869,8 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
         'build\tRun npm test\t2025-01-01T00:00:02Z Test Files  1 failed | 7 passed (8)',
         'build\tRun npm test\t2025-01-01T00:00:02Z ##[error]Process completed with exit code 1.',
       ].join('\n'),
+    checkAnnotations: async (fullName) => (ciDown(`/${fullName}/`) ? [CI_DOWN_NOTE] : []),
+    demoParked: () => repos.get(CI_DOWN_REPO)?.pulls.filter((p) => p.state === 'OPEN' && ciDown(p.url)).map((p) => ({ fullName: CI_DOWN_REPO, prNumber: p.number })) ?? [],
     rerunFailedJobs: async (fullName, runIds) => {
       // The re-run passes: a flake, as the office hoped.
       for (const pr of repos.get(fullName)?.pulls ?? []) {
@@ -1279,6 +1301,26 @@ export function answerReply({ quote, reply }: { quote: string; reply: string }):
   return `> ${q}\n\n${answer} (I'm the demo CEO, so nothing changes, but the real one would act on it.)`;
 }
 
+/** The demo CEO's answer to "where did the money go?": a dashboard of live sources, so it shows the demo's own costs. */
+export function demoMoneyAnswer(): string {
+  const dashboard = {
+    title: 'This week’s spend',
+    tiles: [
+      { label: 'Spend', source: 'costs:7d:total' },
+      { label: 'Per merge', source: 'costs:7d:costPerMerge' },
+      { label: 'Waste', source: 'costs:7d:waste' },
+      { label: 'Merges', source: 'costs:7d:merges' },
+    ],
+    charts: [
+      { type: 'bar', title: 'By floor', source: 'costs:7d:byFloor' },
+      { type: 'donut', title: 'By kind of work', source: 'costs:7d:byKind' },
+    ],
+  };
+  const trend = { type: 'line', title: 'Cost per merge, day by day', source: 'costs:7d:perMerge' };
+  const waste = { title: 'Waste by cause', columns: ['Cause'], source: 'costs:7d:wasteByCause' };
+  return ["Here's where this week's money went: by floor, by kind of work, the waste and the cost per merge. Tap a floor to open it.", '', '```dashboard', JSON.stringify(dashboard), '```', '', '```chart', JSON.stringify(trend), '```', '', '```table', JSON.stringify(waste), '```'].join('\n');
+}
+
 /** A floor in company_status, as far as the demo CEO reads it. */
 export interface DemoFloor {
   floor: number;
@@ -1503,6 +1545,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (awake) return awake;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
+      // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
+      if (/\b(money|spend|spent|spending|costs?)\b/i.test(text)) return demoMoneyAnswer();
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
       if (/\btelegram\b/i.test(text)) {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
