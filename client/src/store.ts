@@ -283,7 +283,7 @@ export const useStore = create<State>((set, get) => ({
     pacingSessions: 3,
     trimIdleDesksMin: 120,
     previewRecentHours: 48,
-    mainPreviewIdleMin: 30,
+    mainPreviewIdleMin: 1, prPreviewIdleMin: 1, previewMaxLifeHours: 0,
     dailyLogDir: '',
     historyDays: 90,
     voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },

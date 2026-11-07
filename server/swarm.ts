@@ -87,7 +87,7 @@ export class Swarm extends SwarmCeoTools {
       const raw = await fs.readFile(STATE_FILE, 'utf8');
       const loaded = JSON.parse(raw) as Partial<Persisted>;
       this.state = {
-        settings: { ...this.state.settings, ...loaded.settings },
+        settings: { ...this.state.settings, ...loaded.settings, ...this.previewIdleUpgrade(loaded.settings) },
         repos: (loaded.repos ?? []).map((r) => ({
           ...r,
           autoMerge: r.autoMerge ?? true,
@@ -328,7 +328,7 @@ export class Swarm extends SwarmCeoTools {
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
     setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
-    setInterval(() => this.sweepPreviews(), 15_000);
+    setInterval(() => this.sweepPreviews(), 5_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
     setInterval(() => {

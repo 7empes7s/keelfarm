@@ -39,7 +39,9 @@ export interface SwarmSettings {
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
   previewRecentHours: number; // an open PR updated this recently gets its own channel chip; older ones fold under "Older"
-  mainPreviewIdleMin: number; // a floor's main preview stops after this many minutes with nobody watching; 0 = never
+  mainPreviewIdleMin: number; // a floor's main preview stops this many minutes after its last use; 0 = never
+  prPreviewIdleMin: number; // a PR preview stops this many minutes after its last use; 0 = never (#252)
+  previewMaxLifeHours: number; // a preview runs at most this many hours, unless "Keep it running"; 0 = no max
   dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
   historyDays: number; // days the session history and its transcripts are kept; 0 = forever
   voice: VoiceSettings;

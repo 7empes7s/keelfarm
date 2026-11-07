@@ -1,5 +1,5 @@
 // The console's Settings sections that are the office's own settings (#102): agents' defaults, the CEO's settings, how
-// agents run, the company, and About this office (the environment, kept out of the way). Each one is a section of its
+// agents run, the company and its previews, and About this office (the environment, kept out of the way). Each one is a section of its
 // own in the side menu (consoleNavRules.ts); the other sections are their own components.
 import { api } from '../api';
 import { useStore } from '../store';
@@ -15,6 +15,7 @@ import { AwakeSettings, FollowupSettings } from './CeoFollowups';
 import { useChatMode } from './chatMode';
 import { openWhatsNew, useTour } from './tour';
 import { Icon } from './Icon';
+import { PR_PREVIEW_SLOTS } from './channels';
 import { STATUS_EMOJI } from '../../../shared/reactions';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
@@ -289,6 +290,37 @@ export function CompanySettings() {
           <Icon name="sparkles" /> What's new
         </button>
       </div>
+    </div>
+  );
+}
+
+/** A whole number of minutes or hours, saved on blur when it changed. */
+function NumberField({ label, value, max, onSave }: { label: string; value: number; max: number; onSave: (n: number) => void }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input key={value} type="number" inputMode="numeric" min={0} max={max} defaultValue={value} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== value && onSave(Number(e.target.value))} />
+    </label>
+  );
+}
+
+/** Settings → Previews (#252): when unused previews stop and free their memory, their max lifetime, and how many run at once. */
+export function PreviewsSettings() {
+  const settings = useStore((s) => s.settings);
+  return (
+    <div className="card">
+      <h3>
+        <Icon name="monitor" /> Previews
+      </h3>
+      <p className="muted small">A preview is in use while it's on screen in the app viewer or open in its own tab. Once nobody uses it, it stops after this long and frees its port and memory. Never while an agent tests in it or you keep it running from the viewer's More menu.</p>
+      <NumberField label="Stop a PR preview after no use (minutes, 0 = never)" value={settings.prPreviewIdleMin} max={1440} onSave={(n) => set({ prPreviewIdleMin: n })} />
+      <NumberField label="Stop a floor's main preview after no use (minutes, 0 = never)" value={settings.mainPreviewIdleMin} max={1440} onSave={(n) => set({ mainPreviewIdleMin: n })} />
+      <NumberField label="Max lifetime (hours, 0 = off)" value={settings.previewMaxLifeHours} max={168} onSave={(n) => set({ previewMaxLifeHours: n })} />
+      <p className="muted small">With a max lifetime, a preview asks “Still using it?” a minute before, in the viewer and in its own tab: Keep it running starts the time again. A reload or a quick tab switch never stops one in use.</p>
+      <dl className="cn-facts small">
+        <dt>Most PR previews at once</dt>
+        <dd>{PR_PREVIEW_SLOTS}, beside each floor's main preview</dd>
+      </dl>
     </div>
   );
 }

@@ -122,8 +122,12 @@ export interface PreviewView {
   startedAt: number | null;
   error: string | null;
   logTail: string[]; // the last 40 lines of install / app output
-  stopsAt?: number | null; // running with nobody watching: when it stops for being idle (null: it won't)
+  stopsAt?: number | null; // running with nobody using it: when it stops for being idle (null: it won't)
   heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop and restart are refused)
+  usedIn?: PreviewUsedIn;
+  pinned?: PreviewPin;
+  lifeEndsAt?: number | null; // when it reaches Settings → Previews' max lifetime (null: no max, or held or kept)
+  stoppedIdle?: boolean; // the office stopped it for no use: opening the viewer starts it again
   /** It didn't start because a program that isn't the office's holds its port (#225): which one, for "Use another port". */
   portOwner?: { pid: number; command: string; startedAt: number | null } | null;
 }
@@ -144,15 +148,24 @@ export interface PrPreviewView {
   watched: boolean; // a viewer has it on screen now
   error: string | null;
   logTail: string[]; // the last 40 lines of install / app output
-  stopsAt?: number | null; // nobody watching: when it stops for being idle (null: it won't)
+  stopsAt?: number | null; // nobody using it: when it stops for being idle (null: it won't)
   heldBy?: string | null; // an agent's QA lab or fix session is using it: their name (stop, restart and eviction are refused)
+  usedIn?: PreviewUsedIn;
+  pinned?: PreviewPin;
+  lifeEndsAt?: number | null; // when it reaches Settings → Previews' max lifetime (null: no max, or held or kept)
 }
+
+/** Where a preview is in use now (#252): an app viewer has it on screen, or its own tab (traffic or the page's heartbeat through the gateway). */
+export type PreviewUsedIn = 'app' | 'tab' | null;
+/** Kept running by the manager (📌) until then, or until they stop it; null: not kept. */
+export type PreviewPin = number | 'forever' | null;
 
 /** The previews' upkeep, for the app viewer's stats: what their desks hold on disk and use in memory, and the last cleanup. */
 export interface PreviewStatsView {
   diskBytes: number | null; // the preview desks' size on disk (null: not measured yet)
   memMb: number | null; // what the previews' processes use (null: not measured, or not Linux)
   cleanedAt: number | null; // the last cleanup of leftover preview desks
+  freed?: { mb: number; count: number } | null; // memory freed by previews the office stopped for no use or lifetime, since it started
 }
 
 /** A folder in the manager's projects folder, as offered when adding a floor. */

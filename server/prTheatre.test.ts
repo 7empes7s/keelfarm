@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampMainIdleMin, clampRecentHours, closedPrs, expired, freeSlot, leftoverPrDesks, mainExpired, onScreen, pickEviction, prBranch, prKey, prPortCandidates, prSlug, stopsAt, type PrRunInfo } from './prTheatre.ts';
+import { addFreed, clampMainIdleMin, clampMaxLifeHours, clampRecentHours, closedPrs, freeSlot, leftoverPrDesks, lifeEndsAt, lifeWarning, onScreen, pickEviction, prBranch, previewSettings, prKey, prPortCandidates, prSlug, stopsAt, stopWhy, upgradePreviewIdle, type PreviewUse, type PrRunInfo } from './prTheatre.ts';
 
 const run = (pr: number, over: Partial<PrRunInfo> = {}): PrRunInfo => ({ key: prKey('o/r', pr), repoId: 'o/r', pr, slot: 1, active: true, viewedAt: 0, ...over });
 
@@ -61,12 +61,44 @@ describe('making room for a new PR preview', () => {
   });
 });
 
+const use = (over: Partial<PreviewUse> = {}): PreviewUse => ({ active: true, viewedAt: 0, inUse: false, held: false, pinnedUntil: null, lifeFrom: 0, ...over });
+const MIN = 60_000;
+const rules = { idleMs: MIN, maxLifeMs: 0 };
+
 describe('stopping on its own', () => {
-  it('stops previews nobody has watched for the idle time', () => {
-    const now = 30 * 60_000;
-    const runs = [run(1, { viewedAt: now - 21 * 60_000 }), run(2, { viewedAt: now - 5 * 60_000 }), run(3, { viewedAt: 0 })];
-    expect(expired(runs, new Set(), now, 20 * 60_000)).toEqual(['o/r#1', 'o/r#3']);
-    expect(expired(runs, new Set(['o/r#3']), now, 20 * 60_000)).toEqual(['o/r#1']);
+  it('stops 60 s after the last use of any kind', () => {
+    expect(stopWhy(use({ viewedAt: 1000 }), rules, 1000 + MIN - 1)).toBeNull();
+    expect(stopWhy(use({ viewedAt: 1000 }), rules, 1000 + MIN)).toBe('idle');
+    expect(stopsAt(use({ viewedAt: 1000 }), rules, 0)).toBe(1000 + MIN);
+  });
+
+  it('never sooner than the grace after the last use, whatever the setting says', () => {
+    expect(stopsAt(use(), { idleMs: 1000, maxLifeMs: 0 }, 0)).toBe(MIN);
+  });
+
+  it('never while in use, held, kept (📌) or not running, and never with the idle stop at 0', () => {
+    const late = 99 * MIN;
+    expect(stopWhy(use({ inUse: true }), rules, late)).toBeNull();
+    expect(stopWhy(use({ held: true }), rules, late)).toBeNull();
+    expect(stopWhy(use({ active: false }), rules, late)).toBeNull();
+    expect(stopWhy(use(), { idleMs: 0, maxLifeMs: 0 }, late)).toBeNull();
+    expect(stopWhy(use({ pinnedUntil: Infinity }), rules, late)).toBeNull();
+    // An hour's pin runs out by itself.
+    expect(stopWhy(use({ pinnedUntil: late + 1 }), rules, late)).toBeNull();
+    expect(stopWhy(use({ pinnedUntil: late }), rules, late)).toBe('idle');
+  });
+
+  it('stops at its max lifetime even in use, with a minute of warning, unless held or kept; Keep it running starts it again', () => {
+    const life = { idleMs: MIN, maxLifeMs: 60 * MIN };
+    const x = use({ inUse: true, lifeFrom: 0 });
+    expect(lifeEndsAt(x, life, 0)).toBe(60 * MIN);
+    expect(lifeWarning(x, life, 58 * MIN)).toBe(false);
+    expect(lifeWarning(x, life, 59 * MIN)).toBe(true);
+    expect(stopWhy(x, life, 60 * MIN)).toBe('lifetime');
+    expect(stopWhy({ ...x, lifeFrom: 59 * MIN }, life, 60 * MIN)).toBeNull();
+    expect(stopWhy({ ...x, held: true }, life, 99 * MIN)).toBeNull();
+    expect(stopWhy({ ...x, pinnedUntil: Infinity }, life, 99 * MIN)).toBeNull();
+    expect(lifeEndsAt(x, rules, 0)).toBeNull(); // 0 = no max lifetime
   });
 
   it('stops previews whose PR merged, closed or left the list', () => {
@@ -86,28 +118,11 @@ describe('stopping on its own', () => {
 });
 
 describe('previews in use, the main preview and leftovers (#204)', () => {
-  it('never evicts or idles out a preview an agent is testing in', () => {
+  it('never evicts a preview an agent is testing in or the manager keeps', () => {
     const runs = [run(1, { viewedAt: 100, held: true }), run(2, { viewedAt: 900, slot: 2 })];
     expect(pickEviction(runs, new Set())).toBe('o/r#2');
     expect(pickEviction(runs, new Set(['o/r#2']))).toBeNull();
-    expect(expired(runs, new Set(), 60 * 60_000, 20 * 60_000)).toEqual(['o/r#2']);
-  });
-
-  it('stops the main preview after its idle time, never while watched, held, stopped or with the stop off', () => {
-    const idle = 30 * 60_000;
-    const x = { active: true, viewedAt: 0, watched: false, held: false };
-    expect(mainExpired(x, idle - 1, idle)).toBe(false);
-    expect(mainExpired(x, idle, idle)).toBe(true);
-    expect(mainExpired({ ...x, watched: true }, idle * 2, idle)).toBe(false);
-    expect(mainExpired({ ...x, held: true }, idle * 2, idle)).toBe(false);
-    expect(mainExpired({ ...x, active: false }, idle * 2, idle)).toBe(false);
-    expect(mainExpired(x, idle * 99, 0)).toBe(false);
-  });
-
-  it("says when an unwatched preview will stop", () => {
-    expect(stopsAt({ active: true, viewedAt: 1000, watched: false, held: false }, 60_000)).toBe(61_000);
-    expect(stopsAt({ active: true, viewedAt: 1000, watched: true, held: false }, 60_000)).toBeNull();
-    expect(stopsAt({ active: true, viewedAt: 1000, watched: false, held: true }, 60_000)).toBeNull();
+    expect(pickEviction([run(1, { viewedAt: 100, pinned: true }), run(2, { viewedAt: 900, slot: 2 })], new Set())).toBe('o/r#2');
   });
 
   it('picks the PR slot desks no preview runs from, never the main one or a stray folder', () => {
@@ -116,6 +131,26 @@ describe('previews in use, the main preview and leftovers (#204)', () => {
 
   it('keeps the settings in range', () => {
     expect([clampRecentHours(0), clampRecentHours('x'), clampRecentHours(72)]).toEqual([1, 48, 72]);
-    expect([clampMainIdleMin(-5), clampMainIdleMin(undefined), clampMainIdleMin(0), clampMainIdleMin(45)]).toEqual([0, 30, 0, 45]);
+    expect([clampMainIdleMin(-5), clampMainIdleMin(undefined), clampMainIdleMin(0), clampMainIdleMin(45), clampMainIdleMin(0.4)]).toEqual([0, 1, 0, 45, 1]);
+    expect([clampMaxLifeHours(-1), clampMaxLifeHours('x'), clampMaxLifeHours(4), clampMaxLifeHours(9999)]).toEqual([0, 0, 4, 168]);
+  });
+
+  it('defaults to a minute after the last use, the env var only a fallback for the PR stop (#252)', () => {
+    expect(previewSettings({}, {})).toMatchObject({ mainPreviewIdleMin: 1, prPreviewIdleMin: 1, previewMaxLifeHours: 0 });
+    expect(previewSettings({}, {}, 20).prPreviewIdleMin).toBe(20);
+    expect(previewSettings({ prPreviewIdleMin: 5 }, {}, 20).prPreviewIdleMin).toBe(5);
+    expect(previewSettings({ prPreviewIdleMin: 5 }, { prPreviewIdleMin: 0, previewMaxLifeHours: 3 })).toMatchObject({ prPreviewIdleMin: 0, previewMaxLifeHours: 3 });
+  });
+
+  it('adds up the memory freed by stopped previews', () => {
+    expect(addFreed(null, 640.4)).toEqual({ mb: 640, count: 1 });
+    expect(addFreed({ mb: 640, count: 1 }, 560)).toEqual({ mb: 1200, count: 2 });
+  });
+
+  it("moves a state file still on the old 30-minute default to 1 minute, never the manager's own choice", () => {
+    expect(upgradePreviewIdle({ mainPreviewIdleMin: 30 })).toBe(1);
+    expect(upgradePreviewIdle({ mainPreviewIdleMin: 45 })).toBeNull();
+    expect(upgradePreviewIdle({ mainPreviewIdleMin: 30, prPreviewIdleMin: 1 })).toBeNull();
+    expect(upgradePreviewIdle(undefined)).toBeNull();
   });
 });

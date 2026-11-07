@@ -97,6 +97,8 @@ export const api = {
   stopPreview: (repoId: string) => call<PreviewView>('DELETE', `${r(repoId)}/preview`),
   startPrPreview: (repoId: string, pr: number, restart = false) => call<PrPreviewView>('POST', `${r(repoId)}/pr-previews/${pr}`, { restart }),
   stopPrPreview: (repoId: string, pr: number) => call('DELETE', `${r(repoId)}/pr-previews/${pr}`),
+  /** 📌 keep a preview running ('hour' | 'forever'), let it stop by itself again ('off'), or (no pin) start its max lifetime again. */
+  keepPreview: (repoId: string, pr: number | null, pin?: 'hour' | 'forever' | 'off') => call('POST', `${r(repoId)}/preview/keep`, { pr, pin }),
   /** The app viewer's heartbeat: which PR preview it has on screen (repoId null: none). Quiet on errors. */
   watchPreview: (viewer: string, repoId: string | null, pr: number | null) => call('POST', '/api/previews/watch', { viewer, repoId, pr }, false),
   previewSync: (repoId: string, pr: number | null) => call<{ url: string }>('POST', `${r(repoId)}/preview/sync`, { pr }),

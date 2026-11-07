@@ -407,7 +407,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     this.previews.heldChanged(repoId, pr);
   }
 
-  /** Every 15 s: previews nobody watches stop, and holds whose agent's QA or fix session ended let go (the views say so). */
+  /** Every 5 s: previews nobody uses stop, and holds whose agent's QA or fix session ended let go (the views say so). */
   protected sweepPreviews() {
     this.previews.sweepPrs();
     for (const [key, { repoId, pr }] of this.previewHolds) {
