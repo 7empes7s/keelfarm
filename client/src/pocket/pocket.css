@@ -428,6 +428,9 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 .pk-railed .pk-company-side > :not(.pk-usage, .pk-ceo, .pk-wide) {
   grid-column: 1 / -1;
 }
+.pk-railed .pk-company-side .tour-invite > .grow {
+  flex-basis: 14em; /* its buttons go below the text in the narrow column */
+}
 .pk-railed .pk-company-floors {
   display: grid;
   grid-template-columns: repeat(var(--pk-cols, 1), minmax(0, 1fr));

@@ -4986,7 +4986,7 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-pipeline {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.35fr); /* "Needs you" on one line */
+  grid-template-columns: repeat(5, auto); /* each chip as wide as its label needs, the rest shared */
   gap: 6px;
   margin: 10px 0 8px;
 }
@@ -5039,6 +5039,14 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   margin-left: auto;
 }
 /* one row, the people and backlog line on the left and Board · Team on the right, wrapping as a whole only on a narrow card */
+@container pkfloor (max-width: 300px) {
+  .pk-pipeline {
+    gap: var(--ds-space-1);
+  }
+  .pk-stage-label {
+    font-size: 0.62rem;
+  }
+}
 @container pkfloor (max-width: 239px) {
   .pk-floor-foot {
     flex-wrap: wrap;
