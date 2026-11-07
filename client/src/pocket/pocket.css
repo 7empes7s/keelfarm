@@ -226,6 +226,10 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   max-width: none;
   padding: 16px 20px 24px;
 }
+/* on a phone the console and the pane are full-screen panels, in the same order */
+.pocket:not(.pk-railed) :is(.pk-pane, .pk-console-host) > .overlay {
+  z-index: calc(var(--ds-z-panel) + var(--pk-layer, 0));
+}
 .pk-railed .pk-work-console > .pk-main {
   display: none;
 }
@@ -246,12 +250,32 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   border-left: var(--ds-border-strong) solid var(--ds-outline);
   background: var(--paper);
 }
-/* too narrow for two panels side by side (a tablet, or the chat docked on a small desktop): the pane covers the page */
+/* too narrow for two panels side by side (the chat docked on a small desktop) and at tablet widths: the pane covers
+   the page */
+.pk-layout-medium .pk-pane:not(:empty) {
+  position: absolute;
+  inset: 0;
+  border-left: none;
+}
 @container pkwork (max-width: 719px) {
   .pk-railed .pk-pane:not(:empty) {
     position: absolute;
     inset: 0;
     border-left: none;
+  }
+}
+/* a panel lays out for the width it has, not the window's: a preview beside the chat stacks its PR column under it */
+@container pkpanel (max-width: 900px) {
+  .pk-railed .app-body {
+    flex-direction: column;
+  }
+  .pk-railed .prc-side {
+    flex: 0 0 auto;
+    max-height: 45%;
+  }
+  .pk-railed .compare-sides {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
   }
 }
 .pk-railed :is(.pk-pane, .pk-console-host) > .overlay {

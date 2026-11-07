@@ -37,7 +37,7 @@ import { FullButton } from '../ui/ChatActionsSheet';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
-import { layerOf, panels, topPanel, usePanels, type PanelEntry } from '../ui/panels';
+import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
 import { DockGrip, useDockWidth } from './DockGrip';
 import './pocket.css';
 
@@ -292,6 +292,12 @@ function paneEntry(o: Overlay): PanelEntry<Overlay> {
   if (o.kind === 'card') return { key: `card:${o.repoId}:${o.key}`, slot: 'pane', label: `${o.pr ? 'PR' : 'Issue'} #${o.number}`, value: o };
   return { key: o.kind, slot: 'pane', label: 'Notifications', value: o };
 }
+
+/** A slot's place in the panel manager's order: the host's z-index wide, its panel's (pocket.css) on a phone. */
+const layer = (order: Panels, slot: string) => {
+  const n = layerOf(order, slot);
+  return n ? { zIndex: n, ['--pk-layer' as string]: n } : undefined;
+};
 
 /** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
@@ -590,12 +596,12 @@ export default function Pocket() {
               </>
             )}
           </main>
-          {/* wide, the console covers the pages and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
-          <div ref={consoleHost} className="pk-console-host" style={{ zIndex: layerOf(order, 'main') || undefined }} onFocus={() => panels.focus('console')}>
+          {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
+          <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
             {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
           </div>
           {/* beside the console when there's room, else over it: whichever was opened or touched last is in front */}
-          <div ref={paneHost} className="pk-pane" style={{ zIndex: layerOf(order, 'pane') || undefined }} onFocus={() => pane && panels.focus(paneEntry(pane).key)}>
+          <div ref={paneHost} className="pk-pane" style={layer(order, 'pane')} onFocus={() => pane && panels.focus(paneEntry(pane).key)}>
             <Suspense fallback={null}>
               <PocketOverlay />
             </Suspense>
