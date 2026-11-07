@@ -4,6 +4,7 @@ import type { ClientEvent, ServerEvent } from '../../shared/types';
 import { currentWatch } from './watch';
 import { hitchWs } from './hitches';
 import { onResume, onTick, type SocketLook } from '../../shared/heartbeat';
+import { socketUrl } from './socketUrl';
 
 let retry = 0;
 let socket: WebSocket | null = null;
@@ -114,8 +115,7 @@ export function connect() {
     watching = true;
     listen();
   }
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  const ws = new WebSocket(socketUrl('/ws'));
   socket = ws;
   startedAt = Date.now();
   ws.onopen = () => {
