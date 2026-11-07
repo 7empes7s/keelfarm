@@ -353,6 +353,7 @@ export class Accounts {
       if (!t.live) {
         if (!told) t.note('This sign-in has ended: tap Try again for a new one.');
         told = true;
+        line = '';
         return;
       }
       told = false;
