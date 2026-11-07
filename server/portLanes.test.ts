@@ -20,17 +20,15 @@ const derived = (base: number) => [
 
 describe('agent port env', () => {
   it("puts the office and every preview port it derives inside the agent's range, off the live lanes", () => {
+    const wrong: string[] = [];
     for (let port = 5200; port < 5900; port++) {
       const env = agentPortEnv(port);
       const range = new Set(agentPorts(port));
-      expect(Number(env.SWARM_PORT)).toBe(port);
-      const base = Number(env.SWARM_PREVIEW_PORT);
-      for (const p of derived(base)) {
-        expect(range.has(p)).toBe(true);
-        expect(inLiveLanes(p)).toBe(false);
-        expect(p).toBeLessThan(32_768); // below Linux's ephemeral ports
-      }
+      if (Number(env.SWARM_PORT) !== port) wrong.push(`${port}: SWARM_PORT ${env.SWARM_PORT}`);
+      // Inside its range, off the live lanes, below Linux's ephemeral ports.
+      for (const p of derived(Number(env.SWARM_PREVIEW_PORT))) if (!range.has(p) || inLiveLanes(p) || p >= 32_768) wrong.push(`${port}: ${p}`);
     }
+    expect(wrong).toEqual([]);
   });
 
   it("gives teammates' ports blocks of their own", () => {
