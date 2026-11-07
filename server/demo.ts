@@ -76,7 +76,7 @@ const bareRepos = new Set<string>();
 const mergedSinceSync = new Map<string, number>(); // merges the fake project folder hasn't pulled yet
 const closedIssues = new Set<string>(); // `${fullName}#${n}`: issues closed by a merge
 const stalls = new Map<string, () => void>(); // agent id -> silences their running fake session (the office doctor's demo)
-const signOuts = new Map<string, { boxId: string; end: () => void }>(); // agent id -> ends their cloud session as an expired sign-in would
+const signOuts = new Map<string, { boxId: string; end: (credit?: boolean) => void }>(); // agent id -> ends their cloud session as an expired sign-in (or a key out of credit) would
 
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
 
@@ -514,7 +514,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     });
   }
   // A cloud agent's session ends the way an expired login ends a real one when the fake account expires sign-ins.
-  const signOut = opts.box && opts.agentId ? { boxId: opts.box.boxId, end: () => expired() } : null;
+  const signOut = opts.box && opts.agentId ? { boxId: opts.box.boxId, end: (credit?: boolean) => expired(credit) } : null;
   if (signOut) signOuts.set(opts.agentId!, signOut);
   const forgetSignOut = () => {
     if (signOut && signOuts.get(opts.agentId!) === signOut) signOuts.delete(opts.agentId!);
@@ -544,15 +544,15 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
   const script = [header, ...(question ? [...body.slice(0, 7), () => ((stopped = true), demoAsked(cb, question))] : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
 
-  const expired = () => {
+  const expired = (credit = false) => { // credit: as an Anthropic key out of credit ends it instead (#258)
     if (stopped) return;
     stopped = true;
     forgetSignOut();
     timers.forEach(clearTimeout);
     cb.tool(null);
-    cb.log([{ kind: 'error', text: 'API Error: 401 · Login expired · Please run /login (demo)' }]);
+    cb.log([{ kind: 'error', text: credit ? 'API Error: 400 · Your credit balance is too low to access the Anthropic API. (demo)' : 'API Error: 401 · Login expired · Please run /login (demo)' }]);
     const name = CLIS.find((c) => c.id === (opts.cli ?? 'claude'))?.label ?? 'Claude Code';
-    cb.finished({ ok: false, text: '', costUsd: 0.1, turns: i, errors: [`${name} stopped: authentication failed`], signedOut: true });
+    cb.finished({ ok: false, text: '', costUsd: 0.1, turns: i, ...(credit ? { errors: ['Claude Code stopped: credit balance is too low'], keyTrouble: 'out-of-credit' } : { errors: [`${name} stopped: authentication failed`], signedOut: true }) });
   };
 
   const finish = () => {
@@ -2063,10 +2063,10 @@ function demoCloud(): CloudBackend {
     reconnect: async () => [], // fake sessions end with the office
     detach: () => undefined,
     signIn: (o, exited) => demoSignIn(o, logins, exited),
-    expireSignIns: () => {
+    expireSignIns: (credit) => {
       const ours = new Set(logins.keys());
-      logins.clear();
-      for (const s of [...signOuts.values()]) if (ours.has(s.boxId)) s.end();
+      if (!credit) logins.clear(); // out of credit: their own logins stay, only the key stopped working
+      for (const s of [...signOuts.values()]) if (credit || ours.has(s.boxId)) s.end(credit);
     },
   };
 }

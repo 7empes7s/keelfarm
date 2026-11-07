@@ -23,6 +23,7 @@ import { clock } from './phoneParts';
 import { isPinching, lastPinchAt } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
 import { Icon } from './Icon';
+import { SignInCard } from './SignInCard';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -109,6 +110,7 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   const look = m ? messageLook(m) : 'bubble';
   if (look === 'hidden') return null; // the CLI's own output (#193) stays backend
+  if (m?.signIn && look === 'card') return <SignInCard card={m.signIn} />;
   if (m?.notice && look === 'card') return <NoticeCard text={officeText(m.text)} notice={m.notice} />;
   if (m && look === 'pill') return <NoticePill text={officeText(m.text)} />;
   const mine = !m || m.from === 'manager';
