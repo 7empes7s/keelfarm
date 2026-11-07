@@ -11,6 +11,7 @@ import { TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { AwakeSettings, FollowupSettings } from './CeoFollowups';
 import { useChatMode } from './chatMode';
+import { openWhatsNew, useTour } from './tour';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
 const set = (p: SettingsPatch) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
@@ -218,8 +219,17 @@ export function CompanySettings() {
         </>
       )}
       <div className="row">
-        <button className="btn btn-small" onClick={() => set({ tutorialStep: 0 })}>
+        <button
+          className="btn btn-small"
+          onClick={() => {
+            useTour.setState({ pocketTour: true, replay: null });
+            set({ tutorialStep: 0 });
+          }}
+        >
           🧭 Replay the tour
+        </button>
+        <button className="btn btn-small" onClick={() => openWhatsNew()}>
+          ✨ What's new
         </button>
       </div>
     </div>

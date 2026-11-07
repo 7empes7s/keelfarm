@@ -9,7 +9,7 @@ import { HUD } from './ui/HUD';
 import { ReplayBar } from './ui/TimeLapse';
 import { Overlays } from './ui/Overlays';
 import { StartScreen } from './ui/StartScreen';
-import { Tutorial } from './ui/Tutorial';
+import { TourInvite, Tutorial } from './ui/Tutorial';
 import { HoldMenu } from './ui/HoldMenu';
 import { TouchStick } from './ui/TouchStick';
 import { useTouchPage } from './ui/touchMode';
@@ -69,7 +69,8 @@ export default function Office() {
       <ReplayBar />
       <Overlays />
       <HoldMenu />
-      {!photo && <Tutorial />}
+      {!photo && <Tutorial track="office" />}
+      {!photo && <TourInvite track="office" floating />}
       <SearchPalette where="office" />
       <GuideSheet />
       <StartScreen />

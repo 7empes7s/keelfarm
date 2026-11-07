@@ -30,6 +30,8 @@ import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { useChatMode } from '../ui/chatMode';
+import { TourInvite, Tutorial } from '../ui/Tutorial';
+import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
 import './pocket.css';
 
@@ -128,7 +130,7 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
   );
 }
 
-function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => void; settings: (section: ConsoleSection) => void }) {
+function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string) => void; settings: (section: ConsoleSection) => void; track: Track }) {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const qa = useStore((s) => s.qa);
@@ -161,6 +163,7 @@ function Company({ go, settings }: { go: (tab: PocketTab, repoId?: string) => vo
           <span>Approvals →</span>
         </button>
       )}
+      <TourInvite track={track} />
       <GuideCard />
       <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
         <b className="small">🤖 Claude usage</b>
@@ -306,6 +309,7 @@ export default function Pocket() {
   const switchKey = useKeyName('switchOffice');
   const layout = useLayout();
   const wide = layout !== 'compact';
+  const track = trackFor('pocket', layout);
   // The chat beside the pages: on wide screens open unless hidden (remembered), at medium widths a drawer, closed at first.
   const [dockPref, setDockPref] = useState(savedDock);
   const [drawer, setDrawer] = useState(false);
@@ -460,18 +464,18 @@ export default function Pocket() {
           </button>
         )}
         {wide ? (
-          <button className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
+          <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>
           </button>
         ) : (
-          <button className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
+          <button data-tour="console" className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
             ⚙️
           </button>
         )}
       </header>
       <NoticeToasts max={2} />
       <div className="pk-body">
-        <nav className="pk-tabs" aria-label="Pocket office">
+        <nav className="pk-tabs" aria-label="Pocket office" data-tour="pocket-tabs">
           {tabs.map(([k, icon, label, badge], i) => {
             // wide, the chat's entry shows and hides its pane
             const docked = wide && k === 'chat';
@@ -479,6 +483,7 @@ export default function Pocket() {
             return (
               <button
                 key={k}
+                data-tour={k === 'chat' ? 'chat' : undefined}
                 className={`pk-tab ${on ? 'pk-tab-on' : ''}`}
                 aria-current={!docked && on ? 'page' : undefined}
                 aria-pressed={docked ? dock : undefined}
@@ -494,7 +499,7 @@ export default function Pocket() {
             );
           })}
           {wide && (
-            <button className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => setSettings(settings ? null : 'menu')} title="Settings and notifications">
+            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => setSettings(settings ? null : 'menu')} title="Settings and notifications">
               <span className="pk-tab-icon">⚙️</span>
               <span className="pk-tab-label">Console</span>
             </button>
@@ -511,7 +516,7 @@ export default function Pocket() {
               </div>
             ) : (
               <>
-                {tab === 'company' && <Company go={go} settings={setSettings} />}
+                {tab === 'company' && <Company go={go} settings={setSettings} track={track} />}
                 {tab === 'chat' && !wide && chat}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
                 {tab === 'team' && <Team focusRepo={repoId} top={<MemoryBanner open={() => setSettings('ops')} />} />}
@@ -543,6 +548,7 @@ export default function Pocket() {
         )}
       </div>
       <SearchPalette where="pocket" />
+      <Tutorial track={track} />
     </div>
   );
 }

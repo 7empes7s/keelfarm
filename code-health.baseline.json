@@ -35,7 +35,7 @@
       "typescript(no-misused-promises)": 2
     },
     "client/src/ui/TerminalView.tsx": {
-      "typescript(no-misused-promises)": 2
+      "typescript(no-misused-promises)": 1
     },
     "client/src/ui/acoustics.test.ts": {
       "eslint(no-unused-expressions)": 4
@@ -288,7 +288,6 @@
     "exports:client/src/photo/gate.ts:saveReplay",
     "exports:client/src/photo/media.ts:recordingType",
     "exports:client/src/photo/overlay.ts:frameInsets",
-    "exports:client/src/pocket/PocketTeam.tsx:Status",
     "exports:client/src/replay.ts:marksBetween",
     "exports:client/src/replayClock.ts:PREFETCH_REAL_MS",
     "exports:client/src/screenshot.ts:screenshotUrl",
@@ -318,7 +317,6 @@
     "exports:client/src/ui/games/pet.ts:COLORS",
     "exports:client/src/ui/games/pet.ts:NAMES",
     "exports:client/src/ui/games/petStore.ts:finishedLine",
-    "exports:client/src/ui/keymap.ts:ACTION_IDS",
     "exports:client/src/ui/keymap.ts:RESERVED",
     "exports:client/src/ui/keymap.ts:scopesOverlap",
     "exports:client/src/ui/micSilence.ts:SPEECH_RATIO",
@@ -590,7 +588,6 @@
   "sizes": {
     "client/src/store.ts": 810,
     "client/src/styles.css": 6034,
-    "client/src/ui/ManagerConsole.tsx": 882,
     "client/src/ui/Phone.tsx": 1167,
     "client/src/ui/sfx.ts": 838,
     "client/src/world/ErrandDirector.tsx": 851,
@@ -599,7 +596,7 @@
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
     "server/cliRunner.ts": 989,
-    "server/demo.ts": 1940,
+    "server/demo.ts": 1925,
     "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
     "shared/types.ts": 946
