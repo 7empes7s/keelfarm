@@ -4,6 +4,7 @@ import { devices, type Locator, type Page } from '@playwright/test';
 import { HALF_D, MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
 import { enterOffice, expect, startAt, test, type SavedView } from './helpers';
+import { buttonRowProblems } from './buttonRows';
 import { telegramViews } from './telegramViews';
 
 // The design system's layout rules (docs/design.md), checked per screen, width and colour scheme: nothing wider than the
@@ -36,7 +37,7 @@ const POCKET = [360, 390, 430, 900, 1280, 1920];
 async function pocket(page: Page, tab: string) {
   await page.goto(`/?pocket=1&tab=${tab}`);
   const root = page.locator('.pocket');
-  await expect(root.locator('.pk-tab-on')).toBeVisible();
+  await expect(root.locator('.pk-tab-on').first()).toBeVisible(); // wide, the chat dock's tab is on too
   return root;
 }
 
@@ -429,6 +430,7 @@ async function layoutProblems(root: Locator): Promise<string[]> {
       return out;
     })),
   );
+  problems.push(...(await buttonRowProblems(root)));
   return problems;
 }
 

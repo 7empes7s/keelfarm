@@ -745,15 +745,10 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
               📋 QA
             </button>
           )}
-          {openUrl ? (
-            <a className="btn btn-small" href={openUrl} target="_blank" rel="noreferrer">
-              Open in new tab ↗
-            </a>
-          ) : (
-            <button className="btn btn-small" disabled>
-              Open in new tab ↗
-            </button>
-          )}
+          {/* one element running or not: a link without an href is disabled (aria-disabled), never a <button> twin */}
+          <a className="btn btn-small" href={openUrl || undefined} aria-disabled={!openUrl || undefined} target="_blank" rel="noreferrer">
+            Open in new tab ↗
+          </a>
         </div>}
       </div>
 
