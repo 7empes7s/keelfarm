@@ -731,9 +731,8 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   protected setQa(rec: QaRecord, patch: Partial<QaRecord>) {
-    const was = rec.status, told = was === 'needs-human' && rec.escalated;
-    Object.assign(rec, patch, { updatedAt: Date.now() });
-    rec.stuckAt = stuckSince(was, rec.status, rec.stuckAt, rec.updatedAt, patch.stuckAt);
+    const was = rec.status, told = was === 'needs-human' && rec.escalated, now = Date.now();
+    Object.assign(rec, patch, { updatedAt: now, stuckAt: stuckSince(was, patch.status ?? was, rec.stuckAt, now, patch.stuckAt) });
     if (!this.state.qa.includes(rec)) return; // it left QA (its PR closed) while a session on it was still wrapping up
     if (rec.status !== 'needs-human') Object.assign(rec, { escalated: false, ceoNote: null });
     else this.ledger({ kind: 'needs-human', repoId: rec.repoId, pr: rec.prNumber });
