@@ -598,7 +598,7 @@
     "e2e/layout.spec.ts": 821,
     "server/ceo.ts": 802,
     "server/cliRunner.ts": 989,
-    "server/demo.ts": 1925,
+    "server/demo.ts": 2038,
     "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
     "shared/types.ts": 956
