@@ -37,7 +37,7 @@ describe('which Kanban columns start folded', () => {
 
 describe("a folded column's summary", () => {
   it('counts the Backlog ready and waiting, and names the next one', () => {
-    const cards = [card(110, { note: '⏳ after #3' }), card(112), card(113, { tone: 'warn' }), card(114)];
+    const cards = [card(110, { note: 'after #3' }), card(112), card(113, { tone: 'warn' }), card(114)];
     expect(foldSummary('backlog', cards)).toBe('2 ready · 2 waiting · next #112');
   });
 

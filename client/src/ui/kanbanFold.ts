@@ -55,8 +55,8 @@ export function foldSummary(id: ColumnId, cards: KanbanCard[]): string {
   const where = (f: (c: KanbanCard) => boolean) => cards.filter(f).length;
   switch (id) {
     case 'backlog': {
-      // waiting on another issue (⏳) or on the manager (a closed PR's issue)
-      const waits = (c: KanbanCard) => c.tone === 'warn' || !!c.note?.startsWith('⏳');
+      // waiting on another issue ("after #N") or on the manager (a closed PR's issue)
+      const waits = (c: KanbanCard) => c.tone === 'warn' || !!c.note?.startsWith('after #');
       const next = cards.find((c) => !waits(c));
       return [counts([[where((c) => !waits(c)), 'ready'], [where(waits), 'waiting']]), next ? `next #${next.number}` : ''].filter(Boolean).join(' · ');
     }
