@@ -90,6 +90,18 @@ export async function consoleSection(root: Locator, group: string, label: string
   expect(pane!.width).toBeGreaterThanOrEqual(split!.width - 1); // no side column beside it
 }
 
+/** Charter with a drift row's "+N more" opened (#240): every merged PR's chip wraps inside the card. */
+export const charterDrift = (where: Where): View => ({
+  name: 'Charter: a drift row opened',
+  go: async (root) => {
+    await (where === 'pocket' ? pocketSection(root, 'Charter') : consoleSection(root, 'Company', 'Charter'));
+    const more = root.locator('.charter-chips button[aria-expanded="false"]').first();
+    await more.scrollIntoViewIfNeeded();
+    await more.click();
+    await expect(root.locator('.charter-chips button[aria-expanded="true"]')).toBeVisible();
+  },
+});
+
 /** The agent window's details, opened from the header if they're closed, then one of their tabs (#117). */
 export async function agentTab(root: Locator, tab: string) {
   const who = root.locator('.aw-who');

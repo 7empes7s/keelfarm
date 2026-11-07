@@ -109,6 +109,8 @@ export interface PersistedAgent {
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
   account?: string; // the account (id) or tag they're pinned to (#247, shared/accounts.ts); absent: the rotation
+  voiceId?: string; // their ElevenLabs voice (#320, shared/voices.ts); absent: none yet
+  voiceName?: string;
   declared?: string[] | null; // the files they declared for their current task (file leases, #24); cleared with the task
   status: AgentStatus;
   issueNumber: number | null;
@@ -152,6 +154,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
+  cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */
@@ -173,7 +176,7 @@ interface CeoState {
   changes: ChangesState; // the manager's board actions for the CEO (#207, shared/managerChanges.ts)
   chats: ChatsState; // the chat's conversations; state.messages is the current one's thread (shared/conversations.ts)
   remember: MemoryNote[]; // the manager's pinned notes, in every CEO job's prompt (shared/ceoMemory.ts)
-  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null }; // its kept session (#28)
+  kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null; model?: string }; // its kept session (#28) and the model it started on (#331)
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

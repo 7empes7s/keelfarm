@@ -36,7 +36,7 @@ import { emptyLedger, packCareers, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
-import { isResync, Outbox } from '../outbox.ts';
+import { isResync, Outbox, snapshotAgent } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
 import { Notifier } from '../notifier.ts';
 import { TelegramBot } from '../telegramBot.ts';
@@ -264,7 +264,7 @@ export abstract class SwarmCore extends SwarmContract {
       listen: () => this.state.settings.listen,
       messages: () => this.state.messages,
       officeNote: (text) => this.postMessage('office', text),
-      keyChanged: (view) => this.broadcast({ type: 'voiceKey', ...view }),
+      keyChanged: (view) => this.voiceKeyChanged(view),
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
@@ -423,9 +423,9 @@ export abstract class SwarmCore extends SwarmContract {
     return effectivePractices(this.state.settings.everyProject.practices, r.practices, variant);
   }
 
-  /** Whether any of the floor's work may run with leases: the floor's switch, or a running experiment's variant. */
+  /** Whether any of the floor's work may run with leases or conflict-aware scheduling (#256): the floor's switch, or a running experiment's variant. */
   protected leasesWanted(r: PersistedRepo) {
-    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases');
+    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases') || this.practicesOf(r).busyFiles || this.lab.tries(r.id, 'busyFiles');
   }
 
   /** The floor's leases now: each agent building or fixing an issue, and each open swarm PR (shared/practices.ts). */
@@ -489,7 +489,7 @@ export abstract class SwarmCore extends SwarmContract {
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
-      ...(a.role !== 'ceo' ? { tools: a.tools ?? {} } : {}), // always sent: a patch can't drop a field
+      ...(a.role !== 'ceo' ? { tools: a.tools ?? {}, voiceId: a.voiceId ?? '', voiceName: a.voiceName ?? '' } : {}), // always sent: a patch can't drop a field
     };
   }
 
@@ -530,7 +530,7 @@ export abstract class SwarmCore extends SwarmContract {
       settings: this.state.settings,
       repos: this.state.repos.map((r) => this.repoView(r)),
       // no terminal lines: each tab asks for the ones it shows (shared/watch.ts)
-      agents: this.state.agents.map((a) => this.agentView(a, false)),
+      agents: this.state.agents.map((a) => snapshotAgent(this.agentView(a, false))),
       qa: this.state.qa.map((q) => this.qaView(q)),
       prPreviews: this.previews.prViews(),
       previewStats: this.previewStats,

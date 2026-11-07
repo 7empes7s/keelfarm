@@ -3,7 +3,8 @@
 // ElevenLabs' own words, never the key.
 import type { VoiceOption } from '../shared/types.ts';
 import { clipExtension } from '../shared/clipLimits.ts';
-import { STT_MODEL, VoiceApiError, type VoiceApi } from './voice.ts';
+import { isV4Voice } from '../shared/voices.ts';
+import { STT_MODEL, synthBody, VoiceApiError, type VoiceApi } from './voice.ts';
 
 const API = 'https://api.elevenlabs.io';
 const CHECK_TIMEOUT_MS = 10_000;
@@ -43,9 +44,18 @@ interface ApiVoice {
   category?: unknown;
   labels?: Record<string, unknown> | null;
   preview_url?: unknown;
+  high_quality_base_model_ids?: unknown;
+  verified_languages?: unknown;
 }
 
-function voiceOption(v: ApiVoice): Omit<VoiceOption, 'recommended'> {
+/** The models a voice says it was made or verified for (both lists are optional in the API). */
+function voiceModels(v: ApiVoice): string[] {
+  const hq = Array.isArray(v.high_quality_base_model_ids) ? v.high_quality_base_model_ids.map(s) : [];
+  const verified = Array.isArray(v.verified_languages) ? v.verified_languages.map((l) => s((l as { model_id?: unknown })?.model_id)) : [];
+  return [...hq, ...verified].filter(Boolean);
+}
+
+export function voiceOption(v: ApiVoice): Omit<VoiceOption, 'recommended'> {
   const l = v.labels ?? {};
   return {
     id: s(v.voice_id),
@@ -53,6 +63,7 @@ function voiceOption(v: ApiVoice): Omit<VoiceOption, 'recommended'> {
     category: s(v.category),
     labels: { accent: s(l.accent), gender: s(l.gender), age: s(l.age), description: s(l.description) || s(l.descriptive), use_case: s(l.use_case) || s(l['use case']) },
     previewUrl: s(v.preview_url) || null,
+    ...(isV4Voice(voiceModels(v)) ? { v4: true } : {}),
   };
 }
 
@@ -76,11 +87,11 @@ export const elevenLabs: VoiceApi = {
     return out;
   },
 
-  async synthesize(key, { voiceId, model, text }, signal) {
+  async synthesize(key, req, signal) {
     const res = await call(
       key,
-      `/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'audio/mpeg' }, body: JSON.stringify({ text, model_id: model }) },
+      `/v1/text-to-speech/${encodeURIComponent(req.voiceId)}?output_format=mp3_44100_128`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'audio/mpeg' }, body: JSON.stringify(synthBody(req)) },
       signal,
     );
     return Buffer.from(await res.arrayBuffer());

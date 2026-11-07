@@ -8,7 +8,7 @@ import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
 import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
-import { qaInstructions } from '../qaPrompt.ts';
+import { fullQualityLine, qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
 import { failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from '../prompts.ts';
@@ -32,6 +32,7 @@ import {
   cell,
   ICON,
 } from './model.ts';
+import { conflictFixRun, conflictFixSettings } from '../../shared/conflicts.ts';
 import { slugify } from './flavour.ts';
 import { MIME_EXT } from './screens.ts';
 import { SwarmSessions } from './sessions.ts';
@@ -277,12 +278,16 @@ export abstract class SwarmQa extends SwarmSessions {
       fixInstructions: rec.fixInstructions,
       defaultBranch: repo.defaultBranch,
     });
+    // A PR that changes how the 3D office looks gets one full-quality pass in the lab (#301).
+    const lab = repo.browserTesting && this.usesTestLab(a, repo);
+    const files = lab ? await this.backend.prDiff(repo.fullName, pr.number, false).then((d) => d.files.map((f) => f.path), () => null) : null;
     const prompt = [
       `Please QA pull request #${pr.number}: ${pr.title}`,
       `URL: ${pr.url}`,
       `Author: ${dev ? (dev.id === a.id ? `you, in an earlier session` : dev.name) : 'a teammate'} · QA round ${rec.round}`,
       qa.checks,
       qa.retest,
+      fullQualityLine(files, lab),
       '',
       'PR description:',
       pr.body.trim() || '(empty)',
@@ -538,6 +543,9 @@ export abstract class SwarmQa extends SwarmSessions {
     const mergeEnd = 'Then reply with a short summary of what you did. Do not open a new pull request; the office merges it once the checks pass, after another QA round if the code changed.';
     const prompt = (mergeFix ? [...mergeFix, ownPrLine(repo.defaultBranch), mergeEnd] : qaFix).filter((l) => l !== '').join('\n');
     const resume = original && rec.devSessionId ? rec.devSessionId : undefined;
+    // A conflict-only round runs on Settings' cheaper model; the round after a cheap one escalates (#256).
+    const files = rec.fixReason === 'conflict' && !rec.cheapFix ? (this.practiceRt.get(repo.id)?.prFiles.get(rec.prNumber)?.files ?? (await this.backend.prDiff(repo.fullName, rec.prNumber, false).then((d) => d.files.map((f) => f.path), () => null))) : null;
+    rec.cheapFix = conflictFixRun(rec, { files, checks: pull?.checks, claude: true }, conflictFixSettings(this.state.settings.everyProject.conflictFix, {}));
     this.startAgentSession(dev, repo, cwd, prompt, this.buildSystemAppend(dev, repo, cwd, headRef, { pr: rec.prNumber, headRef }, desk.deps), resume);
   }
 

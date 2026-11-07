@@ -12,6 +12,7 @@ export class FloorPractice {
   private hotAt = 0;
   private heldSince = new Map<number, number>();
   holds: LeaseHold[] = [];
+  issueFiles = new Map<number, string[]>(); // the files earlier PRs for each issue changed, closed ones too (#256)
 
   /** Paths the floor is known to have: what bare file names in an issue resolve to. */
   known(): string[] {
@@ -32,6 +33,7 @@ export class FloorPractice {
       const files = await read(p.number).catch(() => null);
       if (!files) continue;
       this.prFiles.set(p.number, { sha: p.headSha, files: files.map(normPath) });
+      for (const i of p.closesIssues) this.issueFiles.set(i, [...new Set([...(this.issueFiles.get(i) ?? []), ...files.map(normPath)])].slice(0, 30));
       changed = true;
     }
     return changed;
@@ -44,7 +46,7 @@ export class FloorPractice {
     const log = await read().catch(() => null);
     if (!log) return false;
     const before = JSON.stringify(this.hot);
-    this.hot = hotFiles(log);
+    this.hot = hotFiles(log, 10);
     return JSON.stringify(this.hot) !== before;
   }
 

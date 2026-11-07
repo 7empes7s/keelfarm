@@ -155,6 +155,8 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 
 .pk-railed .pk-body {
+  /* the rail's width, which the full-screen chat also starts at (#242) */
+  --pk-rail-w: 92px;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -166,7 +168,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   flex: none;
   flex-direction: column;
   gap: 4px;
-  width: 92px;
+  width: var(--pk-rail-w);
   padding: 8px 6px;
   border-top: none;
   border-right: var(--ds-border-strong) solid var(--ds-outline);
@@ -180,8 +182,8 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 .pk-railed .pk-tab-console {
   margin-top: auto;
 }
-.pk-layout-medium .pk-tabs {
-  width: 68px;
+.pk-layout-medium .pk-body {
+  --pk-rail-w: 68px;
 }
 .pk-layout-medium .pk-tab-label {
   position: absolute;
@@ -374,19 +376,34 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 .pk-dock .phone-chat {
   width: 100%;
+  min-width: 0;
   background: var(--paper);
 }
-/* the chat full screen (#201): wide, the docked chat covers the rail and the pages, which keep their place behind it;
-   on a phone the tab bar and the working strip's second line step aside */
+/* expanded: the threads column (280px, threads.css) beside the chat, which keeps its dragged width (#212), and the
+   artifact or file it opens beside the dock, not over it (#132) */
+.pk-dock-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pk-dock-threads {
+  width: clamp(640px, calc(var(--pk-dock-w, 380px) + 280px), max(640px, 100% - 692px));
+}
+html:has(.pocket:not(.pk-chat-full) .pk-dock-threads) .artifact-back {
+  right: calc(var(--pk-dock-w, 380px) + 280px);
+}
+/* the chat full screen (#201): wide, the docked chat covers the pages beside the rail (#242: the rail stays, and tapping
+   it leaves full screen), the pages keeping their place behind it; on a phone the tab bar and the working strip's
+   second line step aside */
 .pk-railed.pk-chat-full .pk-dock {
   position: absolute;
-  inset: 0;
+  inset: 0 0 0 var(--pk-rail-w);
   z-index: 4;
   width: auto;
   border-left: none;
   box-shadow: none;
 }
-.pk-railed.pk-chat-full :is(.pk-tabs, .pk-work) {
+.pk-railed.pk-chat-full .pk-work {
   visibility: hidden;
 }
 .pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
@@ -526,6 +543,17 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   grid-column: 1 / -1;
 }
 
+/* Team: a floor's "+ Agent" at the end of its header, and the card of someone just added (#243) */
+.pk-h .pk-add-agent {
+  margin-left: auto;
+}
+.pk-agent {
+  transition: box-shadow var(--ds-dur-slow) var(--ds-ease);
+}
+.pk-agent.pk-agent-new {
+  box-shadow: 0 0 0 var(--ds-border-strong) var(--ds-good-fill), var(--ds-shadow-2);
+}
+
 /* Approvals: the decisions as a list, the one picked beside it */
 .pk-split {
   display: grid;
@@ -591,4 +619,22 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   font-weight: 500;
   text-align: left;
   cursor: pointer;
+}
+
+/* the Team tab's ‹ Chat after a chat link (#151): pinned at the top of the page while it scrolls, over its top padding */
+.pk-back-bar {
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  margin: -12px -12px 0;
+  padding: 12px 12px 0;
+  background: var(--ds-surface-sunken);
+}
+.pk-railed .pk-back-bar {
+  top: -16px;
+  margin: -16px -20px 0;
+  padding: 16px 20px 0;
+}
+.pk-page:has(> .pk-back-bar) .pk-section {
+  scroll-margin-top: 56px;
 }

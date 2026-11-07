@@ -509,10 +509,14 @@ export abstract class SwarmSessions extends SwarmAgents {
     const kind = this.taskKind(a);
     const lab = this.lab.practice(repo.id, a.issueNumber ?? this.prRecord(a)?.issueNumber, a.prNumber, kind); // an experiment's variant wins over every default
     const practice = this.practicePrompt(a, repo, how.cli);
-    const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
+    const rec = a.task === 'fix' ? this.prRecord(a) : undefined;
+    // A conflict-only fix on the cheaper model (#256): Claude Code only, and never over an experiment's own model.
+    const cheap = rec?.cheapFix && (how.cli ?? 'claude') === 'claude' && !lab.model && !lab.effort ? rec.cheapFix : null;
+    if (rec && rec.cheapFix && !cheap) rec.cheapFix = null;
+    const model = cheap ? cheap.model : lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
     const system = [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n');
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(this.prRecord(a)) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
+    const run = this.spend.start(a.id, { kind, effort: (cheap?.effort || lab.effort) ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, cheap: !!cheap, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(rec) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
     this.chatOf(a)?.session(); // its first prompt is their chat's task card
     const active = (entries: LogEntry[]) => {
@@ -598,10 +602,11 @@ export abstract class SwarmSessions extends SwarmAgents {
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
     rt.currentTool = null;
-    a.costUsd += result.costUsd;
+    const turn = this.spend.perTurn(a.id, this.spend.sid(a.id), result);
+    a.costUsd += turn.costUsd;
     a.turns += result.turns;
-    recordCost(this.state.ops, repo.id, result.costUsd, Date.now());
-    void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...result, ok: false }, { stopped: false });
+    recordCost(this.state.ops, repo.id, turn.costUsd, Date.now());
+    void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...turn, ok: false }, { stopped: false });
     // The login its servers turned away is forgotten, so the Box reads as signed out until the manager signs it in again.
     await this.boxMachines.signOut(this.machineOf(a), cli).catch(() => undefined);
     this.holdForSignIn(a, cli, again, true);
@@ -615,7 +620,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     return costsRequest(this.spend.ledger.all(), days, repoId, (id) => this.state.repos.some((r) => r.id === id));
   }
 
-  protected async onFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
+  protected async onFinished(a: PersistedAgent, repo: PersistedRepo, ran: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return; // fired
     if (this.officeUpdate.cutOff.has(a.id)) return; // stopped for the office's update: recovered like after a restart
@@ -623,6 +628,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     rt.session = null;
     rt.currentTool = rt.blocked = null;
     const run = this.spend.take(a.id);
+    const result = this.spend.perTurn(a.id, run?.sessionId, ran); // a CLI kept or resumed across runs reports a running total (#254)
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
     a.turns += result.turns;

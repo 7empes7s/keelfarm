@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { effortHint, resolveEffort, sessionOutcome, wasteReason, type CostMerge, type CostRecord, type CostSession } from '../shared/costs.ts';
 import { REST_LABEL } from '../shared/startup.ts';
-import { CostLedger, costsRequest, costsView, floorSpend, parseLedger, pruneLedger, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
+import { ceoSpend, CostLedger, costsRequest, costsView, floorSpend, parseLedger, pruneLedger, repairRunningTotals, SessionCosts, taskEfforts, taskKindOf } from './costLedger.ts';
 import { sampleCosts } from './costSample.ts';
 import { DAY_MS, HOUR_MS, startOfDay } from './metrics.ts';
 import { seeded } from './journalSample.ts';
@@ -176,6 +176,19 @@ describe('costsView', () => {
     expect(v.top[0]).toMatchObject({ issue: 7, sessions: 6, qaRounds: 1 });
   });
 
+  it("gives the CEO's jobs a row of their own, whatever floor they were about, and says what the #254 repair took off (#254)", () => {
+    const ceo = { agentId: 'ceo', agent: 'Morgan', issue: null, pr: null, outcome: 'ceo-acted' as const };
+    const records = [session({ usd: 2 }), session({ ...ceo, kind: 'ceo-chat', repoId: '', usd: 0.5 }), session({ ...ceo, at: TODAY + 2 * HOUR_MS, kind: 'ceo-followup', usd: 0.3, total: 18.3, corrected: 18 }), merge()];
+    const v = costsView(records, { now: NOW, days: 1 });
+    expect(v.floors.map((f) => [f.repoId, f.usd, f.merges])).toEqual([
+      ['', 0.8, 0],
+      ['acme/shop', 2, 1],
+    ]);
+    expect(v.total.usd).toBe(2.8);
+    expect(v.corrected).toEqual({ usd: 18, before: TODAY + 2 * HOUR_MS });
+    expect(costsView([session()], { now: NOW, days: 1 }).corrected).toBeUndefined();
+  });
+
   it('averages each kind of task at each effort', () => {
     const records = [session({ kind: 'qa', usd: 1, effort: 'medium' }), session({ kind: 'qa', usd: 3, effort: 'medium' }), session({ kind: 'qa', usd: 0.5, effort: 'low' })];
     const [qa] = costsView(records, { now: NOW, days: 7 }).kinds;
@@ -192,6 +205,53 @@ describe('floorSpend (company_status)', () => {
     const records = [session({ at: TODAY - 3 * DAY_MS, usd: 6 }), merge({ at: TODAY - 3 * DAY_MS }), session({ usd: 2, outcome: 'no-pr' }), session({ at: TODAY - 9 * DAY_MS, usd: 50 })];
     expect(floorSpend(records, 'acme/shop', NOW)).toEqual({ costToday: 2, costPerMerge: 8, wasteToday: 2 });
     expect(floorSpend(records, 'acme/api', NOW)).toEqual({ costToday: 0, costPerMerge: null, wasteToday: 0 });
+  });
+
+  it("keeps the CEO's jobs out of a floor's spend: they are ceoSpend's row (#254)", () => {
+    const records = [session({ usd: 2 }), session({ kind: 'ceo-review', usd: 5, outcome: 'ceo-idle' }), session({ repoId: '', kind: 'ceo-chat', usd: 1, at: TODAY - 2 * DAY_MS })];
+    expect(floorSpend(records, 'acme/shop', NOW)).toEqual({ costToday: 2, costPerMerge: null, wasteToday: 0 });
+    expect(ceoSpend(records, NOW)).toEqual({ costToday: 5, cost7d: 6 });
+  });
+});
+
+describe('repairRunningTotals (#254)', () => {
+  const ceo = (usd: number, h: number, o: Partial<CostSession> = {}) => session({ agentId: 'ceo', agent: 'Morgan', repoId: '', kind: 'ceo-chat', issue: null, pr: null, outcome: 'ceo-acted', usd, at: TODAY + h * 60_000, ...o });
+  const usd = (rs: CostRecord[]) => rs.map((r) => (r.type === 'session' ? r.usd : null));
+
+  it("turns the CEO's rising running totals into each run's part; a drop is a new session; other lines stay", () => {
+    const records = [ceo(18.0421, 1, { kind: 'ceo-review' }), session({ usd: 3, at: TODAY + 90_000 }), ceo(18.3575, 2, { kind: 'ceo-followup' }), ceo(18.6829, 3), ceo(22.9256, 4), ceo(0.8508, 5), ceo(1.1143, 6), merge()];
+    const r = repairRunningTotals(records);
+    expect(usd(r.records)).toEqual([18.0421, 3, 0.3154, 0.3254, 4.2427, 0.8508, 0.2635, null]);
+    expect(r.usd).toBeCloseTo(18.0421 + 18.3575 + 18.6829 + 0.8508, 2);
+    expect(r.before).toBe(TODAY + 6 * 60_000);
+    expect((r.records[2] as CostSession).total).toBe(18.3575);
+    expect((r.records[2] as CostSession).corrected).toBe(18.0421);
+    expect(r.records[1]).toBe(records[1]);
+  });
+
+  it('changes nothing the second time, nor lines already booked per run', () => {
+    const once = repairRunningTotals([ceo(18, 1), ceo(18.5, 2), ceo(2, 3, { sid: 's', total: 30 })]).records;
+    const twice = repairRunningTotals(once);
+    expect(twice.records).toEqual(once);
+    expect(twice.before).toBeNull();
+    expect(usd(once)).toEqual([18, 0.5, 2]);
+  });
+
+  it('repairs the ledger file once on load, and a later CEO run on that session books only its part', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'costs-'));
+    const file = path.join(dir, 'costs.jsonl');
+    await fs.writeFile(file, [ceo(18.04, 1), ceo(18.36, 2), ceo(18.68, 3)].map((r) => JSON.stringify(r) + '\n').join(''));
+    const ledger = new CostLedger(file, () => NOW);
+    await ledger.load();
+    const repaired = await fs.readFile(file, 'utf8');
+    expect(usd(parseLedger(repaired))).toEqual([18.04, 0.32, 0.32]);
+    await new CostLedger(file, () => NOW).load();
+    expect(await fs.readFile(file, 'utf8')).toBe(repaired);
+    // The kept session's next run, its id known only now: it carries on from the repaired line's total.
+    const spend = new SessionCosts(ledger, () => false);
+    expect(spend.perTurn('ceo', 'sess-1', { costUsd: 19.1 }).costUsd).toBe(0.42);
+    expect(spend.perTurn('ceo', 'sess-1', { costUsd: 19.6 }).costUsd).toBe(0.5);
+    await fs.rm(dir, { recursive: true, force: true });
   });
 });
 
@@ -308,6 +368,26 @@ describe('SessionCosts', () => {
     void spend.record(agent, 'acme/shop', run, 'fix-checks', ok, { stopped: false });
     void spend.record(agent, 'acme/shop', spend.take('a1'), 'issue', ok, { stopped: false });
     expect(lines.map((l) => l.cause)).toEqual(['spec-missing', 'outage', undefined]);
+  });
+
+  it("books a CLI session's running total as each run's part, by session, and remembers it through a restart (#254)", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'costs-'));
+    const file = path.join(dir, 'costs.jsonl');
+    const ledger = new CostLedger(file, () => NOW);
+    const spend = new SessionCosts(ledger, () => false);
+    const parts = [18.04, 18.36, 18.68, 22.9, 0.85].map((total) => spend.perTurn('ceo', 'kept', { costUsd: total, ok: true }));
+    expect(parts.map((p) => p.costUsd)).toEqual([18.04, 0.32, 0.32, 4.22, 0.85]);
+    expect(spend.perTurn('a1', null, { costUsd: 3 })).toEqual({ costUsd: 3 }); // a single-result session is its own cost
+    expect(spend.perTurn('a1', 'other', { costUsd: 3 }).costUsd).toBe(3); // a session never seen books its total
+    spend.start('ceo', { kind: 'ceo-chat', effort: 'high', model: 'm', startedAt: NOW, round: null, sessionId: 'kept' });
+    expect(spend.sid('ceo')).toBe('kept');
+    await spend.record({ ...agent, id: 'ceo' }, '', spend.take('ceo'), 'ceo-chat', spend.perTurn('ceo', 'kept', { costUsd: 1.5, ok: true }), { stopped: false });
+    const line = parseLedger(await fs.readFile(file, 'utf8'))[0] as CostSession;
+    expect(line).toMatchObject({ usd: 0.65, sid: 'kept', total: 1.5 });
+    const after = new CostLedger(file, () => NOW);
+    await after.load();
+    expect(new SessionCosts(after, () => false).perTurn('ceo', 'kept', { costUsd: 2 }).costUsd).toBe(0.5);
+    await fs.rm(dir, { recursive: true, force: true });
   });
 
   it('marks the session the watchdog stopped, and counts the CEO’s acts once a promise settles', async () => {

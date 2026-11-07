@@ -31,21 +31,48 @@ calling ElevenLabs until you enter a new key.
 
 ## Model and cost
 
-The default model is **`eleven_flash_v2_5`** (Flash v2.5): ElevenLabs' lowest-latency model (~75 ms before network
-time), 32 languages, and half the price per character of Multilingual v2. Other models you can set:
+Settings → Voice → **Model** shows each model with its API price per 1,000 characters. A new office starts on
+**`eleven_v4_turbo`**; an office set up before keeps the model it saved (Flash v2.5 was the old default).
 
-| Model | Why |
-| --- | --- |
-| `eleven_flash_v2_5` (default) | fastest and cheapest; plenty for short updates |
-| `eleven_v4_turbo` | newer and more expressive, still real-time (~100 ms) |
-| `eleven_multilingual_v2`, `eleven_v4` | highest quality; slower and pricier |
+| Model | Price / 1,000 chars | Why |
+| --- | --- | --- |
+| `eleven_v4_turbo` (new offices) | $0.04 | Eleven v4's real-time model (~100–150 ms): expressive, inline audio tags such as `[laughs]`, `[sighs]`, `[whispers]` |
+| `eleven_v4` | $0.08 | the richest delivery, up to 10,000 characters a request; slower |
+| `eleven_flash_v2_5` | $0.04 | fastest (~75 ms), plain; plenty for short updates |
+| `eleven_multilingual_v2` | $0.08 | older high-quality model |
 
-What a message costs: on ElevenLabs' API pricing, Flash costs about **$0.04 per 1,000 characters** (Multilingual v2
-and v3: $0.08). A typical CEO update is 300–800 characters of speech once markdown, emoji and links are stripped,
+Eleven v4 and v4 Turbo launched on 28 September 2026 ([blog](https://elevenlabs.io/blog/eleven-v4),
+[models](https://elevenlabs.io/docs/models)); v4 prices from [OpenRouter](https://openrouter.ai/elevenlabs/eleven-v4).
+
+What a message costs: Flash and v4 Turbo cost about **$0.04 per 1,000 characters** (Multilingual v2 and v4: $0.08). A typical CEO update is 300–800 characters of speech once markdown, emoji and links are stripped,
 so about **1–3 cents**; the office never speaks more than about 1,500 characters of one message (about 6 cents). On a
 subscription plan the same text uses credits from your monthly allowance instead. Each message is synthesized once and
 cached (`<SWARM_HOME>/voice/`, at most 200 clips, kept 7 days by default), so replaying it is free. The settings' **Test** button
 speaks one short line (about 60 characters) and caches it too.
+
+## Speed
+
+Settings → Voice → **Speed**: 0.7× to 1.2× in steps of 0.05, 1× by default. ElevenLabs gets it as
+`voice_settings.speed` on every clip ("available for all voices and all models",
+[help centre](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/can-i-change-the-pace-of-the-voice.md));
+note that ElevenLabs' [Eleven v4 page](https://elevenlabs.io/docs/overview/capabilities/text-to-speech/eleven-v4) says
+v4 has no Speed slider, so a v4 voice may keep its own pace. The speed is part of a clip's cache name, so a new speed
+makes new clips. The browser's voice uses the same number as its rate.
+
+## Favourites, the newest voices and a voice for every agent
+
+Every voice picker (Settings → Voice, and each profile: agent window → Profile) has a search, a star on each voice and
+a preview. Starred voices (`settings.voice.favourites`, ids only, at most 50) come first everywhere, then the
+**Eleven v4** voices, then the shortlist below, then the rest. The office knows a v4 voice from ElevenLabs' own
+metadata in the voice list (a voice whose `high_quality_base_model_ids` or `verified_languages` name an `eleven_v4`
+model), rather than a hard-coded list of the 21 voices v4 shipped with: ElevenLabs' docs don't publish their ids.
+
+Each agent has a voice of their own (`voiceId` / `voiceName` on the agent). A new agent gets one by themselves, from
+the favourites, else the v4 voices, else the shortlist, one nobody on their floor has while there are enough; so does
+everyone still without one when a key is saved or ElevenLabs is turned on. Change it in their profile, or tap
+**Shuffle** for another. The CEO's profile shows the office voice (`settings.voice.voiceId`): it is the one that reads
+messages aloud and talks in voice mode, so changing it there or in Settings → Voice changes both. The pickers show
+only while ElevenLabs is on with a key; otherwise the profile says so, with a button to Settings → Voice.
 
 ## Shortlisted voices
 
@@ -53,7 +80,7 @@ ElevenLabs' old Default voices (Rachel, Sarah, George, …) **expire on 31 Decem
 March 2026 never had them. The shortlist is therefore taken from the new voices ElevenLabs recommends as their
 replacements, which stay usable for good. They're in the Voice Library and can be used by id without saving them; save
 one to **My Voices** to see it on elevenlabs.io too. The office marks these `recommended` in the voice list and shows
-them first, followed by the voices on your account.
+them as **Recommended**, after your favourites and the v4 voices and before the rest of your account's voices.
 
 | Voice | Id | Why it suits a calm, friendly CEO |
 | --- | --- | --- |
@@ -132,7 +159,8 @@ leaving it in the box; letting go of a hold sends it too.
 touching anything: when the CEO's reply has been read aloud, a soft chime plays and the phone listens for up to 8 s with
 a pulsing 🎙️. Say something and it's sent once you stop; say nothing and it closes (with a falling chime). **Esc** or
 **M** closes it straight away. It needs the CEO's voice on, the phone open on the chat in the tab you're looking at, and
-an empty message box; it never asks for the microphone on its own (turning it on asks, from that click).
+an empty message box; it never asks for the microphone on its own (turning it on asks, from that click). For a
+conversation that goes on whatever is on screen, on a desktop too, call the CEO instead ([Calling the CEO](#calling-the-ceo)).
 
 Manners: the browser asks for the microphone the first time you press the 🎙️ (or turn hands-free on), and a refusal
 is explained in one line. The mic is only ever on while you hold the button or V, or while the pulsing 🎙️ shows
@@ -147,12 +175,90 @@ hears (with ElevenLabs, `say()` marks speech for the silence detector). The rule
 `client/src/ui/micSilence.ts` (when you've stopped talking), `handsFree.ts`, `micKeys.ts`, `micText.ts` and
 `shared/clipLimits.ts`.
 
+## Calling the CEO
+
+**Call** (the 📞 in the CEO chat's toolbar) starts a voice call with the CEO, on a phone, a desktop or in pocket mode.
+You just talk; the CEO answers aloud; you talk again. Talking while the CEO speaks interrupts it. The call goes on
+whatever you open: panels, sheets, Settings, other pages, the chat closed, the 3D/pocket switch.
+
+- **Phone and home-screen app:** a call screen like a phone call: the CEO's orb (a ring while it talks, green while
+  it listens), the name, a call timer, live captions, and **Mute**, **Speaker**, **Pause**, **Skip**, **Captions** and
+  a red **End**. ⌄ folds it into a pill at the top while you use the app; tap the pill to come back. 💬 opens the chat
+  without ending the call.
+- **Desktop and tablet:** the chat tucks away and a CEO orb follows you across every page. Drag it to any corner (the
+  top ones sit below the panels' headers, so it never covers a ✕). Click it for the call card with the same controls
+  and **Open chat**.
+- **Keys** (not while typing or in a terminal): **Space** pauses or resumes (or talks, in tap-to-talk), **→** skips
+  to the next sentence, **M** mutes the mic (not the office), **Esc** ends the call from the call screen or card (anywhere
+else it still closes what's open).
+- **Mute** turns the mic off; the CEO still talks. **Pause** stops the CEO's voice where it is and turns the mic off;
+  **Resume** carries on from there (the browser's voice starts that sentence again). **Skip** moves to the next
+  sentence. **Speaker** off reads at about a third of the volume, like a phone's earpiece. **End** hangs up and brings
+  the chat back, with every turn of the call in it.
+- **Turns:** the mic listens all through the call (with echo cancellation), with the same rules as hands-free (about
+  1.2 s of quiet ends your turn) but no chime each time. Talking over the CEO for about 0.3 s stops its voice at once
+  and becomes your next message; a cough, a short noise or "mm-hm" doesn't.
+- **Away:** leaving the tab or locking the phone puts the call on hold: the mic closes (it never records in the
+  background) and opens again when you're back. Closing the tab ends the call. The office's new client never loads
+  during a call (#216): it waits for **End**.
+- **Quiet during a call:** the office's cues, the merge gong, toasts, desktop notifications and Web Push / chat-app
+  notifications (on every device) wait. Each is still in the notifications list, and the toasts show when the call
+  ends. Only the CEO's voice reaches you, so urgent things come from the CEO.
+- **Voices:** the CEO speaks in the voice from Settings → Voice; with Speak messages off, a call still speaks, in the
+  browser's voice. It listens with Talk instead of type's provider, or the browser's recognition when that's off.
+- **No mic:** when the mic is refused or the browser can't listen, the call says why in one line and falls back to
+  tap-to-talk: a **Talk** button (or Space) for each turn.
+
+Nothing else changed: the 🎧 hands-free switch, hold/tap/V to talk, saved clips, ▶ replay and the dips work as
+before, and with no call on nothing opens the mic or starts reading by itself unless those settings say so.
+
+`window.__swarmCall` is the call's probe: `id` (the session, the same for the whole call), `phase` (`idle`,
+`connecting`, `listening`, `thinking`, `speaking`, `ended`), `state` (also `muted`, `paused`, `away`, `tapToTalk`,
+`reply`, `held` notifications, `heard`, `minimised`), `position()` (the reply being read: `{ id, sentence, ms }`),
+`start()` and `end()`. The demo office calls with the fake mic (`__swarmMic.fake()` and `say()`) and the demo's
+voice; its clips last about as long as reading the message would (up to 6 s), so there's time to pause, skip and
+talk over them. The rules are pure and tested: `client/src/ui/voiceCall.ts` (the session's state machine, barge-in,
+sentences); `voiceCallEngine.ts` runs it and `CallScreens.tsx` draws it.
+
+## How a voice call behaves
+
+What the call is modelled on: ChatGPT Voice, Claude's voice mode and ElevenLabs' conversational agents, from their
+public help pages (read in November 2026; OpenAI's pages were read through search extracts, as they refuse automated
+fetches).
+
+| | ChatGPT Voice | Claude voice mode | ElevenLabs | The office |
+| --- | --- | --- | --- | --- |
+| Entering and leaving | the Voice icon; the exit icon ends it [1] | the sound-wave button; it stays in voice mode until **Stop** [3] | the app starts and ends a session | **Call** in the chat; only **End** (or closing the tab) ends it |
+| Where it shows | inside the chat by default, or a separate full-screen orb (Settings → Voice → Separate Mode) [2] | in the chat | the app's own | a call screen on phones, an orb and card on desktops; the chat stays one tap away |
+| Turn-taking | listens and speaks at once; how it decides you're done isn't documented [2] | "listens continuously and responds to natural pauses"; push-to-talk as an option [3] | eagerness: eager, normal or patient; "take turn after silence" 1-30 s [5] | ~1.2 s of quiet ends your turn (micSilence's hands-free rules); tap-to-talk without a mic |
+| Interrupting | speak while it talks; noise or other voices can interrupt by mistake [1] | "just start talking. Claude will stop and listen" [3] | speaking mid-response cancels the reply [4]; interruptions can be turned off [5] | ~0.3 s of real speech stops the voice; noise and "mm-hm" don't |
+| Mute | a mic button bottom-left [1] | not documented | not documented | **Mute** or M: mic off, the call and the CEO's voice go on |
+| Switching apps, locking | goes on in the background if Background Conversations is on; Live Activity on the lock screen [1] | not documented | not documented | the call stays on across every screen; a hidden tab or locked phone stops listening and resumes on return |
+| Notifications during a call | not documented | not documented | not documented | held: in the list, toasts after the call, no pushes; the CEO says what matters |
+| Pause, skip | not documented | not documented | a "skip turn" tool lets the agent wait when you ask for a second [6] | **Pause**/**Resume** where it was, **Skip** a sentence |
+| Captions, transcript | a transcript lands in the chat afterwards [7] | transcripts saved in the chat history [3] | not documented | live captions on the call screen; every turn is a chat message |
+
+Choices that follow from it: the call never depends on what's on screen (both apps keep a voice session going outside
+the chat); barge-in needs a few hundred ms of speech that isn't a backchannel, because OpenAI warns that noise
+interrupts by mistake [1]; nothing listens in a background tab, since a browser tab can't show a lock-screen indicator
+the way ChatGPT's Live Activity does [1]; and as none of them say what happens to notifications, the office keeps them
+for after the call so nothing talks over the CEO.
+
+1. OpenAI, Voice Mode FAQ: https://help.openai.com/en/articles/8400625-voice-mode-faq
+2. OpenAI, ChatGPT release notes (voice in the chat, Nov 2025; GPT-Live-1, Jul 2026): https://help.openai.com/en/articles/6825453-chatgpt-release-notes
+3. Anthropic, Use voice mode: https://support.claude.com/en/articles/11101966-use-voice-mode
+4. ElevenLabs, Speech Engine: https://elevenlabs.io/docs/overview/capabilities/speech-engine
+5. ElevenLabs, Conversation flow (turn eagerness, interruptions, timeouts): https://elevenlabs.io/docs/eleven-agents/customization/conversation-flow
+6. ElevenLabs, Skip turn: https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/skip-turn
+7. OpenAI, ChatGPT Voice: https://help.openai.com/en/articles/20001274-chatgpt-voice
+
 ## API
 
 | Route | What it does |
 | --- | --- |
 | `PUT /api/voice/key` `{ key }` | checks and saves the key; `""` removes it. 400 if ElevenLabs rejects it |
-| `GET /api/voice/voices` | `[{ id, name, category, labels: { accent, gender, age, description, use_case }, previewUrl, recommended }]`, cached 10 minutes; 409 without a key |
+| `GET /api/voice/voices` | `[{ id, name, category, labels: { accent, gender, age, description, use_case }, previewUrl, recommended, v4? }]`, cached 10 minutes; 409 without a key |
+| `PATCH /api/agents/:id` `{ voiceId, voiceName }` | an agent's voice; `""` clears it. 400 for the CEO (theirs is `settings.voice`) or a bad id |
 | `GET /api/voice/messages/:id` | `audio/mpeg` for a CEO message (or an office note with Speak office notes on); 404 when the voice isn't ElevenLabs or there's no such message, 502 when ElevenLabs fails |
 | `GET /api/voice/messages/:id?cached=1&part=N` | the phone's ▶: part N of the message's saved clips (`X-Voice-Parts` says how many), or 404 when none is saved. Never calls ElevenLabs |
 | `DELETE /api/voice/cache` | deletes every saved clip |
@@ -161,12 +267,12 @@ hears (with ElevenLabs, `say()` marks speech for the silence detector). The rule
 | `GET /api/voice/standup?n=3&part=morning` | the CEO's line at a stand-up in the 3D office ("Morning team, three new features today!"; `part` is `morning`, `afternoon` or `evening`), made once per wording and cached; 404 when the voice isn't ElevenLabs |
 
 Settings travel in `settings.voice` (`PATCH /api/settings`): `{ provider: 'off' | 'browser' | 'elevenlabs', voiceId,
-voiceName, model, speakOffice, keepDays }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
+voiceName, model, speakOffice, keepDays, speed, favourites }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
 'elevenlabs', autoSend, handsFree }`. The snapshot has `voiceKeySet`, `voiceKeyHint` and `voiceCache`
 (`{ clips, bytes, saved }`, `saved` being the message ids the ▶ can replay); a `voiceKey` event follows every key change
 and a `voiceCache` event every change to the cache. A phone message's `voice` says who read it when it arrived. One clip is made at a time (20 s timeout); requests for a clip that's being made share that call.
 
 The demo office (`--demo`) fakes all of it with no network: any key except one containing "bad" is accepted, there are
-three voices, and every message is a short generated chime (a WAV), pitched by the voice, cached and replayed like a
+nine voices (six of them v4, from `server/demoVoices.ts`), every message is a short generated chime (a WAV), pitched by the voice, cached and replayed like a
 real clip. Its Speech to Text hears "What's everyone working on?" in any recording. The server logs `voice: made a new
 clip …` for every clip it makes and `voice: transcribed a 2.4 s clip (30 KB)` for every transcription (never the words).

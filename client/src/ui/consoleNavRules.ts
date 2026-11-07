@@ -66,7 +66,7 @@ export const SECTIONS: Section[] = [
   { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
   { id: 'map', group: 'company', icon: 'map', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
   { id: 'ceo', group: 'ceo', icon: 'brain', label: 'The CEO', find: ['Message the CEO', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
-  { id: 'ceo-settings', group: 'ceo', icon: 'sliders-horizontal', label: 'CEO settings', find: ['Team changes from the CEO', 'I approve each one', 'Apply straight away', 'Company review every', 'Research time budget', 'Follow-ups', 'Staying awake, waits and consults'] },
+  { id: 'ceo-settings', group: 'ceo', icon: 'sliders-horizontal', label: 'CEO settings', find: ['Team changes from the CEO', 'I approve each one', 'Apply straight away', 'Company review every', 'Model per job', 'Research time budget', 'Follow-ups', 'Staying awake, waits and consults'] },
   { id: 'tools', group: 'ceo', icon: 'toolbox', label: 'Tools & skills', find: ['Plugins', 'Skills', 'MCP servers', 'Switches for', 'Lean sessions'] },
   { id: 'history', group: 'history', icon: 'scroll-text', label: 'Sessions', find: ['Session history', 'Transcripts', 'Daily log entries'] },
   { id: 'daily-log', group: 'history', icon: 'archive', label: 'Daily log', find: ['Daily log folder', 'Keep transcripts for', 'History storage'] },
@@ -78,7 +78,7 @@ export const SECTIONS: Section[] = [
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
   { id: 'accounts', group: 'settings', icon: 'key-round', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
-  { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text'] },
+  { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text', 'Speed', 'Favourite voices', 'Model'] },
   { id: 'outside', group: 'settings', icon: 'cloud-sun-rain', label: 'Weather & world', find: ['Weather', 'Your city', 'Keep it calm', 'World events'] },
   { id: 'notifications', group: 'settings', icon: 'bell', label: 'Notifications', find: ['Push to my devices', 'Desktop notifications', 'Tell me when', 'Office address for links', 'Telegram', 'Channels'] },
   { id: 'themes', group: 'settings', icon: 'party-popper', label: 'Themes', find: ['Holiday themes', 'Theme to show', 'Birthday'] },
@@ -91,7 +91,12 @@ export type Where = 'office' | 'pocket';
 
 const shows = (s: Section, where: Where) => !s.only || s.only === where;
 
-export const sectionsIn = (group: GroupId, where: Where) => SECTIONS.filter((s) => s.group === group && shows(s, where));
+/** Sections shown in a second tab too (#246): Team sits beside Agents under Settings, where the manager looks for it. Same section, opened in that tab. */
+const ALSO: { id: SectionId; group: GroupId; after: SectionId }[] = [{ id: 'team', group: 'settings', after: 'agents' }];
+const PLACED = ALSO.map(({ id, group, after }) => ({ section: { ...SECTIONS.find((s) => s.id === id)!, group }, after }));
+
+export const sectionsIn = (group: GroupId, where: Where) =>
+  SECTIONS.filter((s) => s.group === group && shows(s, where)).flatMap((s) => [s, ...PLACED.filter((p) => p.section.group === group && p.after === s.id && shows(p.section, where)).map((p) => p.section)]);
 
 /** The sections row under the top tabs (#199): a group's sections, or none when it has only one. */
 export const sectionRow = (group: GroupId, where: Where) => {
@@ -129,8 +134,7 @@ export function resolve(id: string | undefined, where: Where, remembered: Partia
 /** `#settings/cloud-agents` → that section; anything else → undefined. */
 export function parseHash(hash: string, where: Where): Section | undefined {
   const [group, section] = hash.replace(/^#/, '').split('/');
-  const s = section ? sectionById(section) : undefined;
-  return s && s.group === group && shows(s, where) ? s : undefined;
+  return section && isGroup(group) ? sectionsIn(group, where).find((s) => s.id === section) : undefined;
 }
 
 export const hashFor = (s: Section) => `#${s.group}/${s.id}`;

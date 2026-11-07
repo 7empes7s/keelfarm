@@ -149,6 +149,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     this.save();
     this.broadcast({ type: 'agent', agent: this.agentView(agent, false) });
     if (host === 'box') this.bringUpBox(agent);
+    void this.voiceEveryone();
     setTimeout(() => this.schedule(), 200);
     return this.agentView(agent, true);
   }
@@ -475,8 +476,9 @@ export abstract class SwarmAgents extends SwarmMerge {
     return !this.clis.length || this.clis.some((c) => c.id === cli && c.installed);
   }
 
-  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown; account?: unknown }) {
+  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown; account?: unknown; voiceId?: unknown; voiceName?: unknown }) {
     const a = this.agent(id);
+    if (patch.voiceId !== undefined) this.setAgentVoice(a, patch);
     if (patch.account !== undefined) {
       a.account = this.accountBinding(patch.account);
       this.accounts.emit();
@@ -764,7 +766,9 @@ export abstract class SwarmAgents extends SwarmMerge {
   /** A message to them, as a bubble in their chat. */
   protected chatSay(a: PersistedAgent, text: string, who: string) {
     const item = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: scrub(text, this.secrets()), who });
-    if (item) this.outbox.chat(a.id, [item]);
+    if (!item) return;
+    this.outbox.chat(a.id, [item]);
+    this.ceoChat.noteMessage(item.id); // a CEO tool's message: its action card opens the chat here (#215)
   }
 
   /** POST /api/agents/:id/react: the manager's reaction on an item of their chat; one that asks for something is typed into their running session as a short note. */

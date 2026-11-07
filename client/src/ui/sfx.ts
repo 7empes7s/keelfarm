@@ -44,6 +44,7 @@ const DUCKED = 10 ** (-8 / 20);
 const MIC_DUCKED = 10 ** (-15 / 20); // what's left of a message being read while the mic listens
 let speakingDuck = false; // a message is being read aloud
 let micOpen = false;
+let callQuiet = false; // a voice call is on: cues wait for its end, the gong stays quiet
 
 const masterLevel = () => (prefs.muted ? 0 : sliderGain(prefs.volume));
 
@@ -185,6 +186,13 @@ export function setMicOpen(on: boolean) {
   if (micOpen === on) return;
   micOpen = on;
   applyDuck();
+  if (!on && pending && !timer) timer = setTimeout(flush, GATHER_MS);
+}
+
+/** A voice call started or ended (voiceCallEngine.ts): cues wait until it ends, as they do for the 🎙. */
+export function setCallQuiet(on: boolean) {
+  if (callQuiet === on) return;
+  callQuiet = on;
   if (!on && pending && !timer) timer = setTimeout(flush, GATHER_MS);
 }
 
@@ -637,7 +645,7 @@ const GONG_PARTIALS: [number, number, number][] = [
  * plays it quieter (the time-lapse's merges).
  */
 export function gong(level = 1) {
-  if (micOpen || performance.now() - lastGong < 1000) return; // never into the 🎙
+  if (micOpen || callQuiet || performance.now() - lastGong < 1000) return; // never into the 🎙 or a call
   lastGong = performance.now();
   const o = { name: 'gong', group: 'alerts' } as const;
   const k = Math.max(0, Math.min(1, level));
@@ -815,7 +823,7 @@ const better = (a: Cue | null, b: Cue) => (a && CUES[a].rank >= CUES[b].rank ? a
 /** Play an event cue, rate-limited: bursts collapse into their most important cue. While the 🎙 listens it waits. */
 export function cue(c: Cue) {
   const now = performance.now();
-  if (micOpen) {
+  if (micOpen || callQuiet) {
     pending = better(pending, c);
     return;
   }
@@ -828,7 +836,7 @@ export function cue(c: Cue) {
 
 function flush() {
   timer = null;
-  if (micOpen) return; // played when the mic closes
+  if (micOpen || callQuiet) return; // played when the mic closes or the call ends
   const c = pending;
   pending = null;
   if (!c) return;

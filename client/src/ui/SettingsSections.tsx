@@ -3,8 +3,10 @@
 // own in the side menu (consoleNavRules.ts); the other sections are their own components.
 import { api } from '../api';
 import { useStore } from '../store';
-import { DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
-import { CLAUDE_MODELS } from '../../../shared/models';
+import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
+import { CLAUDE_MODELS, modelLabel } from '../../../shared/models';
+import { conflictFixSettings } from '../../../shared/conflicts';
+import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
 import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
 import { MemoryFields } from './HealthStrip';
@@ -68,6 +70,7 @@ export function AgentsSettings() {
         </select>
       </label>
       <EffortByKind />
+      <ConflictFixFields />
       <p className="muted small">
         {terminal
           ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
@@ -114,6 +117,62 @@ export function AgentsSettings() {
   );
 }
 
+/** Settings → Agents → Conflict-only fixes (#256): a cheaper model for fix rounds whose only cause is a merge conflict. */
+function ConflictFixFields() {
+  const every = useStore((s) => s.settings.everyProject);
+  const fix = conflictFixSettings(every.conflictFix, {});
+  const change = (patch: Partial<typeof fix>) => set({ everyProject: { ...every, conflictFix: { ...fix, ...patch } } });
+  return (
+    <div>
+      <div className="small">
+        <b>Conflict-only fixes</b>
+      </div>
+      <label className="field" htmlFor="conflict-fix-model">
+        <span>Model</span>
+        <ModelPicker id="conflict-fix-model" cli="claude" value={fix.model} resolvedDefault="" defaultLabel="The agent's own model (off)" label="Conflict-only fixes: model" onChange={(model) => change({ model })} />
+      </label>
+      <label className="field">
+        <span>Effort</span>
+        <select value={fix.effort} onChange={(e) => change({ effort: e.target.value as EffortLevel | '' })}>
+          <option value="">The agent's own</option>
+          {EFFORTS.map((x) => (
+            <option key={x} value={x}>
+              {x}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">
+        A fix round that only has to merge the base branch in (no QA findings, no red checks) runs on this model. A PR touching office logic ({fix.strongFiles.join(', ') || 'none listed'}) keeps the agent's own model, and so does the round after a cheap one.
+      </p>
+    </div>
+  );
+}
+
+const JOB_NAMES: Record<CeoModelKind, string> = { chat: 'Chat with you', plan: 'Planning', research: 'Research', review: 'Company reviews', followup: 'Follow-ups', triage: 'Stuck PR triage' };
+
+/** CEO settings → Model per job (#331): routine jobs on a cheaper model, the rest on the CEO's own. */
+function CeoModelsByJob() {
+  const awake = useStore((s) => s.settings.ceoAwake);
+  const models = awake.models;
+  const ceoModel = useStore((s) => s.agents[CEO_ID]?.model) || CLAUDE_MODELS[0];
+  const same = `Same as the CEO model (${modelLabel(ceoModel)})`;
+  return (
+    <div>
+      <div className="small">
+        <b>Model per job</b>
+      </div>
+      {CEO_MODEL_KINDS.map((kind) => (
+        <label key={kind} className="field" htmlFor={`ceo-model-${kind}`}>
+          <span>{JOB_NAMES[kind]}</span>
+          <ModelPicker id={`ceo-model-${kind}`} cli="claude" value={models[kind]} resolvedDefault={ceoModel} defaultLabel={same} label={`${JOB_NAMES[kind]}: model`} onChange={(m) => set({ ceoAwake: { ...awake, models: { ...models, [kind]: m } } })} />
+        </label>
+      ))}
+      <p className="muted small">A job starts a fresh session when its model differs from the last one's. If a model isn't available, the job runs again on the CEO model and the office chat says so.</p>
+    </div>
+  );
+}
+
 export function CeoSettings() {
   const settings = useStore((s) => s.settings);
   return (
@@ -144,6 +203,7 @@ export function CeoSettings() {
         <input type="number" min={0} max={1440} defaultValue={settings.ceoHeartbeatMin} onBlur={(e) => set({ ceoHeartbeatMin: Number(e.target.value) })} />
       </label>
       <p className="muted small">A review checks team sizes, stuck PRs and floor profiles, and is skipped when nothing changed since the last one. It never files issues: new work only comes from you. The CEO's own model and effort are in The CEO.</p>
+      <CeoModelsByJob />
       <label className="field">
         <span>Research time budget (minutes)</span>
         <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />

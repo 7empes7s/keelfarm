@@ -28,6 +28,7 @@ import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
 import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
 import { claimVoice } from './ui/voiceClaim';
+import { callOn, callVoice, holdNote } from './ui/voiceCallStore';
 import { speakable } from './ui/voiceQueue';
 import { emitMerge, mergeBursts, recentQaRecord, rememberQa } from './world/confetti';
 import { takeEmote, takePing, takePose, takeRoster } from './world/presence/presenceState';
@@ -42,7 +43,7 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); profile: with their Profile open (#205)
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; jump?: number; details?: 'now' | 'profile' | 'setup'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); jump: their chat item to scroll to; details: the details tab to open (#215); profile: with their Profile open (#205)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
@@ -285,7 +286,7 @@ export const useStore = create<State>((set, get) => ({
     mainPreviewIdleMin: 30,
     dailyLogDir: '',
     historyDays: 90,
-    voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },
+    voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7, speed: 1, favourites: [] },
     themes: { mode: 'auto', disabled: [], birthday: null },
     weather: DEFAULT_WEATHER,
     worldEvents: DEFAULT_WORLD_EVENTS,
@@ -583,8 +584,8 @@ export const useStore = create<State>((set, get) => ({
         if (replay) break; // a replayed message is only shown on the phone
         const o = get().overlay;
         const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
-        // Read aloud, in this tab or another; the voice plays the chirp itself if it can't. Locked audio can't speak.
-        const speak = live && audioUnlocked() && speakable(ev.message, get().settings.voice, Date.now());
+        // Read aloud, in this tab or another (always in a voice call); the voice plays the chirp itself if it can't. Locked audio can't speak.
+        const speak = live && audioUnlocked() && speakable(ev.message, callVoice(get().settings.voice), Date.now());
         if (speak) {
           const arrived = Date.now();
           const wait = claimVoice(ev.message.id);
@@ -592,8 +593,7 @@ export const useStore = create<State>((set, get) => ({
         }
         // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
         if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
-        // Its toast is the office's notice (#107).
-        if (ev.message.from === 'ceo' && !reading && !speak) chirp();
+        if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
         break;
       }
       case 'ceoChat':
@@ -618,8 +618,8 @@ export const useStore = create<State>((set, get) => ({
         const n = noticeOf(ev);
         if (n && !replay) set({ notices: addNotice(get().notices, n, Date.now()) }); // the centre is live-only
         const o = get().overlay;
-        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read).
-        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat')) get().pushToast(ev.level, ev.text, n ?? undefined);
+        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read); a voice call holds it till its end.
+        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat') && !holdNote({ level: ev.level, text: ev.text, ...(n && { notice: n }) })) get().pushToast(ev.level, ev.text, n ?? undefined);
         break;
       }
       case 'noticesRead':
@@ -686,7 +686,7 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'notify':
         // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.
-        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false);
+        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false && !callOn());
         break;
       // Presence: the list is state; poses, emotes and pings go straight to the 3D view (world/presence/presence.ts).
       case 'visitors':
