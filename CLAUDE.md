@@ -135,8 +135,14 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `exec.ts`: `run` / `git` / `gh`: `execFile` without a shell, prompts disabled, `CommandError` with stderr.
 - `previews.ts`: one preview per floor: ports (6300 + floor), statuses, config validation; and the PR theatre's PR
   previews (`prTheatre.ts`: their slots, ports, eviction and idle stop, pure; `syncProxy.ts`: compare mode's synced scrolling).
+  `previewPids.ts`: the previews' processes in `<SWARM_HOME>/previews.json`, so a restart reclaims the office's own
+  leftovers and names anything else on a preview port (#225; the demo's `SWARM_DEMO_LEFTOVER=ours|foreign`, `demoLeftover.ts`).
   `previewGateway.ts`: previews through the office's own address at `/preview/<port>/` for other devices, with a
   service worker keeping the apps' root paths under it.
+- `portLanes.ts`: the live office's preview lanes (6300-6499), which a demo office refuses; each agent's port block,
+  put in their sessions' env (`SWARM_PORT`, `SWARM_PREVIEW_PORT`) so a demo office they start stays on it, and the lab's (#227).
+  `procSweep.ts`: nothing outlives its session: what listens from an ended session's worktree goes with its process
+  group, and every watchdog tick stops processes in machines' worktrees no live session owns (Linux, by cwd).
 - `qaShots.ts`: QA's screenshots of each PR's latest round, kept for the app viewer's QA panel.
 - `previewRunner.ts`: checks out, installs and runs a floor's app in its preview worktree; kills the process tree.
 - `tooling.ts`: Settings → Tools & skills' inventory: what a Claude Code session here loads (`claude plugin list --json`,

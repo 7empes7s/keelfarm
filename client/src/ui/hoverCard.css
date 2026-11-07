@@ -6,7 +6,7 @@
 
 .peek {
   position: fixed;
-  z-index: 1100; /* over every panel and sheet, the artifact viewer's 1000 included, as the chat's ref peek was */
+  z-index: var(--ds-z-popover); /* over every panel and sheet, the artifact viewer included, as the chat's ref peek was */
   color: var(--ds-text);
   font-family: var(--font);
   font-size: var(--ds-text-sm);
@@ -40,7 +40,7 @@
 .peek-scrim {
   position: fixed;
   inset: 0;
-  z-index: 1100;
+  z-index: var(--ds-z-popover);
   background: var(--ds-scrim);
 }
 .peek-sheet {

@@ -171,6 +171,11 @@
   gap: var(--ds-space-2);
   margin-bottom: var(--ds-space-2);
 }
+.app-merged {
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
 .older-prs {
   list-style: none;
   margin: var(--ds-space-2) 0 0;

@@ -1,6 +1,9 @@
+import path from 'node:path';
 import type { Backend } from './backend.ts';
-import { PORT, PR_PREVIEW_IDLE_MS, PREVIEW_PORT } from './config.ts';
+import { HOME_DIR, PORT, PR_PREVIEW_IDLE_MS, PREVIEW_PORT } from './config.ts';
 import { HttpError } from './httpError.ts';
+import { liveLaneRefusal } from './portLanes.ts';
+import { nextInLane, owned, portBusyText, PreviewPids, stillOurs, type PreviewPid, type ProcInfo } from './previewPids.ts';
 import { PREVIEW_BRANCH, PREVIEW_SLUG, portOpen, type PreviewHandle, type PreviewJob } from './previewRunner.ts';
 import { closedPrs, expired, freeSlot, leftoverPrDesks, mainExpired, mainKey, MAX_PR_PREVIEWS, onScreen, pickEviction, prBranch, prKey, prPortCandidates, prSlug, stopsAt, WATCH_MS, type PrRunInfo } from './prTheatre.ts';
 import { SyncProxies } from './syncProxy.ts';
@@ -11,6 +14,8 @@ import type { PreviewConfig, PreviewStatus, PreviewView, PrPreviewView, PullInfo
 // PR theatre: up to MAX_PR_PREVIEWS open PRs at once, each from a slot worktree of its own on its slot's ports.
 // Only the config is persisted; after a restart every preview reads 'stopped' and the PR previews are gone. A main
 // preview stops after its own idle time too, and one an agent's QA lab or fix session holds can't be stopped (#204).
+// Their processes are recorded in previews.json (previewPids.ts), so what an earlier run of the office left on a port
+// is reclaimed, and only something that isn't the office's makes a start fail (#225).
 
 /** What the previews need to know about a floor. */
 export interface PreviewFloor {
@@ -31,6 +36,8 @@ interface Run {
   error: string | null;
   log: string[];
   handle: PreviewHandle | null;
+  pid: number | null; // the app's process, recorded in previews.json while it runs
+  owner: ProcInfo | null; // what holds the port when that's why it didn't start
   gen: number; // bumped by every start / stop; callbacks from older runs are ignored
   viewedAt: number; // when a viewer last had it on screen (or it started)
 }
@@ -92,6 +99,7 @@ export class Previews {
   private hasDefault = new Map<string, boolean>(); // floor id -> package.json in its checkout
   private emitTimers = new Map<string, NodeJS.Timeout>();
   private sync = new SyncProxies();
+  private pids: PreviewPids;
 
   constructor(
     private backend: Backend,
@@ -108,13 +116,17 @@ export class Previews {
       mainIdleMs?(): number;
       /** The floors, for the sweep's main previews. */
       floors?(): PreviewFloor[];
+      /** Where the previews' processes are recorded (tests); default <SWARM_HOME>/previews.json. */
+      pidFile?: string;
     },
-  ) {}
+  ) {
+    this.pids = new PreviewPids(hooks.pidFile ?? path.join(HOME_DIR, 'previews.json'));
+  }
 
   private run(id: string): Run {
     let r = this.runs.get(id);
     if (!r) {
-      r = { status: 'stopped', port: null, ref: null, pr: null, commit: null, startedAt: null, error: null, log: [], handle: null, gen: 0, viewedAt: Date.now() };
+      r = { status: 'stopped', port: null, ref: null, pr: null, commit: null, startedAt: null, error: null, log: [], handle: null, pid: null, owner: null, gen: 0, viewedAt: Date.now() };
       this.runs.set(id, r);
     }
     return r;
@@ -125,12 +137,12 @@ export class Previews {
     return new Set([...this.runs.values(), ...this.prRuns.values()].filter((r) => r !== except && r.port && ACTIVE.includes(r.status)).map((r) => r.port!));
   }
 
-  /** The floor's reserved port: 6300 + floor, moved up by 100 while it clashes with the office or another preview. */
+  /** The floor's reserved port: 6300 + floor (or the one "Use another port" picked), moved up by 100 while it clashes with the office or another preview. */
   portFor(f: PreviewFloor): number {
     const active = this.runs.get(f.id);
     if (active?.port && ACTIVE.includes(active.status)) return active.port;
     const taken = this.takenPorts(active);
-    let p = PREVIEW_PORT + f.floor;
+    let p = this.pids.port(f.id) ?? PREVIEW_PORT + f.floor;
     while (forbidden(p) || taken.has(p)) p += 100;
     return p;
   }
@@ -153,6 +165,7 @@ export class Previews {
       logTail: (r?.log ?? []).slice(-LOG_VIEW),
       stopsAt: r ? stopsAt({ active: ACTIVE.includes(status), viewedAt: r.viewedAt, watched: this.shown.has(mainKey(f.id)), held: !!heldBy }, this.hooks.mainIdleMs?.() ?? 0) : null,
       heldBy,
+      portOwner: status === 'error' && r?.owner ? { pid: r.owner.pid, command: r.owner.command, startedAt: r.owner.startedAt } : null,
     };
   }
 
@@ -179,8 +192,11 @@ export class Previews {
     this.hooks.emit(f.id);
   }
 
-  /** Start the floor's preview on the default branch or an open PR, replacing whatever it is running now. */
-  async start(f: PreviewFloor, title: string, pr?: number | null): Promise<PreviewView> {
+  /**
+   * Start the floor's preview on the default branch or an open PR, replacing whatever it is running now. otherPort: move
+   * the floor to the next free port in its lane (remembered) because something else holds its own.
+   */
+  async start(f: PreviewFloor, title: string, pr?: number | null, otherPort = false): Promise<PreviewView> {
     if (pr !== undefined && pr !== null && (!Number.isInteger(pr) || pr <= 0)) throw new HttpError(400, `Invalid pull request number: ${pr}`);
     if (pr) await this.checkOpen(f, pr);
     const r = this.run(f.id);
@@ -189,25 +205,71 @@ export class Previews {
     await this.halt(f.fullName, r, PREVIEW_SLUG);
     if (gen !== r.gen) return this.view(f); // another start or a stop came in meanwhile
 
-    const port = this.portFor(f);
+    let port = this.portFor(f);
     const ref = pr ? `PR #${pr}` : f.defaultBranch;
-    Object.assign(r, { port, ref, pr: pr ?? null, commit: null, startedAt: Date.now(), viewedAt: Date.now(), error: null, log: [] });
-    if (await portOpen(port)) {
+    Object.assign(r, { port, ref, pr: pr ?? null, commit: null, startedAt: Date.now(), viewedAt: Date.now(), error: null, log: [], owner: null });
+    if (otherPort) {
+      const taken = this.takenPorts(r);
+      const next = await nextInLane(port, async (p) => !forbidden(p) && !taken.has(p) && !(await portOpen(p)));
       if (gen !== r.gen) return this.view(f);
-      Object.assign(r, { status: 'error', error: `Port ${port} is already in use by another program. The office won't stop it; free the port and try again.` });
-      this.hooks.emit(f.id);
-      throw new HttpError(409, r.error!);
+      if (!next) return this.failStart(f, r, `No free port in floor ${f.floor}'s lane above ${port}. Free port ${port} and try again.`);
+      port = r.port = next;
+      this.pids.setPort(f.id, port);
+      r.log.push(`Floor ${f.floor}'s preview moved to port ${port}, and keeps it.`);
     }
+    // What an earlier run of the office left on the port is reclaimed; anything else is named, never stopped.
+    await this.reclaim((e) => e.port === port);
     if (gen !== r.gen) return this.view(f);
+    if (await portOpen(port)) {
+      const owner = await this.backend.previews.portOwner(port).catch(() => null);
+      if (gen !== r.gen) return this.view(f);
+      const ours = !!owner && owned(owner, this.desksDirs(f), this.pids.entries);
+      if (owner && ours) await this.reclaimOne(owner, port, r);
+      if (gen !== r.gen) return this.view(f);
+      // The error stays on the preview and its tile: no page-wide banner for it (#225).
+      if (await portOpen(port)) return this.failStart(f, r, portBusyText(port, ours ? null : owner), ours ? null : owner);
+    }
     r.status = 'preparing';
     this.hooks.emit(f.id);
 
-    this.launch(r, gen, { ...this.job(f, pr ?? null, port, `${title} · ${ref}`), slug: PREVIEW_SLUG, branch: PREVIEW_BRANCH }, {
+    this.launch(r, gen, { ...this.job(f, pr ?? null, port, `${title} · ${ref}`), slug: PREVIEW_SLUG, branch: PREVIEW_BRANCH }, { key: mainKey(f.id), floor: f.floor, slot: 0 }, {
       emit: () => this.hooks.emit(f.id),
       emitSoon: () => this.emitSoon(f.id, () => this.runs.has(f.id) && this.hooks.emit(f.id)),
       unconfigured: () => this.hasDefault.set(f.id, false),
     });
     return this.view(f);
+  }
+
+  private failStart(f: PreviewFloor, r: Run, error: string, owner: ProcInfo | null = null): PreviewView {
+    Object.assign(r, { status: 'error', error, owner });
+    this.hooks.emit(f.id);
+    return this.view(f);
+  }
+
+  /** The desks folders whose preview worktrees are the office's. */
+  private desksDirs(also?: PreviewFloor): string[] {
+    const floors = [...(this.hooks.floors?.() ?? []), ...(also ? [also] : [])];
+    return [...new Set(floors.map((x) => path.dirname(this.backend.deskDir(x.fullName, PREVIEW_SLUG))))];
+  }
+
+  /** Stop a process of the office's own that holds a preview port, wait for the port, and say so in the log. */
+  private async reclaimOne(p: Pick<ProcInfo, 'pid' | 'pgid'>, port: number, r?: Run) {
+    await this.backend.previews.kill(p).catch(() => undefined);
+    this.pids.drop(p.pid);
+    for (let i = 0; i < 20 && (await portOpen(port)); i++) await new Promise((res) => setTimeout(res, 250));
+    const line = `Port ${port} was held by the office's own leftover preview (pid ${p.pid}): stopped it.`;
+    console.log(`preview: ${line}`);
+    r?.log.push(line);
+  }
+
+  /** Recorded previews this run of the office didn't start (left by a restart or a stop that failed): stopped while still in their own worktree, else forgotten. */
+  private async reclaim(match: (e: PreviewPid) => boolean) {
+    const live = new Set([...this.runs.values(), ...this.prRuns.values()].map((r) => r.pid));
+    for (const e of this.pids.entries.filter((x) => match(x) && !live.has(x.pid))) {
+      const now = await this.backend.previews.proc(e.pid).catch(() => null);
+      if (stillOurs(e, now)) await this.reclaimOne({ pid: e.pid, pgid: e.pgid }, e.port);
+      this.pids.drop(e.pid);
+    }
   }
 
   /** Stop the floor's preview and free its port. */
@@ -260,6 +322,7 @@ export class Previews {
    * and a PR preview's worktree is left over from a hard stop.
    */
   async clearOrphans(floors: PreviewFloor[]) {
+    await this.reclaim(() => true);
     const slots = Array.from({ length: MAX_PR_PREVIEWS }, (_, i) => i + 1);
     await Promise.all(
       floors.flatMap((f) => [
@@ -302,7 +365,7 @@ export class Previews {
     if (!r) {
       const slot = this.makeRoom(f);
       const now = Date.now();
-      r = { status: 'stopped', port: null, ref: `PR #${pr}`, pr, commit: null, startedAt: now, error: null, log: [], handle: null, gen: 0, repoId: f.id, fullName: f.fullName, slot, viewedAt: now };
+      r = { status: 'stopped', port: null, ref: `PR #${pr}`, pr, commit: null, startedAt: now, error: null, log: [], handle: null, pid: null, owner: null, gen: 0, repoId: f.id, fullName: f.fullName, slot, viewedAt: now };
       this.prRuns.set(key, r);
     }
     const run = r;
@@ -321,7 +384,7 @@ export class Previews {
     }
     run.port = port;
     this.emitPr(run);
-    this.launch(run, gen, { ...this.job(f, pr, port, `${title} · PR #${pr}`), slug: prSlug(run.slot), branch: prBranch(run.slot) }, {
+    this.launch(run, gen, { ...this.job(f, pr, port, `${title} · PR #${pr}`), slug: prSlug(run.slot), branch: prBranch(run.slot) }, { key, floor: f.floor, slot: run.slot }, {
       emit: () => this.emitPr(run),
       emitSoon: () => this.emitSoon(`pr:${key}`, () => this.emitPr(run)),
     });
@@ -544,9 +607,23 @@ export class Previews {
   }
 
   /** Start a run's job; callbacks from an older run of it (an earlier start, or a stop since) are ignored. */
-  private launch(r: Run, gen: number, job: PreviewJob, on: { emit(): void; emitSoon(): void; unconfigured?(): void }) {
+  private launch(r: Run, gen: number, job: PreviewJob, at: { key: string; floor: number; slot: number }, on: { emit(): void; emitSoon(): void; unconfigured?(): void }) {
     const live = () => gen === r.gen;
+    const refused = liveLaneRefusal(job.port, this.backend.demo);
+    if (refused) {
+      console.warn(`previews: ${refused}`);
+      Object.assign(r, { status: 'error', error: refused });
+      on.emit();
+      return;
+    }
     r.handle = this.backend.previews.start(job, {
+      spawned: (pid) => {
+        if (!live()) return;
+        if (r.pid) this.pids.drop(r.pid);
+        r.pid = pid;
+        const cwd = this.backend.deskDir(job.fullName, job.slug);
+        this.pids.record({ ...at, kind: at.slot ? 'pr' : 'main', pid, pgid: pid, port: job.port, cwd, startedAt: Date.now() });
+      },
       status: (s) => {
         if (!live()) return;
         r.status = s;
@@ -566,6 +643,7 @@ export class Previews {
       failed: (message, unconfigured) => {
         if (!live()) return;
         r.handle = null;
+        this.forget(r);
         Object.assign(r, { status: unconfigured ? 'unconfigured' : 'error', error: message });
         if (unconfigured) on.unconfigured?.();
         on.emit();
@@ -575,11 +653,18 @@ export class Previews {
     });
   }
 
+  /** The run's app is gone: it leaves previews.json. */
+  private forget(r: Run) {
+    if (r.pid) this.pids.drop(r.pid);
+    r.pid = null;
+  }
+
   private async halt(fullName: string, r: Run, slug: string) {
     const handle = r.handle;
     r.handle = null;
     if (!handle) return;
     await handle.stop().catch(() => undefined);
+    this.forget(r);
     if (!r.port) return;
     void this.sync.close(r.port);
     await this.backend.releaseDesk(fullName, slug, r.port).catch(() => undefined);

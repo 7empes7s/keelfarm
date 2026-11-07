@@ -102,6 +102,19 @@ export function killTree(child: ChildProcess): Promise<void> {
   return Promise.resolve();
 }
 
+/**
+ * Whatever a finished detached child left in its process group (a server it started and never stopped) goes too: the
+ * group outlives its leader, so killTree, which skips an exited child, can't reach it. (Windows: taskkill /T at the end.)
+ */
+export function endGroup(child: ChildProcess) {
+  if (child.pid === undefined || process.platform === 'win32') return;
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    // nothing left in it
+  }
+}
+
 /** npm ci in a folder (on Windows through cmd.exe); rejects on failure, and kills the tree after `timeoutMs`. */
 export function npmCi(dir: string, timeoutMs = INSTALL_TIMEOUT_MS): Promise<void> {
   const env: Record<string, string> = {};

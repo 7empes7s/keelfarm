@@ -37,8 +37,10 @@ import { demoPastWeek } from './opsSample.ts';
 import { sampleCareers, sampleHistory, samplePastCareers } from './careerSample.ts';
 import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts';
 import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
+import { demoKill, demoPortOwner, demoProc, holdDemoPort } from './demoLeftover.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
@@ -232,6 +234,19 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.' };
   r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
 }
+
+// A PR that needs the manager only because CI is red (#209): QA passed its code, the Windows job failed.
+const CI_ONLY_REPO = 'demo-co/weather-api';
+const CI_ONLY_SUMMARY = 'QA passed: /forecast and /now answer in °F with ?units=f and the tests pass. Only the Windows CI job is red (a path in a snapshot test).';
+const CI_ONLY_PR = (() => {
+  const r = repos.get(CI_ONLY_REPO)!;
+  const n = r.nextNumber++;
+  const url = `https://github.com/${CI_ONLY_REPO}/pull/${n}`;
+  const failedChecks = [{ name: 'CI / windows', url: `https://github.com/${CI_ONLY_REPO}/actions/runs/${++runSeq}/job/1` }];
+  const files = ['src/forecast.ts', 'src/units.ts', 'src/units.test.ts', 'package.json', 'README.md'];
+  r.pulls.unshift({ ...shippedPull(CI_ONLY_REPO, n, 'Forecast in °F on request', 0), url, state: 'OPEN', mergedAt: null, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), headRefName: 'swarm/units-f-demo', summary: 'Adds ?units=f to /forecast and /now; °C stays the default.', additions: 86, deletions: 12, files, checks: 'failing', failedChecks });
+  return n;
+})();
 
 /** A stranger's issue and a fork's PR (#185): listed with their badges, never built, QA'd or merged. */
 function strangers(fullName: string) {
@@ -818,6 +833,7 @@ async function fakeTrim(stillIdle: () => boolean) {
 export function createDemoBackend(scale: DemoScale | null = null, noTour = false): Backend {
   if (scale) seedBigCompany(scale.floors);
   restoreNumbers();
+  holdDemoPort(() => `/demo/${[...repos.keys()][0]}/desks/preview`);
   // Tie each fake session back to its repo via the desk directory name.
   const deskRepo = new Map<string, string>();
   // Desks whose pretend dependencies are installed: the first task on a desk installs, the next ones skip.
@@ -943,7 +959,8 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
         'build\tRun npm test\t2025-01-01T00:00:02Z ##[error]Process completed with exit code 1.',
       ].join('\n'),
     checkAnnotations: async (fullName) => (ciDown(`/${fullName}/`) ? [CI_DOWN_NOTE] : []),
-    demoParked: () => repos.get(CI_DOWN_REPO)?.pulls.filter((p) => p.state === 'OPEN' && ciDown(p.url)).map((p) => ({ fullName: CI_DOWN_REPO, prNumber: p.number })) ?? [],
+    demoParked: () => [...(repos.get(CI_DOWN_REPO)?.pulls.filter((p) => p.state === 'OPEN' && ciDown(p.url)).map((p) => ({ fullName: CI_DOWN_REPO, prNumber: p.number })) ?? []), { fullName: CI_ONLY_REPO, prNumber: CI_ONLY_PR, stuck: CI_ONLY_SUMMARY }],
+    demoDesign,
     rerunFailedJobs: async (fullName, runIds) => {
       // The re-run passes: a flake, as the office hoped.
       for (const pr of repos.get(fullName)?.pulls ?? []) {
@@ -1039,7 +1056,8 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
         return dir;
       },
       env: () => ({}),
-      release: async () => undefined,
+      release: async () => [],
+      orphans: async () => [],
       trimDesk: (_machine, _fullName, stillIdle) => fakeTrim(stillIdle),
       sweep: async () => 0,
       remove: async () => ({ removed: true, patches: [] }),
@@ -1255,6 +1273,9 @@ const flakedOnce = new Set<string>();
 
 const demoPreviews: PreviewBackend = {
   hasDefault: async (fullName) => !bareRepos.has(fullName),
+  portOwner: demoPortOwner,
+  proc: demoProc,
+  kill: demoKill,
   start(job, cb) {
     let stopped = false;
     let server: http.Server | null = null;

@@ -242,12 +242,14 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   right: -8px;
 }
 
-/* the pages, the console over them, and a terminal, app or card in a pane beside them */
+/* the pages (or the console in their place), and a terminal, app or card in a pane beside them; the panel manager
+   (ui/panels.ts, #212) sets the console's and the pane's z-index so the one opened or touched last is in front */
 .pk-railed .pk-work {
   position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
+  container: pkwork / inline-size;
 }
 .pk-railed .pk-main {
   flex: 1 1 0;
@@ -258,24 +260,57 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   max-width: none;
   padding: 16px 20px 24px;
 }
+/* on a phone the console and the pane are full-screen panels, in the same order */
+.pocket:not(.pk-railed) :is(.pk-pane, .pk-console-host) > .overlay {
+  z-index: calc(var(--ds-z-panel) + var(--pk-layer, 0));
+}
+.pk-railed .pk-work-console > .pk-main {
+  display: none;
+}
 .pk-railed .pk-console-host:not(:empty) {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
+  container: pkpanel / inline-size;
+  background: var(--paper);
 }
 .pk-railed .pk-pane:not(:empty) {
   position: relative;
-  z-index: 2;
   flex: 1.5 1 0;
   min-width: 0;
   display: flex;
+  container: pkpanel / inline-size;
   border-left: var(--ds-border-strong) solid var(--ds-outline);
+  background: var(--paper);
 }
+/* too narrow for two panels side by side (the chat docked on a small desktop) and at tablet widths: the pane covers
+   the page */
 .pk-layout-medium .pk-pane:not(:empty) {
   position: absolute;
   inset: 0;
   border-left: none;
+}
+@container pkwork (max-width: 719px) {
+  .pk-railed .pk-pane:not(:empty) {
+    position: absolute;
+    inset: 0;
+    border-left: none;
+  }
+}
+/* a panel lays out for the width it has, not the window's: a preview beside the chat stacks its PR column under it */
+@container pkpanel (max-width: 900px) {
+  .pk-railed .app-body {
+    flex-direction: column;
+  }
+  .pk-railed .prc-side {
+    flex: 0 0 auto;
+    max-height: 45%;
+  }
+  .pk-railed .compare-sides {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
 }
 .pk-railed :is(.pk-pane, .pk-console-host) > .overlay {
   position: absolute;
@@ -297,9 +332,31 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 }
 
 /* the CEO's chat, docked on the right (medium widths: a drawer over the pages) */
+.pk-dock-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  z-index: 1;
+  width: 14px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pk-dock-grip:is(:hover, :focus-visible, :active) {
+  background: linear-gradient(90deg, transparent 5px, var(--ds-focus) 5px, var(--ds-focus) 9px, transparent 9px);
+  outline: none;
+}
+/* what the last panel replaced (#212): one tap brings it back */
+.pk-back-chip {
+  min-width: 0;
+  max-width: 220px;
+  min-height: var(--ds-target);
+}
 .pk-dock {
+  position: relative;
   flex: none;
-  width: clamp(340px, 28vw, 440px);
+  /* dragged between 360 and 520 px (DockGrip.tsx), never leaving the rail and pages under 600 px */
+  width: clamp(360px, var(--pk-dock-w, 380px), max(360px, 100% - 692px));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -350,30 +407,42 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   display: none;
 }
 
-/* Company: the floors as a grid of cards, usage and the CEO in a column beside them (above them when it's narrower) */
+/* Company (#223): sized by the page's own width (pkmain, beside the chat), never the viewport, so the chat open or closed
+   and the browser's zoom only change that width. Floors in floorColumns()'s --pk-cols columns; usage and the CEO in a
+   column beside them from 1100px, else a compact strip above them, every card at its own height. */
+.pk-railed .pk-page:has(> .pk-company) {
+  max-width: 1600px;
+}
 .pk-railed .pk-company {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: clamp(var(--ds-space-2), 1.2cqi, var(--ds-space-4));
   align-items: start;
 }
 .pk-railed .pk-company-side {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--ds-space-2);
+  align-items: start;
+}
+.pk-railed .pk-company-side > :not(.pk-usage, .pk-ceo, .pk-wide) {
+  grid-column: 1 / -1;
+}
+.pk-railed .pk-company-side .tour-invite > .grow {
+  flex-basis: 14em; /* its buttons go below the text in the narrow column */
 }
 .pk-railed .pk-company-floors {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(var(--pk-cols, 1), minmax(0, 1fr));
+  gap: var(--ds-space-3);
   align-content: start;
 }
-.pk-railed .pk-company-floors > :is(p, .btn) {
+.pk-railed .pk-company-floors > :not(.pk-floor) {
   grid-column: 1 / -1;
 }
-@container pkmain (min-width: 1000px) {
+@container pkmain (min-width: 1100px) {
   .pk-railed .pk-company {
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 24%, 340px);
   }
   .pk-railed .pk-company-side {
     grid-column: 2;
@@ -383,6 +452,69 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   .pk-railed .pk-company-floors {
     grid-row: 1;
   }
+}
+
+/* "What's new" on a floor card: whole tiles only, 1 to 4 by the card's width, snapping, faded at the edge while more
+   are off to the right */
+@property --fb-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+.pk-floor .fb-row {
+  --fb-n: 1;
+  padding-inline: 0;
+  mask-image: linear-gradient(to right, black calc(100% - var(--fb-fade)), transparent);
+}
+.pk-floor .fb-card {
+  width: calc((100cqi - (var(--fb-n) - 1) * var(--ds-space-2)) / var(--fb-n));
+}
+@container pkfloor (min-width: 260px) {
+  .pk-floor .fb-row {
+    --fb-n: 2;
+  }
+}
+@container pkfloor (min-width: 420px) {
+  .pk-floor .fb-row {
+    --fb-n: 3;
+  }
+}
+@container pkfloor (min-width: 600px) {
+  .pk-floor .fb-row {
+    --fb-n: 4;
+  }
+}
+@supports (animation-timeline: scroll()) {
+  .pk-floor .fb-row {
+    animation: pk-fb-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+@keyframes pk-fb-fade {
+  0%,
+  90% {
+    --fb-fade: 24px;
+  }
+  100% {
+    --fb-fade: 0px;
+  }
+}
+
+/* the one status row while the office connects, updates or restarts: over the page's top edge, not pushing it down */
+.pk-status {
+  position: sticky;
+  top: var(--ds-space-1);
+  z-index: 3;
+  height: 0;
+  margin-bottom: -10px; /* the page's gap */
+}
+.pk-status > .pk-banner {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  font-size: var(--ds-text-sm);
+  text-align: center;
+  box-shadow: var(--ds-shadow-1);
 }
 
 /* Kanban: two columns a row at medium widths, the whole board side by side on a wide screen */
