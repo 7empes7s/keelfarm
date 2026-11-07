@@ -25,8 +25,9 @@ import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
 import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
 import { readingsLabel } from '../../shared/usage.ts';
+import { checkBinding } from '../../shared/accounts.ts';
 import { usageLabel } from '../pacing.ts';
-import { floorSpend } from '../costLedger.ts';
+import { floorRoundsByCause, floorSpend } from '../costLedger.ts';
 import { checkRestart, sessionKind } from '../health.ts';
 import { labPattern } from '../testLab.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
@@ -36,11 +37,14 @@ import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
-import type { AgentView, HireRequestView, PhoneMessage } from '../../shared/types.ts';
+import { modelAfterCliChange, modelProblem } from '../../shared/models.ts';
+import { isCli } from '../clis.ts';
+import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../../shared/types.ts';
+import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
-import { decisionsForCeo } from '../../shared/decisions.ts';
+import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
 import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
 import { parseRefs } from '../../shared/chatRefs.ts';
@@ -59,11 +63,11 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
       setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
-      scaleTeam: acts((a) => this.scaleTeam(a)),
-      configureAgent: acts((a) => this.configureAgent(a)),
+      scaleTeam: acts((a) => this.didFor(this.scaleTeam(a), a.floor, [], a.reason, `floor ${a.floor}'s team set to ${a.size}`)),
+      configureAgent: acts((a) => this.didForAgent(this.configureAgent(a), a.agent_id)),
       fileIssue: (a) => this.fileIssue(a),
       setDependencies: acts((a) => this.setDependencies(a)),
-      closeIssue: acts((a) => this.closeIssue(a)),
+      closeIssue: acts(async (a) => this.didFor(await this.closeIssue(a), a.floor, [Number(a.number)], a.reason, `closed #${a.number}`)),
       retryQa: acts((a) => this.triageRetryQa(a)),
       sendBack: acts((a) => this.triageSendBack(a)),
       rerunChecks: acts((a) => this.triageRerunChecks(a)),
@@ -77,6 +81,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       defineExperiment: acts((a) => this.lab.defineText(experimentInput(a, (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null))),
       agentLog: (a) => this.agentLog(a),
       restartAgent: acts((a) => this.restartAgent(a)),
+      stopAgent: acts((a) => this.ceoStopAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
       answerAgent: acts((a) => this.answerAgent(a)),
       askManagerChoice: acts((a) => this.askManagerChoice(a)),
@@ -95,6 +100,19 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   }
 
   // ---------- the CEO's office tools ----------
+
+  /** After a tool call that changed something on a floor: the open questions it answered (#208). Returns its output. */
+  protected didFor(out: string, floor: number, issues: number[], text: string, done: string, link?: DecisionAbout): string {
+    const repo = this.state.repos.find((r) => r.floor === Number(floor));
+    if (repo) this.decisionActedOn({ repoId: repo.id, about: issues.map((number) => ({ kind: 'issue', repoId: repo.id, number })), text, done, ...(link && { link }) });
+    return out;
+  }
+
+  private didForAgent(out: string, ref: string): string {
+    const a = this.state.agents.find((x) => x.id === ref || x.name.toLowerCase() === String(ref).trim().toLowerCase());
+    if (a?.repoId) this.decisionActedOn({ repoId: a.repoId, about: [{ kind: 'agent', agentId: a.id }], text: a.name, done: `changed ${a.name}'s setup` });
+    return out;
+  }
 
   /** A chat message's text replaced by its sender (#125): its old text kept as a version, its chips found again, every tab told. False when nothing changed. */
   protected replaceText(m: PhoneMessage, text: string, reason?: string): boolean {
@@ -180,6 +198,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
             qaPassRate: nums?.qaPass ?? null,
             qaFirstRoundPassRate: nums?.qaFirstPass ?? null,
             qaRoundsPerMerge: nums?.qaRoundsPerMerge != null ? Math.round(nums.qaRoundsPerMerge * 100) / 100 : null,
+            roundsByCause: floorRoundsByCause(this.spend.ledger.all(), r.id, Date.now()), // failed rounds, 7 days; outage and lab-error aren't in qaRoundsPerMerge
+            qaLabErrors: nums?.qaLabErrors ?? 0,
           },
           spend: floorSpend(this.spend.ledger.all(), r.id, Date.now()),
           capacity: {
@@ -200,12 +220,13 @@ export abstract class SwarmCeoTools extends SwarmTeam {
             waitsFor: blockers(i.body, open),
             inProgress: this.issueTaken(r, i.number),
             ...(this.isHeld(r.id, i.number) ? { waitsForManager: 'its PR was closed; only the manager hands it out again' } : {}),
+            ...(i.untrusted ? { waitsForManager: `untrusted author @${i.author ?? 'ghost'}; never built until the manager trusts it` } : {}),
           })),
           pullRequests: rt.pulls
             .filter((p) => p.state === 'OPEN')
             .map((p) => {
               const q = this.state.qa.find((x) => x.repoId === r.id && x.prNumber === p.number);
-              return { number: p.number, title: p.title, qa: q ? `${q.status}${q.round > 1 ? ` (round ${q.round})` : ''}` : 'not tested', merge: q?.mergeNote ?? null, checks: p.checks };
+              return { number: p.number, title: p.title, qa: p.untrusted ? 'from outside: the manager reviews it on GitHub' : q ? `${q.status}${q.round > 1 ? ` (round ${q.round})` : ''}` : 'not tested', merge: q?.mergeNote ?? null, checks: p.checks };
             }),
           mergedRecently: rt.pulls.filter((p) => p.state === 'MERGED').map((p) => `#${p.number} ${p.title}`),
           questions: this.state.questions.filter((q) => q.repoId === r.id).map((q) => ({ agent: q.agentId, name: q.agentName, issue: q.issue, pr: q.pr, question: q.text, options: q.options, waitingFor: q.to === 'ceo' ? 'you' : 'the manager' })),
@@ -230,6 +251,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now(), this.usageCheck)}`,
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
         },
         floors,
@@ -288,11 +310,12 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   }
 
   /** configure_agent: an agent's coding agent, model or effort, from their next task. */
-  protected configureAgent(x: { agent_id: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
+  protected configureAgent(x: { agent_id: string; account?: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
     const a = this.agentByRef(x.agent_id);
     if (a.role === 'ceo') throw new Error("That's you: the manager sets the CEO up.");
     const switches = [...(x.tools_off ?? []).map((r) => [r, false] as const), ...(x.tools_on ?? []).map((r) => [r, true] as const), ...(x.tools_reset ?? []).map((r) => [r, null] as const)];
-    if (x.cli === undefined && x.model === undefined && x.effort === undefined && !switches.length) throw new Error('Nothing to change: pass cli, model, effort, tools_off, tools_on, tools_reset or a mix.');
+    if (x.account === undefined && x.cli === undefined && x.model === undefined && x.effort === undefined && !switches.length) throw new Error('Nothing to change: pass account, cli, model, effort, tools_off, tools_on, tools_reset or a mix.');
+    const account = x.account === undefined ? undefined : checkBinding(this.accounts.list(), x.account); // checked before anything changes
     // Switching off only takes away. Turning on, or undoing a switch, can undo the manager's own: only when they asked.
     if (!this.ceoAsked && switches.some(([, on]) => on !== false)) throw new Error('tools_on and tools_reset only when the manager asks for it in their message; tools_off is always allowed.');
     // Every name is checked before anything changes.
@@ -303,9 +326,15 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       if (item.locks?.agent) throw new Error(`${item.name} can't be switched for agents: ${item.locks.agent.why}.`);
       return { item, on };
     });
-    if (x.cli !== undefined || x.model !== undefined || x.effort !== undefined) this.updateAgent(a.id, { cli: x.cli, model: x.model, effort: x.effort });
+    // A model must be one of their coding agent's (#198); one the new coding agent doesn't have goes back to the default.
+    const cli = this.state.settings.runtime === 'terminal' ? (x.cli === undefined ? a.cli : isCli(x.cli) ? x.cli : '') || this.state.settings.defaultCli : 'claude';
+    const bad = modelProblem(x.model, cli, this.models);
+    if (bad) throw new Error(bad);
+    const model = x.model ?? (x.cli !== undefined ? modelAfterCliChange(a.model, cli, this.models) : undefined);
+    if (x.cli !== undefined || model !== undefined || x.effort !== undefined) this.updateAgent(a.id, { cli: x.cli, model, effort: x.effort });
     for (const { item, on } of picked) this.setToolSwitch(a.id, item.id, on);
-    const setup = this.setupLabel(a) || 'the office defaults';
+    if (x.account !== undefined) this.updateAgent(a.id, { account: account ?? '' });
+    const setup = [this.setupLabel(a) || 'the office defaults', x.account !== undefined ? `on ${account ?? 'the rotation'}` : ''].filter(Boolean).join(' ');
     const tools = picked.map(({ item, on }) => `${item.name} ${on === null ? 'as the office has it' : on ? 'on' : 'off'}`).join(', ');
     this.appendLog(a, [{ kind: 'system', text: `⚙️ ${this.ceo().name} set ${a.name} up with ${setup}${tools ? `; ${tools}` : ''}.` }]);
     return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.`;
@@ -323,6 +352,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const body = `${String(x.body ?? '').trim()}\n\n---\n_Filed by ${this.ceo().name}, the cubefarm CEO._`;
     const n = await this.backend.createIssue(repo.fullName, title, body);
     this.ceoIssues.record(repo.id);
+    this.didFor('', repo.floor, [], title, `filed #${n}`, { kind: 'issue', repoId: repo.id, number: n });
     return `Filed #${n} on floor ${repo.floor}: ${title}.`;
   }
 
@@ -435,19 +465,70 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const resumes = resumesAfterRestart(a, false, this.backend.demo);
     if (resumes) {
       this.refuseWhileUpdating();
-      this.ensureSlot(sessionKind(a)); // refused with the reason: memory, or the session limit
+      this.ensureSlot(sessionKind(a), a); // refused with the reason: memory, or the session limit
     }
     this.recover([a], new Set(), new Set(resumes ? [] : [a]), undefined, 'The CEO restarted your task');
     return resumes ? `${a.name} picks their session back up.` : `${a.name}'s task went back to the queue; they are free for the next one.`;
   }
 
+  // ---------- the manager's changes (#207, shared/managerChanges.ts) ----------
+
+  /** stop_agent: the CEO ends a running session, e.g. on an issue or PR the manager closed. */
+  protected ceoStopAgent(x: { agent_id: string; reason: string }) {
+    const a = this.agentByRef(x.agent_id);
+    if (a.role === 'ceo') throw new Error('That is you: end your job instead.');
+    if (!BUSY.includes(a.status)) throw new Error(`${a.name} isn't running a session (${a.status}): nothing to stop.`);
+    this.stopAgent(a.id, `${this.ceo().name} (CEO): ${clip(x.reason, 200)}`);
+    this.verdict(a, 'stopped');
+    return `Stopped ${a.name}. Their desk is cleared if their issue or PR is closed.`;
+  }
+
+  /** What the CEO did about an agent a manager's change touched, for their card and Mission control. */
+  protected verdict(a: PersistedAgent, v: CeoVerdict) {
+    if (!markVerdict(this.state.ceo.changes, a.id, v)) return;
+    this.emitChanges([a.id]);
+    this.save();
+  }
+
+  /** Wake the CEO once a burst of changes that touched running work has settled. */
+  protected maybeChanges() {
+    if (changesDue(this.state.ceo.changes, Date.now())) {
+      this.state.ceo.changes.wakeAt = null;
+      this.enqueueCeo({ kind: 'changes', at: Date.now() });
+    }
+  }
+
+  protected ceoChanges: string[] = []; // the changes in the running CEO job's prompt
+
+  /** The changes the CEO hasn't heard of, as a block for the job starting now (shared/managerChanges.ts takeUntold). */
+  protected takeChanges(job: { kind: string }): string {
+    const changes = takeUntold(this.state.ceo.changes, job.kind === 'changes');
+    this.ceoChanges = changes.map((c) => c.id);
+    if (changes.length) this.emitChanges();
+    return changesBlock(changes, (c, id) => {
+      const a = this.state.agents.find((x) => x.id === id);
+      return !a ? id : BUSY.includes(a.status) && stillOn(c, a) ? `${a.name} (${a.id}, ${this.agentDoing(a)})` : `${a.name} (${a.id}, finished it already)`;
+    });
+  }
+
+  /** The CEO's job ended: what it didn't act on was let finish. A preempted job hears its changes again. Returns `preempted`. */
+  protected settleChanges(preempted: boolean): boolean {
+    const ids = this.ceoChanges.splice(0);
+    const list = this.state.ceo.changes.list.filter((c) => ids.includes(c.id));
+    if (preempted) for (const c of list) c.told = false;
+    else if (!settle(this.state.ceo.changes, ids)) return preempted;
+    this.emitChanges(list.flatMap((c) => c.affects));
+    return preempted;
+  }
+
   // ---------- agents' questions (#36, shared/questions.ts) ----------
 
-  /** An agent waiting on an answer shows who they wait for (their card, badge and ❓ sign). */
+  /** An agent waiting on an answer shows who they wait for (their card, badge and ❓ sign); one a manager's change touched, that the CEO decides. */
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
     const v = super.agentView(a, withLog);
     const waiting = waitingOn(this.state.questions, a.id);
-    return { ...v, waiting, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
+    const reviewedBy = BUSY.includes(a.status) && reviewing(this.state.ceo.changes, a) ? this.ceo().name : null;
+    return { ...v, waiting, reviewedBy, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
   }
 
   protected clearTask(a: PersistedAgent) {
@@ -544,6 +625,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const running = !!this.agentRt.get(a.id)?.session;
     if (!running) this.refuseWhileUpdating();
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
+    this.verdict(a, 'redirected');
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
   }
 

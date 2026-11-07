@@ -41,7 +41,7 @@
 }
 .mm-hits {
   position: absolute;
-  z-index: var(--ds-z-menu);
+  z-index: var(--ds-z-popover);
   inset: calc(100% + var(--ds-space-1)) 0 auto;
   margin: 0;
   padding: var(--ds-space-1);

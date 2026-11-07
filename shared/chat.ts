@@ -107,6 +107,7 @@ export function yesNoFor(messages: readonly PhoneMessage[]): number | null {
 /** A message the phone is sending (or failed to send): shown at the end of the thread until the office has it. */
 export interface OutgoingMessage {
   key: number; // this phone's own id for it
+  clientId?: string; // sent with it, so a resend after a reload is taken once (#216)
   text: string;
   replyTo?: number;
   files?: FileRef[]; // uploaded already: the message carries their ids
@@ -114,10 +115,61 @@ export interface OutgoingMessage {
   delivery: Extract<Delivery, 'sending' | 'failed'>;
 }
 
-/** The outbox once the office's copy of a message arrived: the send it came from (same text, reply and files) is done. */
-export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments'>): OutgoingMessage[] {
+/** The outbox once the office's copy of a message arrived: the send it came from (its client id, else the same text, reply and files) is done. */
+export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments' | 'clientId'>): OutgoingMessage[] {
   if (m.from !== 'manager') return [...outbox];
   const ids = (fs?: readonly FileRef[]) => (fs ?? []).map((f) => f.id).join();
-  const i = outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo && ids(o.files) === ids(m.attachments));
+  const byId = m.clientId ? outbox.findIndex((o) => o.clientId === m.clientId) : -1;
+  const i = byId >= 0 ? byId : outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo && ids(o.files) === ids(m.attachments));
   return i < 0 ? [...outbox] : outbox.filter((_, j) => j !== i);
+}
+
+/** The manager's message the office already took with this client id: a resend gets it back instead of a second copy. */
+export const sentBefore = (messages: readonly PhoneMessage[], clientId: string | undefined) => (clientId ? messages.find((m) => m.from === 'manager' && m.clientId === clientId) : undefined);
+
+/**
+ * A saved outbox read back after a reload (#216): what the office already has is dropped, the rest shows as failed
+ * (tap to retry) except sends still on their way, which go again once each (`resend`).
+ */
+export function restoreOutbox(saved: readonly OutgoingMessage[], messages: readonly PhoneMessage[]): { outbox: OutgoingMessage[]; resend: OutgoingMessage[] } {
+  const outbox = saved.filter((o) => !sentBefore(messages, o.clientId));
+  return { outbox, resend: outbox.filter((o) => o.delivery === 'sending' && o.clientId) };
+}
+
+// ---------- backend stays backend (#193) ----------
+
+/** The CLI's own markup: background-task results, system reminders, slash-command output. Never the manager's words. */
+const HARNESS_TAGS = 'task-notification|system-reminder|local-command-stdout|local-command-stderr|local-command-caveat|command-name|command-message|command-args|bash-input|bash-stdout|bash-stderr|user-prompt-submit-hook';
+const HARNESS_START = new RegExp(`^\\s*<(${HARNESS_TAGS})>`);
+const HARNESS_BLOCK = new RegExp(`<(${HARNESS_TAGS})>[\\s\\S]*?(?:</\\1>|$)`, 'g');
+
+/** True for text that is only the CLI session's harness output (a task notification…), not something a person wrote. */
+export const isHarnessText = (text: string) => HARNESS_START.test(text) && !stripHarness(text);
+
+/** The text without the harness's blocks (a CEO reply that echoed one); '' when nothing else is left. */
+export const stripHarness = (text: string) => text.replace(HARNESS_BLOCK, '').trim();
+
+/**
+ * The thread without harness output stored as the manager's messages (before #193 they could be), and without the
+ * CEO's answers to them: its replies quoting one, and the CEO message straight after one.
+ */
+export function hideHarness(messages: readonly PhoneMessage[]): PhoneMessage[] {
+  const gone = new Set<number>();
+  let after: number | null = null; // the harness message the CEO's next message would answer
+  for (const m of messages) {
+    if (m.from === 'manager' && isHarnessText(m.text)) {
+      gone.add(m.id);
+      after = m.id;
+    } else if (m.from === 'ceo' && (after !== null || (m.replyTo !== undefined && gone.has(m.replyTo)))) {
+      gone.add(m.id);
+      after = null;
+    } else if (m.from === 'manager') after = null;
+  }
+  return gone.size ? messages.filter((m) => !gone.has(m.id)) : [...messages];
+}
+
+/** How the chat shows a message: the office's notes as a one-line pill (a notice with buttons as a card), harness output not at all. */
+export function messageLook(m: Pick<PhoneMessage, 'from' | 'text' | 'notice'>): 'bubble' | 'pill' | 'card' | 'hidden' {
+  if (m.from === 'office') return m.notice ? 'card' : 'pill';
+  return isHarnessText(m.text) ? 'hidden' : 'bubble';
 }

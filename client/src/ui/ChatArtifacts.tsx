@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -8,6 +8,7 @@ import { Markdown } from './Markdown';
 import { useDialogFocus } from './dialogFocus';
 import { copyText } from './clipboard';
 import { CloseButton, Icon } from './Icon';
+import { ChatTextPill, useChatPinch } from './ChatZoom';
 
 // The CEO's artifacts in the phone chat (shared/chatParts.ts): a card in the bubble, the document full-screen on a
 // phone (a side panel on a desktop) with Copy, Share / Download and "Reply about this", and the list of every one.
@@ -58,6 +59,10 @@ export function Sheet({ label, onClose, className, children }: { label: ReactNod
   const titleId = useId();
   useDialogFocus(ref);
   useEffect(() => ref.current?.focus(), []);
+  // A reader's text pinches like the chat's (#135).
+  const [dialog, setDialog] = useState<HTMLDivElement | null>(null);
+  useEffect(() => setDialog(ref.current), []);
+  useChatPinch(dialog, useCallback(() => ref.current?.querySelector<HTMLElement>('.artifact-body') ?? null, []));
   return createPortal(
     <div className="artifact-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
@@ -81,6 +86,7 @@ export function Sheet({ label, onClose, className, children }: { label: ReactNod
           </b>
           <CloseButton className="chat-reply-x" label="Close" title="Close (Esc)" onClick={onClose} />
         </div>
+        <ChatTextPill />
         {children}
       </div>
     </div>,

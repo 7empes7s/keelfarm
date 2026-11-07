@@ -45,7 +45,7 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   const same = q.findIndex(
     (j) =>
       j.kind === job.kind &&
-      (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
+      (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || job.kind === 'changes' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
   );
   if (same < 0) q.push(job);
   else if (job.kind === 'followup') q[same] = { ...q[same], events: [...(q[same].events ?? []), ...(job.events ?? [])].slice(-20) };
@@ -53,7 +53,7 @@ export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   else q[same] = job.messageIds || q[same].messageIds ? { ...job, messageIds: [...(q[same].messageIds ?? []), ...(job.messageIds ?? [])] } : job;
 }
 
-const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
+const JOB_RANK: Record<CeoJobKind, number> = { chat: 0, triage: 1, changes: 1, onboard: 2, plan: 2, research: 2, followup: 3, review: 3 };
 
 /** The CEO's next job among those `ready`: replies to the manager first (#46: a preempted job never comes before the reply), then triage, reviews and follow-ups last. */
 export function nextCeoJob(q: readonly CeoJob[], ready: (j: CeoJob) => boolean): CeoJob | undefined {
@@ -156,7 +156,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
-  configureAgent(a: { agent_id: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
+  configureAgent(a: { agent_id: string; account?: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
   closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>;
@@ -169,10 +169,11 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   proposeCharter(a: CharterProposalArgs): string;
-  resolveDecision(a: { id: string; outcome: string }): string;
+  resolveDecision(a: { id: string; outcome: string; superseded?: boolean }): string;
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
+  stopAgent(a: { agent_id: string; reason: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
   answerAgent(a: { agent_id: string; text: string }): Promise<string>;
   askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
@@ -292,18 +293,19 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
         size: z.number().int().min(1).max(FLOOR_SEATS).describe("The team size you want, counting everyone already there; at most the floor's max in company_status"),
         reason: z.string().min(1).max(600).describe("Why, from the floor's throughput. The manager reads this."),
         cli: CLI.optional().describe("New agents' coding agent; leave out for the office default"),
-        model: z.string().optional().describe("New agents' model; leave out for the default"),
+        model: z.string().optional().describe("New agents' model id (one of their coding agent's); leave out for the default"),
         effort: EFFORT.optional().describe("New agents' reasoning effort; leave out for the default"),
       },
       (a) => run(() => h.scaleTeam(a)),
     ),
     tool(
       'configure_agent',
-      "Change an agent's coding agent, model, reasoning effort or Tools & skills switches. Takes effect from their next task.",
+      "Change an agent's coding agent, model, reasoning effort, account or Tools & skills switches. Takes effect from their next task.",
       {
         agent_id: z.string(),
+        account: z.string().max(40).optional().describe('An account id or tag (company_status lists them) to run on, or "rotation"'),
         cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
-        model: z.string().optional().describe('"" for the default'),
+        model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
         // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.
         tools_off: TOOL_REFS.describe('Plugins, skills, MCP servers or tools to switch off for them, when the manager asks'),
@@ -433,6 +435,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       "Restart a stopped or errored agent's task: their CLI resumes the same conversation on the same branch. A QA run, or a task with nothing to resume, goes back to the queue instead.",
       { agent_id: z.string().describe('An id (or name) from company_status') },
       (a) => run(() => h.restartAgent(a)),
+    ),
+    tool(
+      'stop_agent',
+      "Stop an agent's running session, e.g. when the manager closed the issue or PR they work on. Their desk is cleared once it ends.",
+      { agent_id: z.string().describe('An id (or name) from company_status'), reason: z.string().min(1).max(200).describe('Why, in a few words: shown on their card') },
+      (a) => run(() => h.stopAgent(a)),
     ),
     tool(
       'message_agent',
@@ -577,12 +585,14 @@ export function ceoSystemPrompt(o: {
     '- Charters: each issue names its objective ("Objective: O2"); ask the manager before filing a non-goal. Change charters only with propose_charter.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
+    "- The manager's board actions never stop agents: you stop_agent, redirect or let finish the work they touched.",
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
     '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
-    '- Nothing to say? react and end with no text. Several messages: reply to each.',
+    '- Nothing to say, or a system notice? React or end silently. Answer each one.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
-    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each; optional first line `? <question>`), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    '- Numbers, trends, comparisons: one ```chart, ```table or ```dashboard JSON block plus a one-line verdict. Prefer a live "source" to values: costs:7d[:byFloor|byDay|byKind|perMerge|wasteByCause], throughput:office|floor:N, backlog:office|floor:N, usage. Chart {"type":"bar|line|donut","title","unit":"usd","labels","series":[{"name","values"}],"refs"}; dashboard {"tiles":[{"label","source"}],"charts"}.',
     "- company_status's openDecisions wait in the manager's tray: bring one up only if it bears on this message or before acting on its topic, at most one per reply, none marked trayOnly, and don't re-ask it in text. Answered in words: resolve_decision.",
     '- "[manager edited message #N: …]": they changed a message you already took. Redo or adjust only what changed, and say so in a line.',
     "- When it would help, end with one ```idea <kind> block (kind: objective, focus, mandate, experiment, research, charter, team or plan) suggesting a change to how the office works: a title line, then the message the manager sends by tapping Accept. At most one per reply.",
@@ -596,6 +606,8 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
       return researchPrompt(job.topic ?? '', floor, researchMin);
     case 'followup':
       return followupPrompt(job.events ?? [], mandates);
+    case 'changes':
+      return 'The manager changed work agents are still running (below). For each agent still on it: read agent_log, then stop_agent (the work is no longer wanted), message_agent (redirect it) or let them finish. Your final message: one line per agent, stopped, redirected or let finish, and why.';
     case 'triage':
       if (!floor || !pr) return `Pull request #${job.prNumber ?? '?'} no longer needs triage. Reply "Nothing to do."`;
       return [
@@ -676,6 +688,8 @@ export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string }
       return `Following up on ${followupLabel(job.events ?? [])}`;
     case 'research':
       return `Researching "${short(job.topic ?? '')}"`;
+    case 'changes':
+      return 'Looking at your changes';
   }
 }
 

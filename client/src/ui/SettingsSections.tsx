@@ -5,16 +5,33 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
 import { CLAUDE_MODELS } from '../../../shared/models';
+import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
 import { MemoryFields } from './HealthStrip';
 import { TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { AwakeSettings, FollowupSettings } from './CeoFollowups';
+import { useChatMode } from './chatMode';
 import { openWhatsNew, useTour } from './tour';
 import { Icon } from './Icon';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
 const set = (p: SettingsPatch) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
+
+/** Where the model lists come from, when they were checked, and a Refresh (#198). */
+function CatalogStatus() {
+  const models = useStore((s) => s.models);
+  const live = models.entries.find((e) => e.cli === 'claude')?.source === 'live';
+  const when = models.checkedAt ? new Date(models.checkedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'never';
+  return (
+    <div className="row wrap small">
+      <span className="grow muted">{models.refreshing ? 'Checking the coding agents’ models…' : `Claude models: ${live ? 'live list' : 'built-in list'}, checked ${when}`}</span>
+      <button className="btn btn-small" disabled={models.refreshing} onClick={() => void api.refreshModels().catch(() => undefined)}>
+        Refresh
+      </button>
+    </div>
+  );
+}
 
 export function AgentsSettings() {
   const settings = useStore((s) => s.settings);
@@ -34,21 +51,11 @@ export function AgentsSettings() {
           </select>
         </label>
       )}
-      <label className="field">
+      <label className="field" htmlFor="default-model">
         <span>Default model{terminal ? ` for ${cliName(clis, settings.defaultCli)}` : ''}</span>
-        <input
-          key={`${settings.defaultCli}:${settings.defaultModel}`}
-          list={defaultCli === 'claude' ? 'models-s' : undefined}
-          defaultValue={settings.defaultModel}
-          placeholder="the agent's own default"
-          onBlur={(e) => e.target.value !== settings.defaultModel && set({ defaultModel: e.target.value })}
-        />
-        <datalist id="models-s">
-          {CLAUDE_MODELS.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
+        <ModelPicker id="default-model" cli={defaultCli} value={settings.defaultModel} resolvedDefault={defaultCli === 'claude' ? CLAUDE_MODELS[0] : ''} onChange={(defaultModel) => set({ defaultModel })} />
       </label>
+      <CatalogStatus />
       <label className="field">
         <span>Default effort</span>
         <select value={settings.defaultEffort} onChange={(e) => set({ defaultEffort: e.target.value as EffortLevel })}>
@@ -140,9 +147,13 @@ export function CeoSettings() {
         <span>Research time budget (minutes)</span>
         <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />
       </label>
-      <p className="muted small">
-        Research (<Icon name="search" /> in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.
-      </p>
+      <p className="muted small">Research (<Icon name="search" /> in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
+      <label className="toggle block">
+        <input type="checkbox" checked={!!settings.statusReactions} onChange={(e) => set({ statusReactions: e.target.checked })} />
+        <span>
+          <b>Status reactions</b>: 👀 ⏳ ✅ under your messages while the CEO or an agent works on them. Off, the working strip shows it.
+        </span>
+      </label>
       <FollowupSettings />
       <AwakeSettings />
     </div>
@@ -151,6 +162,7 @@ export function CeoSettings() {
 
 export function RuntimeSettings() {
   const runtime = useStore((s) => s.settings.runtime);
+  const chat = useChatMode();
   return (
     <div className="card">
       <h3>
@@ -172,6 +184,12 @@ export function RuntimeSettings() {
         Agents work like your own coding agents in a terminal, with your skills, MCP servers and settings, and don't stop to ask. The office's workflow (branches, pull requests, QA reporting
         back) is in their instructions.
       </p>
+      <label className="toggle block">
+        <input type="checkbox" checked={chat.on} onChange={(e) => chat.set(e.target.checked)} />
+        <span>
+          <b>Chat mode</b> (this device): desks, Team and Kanban open an agent's chat, their steps in plain words, instead of their terminal. Each window's Chat | Terminal switch changes it too.
+        </span>
+      </label>
     </div>
   );
 }
@@ -212,6 +230,15 @@ export function CompanySettings() {
         />
       </label>
       <p className="muted small">A desk left idle this long loses its node_modules and build output to save disk space. Its next task installs them again.</p>
+      <label className="field">
+        <span>Stop a floor's app preview after (minutes unwatched, 0 = never)</span>
+        <input key={settings.mainPreviewIdleMin} type="number" min={0} max={1440} defaultValue={settings.mainPreviewIdleMin} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.mainPreviewIdleMin && set({ mainPreviewIdleMin: Number(e.target.value) })} />
+      </label>
+      <label className="field">
+        <span>PRs get their own channel when updated within (hours)</span>
+        <input key={settings.previewRecentHours} type="number" min={1} max={2160} defaultValue={settings.previewRecentHours} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.previewRecentHours && set({ previewRecentHours: Number(e.target.value) })} />
+      </label>
+      <p className="muted small">Never while someone watches it or an agent tests in it. Older open PRs fold under “Older” in the app viewer.</p>
       {typeof settings.autoUpdate === 'boolean' && (
         <>
           <label className="field">

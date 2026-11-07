@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { Key } from './Key';
 import { resetA11y, setA11y, useA11y } from './a11y';
 import { DEFAULT_A11Y, LIMITS, reducesMotion, showsShapes, type A11yPrefs, type ReduceMotion } from './a11yPrefs';
+import './chat.css';
 import { KIND_ICON_NAME, KIND_WORD, kindStrong, PALETTE_LABELS, PALETTES, STATUS_KINDS, type Palette } from './statusLook';
 
 function Toggle({ k, children, hint, disabled }: { k: 'captions' | 'statusShapes' | 'headBob' | 'cameraShake' | 'centerDot' | 'readableFont' | 'highContrast'; children: ReactNode; hint?: string; disabled?: boolean }) {
@@ -28,7 +29,7 @@ function Toggle({ k, children, hint, disabled }: { k: 'captions' | 'statusShapes
   );
 }
 
-function Slider({ k, label, unit, describe }: { k: 'captionSize' | 'captionBg' | 'fov' | 'uiScale'; label: string; unit: string; describe?: (v: number) => string }) {
+function Slider({ k, label, unit, describe }: { k: 'captionSize' | 'captionBg' | 'fov' | 'uiScale' | 'chatText'; label: string; unit: string; describe?: (v: number) => string }) {
   const v = useA11y((s) => s.prefs[k]);
   const { min, max, step } = LIMITS[k];
   return (
@@ -142,6 +143,16 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
         </h3>
         <Slider k="uiScale" label="UI scale" unit="%" />
         <p className="muted small">The HUD, the phone, the console and every panel, from 80% to 150%.</p>
+        <Slider k="chatText" label="Chat text size" unit="%" />
+        <p className="muted small">The messages with the CEO and the documents they send, on top of the UI scale, from 80% to 200%. Pinch the chat with two fingers to change it there, or Ctrl + wheel over it. It starts at your phone's own text size.</p>
+        <div className="chat-log a11y-chat-preview" aria-hidden>
+          <div className="bubble-row">
+            <div className="bubble bubble-them">
+              <div className="bubble-text">PR #12 is ready to merge.</div>
+              <div className="bubble-time">09:41</div>
+            </div>
+          </div>
+        </div>
         <Toggle k="readableFont" hint="Verdana, with wider letter, word and line spacing, as dyslexia style guides recommend.">
           Dyslexia-friendly font
         </Toggle>

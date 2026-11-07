@@ -1,6 +1,6 @@
-// The manager's console's map (#102): five top tabs, each a group of sections shown one at a time beside a side menu
+// The manager's console's map (#102): five top tabs, each a group of sections shown one at a time under a row of their tabs
 // (a list you tap into on a phone), deep links like #settings/cloud-agents, the last section each tab showed, and the
-// side menu's search over every setting's label. Pure; ConsoleNav.tsx draws it.
+// search over every setting's label. Pure; ConsoleNav.tsx draws it.
 import type { IconName } from './icons';
 
 export type GroupId = 'work' | 'company' | 'ceo' | 'history' | 'settings';
@@ -23,6 +23,7 @@ export type SectionId =
   | 'runtime'
   | 'office'
   | 'profile'
+  | 'accounts'
   | 'cloud-agents'
   | 'voice'
   | 'outside'
@@ -72,9 +73,10 @@ export const SECTIONS: Section[] = [
   { id: 'timelapse', group: 'history', icon: 'film', label: 'Time-lapse', only: 'office', find: ['Replay the day', 'Since I was last here'] },
   { id: 'agents', group: 'settings', icon: 'laptop', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'Most agents per floor'] },
   { id: 'projects', group: 'settings', icon: 'hard-hat', label: 'Every project', find: ['Version control', "Every project's playbook"] },
-  { id: 'runtime', group: 'settings', icon: 'keyboard', label: 'How agents run', find: ['Real terminals', 'Agent SDK'] },
+  { id: 'runtime', group: 'settings', icon: 'keyboard', label: 'How agents run', find: ['Real terminals', 'Agent SDK', 'Chat mode'] },
   { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
+  { id: 'accounts', group: 'settings', icon: 'key-round', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
   { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text'] },
   { id: 'outside', group: 'settings', icon: 'cloud-sun-rain', label: 'Weather & world', find: ['Weather', 'Your city', 'Keep it calm', 'World events'] },
@@ -90,6 +92,22 @@ export type Where = 'office' | 'pocket';
 const shows = (s: Section, where: Where) => !s.only || s.only === where;
 
 export const sectionsIn = (group: GroupId, where: Where) => SECTIONS.filter((s) => s.group === group && shows(s, where));
+
+/** The sections row under the top tabs (#199): a group's sections, or none when it has only one. */
+export const sectionRow = (group: GroupId, where: Where) => {
+  const list = sectionsIn(group, where);
+  return list.length > 1 ? list : [];
+};
+
+/** Arrow keys in a row of tabs: the index a key moves to (wrapping; Home and End to the ends), or undefined for other keys. */
+export function stepTab(at: number, count: number, key: string): number | undefined {
+  if (count < 1) return undefined;
+  if (key === 'ArrowRight' || key === 'ArrowDown') return (at + 1) % count;
+  if (key === 'ArrowLeft' || key === 'ArrowUp') return (at - 1 + count) % count;
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  return undefined;
+}
 
 /** Where the lobby's test lab screen opens the console: the section with the Test lab card. */
 export const TEST_LAB_SECTION: SectionId = 'ops';

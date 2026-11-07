@@ -67,6 +67,10 @@
   --ds-series-2: var(--ds-good-fill);
   --ds-series-3: var(--ds-bad-fill);
   --ds-series-4: #8fb3ff;
+  --ds-series-5: #c9a7ff;
+  --ds-series-6: #ffad73;
+  --ds-series-7: #5fd4e0;
+  --ds-series-8: #c8c2b4; /* last: a donut's "Other" */
 
   /* elevation: the office's solid offset shadows */
   --ds-shadow-1: 0 2px 0 var(--ds-shadow-color);
@@ -79,13 +83,16 @@
   --ds-dur: 160ms;
   --ds-dur-slow: 240ms;
   --ds-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* a small overshoot: peeks and expanding buttons (#213) */
 
-  /* layers */
-  --ds-z-hud: 10;
-  --ds-z-panel: 30;
-  --ds-z-menu: 50;
-  --ds-z-confirm: 60;
-  --ds-z-toast: 70;
+  /* layers (#212): every z-index over 10 is one of these, so what opens last can always come to the front */
+  --ds-z-base: 10; /* the HUD over the 3D view */
+  --ds-z-panel: 30; /* panels and windows */
+  --ds-z-sheet: 40; /* sheets over a panel or the chat, full-screen gates */
+  --ds-z-popover: 50; /* menus, previews, pickers */
+  --ds-z-toast: 60;
+  --ds-z-tour: 70; /* the tour's card and ring */
+  --ds-z-modal: 80; /* confirmations, and readouts over everything */
 
   /* the notch and the home bar */
   --ds-safe-top: env(safe-area-inset-top, 0px);
@@ -120,10 +127,18 @@ html[data-reduce-motion] {
 
 /* ---------- buttons ---------- */
 
-.ds-btn {
+/* One base for everything that looks like a button, whatever its element (button, a, label, summary): content centred,
+   one line height, no underline. :where() keeps it at zero specificity, so a screen's own display or size still wins. */
+:where(.btn, .ds-btn) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--ds-space-1);
+  line-height: var(--ds-leading-tight);
+  text-align: center;
+  text-decoration: none;
+}
+.ds-btn {
   gap: var(--ds-space-2);
   min-width: var(--ds-target);
   min-height: var(--ds-target);
@@ -143,14 +158,22 @@ html[data-reduce-motion] {
     box-shadow var(--ds-dur-fast) var(--ds-ease),
     background var(--ds-dur-fast);
 }
-.ds-btn:hover:not(:disabled) {
+.ds-btn:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--ds-surface-hover);
 }
-.ds-btn:active:not(:disabled) {
+/* primary actions lift and glow a little under a pointer (#213) */
+@media (hover: hover) {
+  .btn.btn-good:hover:not(:disabled, [aria-disabled='true']) {
+    box-shadow:
+      0 4px 0 var(--ds-shadow-color),
+      0 0 0 3px color-mix(in srgb, var(--ds-good-fill) 35%, transparent);
+  }
+}
+.ds-btn:active:not(:disabled, [aria-disabled='true']) {
   transform: translateY(2px);
   box-shadow: none;
 }
-.ds-btn:disabled {
+.ds-btn:is(:disabled, [aria-disabled='true']) {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -216,7 +239,7 @@ html[data-reduce-motion] {
 }
 .ds-menu {
   position: fixed;
-  z-index: var(--ds-z-menu);
+  z-index: var(--ds-z-popover);
   display: flex;
   flex-direction: column;
   min-width: 220px;
@@ -296,7 +319,7 @@ html[data-reduce-motion] {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: var(--ds-z-menu);
+    z-index: var(--ds-z-popover);
     background: var(--ds-scrim);
     animation: fadein var(--ds-dur) ease-out;
   }
@@ -730,10 +753,35 @@ html[data-reduce-motion] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* their coding agent, model and effort: labelled, side by side, wrapping before any gets cut (#198) */
+.ds-console .roster-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--ds-space-3);
+  min-width: min(100%, 300px);
+}
+.ds-console .roster-setup .field {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.ds-console .roster-setup .field > span {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.ds-console .roster-line {
+  font-weight: 600;
+  white-space: normal;
+}
 @container (max-width: 760px) {
   .ds-console .roster-doing {
     max-width: none;
     white-space: normal;
+  }
+  .ds-console .roster-setup {
+    flex-direction: column;
+  }
+  .ds-console .roster-setup .field {
+    flex-basis: auto;
   }
   .ds-console .roster .ds-row-actions {
     justify-content: flex-start;

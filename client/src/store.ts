@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AgentView, type CeoChatView, type CeoInfo, type CliView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
+import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
+import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
 import { latestListed } from '../../shared/watch';
+import { mergeChat, type ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
@@ -18,7 +21,7 @@ import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { applyChat, EMPTY_CHAT } from './ceoChat';
 import type { FileView } from '../../shared/files';
 import type { Decision } from '../../shared/decisions';
-import { showDesktopNote } from './notifications';
+import { clearDesktopNotes, showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import { qaCardNote, type CardTone } from './qaCard';
@@ -39,14 +42,14 @@ export type Agent = Omit<AgentView, 'log'>;
 export type PhoneTab = 'chat' | 'hires' | 'company' | 'games';
 
 export type Overlay =
-  | { kind: 'terminal'; agentId: string }
+  | { kind: 'terminal'; agentId: string; view?: 'chat' | 'terminal'; profile?: boolean } // view: opened on it (the CEO chat's @Agent opens their chat); profile: with their Profile open (#205)
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
   | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean } // pr: open the viewer on that channel (null: main); qa: with its QA panel
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
-  | { kind: 'phone'; tab?: PhoneTab; requestId?: string }
+  | { kind: 'phone'; tab?: PhoneTab; requestId?: string; full?: boolean }
   /** A team change face to face: a new agent waiting in the lobby, or the CEO's let-go note on a desk. */
   | { kind: 'interview'; requestId: string }
   | { kind: 'help'; tab?: HelpTab }
@@ -54,7 +57,8 @@ export type Overlay =
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
   | { kind: 'floorList' }
-  | { kind: 'notices' }; // the notification centre (ui/Notices.tsx)
+  | { kind: 'notices' } // the notification centre (ui/Notices.tsx)
+  | { kind: 'mapRoom' }; // the memory map as a 3D constellation (ui/MapRoom.tsx, #137)
 
 /** Help's tabs: how the office works, and the controls (keys, mouse, gamepad). */
 export type HelpTab = 'office' | 'controls';
@@ -124,15 +128,18 @@ interface State {
   machinesRoot: string;
   settings: SwarmSettings;
   clis: CliView[]; // the coding-agent CLIs installed where the office runs
+  models: ModelCatalogView; // their models to pick from (#198)
   repos: RepoView[];
   agents: Record<string, Agent>;
   logs: Record<string, LogLine[]>; // only for the agents this tab watches (shared/watch.ts): its floor and open panels
   latest: Record<string, LogLine>; // everyone's latest line worth listing, for the workers list
+  agentChat: Record<string, ChatItem[]>; // chat items (#120) of the agents whose window is open
   workersOpen: boolean; // the workers list is showing (WorkersPanel.tsx), so the office sends everyone's latest line
   peek: string | null; // the agent a chat chip's preview shows, so the office sends their lines (ui/RefChips.tsx)
   screens: Record<string, number>; // agentId -> screenshot timestamp (cache buster)
   qa: Record<string, QaView>; // `${repoId}#${prNumber}`
   prPreviews: Record<string, PrPreviewView>; // the PR theatre's previews, `${repoId}#${pr}`
+  previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
   messages: PhoneMessage[];
@@ -156,16 +163,20 @@ interface State {
   voiceKeyHint: string; // its last 4 characters
   voiceCache: VoiceCacheView; // the voice's saved clips: Settings → Voice, and which messages the phone's ▶ replays
   progress: ProgressView; // coins, decorations and achievements (#210)
+  pastCareers: PastCareer[]; // careers of people let go (#205): the Team tab's Past agents
   voiceSpeaking: number | null; // the phone message being read aloud in this tab (ui/voiceMessages.ts)
   weather: WeatherView; // the real local weather's place and latest reading (Settings → Weather)
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
+  accounts: AccountsView; // Settings → Providers & accounts (#247): logins and keys (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
+  managerChanges: ManagerChange[]; // the manager's board actions and what the CEO did about them (#207)
   historySeq: number; // bumped by each new history entry (#49): an open History tab reloads its page
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
+  updateReady: string | null; // the office came back on this commit: its client loads at a safe moment (updateLoad.ts, #216)
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
   replaying: boolean; // the time-lapse (replay.ts) is showing a recorded day: live events wait, live actions are off
 
@@ -269,6 +280,8 @@ export const useStore = create<State>((set, get) => ({
     tutorialStep: -1,
     pacingSessions: 3,
     trimIdleDesksMin: 120,
+    previewRecentHours: 48,
+    mainPreviewIdleMin: 30,
     dailyLogDir: '',
     historyDays: 90,
     voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },
@@ -283,15 +296,18 @@ export const useStore = create<State>((set, get) => ({
     officePlaybook: '',
   },
   clis: [],
+  models: { entries: [], checkedAt: 0 },
   repos: [],
   agents: {},
   logs: {},
   latest: {},
+  agentChat: {},
   workersOpen: false,
   peek: null,
   screens: {},
   qa: {},
   prPreviews: {},
+  previewStats: { diskBytes: null, memMb: null, cleanedAt: null },
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
@@ -312,6 +328,7 @@ export const useStore = create<State>((set, get) => ({
   voiceKeyHint: '',
   voiceCache: { clips: 0, bytes: 0, saved: [] },
   progress: { floors: {}, achievements: [], coffees: 0, merges: 0 },
+  pastCareers: [],
   voiceSpeaking: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
@@ -320,14 +337,18 @@ export const useStore = create<State>((set, get) => ({
     pushDevices: 0,
     devices: [],
     desktop: null,
-    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null },
+    telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null },
+    today: { sent: 0, skipped: 0 },
   },
   cloud: EMPTY_CLOUD,
+  accounts: { accounts: [] },
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
+  managerChanges: [],
   historySeq: 0,
   pong: {},
   restarting: false,
+  updateReady: null,
   visitors: [],
   replaying: false,
 
@@ -381,6 +402,7 @@ export const useStore = create<State>((set, get) => ({
           screens,
           qa,
           prPreviews,
+          previewStats: d.previewStats ?? { diskBytes: null, memMb: null, cleanedAt: null },
           requests: d.requests,
           ceo: d.ceo,
           messages: d.messages,
@@ -400,6 +422,7 @@ export const useStore = create<State>((set, get) => ({
           ops: d.ops ?? EMPTY_OPS,
           doctor: d.doctor ?? [],
           clis: d.clis ?? [],
+          models: d.models ?? { entries: [], checkedAt: 0 },
           voiceKeySet: d.voiceKeySet ?? false,
           voiceKeyHint: d.voiceKeyHint ?? '',
           voiceCache: d.voiceCache ?? { clips: 0, bytes: 0, saved: [] },
@@ -407,9 +430,12 @@ export const useStore = create<State>((set, get) => ({
           ticker: d.ticker ?? [],
           notifyChannels: d.notifyChannels ?? get().notifyChannels,
           cloud: d.cloud ?? EMPTY_CLOUD,
+          accounts: d.accounts ?? { accounts: [] },
           tooling: d.tooling ?? EMPTY_INVENTORY,
           experiments: d.experiments ?? emptyLabView(),
+          managerChanges: d.managerChanges ?? [],
           progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
+          pastCareers: d.pastCareers ?? [],
           pong: d.pong ?? {},
           restarting: false,
           floor: floorExists ? get().floor : 0,
@@ -490,6 +516,12 @@ export const useStore = create<State>((set, get) => ({
       case 'latest':
         set({ latest: { ...get().latest, ...ev.lines } });
         break;
+      case 'agentChat': {
+        const chats = { ...get().agentChat };
+        for (const [id, items] of Object.entries(ev.chats)) chats[id] = mergeChat(ev.catchUp ? [] : (chats[id] ?? []), items);
+        set({ agentChat: chats });
+        break;
+      }
       case 'screen': {
         const a = get().agents[ev.agentId];
         set({
@@ -515,6 +547,9 @@ export const useStore = create<State>((set, get) => ({
       case 'prPreview':
         set({ prPreviews: { ...get().prPreviews, [qaKey(ev.preview.repoId, ev.preview.pr)]: ev.preview } });
         break;
+      case 'previewStats':
+        set({ previewStats: ev.stats });
+        break;
       case 'prPreviewRemoved': {
         const { [qaKey(ev.repoId, ev.pr)]: _gone, ...prPreviews } = get().prPreviews;
         set({ prPreviews });
@@ -525,6 +560,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'clis':
         set({ clis: ev.clis });
+        break;
+      case 'models':
+        set({ models: ev.models });
         break;
       case 'request': {
         const prev = get().requests.find((r) => r.id === ev.request.id);
@@ -584,6 +622,9 @@ export const useStore = create<State>((set, get) => ({
       case 'noticesRead':
         set({ notices: markRead(get().notices, ev.ids) });
         break;
+      case 'notifyClear':
+        clearDesktopNotes(ev.events);
+        break;
       case 'officeUpdate':
         set({ officeUpdate: ev.officeUpdate });
         break;
@@ -625,11 +666,17 @@ export const useStore = create<State>((set, get) => ({
       case 'cloud':
         set({ cloud: ev.cloud });
         break;
+      case 'accounts':
+        set({ accounts: ev.accounts });
+        break;
       case 'tooling':
         set({ tooling: ev.tooling });
         break;
       case 'experiments':
         set({ experiments: ev.experiments });
+        break;
+      case 'managerChanges':
+        set({ managerChanges: ev.changes });
         break;
       case 'history':
         set({ historySeq: get().historySeq + 1 });
@@ -654,6 +701,9 @@ export const useStore = create<State>((set, get) => ({
         break;
       case 'progress':
         set({ progress: ev.progress });
+        break;
+      case 'pastCareers':
+        set({ pastCareers: ev.past });
         break;
       case 'reward':
         if (live) emitReward(ev.reward);
@@ -727,10 +777,10 @@ export const agentsOnRepo = (agents: Record<string, Agent>, repoId: string) =>
     .sort((a, b) => a.desk - b.desk);
 
 /**
- * Panels that hide the whole office (the wide ones: Kanban, terminals and the manager's console), so the
+ * Panels that hide the whole office (the wide ones: Kanban, terminals, the manager's console and the map room), so the
  * 3D view can stop drawing behind them. The phone, help, elevator panel and confirm dialogs are see-through.
  */
-export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager';
+export const coversView = (o: Overlay | null) => o?.kind === 'kanban' || o?.kind === 'terminal' || o?.kind === 'manager' || o?.kind === 'mapRoom' || (o?.kind === 'phone' && !!o.full);
 
 /**
  * Whether the 3D view stops drawing under this panel: a full-screen one anywhere, and any panel on a touch screen
@@ -766,6 +816,8 @@ export interface KanbanCard {
   qa?: QaView;
   /** The 3D board draws it as an outline: its sticky is off the board, with the agent testing it (StickyNotes.tsx). */
   ghost?: boolean;
+  /** An outsider's issue or PR (#185): the office leaves it alone. */
+  untrusted?: boolean;
 }
 
 export interface KanbanColumns {
@@ -811,13 +863,13 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const rec = qaRecords[qaKey(repo.id, p.number)];
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
-    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec };
-    const card = { ...base, ...qaCardNote(rec, p, repo.autoMerge) };
+    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
+    const card = { ...base, ...(p.untrusted ? { note: `🛡 ${OUTSIDE_PR}`, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
   }
 
-  const claimed = new Set<number>([...progress.map((c) => c.number), ...openPulls.flatMap((p) => p.closesIssues)]);
+  const claimed = new Set<number>([...progress.map((c) => c.number), ...openPulls.flatMap((p) => (p.untrusted ? [] : p.closesIssues))]);
   const open = new Set(repo.issues.map((i) => i.number));
   const held = new Map((repo.held ?? []).map((h) => [h.issue, h.pr]));
   const paced = repo.autoAssign && usage && usage.state !== 'normal' ? (usage.state === 'paused' ? 'paused' : 'paced') : '';
@@ -827,6 +879,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       const waits = blockers(i.body, open);
       const labels = i.labels.slice(0, 2).join(', ');
       const card = { key: `i-${i.number}`, number: i.number, title: i.title, url: i.url };
+      if (i.untrusted) return { ...card, note: `🛡 ${UNTRUSTED_ISSUE} · @${i.author ?? 'ghost'}`, tone: 'warn' as const, untrusted: true };
       // Its PR was closed: it waits for the manager rather than going back to auto-assign.
       if (held.has(i.number)) return { ...card, note: `PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
       return { ...card, note: (waits.length ? `after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };

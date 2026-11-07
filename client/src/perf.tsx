@@ -250,7 +250,8 @@ export function StatsProbe({ paused }: { paused: boolean }) {
 
 /** The corner readout for `?stats`. Shows when the 3D view is paused, since the numbers stop updating then. */
 export function StatsReadout() {
-  const paused = useRenderPaused();
+  const room = useStore((s) => s.overlay?.kind === 'mapRoom'); // the map room's canvas measures itself
+  const paused = useRenderPaused() && !room;
   return (
     <div className="stats" aria-hidden="true">
       <span

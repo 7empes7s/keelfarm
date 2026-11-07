@@ -4,6 +4,7 @@
 import { useStore } from '../store';
 import type { LabJobView, TestLabSettings } from '../../../shared/testLab';
 import { Icon } from './Icon';
+import { ProgressBar } from './ProgressBar';
 import './testLab.css';
 
 const ago = (at: number) => `${Math.max(0, Math.round((Date.now() - at) / 60_000))} min ago`;
@@ -43,6 +44,18 @@ export function TestLabCard() {
           <div className={`small office-state ${lab.held ? 'office-state-bad' : lab.running.length ? 'office-state-busy' : 'office-state-ok'}`} role="status">
             {lab.held ?? (lab.running[0] ? `${lab.running[0].title} for ${lab.running[0].agent} (floor ${lab.running[0].floor})` : 'Idle: agents ask it for screenshots, browser checks and heavy runs')}
           </div>
+          {lab.running.map((j) => (
+            <ProgressBar
+              key={j.id}
+              label={`${j.title} · floor ${j.floor}`}
+              value={j.startedAt ? `${Math.max(0, Math.round((Date.now() - j.startedAt) / 60_000))} min` : 'starting'}
+              pct={null}
+              compact
+              aria={`Lab run for ${j.agent}: ${j.title}, running`}
+              onClick={() => openOverlay({ kind: 'terminal', agentId: j.agentId })}
+              tap={`Open ${j.agent}'s terminal`}
+            />
+          ))}
           {lab.queue.slice(0, 5).map((j, i) => (
             <div key={j.id} className="small muted row wrap">
               {i + 1}. {j.title} · floor {j.floor} · {who(j)}

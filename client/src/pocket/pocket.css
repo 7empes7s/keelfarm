@@ -138,9 +138,20 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
 .pk-tabs {
   order: 1;
 }
-/* typing on the phone (viewport.ts): the keyboard has the bottom, so the tab bar steps aside until it closes */
-html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
+/* typing on the phone (viewport.ts): the keyboard has the bottom, so the tab bar and the decisions tray step aside until
+   it closes (#152) */
+html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   display: none;
+}
+/* a short chat (a small phone with the keyboard up): the header's presence line gives its room to the conversation and
+   the composer; the working strip says what the CEO is doing */
+.pk-main-chat {
+  container: pk-chat / size;
+}
+@container pk-chat (max-height: 340px) {
+  .phone-chat > .chat-head {
+    display: none;
+  }
 }
 
 .pk-railed .pk-body {
@@ -186,13 +197,49 @@ html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
 .pk-switch kbd {
   font-size: 0.7rem;
 }
+/* the CEO chat's header button (#214): their avatar, pressed while the chat is open */
+.pk-chat-btn {
+  position: relative;
+}
+.pk-chat-btn-on {
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+  box-shadow: none;
+  transform: translateY(2px);
+}
+.pk-chat-avatar {
+  position: relative;
+  display: inline-grid;
+  vertical-align: middle;
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-width: 2px;
+  font-size: 0.75rem;
+}
+.pk-chat-working {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-outline);
+  background: var(--ds-good-fill);
+}
+.pk-chat-btn .badge-dot {
+  top: -8px;
+  right: -8px;
+}
 
-/* the pages, the console over them, and a terminal, app or card in a pane beside them */
+/* the pages (or the console in their place), and a terminal, app or card in a pane beside them; the panel manager
+   (ui/panels.ts, #212) sets the console's and the pane's z-index so the one opened or touched last is in front */
 .pk-railed .pk-work {
   position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
+  container: pkwork / inline-size;
 }
 .pk-railed .pk-main {
   flex: 1 1 0;
@@ -203,24 +250,57 @@ html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
   max-width: none;
   padding: 16px 20px 24px;
 }
+/* on a phone the console and the pane are full-screen panels, in the same order */
+.pocket:not(.pk-railed) :is(.pk-pane, .pk-console-host) > .overlay {
+  z-index: calc(var(--ds-z-panel) + var(--pk-layer, 0));
+}
+.pk-railed .pk-work-console > .pk-main {
+  display: none;
+}
 .pk-railed .pk-console-host:not(:empty) {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
+  container: pkpanel / inline-size;
+  background: var(--paper);
 }
 .pk-railed .pk-pane:not(:empty) {
   position: relative;
-  z-index: 2;
   flex: 1.5 1 0;
   min-width: 0;
   display: flex;
+  container: pkpanel / inline-size;
   border-left: var(--ds-border-strong) solid var(--ds-outline);
+  background: var(--paper);
 }
+/* too narrow for two panels side by side (the chat docked on a small desktop) and at tablet widths: the pane covers
+   the page */
 .pk-layout-medium .pk-pane:not(:empty) {
   position: absolute;
   inset: 0;
   border-left: none;
+}
+@container pkwork (max-width: 719px) {
+  .pk-railed .pk-pane:not(:empty) {
+    position: absolute;
+    inset: 0;
+    border-left: none;
+  }
+}
+/* a panel lays out for the width it has, not the window's: a preview beside the chat stacks its PR column under it */
+@container pkpanel (max-width: 900px) {
+  .pk-railed .app-body {
+    flex-direction: column;
+  }
+  .pk-railed .prc-side {
+    flex: 0 0 auto;
+    max-height: 45%;
+  }
+  .pk-railed .compare-sides {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
 }
 .pk-railed :is(.pk-pane, .pk-console-host) > .overlay {
   position: absolute;
@@ -242,9 +322,31 @@ html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
 }
 
 /* the CEO's chat, docked on the right (medium widths: a drawer over the pages) */
+.pk-dock-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  z-index: 1;
+  width: 14px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pk-dock-grip:is(:hover, :focus-visible, :active) {
+  background: linear-gradient(90deg, transparent 5px, var(--ds-focus) 5px, var(--ds-focus) 9px, transparent 9px);
+  outline: none;
+}
+/* what the last panel replaced (#212): one tap brings it back */
+.pk-back-chip {
+  min-width: 0;
+  max-width: 220px;
+  min-height: var(--ds-target);
+}
 .pk-dock {
+  position: relative;
   flex: none;
-  width: clamp(340px, 28vw, 440px);
+  /* dragged between 360 and 520 px (DockGrip.tsx), never leaving the rail and pages under 600 px */
+  width: clamp(360px, var(--pk-dock-w, 380px), max(360px, 100% - 692px));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -273,6 +375,22 @@ html[data-typing] .pocket:not(.pk-railed) .pk-tabs {
 .pk-dock .phone-chat {
   width: 100%;
   background: var(--paper);
+}
+/* the chat full screen (#201): wide, the docked chat covers the rail and the pages, which keep their place behind it;
+   on a phone the tab bar and the working strip's second line step aside */
+.pk-railed.pk-chat-full .pk-dock {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: auto;
+  border-left: none;
+  box-shadow: none;
+}
+.pk-railed.pk-chat-full :is(.pk-tabs, .pk-work) {
+  visibility: hidden;
+}
+.pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
+  display: none;
 }
 
 /* Company: the floors as a grid of cards, usage and the CEO in a column beside them (above them when it's narrower) */

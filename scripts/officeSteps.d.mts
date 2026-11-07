@@ -25,6 +25,15 @@ export interface StepResult {
 }
 export function preflightSteps(opts: { startMode: boolean }): PreflightStep[];
 export function preflightOutcome(steps: string[], results: StepResult[]): { go: boolean; error: string | null };
+export const PREFLIGHT_TEST: string[];
+export const TEST_RETRY_WAIT_MS: number;
+export interface FailedTest {
+  file: string;
+  name: string;
+}
+export function failedTests(output: string): FailedTest[];
+export function testRetryArgs(failed: FailedTest[]): string[];
+export function testsFailedError(failed: FailedTest[], fallback: string): string;
 export function isOfficeState(json: unknown): boolean;
 export interface Verdict {
   done: boolean;

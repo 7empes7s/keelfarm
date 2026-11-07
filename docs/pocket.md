@@ -42,19 +42,28 @@ the 3D office's top bar switches to it, **🏢 3D office** in pocket mode's head
 Controls) does either from the keyboard. Each device remembers the last choice; `?pocket=1` / `?pocket=0` still win.
 
 The layout follows the window's width (in the UI scale's px): up to 760 px it's the phone's, with the tabs at the
-bottom. From 761 px a rail on the left takes their place, with ⚙️ at its foot and badges for the chat and approvals:
+bottom. From 761 px a rail on the left takes their place, with ⚙️ at its foot and a badge for approvals. The rail only
+navigates: the CEO's chat is a window, opened from the header's top right like 🔔 (#214), by the CEO's avatar with an
+unread badge and a dot while they work (pressed while it's open):
 
 - **1024 px and wider**: the rail with labels, and the CEO's chat docked on the right while you use the other tabs
-  (✕ hides it, 💬 on the rail brings it back; remembered). Company shows the floors as a grid of cards with usage and
-  the CEO beside them, the Kanban its whole board side by side, Team its agents as a grid, and Approvals a list of
-  decisions beside the one picked. An agent's terminal, a floor's app or a card (from a tab or a chat chip) opens in a
-  pane beside the page; ⚙️ opens the console over the pages, with its top tabs and side menu.
-- **761-1023 px**: the rail with icons only; 💬 opens the chat as a drawer over the pages, and terminals, apps and
-  the console cover the pages.
+  (✕ or the avatar hides it, the avatar brings it back; drag its left edge, or focus it and use the arrow keys, for a
+  width between 360 and 520 px; both remembered). Company shows the floors as a grid of cards with usage and the CEO
+  beside them, the Kanban its whole board side by side, Team its agents as a grid, and Approvals a list of decisions
+  beside the one picked. ⚙️ opens the console in the pages' place, with its top tabs and side menu. An agent's terminal,
+  a floor's app or a card (from a tab or a chat chip) opens in a pane beside them, or over them when the room left
+  beside the chat is under 720 px.
+- **761-1023 px**: the rail with icons only; the avatar opens the chat as a drawer over the pages, and terminals, apps
+  and the console cover the pages. Opening one closes the drawer.
 
-Touch-only screens keep the phone's layout below 1024 px. Keys, never while typing in a field: **1**-**5** (or
-**Alt+1**-**5**) the tabs in the rail's order, **/** the chat's message box, **Esc** closes the open panel, then the
-chat drawer.
+Whatever you open, tap or focus last comes to the front (#212, `ui/panels.ts`): a chat chip, a notification or a card
+never opens behind the console, the rail brings its page in front of it, and ⚙️ brings the console back in front of a
+pane. A window opened in place of another leaves a **‹ back chip** in the header that brings the first one back.
+
+Touch-only screens keep the phone's layout below 768 px wide or 600 px tall (an iPad upright gets the rail and the
+chat drawer, a phone on its side doesn't). Keys, never while typing in a field: **1**-**5** (or **Alt+1**-**5**) the
+tabs in the phone's order (**2** is the chat), **/** the chat's message box, **Esc** closes the top panel only, then
+the chat drawer.
 
 ### The tour and What's new
 
@@ -73,6 +82,7 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `look`, `phone`, `phone-tour`, `ceo`, `hires`, `upstairs`, `whiteboard`, `watch`, `office`: walking the building | | | ✓ |
 | `pocket-tabs`: the five tabs | ✓ | ✓ | |
 | `desk-keys`: 1-5, / and 🏢 3D office | | ✓ | |
+| `chat-button`: the chat opens from the header's avatar | | ✓ | |
 | `search`: 🔍 search everything | ✓ | ✓ | ✓ |
 | `guide`: the ✅ guide checklist | ✓ | ✓ | ✓ |
 | `bell`: 🔔 the notification centre | ✓ | ✓ | ✓ |
@@ -80,6 +90,8 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `console`: the console's tabs, side menus and search | ✓ | ✓ | ✓ |
 | `charter`: the charter page and its numbers | ✓ | ✓ | ✓ |
 | `costs`: Mission control's cost insights and cards | ✓ | ✓ | ✓ |
+| `agent-chat`: an agent's chat, chat mode and reactions | ✓ | ✓ | ✓ |
+| `chat-full`: ⛶ the CEO chat full screen | ✓ | ✓ | ✓ |
 | `info`: every screen's ⓘ | ✓ | ✓ | |
 | `switch`: the 2D office | | | ✓ |
 
@@ -105,8 +117,10 @@ about:
 - Claude's usage limit pauses the office, or a usage warning paces it
 - every merge (off unless you turn it on)
 
-You get at most one notification of each kind a minute. Whatever else of that kind happens in the minute arrives
-together as one summary ("🔀 9 more merges"), so a burst of merges is two notifications, not ten.
+Nothing is sent while you're using the app on any device (a tab on screen and touched in the last minute; Settings →
+Notifications → "Quiet while I'm using the app on any device"). Otherwise a note waits 15 seconds, and reading it on a
+device meanwhile cancels it. Each kind is one notification that updates in place ("💬 Morgan: 3 new messages"), at most
+once every two minutes while unread; reading it on one device clears it from the others.
 
 **Office address for links:** the address your phone opens the office at (for example your Tailscale Serve URL).
 Every ntfy message ends with it, so a tap takes you there. Opening the settings over HTTPS fills it in when it's empty.

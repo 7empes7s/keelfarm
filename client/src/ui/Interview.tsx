@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { Markdown } from './Markdown';
 import { backdropClose, closeOverlay, useBackLayer } from './Panel';
-import { HireSetupFields, cliLabel, hireCli, hireOverrides, setupOf, type HireSetup } from './Phone';
+import { HireSetupFields, cliLabel, hireCli, hireOverrides, setupOf, type HireSetup } from './TeamChanges';
 import { CLAUDE_MODELS, effectiveModel } from '../../../shared/models';
 import { CloseButton, Icon } from './Icon';
 

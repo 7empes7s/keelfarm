@@ -1,11 +1,14 @@
-// An agent's window (#86, #117): one header row (their ring, name, task, time, ■ and ⋯), the terminal in all the room
-// there is with the message box under it, and the details (Now, Profile, Setup) in a bottom sheet on phones or a side
-// panel on computers.
+// An agent's window (#86, #117): one header row (their ring, name, task, time, ■ and ⋯), the terminal or their chat
+// (#120, AgentChat.tsx; the Chat | Terminal switch) in all the room there is with the message box under it, and the
+// details (Now, Profile, Setup) in a bottom sheet on phones or a side panel on computers.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { api } from '../api';
 import { isBusy, kanbanFor, agentsOnRepo, useStore } from '../store';
+import { AgentChat } from './AgentChat';
 import { AgentDetails, type DetailsTab } from './AgentDetails';
+import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMode';
 import { AgentRing } from './AgentRing';
+import { TaskRing } from './TaskProgress';
 import { canPickWork, sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
 import { clearDesk, letGo, stopAgent } from './dangerActions';
 import { LiveTerminal } from './LiveTerminal';
@@ -27,6 +30,7 @@ import { useA11y } from './a11y';
 import { Icon } from './Icon';
 import { useMode } from '../pocket/mode';
 import './termPhone.css';
+import { useDraft } from '../drafts';
 
 function elapsed(from: number | null, to: number | null) {
   if (!from) return '';
@@ -98,7 +102,7 @@ function useTermFont(phone: boolean): [number, (by: 1 | -1) => void] {
   return [size, step];
 }
 
-export function TerminalView({ agentId }: { agentId: string }) {
+export function TerminalView({ agentId, view, profile = false }: { agentId: string; view?: AgentPane; profile?: boolean }) {
   const agent = useStore((s) => s.agents[agentId]);
   const log = useStore((s) => s.logs[agentId]) ?? [];
   const shotAt = useStore((s) => s.screens[agentId]);
@@ -107,20 +111,22 @@ export function TerminalView({ agentId }: { agentId: string }) {
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
   const office = useMode((s) => s.mode) === 'office';
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`agent:${agentId}`); // kept through a reload (#216)
   const [busy, setBusy] = useState(false);
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState(profile);
   const [side, setSide] = useState(true);
   const details = phone ? sheet : side;
   const setDetails = phone ? setSheet : setSide;
-  const [tab, setTab] = useState<DetailsTab>('now');
+  const [tab, setTab] = useState<DetailsTab>(profile ? 'profile' : 'now');
   const swipe = useSwipe(details, setDetails);
   const [fontPx, stepFontSize] = useTermFont(phone);
   const uiScale = useA11y((s) => s.prefs.uiScale);
   const fontSize = phone ? unzoomedFont(fontPx, uiScale) : fontPx;
   const [keysOn, setKeysOn] = useTermKeysPref(false);
+  const chatMode = useChatMode();
+  const [opened, setOpened] = useState(view);
   const [liveLine, setLiveLine] = useState('');
   const onStatus = useCallback((line: string) => setLiveLine(line), []);
   const [, tick] = useState(0);
@@ -180,6 +186,13 @@ export function TerminalView({ agentId }: { agentId: string }) {
   const canMessage = working || (agent.task !== 'qa' && !!agent.branch && agent.status !== 'idle');
   const qaRec = agent.prNumber ? qaRecords[`${repo.id}#${agent.prNumber}`] : undefined;
   const signIn = signInFor(agent, settings);
+  const noChat = chatUnavailable(agent, settings);
+  const pane = signIn ? 'terminal' : paneFor(opened, chatMode.on, noChat);
+  // The switch is the device's choice for every window from now on (chat mode).
+  const choose = (p: AgentPane) => {
+    setOpened(p);
+    chatMode.set(p === 'chat');
+  };
   const time = agent.startedAt ? elapsed(agent.startedAt, working ? null : agent.endedAt) : '';
   const send = (t: string) => {
     const body = t.trim();
@@ -236,7 +249,9 @@ export function TerminalView({ agentId }: { agentId: string }) {
       <div className="muted small">Latest Playwright screenshot{agent.screenshotAt ? ` · ${new Date(agent.screenshotAt).toLocaleTimeString()}` : ''}</div>
     </div>
   );
-  const split = (
+  const split = pane === 'chat' ? (
+    <AgentChat agent={agent} repo={repo} onTerminal={() => choose('terminal')} onSend={send} onStop={() => void stop()} />
+  ) : (
     <div className="term-split">
       {agent.terminal ? (
         <LiveTerminal agentId={agent.id} cli={cli} fontSize={fontSize} compact={phone} keys={phone ? keysOn : undefined} onStatus={phone ? onStatus : undefined} />
@@ -334,6 +349,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
   const title = (
     <div className="aw-head">
       <AgentRing agent={agent} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
+      <TaskRing agent={agent} link />
       <button type="button" className="aw-who" aria-expanded={details} aria-controls="aw-details" title={details ? 'Hide the details' : 'Task, profile and setup (or swipe up)'} {...swipe}>
         <span className="aw-name">
           {agent.name}
@@ -351,6 +367,22 @@ export function TerminalView({ agentId }: { agentId: string }) {
         <button type="button" className="aw-icon aw-stop" aria-label={`Stop ${agent.name}…`} title={`Stop ${agent.name} (asks first)`} disabled={busy} onClick={() => void stop()}>
           <Icon name="square" />
         </button>
+      )}
+      {!noChat && phone && (
+        // one button for the other pane: the two-button pill doesn't fit beside ■, ⋯ and × at 390px
+        <button type="button" className="aw-icon aw-pane-toggle" aria-label={pane === 'chat' ? 'Terminal' : 'Chat'} title={pane === 'chat' ? 'Their terminal' : 'Their work as a conversation'} onClick={() => choose(pane === 'chat' ? 'terminal' : 'chat')}>
+          <span aria-hidden>{pane === 'chat' ? '⌨' : '💬'}</span>
+        </button>
+      )}
+      {!noChat && !phone && (
+        <div className="aw-panes" role="group" aria-label="Show">
+          {(['chat', 'terminal'] as const).map((p) => (
+            <button key={p} type="button" aria-pressed={pane === p} aria-label={p === 'chat' ? 'Chat' : 'Terminal'} title={p === 'chat' ? 'Their work as a conversation' : 'Their terminal'} onClick={() => choose(p)}>
+              <span aria-hidden>{p === 'chat' ? '💬' : '⌨'}</span>
+              <span className="aw-pane-label">{p === 'chat' ? ' Chat' : ' Terminal'}</span>
+            </button>
+          ))}
+        </div>
       )}
       {menu}
     </div>
@@ -389,6 +421,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
       <div className={`aw-body ${!phone && details ? 'aw-body-side' : ''}`}>
         <div className="aw-main">
           {notes}
+          {noChat && chatMode.on && agent.role !== 'ceo' && <p className="ac-note">{noChat}</p>}
           {split}
           {form}
         </div>

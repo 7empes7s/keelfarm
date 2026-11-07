@@ -24,6 +24,7 @@ export const DEFAULT_NOTIFY: NotifySettings = {
   channels: { desktop: true, push: true, ntfy: true, telegram: true },
   officeUrl: '',
   telegramMirror: false,
+  quietInApp: true,
 };
 
 /** An http(s) address the manager's devices can open, or null. */
@@ -42,7 +43,7 @@ export function officeUrl(raw: unknown): string | null {
 
 /** Notification settings from a saved state or a PATCH /api/settings, field by field; anything invalid keeps `base`. */
 export function notifySettings(base: NotifySettings, patch: unknown): NotifySettings {
-  const p = (patch && typeof patch === 'object' ? patch : {}) as { events?: unknown; channels?: unknown; officeUrl?: unknown; telegramMirror?: unknown };
+  const p = (patch && typeof patch === 'object' ? patch : {}) as { events?: unknown; channels?: unknown; officeUrl?: unknown; telegramMirror?: unknown; quietInApp?: unknown };
   const pick = <K extends string>(keys: readonly K[], from: Record<K, boolean>, raw: unknown): Record<K, boolean> => {
     const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     return Object.fromEntries(keys.map((k) => [k, typeof r[k] === 'boolean' ? r[k] : from[k] ?? false])) as Record<K, boolean>;
@@ -57,6 +58,7 @@ export function notifySettings(base: NotifySettings, patch: unknown): NotifySett
     channels: pick(NOTIFY_CHANNELS, { ...DEFAULT_NOTIFY.channels, ...base.channels }, p.channels),
     officeUrl: url ?? base.officeUrl ?? '',
     telegramMirror: typeof p.telegramMirror === 'boolean' ? p.telegramMirror : (base.telegramMirror ?? false),
+    quietInApp: typeof p.quietInApp === 'boolean' ? p.quietInApp : (base.quietInApp ?? true),
   };
 }
 

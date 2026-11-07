@@ -78,6 +78,16 @@ export function IdeaCard({ idea, ceoName, onAccept, onEdit }: { idea: ChatIdea; 
 }
 
 /** While the CEO is on a job: the step it's on in plain words, for how long, Stop, and the job waiting next. */
+/** An office note (#193): one muted, centred line (icon and short text); tap for the whole of a long one. */
+export function NoticePill({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button type="button" className={`notice-pill ${open ? 'notice-pill-open' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+      <span className="bubble-office">{text}</span>
+    </button>
+  );
+}
+
 /** A system notice from the office (#138): its line, the output behind it under Details, and links to the commits. */
 export function NoticeCard({ text, notice }: { text: string; notice: ChatNotice }) {
   return (

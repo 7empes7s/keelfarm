@@ -261,3 +261,48 @@ for (const w of WINDOWS) {
 }
 
 
+
+// ---------- pinching the chat's text (#135) ----------
+
+const chatText = (page: Page) => page.evaluate(() => (window as unknown as { __swarmA11y: { prefs: { chatText: number } } }).__swarmA11y.prefs.chatText);
+
+test('two fingers on the chat scale its text, never reply, open the menu or zoom the page, and the size stays', async ({ page }) => {
+  chromiumOnly();
+  for (let i = 0; i < 4; i++) await page.request.post('/api/ceo/message', { data: { text: `Message ${i} about the plan for this week` } });
+  await page.goto('/?pocket=1&tab=chat');
+  await page.evaluate(() => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ uiScale: 90, chatText: 100 }));
+  const bubble = page.locator('.bubble-me').last();
+  await expect(bubble).toBeVisible();
+  const b = (await bubble.boundingBox())!;
+  const [cx, cy] = [b.x + b.width / 2, b.y + b.height / 2];
+  const cdp = await page.context().newCDPSession(page);
+  const pill = page.locator('.chat-text-pill');
+  // the right finger slides well past a swipe-to-reply, and they stay down past a long press
+  await drag(cdp, [{ from: { x: cx - 20, y: cy }, to: { x: cx - 120, y: cy } }, { from: { x: cx + 20, y: cy }, to: { x: cx + 120, y: cy } }], async () => {
+    await expect(pill).toContainText('Text 200%');
+    await page.waitForTimeout(700);
+  });
+  expect(await chatText(page)).toBe(200);
+  await expect(page.locator('.chat-reply'), 'no reply from a pinch').toHaveCount(0);
+  await expect(page.locator('.chat-menu'), 'no long-press menu from a pinch').toHaveCount(0);
+  const page1 = await page.evaluate(() => ({ zoom: window.visualViewport?.scale ?? 1, wide: document.documentElement.scrollWidth - window.innerWidth }));
+  expect(page1).toEqual({ zoom: 1, wide: 0 });
+
+  await page.reload();
+  await expect(page.locator('.bubble-me').last()).toBeVisible();
+  expect(await chatText(page)).toBe(200);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--chat-text'))).toBe('2');
+
+  // and back: fingers from 240 px apart to 120 halve it
+  const c = (await page.locator('.chat-log').boundingBox())!;
+  const [x, y] = [c.x + c.width / 2, c.y + c.height / 2];
+  await drag(cdp, [{ from: { x: x - 120, y }, to: { x: x - 60, y } }, { from: { x: x + 120, y }, to: { x: x + 60, y } }], () => expect(pill).toContainText('Text 100%'));
+  expect(await chatText(page)).toBe(100);
+
+  // a one-finger swipe is still a reply, not a pinch
+  const last = page.locator('.bubble-me').last();
+  const l = (await last.boundingBox())!;
+  await drag(cdp, [{ from: { x: l.x + 10, y: l.y + l.height / 2 }, to: { x: l.x + 120, y: l.y + l.height / 2 } }], async () => {});
+  await expect(page.locator('.chat-reply')).toHaveCount(1);
+  expect(await chatText(page)).toBe(100);
+});

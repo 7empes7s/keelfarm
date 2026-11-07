@@ -12,6 +12,7 @@ import { newSince, stepsFor, textParts, TOUR, isStep, type TourStep, type Track,
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
 import { Icon } from './Icon';
 import './tour.css';
+import { useChatMode } from './chatMode';
 import { isTouch, useTouchStick } from '../world/touch/touchState';
 
 // The tour (#121): a coach card with one sentence per step, a ring around the real control it's about, Back / Next /
@@ -34,6 +35,7 @@ const DONE: Record<string, { done: (s: S) => boolean; minMs?: number }> = {
   search: { done: () => useFinder.getState().search },
   guide: { done: () => useFinder.getState().guide },
   bell: { done: (s) => s.overlay?.kind === 'notices' },
+  'agent-chat': { done: () => useChatMode.getState().on, minMs: 3000 },
 };
 
 const TRY_LABEL: Record<TryIt, string> = { search: 'Open search', guide: 'Open the guide', bell: 'Open the bell', plan: 'Start a /plan', console: 'Open the console', charter: 'Open a charter', costs: 'Show the costs' };

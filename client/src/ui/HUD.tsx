@@ -13,6 +13,7 @@ import { stickyDrop } from '../world/boardHands';
 import { WorkersPanel } from './WorkersPanel';
 import { PresenceHud } from './PresenceHud';
 import { officeUpdateChip } from '../officeUpdate';
+import { UpdatePill } from './UpdatePill';
 import { useA11y } from './a11y';
 import { useCameraView } from '../world/camera/rig';
 import { CameraHud, OverviewButton } from './CameraHud';
@@ -31,6 +32,7 @@ import { isTouch, openHoldMenu, useTouchLook, useTouchStick } from '../world/tou
 import { TouchZoneHints } from './TouchZoneHints';
 import { switchOffice } from '../pocket/switchOffice';
 import { Icon, IconText } from './Icon';
+import { useChatMode } from './chatMode';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -130,6 +132,16 @@ function SwitchButton() {
   return (
     <button data-tour="switch" className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
       <Icon name="map" /> 2D office <kbd>{key}</kbd>
+    </button>
+  );
+}
+
+/** Chat mode (#120): desks, Team and Kanban open an agent's chat instead of their terminal; this device remembers it. */
+function ChatModeButton() {
+  const { on, set } = useChatMode();
+  return (
+    <button className="pill pill-switch" aria-pressed={on} onClick={() => set(!on)} title={`Chat mode is ${on ? 'on' : 'off'}: desks open an agent's ${on ? 'chat, their steps in plain words' : 'terminal'}. Click to switch`}>
+      💬 Chat {on ? 'on' : 'off'}
     </button>
   );
 }
@@ -245,12 +257,14 @@ export function HUD() {
         <PhotoButton />
         <SearchButton />
         <GuideButton />
+        <ChatModeButton />
         <SwitchButton />
       </div>
 
       <WorkersPanel />
       <div className="hud-chips">
         <OfficeUpdateChip />
+        <UpdatePill className="office-chip update-pill" />
         <UsageChip />
         <MemoryChip />
         <DoctorChip />

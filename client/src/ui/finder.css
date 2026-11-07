@@ -4,7 +4,7 @@
 .sheet-scrim {
   position: fixed;
   inset: 0;
-  z-index: var(--ds-z-menu);
+  z-index: var(--ds-z-popover);
   display: grid;
   place-items: center;
   padding: var(--ds-space-4);

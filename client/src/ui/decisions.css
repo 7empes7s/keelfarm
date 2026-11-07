@@ -34,18 +34,42 @@
   line-height: 1;
   background: var(--ds-surface-raised);
 }
-/* a compact row that scrolls sideways inside itself: the page never does */
+/* a row that scrolls sideways inside itself, one whole card per page (never half off it, #183): the page never does */
 .decision-row {
   display: flex;
   gap: var(--ds-space-2);
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
   padding: var(--ds-space-1) 0 var(--ds-space-2);
 }
+.decision-row::-webkit-scrollbar {
+  display: none;
+}
 .decision-row .decision-card {
-  flex: 0 0 min(280px, 82%);
+  flex: 0 0 100%;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.decision-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  white-space: nowrap;
+}
+.decision-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.decision-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ds-line-strong);
+}
+.decision-dots i.on {
+  background: var(--ds-text);
 }
 .decision-list {
   display: grid;
@@ -76,11 +100,18 @@
   --ds-icon: var(--ds-icon-md);
 }
 .decision-q {
+  /* a button: tapping it opens the whole question */
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
   font-weight: var(--ds-weight-strong);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-tight);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -109,9 +140,157 @@
   border-color: var(--ds-outline);
   color: var(--ds-on-color);
 }
+.decision-sheet-q {
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.decision-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin-bottom: var(--ds-space-2);
+}
+.decision-chip {
+  padding: 2px var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-hover);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.decision-context {
+  margin: 0 0 var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-left: 3px solid var(--ds-line-strong);
+  background: var(--ds-surface-sunken);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading);
+  overflow-wrap: anywhere;
+}
+.decision-jump {
+  min-height: var(--ds-target);
+  margin-top: var(--ds-space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-link);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.decision-q:focus-visible,
+.decision-jump:focus-visible,
 .decision-option:focus-visible,
 .decision-pill:focus-visible,
 .decision-collapse:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+/* #208: a CEO action probably answered it: one muted line and two taps instead of the options */
+.decision-probably {
+  align-items: center;
+}
+.decision-probably-what {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}
+/* the decision log (ui/DecisionLog.tsx): a bar of who closed what this week, then the closed questions */
+.decision-log {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.decision-log-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--ds-radius-pill);
+  overflow: hidden;
+  background: var(--ds-surface-sunken);
+}
+.decision-log-bar i {
+  flex-basis: 0;
+  min-width: 6px;
+}
+.decision-log-open {
+  background: var(--ds-accent);
+}
+.decision-log-bar .decision-log-you {
+  background: var(--ds-good-fill);
+}
+.decision-log-bar .decision-log-ceo {
+  background: var(--ds-link);
+}
+.decision-log-bar .decision-log-auto {
+  background: var(--ds-line-strong);
+}
+.decision-log-counts {
+  margin: 0;
+}
+.decision-log-list {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.decision-log-entry {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-line);
+  border-left-width: 4px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+.decision-log-entry.decision-log-you {
+  border-left-color: var(--ds-good-fill);
+}
+.decision-log-entry.decision-log-ceo {
+  border-left-color: var(--ds-link);
+}
+.decision-log-entry.decision-log-auto {
+  border-left-color: var(--ds-line-strong);
+}
+.decision-log-q {
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.decision-log-a {
+  overflow-wrap: anywhere;
+}
+.decision-log-how {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+}
+.decision-log-link {
+  min-height: var(--ds-target);
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-link);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  text-decoration: none;
+  cursor: pointer;
+}
+.decision-log-reopen {
+  margin-left: auto;
+}
+.decision-log-link:focus-visible {
   outline: 3px solid var(--ds-focus);
   outline-offset: 2px;
 }

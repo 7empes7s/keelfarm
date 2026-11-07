@@ -142,6 +142,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Set your name and colour.', 'Choose whether others see you.', 'Wave at visitors with the emote key.'],
     docs: `${HOW}#shared-presence`,
   },
+  accounts: {
+    title: 'Providers & accounts',
+    shows: 'Every login and API key the coding agents on this computer run on, with usage, status and cost.',
+    actions: ['Add a second subscription or an API key.', 'Pin an agent or the CEO to an account or tag.', 'Pause, reorder, test or remove an account.'],
+    docs: `${DOCS}accounts.md`,
+  },
   'cloud-agents': {
     title: 'Cloud agents',
     shows: 'Agents that work in an Upstash Box and carry on when the office is closed.',

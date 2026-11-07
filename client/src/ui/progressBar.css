@@ -1,0 +1,269 @@
+/* The progress bar and ring (#140, ProgressBar.tsx, docs/design.md "Progress bar"). Tokens only. */
+
+.pb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+}
+.pb-tap {
+  inline-size: 100%;
+  min-block-size: var(--ds-target);
+  justify-content: center;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+.pb-tap:hover {
+  background: var(--ds-surface-hover);
+}
+.pb-tap:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.pb-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+}
+.pb-label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.pb-value {
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pb-chevron {
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+}
+.pb-compact .pb-head {
+  font-size: var(--ds-text-xs);
+}
+
+/* the track: an 8 px pill with a hairline of ink, like the share bar */
+.pb-track,
+.pb-steps {
+  display: flex;
+  inline-size: 100%;
+  block-size: var(--ds-space-2);
+}
+.pb-track {
+  overflow: hidden;
+  border: 1px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.pb-compact .pb-track,
+.pb-compact .pb-steps {
+  block-size: 6px;
+}
+.pb-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--ds-radius-pill);
+  background: var(--pb-tone);
+  transition: inline-size var(--ds-dur-slow) var(--ds-ease);
+}
+.pb-good {
+  --pb-tone: var(--ds-good-fill);
+}
+.pb-warn {
+  --pb-tone: var(--ds-warn-fill);
+}
+.pb-bad {
+  --pb-tone: var(--ds-bad-fill);
+}
+.pb-neutral {
+  --pb-tone: var(--ds-series-4);
+}
+
+/* nobody knows how far: a third of the track sweeping across (still at the start without motion) */
+.pb-indeterminate .pb-fill {
+  inline-size: 35%;
+  animation: pb-sweep calc(var(--ds-dur-slow) * 6) var(--ds-ease) infinite;
+}
+@keyframes pb-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+/* stacked parts */
+.pb-part {
+  display: block;
+  flex-basis: 0;
+}
+.pb-part + .pb-part {
+  border-inline-start: 1px solid var(--ds-outline);
+}
+.pb-s1 {
+  background: var(--ds-series-2);
+}
+.pb-s2 {
+  background: var(--ds-series-4);
+}
+.pb-s3 {
+  background: var(--ds-series-1);
+}
+.pb-s4 {
+  background: var(--ds-line-strong);
+}
+.pb-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.pb-dot {
+  display: inline-block;
+  inline-size: var(--ds-space-2);
+  block-size: var(--ds-space-2);
+  margin-inline-end: var(--ds-space-1);
+  border: 1px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+}
+
+/* steps: a short pill each, the one running now pulsing */
+.pb-steps {
+  gap: 3px;
+}
+.pb-step {
+  flex: 1;
+  border: 1px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.pb-step-done,
+.pb-step-now {
+  background: var(--pb-tone);
+}
+.pb-step-now {
+  animation: pb-pulse calc(var(--ds-dur-slow) * 5) ease-in-out infinite alternate;
+}
+@keyframes pb-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+.pb-step-labels {
+  display: flex;
+  gap: 3px;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.pb-step-labels > span {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pb-step-labels .pb-step-label-now {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-strong);
+}
+.pb-note {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+/* the ring */
+.pr {
+  position: relative;
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+}
+.pr svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.pr-arc {
+  fill: none;
+  stroke: var(--ds-line-strong);
+  stroke-width: 4;
+}
+.pr-done,
+.pr-now {
+  stroke: var(--pb-tone);
+}
+.pr-now {
+  animation: pb-pulse calc(var(--ds-dur-slow) * 5) ease-in-out infinite alternate;
+}
+.pr-glyph {
+  position: relative;
+  font-size: var(--ds-text-xs);
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-step-now,
+  .pr-now,
+  .pb-indeterminate .pb-fill {
+    animation: none;
+  }
+}
+html[data-reduce-motion] .pb-step-now,
+html[data-reduce-motion] .pr-now,
+html[data-reduce-motion] .pb-indeterminate .pb-fill {
+  animation: none;
+}
+
+/* a floor's progress card (FloorProgress.tsx) */
+.fp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+.fp-name {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.fp-trend {
+  inline-size: 3.5em;
+  block-size: 0.9em;
+  vertical-align: -0.1em;
+  fill: var(--ds-series-2);
+  stroke: var(--ds-outline);
+  stroke-width: 0.5;
+}
+.costs-stat .pb {
+  align-self: stretch;
+}
+.kcard .pb,
+.ac-stage {
+  margin-block: var(--ds-space-1);
+}
+.ac-stage:empty {
+  display: none;
+}
+.pr-link {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  min-inline-size: var(--ds-target);
+  min-block-size: var(--ds-target);
+  border-radius: var(--ds-radius-pill);
+}
+.pr-link:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+}

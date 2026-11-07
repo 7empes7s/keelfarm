@@ -7,6 +7,7 @@ import { go, openSearch, useFinder } from './goTo';
 import { buildIndex, loadRecent, saveRecent, searchAll, withRecent, type Item } from './searchIndex';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
+import { XLabel } from './HoverCard';
 
 const close = () => useFinder.setState({ search: false });
 
@@ -126,8 +127,9 @@ export function SearchPalette({ where }: { where: Where }) {
 /** The 🔍 that opens it. */
 export function SearchButton({ className }: { className?: string }) {
   return (
-    <button data-tour="search" className={className ?? 'pill pill-search'} onClick={openSearch} aria-label="Search everything (Ctrl+K)" title="Search everything (Ctrl+K)">
+    <button data-tour="search" className={`${className ?? 'pill pill-search'} xbtn`} onClick={openSearch} aria-label="Search everything (Ctrl+K)" title="Search everything (Ctrl+K)">
       <Icon name="search" />
+      <XLabel text="Search everything" keys="Ctrl K" />
     </button>
   );
 }

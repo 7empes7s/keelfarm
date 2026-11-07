@@ -39,10 +39,30 @@ test("the console's search finds a setting by its label and opens its section at
   await enterOffice(page);
   await page.keyboard.press('e');
   const panel = page.getByRole('dialog', { name: /Manager's console/ });
+  await panel.getByRole('button', { name: 'Search settings' }).click(); // the 🔍 at the end of the sections row (#199)
+  await page.keyboard.press('Escape'); // closes the search, not the console
+  await expect(panel.getByRole('searchbox')).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Search settings' }).click();
   await panel.getByRole('searchbox', { name: 'Search settings' }).fill('box size');
   await panel.getByRole('button', { name: /^Box size/ }).click();
   await expect(panel.getByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true');
   await expect(panel.getByRole('tab', { name: 'Cloud agents' })).toHaveAttribute('aria-selected', 'true');
   await expect(panel.getByLabel('Box size')).toBeVisible();
   expect(new URL(page.url()).hash).toBe('#settings/cloud-agents');
+  await expect(panel.getByRole('searchbox')).toHaveCount(0); // the row is back
+});
+
+test("the console's sections sit in a row under its tabs, the arrow keys move between them (#199)", async ({ page }) => {
+  await startAt(page, AT_DESK);
+  await enterOffice(page);
+  await page.keyboard.press('e');
+  const panel = page.getByRole('dialog', { name: /Manager's console/ });
+  await panel.locator('.cn-groups').getByRole('tab', { name: /Work/ }).click();
+  const row = panel.locator('.cn-sections');
+  await row.getByRole('tab', { name: 'Floors & repos' }).click();
+  await page.keyboard.press('ArrowRight');
+  await expect(row.getByRole('tab', { name: 'Issues' })).toHaveAttribute('aria-selected', 'true');
+  await expect(row.getByRole('tab', { name: 'Issues' })).toBeFocused();
+  await expect(page).toHaveURL(/#work\/issues$/);
 });

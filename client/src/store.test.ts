@@ -234,4 +234,9 @@ describe('pausesView (#83)', () => {
     expect(pausesView({ kind: 'terminal', agentId: 'ken' }, false)).toBe(true);
     expect(pausesView(null, false)).toBe(false);
   });
+
+  it('under the CEO chat full screen, not the phone (#201)', () => {
+    expect(pausesView({ kind: 'phone', tab: 'chat', full: true }, false)).toBe(true);
+    expect(pausesView({ kind: 'phone', tab: 'chat' }, false)).toBe(false);
+  });
 });

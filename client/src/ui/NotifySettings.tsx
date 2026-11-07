@@ -238,6 +238,23 @@ function ThisDevice({ notify, save }: { notify: Notify; save: Save }) {
   );
 }
 
+/** Today's notes (#210): sent, and held back because the manager was in the app, as one small bar. */
+function QuietToday() {
+  const { sent, skipped } = useStore((s) => s.notifyChannels.today);
+  const total = sent + skipped;
+  return (
+    <div className="notify-today" aria-label={`Today: ${sent} sent, ${skipped} not sent because you were in the app`}>
+      <div className="notify-today-bar" aria-hidden>
+        {total > 0 && <span className="notify-today-sent" style={{ width: `${(sent / total) * 100}%` }} />}
+        {total > 0 && <span className="notify-today-skipped" style={{ width: `${(skipped / total) * 100}%` }} />}
+      </div>
+      <span className="small muted">
+        Today: {sent} sent · {skipped} skipped because you were in the app
+      </span>
+    </div>
+  );
+}
+
 export function NotifySettings() {
   const notify = useStore((s) => s.settings.notify);
   const [url, setUrl] = useState(notify.officeUrl);
@@ -254,7 +271,12 @@ export function NotifySettings() {
       <h3>
         <Icon name="bell" /> Notifications
       </h3>
-      <p className="muted small">What the office tells you when you're not looking. At most one of each kind a minute; a burst arrives as one summary.</p>
+      <p className="muted small">What the office tells you when you're not looking. One notification per kind, updated in place; read it on one device and it's gone from the others.</p>
+      <label className="toggle block">
+        <input type="checkbox" checked={notify.quietInApp !== false} onChange={(e) => save({ quietInApp: e.target.checked })} />
+        <span>Quiet while I'm using the app on any device</span>
+      </label>
+      <QuietToday />
       <div className="notify-events" role="group" aria-label="Tell me when">
         {NOTIFY_EVENTS.map((e) => (
           <label key={e.id} className="toggle block">

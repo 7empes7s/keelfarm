@@ -45,10 +45,10 @@ Rejected:
 | Type | `--ds-text-xs` .75 · `-sm` .875 · `-md` 1 · `-lg` 1.125 · `-xl` 1.375 rem; `--ds-leading`, `--ds-leading-tight`, `--ds-weight(-strong)` |
 | Radii | `--ds-radius-sm` 8 · `-md` 12 · `-lg` 16 · `-xl` 24 · `-pill`; borders `--ds-border` 2, `--ds-border-strong` 3 |
 | Touch | `--ds-target` 44 px |
-| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; chart series `--ds-series-1…4` |
+| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; chart series `--ds-series-1…8` (in order; charts group a donut's rest as "Other" in the 8th) |
 | Elevation | `--ds-shadow-1` (buttons), `-2` (cards), `-3` (panels), `--ds-shadow-float` (menus) |
-| Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
-| Layers | `--ds-z-hud` 10 · `-panel` 30 · `-menu` 50 · `-confirm` 60 · `-toast` 70 |
+| Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`, `--ds-ease-spring`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
+| Layers | `--ds-z-base` 10 · `-panel` 30 · `-sheet` 40 · `-popover` 50 · `-toast` 60 · `-tour` 70 · `-modal` 80; no raw `z-index` over 10 (`designTokens.test.ts`) |
 | Safe areas | `--ds-safe-top/right/bottom/left` |
 
 The values equal the office's old colours, so moving a rule onto tokens changes nothing. There is no dark palette: don't
@@ -69,7 +69,7 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 | 🛰️ Company | Mission control (with server health and the test lab), Charter, Memory map |
 | 🧠 CEO | The CEO (chat, mandates, team changes, project briefs), CEO settings, Tools & skills |
 | 📜 History | Sessions, Daily log, Time-lapse (3D only) |
-| ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
+| ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Providers & accounts, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
 
 - Each section links as `#<tab>/<section>` (e.g. `#settings/cloud-agents`), and each tab remembers its last section in this browser.
 - The search at the top of the side menu finds sections and settings by label. A new setting adds its label to its
@@ -85,7 +85,10 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 - **Panel / sheet** (`ui/Panel.tsx`): title (truncates), the shared Close button, body scrolls. Full-screen sheet ≤ 600 px.
   `className="ds-console"` adds the console's tabs, cards and headings.
 - **Buttons**: `.btn` (primary actions: `.btn-good`; destructive confirm: `.btn-bad`; quiet: `.btn-ghost`) and
-  `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44.
+  `.ds-btn` for new code. Inside a rebuilt screen every button is at least 44×44. Both share one base in design.css
+  (`:where(.btn, .ds-btn)`: inline-flex, centred, one line height, no underline), so a link, label or summary styled
+  as a button looks and lines up like a `<button>`. A link that can't be followed yet stays a link: no `href`,
+  `aria-disabled="true"`, the disabled look; never swap it for a `<button disabled>` twin.
 - **Overflow menu** (`ui/Menu.tsx`): `<Menu label="More for Ada" title="Ada" items={[…]} />`. A popover on wide
   screens, a bottom sheet with a title and Cancel on phones. Arrow keys, Home/End, Esc (focus back to ⋯), Tab leaves,
   outside tap or scroll closes. Items with `danger: true` go last, under a separator, in red; end their label with "…"
@@ -113,6 +116,22 @@ The manager's console has five top tabs, and each one shows a side menu of its s
   never in the text flow. Expandable groups are buttons with `aria-expanded`.
 - **Share bar** (`.costs-bar`): an 8 px pill, 1 px ink outline, segments in `--ds-series-1…4` in that order, with a
   legend of dots below when there's more than one; give it `role="img"` and an `aria-label` with the numbers.
+- **Progress bar** (`ui/ProgressBar.tsx`, #140): a label and its number above an 8 px pill track (6 px `compact`)
+  with a 1 px ink outline. Filled to a share (`pct`; `null` sweeps, for work of unknown length), stacked `parts`
+  (`--ds-series-*`, legend below), or `steps` (done ones filled, the current one pulsing). Tone good / warn / bad from
+  the state fills, neutral in `--ds-series-4`; the words say it too. With `onClick` or `href` the whole bar is a 44 px
+  button or link to what it counts (`tap` says what). Animations use the motion tokens and stop under reduce motion.
+  `ProgressRing` is its compact form for avatars and tight cards. Values come from pure `shared/progressBars.ts`.
+- **Hover card** (`ui/HoverCard.tsx`, #213): explains or previews a thing in place. `<HoverCard label=… peek={…}>`
+  around one element (or `usePeek` + `Peek` for a custom trigger); `PeekCard` lays out a title, a few stats, a bar or
+  sparkline, a note and up to two actions. It opens after 350 ms of hover or keyboard focus, closes 150 ms after the
+  pointer leaves trigger and card, never covers the CEO chat column or the chat's message box (timing and placement
+  are pure in `ui/hoverRules.ts`); a long press on touch opens it as a small sheet, and a tap still does the
+  element's own action. Esc dismisses it; ↓ moves into its actions. Peeks read the store only: no fetches, no polling.
+  Bodies for agents, issues and PRs, and QA are in `ui/Peeks.tsx`.
+- **Expanding icon button**: an icon-only button adds `.xbtn` and `<XLabel text="Full screen" keys="F" />`; the label
+  and shortcut slide out to its left on hover or keyboard focus (`--ds-ease-spring`), over its neighbours, never
+  reflowing the header. Primary `.btn-good` buttons lift and glow a little under a pointer.
 - **Decisions** `.ds-decision`: two answers (Hire / Decline, Let go / Keep) far apart; mark both `data-decision`.
 
 ## Icons (#134)
@@ -153,8 +172,9 @@ Do:
   anything) in a ⋯ menu's danger section, then `confirmDialog({ tone: 'danger' })`. Shared ones: `ui/dangerActions.ts`.
 - Keep the primary action visible; at most two or three visible buttons per card, the rest in ⋯.
 - Write labels as verbs ("Let Ada go…", "Close as not planned…"), sentence case, no jargon.
-- Check every screen you change at 360, 390, 430 and 1280 px, light and dark, and add it to `e2e/layout.spec.ts`'s
-  `SCREENS`.
+- Check every screen you change at 360, 390, 430 and 1280 px, light and dark, and add it to the `SCREENS` of its
+  screen's file in `e2e/layout/` (`chat.spec.ts`, `kanban.spec.ts`, `console.spec.ts`, …). New layout tests go in their
+  screen's file, never a catch-all: each stays under 300 lines (the lint ratchet checks it), so parallel PRs don't collide.
 
 Don't:
 - Put a destructive button next to a safe one, or anywhere one tap does it.
@@ -165,9 +185,11 @@ Don't:
 
 ## Checking a screen
 
-`e2e/layout.spec.ts` opens each screen in `SCREENS` at its widths in light and dark, walks its tabs and fails on:
+Each `e2e/layout/<screen>.spec.ts` opens each screen in its `SCREENS` (the checks are `checkScreens` in
+`e2e/layout/helpers.ts`) at its widths in light and dark, walks its tabs and fails on:
 sideways page scroll or an element wider than the viewport (outside a scroller), a button that can't be scrolled
-into view or is covered (`elementFromPoint`), a button under 44×44, a destructive button outside a menu, a ⋯ menu
+into view or is covered (`elementFromPoint`), a button under 44×44, anything styled `.btn`/`.ds-btn` under 44 px
+tall, with its label off centre or a different height from the buttons beside it, a destructive button outside a menu, a ⋯ menu
 whose danger items aren't last and separated or whose Esc closes more than the menu, and any axe WCAG 2.1 AA
 violation. Run it alone with your reserved port:
 

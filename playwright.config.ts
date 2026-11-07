@@ -54,7 +54,7 @@ export default defineConfig({
     // The phone 3D office's taps on Safari's engine too (#83), when WebKit is installed (never downloaded mid-run).
     ...(installed.webkit ? [{ name: 'iphone', testMatch: 'touch.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
     // Settings' layout on Safari's engine too (#91): clipped labels, overflow and targets in every tab.
-    ...(installed.webkit ? [{ name: 'iphone-settings', testMatch: 'layout.spec.ts', grep: /pocket console at (360|390|430)px/, dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
+    ...(installed.webkit ? [{ name: 'iphone-settings', testMatch: '**/layout/console.spec.ts', grep: /pocket console at (360|390|430)px/, dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
     // The phone app back from the background (#93) on Safari's engine too.
     ...(installed.webkit ? [{ name: 'iphone-resume', testMatch: 'resume.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
   ],

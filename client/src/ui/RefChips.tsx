@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { createPortal } from 'react-dom';
+import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { api } from '../api';
 import { qaKey, useStore, type Overlay } from '../store';
 import { useMode } from '../pocket/mode';
@@ -9,9 +8,11 @@ import { chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, typ
 import { qaShotUrl } from './channels';
 import { Sheet } from './ChatArtifacts';
 import { Icon } from './Icon';
+import { Peek, usePeek } from './HoverCard';
+import { firstFailing, whoIsOn } from './peekFacts';
 import './chatRefs.css';
 
-// The chat's refs (#26): chips in the bubbles with a preview on hover (mouse) or press and hold (touch), a tap that
+// The chat's refs (#26): chips in the bubbles with a preview on hover or focus (mouse, keyboard) or press and hold (touch), a tap that
 // jumps there inside the office (riding the elevator first in 3D), and back to the chat at the same scroll position
 // when that panel closes. Files open in a read-only viewer here. Also the message box's "@" and "#" picks.
 
@@ -82,9 +83,6 @@ export function useRefOpen(): ((ref: ChatRef) => (() => void) | null) {
   };
 }
 
-const HOVER_MS = 300;
-const HOLD_MS = 450;
-
 /** One ref of a message as a chip, labelled as written. Text when what it names is gone. */
 export function RefChip({ messageId, index, children }: { messageId: number; index: number; children: ReactNode }) {
   const nav = useContext(NavContext);
@@ -92,107 +90,45 @@ export function RefChip({ messageId, index, children }: { messageId: number; ind
   const ref = m?.refs?.[index];
   const world = useWorld();
   const pocket = useMode((s) => s.mode) === 'pocket';
-  const [peek, setPeek] = useState(false);
-  const btn = useRef<HTMLButtonElement>(null);
-  const timer = useRef(0);
-  const held = useRef(false);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  // Hover or focus previews it, a long press on touch too (as a small sheet); a tap jumps (HoverCard.tsx).
+  const peek = usePeek();
   const info = ref && chipInfo(ref, world);
   if (!nav || !ref || !info) return <span>{children}</span>;
   const label = m!.text.slice(ref.start, ref.end).replace(/`/g, '');
   const jump = () => {
-    setPeek(false);
+    peek.ctl.close();
     const j = jumpFor(ref, pocket ? 'pocket' : 'office', world);
     if (j) nav.go(j, { messageId, index });
-  };
-  const later = (ms: number, fn: () => void) => {
-    clearTimeout(timer.current);
-    timer.current = window.setTimeout(fn, ms);
   };
   return (
     <>
       <button
-        ref={btn}
+        ref={(el) => void (peek.anchor.current = el)}
         type="button"
         className={`ref-chip ${info.tone ? `ref-chip-${info.tone}` : ''}`}
-        onPointerEnter={(e) => e.pointerType === 'mouse' && later(HOVER_MS, () => setPeek(true))}
-        onPointerLeave={(e) => {
-          if (e.pointerType !== 'mouse') return;
-          clearTimeout(timer.current);
-          setPeek(false);
-        }}
-        onPointerDown={(e) => {
-          if (e.pointerType === 'mouse') return;
-          held.current = false;
-          later(HOLD_MS, () => {
-            held.current = true;
-            setPeek(true);
-          });
-        }}
-        onPointerUp={(e) => e.pointerType !== 'mouse' && clearTimeout(timer.current)}
-        onPointerCancel={() => clearTimeout(timer.current)}
+        aria-describedby={peek.mode ? peek.id : undefined}
+        {...peek.trigger}
         onContextMenu={(e) => {
           // A long press is the preview here, not the message's actions or the browser's menu.
           e.preventDefault();
           e.stopPropagation();
         }}
-        onClick={() => {
-          if (held.current) held.current = false;
-          else jump();
-        }}
+        onClick={jump}
       >
         <span aria-hidden><Icon name={info.icon} /></span>
         <span className="ref-chip-label">{label}</span>
         {info.status && <span className="ref-chip-status">{` ${info.status}`}</span>}
       </button>
-      {peek && (
-        <RefPeek
-          anchor={btn}
-          chip={ref}
-          messageId={messageId}
-          index={index}
-          onOpen={() => {
-            // The finger lifted off a hold can land on the card: that isn't a tap on it.
-            if (held.current) held.current = false;
-            else jump();
-          }}
-          onClose={() => setPeek(false)}
-        />
-      )}
+      <Peek peek={peek} label={label}>
+        <div className="ref-peek" onClick={jump}>
+          <PeekBody chip={ref} messageId={messageId} index={index} />
+        </div>
+      </Peek>
     </>
   );
 }
 
 // ---------- the preview card ----------
-
-const PEEK_W = 300;
-
-function RefPeek({ anchor, chip, messageId, index, onOpen, onClose }: { anchor: RefObject<HTMLElement | null>; chip: ChatRef; messageId: number; index: number; onOpen: () => void; onClose: () => void }) {
-  const card = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
-  useLayoutEffect(() => {
-    const a = anchor.current?.getBoundingClientRect();
-    if (!a) return;
-    const w = Math.min(PEEK_W, window.innerWidth - 32);
-    const left = Math.max(16, Math.min(a.left, window.innerWidth - 16 - w));
-    // Above the chip when there's room (growing upwards as lines arrive), else below it: never over it.
-    setPos(a.top > window.innerHeight / 2 ? { left, bottom: window.innerHeight - a.top + 8 } : { left, top: a.bottom + 8 });
-  }, [anchor]);
-  // A touch preview stays until the next tap anywhere else.
-  useEffect(() => {
-    const away = (e: PointerEvent) => {
-      if (!card.current?.contains(e.target as Node) && !anchor.current?.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
-  }, [anchor, onClose]);
-  return createPortal(
-    <div ref={card} className="ref-peek" role="tooltip" style={pos ?? { visibility: 'hidden' }} onClick={onOpen}>
-      <PeekBody chip={chip} messageId={messageId} index={index} />
-    </div>,
-    document.body,
-  );
-}
 
 function PeekBody({ chip, messageId, index }: { chip: ChatRef; messageId: number; index: number }) {
   if (chip.kind === 'agent') return <AgentPeek id={chip.agentId} />;
@@ -240,7 +176,9 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
   const n = chip.kind === 'floor' ? undefined : chip.number;
   const qa = useStore((s) => (n === undefined ? undefined : s.qa[qaKey(chip.repoId, n)]));
   const prApp = useStore((s) => (n === undefined ? undefined : s.prPreviews[qaKey(chip.repoId, n)]));
+  const agents = useStore((s) => s.agents);
   if (!repo) return null;
+  const who = n === undefined ? [] : whoIsOn(repo.id, n, Object.values(agents), qa);
   const name = repo.fullName.split('/')[1];
   if (chip.kind === 'floor') {
     return (
@@ -269,6 +207,7 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
     );
   }
   const title = pull?.title ?? issue?.title;
+  const fail = firstFailing(qa?.checks);
   return (
     <>
       <b>
@@ -278,6 +217,8 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
         {pull ? `${pull.state.toLowerCase()} · checks ${pull.checks}` : issue ? 'open' : 'Not on the board: opens on GitHub.'}
         {qa ? ` · QA ${qa.status}${qa.round > 1 ? ` (round ${qa.round})` : ''}` : ''}
       </p>
+      {(pull || issue) && <p className="small">👤 {who.length ? who.join(', ') : 'Nobody on it yet'}</p>}
+      {fail && <p className="small ref-peek-clip">✗ {fail.name}: {fail.line}</p>}
       {qa?.summary && <p className="small ref-peek-clip">{qa.summary}</p>}
       {chip.kind === 'qa' && n !== undefined && qa?.shots?.length ? <img className="ref-peek-shot" src={qaShotUrl(repo.id, n, 0, qa.updatedAt)} alt={qa.shots[0].caption} /> : null}
     </>

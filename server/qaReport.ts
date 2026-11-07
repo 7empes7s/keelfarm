@@ -1,11 +1,14 @@
 // The QA session's report: the JSON schema it answers in and the parser that reads it back from the session's result
 // (structured output, or the last ```json block of a terminal agent's message).
 
+import { isRoundCause, ROUND_CAUSES, type RoundCause } from '../shared/rounds.ts';
 import type { QaCheck } from '../shared/types.ts';
 import type { SessionResult } from './agentRunner.ts';
+import { LAB_PROBLEM_TEXT } from './testLab.ts';
 
 export interface QaReport {
-  verdict: 'pass' | 'fail';
+  /** lab-error: the test lab failed (watchdog, no browser, OOM, a busy port), so the PR couldn't be judged (#189). */
+  verdict: 'pass' | 'fail' | 'lab-error';
   summary: string;
   checks: QaCheck[];
   commands: { command: string; result: string }[];
@@ -13,6 +16,8 @@ export interface QaReport {
   fixInstructions?: string;
   /** The charter check (#48): "ok …" or "violation: …"; a violation fails the PR. */
   charterCheck?: string;
+  /** Why it failed (#188): QA's pick, absent on a pass or when QA gave none. */
+  cause?: RoundCause;
 }
 
 export const QA_SCHEMA: Record<string, unknown> = {
@@ -20,7 +25,7 @@ export const QA_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   required: ['verdict', 'summary', 'checks', 'commands', 'screenshots'],
   properties: {
-    verdict: { type: 'string', enum: ['pass', 'fail'], description: 'pass only if the change works and meets the issue requirements' },
+    verdict: { type: 'string', enum: ['pass', 'fail', 'lab-error'], description: 'pass only if the change works and meets the issue requirements; lab-error only if the lab itself failed (LAB ERROR) and you could not judge it' },
     summary: { type: 'string', description: 'Two to four sentences for the pull request comment.' },
     checks: {
       type: 'array',
@@ -52,6 +57,11 @@ export const QA_SCHEMA: Record<string, unknown> = {
       items: { type: 'string' },
     },
     fixInstructions: { type: 'string', description: 'When the verdict is fail: precise, actionable instructions for the developer.' },
+    cause: {
+      type: 'string',
+      enum: ROUND_CAUSES,
+      description: 'When the verdict is fail, the main reason: bug (doesn\'t work), nit (small polish only), spec-missing (lacks a test or part the issue asks for), lab-error (the browser or test lab broke, not the PR), outage (CI never started), conflict, checks (CI red).',
+    },
     charterCheck: { type: 'string', description: 'When the project has a charter: one line, "ok" or "violation: <the standard broken>", on its standards and the issue\'s objective.' },
   },
 };
@@ -63,6 +73,12 @@ function charterCheckOf(field: unknown, text: string | undefined): string | unde
 }
 
 const charterViolation = (check: string | undefined) => !!check && /^\W*violat/i.test(check);
+
+/** A fail whose every failed check is the lab's problem (a run the watchdog stopped, no browser, OOM, a busy port) is a lab error. */
+function labFailure(checks: readonly QaCheck[]): boolean {
+  const failed = checks.filter((c) => c.result === 'fail');
+  return failed.length > 0 && failed.every((c) => LAB_PROBLEM_TEXT.test(`${c.name} ${c.details}`));
+}
 
 export function parseReport(result: SessionResult): QaReport | null {
   let raw: unknown = result.structured;
@@ -80,7 +96,7 @@ export function parseReport(result: SessionResult): QaReport | null {
   }
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Partial<QaReport>;
-  if (r.verdict !== 'pass' && r.verdict !== 'fail') return null;
+  if (r.verdict !== 'pass' && r.verdict !== 'fail' && r.verdict !== 'lab-error') return null;
   const charterCheck = charterCheckOf(r.charterCheck, result.text);
   const broken = charterViolation(charterCheck);
   const checks: QaCheck[] = Array.isArray(r.checks) ? r.checks.map((c) => ({ name: String(c.name ?? ''), result: c.result === 'fail' ? 'fail' : c.result === 'skip' ? 'skip' : 'pass', details: String(c.details ?? '') })) : [];
@@ -88,12 +104,13 @@ export function parseReport(result: SessionResult): QaReport | null {
   if (charterCheck) checks.push({ name: 'Charter check', result: broken ? 'fail' : 'pass', details: charterCheck });
   const fixInstructions = r.fixInstructions ? String(r.fixInstructions) : broken ? `Keep the charter's standards: ${charterCheck}` : undefined;
   return {
-    verdict: broken ? 'fail' : r.verdict,
+    verdict: broken ? 'fail' : r.verdict === 'fail' && labFailure(checks) ? 'lab-error' : r.verdict,
     summary: String(r.summary ?? ''),
     checks,
     commands: Array.isArray(r.commands) ? r.commands.map((c) => ({ command: String(c.command ?? ''), result: String(c.result ?? '') })) : [],
     screenshots: Array.isArray(r.screenshots) ? r.screenshots.map(String) : [],
     fixInstructions,
     charterCheck,
+    ...((r.verdict === 'fail' || broken) && isRoundCause(r.cause) ? { cause: r.cause } : {}),
   };
 }

@@ -379,7 +379,7 @@ export function ChannelHealth() {
         <li>
           <b>Telegram</b> <code className="small">@{channels.telegram.bot}</code>
           <div>
-            <Health last={channels.telegram.last} />
+            {channels.telegram.on ? <Health last={channels.telegram.last} /> : <span className="small muted">Off: nothing is sent</span>}
           </div>
         </li>
       )}

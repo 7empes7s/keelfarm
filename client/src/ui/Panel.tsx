@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { pushLayer } from './backStack';
-import { useDialogFocus } from './dialogFocus';
+import { focusRaises, isTopDialog, raiseDialog, useDialogFocus } from './dialogFocus';
 import { CloseButton } from './Icon';
 
 // Closing a panel grabs the mouse again right away (world/lookLock.ts; "Grab the mouse when panels
@@ -14,11 +14,20 @@ export function closeOverlay() {
   useStore.getState().openOverlay(null);
 }
 
-/** While mounted, the back gesture and the browser's Back run `close` instead of leaving the app (backStack.ts). */
-export function useBackLayer(close: () => void) {
+/**
+ * While mounted, the back gesture and the browser's Back run `close` instead of leaving the app (backStack.ts).
+ * Returns what makes it the layer Back closes first.
+ */
+export function useBackLayer(close: () => void): () => void {
   const latest = useRef(close);
+  const raise = useRef(() => {});
   useEffect(() => void (latest.current = close));
-  useEffect(() => pushLayer(() => latest.current()), []);
+  useEffect(() => {
+    const remove = pushLayer(() => latest.current());
+    raise.current = remove.raise;
+    return remove;
+  }, []);
+  return () => raise.current();
 }
 
 let pressedBackdrop: EventTarget | null = null;
@@ -50,10 +59,11 @@ export function Panel({
   const box = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useDialogFocus(box);
-  useBackLayer(onClose ?? closeOverlay);
+  const raiseBack = useBackLayer(onClose ?? closeOverlay);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // two panels side by side (#212): Esc closes the top one only, the one last opened, clicked or focused
+      if (e.key === 'Escape' && isTopDialog(box.current)) {
         e.preventDefault();
         onClose ? onClose() : closeOverlay();
       }
@@ -71,6 +81,11 @@ export function Panel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        onFocus={(e) => {
+          if (!focusRaises(box.current, e.target)) return;
+          raiseDialog(box.current!);
+          raiseBack();
+        }}
       >
         <div className="panel-head">
           <h2 className="panel-title" id={titleId}>

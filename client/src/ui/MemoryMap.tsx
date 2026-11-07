@@ -2,7 +2,7 @@
 // Built in the tab from the snapshot and the live events (shared/memoryMap.ts), so it changes as the office does.
 // Search, filters, colour groups, a local graph 1-3 links deep, insight cards, a time slider to replay how it grew,
 // and a card per node with what it links to and what to open. Loaded when first opened; the canvas is MapCanvas.tsx.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { CEO_ID } from '../../../shared/types';
 import { buildGraph, DEFAULT_CAPS, filterGraph, localIds, mapChanges, mapInsights, neighbours, NODE_TYPES, searchNodes, type MapChange, type MapEdgeKind, type MapInsight, type MapNode, type MapNodeType, type MapStatus, type MapTarget, type MemoryGraph } from '../../../shared/memoryMap';
 import { useStore } from '../store';
@@ -12,7 +12,7 @@ import { kindStrong, type StatusKind } from './statusLook';
 import { jumpFor } from './chatRefs';
 import { ArtifactView, Sheet } from './ChatArtifacts';
 import { sendToCeo } from './chatSend';
-import { MapCanvas, type MapPaint } from './MapCanvas';
+import { MapCanvas, type MapPaint, type MapStageProps } from './MapCanvas';
 import './memoryMap.css';
 import { CloseButton, Icon } from './Icon';
 import { iconFor } from './icons';
@@ -66,7 +66,12 @@ function useGraph(older: boolean): MemoryGraph {
   );
 }
 
-export function MemoryMap() {
+/**
+ * `Stage`: what draws the graph (the 2D canvas; the map room passes its 3D constellation), with everything else
+ * shared. `action`: the bar's last button (the map room's way back to 2D); in the 3D office the 2D map's opens the room.
+ */
+export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType<MapStageProps>; action?: ReactNode }) {
+  const office = useMode((s) => s.mode === 'office');
   const [older, setOlder] = useState(false);
   const graph = useGraph(older);
   const repos = useStore((s) => s.repos);
@@ -108,6 +113,7 @@ export function MemoryMap() {
     () => ({
       fill: (n) => (colourBy === 'type' ? TYPE_LOOK[n.type][0] : colourBy === 'floor' ? ((n.repoId && repoColour.get(n.repoId)) ?? NONE) : n.objective ? groupColour(n.objective) : n.type === 'company' ? TYPE_LOOK.company[0] : NONE),
       ring: (n) => (n.status && RING[n.status] ? kindStrong(RING[n.status]!, palette) : null),
+      byType: colourBy === 'type',
     }),
     [colourBy, repoColour, palette],
   );
@@ -175,6 +181,12 @@ export function MemoryMap() {
         <button type="button" className="btn mm-filter-btn" onClick={() => setSheet('filters')} aria-label={`Filters and groups${nFilters ? `, ${nFilters} on` : ''}`}>
           <Icon name="sliders-horizontal" /> Filters{nFilters > 0 && <span className="badge">{nFilters}</span>}
         </button>
+        {action ??
+          (office && (
+            <button type="button" className="btn mm-filter-btn" onClick={() => useStore.getState().openOverlay({ kind: 'mapRoom' })} aria-label="Walk into the map room: the map in 3D">
+              🌌 3D
+            </button>
+          ))}
       </div>
 
       <div className="mm-insights" role="group" aria-label="Insights">
@@ -189,7 +201,7 @@ export function MemoryMap() {
       </div>
 
       <div className="mm-stage">
-        <MapCanvas graph={shown} paint={paint} selected={selected} lit={lit} pulses={pulses} centre={centre} onSelect={select} onMenu={(id) => (select(id), setSheet('node'))} />
+        <Stage graph={shown} paint={paint} selected={selected} lit={lit} pulses={pulses} centre={centre} onSelect={select} onMenu={(id) => (select(id), setSheet('node'))} />
         <div className="mm-stats small" aria-live="polite">
           {shown.nodes.length} things · {shown.edges.length} links
           {local && byId.get(local.id) && <> · around {byId.get(local.id)!.label}</>}

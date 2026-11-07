@@ -1,7 +1,9 @@
 // Settings → Notifications → Telegram (docs/pocket.md): the manager's own bot. BotFather's token goes in once and only
 // the bot's name comes back; pressing Start with the one-time link links their chat. Then the On switch, mirroring the
-// CEO chat, a test and Remove; the demo office adds buttons that play the manager on Telegram.
+// CEO chat, a test and Remove; the demo office adds buttons that play the manager on Telegram. Off reads and sends
+// nothing (server/telegramBot.ts) and keeps the token and chat for when it's turned back on.
 import { useEffect, useId, useState, type ReactNode } from 'react';
+import { ago } from '../../../shared/usage';
 import { api } from '../api';
 import { useStore } from '../store';
 import { confirmDialog } from './Confirm';
@@ -71,21 +73,41 @@ export function TelegramSettings() {
     }
   };
   const save = (patch: Partial<typeof notify>) => void api.updateSettings({ notify: { ...notify, ...patch } }).catch(() => undefined);
+  const turn = (on: boolean) => save({ channels: { ...notify.channels, telegram: on } });
+  const retry = () => act(() => api.retryTelegram());
 
   const steps = telegramSteps(view, startUrl);
+  const off = view.set && !view.on;
+  const offWhy = off ? 'Telegram is off: turn it on to use this' : undefined;
   return (
     <div className="notify-hook telegram">
       <div className="row wrap">
         <b className="grow">
           <Icon name="plane" /> Telegram
         </b>
-        {view.linked && (
+        {view.set && (
           <label className="toggle small">
-            <input type="checkbox" checked={notify.channels.telegram} onChange={(e) => save({ channels: { ...notify.channels, telegram: e.target.checked } })} /> On
+            <input type="checkbox" role="switch" aria-checked={view.on} checked={view.on} onChange={(e) => turn(e.target.checked)} /> {view.on ? 'On' : 'Off'}
           </label>
         )}
       </div>
       <p className="muted small">Notifications in Telegram, and the CEO chat right there: write to your bot and the CEO answers.</p>
+      {off ? (
+        <div className="telegram-off" role="status">
+          <p>
+            <b>Telegram is off.</b> Turn it on to get notifications and chat with the CEO in Telegram.
+          </p>
+          <ul className="guide-how small">
+            <li>Bot: @{view.bot}</li>
+            <li>Token: saved</li>
+            <li>Chat: {view.linked ? view.chat : 'not linked yet'}</li>
+          </ul>
+          <p className="small muted">Kept for when you turn it back on.</p>
+          <button className="btn btn-good" onClick={() => turn(true)}>
+            Turn on
+          </button>
+        </div>
+      ) : (
       <ol className="guide-steps" aria-live="polite">
         {steps.map((s, i) => (
           <li key={s.id} className={`guide-step guide-${s.state}`}>
@@ -155,22 +177,29 @@ export function TelegramSettings() {
           </li>
         ))}
       </ol>
-      {view.set && view.polling === 'retrying' && (
-        <p className="small term-error" role="status">
-          Can't read the bot's messages right now: {view.error}. Retrying.
-        </p>
+      )}
+      {view.on && view.polling === 'retrying' && (
+        <div className="small term-error" role="status">
+          <p>
+            Can't reach Telegram, retrying: {view.error}. {view.okAt ? `It last worked ${ago(view.okAt, Date.now())}.` : "It hasn't worked yet."}
+          </p>
+          {view.advice && <p>{view.advice}</p>}
+          <button className="btn btn-small" disabled={busy} onClick={() => void retry()}>
+            Retry now
+          </button>
+        </div>
       )}
       {view.linked && (
         <>
-          <label className="toggle block small">
-            <input type="checkbox" checked={notify.telegramMirror} onChange={(e) => save({ telegramMirror: e.target.checked })} />
+          <label className={`toggle block small${off ? ' muted' : ''}`} title={offWhy}>
+            <input type="checkbox" checked={notify.telegramMirror} disabled={off} onChange={(e) => save({ telegramMirror: e.target.checked })} />
             <span>Mirror the whole CEO chat to Telegram (otherwise the CEO answers there only when you wrote from there)</span>
           </label>
           <div className="row wrap">
-            <button className="btn btn-small" disabled={busy} onClick={() => void test()}>
+            <button className="btn btn-small" disabled={busy || off} title={offWhy} onClick={() => void test()}>
               Send test
             </button>
-            <button className="btn btn-small btn-ghost" disabled={busy} onClick={() => void newLink()}>
+            <button className="btn btn-small btn-ghost" disabled={busy || off} title={offWhy} onClick={() => void newLink()}>
               Link another chat
             </button>
             {result && (
@@ -179,6 +208,7 @@ export function TelegramSettings() {
               </span>
             )}
           </div>
+          {off && <p className="small muted">Off: turn Telegram on to mirror the chat, send a test or link another chat.</p>}
           {startUrl && view.linking && (
             <p className="small">
               <a href={startUrl} target="_blank" rel="noreferrer">
@@ -217,6 +247,11 @@ export function TelegramSettings() {
             <button className="btn btn-small btn-ghost" onClick={() => void act(() => api.telegramDemo('decline'))}>
               Press Decline
             </button>
+            {view.on && (
+              <button className="btn btn-small btn-ghost" onClick={() => void act(() => api.telegramDemo(view.polling === 'retrying' ? 'online' : 'outage'))}>
+                {view.polling === 'retrying' ? 'Bring Telegram back' : 'Make Telegram unreachable'}
+              </button>
+            )}
           </div>
         </details>
       )}
