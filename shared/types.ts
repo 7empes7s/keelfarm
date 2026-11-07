@@ -25,6 +25,7 @@ import type { Conversation } from './conversations.ts';
 import type { MemoryNote } from './ceoMemory.ts';
 import type { TestLabSettings, TestLabView } from './testLab.ts';
 import type { EveryProject, FloorPracticeView } from './practices.ts';
+import type { ChatItem } from './agentChat.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -842,6 +843,7 @@ export type ServerEvent =
   | { type: 'logs'; tails: Record<string, LogLine[]>; catchUp?: boolean }
   /** The latest line worth listing of agents it doesn't watch, for the workers list. */
   | { type: 'latest'; lines: Record<string, LogLine> }
+  | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean } // chat items (#120) of the agent windows a tab has open; catchUp replaces
   | { type: 'screen'; agentId: string; url: string | null; at: number }
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }

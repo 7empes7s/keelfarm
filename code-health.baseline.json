@@ -595,6 +595,7 @@
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
+    "e2e/layout.spec.ts": 821,
     "server/ceo.ts": 802,
     "server/cliRunner.ts": 989,
     "server/demo.ts": 1925,

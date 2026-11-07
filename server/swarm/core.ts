@@ -173,6 +173,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected outbox = new Outbox({
     agents: () => this.state.agents.map((a) => ({ id: a.id, floor: this.floorOf(a) })),
     log: (id) => this.agentRt.get(id)?.log ?? [],
+    chat: (id) => this.agentRt.get(id)?.chat?.items ?? [],
     beforeFlush: (ids) => this.updateSigns(ids),
   });
   protected user: string | null = null;

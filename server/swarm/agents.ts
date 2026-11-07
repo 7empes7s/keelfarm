@@ -19,6 +19,9 @@ import {
   type SessionTools,
 } from '../../shared/tooling.ts';
 import { blockers, waitsMessage } from '../../shared/issues.ts';
+import { ChatLog, quoteOf, type TranscriptEvent } from '../../shared/agentChat.ts';
+import { redact as scrub } from '../../shared/journal.ts';
+import { isAgentReaction, reactionNote } from '../../shared/reactions.ts';
 import { cleanStyle } from '../../shared/looks.ts';
 import { effectiveModel } from '../../shared/models.ts';
 import { FLOOR_SEATS } from '../../shared/types.ts';
@@ -688,5 +691,41 @@ export abstract class SwarmAgents extends SwarmMerge {
   /** The model to ask for (the Agent SDK runs Claude Code). '' lets another coding agent use its own default. */
   protected modelFor(a: PersistedAgent, cli: AgentCli | undefined) {
     return effectiveModel(a.model, cli ?? 'claude', this.state.settings, DEFAULT_MODEL);
+  }
+
+  // ---------- their chat (#120) ----------
+
+  protected chatOf(a: PersistedAgent): ChatLog | null {
+    const rt = this.agentRt.get(a.id);
+    return rt ? (rt.chat ??= new ChatLog()) : null;
+  }
+
+  /** Their session's transcript, into their chat, secrets masked as for agent_log. */
+  protected chatEvents(a: PersistedAgent, events: TranscriptEvent[], cwd: string) {
+    const secrets = this.secrets();
+    this.outbox.chat(a.id, this.chatOf(a)?.apply(events, cwd, (t) => scrub(t, secrets)) ?? []);
+  }
+
+  /** A message to them, as a bubble in their chat. */
+  protected chatSay(a: PersistedAgent, text: string, who: string) {
+    const item = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: scrub(text, this.secrets()), who });
+    if (item) this.outbox.chat(a.id, [item]);
+  }
+
+  /** POST /api/agents/:id/react: the manager's reaction on an item of their chat; one that asks for something is typed into their running session as a short note. */
+  react(id: string, itemId: unknown, reaction: unknown) {
+    const a = this.agent(id);
+    if (!isAgentReaction(reaction)) throw new HttpError(400, 'Pick a reaction from the bar.');
+    const hit = typeof itemId === 'number' ? this.chatOf(a)?.react(itemId, reaction) : null;
+    if (!hit) throw new HttpError(404, 'That message is no longer in their chat.');
+    this.outbox.chat(a.id, [hit.item]);
+    const note = hit.added ? reactionNote(reaction, quoteOf(hit.item)) : null;
+    // Only into a running session, read after its current step (shown in their terminal too): a reaction never starts one.
+    const session = note ? this.agentRt.get(a.id)?.session : null;
+    if (session) {
+      this.appendLog(a, [{ kind: 'manager', text: `▶ ${note}` }]);
+      session.send(note!);
+    }
+    return { sent: !!session, note: !!note };
   }
 }

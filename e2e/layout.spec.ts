@@ -268,6 +268,29 @@ const SCREENS: Screen[] = [
     tabs: ['', ...(['Now', 'Profile', 'Setup'] as const).map((t) => ({ name: `details › ${t}`, go: (root: Locator) => agentTab(root, t) }))],
   },
   {
+    // their chat (#120): the conversation, a group of steps opened, then the terminal again
+    name: 'agent chat',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'team');
+      await root.getByRole('button', { name: 'Terminal', exact: true }).first().click();
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Chat', exact: true }).click();
+      return d;
+    },
+    tabs: [
+      '',
+      {
+        name: 'a step open',
+        go: async (root) => {
+          const step = root.locator('.ac-steps > summary').first(); // an agent who hasn't started yet has none
+          if (await step.count()) await step.click();
+        },
+      },
+      { name: 'terminal', go: (root) => root.getByRole('button', { name: 'Terminal', exact: true }).click() },
+    ],
+  },
+  {
     name: 'app viewer',
     widths: PHONES,
     open: async (page) => {
