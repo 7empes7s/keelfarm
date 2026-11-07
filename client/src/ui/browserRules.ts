@@ -2,7 +2,7 @@
 // preview, the caption ("@Grace's browser · 2 min ago"), whether they're browsing right now, and the full-screen
 // viewer's zoom and pan limits.
 
-import type { AgentView } from '../../../shared/types';
+import type { AgentView, PullInfo } from '../../../shared/types';
 import { pagePath } from './prChangesRules';
 
 export interface AddressBar {
@@ -29,6 +29,15 @@ export function addressBar(url: string | null | undefined): AddressBar {
   // The floor's app runs on this computer (an agent's dev server, a preview) or comes through the office's /preview/<port>/.
   const preview = !!u && (u.protocol === 'http:' || u.protocol === 'https:') && (LOOPBACK.has(u.hostname) || /^\/preview\/\d+(\/|$)/.test(u.pathname));
   return { text, unknown: false, secure: u?.protocol === 'https:', previewPath: preview ? pagePath(url) : null };
+}
+
+/** Where the address link opens the app viewer: the agent's PR channel while that PR is open, else main at the path
+ *  (saying so when the PR merged; agents keep their prNumber after it merges, and the viewer refuses a merged PR). */
+export function previewTarget(prNumber: number | null | undefined, pulls: readonly Pick<PullInfo, 'number' | 'state' | 'headSha'>[], path: string): { pr: number | null; path: string; merged?: { pr: number; sha: string; path: string } } {
+  const pull = prNumber == null ? undefined : pulls.find((p) => p.number === prNumber);
+  if (pull?.state === 'OPEN') return { pr: pull.number, path };
+  if (pull?.state === 'MERGED') return { pr: null, path, merged: { pr: pull.number, sha: (pull.headSha ?? '').slice(0, 7), path } };
+  return { pr: null, path };
 }
 
 /** How long ago, in a few words. */

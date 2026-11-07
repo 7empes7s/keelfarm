@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore, type Agent } from '../store';
-import { addressBar, clampPan, clampZoom, isBrowsing, shotCaption } from './browserRules';
+import { addressBar, clampPan, clampZoom, isBrowsing, previewTarget, shotCaption } from './browserRules';
 import { touchDistance } from './chatPinch';
 import { useBackLayer } from './Panel';
 import { isTopDialog, useDialogFocus } from './dialogFocus';
@@ -31,7 +31,11 @@ export function BrowserCard({ agent, img }: { agent: Agent; img: HTMLImageElemen
   // This session's earlier shots, as screen events said (a new task's first shot starts the strip again).
   const times = useStore((st) => st.shotTimes[agent.id]);
   const earlier = (times ?? []).filter((at) => at >= (agent.startedAt ?? 0) && at < (agent.screenshotAt ?? 0)).slice(-5);
-  const openPreview = () => address.previewPath && agent.repoId && useStore.getState().openOverlay({ kind: 'app', repoId: agent.repoId, pr: agent.prNumber ?? null, path: address.previewPath });
+  const openPreview = () => {
+    const st = useStore.getState();
+    const pulls = st.repos.find((r) => r.id === agent.repoId)?.pulls ?? [];
+    if (address.previewPath && agent.repoId) st.openOverlay({ kind: 'app', repoId: agent.repoId, ...previewTarget(agent.prNumber, pulls, address.previewPath) });
+  };
 
   return (
     <figure className="bc" aria-label={`${agent.name}'s browser`}>

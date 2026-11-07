@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressBar, ago, clampPan, clampZoom, isBrowsing, shotCaption } from './browserRules';
+import { addressBar, ago, clampPan, clampZoom, isBrowsing, previewTarget, shotCaption } from './browserRules';
 
 describe('addressBar', () => {
   it('says "address unknown" instead of about:blank when none is known', () => {
@@ -41,5 +41,27 @@ describe('the viewer', () => {
     expect(clampZoom(9)).toBe(5);
     expect(clampPan({ x: 500, y: -500 }, 2, { w: 400, h: 300 })).toEqual({ x: 200, y: -150 });
     expect(clampPan({ x: 30, y: 30 }, 1, { w: 400, h: 300 })).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('previewTarget', () => {
+  const pulls = [
+    { number: 3, state: 'OPEN' as const, headSha: 'aaaaaaaaaa' },
+    { number: 26, state: 'MERGED' as const, headSha: 'bbbbbbbbbb' },
+    { number: 9, state: 'CLOSED' as const, headSha: 'cccccccccc' },
+  ];
+
+  it('opens the PR channel at the path while the PR is open', () => {
+    expect(previewTarget(3, pulls, '/todos')).toEqual({ pr: 3, path: '/todos' });
+  });
+
+  it('opens main at the path once the PR merged, saying so', () => {
+    expect(previewTarget(26, pulls, '/todos')).toEqual({ pr: null, path: '/todos', merged: { pr: 26, sha: 'bbbbbbb', path: '/todos' } });
+  });
+
+  it('opens main at the path for a closed, unknown or missing PR', () => {
+    expect(previewTarget(9, pulls, '/a')).toEqual({ pr: null, path: '/a' });
+    expect(previewTarget(77, pulls, '/a')).toEqual({ pr: null, path: '/a' });
+    expect(previewTarget(null, pulls, '/a')).toEqual({ pr: null, path: '/a' });
   });
 });
