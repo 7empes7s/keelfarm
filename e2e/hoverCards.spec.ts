@@ -13,7 +13,7 @@ async function issueChip(page: Page) {
   n = repo.issues[0].number;
   await page.request.post('/api/ceo/message', { data: { text: `Where does #${n} on floor 1 stand? (peek)` } });
   await page.goto('/?pocket=1&tab=chat');
-  const chip = page.locator('.bubble-text', { hasText: '(peek)' }).last().locator('.ref-chip').first();
+  const chip = page.locator('.bubble-text', { hasText: '(peek)' }).last().locator('.ref-chip', { hasText: `#${n}` });
   await expect(chip).toBeVisible();
   return chip;
 }
