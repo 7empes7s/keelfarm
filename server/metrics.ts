@@ -26,12 +26,15 @@ export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number |
 export type CheckEntry = [at: number, repo: string, sha: string, pass: boolean, ms: number];
 /** A finished session's reported cost: when, the repo ('' for the CEO), dollars. */
 export type CostEntry = [at: number, repo: string, usd: number];
+/** Conflict-aware scheduling (#256) started an issue instead of one that overlapped busy files: when, the repo, the issue. */
+export type AvoidedEntry = [at: number, repo: string, issue: number];
 
 export interface OpsHistory {
   merges: MergeEntry[];
   qa: QaEntry[];
   checks: CheckEntry[];
   cost: CostEntry[];
+  avoided?: AvoidedEntry[];
 }
 
 export const emptyHistory = (): OpsHistory => ({ merges: [], qa: [], checks: [], cost: [] });
@@ -48,6 +51,7 @@ export function prune(h: OpsHistory, now: number) {
   h.qa = fresh(h.qa, now);
   h.checks = fresh(h.checks, now);
   h.cost = fresh(h.cost, now);
+  if (h.avoided) h.avoided = fresh(h.avoided, now);
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -65,6 +69,7 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
       .map((e) => (isNum(e[4]) && isNum(e[5]) ? e.slice(0, isRoundCause(e[6]) ? 7 : 6) : e.slice(0, 4))) as QaEntry[],
     checks: list(r.checks).filter((e) => typeof e[2] === 'string' && typeof e[3] === 'boolean' && isNum(e[4])) as CheckEntry[],
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
+    ...(Array.isArray(r.avoided) ? { avoided: list(r.avoided).filter((e) => isNum(e[2])) as AvoidedEntry[] } : {}),
   };
   prune(h, now);
   return h;
@@ -111,6 +116,12 @@ export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: num
   const entry: QaEntry = [now, repo, pass, waitMs === null ? null : Math.max(0, waitMs), pr, round];
   if (cause) entry.push(cause);
   h.qa.push(entry);
+  prune(h, now);
+}
+
+/** An issue conflict-aware scheduling started instead of an overlapping one (#256). */
+export function recordAvoided(h: OpsHistory, repo: string, issue: number, now: number) {
+  (h.avoided ??= []).push([now, repo, issue]);
   prune(h, now);
 }
 
@@ -266,5 +277,6 @@ export function opsView(floors: OpsFloorState[], h: OpsHistory, now: number): Op
     total,
     ceoCostToday: flow(h, (r) => r === '', now).costToday,
     alarms: sorted.flatMap((f) => floorAlarms(f, now)).sort((a, b) => a.since - b.since),
+    ...(h.avoided?.length ? { avoided: Object.fromEntries(sorted.map((f) => [f.repoId, h.avoided!.filter((e) => e[1] === f.repoId && now - e[0] <= KEEP_MS).length])) } : {}),
   };
 }
