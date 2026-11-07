@@ -1,8 +1,8 @@
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { parseRefs } from '../../../shared/chatRefs';
-import { deltaTone, formatDelta, formatValue, sortRows, type ChatVisual, type VisualChart, type VisualColor, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
+import { parseRefs, soleRef, type RefContext } from '../../../shared/chatRefs';
+import { deltaTone, formatDelta, formatValue, SERIES_COLORS, sortRows, xTicks, type ChatVisual, type VisualChart, type VisualColor, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
 import type { CostsView } from '../../../shared/costs';
 import { costDays, resolveVisual, type Resolved, type SourceData } from './chatVisualSources';
 import { useRefOpen } from './RefChips';
@@ -44,15 +44,16 @@ function useResolved(v: ChatVisual): Resolved {
   return useMemo(() => resolveVisual(v, { costs, ops, floors, usage, now: Date.now() }), [v, costs, ops, floors, usage]);
 }
 
-/** What a ref written in a block ("floor 3 #116", "qa: floor 3 #116", "@Ada") opens, or null. */
-function useRefText(): (text: string | null | undefined) => (() => void) | null {
+/** What a ref written in a block ("floor 3 #116", "qa: floor 3 #116", "@Ada") opens, or null. `whole`: only when the
+ * text is that ref (a table cell), not free text that mentions one. */
+function useRefText(): (text: string | null | undefined, whole?: boolean) => (() => void) | null {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const open = useRefOpen();
-  return (text) => {
+  return (text, whole) => {
     if (!text) return null;
-    const ctx = { floors: repos.map((r) => ({ floor: r.floor, repoId: r.id })), agents: Object.values(agents).filter((a) => a.role !== 'ceo').map((a) => ({ id: a.id, name: a.name })), hasFile: () => false };
-    const ref = parseRefs(text, ctx)[0];
+    const ctx: RefContext = { floors: repos.map((r) => ({ floor: r.floor, repoId: r.id })), agents: Object.values(agents).filter((a) => a.role !== 'ceo').map((a) => ({ id: a.id, name: a.name })), hasFile: () => false };
+    const ref = whole ? soleRef(text, ctx) : parseRefs(text, ctx)[0];
     return ref ? open(ref) : null;
   };
 }
@@ -60,13 +61,30 @@ function useRefText(): (text: string | null | undefined) => (() => void) | null 
 // ---------- colours ----------
 
 const TOKENS: Record<VisualColor, string> = { accent: 'var(--ds-accent)', good: 'var(--ds-good-fill)', warn: 'var(--ds-warn-fill)', bad: 'var(--ds-bad-fill)', blue: 'var(--ds-series-4)', muted: 'var(--ds-line-strong)' };
-const seriesColor = (i: number, c?: VisualColor) => (c ? TOKENS[c] : `var(--ds-series-${(i % 4) + 1})`);
+const seriesColor = (i: number, c?: VisualColor) => (c ? TOKENS[c] : `var(--ds-series-${(i % SERIES_COLORS) + 1})`);
 
 // ---------- charts ----------
 
-const W = 320;
-const H = 150;
-const PAD = { l: 40, r: 8, t: 8, b: 24 };
+// The SVG is drawn at its real width (1 unit = 1 px), so axis text keeps the --ds-text-xs size in a narrow chat.
+const W = 320; // before it is measured
+const PAD = { l: 44, r: 8, t: 8, b: 24 };
+const CHAR_PX = 7; // a character of axis text, about
+const heightOf = (w: number) => Math.min(260, Math.max(140, Math.round(w * 0.47)));
+
+/** An element's width in px, measured as it changes (a callback ref: the plot appears once its data loads). */
+function useWidth(): [(el: HTMLElement | null) => void, number] {
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  const [w, setW] = useState(W);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const read = () => el.clientWidth && setW(Math.round(el.clientWidth));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return [setEl, w];
+}
 
 /** A round top for the y axis: 1, 2, 2.5 or 5 times a power of ten. */
 function niceMax(v: number): number {
@@ -75,25 +93,23 @@ function niceMax(v: number): number {
   return ([1, 2, 2.5, 5, 10].find((m) => m * p >= v) ?? 10) * p;
 }
 
-/** Every k-th x label, so at most `fit` show. */
-const labelStep = (n: number, fit: number) => Math.max(1, Math.ceil(n / fit));
-
 interface ChartProps {
   c: VisualChart;
   hidden: Set<number>;
   sel: number | null;
   onSel: (i: number | null) => void;
+  w: number;
 }
 
-function Axes({ max, unit }: { max: number; unit: VisualUnit }) {
+function Axes({ max, unit, w, h }: { max: number; unit: VisualUnit; w: number; h: number }) {
   const ys = [0, max / 2, max];
   return (
     <g className="viz-axis" aria-hidden>
       {ys.map((y) => {
-        const py = PAD.t + (H - PAD.t - PAD.b) * (1 - y / max);
+        const py = PAD.t + (h - PAD.t - PAD.b) * (1 - y / max);
         return (
           <g key={y}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={py} y2={py} />
+            <line x1={PAD.l} x2={w - PAD.r} y1={py} y2={py} />
             <text x={PAD.l - 4} y={py + 3} textAnchor="end">
               {formatValue(y, unit, true)}
             </text>
@@ -104,35 +120,33 @@ function Axes({ max, unit }: { max: number; unit: VisualUnit }) {
   );
 }
 
-function XLabels({ labels, x }: { labels: string[]; x: (i: number) => number }) {
-  const step = labelStep(labels.length, 5);
+function XLabels({ labels, x, w, h }: { labels: string[]; x: (i: number) => number; w: number; h: number }) {
   return (
     <g className="viz-axis" aria-hidden>
-      {labels.map((l, i) =>
-        i % step ? null : (
-          <text key={i} x={x(i)} y={H - 6} textAnchor="middle">
-            {l.length > 8 ? `${l.slice(0, 7)}…` : l}
-          </text>
-        ),
-      )}
+      {xTicks(labels, w - PAD.l - PAD.r, CHAR_PX).map(({ i, text }) => (
+        <text key={i} x={x(i)} y={h - 6} textAnchor="middle">
+          {text}
+        </text>
+      ))}
     </g>
   );
 }
 
-function BarsChart({ c, hidden, sel, onSel }: ChartProps) {
+function BarsChart({ c, hidden, sel, onSel, w }: ChartProps) {
+  const h = heightOf(w);
   const shown = c.series.map((s, i) => ({ s, i })).filter((x) => !hidden.has(x.i));
   const stacked = c.type === 'stacked-bar';
   const n = c.labels.length;
   const totals = c.labels.map((_, j) => shown.reduce((a, { s }) => a + Math.max(0, s.values[j] ?? 0), 0));
   const max = niceMax(Math.max(...(stacked ? totals : shown.flatMap(({ s }) => s.values.map((v) => v ?? 0))), 0));
-  const plotW = W - PAD.l - PAD.r;
-  const plotH = H - PAD.t - PAD.b;
+  const plotW = w - PAD.l - PAD.r;
+  const plotH = h - PAD.t - PAD.b;
   const slot = plotW / Math.max(1, n);
   const x = (j: number) => PAD.l + slot * (j + 0.5);
   const bw = Math.min(28, slot * 0.7);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="viz-svg" aria-hidden>
-      <Axes max={max} unit={c.unit} />
+    <svg viewBox={`0 0 ${w} ${h}`} className="viz-svg" aria-hidden>
+      <Axes max={max} unit={c.unit} w={w} h={h} />
       {c.labels.map((_, j) => {
         let base = 0;
         return (
@@ -150,23 +164,24 @@ function BarsChart({ c, hidden, sel, onSel }: ChartProps) {
           </g>
         );
       })}
-      <XLabels labels={c.labels} x={x} />
+      <XLabels labels={c.labels} x={x} w={w} h={h} />
     </svg>
   );
 }
 
-function LinesChart({ c, hidden, sel, onSel }: ChartProps) {
+function LinesChart({ c, hidden, sel, onSel, w }: ChartProps) {
+  const h = heightOf(w);
   const shown = c.series.map((s, i) => ({ s, i })).filter((x) => !hidden.has(x.i));
   const n = c.labels.length;
   const max = niceMax(Math.max(0, ...shown.flatMap(({ s }) => s.values.map((v) => v ?? 0))));
-  const plotW = W - PAD.l - PAD.r;
-  const plotH = H - PAD.t - PAD.b;
+  const plotW = w - PAD.l - PAD.r;
+  const plotH = h - PAD.t - PAD.b;
   const x = (j: number) => PAD.l + (n === 1 ? plotW / 2 : (plotW * j) / (n - 1));
   const y = (v: number) => PAD.t + plotH * (1 - v / max);
   const slot = plotW / Math.max(1, n - 1);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="viz-svg" aria-hidden>
-      <Axes max={max} unit={c.unit} />
+    <svg viewBox={`0 0 ${w} ${h}`} className="viz-svg" aria-hidden>
+      <Axes max={max} unit={c.unit} w={w} h={h} />
       {shown.map(({ s, i }) => {
         // A gap (null) breaks the line.
         const runs: [number, number][][] = [[]];
@@ -195,7 +210,7 @@ function LinesChart({ c, hidden, sel, onSel }: ChartProps) {
           {sel === j && shown.map(({ s, i }) => s.values[j] !== null && <circle key={i} cx={x(j)} cy={y(s.values[j]!)} r={4.5} fill={seriesColor(i, s.color)} className="viz-mark" />)}
         </g>
       ))}
-      <XLabels labels={c.labels} x={x} />
+      <XLabels labels={c.labels} x={x} w={w} h={h} />
     </svg>
   );
 }
@@ -298,9 +313,10 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   const [sel, setSel] = useState<number | null>(null);
   const refOpen = useRefText();
+  const [plotRef, w] = useWidth();
   if (c.missing || !c.labels.length) return <p className="viz-missing">{c.missing ?? 'Nothing to show yet.'}</p>;
   const donut = c.type === 'donut';
-  const props: ChartProps = { c, hidden, sel: sel !== null && sel < c.labels.length ? sel : null, onSel: setSel };
+  const props: ChartProps = { c, hidden, sel: sel !== null && sel < c.labels.length ? sel : null, onSel: setSel, w };
   const Body = donut ? DonutChart : c.type === 'progress' ? ProgressChart : c.type === 'line' || c.type === 'area' ? LinesChart : BarsChart;
   const legend = donut ? c.labels : c.series.length > 1 ? c.series.map((s) => s.name) : [];
   const toggle = (i: number) =>
@@ -316,7 +332,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
     .join(', ')}${c.labels.length > 8 ? '…' : ''}`;
   return (
     <div className={`viz-chart ${big ? 'viz-big' : ''}`}>
-      <div className="viz-plot" role="img" aria-label={summary}>
+      <div ref={plotRef} className="viz-plot" role="img" aria-label={summary}>
         <Body {...props} />
       </div>
       {legend.length > 0 && (
@@ -355,7 +371,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
 const PREVIEW_ROWS = 5;
 
 function Cell({ v, unit, refOpen }: { v: VisualTable['rows'][number][number]; unit: VisualUnit; refOpen: ReturnType<typeof useRefText> }) {
-  const open = typeof v === 'string' ? refOpen(v) : null;
+  const open = typeof v === 'string' ? refOpen(v, true) : null;
   if (open)
     return (
       <button type="button" className="ref-chip" onClick={open}>

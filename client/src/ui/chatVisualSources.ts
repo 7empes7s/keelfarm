@@ -3,7 +3,7 @@
 // Pure: a visual with a source comes back with its values filled in, or with `missing` saying why it can't be.
 
 import { KIND_GROUP_LABELS, kindShares, perMergeTrend, wasteGroups, type CostsView, type KindGroup } from '../../../shared/costs';
-import { parseSource, type ChatVisual, type VisualChart, type VisualSource, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
+import { capSlices, parseSource, type ChatVisual, type VisualChart, type VisualSource, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
 import type { OpsNumbers, OpsView } from '../../../shared/ops';
 import type { UsageReading } from '../../../shared/types';
 import { barName, usedPercent } from '../../../shared/usage';
@@ -144,7 +144,7 @@ function tileFromChart(c: Omit<VisualChart, 'kind' | 'title' | 'source'>): Omit<
   return { value: vals.length ? round(sum ? vals.reduce((a, b) => a + b, 0) : vals[vals.length - 1]) : null, unit: c.unit, ...(vals.length > 1 && { spark: vals }) };
 }
 
-function resolveChart(c: VisualChart, d: SourceData): Resolved<VisualChart> {
+function liveChart(c: VisualChart, d: SourceData): Resolved<VisualChart> {
   const s = parseSource(c.source);
   if (!s) return c;
   const got = sourceData(s, d);
@@ -154,6 +154,9 @@ function resolveChart(c: VisualChart, d: SourceData): Resolved<VisualChart> {
   const type = c.type === 'bar' && got.chart.type !== 'bar' ? got.chart.type : c.type;
   return { ...c, ...got.chart, type, title: c.title, ...(c.max && { max: c.max }) };
 }
+
+/** A chart with its source's numbers, a donut's small slices grouped. */
+const resolveChart = (c: VisualChart, d: SourceData) => capSlices(liveChart(c, d));
 
 function resolveTile(t: VisualTile, d: SourceData): VisualTile & { missing?: string } {
   const s = parseSource(t.source);

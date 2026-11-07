@@ -310,6 +310,42 @@ export function deltaTone(t: Pick<VisualTile, 'delta' | 'good'>): 'good' | 'bad'
   return t.delta > 0 === (t.good !== 'down') ? 'good' : 'bad';
 }
 
+// ---------- drawing ----------
+
+/** Distinct series colours (client: --ds-series-1…8); a donut with more slices groups the rest as "Other". */
+export const SERIES_COLORS = 8;
+
+/** A donut of at most SERIES_COLORS slices: the biggest ones, then the rest summed as "Other". */
+export function capSlices<T extends VisualChart>(c: T): T {
+  const vals = c.series[0]?.values ?? [];
+  if (c.type !== 'donut' || c.labels.length <= SERIES_COLORS) return c;
+  const order = c.labels.map((_, j) => j).sort((a, b) => (vals[b] ?? 0) - (vals[a] ?? 0));
+  const keep = order.slice(0, SERIES_COLORS - 1).sort((a, b) => a - b);
+  const rest = order.slice(SERIES_COLORS - 1).reduce((a, j) => a + Math.max(0, vals[j] ?? 0), 0);
+  return {
+    ...c,
+    labels: [...keep.map((j) => c.labels[j]), 'Other'],
+    series: c.series.slice(0, 1).map((s) => ({ ...s, values: [...keep.map((j) => s.values[j]), Math.round(rest * 100) / 100] })),
+    ...(c.refs && { refs: [...keep.map((j) => c.refs![j]), null] }),
+  };
+}
+
+/** Which x labels fit under a chart `plotW` px wide at `charPx` per character: every k-th one, cut at 8 characters (or 6 rather than skip). */
+export function xTicks(labels: readonly string[], plotW: number, charPx: number): { i: number; text: string }[] {
+  const n = labels.length;
+  if (!n) return [];
+  const want = Math.min(8, Math.max(...labels.map((l) => l.length)));
+  let step = 1;
+  let chars = 0;
+  for (; step < n; step++) {
+    chars = Math.floor((plotW / n) * step / charPx) - 1; // a character's gap between labels
+    if (chars >= Math.min(want, 6)) break; // cut long labels to 6+ before skipping any
+  }
+  if (step >= n) chars = Math.floor(plotW / charPx) - 1;
+  const fit = Math.max(1, Math.min(want, chars));
+  return labels.flatMap((l, i) => (i % step ? [] : [{ i, text: l.length > fit ? `${l.slice(0, Math.max(1, fit - 1))}…` : l }]));
+}
+
 // ---------- as text (Telegram, notifications) ----------
 
 const ICONS: Record<VisualKind, string> = { chart: '📊', table: '📋', dashboard: '📈' };

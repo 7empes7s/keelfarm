@@ -131,6 +131,16 @@ describe('resolveVisual', () => {
     const inline: ChatVisual = v('chart', { labels: ['a'], series: [{ values: [1] }] });
     expect(resolveVisual(inline, data())).toBe(inline);
   });
+
+  it('groups a donut past 8 slices as Other, in a chart or a dashboard, so no colour repeats', () => {
+    const labels = Array.from({ length: 10 }, (_, i) => `K${i}`);
+    const donut = { type: 'donut', labels, series: [{ values: labels.map((_, i) => 10 - i) }] };
+    const chart = resolveVisual(v('chart', donut), data()) as VisualChart;
+    expect(chart.labels).toEqual(['K0', 'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'Other']);
+    expect(chart.series[0].values.at(-1)).toBe(3 + 2 + 1);
+    const dash = resolveVisual(v('dashboard', { charts: [donut] }), data()) as VisualDashboard;
+    expect(dash.charts[0].labels).toHaveLength(8);
+  });
 });
 
 describe('costDays', () => {

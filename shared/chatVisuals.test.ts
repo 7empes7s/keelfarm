@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCeoMessage } from './chatParts';
-import { deltaTone, formatDelta, formatDuration, formatValue, numberOf, parseSource, parseVisual, sortRows, visualText, withVisualsText, VISUAL_CHARS } from './chatVisuals';
+import { capSlices, deltaTone, formatDelta, formatDuration, formatValue, numberOf, parseSource, parseVisual, SERIES_COLORS, sortRows, visualText, xTicks, withVisualsText, VISUAL_CHARS } from './chatVisuals';
 
 const fence = '```';
 
@@ -132,5 +132,52 @@ describe('visualText', () => {
     const dash = parseVisual('dashboard', '{"title":"Week","tiles":[{"label":"Spend","value":12,"unit":"usd","delta":-8},{"label":"Live","source":"costs:7d:total"}]}')!;
     expect(visualText(dash)).toBe('📈 Week\nSpend: $12.00 (↓ 8%)\nLive: live in the office');
     expect(withVisualsText('Floor 2 costs most.', [chart])).toBe('Floor 2 costs most.\n\n📊 Spend\nFloor 1: $1.00\nFloor 2: $4.50');
+  });
+});
+
+describe('capSlices', () => {
+  const donut = (n: number) => ({ kind: 'chart' as const, type: 'donut' as const, title: 'Spend', unit: 'usd' as const, labels: Array.from({ length: n }, (_, i) => `K${i}`), series: [{ name: 'Spend', values: Array.from({ length: n }, (_, i) => i + 1) }], refs: Array.from({ length: n }, (_, i) => `#${i}`) });
+
+  it('keeps a donut of up to 8 slices as it is, each with its own colour', () => {
+    const c = donut(SERIES_COLORS);
+    expect(capSlices(c)).toBe(c);
+    expect(SERIES_COLORS).toBe(8);
+  });
+
+  it('keeps the 7 biggest slices in order and groups the rest as Other', () => {
+    const c = capSlices(donut(11)); // values 1..11: the biggest are K4..K10, the rest 1+2+3+4 = 10
+    expect(c.labels).toEqual(['K4', 'K5', 'K6', 'K7', 'K8', 'K9', 'K10', 'Other']);
+    expect(c.series[0].values).toEqual([5, 6, 7, 8, 9, 10, 11, 10]);
+    expect(c.refs).toEqual(['#4', '#5', '#6', '#7', '#8', '#9', '#10', null]);
+  });
+
+  it('leaves other charts alone', () => {
+    const bars = { ...donut(12), type: 'bar' as const };
+    expect(capSlices(bars)).toBe(bars);
+  });
+});
+
+describe('xTicks', () => {
+  const days = Array.from({ length: 14 }, (_, i) => `Nov ${i + 1}`);
+
+  it('shows every label when they fit', () => {
+    expect(xTicks(['Build', 'QA', 'Fix'], 270, 7).map((t) => t.text)).toEqual(['Build', 'QA', 'Fix']);
+  });
+
+  it('skips labels rather than squeezing or cutting them in a narrow chart', () => {
+    const ticks = xTicks(days, 200, 7);
+    expect(ticks.map((t) => t.text)).toEqual(['Nov 1', 'Nov 5', 'Nov 9', 'Nov 13']);
+    expect(ticks.length * 7 * Math.max(...ticks.map((t) => t.text.length + 1))).toBeLessThanOrEqual(200);
+    expect(ticks[0]).toEqual({ i: 0, text: 'Nov 1' });
+  });
+
+  it('cuts long labels with an ellipsis, never past 8 characters, before skipping any', () => {
+    expect(xTicks(['CEO', 'Floor 1', 'weather-api', 'Floor 3'], 248, 7).map((t) => t.text)).toEqual(['CEO', 'Floor 1', 'weathe…', 'Floor 3']);
+    const ticks = xTicks(['Infrastructure', 'Documentation'], 400, 7);
+    expect(ticks.map((t) => t.text)).toEqual(['Infrast…', 'Documen…']);
+    expect(xTicks(['Infrastructure', 'Documentation', 'Refactoring'], 120, 7)).toEqual([
+      { i: 0, text: 'Infrast…' },
+      { i: 2, text: 'Refacto…' },
+    ]);
   });
 });
