@@ -32,7 +32,7 @@ import { Lab, loadLab } from '../experiments.ts';
 import { FloorPractice } from '../practiceState.ts';
 import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
-import { emptyLedger, pastCareers } from '../ledger.ts';
+import { emptyLedger, packCareers, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
@@ -589,11 +589,11 @@ export abstract class SwarmCore extends SwarmContract {
       // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
       // otherwise it's saying whether the manager is using it (#210) or what it shows (shared/watch.ts).
       if (isResync(raw)) {
-        this.send(ws, { type: 'snapshot', data: this.snapshot() });
+        this.send(ws, { type: 'snapshot', data: packCareers(this.snapshot()) });
         this.outbox.resync(ws);
       } else if (!this.notifier.attention.receive(ws, raw)) this.outbox.receive(ws, String(raw));
     });
-    this.send(ws, { type: 'snapshot', data: this.snapshot() });
+    this.send(ws, { type: 'snapshot', data: packCareers(this.snapshot()) });
   }
 
   /** The floor an agent's desk is on, for routing their terminal lines: 0 for the CEO in the lobby, null for none. */
