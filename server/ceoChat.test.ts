@@ -107,6 +107,16 @@ describe('the CEO chat', () => {
     await swarm.stopCeo().catch(() => undefined);
   });
 
+  it('takes a message resent with the same client id once (#216)', { timeout: 60_000 }, async () => {
+    const { swarm, i } = await office();
+    const { id } = await swarm.messageCeo('Ship the bakery', undefined, undefined, [], undefined, 'c-1');
+    expect(await swarm.messageCeo('Ship the bakery', undefined, undefined, [], undefined, 'c-1')).toEqual({ id });
+    expect(i.state.messages.filter((m) => m.from === 'manager').map((m) => m.clientId)).toEqual(['c-1']);
+    await swarm.messageCeo('Ship the bakery'); // without one, sending it again is a new message
+    expect(i.state.messages.filter((m) => m.from === 'manager')).toHaveLength(2);
+    await swarm.stopCeo().catch(() => undefined);
+  });
+
   it('puts what a reply changed on it as action cards, with its artifact and idea (#108)', { timeout: 60_000 }, async () => {
     const { swarm, replies } = await office();
     await swarm.messageCeo('Plan the next milestone for floor 1');

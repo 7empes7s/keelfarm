@@ -34,7 +34,7 @@ export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): J
   if (ref.kind === 'agent') {
     const a = w.agents[ref.agentId];
     if (a && ref.section && w.repos.some((r) => r.id === a.repoId)) return sectionJump(a.repoId, ref.section);
-    return a ? { kind: 'overlay', overlay: { kind: 'terminal', agentId: a.id }, ...ride(a.repoId) } : null;
+    return a ? { kind: 'overlay', overlay: { kind: 'terminal', agentId: a.id, view: ref.terminal ? 'terminal' : 'chat' }, ...ride(a.repoId) } : null; // @Ada opens their chat (#120)
   }
   const repo = w.repos.find((r) => r.id === ref.repoId);
   if (!repo) return null;

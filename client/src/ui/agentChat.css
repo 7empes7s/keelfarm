@@ -1,0 +1,354 @@
+/* An agent's chat (#120, AgentChat.tsx) and the reaction bar (Reactions.tsx): bubbles, grouped steps, milestone
+   cards and the live line, in the agent window's place of the terminal. */
+
+.ac {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ds-surface-sunken);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+}
+.term-phone .ac {
+  border: none;
+  border-radius: 0;
+}
+.ac-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3);
+}
+/* Rows off screen skip layout and paint: long sessions stay light. */
+.ac-scroll > * {
+  flex: none;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+.ac-earlier {
+  align-self: center;
+}
+.ac-empty {
+  margin: auto;
+  max-width: 34ch;
+  text-align: center;
+}
+
+/* ---------- bubbles ---------- */
+.ac-bubble {
+  max-width: min(46rem, 92%);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading);
+  overflow-wrap: anywhere;
+}
+.ac-bubble :is(p, ul, ol, pre) {
+  margin: 0 0 var(--ds-space-2);
+}
+.ac-bubble > :last-child :last-child {
+  margin-bottom: 0;
+}
+.ac-me {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.ac-bubble-me {
+  border-radius: var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-sm) var(--ds-radius-md);
+  background: var(--ds-surface-hover);
+  white-space: pre-wrap;
+}
+.ac-who {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+
+/* ---------- steps ---------- */
+.ac-steps {
+  max-width: min(46rem, 100%);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  font-size: var(--ds-text-sm);
+}
+.ac-steps > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  cursor: pointer;
+  list-style: none;
+}
+.ac-steps > summary::-webkit-details-marker {
+  display: none;
+}
+.ac-steps > summary::after {
+  content: '›';
+  margin-left: auto;
+  color: var(--ds-text-muted);
+  transition: transform var(--ds-dur) var(--ds-ease);
+}
+.ac-steps[open] > summary::after {
+  transform: rotate(90deg);
+}
+.ac-step-icon {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  color: var(--ds-text-muted);
+}
+.ac-step-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-steps-bad {
+  border-color: var(--ds-danger-text);
+}
+.ac-steps-bad .ac-step-icon,
+.ac-bad,
+.ac-error {
+  color: var(--ds-danger-text);
+}
+.ac-step-body {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-top: 1px solid var(--ds-line);
+}
+.ac-step-line {
+  font-weight: var(--ds-weight-strong);
+}
+.ac-outcome {
+  color: var(--ds-text-muted);
+  font-weight: var(--ds-weight);
+}
+.ac-error {
+  margin-top: var(--ds-space-1);
+}
+.ac-pre {
+  max-height: 16rem;
+  margin: var(--ds-space-2) 0 0;
+  padding: var(--ds-space-2);
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- cards ---------- */
+.ac-card {
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  font-size: var(--ds-text-sm);
+}
+.ac-prompt > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  cursor: pointer;
+}
+.ac-prompt-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-prompt > .ac-pre {
+  margin: 0 var(--ds-space-3) var(--ds-space-3);
+}
+.ac-milestone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-1) var(--ds-space-3);
+  font-weight: var(--ds-weight-strong);
+}
+.ac-milestone a {
+  color: var(--ds-link);
+}
+.ac-chip {
+  padding: 2px var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface);
+  font-size: var(--ds-text-xs);
+}
+.ac-chip-good,
+.ac-verdict-good {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.ac-chip-bad,
+.ac-verdict-bad {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.ac-chip-warn,
+.ac-verdict-warn {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+
+/* ---------- the live line and the chips ---------- */
+.ac-live {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.ac-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+  animation: ac-pulse 1.2s var(--ds-ease) infinite alternate;
+}
+@keyframes ac-pulse {
+  to {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ac-dot {
+    animation: none;
+  }
+}
+.ac-chips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-top: 1px solid var(--ds-line);
+}
+.ac-chips .btn {
+  min-height: var(--ds-target);
+}
+.aw-panes {
+  display: inline-flex;
+  flex: none;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  overflow: hidden;
+}
+.aw-panes button {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  border: none;
+  background: var(--ds-surface);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .aw-pane-label {
+    display: none;
+  }
+  .aw-panes button {
+    padding: 0;
+  }
+}
+.aw-more {
+  flex: none; /* ⋯ keeps its 44px; the name gives way */
+}
+.aw-panes button[aria-pressed='true'] {
+  background: var(--ds-text);
+  color: var(--ds-surface-raised);
+}
+.ac-note {
+  flex: none;
+  margin: 0 0 var(--ds-space-2);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+/* ---------- reactions ---------- */
+.rx-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  -webkit-touch-callout: none;
+}
+.rx-open-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border: none;
+  background: none;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-lg);
+  cursor: pointer;
+  opacity: 0;
+}
+.rx-wrap:is(:hover, :focus-within, .rx-open) .rx-open-btn {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .rx-open-btn {
+    display: none;
+  }
+}
+.rx-bar {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + var(--ds-space-1));
+  left: 0;
+  display: flex;
+  max-width: calc(100vw - 2 * var(--ds-space-4));
+  overflow-x: auto;
+  padding: 0 var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-float);
+}
+.rx-pick {
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border: none;
+  border-radius: 50%;
+  background: none;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+.rx-pick[aria-pressed='true'] {
+  background: var(--ds-surface-hover);
+}
+.rx-chips {
+  display: flex;
+  gap: var(--ds-space-1);
+  margin-top: 2px;
+}
+.rx-chip {
+  padding: 0 6px;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  font-size: var(--ds-text-xs);
+  line-height: 1.6;
+}

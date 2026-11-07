@@ -13,8 +13,12 @@ import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
+import { readCatalog } from './modelCatalog.ts';
+import { checkAccount } from './accountCheck.ts';
+import { startLocalSignIn } from './localSignIn.ts';
+import type { AccountsDeps } from './accounts.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
-import { realPreviews, type PreviewBackend } from './previewRunner.ts';
+import { previewDesks, realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import { elevenLabs } from './elevenlabs.ts';
 import { httpTransport, type NotifyTransport } from './notifier.ts';
@@ -27,7 +31,7 @@ import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { DemoCharter } from './demoCharters.ts';
-import type { CareerView } from '../shared/careers.ts';
+import type { CareerView, PastCareer } from '../shared/careers.ts';
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
@@ -37,7 +41,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, PullInfo } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
@@ -48,6 +52,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** The logins of collaborators with write access, for trust (#185). */
+  writers(fullName: string): Promise<string[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
   /** OPEN or CLOSED; null when there is no such issue. */
   issueState(fullName: string, number: number): Promise<'OPEN' | 'CLOSED' | null>;
@@ -64,6 +70,8 @@ export interface Backend {
   failedRunLog(fullName: string, runId: string): Promise<string>;
   /** Re-run the failed jobs of these GitHub Actions runs. */
   rerunFailedJobs(fullName: string, runIds: number[]): Promise<void>;
+  /** The annotations' messages on these failed checks' jobs (from their log URLs), e.g. GitHub saying why it wouldn't run them (#191). */
+  checkAnnotations(fullName: string, urls: string[]): Promise<string[]>;
   closePull(fullName: string, number: number): Promise<void>;
   prForBranch(fullName: string, branch: string): Promise<{ number: number; url: string } | null>;
   prDetails(fullName: string, number: number): Promise<github.PrDetails>;
@@ -109,6 +117,8 @@ export interface Backend {
   trimDesk(fullName: string, agentSlug: string, stillIdle: () => boolean): Promise<workspace.DeskTrim | null>;
   /** Stop processes an agent left running (dev servers on its port, anything started in its desk). */
   releaseDesk(fullName: string, agentSlug: string, port: number): Promise<void>;
+  /** The floor's preview desks (desks/preview, desks/preview-pr-N) and their size on disk, for cleanup and stats (#204). */
+  previewDesks(fullName: string): Promise<{ slug: string; bytes: number }[]>;
   /** An agent session: the real CLI in the agent's terminal when opts.terminal is set, else an Agent SDK session. */
   startSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle;
   /** A finished Claude Code session's transcript (#49): its file and session id; null when there's none on disk. */
@@ -129,6 +139,8 @@ export interface Backend {
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
   toolInventory(projects: string[]): Promise<ToolInventory>;
+  /** The coding agents' models, read from their live lists now (server/modelCatalog.ts): never throws. */
+  modelCatalog(): Promise<ModelCatalogView>;
   /** Claude's subscription usage read directly, while no session reports it (#89): no model tokens, never throws. */
   usageCheck(): Promise<UsageCheck>;
   /** The default branch's commits and the issues filed since `since`: what says whether merged PRs survived (#23). */
@@ -151,20 +163,30 @@ export interface Backend {
   telegram: TelegramApi;
   /** Cloud agents (docs/cloud.md): Upstash's Box API (the demo's is fake), and picking their CLIs up after a restart. */
   cloud: CloudBackend;
+  /** Providers & accounts (#247, docs/accounts.md): testing them and their logins' sign-in terminals (the demo's are fake). */
+  accounts: AccountsBackend;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
   seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
   /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
   seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
+  /** The demo only: someone let go, under the Team tab's Past agents (#205). */
+  seedPastCareers?(now: number): Record<string, PastCareer>;
+  /** The demo only: the made-up cost ledger as session history (#205), so profiles have timelines. */
+  seedHistory?(records: readonly CostRecord[], repos: readonly { id: string; fullName: string; floor: number }[], now: number): HistoryEntry[];
   /** The demo only: an objective log over the made-up ledger (#105), so the Charter tab's numbers show from the start. */
   seedCharterLog?(charter: CharterParts, ledger: CostRecord[], now: number): ObjectiveLog;
   /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
   demoCharter?(fullName: string): DemoCharter;
   /** The demo only: an update the preflight held back (#138), so a fresh demo office's chat shows its card. */
   demoHeldUpdate?(): LastUpdate;
+  /** The demo only: open PRs a CI outage holds (#191), which a fresh demo office starts with as QA-passed and parked. */
+  demoParked?(): { fullName: string; prNumber: number }[];
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
+  /** The demo opens without the setup wizard or the tour (config.ts demoNoTour), for QA's and tests' browsers. */
+  demoNoTour?: boolean;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */
   seedLab?(repos: { id: string }[], now: number): LabState;
   /** The demo only: a chat to open on, with edited messages of every kind (#125), reactions and quoted replies (#118); ids from 1 (the office renumbers them). */
@@ -194,6 +216,15 @@ export interface CloudBackend {
   signIn(o: { api: BoxApi; boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal; agentId: string }, exited: (code: number) => void): BoxSignIn;
   /** The demo only: every Box's sign-in expires, as a login Anthropic or OpenAI turned away would. */
   expireSignIns?(): void;
+}
+
+export interface AccountsBackend {
+  /** Test an account: a login in its folder (and its usage), or one free request with its key. Never throws. */
+  check: AccountsDeps['check'];
+  /** A login's CLI signing in, in the account's terminal, with the account's folder in `env`. */
+  signIn: AccountsDeps['signIn'];
+  /** The demo only: its made-up accounts and keys, added to a registry that has only the built-in ones. */
+  seed?(): { accounts: ProviderAccount[]; keys: Record<string, string> };
 }
 
 /** The real cloud: Upstash, the manager's gh and git. */
@@ -232,6 +263,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  writers: github.writers,
   createIssue: github.createIssue,
   exportCharter: github.exportCharter,
   issueState: github.issueState,
@@ -243,6 +275,7 @@ export const realBackend: Backend = {
   fileHistory: (fullName) => workspace.fileHistory(fullName),
   failedRunLog: github.failedRunLog,
   rerunFailedJobs: github.rerunFailedJobs,
+  checkAnnotations: github.checkAnnotations,
   closePull: github.closePull,
   prForBranch: github.prForBranch,
   prDetails: github.prDetails,
@@ -270,6 +303,7 @@ export const realBackend: Backend = {
   sweepDesks: workspace.sweepDesks,
   trimDesk: workspace.trimDesk,
   releaseDesk: (fullName, agentSlug, port) => workspace.releaseDesk(fullName, agentSlug, port, officeProcesses()),
+  previewDesks,
   // A CLI started in the terminal keeper outlives an office restart (kept); a Box's is followed through its record.
   startSession: (opts, cb) => (opts.terminal ? Object.assign(startCliSession(opts, cb), { kept: !opts.box && keeperHookUrl() !== null }) : startSession(opts, cb)),
   sessionTranscript: async (cwd, sessionId) => {
@@ -284,7 +318,9 @@ export const realBackend: Backend = {
   detectClis,
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
+  modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
+  accounts: { check: checkAccount, signIn: startLocalSignIn },
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

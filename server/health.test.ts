@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEMORY, heldNote, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
 import { createDemoBackend } from './demo.ts';
-import { admission, checkRestart, heldMessage, heldPing, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
+import { admission, checkRestart, heldMessage, heldPing, idlePreview, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryRelief, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
 import { Swarm } from './swarm.ts';
 
 // The office never takes its computer down (#55): sessions start only when memory allows, sessions killed for memory
@@ -109,6 +109,23 @@ describe('killed sessions', () => {
     expect(memoryVictim({ memory: mem(4000), headroomMb: 1536, sessionMaxMb: 1024, sessions })?.id).toBe('b');
     expect(memoryVictim({ memory: mem(4000), headroomMb: 1536, sessionMaxMb: 0, sessions })).toBeNull();
     expect(memoryVictim({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 0, sessions })).toMatchObject({ id: 'b', why: expect.stringMatching(/running out of memory/) });
+  });
+
+  it('stop an idle preview before any session when memory is about to run out (#204)', () => {
+    const sessions = [{ id: 'a', rssMb: 900 }, { id: 'b', rssMb: 1800 }];
+    const previews = [
+      { key: 'o/r#main', rssMb: 300, idle: true },
+      { key: 'o/r#4', rssMb: 700, idle: true },
+      { key: 'o/r#5', rssMb: 900, idle: false }, // on screen, or an agent tests in it
+    ];
+    expect(idlePreview(previews)).toBe('o/r#4');
+    expect(idlePreview([previews[2]])).toBeNull();
+    expect(memoryRelief({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 0, sessions, previews })).toEqual({ preview: 'o/r#4' });
+    // No idle preview: the biggest session, as before.
+    expect(memoryRelief({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 0, sessions, previews: [previews[2]] })).toMatchObject({ session: { id: 'b' } });
+    // A session over its ceiling is that session's problem; plenty of memory: nothing stops.
+    expect(memoryRelief({ memory: mem(500, 100), headroomMb: 1536, sessionMaxMb: 1024, sessions, previews })).toMatchObject({ session: { id: 'b' } });
+    expect(memoryRelief({ memory: mem(4000), headroomMb: 1536, sessionMaxMb: 0, sessions, previews })).toBeNull();
   });
 });
 
@@ -286,6 +303,26 @@ describe('a demo office short of memory', () => {
     expect(swarm.snapshot().health?.heldWork).toBeNull();
     if (!busy()) x.startIssueWork(repo); // the release may already have started it
     expect(busy()).toBe(1);
+  });
+});
+
+describe('a demo office short of memory, with a cloud agent (#263)', () => {
+  it('gives the ready issue to the Box agent while local agents wait, and counts nothing as waiting', async () => {
+    const swarm = new Swarm(createDemoBackend());
+    await swarm.connectRepo('demo-co/pixel-todo');
+    const x = swarm as unknown as Internals;
+    const repo = x.state.repos[0];
+    repo.autoAssign = true;
+    swarm.hireAgent(repo.id, { name: 'Radia' });
+    const team = x.state.agents.filter((a) => a.role !== 'ceo');
+    const box = team.find((a) => a.name === 'Radia')! as (typeof team)[number] & { host?: string };
+    box.host = 'box'; // the demo has no Upstash account: what matters here is only where the scheduler thinks they work
+    await swarm.health.simulate(true);
+    expect(x.startIssueWork(repo)).toBe(true);
+    expect(team.filter((a) => a.status === 'preparing').map((a) => a.id)).toEqual([box.id]);
+    expect(swarm.snapshot().health?.heldWork).toBeNull();
+    expect(x.startIssueWork(repo)).toBe(false); // the local agents still wait
+    expect(heldNote(swarm.snapshot().health?.heldWork)).toMatch(/^⏳ 1 task waiting for memory/);
   });
 });
 

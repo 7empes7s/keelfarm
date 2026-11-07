@@ -13,7 +13,7 @@ block anyone, and nothing new gets in.
 | --- | --- | --- |
 | Lint | oxlint, type-aware (`.oxlintrc.json`) | a file has more findings of a rule than the baseline records for that file and rule |
 | Dead code | knip (`knip.jsonc`) | a new unused file, export, type, dependency, devDependency or unlisted import |
-| File size | line count of `client/ server/ shared/ scripts/ bin/ e2e/` `.ts .tsx .mts .js .mjs .css` | a file the baseline doesn't list has over 800 lines, or a listed one (they're the files over 800) passes its recorded size + 5% |
+| File size | line count of `client/ server/ shared/ scripts/ bin/ e2e/` `.ts .tsx .mts .js .mjs .css` | a file the baseline doesn't list has over 800 lines, or a listed one (they're the files over 800) passes its recorded size + 5%; a file in `e2e/layout/` has over 300, or in `shared/types/` over 400 (#187) |
 
 - Lint counts per file and rule, not per line, so moving code around inside a file never trips it. When a count
   goes up, the output lists every finding of that rule in that file, since a count can't say which one is new.

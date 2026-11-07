@@ -1,9 +1,9 @@
-// The manager's console (#102): five top tabs (consoleNavRules.ts's groups), a side menu of the open tab's sections with a
-// search over every setting at its top, and one section beside it. Pocket mode draws the same map as a list you tap
+// The manager's console (#102): five top tabs (consoleNavRules.ts's groups), a row of the open tab's sections under them
+// with a 🔍 search over every setting at its end (#199), and one section at full width below. Pocket mode draws the same map as a list you tap
 // into (PocketConsole.tsx); both keep the open section in the address (#settings/cloud-agents) and remember it.
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { pendingRequests, useStore, type ManagerTab } from '../store';
-import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionsIn, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
+import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionRow, sectionsIn, stepTab, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
@@ -13,12 +13,13 @@ import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
 import { EveryProjectCard } from './PracticesSettings';
 import { ProfileSettings } from './ProfileSettings';
 import { CloudSettings } from './CloudSettings';
+import { ProvidersSettings } from './ProvidersSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { OutsideSettings } from './OutsideSettings';
 import { NotifySettings } from './NotifySettings';
 import { ThemeSettings } from './ThemeSettings';
 import { AccessibilitySettings } from './AccessibilitySettings';
-import { Panel } from './Panel';
+import { Panel, useBackLayer } from './Panel';
 import { InfoButton } from './InfoButton';
 import { setMode } from '../pocket/mode';
 import './console.css';
@@ -85,6 +86,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return one(<CompanySettings />);
     case 'profile':
       return one(<ProfileSettings />);
+    case 'accounts':
+      return one(<ProvidersSettings />);
     case 'cloud-agents':
       return one(<CloudSettings />);
     case 'voice':
@@ -159,13 +162,20 @@ export function useFoundLabel(pane: RefObject<HTMLElement | null>) {
   return setLabel;
 }
 
-/** The search at the top of the side menu (and pocket mode's list): every setting, by its label. */
-export function ConsoleSearch({ where, query, setQuery, go }: { where: Where; query: string; setQuery: (q: string) => void; go: (hit: Hit) => void }) {
+/** The search over every setting, by its label: in the console's sections row (onClose: its × and Esc), and on pocket mode's list. */
+export function ConsoleSearch({ where, query, setQuery, go, onClose }: { where: Where; query: string; setQuery: (q: string) => void; go: (hit: Hit) => void; onClose?: () => void }) {
   const hits = search(query, where);
   const id = useId();
   return (
-    <div className="cn-search" data-tour="console-search">
-      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search settings" aria-label="Search settings" aria-controls={query ? id : undefined} />
+    <div className={`cn-search ${onClose ? 'cn-search-bar' : ''}`} data-tour="console-search">
+      <div className="cn-search-field">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search settings" aria-label="Search settings" aria-controls={query ? id : undefined} autoFocus={!!onClose} />
+        {onClose && (
+          <button className="btn btn-ghost cn-search-close" onClick={onClose} aria-label="Close search">
+            ×
+          </button>
+        )}
+      </div>
       {query.trim() && (
         <ul className="cn-hits" id={id} aria-label="Search results">
           {hits.length === 0 && <li className="muted small cn-none">Nothing called that.</li>}
@@ -186,9 +196,37 @@ export function ConsoleSearch({ where, query, setQuery, go }: { where: Where; qu
   );
 }
 
-/** The console's top tabs, the open tab's side menu and one section beside it: the 3D office's console, and pocket mode's ⚙️ on a desktop (#104). */
-export function ConsoleSplit({ where, section, pick, focus }: { where: Where; section: Section; pick: (s: Section) => void; focus?: SectionFocus }) {
+/** The console's search, open in the sections row: Esc, × and the back gesture close it, never the console. */
+function SearchBar({ where, close, go }: { where: Where; close: () => void; go: (hit: Hit) => void }) {
   const [query, setQuery] = useState('');
+  useBackLayer(close);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [close]);
+  return <ConsoleSearch where={where} query={query} setQuery={setQuery} go={go} onClose={close} />;
+}
+
+/** Arrow keys, Home and End in a row of tabs: pick the tab they reach and focus it. */
+function tabArrows<T>(list: T[], at: number, go: (t: T) => void) {
+  return (e: ReactKeyboardEvent<HTMLElement>) => {
+    const i = stepTab(at, list.length, e.key);
+    if (i === undefined) return;
+    e.preventDefault();
+    go(list[i]);
+    e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[i]?.focus();
+  };
+}
+
+/** The console's top tabs, the open tab's sections in a row under them (#199) and the section at full width: the 3D office's console, and pocket mode's ⚙️ on a desktop (#104). */
+export function ConsoleSplit({ where, section, pick, focus }: { where: Where; section: Section; pick: (s: Section) => void; focus?: SectionFocus }) {
+  const [searching, setSearching] = useState(false);
   const pane = useRef<HTMLDivElement>(null);
   const setFound = useFoundLabel(pane);
   const badges = useBadges();
@@ -197,49 +235,63 @@ export function ConsoleSplit({ where, section, pick, focus }: { where: Where; se
     pane.current?.scrollTo(0, 0); // a block: Chrome's scrollTo can return a promise, which React would take for a cleanup
   }, [section]);
   const openGroup = (g: GroupId) => pick(opening(g, '', where, loadRemembered()));
-  const sections = sectionsIn(section.group, where);
+  const row = sectionRow(section.group, where);
+  const groupAt = GROUPS.findIndex((g) => g.id === section.group);
+  const closeSearch = useCallback(() => setSearching(false), []);
+  const searchButton = (
+    <button className="btn btn-ghost cn-search-open" onClick={() => setSearching(true)} aria-label="Search settings" data-tour="console-search">
+      <span aria-hidden>🔍</span>
+    </button>
+  );
   return (
     <>
-      <div className="tabs cn-groups" role="tablist" aria-label="Console">
+      <div className="tabs cn-groups" role="tablist" aria-label="Console" onKeyDown={tabArrows(GROUPS, groupAt, (g) => openGroup(g.id))}>
         {GROUPS.map((g) => (
-          <button key={g.id} role="tab" aria-selected={section.group === g.id} className={`tab ${section.group === g.id ? 'tab-on' : ''}`} onClick={() => openGroup(g.id)}>
+          <button key={g.id} role="tab" aria-selected={section.group === g.id} tabIndex={section.group === g.id ? 0 : -1} className={`tab ${section.group === g.id ? 'tab-on' : ''}`} onClick={() => openGroup(g.id)}>
             {g.icon} {g.label} <Badge n={groupBadge(g.id, where, badges)} />
           </button>
         ))}
       </div>
       <div className="cn-split">
-        <nav className="cn-side" aria-label="Sections">
-          <ConsoleSearch
-            where={where}
-            query={query}
-            setQuery={setQuery}
-            go={(h) => {
-              setQuery('');
-              pick(h.section);
-              setFound(h.label === h.section.label ? null : h.label);
-            }}
-          />
-          {!query.trim() && (
-            <div className="cn-menu" role="tablist" aria-orientation="vertical" aria-label={GROUPS.find((g) => g.id === section.group)?.label}>
-              {sections.map((s) => (
-                <button
-                  key={s.id}
-                  role="tab"
-                  aria-selected={section.id === s.id}
-                  aria-controls={`${ids}-pane`}
-                  className={`cn-item ${section.id === s.id ? 'cn-item-on' : ''}`}
-                  onClick={() => pick(s)}
-                >
-                  <span aria-hidden>{s.icon}</span>
-                  <span className="cn-item-text">{s.label}</span>
-                  <Badge n={badges[s.id]} />
-                </button>
-              ))}
-            </div>
-          )}
-        </nav>
+        {(searching || row.length > 0) && (
+          <div className="cn-bar">
+            {searching ? (
+              <SearchBar
+                where={where}
+                close={closeSearch}
+                go={(h) => {
+                  setSearching(false);
+                  pick(h.section);
+                  setFound(h.label === h.section.label ? null : h.label);
+                }}
+              />
+            ) : (
+              <>
+                <div className="cn-sections" role="tablist" aria-label={GROUPS[groupAt]?.label} onKeyDown={tabArrows(row, row.indexOf(section), pick)}>
+                  {row.map((s) => (
+                    <button
+                      key={s.id}
+                      role="tab"
+                      aria-selected={section.id === s.id}
+                      aria-controls={`${ids}-pane`}
+                      tabIndex={section.id === s.id ? 0 : -1}
+                      className={`cn-sec ${section.id === s.id ? 'cn-sec-on' : ''}`}
+                      onClick={() => pick(s)}
+                    >
+                      <span aria-hidden>{s.icon}</span>
+                      <span>{s.label}</span>
+                      <Badge n={badges[s.id]} />
+                    </button>
+                  ))}
+                </div>
+                {searchButton}
+              </>
+            )}
+          </div>
+        )}
         <div ref={pane} className="cn-pane tab-body ds-stack-scope" role="tabpanel" id={`${ids}-pane`} aria-label={section.label}>
           <div className="cn-pane-info">
+            {!searching && row.length === 0 && searchButton}
             <InfoButton key={section.id} screen={section.id} />
           </div>
           <SectionBody key={section.id} id={section.id} where={where} focus={focus} />

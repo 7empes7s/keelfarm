@@ -1,6 +1,7 @@
 // The back gesture and the browser's Back close the top overlay, never the app (#129). Every open panel, sheet or
 // viewer is a layer with a history entry of ours; each entry carries its depth, so a popstate says how many layers
 // should still be open. Opening one panel in place of another (same tick) nets out to no history change.
+import { raiseIn } from './dialogFocus';
 
 /** History steps that make our `depth` entries match `layers` open layers: > 0 push that many, < 0 go back that many. */
 export const stepsTo = (layers: number, depth: number) => layers - depth;
@@ -54,16 +55,20 @@ function install() {
   });
 }
 
-/** Adds a layer that Back closes with `close`; returns its removal (call it when the layer goes, however it closed). */
-export function pushLayer(close: () => void): () => void {
+/**
+ * Adds a layer that Back closes with `close`; returns its removal (call it when the layer goes, however it closed),
+ * whose `raise` makes it the layer Back closes first (a panel beside another one clicked or focused, #212).
+ */
+export function pushLayer(close: () => void): (() => void) & { raise: () => void } {
   install();
   const layer = { close };
   layers.push(layer);
   schedule();
-  return () => {
+  const remove = () => {
     const i = layers.indexOf(layer);
     if (i < 0) return;
     layers.splice(i, 1);
     schedule();
   };
+  return Object.assign(remove, { raise: () => void raiseIn(layers, layer) });
 }

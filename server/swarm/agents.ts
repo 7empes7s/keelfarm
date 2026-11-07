@@ -1,14 +1,20 @@
 // The staff: hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills.
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
+import path from 'node:path';
 import type { BoxCliRecord, BoxTarget } from '../boxCli.ts';
 import { redact } from '../cloud.ts';
 import { HttpError } from '../httpError.ts';
 import { issueTaken } from '../issueClaims.ts';
 import { cliLabel, isCli } from '../clis.ts';
+import { Accounts } from '../accounts.ts';
+import { checkBinding } from '../../shared/accounts.ts';
+import { HOME_DIR, MODELS_FILE } from '../config.ts';
+import { CATALOG_MS, loadCatalog, saveCatalog } from '../modelCatalog.ts';
 import { machineName } from '../machines.ts';
 import type { SessionKind } from '../health.ts';
-import { apply as applyLedger } from '../ledger.ts';
+import { runsHere } from '../handOut.ts';
+import { apply as applyLedger, pastCareers } from '../ledger.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import {
   isToolId,
@@ -19,6 +25,9 @@ import {
   type SessionTools,
 } from '../../shared/tooling.ts';
 import { blockers, waitsMessage } from '../../shared/issues.ts';
+import { ChatLog, quoteOf, type TranscriptEvent } from '../../shared/agentChat.ts';
+import { redact as scrub } from '../../shared/journal.ts';
+import { isAgentReaction, reactionNote } from '../../shared/reactions.ts';
 import { cleanStyle } from '../../shared/looks.ts';
 import { effectiveModel } from '../../shared/models.ts';
 import { FLOOR_SEATS } from '../../shared/types.ts';
@@ -42,6 +51,22 @@ import { removeScreens } from './screens.ts';
 import { SwarmMerge } from './merge.ts';
 
 export abstract class SwarmAgents extends SwarmMerge {
+  /** Providers & accounts (#247, docs/accounts.md): the logins and keys agents and the CEO run on. */
+  readonly accounts = new Accounts({
+    secretsFile: path.join(HOME_DIR, this.backend.demo ? 'demo-accounts-secrets.json' : 'secrets.json'),
+    home: HOME_DIR,
+    env: process.env,
+    file: path.join(HOME_DIR, this.backend.demo ? 'demo-accounts.json' : 'accounts.json'),
+    check: (a, dir, secret) => this.backend.accounts.check(a, dir, secret),
+    signIn: (o, exited) => this.backend.accounts.signIn(o, exited),
+    spend: () => this.spend.ledger.all().filter((r) => r.type === 'session'),
+    agents: () => this.state.agents,
+    builtInUsage: () => this.state.claudeUsage,
+    changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
+    seed: this.backend.accounts.seed,
+    poll: !process.env.VITEST,
+  });
+
   // ---------- agents ----------
 
   /** Answering one of the CEO's consults (#28): working to everyone, though their saved status stays as it was. */
@@ -50,7 +75,7 @@ export abstract class SwarmAgents extends SwarmMerge {
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
-    const v = super.agentView(a, withLog);
+    const v = { ...super.agentView(a, withLog), ...(a.account ? { account: a.account } : {}) };
     return this.consulting(a) ? { ...v, status: 'working', issueTitle: `Consult for ${this.ceo().name}` } : v;
   }
 
@@ -118,7 +143,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       logTail: [],
     };
     this.state.agents.push(agent);
-    applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now() });
+    if (applyLedger(this.state.progress, { kind: 'hired', agentId: agent.id, at: Date.now(), name }).past) this.broadcast({ type: 'pastCareers', past: pastCareers(this.state.progress) });
     this.agentRt.set(agent.id, { log: [], session: null, currentTool: null, browserUrl: null, screenshot: null, shots: [], terminal: null });
     this.appendLog(agent, [{ kind: 'system', text: `👋 ${name} joined floor ${repo.floor} (${repo.fullName})${host === 'box' ? ', working in the cloud' : ''}.` }]);
     this.save();
@@ -450,8 +475,12 @@ export abstract class SwarmAgents extends SwarmMerge {
     return !this.clis.length || this.clis.some((c) => c.id === cli && c.installed);
   }
 
-  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown }) {
+  updateAgent(id: string, patch: { name?: string; model?: string; effort?: string; cli?: string; host?: string; look?: string; color?: string; hair?: string; style?: unknown; account?: unknown }) {
     const a = this.agent(id);
+    if (patch.account !== undefined) {
+      a.account = this.accountBinding(patch.account);
+      this.accounts.emit();
+    }
     if (patch.host !== undefined && a.role !== 'ceo' && (patch.host === 'box' || patch.host === 'local')) this.moveAgent(a, patch.host);
     if (patch.cli !== undefined && a.role !== 'ceo') {
       const cli = isCli(patch.cli) ? patch.cli : '';
@@ -474,6 +503,15 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (patch.effort !== undefined) a.effort = EFFORTS.includes(patch.effort as EffortLevel) ? (patch.effort as EffortLevel) : '';
     this.save();
     this.emitAgent(a);
+  }
+
+  /** An account id or tag to pin an agent or the CEO to, checked; undefined: the rotation. */
+  protected accountBinding(raw: unknown): string | undefined {
+    try {
+      return checkBinding(this.accounts.list(), String(raw ?? ''));
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
   }
 
   fireAgent(id: string, force = false) {
@@ -509,7 +547,7 @@ export abstract class SwarmAgents extends SwarmMerge {
         .then(() => this.sweepFloor(repo.id));
     }
     this.state.agents = this.state.agents.filter((x) => x.id !== id);
-    applyLedger(this.state.progress, { kind: 'let-go', agentId: id });
+    if (applyLedger(this.state.progress, { kind: 'let-go', agentId: id, name: a.name, at: Date.now() }).past) this.broadcast({ type: 'pastCareers', past: pastCareers(this.state.progress) });
     this.agentRt.delete(id);
     this.seenActivity.delete(id);
     this.shownActivity.delete(id);
@@ -517,7 +555,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     this.broadcast({ type: 'agentRemoved', agentId: id });
   }
 
-  stopAgent(id: string) {
+  /** ■ Stop: ends the session at once. why: who stopped it and why, when not the manager (the CEO's stop_agent). */
+  stopAgent(id: string, why?: string) {
     const a = this.agent(id);
     if (this.consulting(a)) {
       // a consult leaves their saved status alone: stopping it ends the session, and the CEO hears they couldn't answer
@@ -527,8 +566,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     }
     if (!BUSY.includes(a.status)) return;
     a.status = 'stopped';
-    a.lastError = 'Stopped by manager';
-    this.appendLog(a, [{ kind: 'manager', text: '■ Manager stopped this session.' }]);
+    a.lastError = why ? `Stopped by ${why}` : 'Stopped by manager';
+    this.appendLog(a, [{ kind: 'manager', text: why ? `■ Stopped by ${why}.` : '■ Manager stopped this session.' }]);
     const sign = this.signIns.get(id);
     if (sign) sign.held = null; // the task waiting for their sign-in stays stopped
     this.agentRt.get(id)?.session?.stop();
@@ -569,13 +608,13 @@ export abstract class SwarmAgents extends SwarmMerge {
     return issueTaken(
       n,
       this.state.agents.filter((a) => a.repoId === repo.id),
-      this.repoRt.get(repo.id)?.pulls ?? [],
+      (this.repoRt.get(repo.id)?.pulls ?? []).filter((p) => !p.untrusted), // an outsider's "Closes #n" doesn't hold #n up
       Date.now(),
     );
   }
 
-  protected ensureSlot(kind: SessionKind = 'build') {
-    this.health.ensure(kind);
+  protected ensureSlot(kind: SessionKind = 'build', a?: { host?: MachineHost }) {
+    if (!a || runsHere(a)) this.health.ensure(kind); // a Box agent's session doesn't use this computer's memory (#263)
     if (this.slotsFull()) {
       throw new HttpError(429, `All ${this.state.settings.sessionLimit} session slots are busy. Raise or clear the session limit in the manager's console, or wait.`);
     }
@@ -588,10 +627,11 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (a.role === 'ceo') throw new HttpError(400, `${a.name} runs the company; give issues to the agents on the floors.`);
     if (BUSY.includes(a.status)) throw new HttpError(409, `${a.name} is busy: ${this.agentDoing(a)}`);
     if (this.consulting(a)) throw new HttpError(409, `${a.name} is answering a consult`);
-    this.ensureSlot();
+    this.ensureSlot('build', a);
     const issues = this.repoRt.get(repo.id)?.issues ?? [];
     const issue = issues.find((i) => i.number === issueNumber);
     if (!issue) throw new HttpError(404, `Issue #${issueNumber} is not open on ${repo.fullName}`);
+    if (issue.untrusted) throw new HttpError(403, `#${issueNumber} is from @${issue.author ?? 'ghost'}, who isn't trusted on ${repo.fullName}: only the manager can let it in (Trust this issue on the Kanban).`);
     const waits = waitForDeps ? blockers(issue.body, new Set(issues.map((i) => i.number))) : [];
     if (waits.length) throw new HttpError(409, waitsMessage(issueNumber, waits));
     const holder = this.state.agents.find((x) => x.id !== a.id && x.repoId === repo.id && x.issueNumber === issueNumber && BUSY.includes(x.status));
@@ -665,6 +705,25 @@ export abstract class SwarmAgents extends SwarmMerge {
     return this.tooling;
   }
 
+  /** The model catalog at startup: the cached one at once, then read again now and every day (#198). */
+  protected async startModels() {
+    this.models = (await loadCatalog(MODELS_FILE)) ?? this.models;
+    void this.refreshModels();
+    setInterval(() => void this.refreshModels(), CATALOG_MS);
+  }
+
+  /** Read the coding agents' models again (server/modelCatalog.ts) and cache them; one read at a time. */
+  async refreshModels() {
+    if (this.models.refreshing) return this.models;
+    this.models = { ...this.models, refreshing: true };
+    this.broadcast({ type: 'models', models: this.models });
+    const read = await this.backend.modelCatalog().catch(() => null);
+    this.models = read ?? { ...this.models, refreshing: false };
+    this.broadcast({ type: 'models', models: this.models });
+    if (read) void saveCatalog(MODELS_FILE, read).catch((err) => console.warn('could not save the model catalog', err));
+    return this.models;
+  }
+
   /** One Tools & skills switch: scope 'everyone', 'ceo', a role profile ('build', 'qa') or an agent's id; on null follows the scope above. */
   setToolSwitch(scope: string, id: unknown, on: unknown) {
     if (!isToolId(id)) throw new HttpError(400, 'Pick a tool, plugin, skill or MCP server from the list.');
@@ -687,5 +746,41 @@ export abstract class SwarmAgents extends SwarmMerge {
   /** The model to ask for (the Agent SDK runs Claude Code). '' lets another coding agent use its own default. */
   protected modelFor(a: PersistedAgent, cli: AgentCli | undefined) {
     return effectiveModel(a.model, cli ?? 'claude', this.state.settings, DEFAULT_MODEL);
+  }
+
+  // ---------- their chat (#120) ----------
+
+  protected chatOf(a: PersistedAgent): ChatLog | null {
+    const rt = this.agentRt.get(a.id);
+    return rt ? (rt.chat ??= new ChatLog()) : null;
+  }
+
+  /** Their session's transcript, into their chat, secrets masked as for agent_log. */
+  protected chatEvents(a: PersistedAgent, events: TranscriptEvent[], cwd: string) {
+    const secrets = this.secrets();
+    this.outbox.chat(a.id, this.chatOf(a)?.apply(events, cwd, (t) => scrub(t, secrets)) ?? []);
+  }
+
+  /** A message to them, as a bubble in their chat. */
+  protected chatSay(a: PersistedAgent, text: string, who: string) {
+    const item = this.chatOf(a)?.add({ t: Date.now(), kind: 'manager', text: scrub(text, this.secrets()), who });
+    if (item) this.outbox.chat(a.id, [item]);
+  }
+
+  /** POST /api/agents/:id/react: the manager's reaction on an item of their chat; one that asks for something is typed into their running session as a short note. */
+  react(id: string, itemId: unknown, reaction: unknown) {
+    const a = this.agent(id);
+    if (!isAgentReaction(reaction)) throw new HttpError(400, 'Pick a reaction from the bar.');
+    const hit = typeof itemId === 'number' ? this.chatOf(a)?.react(itemId, reaction) : null;
+    if (!hit) throw new HttpError(404, 'That message is no longer in their chat.');
+    this.outbox.chat(a.id, [hit.item]);
+    const note = hit.added ? reactionNote(reaction, quoteOf(hit.item)) : null;
+    // Only into a running session, read after its current step (shown in their terminal too): a reaction never starts one.
+    const session = note ? this.agentRt.get(a.id)?.session : null;
+    if (session) {
+      this.appendLog(a, [{ kind: 'manager', text: `▶ ${note}` }]);
+      session.send(note!);
+    }
+    return { sent: !!session, note: !!note };
   }
 }

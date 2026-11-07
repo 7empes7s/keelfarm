@@ -13,7 +13,7 @@ type Internals = {
   ensureCeo(interrupted: unknown[]): void;
   broadcast(ev: ServerEvent): void;
   backend: { startSession(opts: SessionOptions, cb: unknown): unknown };
-  state: { ceo: { queue: unknown[] }; messages: PhoneMessage[]; agents: { id: string; status: AgentStatus }[] };
+  state: { ceo: { queue: unknown[] }; messages: PhoneMessage[]; agents: { id: string; status: AgentStatus }[]; settings: { statusReactions: boolean } };
 };
 
 const until = async (ok: () => boolean, ms = 25_000) => {
@@ -23,12 +23,13 @@ const until = async (ok: () => boolean, ms = 25_000) => {
 
 afterEach(() => vi.restoreAllMocks());
 
-async function office() {
+async function office(statusReactions = true) {
   for (const m of ['log', 'warn', 'info'] as const) vi.spyOn(console, m).mockImplementation(() => undefined);
   const swarm = new Swarm(createDemoBackend());
   await swarm.connectRepo('demo-co/pixel-todo');
   const i = swarm as unknown as Internals;
   i.state.ceo.queue = []; // no onboarding: the chat is the CEO's only job
+  i.state.settings.statusReactions = statusReactions; // off by default (#193)
   i.ensureCeo([]);
   const statuses = new Map<number, StatusReaction[]>();
   const toasts: string[] = [];
@@ -44,7 +45,7 @@ async function office() {
   const ceo = () => i.state.agents.find((a) => a.id === 'ceo')!;
   const byId = (id: number) => i.state.messages.find((m) => m.id === id)!;
   const replies = () => i.state.messages.filter((m) => m.from === 'ceo');
-  return { swarm, statuses, toasts, prompts, ceo, byId, replies };
+  return { swarm, statuses, toasts, prompts, ceo, byId, replies, state: i.state };
 }
 
 describe('reactions in the CEO chat', () => {
@@ -105,6 +106,26 @@ describe('reactions in the CEO chat', () => {
     await until(() => prompts.length === 2);
     expect(prompts[1]).toMatch(/The manager reacted to your replies[\s\S]*👎 on your reply «.+»: too long/);
     expect(prompts[1]).not.toContain('❤️');
+  });
+});
+
+describe('a quiet chat (#193)', () => {
+  const notice = '<task-notification>\n<task-id>ksyddpqvg</task-id>\n<status>completed</status>\n<summary>MCP task ksyddpqv (office/wait_for) completed.</summary>\n<result>\nThe job ended.\n</result>\n</task-notification>';
+
+  it("puts no status reaction on the manager's message unless Settings turns them on", { timeout: 60_000 }, async () => {
+    const { swarm, statuses, ceo, byId, replies } = await office(false);
+    const { id } = await swarm.messageCeo('How are things going?');
+    await until(() => ceo().status === 'done' && replies().length === 1);
+    expect(byId(id).status).toBeUndefined();
+    expect(statuses.get(id)).toBeUndefined();
+  });
+
+  it("keeps the CEO session's task notification out of the chat: no message, no job", async () => {
+    const { swarm, state } = await office(false);
+    const before = state.messages.length;
+    await expect(swarm.messageCeo(notice)).rejects.toThrow(/own output/);
+    expect(state.messages.length).toBe(before);
+    expect(state.ceo.queue).toEqual([]);
   });
 });
 

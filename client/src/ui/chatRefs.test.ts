@@ -25,8 +25,8 @@ const ref = (r: Record<string, unknown>) => ({ ...at, ...r }) as ChatRef;
 
 describe('jumpFor', () => {
   it('opens agents, cards and apps as panels, riding to their floor in 3D but not in pocket mode', () => {
-    expect(jumpFor(ref({ kind: 'agent', agentId: 'ada' }), 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'ada' }, floor: 2 });
-    expect(jumpFor(ref({ kind: 'agent', agentId: 'ada', terminal: true }), 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'ada' } });
+    expect(jumpFor(ref({ kind: 'agent', agentId: 'ada' }), 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'ada', view: 'chat' }, floor: 2 });
+    expect(jumpFor(ref({ kind: 'agent', agentId: 'ada', terminal: true }), 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'ada', view: 'terminal' } });
     expect(jumpFor(ref({ kind: 'issue', repoId: 'o/web', number: 3 }), 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'card', repoId: 'o/web', key: 'i-3', number: 3, pr: false }, floor: 2 });
     expect(jumpFor(ref({ kind: 'issue', repoId: 'o/web', number: 13 }), 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'card', repoId: 'o/web', key: 'pr-13', number: 13, pr: true } });
     expect(jumpFor(ref({ kind: 'issue', repoId: 'o/web', number: 14 }), 'pocket', world)).toMatchObject({ overlay: { key: 'm-14', pr: true } });

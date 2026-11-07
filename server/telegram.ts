@@ -179,6 +179,20 @@ export function pollBackoff(failures: number, retryAfterS?: number): number {
   return Math.min(BACKOFF_MAX_MS, 1000 * 2 ** (failures - 1));
 }
 
+/** The office reads the bot's messages only with a token saved and the Telegram switch on: Off polls and retries nothing. */
+export const telegramPolls = (hasToken: boolean, on: boolean): boolean => hasToken && on;
+
+/** After this many failed reads in a row the settings say what to check. */
+export const POLL_ADVICE_AFTER = 4;
+
+/** What to check once reading keeps failing, or '' while it may just be a blip. */
+export function pollAdvice(failures: number, status: number): string {
+  if (failures < POLL_ADVICE_AFTER) return '';
+  if (status === 0) return "Check this computer's internet connection, and that nothing blocks api.telegram.org.";
+  if (status === 401 || status === 404) return 'The token was probably revoked in BotFather: Remove Telegram and save the new token.';
+  return 'Check that the token is still valid in BotFather and the bot has no webhook set elsewhere.';
+}
+
 /** Why a Bot API call failed, in words the settings can show; never the token. */
 export function telegramError(status: number, description = ''): string {
   if (status === 0) return "couldn't reach Telegram";
