@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixGoesTo, pickTester, PREP_HOLD_MS, prepFailure, prepHeld, SELF_QA_WAIT_MS, type FixAuthor } from './handOut.ts';
+import { fixGoesTo, pickTester, PREP_HOLD_MS, prepFailure, prepHeld, runnerFor, SELF_QA_WAIT_MS, type FixAuthor } from './handOut.ts';
 
 const author = (o: Partial<FixAuthor> = {}): FixAuthor => ({ status: 'done', branch: 'swarm/issue-192-barbara', prNumber: 198, ...o });
 const HEAD = 'swarm/issue-192-barbara';
@@ -94,5 +94,39 @@ describe('pickTester', () => {
 
   it('has nobody to pick from an empty floor', () => {
     expect(pickTester([], 'ada', new Set(), false, SELF_QA_WAIT_MS)).toBeNull();
+  });
+});
+
+describe('runnerFor (#263: Box agents and this computer\'s memory)', () => {
+  const ada = { id: 'ada' };
+  const radia = { id: 'radia', host: 'box' };
+  const gate = (fits: boolean) => {
+    const asked: string[] = [];
+    return { asked, fits: () => (asked.push('fits'), fits), admit: () => (asked.push('admit'), fits) };
+  };
+
+  it('gives work to a free Box agent while memory is short, without counting it as waiting', () => {
+    const g = gate(false);
+    expect(runnerFor(ada, () => radia, g.fits, g.admit)).toBe(radia);
+    expect(g.asked).not.toContain('admit');
+  });
+
+  it('starts a picked Box agent whatever the memory', () => {
+    const g = gate(false);
+    expect(runnerFor(radia, () => null, g.fits, g.admit)).toBe(radia);
+    expect(g.asked).toEqual([]);
+  });
+
+  it('keeps a local agent waiting for memory when no Box agent is free', () => {
+    const g = gate(false);
+    expect(runnerFor(ada, () => null, g.fits, g.admit)).toBeNull();
+    expect(g.asked).toEqual(['admit']);
+  });
+
+  it('is exactly today\'s gate without Box agents, and keeps the local pick while memory fits', () => {
+    const g = gate(true);
+    expect(runnerFor(ada, () => null, g.fits, g.admit)).toBe(ada);
+    expect(g.asked).toEqual(['admit']);
+    expect(runnerFor(ada, () => radia, gate(true).fits, gate(true).admit)).toBe(ada);
   });
 });

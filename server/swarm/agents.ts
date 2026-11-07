@@ -10,6 +10,7 @@ import { MODELS_FILE } from '../config.ts';
 import { CATALOG_MS, loadCatalog, saveCatalog } from '../modelCatalog.ts';
 import { machineName } from '../machines.ts';
 import type { SessionKind } from '../health.ts';
+import { runsHere } from '../handOut.ts';
 import { apply as applyLedger, pastCareers } from '../ledger.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import {
@@ -580,8 +581,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     );
   }
 
-  protected ensureSlot(kind: SessionKind = 'build') {
-    this.health.ensure(kind);
+  protected ensureSlot(kind: SessionKind = 'build', a?: { host?: MachineHost }) {
+    if (!a || runsHere(a)) this.health.ensure(kind); // a Box agent's session doesn't use this computer's memory (#263)
     if (this.slotsFull()) {
       throw new HttpError(429, `All ${this.state.settings.sessionLimit} session slots are busy. Raise or clear the session limit in the manager's console, or wait.`);
     }
@@ -594,7 +595,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (a.role === 'ceo') throw new HttpError(400, `${a.name} runs the company; give issues to the agents on the floors.`);
     if (BUSY.includes(a.status)) throw new HttpError(409, `${a.name} is busy: ${this.agentDoing(a)}`);
     if (this.consulting(a)) throw new HttpError(409, `${a.name} is answering a consult`);
-    this.ensureSlot();
+    this.ensureSlot('build', a);
     const issues = this.repoRt.get(repo.id)?.issues ?? [];
     const issue = issues.find((i) => i.number === issueNumber);
     if (!issue) throw new HttpError(404, `Issue #${issueNumber} is not open on ${repo.fullName}`);
