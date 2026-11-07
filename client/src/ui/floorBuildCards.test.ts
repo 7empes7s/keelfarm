@@ -29,6 +29,11 @@ describe("a floor's build cards", () => {
     expect(card).toMatchObject({ pr: 5, status: 'qa', agentId: 'bo', preview: 'error', shot: '/api/repos/acme%2Fapp/pulls/5/qa-shots/0?v=42' });
   });
 
+  it("leave out an open PR from outside, which the office never previews (#185)", () => {
+    const r = repo(pull(6, 'OPEN', '2026-11-01T10:00:00Z'), { ...pull(7, 'OPEN', '2026-11-01T11:00:00Z'), untrusted: true });
+    expect(floorBuilds(r, [], {}, {}).map((c) => c.key)).toEqual(['main', 'pr-6']);
+  });
+
   it('keep only the latest merges', () => {
     const r = repo(...[1, 2, 3, 4, 5].map((n) => pull(n, 'MERGED', `2026-11-0${n}T10:00:00Z`)));
     expect(floorBuilds(r, [], {}, {}).map((c) => c.pr)).toEqual([null, 5, 4, 3]);

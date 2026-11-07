@@ -9,9 +9,11 @@ import { reduceMotion } from './a11y';
 export interface MapPaint {
   fill: (n: MapNode) => string;
   ring: (n: MapNode) => string | null;
+  byType?: boolean; // coloured by type: the map room draws agents in their shirts' colours
 }
 
-interface Props {
+/** What the map's stage gets: this 2D canvas, or the map room's 3D constellation (Constellation.tsx). */
+export interface MapStageProps {
   graph: MemoryGraph;
   paint: MapPaint;
   selected: string | null;
@@ -26,7 +28,7 @@ const HOLD_MS = 500;
 const SLOP = 8;
 const PULSE_MS = 1400;
 
-export function MapCanvas({ graph, paint, selected, lit, pulses, centre, onSelect, onMenu }: Props) {
+export function MapCanvas({ graph, paint, selected, lit, pulses, centre, onSelect, onMenu }: MapStageProps) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const sim = useRef<Sim>({ bodies: [], links: [], alpha: 0 });

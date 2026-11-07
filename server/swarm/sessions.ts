@@ -43,6 +43,7 @@ import { SwarmAgents } from './agents.ts';
 import { TestLab, type Requester } from '../testLab.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { createLabTools } from '../testLabTools.ts';
+import { fixCause } from '../../shared/rounds.ts';
 
 const LAB_VIEWER = 'testlab';
 const LAB_PREVIEW_MS = 5 * 60_000;
@@ -443,8 +444,9 @@ export abstract class SwarmSessions extends SwarmAgents {
     const model = lab.model && (how.cli ?? 'claude') === 'claude' ? lab.model : this.modelFor(a, how.cli);
     const system = [systemAppend, practice.text, lab.prompt].filter(Boolean).join('\n\n');
     const known = officeParts({ system, prompt, officePlaybook: this.state.settings.officePlaybook, playbook: repo.playbook, qaBrief: repo.qaBrief });
-    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
+    const run = this.spend.start(a.id, { kind, effort: lab.effort ?? resolveEffort(a.effort, kind, this.state.settings.taskEffort, this.state.settings.defaultEffort), model, startedAt: Date.now(), round: a.task === 'qa' ? (this.prRecord(a)?.round ?? null) : null, cause: a.task === 'fix' ? fixCause(this.prRecord(a)) : null, exp: lab.tag, known, cwd, sessionId: resumeSessionId ?? null, title: a.issueTitle ?? '' });
     this.emitAgent(a);
+    this.chatOf(a)?.session(); // its first prompt is their chat's task card
     const active = (entries: LogEntry[]) => {
       if (entries.some((e) => e.kind !== 'manager')) this.activity.set(a.id, Date.now());
     };
@@ -485,6 +487,7 @@ export abstract class SwarmSessions extends SwarmAgents {
           rt.currentTool = name;
           this.emitAgent(a);
         },
+        chat: (events) => this.chatEvents(a, events, cwd),
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? (how.cli ?? 'claude') : null;

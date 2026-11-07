@@ -70,7 +70,7 @@ export const SECTIONS: Section[] = [
   { id: 'timelapse', group: 'history', icon: '📼', label: 'Time-lapse', only: 'office', find: ['Replay the day', 'Since I was last here'] },
   { id: 'agents', group: 'settings', icon: '🧑‍💻', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'Most agents per floor'] },
   { id: 'projects', group: 'settings', icon: '🏗️', label: 'Every project', find: ['Version control', "Every project's playbook"] },
-  { id: 'runtime', group: 'settings', icon: '⌨️', label: 'How agents run', find: ['Real terminals', 'Agent SDK'] },
+  { id: 'runtime', group: 'settings', icon: '⌨️', label: 'How agents run', find: ['Real terminals', 'Agent SDK', 'Chat mode'] },
   { id: 'office', group: 'settings', icon: '🏬', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
   { id: 'profile', group: 'settings', icon: '👤', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
   { id: 'cloud-agents', group: 'settings', icon: '☁️', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },

@@ -1,10 +1,11 @@
 // The CEO's suggestion boxes, idea cards and artifacts: fenced blocks in their final message that the office lifts out
 // of the bubble's text when it posts it (```suggestions, one option per line; ```idea <kind>, a title line then the
-// message Accept sends; ```artifact title="…", markdown). A block that breaks the rules stays in the text as written,
+// message Accept sends; ```artifact title="…", markdown; ```chart / ```table / ```dashboard, JSON: shared/chatVisuals.ts). A block that breaks the rules stays in the text as written,
 // so nothing the CEO wrote is ever lost.
 
 import { cleanTerminalText } from './terminalText.ts';
 import type { ChatArtifact, ChatIdea, PhoneMessage } from './types.ts';
+import { MAX_VISUALS, parseVisual, visualKind, type ChatVisual } from './chatVisuals.ts';
 
 export const MAX_SUGGESTIONS = 4;
 export const SUGGESTION_CHARS = 60;
@@ -25,6 +26,7 @@ export interface ParsedMessage {
   ask?: string;
   idea?: ChatIdea;
   artifacts?: { title: string; markdown: string }[];
+  visuals?: ChatVisual[];
 }
 
 const FENCE = /^(\s{0,3})(`{3,}|~{3,})\s*(.*)$/;
@@ -82,7 +84,7 @@ export function parseMessage(from: PhoneMessage['from'], raw: string): ParsedMes
 /** An office note as the chat shows it: also run when one renders, so notes stored before #138 come out clean too. */
 export const officeText = (raw: string) => cleanTerminalText(raw, 6000);
 
-/** Lifts the suggestion and artifact blocks out of a CEO message. A message without valid ones comes back as it was. */
+/** Lifts the suggestion, idea, artifact and visual blocks out of a CEO message. A message without valid ones comes back as it was. */
 export function parseCeoMessage(raw: string): ParsedMessage {
   const lines = raw.replace(/\r\n?/g, '\n').split('\n');
   const keep: string[] = [];
@@ -90,6 +92,7 @@ export function parseCeoMessage(raw: string): ParsedMessage {
   let ask: string | undefined;
   let idea: ChatIdea | undefined;
   const artifacts: { title: string; markdown: string }[] = [];
+  const visuals: ChatVisual[] = [];
   for (let i = 0; i < lines.length; i++) {
     const f = lines[i].match(FENCE);
     if (!f) {
@@ -108,15 +111,18 @@ export function parseCeoMessage(raw: string): ParsedMessage {
     const s = kind === 'suggestions' && !suggestions ? suggestionsOf(body) : null;
     const a = kind === 'artifact' && artifacts.length < MAX_ARTIFACTS ? artifactOf(info, body) : null;
     const d = kind === 'idea' && !idea ? ideaOf(info, body) : null;
+    const vk = visualKind(info);
+    const v = vk && visuals.length < MAX_VISUALS ? parseVisual(vk, body.join('\n')) : null;
     if (s) ({ options: suggestions, ask } = s);
     else if (a) artifacts.push(a);
     else if (d) idea = d;
+    else if (v) visuals.push(v);
     else keep.push(...lines.slice(i, end + 1));
     i = end;
   }
-  if (!suggestions && !idea && !artifacts.length) return { text: raw };
+  if (!suggestions && !idea && !artifacts.length && !visuals.length) return { text: raw };
   const text = keep.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { text, ...(suggestions && { suggestions }), ...(ask && { ask }), ...(idea && { idea }), ...(artifacts.length && { artifacts }) };
+  return { text, ...(suggestions && { suggestions }), ...(ask && { ask }), ...(idea && { idea }), ...(artifacts.length && { artifacts }), ...(visuals.length && { visuals }) };
 }
 
 /** An artifact's first line as plain words, for its card. */

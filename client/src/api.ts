@@ -85,6 +85,7 @@ export const api = {
       summary?: string;
       qaBrief?: string;
       playbook?: string;
+      trustedAuthors?: string[];
       previewCommand?: string | null;
       previewEnv?: Record<string, string>;
       practices?: { [K in keyof PracticeOverrides]?: PracticeOverrides[K] | null }; // null: inherit Every project's again
@@ -102,6 +103,7 @@ export const api = {
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
   closeIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/close`),
+  trustIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/trust`),
   planFloor: (repoId: string, mission?: string, research = false) => call('POST', `${r(repoId)}/plan`, { mission, research }),
   onboardFloor: (repoId: string) => call('POST', `${r(repoId)}/onboard`),
   setCharter: (repoId: string, charter: Charter) => call<RepoView>('PUT', `${r(repoId)}/charter`, { charter }),
@@ -124,6 +126,7 @@ export const api = {
   stop: (id: string) => call('POST', `/api/agents/${id}/stop`),
   reset: (id: string) => call('POST', `/api/agents/${id}/reset`),
   message: (id: string, text: string) => call('POST', `/api/agents/${id}/message`, { text }),
+  react: (id: string, itemId: number, reaction: string) => call<{ sent: boolean; note: boolean }>('POST', `/api/agents/${id}/react`, { itemId, reaction }),
   /** Start a cloud agent's sign-in again in their terminal (docs/cloud.md). */
   signIn: (id: string) => call('POST', `/api/agents/${id}/sign-in`),
   agentPrompt: (id: string) => call<AgentPromptView>('GET', `/api/agents/${id}/prompt`),
@@ -221,9 +224,10 @@ export const api = {
   // The manager's Telegram bot. No toasts: the settings show why a token was refused.
   setTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/notify/telegram', { token }, false),
   telegramLink: () => call<{ startUrl: string }>('POST', '/api/notify/telegram/link', {}, false),
+  retryTelegram: () => call<TelegramView>('POST', '/api/notify/telegram/retry', {}),
   removeTelegram: () => call<TelegramView>('DELETE', '/api/notify/telegram'),
   /** The demo only: the fake manager on Telegram presses Start, writes, replies, or presses a team change's button. */
-  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
+  telegramDemo: (kind: 'start' | 'message' | 'reply' | 'approve' | 'decline' | 'outage' | 'online', text = '') => call('POST', '/api/notify/telegram/demo', { kind, text }),
   // office progression (#210)
   buyDecor: (repoId: string, item: DecorItem) => call<ProgressView>('POST', `${r(repoId)}/decor/buy`, { item }),
   placeDecor: (repoId: string, body: { item: DecorItem; slot: string | null; from: string | null }) => call<ProgressView>('POST', `${r(repoId)}/decor/place`, body),

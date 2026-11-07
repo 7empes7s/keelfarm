@@ -1,6 +1,7 @@
 // The Swarm's persisted shapes, runtimes and constants, shared by its layers (server/swarm/*.ts).
 import path from 'node:path';
 import type { SessionHandle } from '../agentRunner.ts';
+import type { ChatLog } from '../../shared/agentChat.ts';
 import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
@@ -23,6 +24,7 @@ import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
+import type { RoundCause } from '../../shared/rounds.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -67,12 +69,22 @@ export interface PersistedRepo {
   summary: string;
   qaBrief: string;
   playbook: string;
+  trustedAuthors?: string[]; // the floor's allow-list besides the owner, the office and write collaborators (#185)
   labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
+  ciOutage?: CiOutageState | null; // GitHub won't run its checks (#191)
+}
+
+/** A floor's CI outage (#191): why, since when, the last probe re-run, and when a run was last seen really starting. */
+interface CiOutageState {
+  reason: string;
+  since: number;
+  probeAt: number | null;
+  back: number | null;
 }
 
 export interface PersistedAgent {
@@ -121,6 +133,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   testedSha: string | null; // the head commit QA is testing
   passedSha: string | null; // the head commit QA signed off on: auto-merge merges exactly that
   fixReason: 'qa' | 'checks' | 'conflict' | null; // why it was last sent back to a developer
+  qaCause?: RoundCause | null; // why QA last failed it (#188): a QA fix's cause
   mergeFixes: number; // times it went back for failing checks or conflicts
   retests: number; // QA rounds caused by merge fixes or new commits rather than by QA failing it
   preQa: PreQa | null; // a conflict found before QA tested the head is being fixed
@@ -134,7 +147,9 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
+  labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
+  ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */
@@ -176,6 +191,7 @@ export interface Persisted {
   phoneReadAt: number;
   notices: NoticeView[]; // the notification centre (shared/notices.ts)
   prLimits: number; // the PR budgets (PR_LIMITS_VERSION) needs-human records were judged by
+  outageReleased: boolean; // PRs a CI outage made needs-human before #191 went back to the merge gate
   ops: OpsHistory; // mission control's rolling week of merges, QA verdicts, check runs and costs
   held: HeldIssue[];
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
@@ -204,6 +220,7 @@ export interface AgentRuntime {
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
   blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
+  chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }
 
 export interface RepoRuntime {
@@ -222,6 +239,7 @@ export interface RepoRuntime {
   closedPulls: Map<number, LearnedPull>; // PRs it learned are closed or merged
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
   insights?: CharterInsights; // the Charter tab's numbers, worked out at each sync and charter change (refreshInsights)
+  writers?: { logins: string[]; at: number }; // collaborators with write access, as last asked (#185)
 }
 
 /** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */

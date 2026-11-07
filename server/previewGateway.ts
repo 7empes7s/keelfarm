@@ -58,6 +58,15 @@ export function injectBoot(html: string): string {
   return BOOT_SCRIPT + html;
 }
 
+/**
+ * The page's own scripts and stylesheets at root paths, put under its mount: a module script keeps the address it
+ * was asked for, while its imports resolve against the worker's answer under the mount, so the app's entry would run
+ * twice (a Vite app's two React roots, a blank page: #192).
+ */
+export function mountAssets(html: string, port: number): string {
+  return html.replace(/(<(?:script|link)\b[^>]*?\s(?:src|href)=)(["'])\/(?![/\\]|preview\/\d)/gi, `$1$2${GATEWAY}${port}/`);
+}
+
 /** The preview worker, served at GATEWAY_WORKER. It only sees pages under /preview/ and the requests they make. */
 export const WORKER_SOURCE = `// cubefarm's preview worker (server/previewGateway.ts): keeps a preview's root paths under its /preview/<port>/.
 const MOUNT = /^\\/preview\\/\\d{1,5}(?=\\/)/;
@@ -154,7 +163,7 @@ export function handleGateway(req: http.IncomingMessage, res: http.ServerRespons
         const chunks: Buffer[] = [];
         ur.on('data', (c: Buffer) => chunks.push(c));
         ur.once('end', () => {
-          const page = Buffer.from(injectBoot(Buffer.concat(chunks).toString('utf8')), 'utf8');
+          const page = Buffer.from(injectBoot(mountAssets(Buffer.concat(chunks).toString('utf8'), at.port)), 'utf8');
           res.writeHead(ur.statusCode ?? 200, syncedHeaders(headers, page.length));
           res.end(page);
         });

@@ -11,7 +11,7 @@ const world: RefWorld = {
 describe('noticeJump', () => {
   it('jumps to its target like a chat ref', () => {
     expect(noticeJump({ kind: 'qaFail', target: { kind: 'qa', repoId: 'r1', number: 7 } }, 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'app', repoId: 'r1', pr: 7, qa: true }, floor: 2 });
-    expect(noticeJump({ kind: 'stuck', target: { kind: 'agent', agentId: 'a1', terminal: true } }, 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'a1' } });
+    expect(noticeJump({ kind: 'stuck', target: { kind: 'agent', agentId: 'a1', terminal: true } }, 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'a1', view: 'terminal' } });
   });
   it("opens the chat for the CEO's and the approvals for a team change", () => {
     expect(noticeJump({ kind: 'ceo' }, 'pocket', world)).toEqual({ kind: 'chat' });

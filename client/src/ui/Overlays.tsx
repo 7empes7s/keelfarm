@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useState, useSyncExternalStore } from 'react';
 import { useStore, type HelpTab } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { AppViewer } from './AppViewer';
@@ -25,6 +25,9 @@ import { hitchSummary, performanceReport } from '../hitches';
 import { setReplay, usePhotoGate } from '../photo/gate';
 
 export { closeOverlay, Panel } from './Panel';
+
+// The map room's constellation is its own chunk: nothing of it loads until you walk in.
+const MapRoom = lazy(() => import('./MapRoom').then((m) => ({ default: m.MapRoom })));
 
 const SOUND_GROUP_LABELS: Record<SoundGroup, string> = { steps: 'Footsteps', typing: 'Typing', babble: 'Chatter', toys: 'Toys', alerts: 'Alerts', music: 'Music', voice: 'Voice', outside: 'Outside', score: 'Soundtrack' };
 const SOUND_GROUP_TITLES: Partial<Record<SoundGroup, string>> = {
@@ -429,7 +432,7 @@ export function Overlays() {
   if (!overlay) return null;
   switch (overlay.kind) {
     case 'terminal':
-      return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} />;
+      return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} view={overlay.view} />;
     case 'phone':
       return <Phone tab={overlay.tab} requestId={overlay.requestId} />;
     case 'kanban':
@@ -454,5 +457,11 @@ export function Overlays() {
       return <FloorList />;
     case 'notices':
       return <NoticeCentre />;
+    case 'mapRoom':
+      return (
+        <Suspense fallback={null}>
+          <MapRoom />
+        </Suspense>
+      );
   }
 }

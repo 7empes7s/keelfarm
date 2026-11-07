@@ -1,7 +1,9 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CommandError, gh, ghJson } from './exec.ts';
+import { NEVER_STARTED_MS } from './mergeGate.ts';
 import { PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
+import { TRUST_LABEL } from '../shared/trust.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
 
@@ -55,16 +57,59 @@ export async function repoMeta(fullName: string): Promise<RepoMeta> {
   };
 }
 
+interface RawIssue {
+  number: number;
+  title: string;
+  body: string | null;
+  url: string;
+  createdAt: string;
+  author: { login: string } | null;
+  authorAssociation: string;
+  labels: { nodes: { name: string }[] } | null;
+  timelineItems: { nodes: ({ label?: { name: string } | null; actor?: { login: string } | null } | null)[] } | null;
+}
+
+const ISSUES_QUERY = `query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    issues(states: OPEN, first: 100, orderBy: { field: CREATED_AT, direction: DESC }) {
+      nodes {
+        number title body url createdAt authorAssociation
+        author { login }
+        labels(first: 50) { nodes { name } }
+        timelineItems(itemTypes: [LABELED_EVENT], last: 50) { nodes { ... on LabeledEvent { label { name } actor { login } } } }
+      }
+    }
+  }
+}`;
+
+/** An issue from the GraphQL list, with who last added the office-trusted label (#185). */
+export function issueOf(i: RawIssue): IssueInfo {
+  const trusting = (i.timelineItems?.nodes ?? []).filter((e) => e?.label?.name === TRUST_LABEL);
+  return {
+    number: i.number,
+    title: i.title,
+    body: i.body ?? '',
+    url: i.url,
+    labels: (i.labels?.nodes ?? []).map((l) => l.name),
+    createdAt: i.createdAt,
+    author: i.author?.login ?? null,
+    authorAssociation: i.authorAssociation,
+    trustedBy: trusting.at(-1)?.actor?.login ?? null,
+  };
+}
+
 export async function listIssues(fullName: string): Promise<IssueInfo[]> {
+  const [owner, name] = fullName.split('/');
   const raw = await readTwice(() =>
-    ghJson<{ number: number; title: string; body: string; url: string; labels: { name: string }[]; createdAt: string }[]>(
-      ['issue', 'list', '-R', fullName, '--state', 'open', '--limit', '100', '--json', 'number,title,body,url,labels,createdAt'],
-      SYNC_READ,
-    ),
+    ghJson<{ data: { repository: { issues: { nodes: RawIssue[] } } | null } }>(['api', 'graphql', '-f', `owner=${owner}`, '-f', `name=${name}`, '-f', `query=${ISSUES_QUERY}`], SYNC_READ),
   );
-  return raw
-    .map((i) => ({ number: i.number, title: i.title, body: i.body ?? '', url: i.url, labels: i.labels.map((l) => l.name), createdAt: i.createdAt }))
-    .sort((a, b) => a.number - b.number);
+  return (raw.data.repository?.issues.nodes ?? []).map(issueOf).sort((a, b) => a.number - b.number);
+}
+
+/** The logins of the repo's collaborators with write access (#185). */
+export async function writers(fullName: string): Promise<string[]> {
+  const out = await gh(['api', '--paginate', `repos/${fullName}/collaborators?permission=push&per_page=100`, '--jq', '.[].login'], SYNC_READ);
+  return out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
 
 /** The default branch's commits (up to 100) and the issues filed (up to 200) since `since`, for the lab's survival check. */
@@ -100,6 +145,8 @@ interface RawPull {
   headRefOid: string;
   mergeStateStatus: string;
   files?: { path: string }[] | null;
+  author?: { login: string } | null;
+  isCrossRepository?: boolean;
   // check runs (GitHub Actions…) carry name/status/conclusion/detailsUrl and startedAt/completedAt; commit statuses (Vercel…) carry context/state/targetUrl
   statusCheckRollup:
     | { name?: string; context?: string; status?: string; conclusion?: string; state?: string; detailsUrl?: string; targetUrl?: string; startedAt?: string; completedAt?: string }[]
@@ -107,13 +154,20 @@ interface RawPull {
 }
 
 const PR_FIELDS =
-  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup,files';
+  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository';
 
 type Check = NonNullable<RawPull['statusCheckRollup']>[number];
 const BAD = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
 const failed = (c: Check) => BAD.includes(c.conclusion ?? '') || BAD.includes(c.state ?? '');
 const pending = (c: Check) => (!!c.status && c.status !== 'COMPLETED') || c.state === 'PENDING' || c.state === 'EXPECTED';
 const checkName = (c: Check) => c.name || c.context || 'check';
+
+/** A check run GitHub ended without running it (#191): a startup failure, or finished within seconds of starting. */
+export function neverStartedCheck(c: Check): boolean {
+  if (c.conclusion === 'STARTUP_FAILURE') return true;
+  const ms = Date.parse(c.completedAt ?? '') - Date.parse(c.startedAt ?? '');
+  return c.status === 'COMPLETED' && Number.isFinite(ms) && ms < NEVER_STARTED_MS;
+}
 
 function checksOf(rollup: RawPull['statusCheckRollup']): PullInfo['checks'] {
   if (!rollup || rollup.length === 0) return 'none';
@@ -153,10 +207,12 @@ function toPull(p: RawPull): PullInfo {
     checks: checksOf(p.statusCheckRollup),
     headSha: p.headRefOid,
     mergeState: p.mergeStateStatus || 'UNKNOWN',
-    failedChecks: (p.statusCheckRollup ?? []).filter(failed).map((c) => ({ name: checkName(c), url: c.detailsUrl || c.targetUrl || null })),
+    failedChecks: (p.statusCheckRollup ?? []).filter(failed).map((c) => ({ name: checkName(c), url: c.detailsUrl || c.targetUrl || null, ...(neverStartedCheck(c) ? { neverStarted: true } : {}) })),
     pendingChecks: (p.statusCheckRollup ?? []).filter(pending).map(checkName),
     checkRun: checkRunOf(p.statusCheckRollup),
     files: (p.files ?? []).slice(0, PR_FILES_MAX).map((f) => f.path),
+    author: p.author?.login ?? null,
+    isCrossRepository: p.isCrossRepository ?? true, // unknown: treated as a fork's
   };
 }
 
@@ -250,6 +306,14 @@ export async function failedRunLog(fullName: string, runId: string): Promise<str
 /** Re-run the failed jobs of these GitHub Actions runs (a flaky check or an outage). */
 export async function rerunFailedJobs(fullName: string, runIds: number[]): Promise<void> {
   for (const id of runIds) await gh(['run', 'rerun', String(id), '--failed', '-R', fullName], { timeoutMs: 60_000 });
+}
+
+/** The annotations' messages on GitHub Actions jobs, from their log URLs (…/job/<id>: a job is a check run), e.g. why GitHub wouldn't run them. */
+export async function checkAnnotations(fullName: string, urls: string[]): Promise<string[]> {
+  const ids = [...new Set(urls.map((u) => u.match(/\/job\/(\d+)/)?.[1]).filter((id): id is string => !!id))].slice(0, 3);
+  const out: string[] = [];
+  for (const id of ids) out.push(...(await ghJson<{ message?: string }[]>(['api', `repos/${fullName}/check-runs/${id}/annotations`], { timeoutMs: 30_000 })).map((a) => a.message ?? ''));
+  return out;
 }
 
 export async function closePull(fullName: string, number: number): Promise<void> {
