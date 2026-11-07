@@ -377,7 +377,9 @@ app.post(
   route((req) => {
     const files: unknown = req.body.files ?? [];
     if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) throw new HttpError(400, 'files is a list of file ids');
-    return swarm.messageCeo(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, undefined, files);
+    const clientId: unknown = req.body.clientId;
+    if (clientId !== undefined && (typeof clientId !== 'string' || !clientId || clientId.length > 64)) throw new HttpError(400, 'clientId is a string of at most 64 characters');
+    return swarm.messageFromTab(str(req.body.text), Number.isInteger(req.body.replyTo) ? req.body.replyTo : undefined, files, clientId);
   }),
 );
 app.get('/api/ceo/picks', route(() => swarm.ceoPicks()));
@@ -415,6 +417,7 @@ app.post(
 app.post('/api/requests/:id/reject', route((req) => swarm.rejectRequest(String(req.params.id), str(req.body?.note))));
 app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params.id), req.body?.action)));
 // The demo office only: the CEO grows (or shrinks) a floor's team on demand.
+app.post('/api/demo/office-update', route(() => swarm.demoOfficeUpdate()));
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
 
 // Office progression (#210): the lobby kiosk, a floor's decorations, the player's coffees, and the demo's coins and

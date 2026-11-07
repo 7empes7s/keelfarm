@@ -16,6 +16,7 @@ export interface Tab {
   readonly OPEN: number;
   readonly readyState: number;
   send(data: string): void;
+  close?(code: number, reason: string): void;
 }
 
 export interface OutboxHost {
@@ -248,6 +249,11 @@ export class Outbox {
       if (anyTail) this.send(tab, { type: 'logs', tails });
       if (anyLatest) this.send(tab, { type: 'latest', lines: latest });
     }
+  }
+
+  /** Closes every tab's socket, as a restart would: each reconnects and gets a fresh snapshot (the demo's fake update). */
+  dropAll() {
+    for (const tab of this.tabs.keys()) tab.close?.(1012, 'office restarted');
   }
 
   /** Stops the tick (the office is shutting down). */

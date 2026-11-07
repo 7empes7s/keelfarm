@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUOTE_CHARS, RESEARCH_PREFIX, excerpt, forwardText, hideHarness, isHarnessText, isQuestion, messageLook, nextDelivery, parseForwarded, researchTopic, settleOutbox, stripHarness, yesNoFor, type OutgoingMessage } from './chat.ts';
+import { QUOTE_CHARS, RESEARCH_PREFIX, alreadySent, excerpt, forwardText, hideHarness, isHarnessText, isQuestion, messageLook, nextDelivery, parseForwarded, researchTopic, settleOutbox, stripHarness, yesNoFor, type OutgoingMessage } from './chat.ts';
 import type { PhoneMessage } from './types.ts';
 
 describe('forwardText', () => {
@@ -92,7 +92,7 @@ describe('quick Yes / No', () => {
 });
 
 describe('settleOutbox', () => {
-  const out = (key: number, text: string, extra: Partial<OutgoingMessage> = {}): OutgoingMessage => ({ key, text, at: key, delivery: 'sending', ...extra });
+  const out = (key: number, text: string, extra: Partial<OutgoingMessage> = {}): OutgoingMessage => ({ key, clientId: `c${key}`, text, at: key, delivery: 'sending', ...extra });
 
   it('drops the send the office now has, and only that one', () => {
     const box = [out(1, 'hi'), out(2, 'hi', { replyTo: 4 }), out(3, 'hi')];
@@ -103,6 +103,25 @@ describe('settleOutbox', () => {
 
   it('keeps failed sends for their retry', () => {
     expect(settleOutbox([out(1, 'hi', { delivery: 'failed' })], { from: 'manager', text: 'hi' })).toHaveLength(1);
+  });
+
+  it('settles by client id first (#216): a resend of the same message, failed or not, is done once the office has it', () => {
+    const box = [out(1, 'hi'), out(2, 'hi', { delivery: 'failed' })];
+    expect(settleOutbox(box, { from: 'manager', text: 'hi', clientId: 'c2' }).map((o) => o.key)).toEqual([1]);
+    expect(settleOutbox(box, { from: 'manager', text: 'edited later', clientId: 'c1' }).map((o) => o.key)).toEqual([2]);
+  });
+});
+
+describe('alreadySent (#216)', () => {
+  const msgs = [
+    { id: 1, from: 'manager', text: 'hi', at: 1, clientId: 'tab-a' },
+    { id: 2, from: 'ceo', text: 'hello', at: 2, clientId: 'tab-b' },
+  ] as PhoneMessage[];
+  it("finds the manager's message saved under a client id, and nothing without one", () => {
+    expect(alreadySent(msgs, 'tab-a')?.id).toBe(1);
+    expect(alreadySent(msgs, 'tab-b')).toBeUndefined();
+    expect(alreadySent(msgs, 'tab-c')).toBeUndefined();
+    expect(alreadySent(msgs, undefined)).toBeUndefined();
   });
 });
 

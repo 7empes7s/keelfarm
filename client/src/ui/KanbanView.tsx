@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useDraft } from '../drafts';
+import { useUpdateHold } from '../clientUpdate';
 import { LabChip } from './ExperimentsSection';
 import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
@@ -29,11 +31,22 @@ function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
   );
 }
 
+interface IssueDraft {
+  title: string;
+  body: string;
+}
+const BLANK_ISSUE: IssueDraft = { title: '', body: '' };
+const issueEmpty = (d: IssueDraft) => !d.title.trim() && !d.body.trim();
+
 export function IssueForm({ repoId, agents, onDone }: { repoId: string; agents: Agent[]; onDone?: () => void }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [assignTo, setAssignTo] = useState('');
   const [busy, setBusy] = useState(false);
+  // A half-written issue survives a reload or an office update, per floor, and holds the update back (#216).
+  const typed = useMemo(() => ({ title, body }), [title, body]);
+  useDraft(`issue:${repoId}`, typed, BLANK_ISSUE, issueEmpty, (d) => (setTitle(d.title), setBody(d.body)));
+  useUpdateHold(`issue-form:${repoId}`, busy ? 'send' : issueEmpty(typed) ? null : 'draft');
   const free = agents.filter((a) => a.role !== 'ceo' && a.status !== 'working' && a.status !== 'preparing');
   return (
     <form

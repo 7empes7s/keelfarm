@@ -1,5 +1,7 @@
 import { useStore } from './store';
-import { restartExpected, shouldReload } from './officeUpdate';
+import { restartExpected } from './officeUpdate';
+import { noteCommit } from './clientUpdate';
+import { resumeOutbox } from './ui/chatSend';
 import type { ClientEvent, ServerEvent } from '../../shared/types';
 import { currentWatch } from './watch';
 import { hitchWs } from './hitches';
@@ -47,29 +49,6 @@ export const wsOpens = () => opens;
 export function requestSnapshot() {
   awaitingSnapshot = true;
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resync' } satisfies ClientEvent));
-}
-
-// The commit this tab last reloaded for, so a new office commit reloads the page at most once.
-const RELOAD_KEY = 'office-swarm:reloaded-for';
-
-function reloadedFor(): string | null {
-  try {
-    return sessionStorage.getItem(RELOAD_KEY);
-  } catch {
-    return null;
-  }
-}
-
-/** The server came back on a different commit: load the client that goes with it. */
-function reloadForNewCommit(commit: string): boolean {
-  if (!shouldReload(useStore.getState().officeCommit, commit, reloadedFor())) return false;
-  try {
-    sessionStorage.setItem(RELOAD_KEY, commit);
-  } catch {
-    return false; // without storage we can't promise a single reload, so keep the old client
-  }
-  location.reload();
-  return true;
 }
 
 const look = (): SocketLook => ({ readyState: socket?.readyState ?? WebSocket.CLOSED, startedAt, heardAt });
@@ -140,7 +119,7 @@ export function connect() {
       type = ev.type;
       if (ev.type === 'beat') return;
       if (ev.type.startsWith('visitor')) wsTraffic.presence += e.data.length;
-      if (ev.type === 'snapshot' && ev.data.officeCommit && reloadForNewCommit(ev.data.officeCommit)) return;
+      if (ev.type === 'snapshot') noteCommit(ev.data.officeCommit); // a new version waits for a safe moment, never reloads (#216)
       // While the time-lapse plays it owns the office; it asks for a fresh snapshot when it stops. What isn't part of
       // the replayed office (notifications, settings, the office's own update…) still applies.
       if (!OUTSIDE_REPLAY.has(ev.type)) {
@@ -151,6 +130,7 @@ export function connect() {
         }
       }
       useStore.getState().apply(ev);
+      if (ev.type === 'snapshot') void resumeOutbox();
     } catch (err) {
       console.error('bad server event', err);
     }

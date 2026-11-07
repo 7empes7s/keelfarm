@@ -83,3 +83,26 @@ describe('push in the service worker (#210)', () => {
     expect(r).toEqual({ shown: [], closed: ['cubefarm-ceoMessage'] });
   });
 });
+
+/** Installs the worker with or without an older one active; returns how often it took over. */
+async function install(active: boolean, message?: object) {
+  const handlers: Record<string, (e: unknown) => void> = {};
+  let skipped = 0;
+  const self = { addEventListener: (type: string, fn: (e: unknown) => void) => (handlers[type] = fn), location: { origin: 'https://office.example' }, registration: { active: active ? {} : null }, skipWaiting: async () => void skipped++ };
+  const caches = { open: async () => ({ addAll: async () => undefined }) };
+  vm.runInNewContext(serviceWorkerSource('v2'), { self, URL, caches, fetch: () => undefined, Response: {} });
+  let done: Promise<unknown> = Promise.resolve();
+  handlers.install({ waitUntil: (p: Promise<unknown>) => (done = p) });
+  await done;
+  if (message) handlers.message({ data: message });
+  return skipped;
+}
+
+describe('a new worker version (#216)', () => {
+  it('takes over at once only as the first worker; an update waits for the page to say so', async () => {
+    expect(await install(false)).toBe(1);
+    expect(await install(true)).toBe(0);
+    expect(await install(true, { type: 'skipWaiting' })).toBe(1);
+    expect(await install(true, { type: 'other' })).toBe(0);
+  });
+});

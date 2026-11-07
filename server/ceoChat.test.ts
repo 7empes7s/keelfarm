@@ -42,6 +42,18 @@ async function office() {
   return { swarm, i, lives, prompts, ceo, replies };
 }
 
+describe('a resent message (#216)', () => {
+  it('is saved once: the same client id answers with the first copy', { timeout: 60_000 }, async () => {
+    const { swarm, i } = await office();
+    const first = await swarm.messageFromTab('Ship it?', undefined, [], 'tab-1');
+    const again = await swarm.messageFromTab('Ship it?', undefined, [], 'tab-1');
+    const other = await swarm.messageFromTab('Ship it?', undefined, [], 'tab-2');
+    expect(again.id).toBe(first.id);
+    expect(other.id).not.toBe(first.id);
+    expect(i.state.messages.filter((m) => m.from === 'manager' && m.text === 'Ship it?')).toHaveLength(2);
+  });
+});
+
 describe('the CEO chat', () => {
   it('streams the reply with its steps, keeps them on it, and carries conversations apart', { timeout: 60_000 }, async () => {
     const { swarm, lives, prompts, ceo, replies } = await office();

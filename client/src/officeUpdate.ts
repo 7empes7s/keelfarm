@@ -1,4 +1,4 @@
-// The office's own update, in plain words for the console and the HUD, and the reload that brings in the new client.
+// The office's own update, in plain words for the console and the HUD, and when this page loads the new version (#216).
 import type { OfficeUpdateView } from '../../shared/types';
 
 /** The server stops the sessions still running this long after it started draining (#37). */
@@ -49,10 +49,26 @@ export const canPostpone = (u: OfficeUpdateView) => u.launcher && (u.state === '
 /** A dropped connection while the office is about to restart itself is expected, not an error. */
 export const restartExpected = (u: OfficeUpdateView | undefined) => u?.state === 'draining' || u?.state === 'updating';
 
-/**
- * Reload when the server comes back on a different commit, so the manager gets the matching client. At most once
- * per commit (remembered in sessionStorage), so a server that keeps reporting a new commit can't loop the page.
- */
-export function shouldReload(before: string | null | undefined, after: string | null | undefined, reloadedFor: string | null): boolean {
-  return !!before && !!after && before !== after && reloadedFor !== after;
+/** The office came back on another commit than the one this page loaded with: a new version is ready (#216). */
+export const newVersion = (loaded: string | null | undefined, now: string | null | undefined) => !!loaded && !!now && loaded !== now;
+
+/** When the new version may load: a tab or section change, back after a while in the background, or the pill's tap. */
+export type UpdateMoment = 'navigate' | 'resume' | 'tap';
+
+/** What holds a waiting version back: something being written, uploaded or sent, or a sheet or dialog open. */
+export type UpdateHold = 'draft' | 'upload' | 'send' | 'sheet';
+
+/** The background a phone must have been in before coming back loads the new version. */
+export const RESUME_AFTER_MS = 30_000;
+
+/** True when the waiting version loads now; never over the manager's work in progress, which waits for the next moment. */
+export function loadsNow(ready: boolean, moment: UpdateMoment, holds: readonly UpdateHold[], hiddenMs = 0): boolean {
+  if (!ready || holds.length) return false;
+  return moment !== 'resume' || hiddenMs >= RESUME_AFTER_MS;
+}
+
+/** Why the pill's tap didn't update, in plain words. */
+export function heldText(holds: readonly UpdateHold[]): string {
+  const why = holds.includes('send') ? 'a message is still sending' : holds.includes('upload') ? 'a file is still uploading' : holds.includes('draft') ? 'you have an unsent message' : 'a sheet is open';
+  return `Updating when it's safe: ${why}. Your work is kept.`;
 }

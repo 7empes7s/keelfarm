@@ -2,10 +2,12 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
+import { resumedTab, tabShown } from '../clientUpdate';
+import { UpdatePill } from '../ui/UpdatePill';
 import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
@@ -325,7 +327,7 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
 }
 
 export default function Pocket() {
-  const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? 'company');
+  const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? (TABS.find((t) => t === resumedTab()) || 'company'));
   const [repoId, setRepoId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
   const company = useStore((s) => s.settings.companyName);
@@ -362,6 +364,13 @@ export default function Pocket() {
     else setTab('chat');
     focusChatBox();
   };
+
+  // A tab change is a safe moment for a waiting office version, which then opens on this tab (#216).
+  const firstTab = useRef(true);
+  useEffect(() => {
+    tabShown(tab, !firstTab.current);
+    firstTab.current = false;
+  }, [tab]);
 
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
@@ -493,6 +502,7 @@ export default function Pocket() {
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
+        <UpdatePill />
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}

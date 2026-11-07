@@ -45,7 +45,7 @@ import { clip } from '../notify.ts';
 import { SwarmTeam } from './team.ts';
 import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
 import { applyEdit } from '../../shared/messageEdits.ts';
-import { excerpt } from '../../shared/chat.ts';
+import { alreadySent, excerpt } from '../../shared/chat.ts';
 import { parseRefs } from '../../shared/chatRefs.ts';
 import { telegramChat } from '../telegram.ts';
 
@@ -584,9 +584,15 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     }
   }
 
+  /** The manager's message from a tab: saved once per client id, however often a reload or a lost answer resends it (#216). */
+  async messageFromTab(text: string, replyTo: number | undefined, fileIds: readonly string[], clientId?: string) {
+    const sent = alreadySent(this.state.messages, clientId);
+    return sent ? { id: sent.id } : this.messageCeo(text, replyTo, undefined, fileIds, undefined, clientId);
+  }
+
   /** The manager answered a question (tapped an option, or replied to its message): to the agent, and the CEO hears. */
-  protected async managerAnswer(q: AgentQuestion, text: string, replyTo: number, via?: 'telegram') {
-    const m = this.postMessage('manager', text, undefined, { replyTo, delivery: 'read', ...(via && { telegram: 'in' as const }) });
+  protected async managerAnswer(q: AgentQuestion, text: string, replyTo: number, via?: 'telegram', clientId?: string) {
+    const m = this.postMessage('manager', text, undefined, { replyTo, delivery: 'read', ...(via && { telegram: 'in' as const }), ...(clientId && { clientId }) });
     try {
       await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager');
       this.ceoTold.push(`The manager answered ${q.agentName}'s question "${clip(q.text, 120)}": ${clip(text, 200)}`);

@@ -28,6 +28,8 @@ import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
 import { useMode } from '../pocket/mode';
+import { useDraft } from '../drafts';
+import { useUpdateHold } from '../clientUpdate';
 import './termPhone.css';
 
 function elapsed(from: number | null, to: number | null) {
@@ -100,6 +102,8 @@ function useTermFont(phone: boolean): [number, (by: 1 | -1) => void] {
   return [size, step];
 }
 
+const blank = (t: string) => !t.trim();
+
 export function TerminalView({ agentId, view }: { agentId: string; view?: AgentPane }) {
   const agent = useStore((s) => s.agents[agentId]);
   const log = useStore((s) => s.logs[agentId]) ?? [];
@@ -111,6 +115,9 @@ export function TerminalView({ agentId, view }: { agentId: string; view?: AgentP
   const office = useMode((s) => s.mode) === 'office';
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  // The message box survives a reload or an office update, per agent, and holds the update back (#216).
+  useDraft(`agent:${agentId}`, text, '', blank, setText);
+  useUpdateHold('agent-composer', busy ? 'send' : blank(text) ? null : 'draft');
   const phone = usePhoneWindow();
   // The details: a sheet a phone opens when asked, a side panel a computer shows from the start.
   const [sheet, setSheet] = useState(false);

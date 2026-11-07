@@ -1,6 +1,6 @@
 // The installable app's service worker (docs/pocket.md), served by the office at /sw.js. Its version is the build's
 // index.html, the package version and the office's commit, so every office update makes a new worker, which drops the
-// old cache. It caches only the app shell (the page and its hashed /assets/, icons and manifest): never /api, the
+// old cache once the page tells it to take over (client/src/clientUpdate.ts). It caches only the app shell (the page and its hashed /assets/, icons and manifest): never /api, the
 // websockets or anything else. It also shows Web Push notifications (not while an office window is in use, #210),
 // closes those read elsewhere, and opens the office when one is tapped.
 import crypto from 'node:crypto';
@@ -17,8 +17,13 @@ const VERSION = ${JSON.stringify(version)};
 const CACHE = 'cubefarm-shell-' + VERSION;
 const PRECACHE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
+// The first worker takes over at once; a new version waits until the page finds a safe moment (#216: never mid-message).
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.registration.active || self.skipWaiting()));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'skipWaiting') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

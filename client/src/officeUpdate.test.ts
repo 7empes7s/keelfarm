@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, officeUpdateChip, officeUpdateText, restartExpected, shouldReload } from './officeUpdate';
+import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, officeUpdateChip, officeUpdateText, restartExpected, newVersion, loadsNow, heldText, RESUME_AFTER_MS } from './officeUpdate';
 import type { OfficeUpdateView } from '../../shared/types';
 
 const u = (over: Partial<OfficeUpdateView>): OfficeUpdateView => ({ state: 'none', behind: 0, launcher: true, drainingSince: null, running: 0, updateAt: null, holds: false, detail: null, ...over });
@@ -62,18 +62,33 @@ it('restartExpected only while draining or updating', () => {
   expect(restartExpected(u({ state: 'updating' }))).toBe(true);
 });
 
-describe('shouldReload', () => {
-  it('reloads when the office comes back on another commit', () => {
-    expect(shouldReload('abc1234', 'def5678', null)).toBe(true);
+describe('newVersion (#216)', () => {
+  it('is ready when the office comes back on another commit than the page loaded with', () => {
+    expect(newVersion('abc1234', 'def5678')).toBe(true);
   });
   it('never on the first snapshot, the same commit, or a server without commits', () => {
-    expect(shouldReload(undefined, 'def5678', null)).toBe(false);
-    expect(shouldReload('abc1234', 'abc1234', null)).toBe(false);
-    expect(shouldReload(null, 'def5678', null)).toBe(false);
-    expect(shouldReload('abc1234', null, null)).toBe(false);
+    expect(newVersion(undefined, 'def5678')).toBe(false);
+    expect(newVersion('abc1234', 'abc1234')).toBe(false);
+    expect(newVersion(null, 'def5678')).toBe(false);
+    expect(newVersion('abc1234', null)).toBe(false);
   });
-  it('at most once per commit', () => {
-    expect(shouldReload('abc1234', 'def5678', 'def5678')).toBe(false);
-    expect(shouldReload('def5678', 'fed9999', 'def5678')).toBe(true);
+});
+
+describe('loadsNow: the safe moment (#216)', () => {
+  it('loads a ready version on a navigation or a tap, and on coming back after 30 s in the background', () => {
+    expect(loadsNow(true, 'navigate', [])).toBe(true);
+    expect(loadsNow(true, 'tap', [])).toBe(true);
+    expect(loadsNow(true, 'resume', [], RESUME_AFTER_MS)).toBe(true);
+    expect(loadsNow(true, 'resume', [], RESUME_AFTER_MS - 1)).toBe(false);
+    expect(loadsNow(false, 'tap', [])).toBe(false);
+  });
+  it('never while a draft, an upload, a send or a sheet is active, not even on a tap', () => {
+    for (const hold of ['draft', 'upload', 'send', 'sheet'] as const) {
+      for (const moment of ['navigate', 'tap', 'resume'] as const) expect(loadsNow(true, moment, [hold], RESUME_AFTER_MS)).toBe(false);
+    }
+  });
+  it('says why it waits', () => {
+    expect(heldText(['draft', 'send'])).toBe("Updating when it's safe: a message is still sending. Your work is kept.");
+    expect(heldText(['sheet'])).toBe("Updating when it's safe: a sheet is open. Your work is kept.");
   });
 });

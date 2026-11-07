@@ -1,4 +1,5 @@
 // The office's own update: settling, draining, the hand-over to the launcher, the result after a restart.
+import crypto from 'node:crypto';
 import { HttpError } from '../httpError.ts';
 import { drainDecision, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
@@ -62,6 +63,13 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     if (key === this.lastOfficeView) return;
     this.lastOfficeView = key;
     this.broadcast({ type: 'officeUpdate', officeUpdate: view });
+  }
+
+  /** The demo's "new version": the office now reports another commit and every tab reconnects, as after a real update (#216). */
+  demoOfficeUpdate() {
+    if (!this.backend.demo) throw new HttpError(404, 'Only the demo office fakes an update');
+    this.officeHead = crypto.randomBytes(20).toString('hex');
+    this.outbox.dropAll();
   }
 
   /** The own-folder check found the office this many commits behind GitHub. */

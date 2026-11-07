@@ -107,6 +107,7 @@ export function yesNoFor(messages: readonly PhoneMessage[]): number | null {
 /** A message the phone is sending (or failed to send): shown at the end of the thread until the office has it. */
 export interface OutgoingMessage {
   key: number; // this phone's own id for it
+  clientId: string; // sent with it: the office saves it once however often it arrives (#216)
   text: string;
   replyTo?: number;
   files?: FileRef[]; // uploaded already: the message carries their ids
@@ -115,11 +116,17 @@ export interface OutgoingMessage {
 }
 
 /** The outbox once the office's copy of a message arrived: the send it came from (same text, reply and files) is done. */
-export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments'>): OutgoingMessage[] {
+export function settleOutbox(outbox: readonly OutgoingMessage[], m: Pick<PhoneMessage, 'from' | 'text' | 'replyTo' | 'attachments' | 'clientId'>): OutgoingMessage[] {
   if (m.from !== 'manager') return [...outbox];
+  if (m.clientId && outbox.some((o) => o.clientId === m.clientId)) return outbox.filter((o) => o.clientId !== m.clientId);
   const ids = (fs?: readonly FileRef[]) => (fs ?? []).map((f) => f.id).join();
   const i = outbox.findIndex((o) => o.delivery === 'sending' && o.text.trim() === m.text && o.replyTo === m.replyTo && ids(o.files) === ids(m.attachments));
   return i < 0 ? [...outbox] : outbox.filter((_, j) => j !== i);
+}
+
+/** The manager's message already saved for this client id (a resend after a reload or a lost answer, #216), if any. */
+export function alreadySent(messages: readonly PhoneMessage[], clientId: string | undefined): PhoneMessage | undefined {
+  return clientId ? messages.find((m) => m.from === 'manager' && m.clientId === clientId) : undefined;
 }
 
 // ---------- backend stays backend (#193) ----------

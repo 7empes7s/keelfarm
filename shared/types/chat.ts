@@ -47,6 +47,7 @@ export interface PhoneMessage {
   reactions?: MessageReaction[]; // the manager's and the CEO's, oldest first
   tg?: number; // its Telegram message id, for one the manager sent from there
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+  clientId?: string; // the manager's: the sending tab's id for it, so a resend after a reload is saved once (#216)
 }
 
 /** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */

@@ -1,5 +1,7 @@
 // The manager's attachments while they write a message to the CEO: each file uploads to the office's files store as
 // soon as it's picked, pasted or dropped (with progress, cancellable), and the message carries the uploaded ids.
+// A file keeps its bytes until it's uploaded, so the tray's draft (Chat.tsx, drafts.ts) can upload it again after a
+// reload (#216).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
@@ -15,8 +17,14 @@ export interface Pending {
   preview: string | null; // an object URL for images the browser can show
   progress: number; // 0..1
   ref?: FileRef; // uploaded
+  file?: File; // its bytes until then
   error?: string;
 }
+
+/** A tray as a draft keeps it: uploaded files by ref, the others with their bytes. */
+export type TrayDraft = ({ ref: FileRef } | { file: File })[];
+
+export const trayDraft = (pending: readonly Pending[]): TrayDraft => pending.flatMap<TrayDraft[number]>((p) => (p.ref ? [{ ref: p.ref }] : p.file && !p.error ? [{ file: p.file }] : []));
 
 /** POSTs a file's bytes to the store; `abort` cancels it. */
 function uploadFile(file: File, onProgress: (fraction: number) => void): { done: Promise<FileRef>; abort: () => void } {
@@ -63,11 +71,11 @@ export function useAttachments() {
     for (const file of files) {
       const key = ++seq;
       const showable = file.type.startsWith('image/') && inlineType(file.type) && !/hei[cf]/.test(file.type);
-      setPending((all) => [...all, { key, name: file.name || 'file', type: file.type, size: file.size, preview: showable ? URL.createObjectURL(file) : null, progress: 0 }]);
+      setPending((all) => [...all, { key, name: file.name || 'file', type: file.type, size: file.size, preview: showable ? URL.createObjectURL(file) : null, progress: 0, file }]);
       const up = uploadFile(file, (progress) => patch(key, { progress }));
       aborts.current.set(key, up.abort);
       up.done.then(
-        (ref) => patch(key, { ref, progress: 1 }),
+        (ref) => patch(key, { ref, progress: 1, file: undefined }),
         (err: Error) => err.name !== 'AbortError' && patch(key, { error: err.message }),
       ).finally(() => aborts.current.delete(key));
     }
@@ -88,10 +96,20 @@ export function useAttachments() {
     setPending([]);
   }, []);
 
+  /** A draft's tray back after a reload: uploaded files as they were, the others uploading again. */
+  const restore = useCallback(
+    (tray: TrayDraft) => {
+      const done = tray.flatMap((t) => ('ref' in t ? [t.ref] : []));
+      setPending((all) => [...all, ...done.map((ref) => ({ key: ++seq, name: ref.name, type: ref.type, size: ref.size, preview: null, progress: 1, ref }))]);
+      add(tray.flatMap((t) => ('file' in t ? [t.file] : [])));
+    },
+    [add],
+  );
+
   useEffect(() => () => aborts.current.forEach((abort) => abort()), []);
 
   const ready = pending.flatMap((p) => (p.ref ? [p.ref] : []));
   const busy = pending.some((p) => !p.ref && !p.error);
   const failed = pending.some((p) => p.error);
-  return { pending, add, remove, clear, ready, busy, failed };
+  return { pending, add, remove, clear, restore, ready, busy, failed };
 }

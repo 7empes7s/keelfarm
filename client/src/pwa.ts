@@ -5,15 +5,19 @@ import { askPermission, ensureWorker, fromB64u, StepError, subscribe } from './p
 import { mountOf } from './socketUrl';
 
 /**
- * Registers the worker in a built office (the dev server has none). A new office version replaces it on its own. Not
+ * Registers the worker in a built office (the dev server has none). A new office version waits for clientUpdate.ts. Not
  * in an office seen through another's preview gateway: its /sw.js is that office's, and the preview worker runs it.
  */
 export function registerServiceWorker() {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator) || !window.isSecureContext || mountOf(location.pathname)) return;
-  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err: unknown) => {
-    console.warn('no service worker:', err);
-    void api.pushReport('worker', `The service worker couldn't be registered: ${err instanceof Error ? err.message : String(err)}`).catch(() => undefined);
-  });
+  navigator.serviceWorker
+    .register('/sw.js', { updateViaCache: 'none' })
+    // a version left waiting by an earlier page takes over now: this page just loaded, so nothing is lost (#216)
+    .then((reg) => reg.waiting?.postMessage({ type: 'skipWaiting' }))
+    .catch((err: unknown) => {
+      console.warn('no service worker:', err);
+      void api.pushReport('worker', `The service worker couldn't be registered: ${err instanceof Error ? err.message : String(err)}`).catch(() => undefined);
+    });
   // A tapped notification asks the open office to show what it's about.
   navigator.serviceWorker.addEventListener('message', (e: MessageEvent<{ type?: string; url?: string }>) => {
     if (e.data?.type === 'cubefarm:open') window.dispatchEvent(new CustomEvent('cubefarm:open', { detail: e.data.url }));

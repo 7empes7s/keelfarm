@@ -288,6 +288,12 @@ export function AboutOffice() {
           <code>{machinesRoot}</code>
         </dd>
       </dl>
+      {demo && (
+        // #216: the office comes back on a new commit; the header's "New version · Update" appears, nothing reloads
+        <button className="btn btn-small btn-ghost" onClick={() => void api.demoOfficeUpdate().catch(() => undefined)}>
+          🔄 Demo: simulate an office update
+        </button>
+      )}
     </div>
   );
 }

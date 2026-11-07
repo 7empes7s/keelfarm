@@ -13,6 +13,7 @@ import { stickyDrop } from '../world/boardHands';
 import { WorkersPanel } from './WorkersPanel';
 import { PresenceHud } from './PresenceHud';
 import { officeUpdateChip } from '../officeUpdate';
+import { UpdatePill } from './UpdatePill';
 import { useA11y } from './a11y';
 import { useCameraView } from '../world/camera/rig';
 import { CameraHud, OverviewButton } from './CameraHud';
@@ -220,6 +221,7 @@ export function HUD() {
       {/* the bell first: when the row wraps, its last pills go under the workers list, never the bell */}
       <div className="hud-status">
         <NoticeBell className="pill" />
+        <UpdatePill />
         {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
         <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>{replaying ? '▶ replay' : connected ? '● live' : restarting ? '○ restarting' : '○ reconnecting'}</span>
         <span className="pill">

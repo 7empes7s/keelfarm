@@ -22,7 +22,9 @@ import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachTray, FilesList, FileViewer, useDropZone, useSlash } from './ChatFiles';
-import { useAttachments } from './chatUpload';
+import { trayDraft, useAttachments, type TrayDraft } from './chatUpload';
+import { useDraft } from '../drafts';
+import { useUpdateHold } from '../clientUpdate';
 import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
@@ -41,6 +43,15 @@ import { togglesFull, useChatFull } from './chatFull';
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
  * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
  */
+/** The message box as a conversation's draft keeps it through a reload (#216). */
+interface CeoDraft {
+  text: string;
+  replyTo: number | null;
+  files: TrayDraft;
+}
+const BLANK_DRAFT: CeoDraft = { text: '', replyTo: null, files: [] };
+const draftEmpty = (d: CeoDraft) => !d.text.trim() && !d.files.length;
+
 export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean }) {
   const messages = useStore((s) => s.messages);
   const outbox = useStore((s) => s.chatOutbox);
@@ -64,6 +75,15 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const att = useAttachments();
   const fileCount = useStore((s) => s.files.length);
   const drop = useDropZone(att.add);
+  // What's being written, per conversation, survives a reload or an office update; and holds the update back (#216).
+  const typed = useMemo<CeoDraft>(() => ({ text, replyTo, files: trayDraft(att.pending) }), [text, replyTo, att.pending]);
+  useDraft(`ceo:${chat.current}`, typed, BLANK_DRAFT, draftEmpty, (d) => {
+    setText(d.text);
+    setReplyTo(d.replyTo);
+    att.clear();
+    att.restore(d.files);
+  });
+  useUpdateHold('ceo-composer', att.busy ? 'upload' : draftEmpty(typed) ? null : 'draft');
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
   // A message the search, the guide or an empty list prepared for the CEO (goTo.ts): in the box, ready to finish and send.
   const draft = useCeoDraft((s) => s.text);

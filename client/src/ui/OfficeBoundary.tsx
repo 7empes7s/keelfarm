@@ -3,6 +3,7 @@
 import { Component, type ReactNode } from 'react';
 import { bootDone } from '../pocket/officeBoot';
 import { setMode } from '../pocket/mode';
+import { drafts } from '../drafts';
 
 /** A dynamic import that failed: retrying the same URL won't help, a fresh page load gets the current build. */
 const chunkFailed = (err: Error) => /dynamically imported module|importing a module script failed|failed to fetch|error loading/i.test(err.message);
@@ -22,7 +23,8 @@ export class OfficeBoundary extends Component<{ children: ReactNode; onRetry: ()
   private retry = () => {
     const { error } = this.state;
     if (error && chunkFailed(error)) {
-      location.reload();
+      // drafts and the outbox are on disk first: the fresh page restores and resends them (#216)
+      void drafts.flush().finally(() => location.reload());
       return;
     }
     this.setState({ error: null });
