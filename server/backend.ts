@@ -27,6 +27,7 @@ import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { DemoCharter } from './demoCharters.ts';
+import type { DemoQaReport } from './demoQa.ts';
 import type { CareerView } from '../shared/careers.ts';
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
@@ -160,6 +161,8 @@ export interface Backend {
   seedCharterLog?(charter: CharterParts, ledger: CostRecord[], now: number): ObjectiveLog;
   /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
   demoCharter?(fullName: string): DemoCharter;
+  /** The demo only: a stuck PR on that floor with QA's failing report (#155), or null for none. */
+  seedQaReport?(fullName: string): DemoQaReport | null;
   /** The demo only: an update the preflight held back (#138), so a fresh demo office's chat shows its card. */
   demoHeldUpdate?(): LastUpdate;
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */

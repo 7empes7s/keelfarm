@@ -194,6 +194,8 @@ const SCREENS: Screen[] = [
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
+  // the demo's stuck PR (#155): its details page, opened from Approvals
+  { name: 'pocket PR details (#155)', widths: [360, 390, 430, 1280], open: async (page) => (await (await pocket(page, 'approvals')).getByRole('button', { name: /open the details$/ }).first().click(), dialog(page, /PR #/)), tabs: [] },
   {
     name: 'search palette (#109)',
     widths: PHONES,

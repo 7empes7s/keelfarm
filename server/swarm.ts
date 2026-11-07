@@ -291,6 +291,7 @@ export class Swarm extends SwarmCeoTools {
       if (p) void this.officeTools().call('propose_charter', { floor: r.floor, ...p });
     }
     if (seeded) this.seedDemoDecisions(); // and a question and a team change still waiting on the manager (#114)
+    if (seeded) this.seedDemoQa(); // and a PR QA failed, with a full report (#155)
     // Agents from before the ledger start their careers now.
     for (const a of this.state.agents) if (a.role !== 'ceo') applyLedger(this.state.progress, { kind: 'hired', agentId: a.id, at: Date.now() });
     // A fresh demo office's agents come with records of all kinds (#117).

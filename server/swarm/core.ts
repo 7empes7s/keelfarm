@@ -473,6 +473,7 @@ export abstract class SwarmCore extends SwarmContract {
       qaAgentId: q.qaAgentId,
       summary: q.summary,
       checks: q.checks,
+      fixInstructions: q.status === 'passed' ? null : q.fixInstructions,
       commentUrl: q.commentUrl,
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,

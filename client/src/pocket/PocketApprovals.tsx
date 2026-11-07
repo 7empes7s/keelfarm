@@ -15,6 +15,8 @@ import { waitingOnYou } from './pocketData';
 import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';
 import { chatDecisions } from '../../../shared/decisions';
 import { EmptyState } from '../ui/EmptyState';
+import { AgentChip, Chip, StatusRows, Verdict } from '../ui/DetailsPage';
+import { mergeRows, stateChip } from '../ui/detailsRules';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
   const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
@@ -59,27 +61,31 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
     const ok = await confirmDialog({ tone: 'danger', title: `Close PR #${pr.number}?`, body: `“${pr.title}” will be closed without merging. The branch stays on GitHub.`, confirm: 'Close PR' });
     if (ok) await act(() => api.closePull(repo.id, pr.number));
   };
+  const failed = qa.status === 'failed' || qa.status === 'needs-human';
+  const chip = stateChip(qa, pr, false);
+  const blockers = mergeRows(pr, repo.defaultBranch).filter((r) => r.tone === 'bad' || r.tone === 'warn');
+  const details = () => useStore.getState().openOverlay({ kind: 'card', repoId: repo.id, key: `pr-${pr.number}`, number: pr.number, pr: true });
   return (
     <div className={`pk-card pk-pr kcard-${tone ?? 'plain'}`} style={{ ['--accent' as string]: repo.color }}>
       <div className="pk-pr-head">
         <span className="floor-badge">{repo.floor}</span>
         <div className="grow">
-          <a href={pr.url} target="_blank" rel="noreferrer">
-            <b>PR #{pr.number}</b>
-          </a>{' '}
-          {pr.title}
-          <div className="muted small">
-            {repo.fullName.split('/')[1]}
-            {author ? ` · by ${author.name}` : ''} · round {qa.round} · {note}
+          <div className="dp-eyebrow">
+            PR #{pr.number} · {repo.fullName.split('/')[1]}
           </div>
+          <button type="button" className="dp-title dp-title-link" onClick={details} aria-label={`${pr.title}: open the details`}>
+            {pr.title} <span className="dp-chev" aria-hidden />
+          </button>
+          <div className="dp-chips">
+            <Chip tone={chip.tone}>{chip.label}</Chip>
+            <Chip>Round {qa.round}</Chip>
+            {author && <AgentChip agent={author} role="Built by" />}
+          </div>
+          {!note.toLowerCase().includes(chip.label.toLowerCase()) && <div className="dp-meta">{note}</div>}
         </div>
       </div>
-      {qa.summary && <div className="small pk-pr-summary">{qa.summary}</div>}
-      {qa.commentUrl && (
-        <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-          QA report ↗
-        </a>
-      )}
+      <Verdict summary={qa.summary} fix={qa.fixInstructions} failed={failed} />
+      {blockers.length > 0 && <StatusRows rows={blockers} />}
       <div className="pk-actions">
         {!ready && (
           <button className="btn btn-small btn-good" disabled={busy} onClick={() => void act(() => api.sendToQa(repo.id, pr.number))}>
@@ -95,7 +101,15 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
           {ready ? 'Merge' : 'Merge anyway'}
         </button>
         <span className="spacer" />
-        <Menu label={`More for PR #${pr.number}`} title={`PR #${pr.number} ${pr.title}`} items={[{ label: 'Close PR…', hint: 'Closed without merging; the branch stays', danger: true, disabled: busy, onSelect: () => void close() }]} />
+        <Menu
+          label={`More for PR #${pr.number}`}
+          title={`PR #${pr.number} ${pr.title}`}
+          items={[
+            { label: 'Open on GitHub ↗', onSelect: () => void window.open(pr.url, '_blank', 'noopener') },
+            ...(qa.commentUrl ? [{ label: 'QA report ↗', onSelect: () => void window.open(qa.commentUrl!, '_blank', 'noopener') }] : []),
+            { label: 'Close PR…', hint: 'Closed without merging; the branch stays', danger: true, disabled: busy, onSelect: () => void close() },
+          ]}
+        />
       </div>
     </div>
   );

@@ -42,6 +42,7 @@ import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
+import { demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
@@ -993,6 +994,14 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
       return [...edits, ...sampleChat(now, edits.length + 1)];
     },
     demoCharter,
+    seedQaReport: (fullName) => {
+      const r = repos.get(fullName);
+      const issue = r?.issues.find((i) => /phone/i.test(i.title)) ?? r?.issues.at(-1);
+      if (!r || !issue) return null;
+      const seeded = demoQaReport(fullName, takeNumber(r), issue, 3 * 3_600_000, fakeSha());
+      r.pulls.unshift(seeded.pull);
+      return seeded;
+    },
     demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
