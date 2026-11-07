@@ -33,6 +33,11 @@ describe("a fresh demo office's chat", () => {
     expect(quoted).toEqual(['Plan the checkout fix for floor 1', 'And can QA check the phone layout first?']);
     expect(messages.some((m) => m.versions?.length)).toBe(true); // #125's edits
     expect(swarm.snapshot().decisions?.length).toBeGreaterThan(0); // #114's, posted after them
+    const payment = (swarm.snapshot().decisions ?? []).filter((d) => /payment|limit/i.test(d.question));
+    expect(payment.map((d) => [d.question, d.status])).toEqual([
+      ['I fixed the payment or skip Windows CI for now?', 'open'],
+      ['Raised the limit or drop the Windows CI job?', 'superseded'],
+    ]); // #183's phone, the older one replaced
 
     const ids = messages.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);

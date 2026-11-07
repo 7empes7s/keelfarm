@@ -86,6 +86,12 @@ describe('parseCeoMessage', () => {
     }
   });
 
+  it('takes a `? question` first line as the question its options answer (#183)', () => {
+    const p = parseCeoMessage(`The payment failed.\n${fence}suggestions\n? Did you fix the GitHub payment?\nFixed it\nNot yet\n${fence}`);
+    expect(p).toEqual({ text: 'The payment failed.', suggestions: ['Fixed it', 'Not yet'], ask: 'Did you fix the GitHub payment?' });
+    expect(parseCeoMessage(`Hm.\n${fence}suggestions\n? Only a question\n${fence}`).suggestions).toBeUndefined();
+  });
+
   it('only uses the first suggestions block', () => {
     const raw = `Q?\n${fence}suggestions\nYes\n${fence}\n${fence}suggestions\nNo\n${fence}`;
     const p = parseCeoMessage(raw);

@@ -662,6 +662,7 @@ export interface PhoneMessage {
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
+  ask?: string; // the CEO's: the question those replies answer, when it named one (a `? …` first line, #183)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
