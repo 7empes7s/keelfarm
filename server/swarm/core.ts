@@ -37,6 +37,7 @@ import { Ticker } from '../ticker.ts';
 import { isResync, Outbox } from '../outbox.ts';
 import { DEFAULT_LISTEN, DEFAULT_VOICE, Voice } from '../voice.ts';
 import { Notifier } from '../notifier.ts';
+import { parseAttention, type TabAttention } from '../notify.ts';
 import { TelegramBot } from '../telegramBot.ts';
 import { DEFAULT_NOTIFY, notifySettings } from '../../shared/notify.ts';
 import { addNotice, makeNotice, type NoticeInput } from '../../shared/notices.ts';
@@ -185,6 +186,10 @@ export abstract class SwarmCore extends SwarmContract {
   protected writing: Promise<void> = Promise.resolve(); // state file writes, one at a time: they share its temp file
   protected logSeq = 1;
   private noticeSeq = 0;
+  /** Each open tab's attention (#210), for the notifier's quiet while the manager is in the app. */
+  private attention = new Map<WebSocket, TabAttention>();
+  /** The CEO messages whose notifications wait, by notice id: marked when one isn't sent (#210). */
+  protected noticeMessages = new Map<string, number>();
   protected previews: Previews;
   protected officeHead: string | null = null; // the commit the office runs (null: not a git checkout, so no self-update)
   protected officeUpdate = {
@@ -299,6 +304,10 @@ export abstract class SwarmCore extends SwarmContract {
         send: (text, keyboard) => this.telegram.send(text, keyboard),
         view: () => this.telegram.view(),
       },
+      attention: () => this.attention.values(),
+      // after the notice returns: its CEO message is matched to it then
+      quiet: (ids) => queueMicrotask(() => this.markQuiet(ids)),
+      cleared: (events) => this.broadcast({ type: 'notifyClear', events }),
     });
     this.cloud = new Cloud({
       // The demo's fake cloud keeps a file of its own: its tests run beside the notifier's, which share demo-secrets.json.
@@ -550,11 +559,17 @@ export abstract class SwarmCore extends SwarmContract {
 
   addClient(ws: WebSocket) {
     this.outbox.add(ws);
-    ws.on('close', () => this.outbox.remove(ws));
+    ws.on('close', () => {
+      this.outbox.remove(ws);
+      this.attention.delete(ws);
+    });
     ws.on('message', (raw) => {
+      // Whether the manager is using this tab (#210): notifications hold off while they are, on any device.
+      const att = parseAttention(raw);
+      if (att) this.attention.set(ws, { visible: att.visible, at: Date.now() });
       // A tab back from the time-lapse asks for the live office again, and the terminal lines it shows with it;
       // otherwise it's saying what it shows (shared/watch.ts).
-      if (isResync(raw)) {
+      else if (isResync(raw)) {
         this.send(ws, { type: 'snapshot', data: this.snapshot() });
         this.outbox.resync(ws);
       } else this.outbox.receive(ws, String(raw));
@@ -581,6 +596,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected observe(ev: ServerEvent) {
     for (const item of this.ticker.observe(ev)) this.broadcast({ type: 'ticker', item });
     if (OPS_EVENTS.has(ev.type)) this.opsSoon();
+    if (ev.type === 'noticesRead') this.notifier.readNotices(ev.ids); // read here: cleared on every device (#210)
     this.journal.record(ev);
   }
 
@@ -651,8 +667,19 @@ export abstract class SwarmCore extends SwarmContract {
     this.broadcast({ type: 'toast', level, text: cleanTerminalText(text, 500) });
   }
 
-  /** A rich toast that joins the notification centre (#107); with `push`, the manager's devices hear of it with the same id. */
-  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4] }) {
+  /** CEO messages whose notification wasn't sent, as the manager was in the app: their bubbles say so (#210). */
+  private markQuiet(ids: string[]) {
+    for (const id of ids) {
+      const m = this.state.messages.find((x) => x.id === this.noticeMessages.get(id));
+      this.noticeMessages.delete(id);
+      if (!m || m.quiet) continue;
+      m.quiet = true;
+      this.broadcast({ type: 'ceoChat', message: m });
+    }
+  }
+
+  /** A rich toast that joins the notification centre (#107); with `push`, the manager's devices hear of it with the same id. Returns its id. */
+  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4] }): string {
     const at = Date.now(), t = input.target;
     const repoId = !t ? undefined : t.kind === 'agent' ? this.state.agents.find((a) => a.id === t.agentId)?.repoId : t.repoId;
     const n = makeNotice({ ...input, floor: input.floor ?? this.state.repos.find((r) => r.id === repoId)?.floor }, `${at.toString(36)}-${++this.noticeSeq}`, at);
@@ -660,6 +687,7 @@ export abstract class SwarmCore extends SwarmContract {
     this.broadcast({ type: 'toast', ...n });
     if (push) this.notifier.notify(push.event, push.title ?? n.title, n.text, push.line, push.changes, n.id);
     this.save();
+    return n.id;
   }
 
   /** The Charter tab's numbers (#105) from the objective log, the cost ledger and the open issues; the view keeps them till the next. */

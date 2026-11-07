@@ -8,6 +8,7 @@ import { DEFAULT_NOTIFY, notifySettings } from '../shared/notify.ts';
 import type { NoteView, NotifySettings } from '../shared/types.ts';
 import { createDemoBackend } from './demo.ts';
 import { Notifier, deviceId, deviceName, pushOutcome, type NotifyRequest } from './notifier.ts';
+import { GRACE_MS, THREAD_GAP_MS } from './notify.ts';
 import { Swarm } from './swarm.ts';
 
 const SECRETS = {
@@ -24,6 +25,9 @@ function subscription(endpoint = 'https://push.example.net/push/pushSECRETendpoi
 
 const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-notify-'));
 const settle = () => new Promise((r) => setTimeout(r, 30));
+/** Fake timers for what notes wait on (#210: the grace, the thread's gap); files and fetches stay real. */
+const fakeClock = (now = Date.UTC(2026, 9, 4, 12)) => vi.useFakeTimers({ now, toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+const pastGrace = () => vi.advanceTimersByTimeAsync(GRACE_MS + 30);
 
 afterEach(() => {
   vi.useRealTimers();
@@ -46,9 +50,11 @@ describe('notification secrets', () => {
     swarm.updateSettings({ notify: { ...DEFAULT_NOTIFY, events: { ...DEFAULT_NOTIFY.events, merge: true }, officeUrl: 'https://office.example.ts.net/' } });
 
     out.length = 0;
+    fakeClock();
     swarm.notifier.notify('needsHuman', 'PR #4 needs you', 'pixel-todo: Add login.');
+    await pastGrace();
     for (const c of ['desktop', 'push', 'ntfy']) answers.push(await swarm.notifier.test(c));
-    await settle();
+    await vi.advanceTimersByTimeAsync(30);
 
     // The demo shows what each channel would get: one formatted line per chat app and device for the PR.
     const pr = out.filter((l) => l.includes('⚠️ PR #4 needs you'));
@@ -125,23 +131,26 @@ function notifier(dir: string, status: (req: NotifyRequest) => number, settings:
 }
 
 describe('the notifier', () => {
-  it('sends a burst of 10 merges as one notification now and one summary a minute later, on every channel', async () => {
-    vi.useFakeTimers({ now: Date.UTC(2026, 9, 4, 12) });
+  it('sends a burst of 10 merges as one notification after the grace, on every channel, and the next one at most two minutes on', async () => {
+    fakeClock();
     const { n, posts, notes } = notifier(tmpDir(), () => 200);
     await n.init();
     await n.setWebhook('ntfy', SECRETS.ntfy);
     for (let i = 1; i <= 10; i++) n.notify('merge', `Merged PR #${i}`, `pixel-todo: Change ${i}`, `#${i} Change ${i}`);
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(GRACE_MS - 100);
+    expect(posts).toEqual([]);
+    await vi.advanceTimersByTimeAsync(130);
     expect(posts.map((p) => p.channel)).toEqual(['ntfy']);
     expect(posts[0].url).toBe('https://ntfy.sh/');
     expect(posts[0].headers).toMatchObject({ Authorization: `Bearer ${SECRETS.ntfy.token}` });
-    expect(JSON.parse(String(posts[0].body))).toMatchObject({ topic: 'ntfySECRETtopic4242', title: '🔀 Merged PR #1', message: 'pixel-todo: Change 1' });
-    await vi.advanceTimersByTimeAsync(59_000);
+    expect(JSON.parse(String(posts[0].body))).toMatchObject({ topic: 'ntfySECRETtopic4242', title: '🔀 10 merges' });
+    expect(posts[0].text).toMatch(/^🔀 10 merges\n• #10 Change 10/);
+    n.notify('merge', 'Merged PR #11', 'pixel-todo: Change 11', '#11 Change 11');
+    await vi.advanceTimersByTimeAsync(THREAD_GAP_MS - 1_000);
     expect(posts).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(posts).toHaveLength(2);
-    expect(posts[1].text).toMatch(/^🔀 9 more merges\n• #2 Change 2/);
-    expect(notes.map((x) => x.title)).toEqual(['🔀 Merged PR #1', '🔀 9 more merges']);
+    expect(posts.map((p) => p.text.split('\n')[0])).toEqual(['🔀 10 merges', '🔀 11 merges']);
+    expect(notes.map((x) => x.title)).toEqual(['🔀 10 merges', '🔀 11 merges']);
     expect(notes[0].url).toBe('/?tab=company');
   });
 
@@ -149,8 +158,9 @@ describe('the notifier', () => {
     const settings = notifySettings(DEFAULT_NOTIFY, { officeUrl: 'https://office.example/' });
     const { n, posts, notes } = notifier(tmpDir(), () => 200, settings);
     await n.setWebhook('ntfy', SECRETS.ntfy);
+    fakeClock();
     n.notify('needsHuman', 'PR #4 needs you', 'x', undefined, undefined, 'mh1-7');
-    await settle();
+    await pastGrace();
     expect(notes.map((x) => [x.id, x.url])).toEqual([['mh1-7', '/?tab=approvals&note=mh1-7']]);
     expect(JSON.parse(String(posts[0].body)).click).toBe('https://office.example/?note=mh1-7');
   });
@@ -159,15 +169,16 @@ describe('the notifier', () => {
     const settings = notifySettings(DEFAULT_NOTIFY, { channels: { desktop: false } });
     const { n, posts, notes } = notifier(tmpDir(), () => 200, settings);
     await n.setWebhook('ntfy', SECRETS.ntfy);
+    fakeClock();
     n.notify('merge', 'Merged PR #1', 'x'); // merges are off by default
     n.notify('hire', 'A new agent waits for floor 1', 'Ada');
-    await settle();
+    await pastGrace();
     expect(notes).toEqual([]);
     expect(posts.map((p) => [p.channel, p.text])).toEqual([['ntfy', '📄 A new agent waits for floor 1\nAda']]);
     const quiet = notifier(tmpDir(), () => 200, notifySettings(DEFAULT_NOTIFY, { channels: { ntfy: false } }));
     await quiet.n.setWebhook('ntfy', SECRETS.ntfy);
     quiet.n.notify('hire', 'A new agent waits for floor 1', 'Ada');
-    await settle();
+    await pastGrace();
     expect(quiet.posts).toEqual([]);
   });
 
@@ -178,14 +189,17 @@ describe('the notifier', () => {
     await n.subscribe(subscription('https://push.example.net/push/alive'));
     await n.subscribe(subscription('https://push.example.net/push/gone'));
     expect(n.channelsView().pushDevices).toBe(2);
+    fakeClock();
     n.notify('ceoMessage', 'Morgan', 'Floor 2 is done.');
-    await settle();
+    await pastGrace();
     expect(posts.map((p) => [p.channel, p.url])).toEqual([
       ['push', 'https://push.example.net/push/alive'],
       ['push', 'https://push.example.net/push/gone'],
     ]);
     expect(posts[0].headers).toMatchObject({ 'Content-Encoding': 'aes128gcm' });
     expect(Buffer.isBuffer(posts[0].body) && posts[0].body.includes(Buffer.from('Floor 2'))).toBe(false); // encrypted
+    vi.useRealTimers();
+    await settle(); // forgetting it writes push.json
     expect(n.channelsView().pushDevices).toBe(1);
     // Kept on disk across a restart, with the same keys.
     const again = notifier(dir, () => 201).n;
@@ -240,16 +254,18 @@ describe('push devices', () => {
       ['Laptop', null],
     ]);
 
-    vi.useFakeTimers({ now: 5_000 });
+    fakeClock(5_000);
     n.notify('ceoMessage', 'Morgan', 'Floor 2 is done.');
-    await vi.advanceTimersByTimeAsync(30);
+    await pastGrace();
+    const at = 5_000 + GRACE_MS;
     const view = n.channelsView();
-    expect(view.desktop).toEqual({ at: 5_000, ok: true, error: '' });
-    expect(view.webhooks.ntfy.last).toEqual({ at: 5_000, ok: true, error: '' });
+    expect(view.desktop).toEqual({ at, ok: true, error: '' });
+    expect(view.webhooks.ntfy.last).toEqual({ at, ok: true, error: '' });
     expect(view.devices.map((d) => d.last)).toEqual([
-      { at: 5_000, ok: true, error: '' },
-      { at: 5_000, ok: false, error: 'Push answered HTTP 500' },
+      { at, ok: true, error: '' },
+      { at, ok: false, error: 'Push answered HTTP 500' },
     ]);
+    vi.useRealTimers();
     expect(JSON.stringify(view)).not.toContain('SECRET');
 
     await n.renameDevice(id, 'Phone');
@@ -319,8 +335,9 @@ describe('the notification centre (#107)', () => {
     const sent: { type: string; [k: string]: unknown }[] = [];
     swarm.addClient({ OPEN: 1, readyState: 1, send: (m: string) => sent.push(JSON.parse(m)), on: () => undefined } as unknown as WebSocket);
     const notice = (swarm as unknown as { notice: (i: object, p?: object) => void }).notice.bind(swarm);
+    fakeClock();
     notice({ kind: 'needsYou', title: 'PR #4 needs you', text: 'pixel-todo', target: { kind: 'qa', repoId: 'r', number: 4 }, actions: ['openQa'] }, { event: 'needsHuman' });
-    await settle();
+    await pastGrace();
     const [n] = swarm.snapshot().notices;
     expect(n).toMatchObject({ kind: 'needsYou', level: 'info', title: 'PR #4 needs you', read: false, actions: ['openQa'] });
     expect(sent.find((e) => e.type === 'toast')).toMatchObject({ id: n.id, kind: 'needsYou', title: 'PR #4 needs you', target: { kind: 'qa', number: 4 } });
@@ -331,5 +348,90 @@ describe('the notification centre (#107)', () => {
     swarm.readNotices(undefined); // nothing left unread: no event
     expect(sent.filter((e) => e.type === 'noticesRead')).toHaveLength(1);
     expect(() => swarm.readNotices('all')).toThrow(/list of notice ids/);
+  });
+});
+
+describe('quiet while in the app (#210)', () => {
+  /** A notifier with push devices, ntfy and a linked Telegram, and the open tabs' attention it reads. */
+  async function office(quietInApp = true) {
+    fakeClock();
+    const tabs: { visible: boolean; at: number }[] = [];
+    const tg: string[] = [];
+    const posts: NotifyRequest[] = [];
+    const notes: NoteView[] = [];
+    const quiet: string[] = [];
+    const cleared: string[][] = [];
+    const dir = tmpDir();
+    const telegram = { linked: () => true, mirrors: () => false, send: async (text: string) => (tg.push(text), null), view: () => ({ set: true, bot: 'b', linked: true, chat: 'Ana', linking: false, on: true, polling: 'off' as const, error: '', okAt: null, advice: '', last: null }) };
+    const settings = notifySettings(DEFAULT_NOTIFY, { quietInApp });
+    const n = new Notifier({ transport: { post: async (req) => (posts.push(req), 201) }, secretsFile: path.join(dir, 'secrets.json'), pushFile: path.join(dir, 'push.json'), settings: () => settings, broadcast: (x) => notes.push(x), channelsChanged: () => undefined, log: () => undefined, telegram, attention: () => tabs, quiet: (ids) => quiet.push(...ids), cleared: (e) => cleared.push(e) });
+    await n.setWebhook('ntfy', SECRETS.ntfy);
+    await n.pushKey();
+    await n.subscribe(subscription('https://push.example.net/push/phone'));
+    await n.subscribe(subscription('https://push.example.net/push/laptop'));
+    return { n, tabs, tg, posts, notes, quiet, cleared };
+  }
+
+  it('sends to no device, ntfy or Telegram while the manager uses the app on one device, and counts it', async () => {
+    const o = await office();
+    o.tabs.push({ visible: false, at: Date.now() }, { visible: true, at: Date.now() });
+    o.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.', undefined, undefined, 'n1');
+    await pastGrace();
+    expect([o.posts, o.tg, o.notes]).toEqual([[], [], []]);
+    expect(o.quiet).toEqual(['n1']);
+    expect(o.n.channelsView().today).toEqual({ sent: 0, skipped: 1 });
+  });
+
+  it('sends once after the grace when the app is only open out of sight, and as usual with the switch off', async () => {
+    const o = await office();
+    o.tabs.push({ visible: false, at: Date.now() });
+    o.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.');
+    await pastGrace();
+    expect(o.posts.map((p) => p.channel)).toEqual(['ntfy', 'push', 'push']);
+    expect(o.tg).toHaveLength(1);
+    expect(o.n.channelsView().today).toEqual({ sent: 1, skipped: 0 });
+    vi.useRealTimers();
+    const loud = await office(false);
+    loud.tabs.push({ visible: true, at: Date.now() });
+    loud.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.');
+    await pastGrace();
+    expect(loud.posts).toHaveLength(3);
+  });
+
+  it('cancels a message read within the grace, and clears one already sent on every device', async () => {
+    const o = await office();
+    o.n.notify('ceoMessage', 'Mimoun', 'First');
+    await vi.advanceTimersByTimeAsync(5_000);
+    o.n.readTab('chat');
+    await pastGrace();
+    expect(o.posts).toEqual([]);
+    o.n.notify('ceoMessage', 'Mimoun', 'Second');
+    await pastGrace();
+    expect(o.posts).toHaveLength(3);
+    o.posts.length = 0;
+    o.n.readTab('chat');
+    await vi.advanceTimersByTimeAsync(30);
+    // a silent "clear" push to each device (the service worker closes the thread's notification), and the open tabs
+    expect(o.posts.map((p) => [p.channel, p.url, p.text])).toEqual([
+      ['push', 'https://push.example.net/push/phone', 'clear ceoMessage'],
+      ['push', 'https://push.example.net/push/laptop', 'clear ceoMessage'],
+    ]);
+    expect(o.cleared).toEqual([['ceoMessage']]);
+  });
+
+  it("follows the open tabs' attention and the chat being read through the office", async () => {
+    const swarm = new Swarm(createDemoBackend());
+    const handlers: Record<string, (raw: unknown) => void> = {};
+    const sent: { type: string; message?: { id: number; quiet?: boolean } }[] = [];
+    swarm.addClient({ OPEN: 1, readyState: 1, send: (m: string) => sent.push(JSON.parse(m)), on: (ev: string, fn: (raw: unknown) => void) => (handlers[ev] = fn) } as unknown as WebSocket);
+    (swarm as unknown as { ensureCeo: (x: unknown[]) => void }).ensureCeo([]);
+    const post = (swarm as unknown as { postMessage: (from: string, text: string) => { id: number } }).postMessage.bind(swarm);
+    const readTab = vi.spyOn(swarm.notifier, 'readTab');
+    handlers.message(JSON.stringify({ type: 'attention', visible: true }));
+    const m = post('ceo', 'Floor 2 is done.');
+    await settle();
+    expect(sent.find((e) => e.type === 'ceoChat' && e.message?.id === m.id)?.message).toMatchObject({ quiet: true });
+    swarm.markPhoneRead(Date.now());
+    expect(readTab).toHaveBeenCalledWith('chat');
   });
 });

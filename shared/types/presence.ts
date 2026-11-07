@@ -38,7 +38,10 @@ export type EmoteId = 'wave' | 'thumbs' | 'clap' | 'point' | 'laugh';
  * Browser to server on /ws. resync: send a fresh snapshot (a tab back from the time-lapse replay); lines: which
  * agents' terminal lines this tab shows (shared/watch.ts). The rest: presence.
  */
-export type ClientEvent = { type: 'resync' } | ({ type: 'lines' } & Watch) | PresenceEvent;
+export type ClientEvent = { type: 'resync' } | ({ type: 'lines' } & Watch) | PresenceEvent | AttentionEvent;
+
+/** A tab telling the office whether the manager is using it (#210): on screen or not, sent on change and on input. */
+export type AttentionEvent = { type: 'attention'; visible: boolean };
 
 /**
  * A tab's presence (shared/presence.ts). hello: your name and colour · pose: you're in the office and appear to others ·

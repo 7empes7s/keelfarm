@@ -112,10 +112,15 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Reading the thread marks it read.
+  // Reading the thread marks it read, on screen only: that also clears its notifications on every device (#210).
   useEffect(() => {
-    const last = [...messages].reverse().find((m) => m.from === 'ceo');
-    if (last && last.at > readAt) void attempt(() => api.phoneRead(last.at));
+    const read = () => {
+      const last = [...messages].reverse().find((m) => m.from === 'ceo');
+      if (last && last.at > readAt && document.visibilityState === 'visible') void attempt(() => api.phoneRead(last.at));
+    };
+    read();
+    document.addEventListener('visibilitychange', read);
+    return () => document.removeEventListener('visibilitychange', read);
   }, [messages, readAt]);
   // Opening the chat shows the unread divider (or the end); after that it follows new messages only from the end.
   useLayoutEffect(() => {

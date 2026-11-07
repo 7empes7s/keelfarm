@@ -1,17 +1,18 @@
-// Notifications, the sending part (docs/pocket.md): the rate-limited fan-out of a note to this office's open tabs
-// (desktop notifications), Web Push to the manager's devices, the chat apps' webhooks and the manager's Telegram bot
-// (telegramBot.ts). Webhook URLs and tokens live
-// in the secrets file next to the ElevenLabs key; the VAPID keys and push subscriptions in <SWARM_HOME>/push.json.
+// Notifications, the sending part (docs/pocket.md): the fan-out of a note to this office's open tabs (desktop
+// notifications), Web Push to the manager's devices, the chat apps' webhooks and the manager's Telegram bot
+// (telegramBot.ts), one per thread and none while the manager is in the app (#210, rules in notify.ts). Webhook URLs
+// and tokens live in the secrets file next to the ElevenLabs key; the VAPID keys and push subscriptions in <SWARM_HOME>/push.json.
 // None of it is ever logged or sent to a browser, except the VAPID public key a browser subscribes with.
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { NOTIFY_WEBHOOKS, noteTab } from '../shared/notify.ts';
+import { NOTIFY_EVENTS, NOTIFY_WEBHOOKS, noteTab } from '../shared/notify.ts';
 import { NTFY_SERVER, ntfyTopic } from '../shared/ntfy.ts';
 import type { NoteView, NotifyChannel, NotifyChannelsView, NotifyEvent, NotifyHealth, NotifySettings, NotifyWebhook, PushTestView, TelegramView } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import {
   due,
+  inApp,
   nextDue,
   clip,
   note,
@@ -19,14 +20,18 @@ import {
   noteText,
   ntfyPayload,
   ntfyTarget,
-  offer,
   parseWebhook,
+  queue,
+  read,
+  readNotes,
   redact,
   secretValues,
   webhookHint,
-  type Gates,
   type Note,
+  type Step,
+  type TabAttention,
   type TeamChange,
+  type Threads,
   type WebhookSecrets,
 } from './notify.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
@@ -72,6 +77,12 @@ export interface NotifierDeps {
   log(line: string): void;
   /** The manager's Telegram bot, when the office has one. */
   telegram?: TelegramChannel;
+  /** The open tabs' attention (#210): while one is in use, nothing goes out. */
+  attention?(): Iterable<TabAttention>;
+  /** Notes not sent because the manager was in the app, by their notice ids. */
+  quiet?(ids: string[]): void;
+  /** Notifications read or seen on some device, to close in the open tabs (their tags' events). */
+  cleared?(events: string[]): void;
   now?(): number;
 }
 
@@ -131,7 +142,9 @@ export function sendError(channel: NotifyChannel, status: number): string {
 export class Notifier {
   private webhooks: WebhookSecrets = {};
   private push: PushStore = { vapid: null, devices: [] };
-  private gates: Gates = {};
+  private threads: Threads = {};
+  /** Today's notes, sent and not sent as the manager was in the app (#210). */
+  private today = { day: '', sent: 0, skipped: 0 };
   private timer: NodeJS.Timeout | null = null;
   private seq = 0;
   private pushWrites: Promise<unknown> = Promise.resolve();
@@ -175,25 +188,69 @@ export class Notifier {
       const id = deviceId(d.endpoint);
       return { id, name: d.name, addedAt: d.addedAt, last: last(`push:${id}`) };
     });
-    return { webhooks, pushDevices: devices.length, devices, desktop: last('desktop'), telegram: this.deps.telegram?.view() ?? NO_TELEGRAM };
+    const { sent, skipped } = this.counts();
+    return { webhooks, pushDevices: devices.length, devices, desktop: last('desktop'), telegram: this.deps.telegram?.view() ?? NO_TELEGRAM, today: { sent, skipped } };
   }
 
-  /** Something happened: tell the manager on every channel that's on, unless the event is off or had its minute. */
+  /** Something happened: tell the manager on every channel that's on, after a short wait, unless the event is off or they're in the app. */
   notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[], id?: string) {
     if (!this.deps.settings().events[event]) return;
-    const r = offer(this.gates, note(event, title, body, line, changes, id), this.now());
-    this.gates = r.gates;
-    if (r.send) void this.deliver(r.send);
+    this.step(queue(this.threads, note(event, title, body, line, changes, id), this.now(), this.present()));
+  }
+
+  /** Sends the threads whose wait is up. The timer calls it. */
+  flush() {
+    this.step(due(this.threads, this.now(), this.present()));
+  }
+
+  /** The manager read a pocket tab (the chat) on some device: its threads are read on every device. */
+  readTab(tab: string) {
+    this.step(read(this.threads, NOTIFY_EVENTS.flatMap((e) => (noteTab(e.id) === tab ? [e.id] : []))));
+  }
+
+  /** Notices read in the notification centre (#107): their threads, once all read, are read on every device. */
+  readNotices(ids: readonly string[]) {
+    this.step(readNotes(this.threads, ids));
+  }
+
+  /** Whether the manager is using the app on some device right now (and wants quiet then). */
+  private present(): boolean {
+    return this.deps.settings().quietInApp !== false && inApp(this.deps.attention?.() ?? [], this.now());
+  }
+
+  private step(r: Step) {
+    this.threads = r.threads;
+    const events = this.deps.settings().events;
+    for (const n of r.send) if (n.event === 'test' || events[n.event]) void this.deliver(n);
+    if (r.send.length || r.skipped.length) {
+      const c = this.counts();
+      c.sent += r.sent;
+      c.skipped += r.skipped.length;
+    }
+    if (r.skipped.length) this.deps.log(redact(`notify: not sent, the manager is in the app: ${r.skipped.map((n) => n.title).join(', ')}`, this.secrets()));
+    const ids = r.skipped.flatMap((n) => (n.id ? [n.id] : []));
+    if (ids.length) this.deps.quiet?.(ids);
+    if (r.clear.length) void this.clear(r.clear);
+    if (r.skipped.length && !r.send.length) this.changed();
     this.arm();
   }
 
-  /** Sends the summaries whose minute is up. The timer calls it. */
-  flush() {
-    const r = due(this.gates, this.now());
-    this.gates = r.gates;
-    const events = this.deps.settings().events;
-    for (const n of r.send) if (n.event === 'test' || events[n.event]) void this.deliver(n);
-    this.arm();
+  /** Today's counters, started over on a new day. */
+  private counts() {
+    const day = new Date(this.now()).toDateString();
+    if (this.today.day !== day) this.today = { day, sent: 0, skipped: 0 };
+    return this.today;
+  }
+
+  /** Read or seen: closes the threads' notifications on every device (a silent push) and in the open tabs. */
+  private async clear(events: string[]) {
+    this.deps.cleared?.(events);
+    if (!this.deps.settings().channels.push || !this.push.vapid) return;
+    const sends = events.flatMap((e) => {
+      const payload = JSON.stringify({ type: 'clear', tag: `cubefarm-${e}` });
+      return this.push.devices.map((d) => this.sendPush(d, payload, `clear ${e}`));
+    });
+    await Promise.all(sends);
   }
 
   /** POST /api/notify/test: a test note on one channel, whatever the toggles say. Throws what went wrong. */
@@ -311,9 +368,11 @@ export class Notifier {
 
   // ---------- sending ----------
 
+  /** Wakes for the next thread due (a new thread's grace can end before an older one's gap). */
   private arm() {
-    if (this.timer) return;
-    const at = nextDue(this.gates);
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    const at = nextDue(this.threads);
     if (at === null) return;
     this.timer = setTimeout(
       () => {
@@ -342,7 +401,8 @@ export class Notifier {
     const repeats = (n.event === 'ceoMessage' || n.event === 'hire') && !only && tg?.mirrors();
     if (on('telegram') && tg?.linked() && !repeats) sends.push(tg.send(telegramNote(n, link), n.changes ? teamKeyboard(n.changes) : undefined));
     if (on('push') && this.push.vapid) {
-      const payload = JSON.stringify({ title: view.title, body: view.body, tag: `cubefarm-${view.id}`, url: view.url });
+      // One tag per thread (#210): a newer notification replaces the last instead of piling up.
+      const payload = JSON.stringify({ title: view.title, body: view.body, tag: `cubefarm-${n.event}`, url: view.url });
       for (const d of [...this.push.devices]) sends.push(this.sendPush(d, payload, noteText(n)));
     }
     const out = await Promise.all(sends);

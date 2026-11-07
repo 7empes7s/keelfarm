@@ -20,7 +20,7 @@ import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
 import { applyChat, EMPTY_CHAT } from './ceoChat';
 import type { FileView } from '../../shared/files';
 import type { Decision } from '../../shared/decisions';
-import { showDesktopNote } from './notifications';
+import { clearDesktopNotes, showDesktopNote } from './notifications';
 import { EMPTY_OPS, newAlarms } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import { qaCardNote, type CardTone } from './qaCard';
@@ -328,6 +328,7 @@ export const useStore = create<State>((set, get) => ({
     devices: [],
     desktop: null,
     telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null },
+    today: { sent: 0, skipped: 0 },
   },
   cloud: EMPTY_CLOUD,
   tooling: EMPTY_INVENTORY,
@@ -600,6 +601,9 @@ export const useStore = create<State>((set, get) => ({
       }
       case 'noticesRead':
         set({ notices: markRead(get().notices, ev.ids) });
+        break;
+      case 'notifyClear':
+        clearDesktopNotes(ev.events);
         break;
       case 'officeUpdate':
         set({ officeUpdate: ev.officeUpdate });
