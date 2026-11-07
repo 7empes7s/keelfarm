@@ -810,8 +810,8 @@ export async function releaseDesk(fullName: string, agentSlug: string, port: num
 }
 
 /** releaseDesk's work: what listens on one of `ports` or (Linux, #227) from inside `dirs`, with its process group, or
- * whose command line points into one of `dirs`. Returns the ports still held afterwards. */
-export async function releaseDirs(dirs: string[], ports: number[], keep: OfficeProcesses): Promise<number[]> {
+ * whose command line points into one of `dirs`. Returns `ports`, and `block` ports held from `dirs`, still taken after. */
+export async function releaseDirs(dirs: string[], ports: number[], keep: OfficeProcesses, block: number[] = []): Promise<number[]> {
   const spare = [process.pid, ...keep.pids];
   if (process.platform === 'win32') {
     const psList = (paths: string[]) => paths.flatMap(pathForms).map((d) => `'${d.toLowerCase().replaceAll("'", "''")}'`).join(', ');
@@ -855,7 +855,7 @@ Write-Output $kill.Count`;
   const listening = [...held].filter(([, ps]) => ps.some((p) => ports.includes(p))).map(([pid]) => pid);
   const pids = new Set([...listening, ...dirs.flatMap((d) => leftoversInDesk(listing, d, keep)), ...plan.pids]);
   kill({ groups: plan.groups, pids: [...pids].filter((pid) => pid && !spare.includes(pid)) });
-  return stillHeld(ports, spare);
+  return stillHeld(ports, spare, block, dirs);
 }
 
 // ---------- agents' machines ----------
@@ -901,12 +901,12 @@ export function trimMachineDesk(machine: string, fullName: string, stillIdle: ()
 }
 
 /**
- * Stop what an agent left running on its machine: on its ports (its reserved one and its demo office's preview block),
- * or started in its worktree; returns the ports still held after. Not what's in its temp folder: that's where the
- * browser of a CLI still waiting at its prompt keeps its profile.
+ * Stop what an agent left running on its machine: on its reserved port, or started in its worktree (so its demo office's
+ * preview block, shared with teammates, only from there); returns its ports still held after. Not its temp folder: the
+ * browser of a CLI still waiting at its prompt keeps its profile there.
  */
 export function releaseMachine(machine: string, fullName: string, port: number, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<number[]> {
-  return releaseDirs([machineDesk(machine, fullName)], agentPorts(port), keep);
+  return releaseDirs([machineDesk(machine, fullName)], [port], keep, agentPorts(port).slice(1));
 }
 
 /** Finished swarm/issue-* and qa/pr-* branches in a machine's clone that its worktree doesn't have out and `keep` doesn't name. */

@@ -6,8 +6,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { agentPreviewBase, LAB_PREVIEW_PORT } from './portLanes.ts';
 import { createLabRunner } from './testLabRunner.ts';
-import { killPlan, orphans, parseListeners, parseProcs, protectedPids, sessionLeftovers, sweepOrphans, type Proc } from './procSweep.ts';
-import { MACHINES_DIR, releaseDirs } from './workspace.ts';
+import { heldPorts, killPlan, orphans, parseListeners, parseProcs, protectedPids, sessionLeftovers, sweepOrphans, type Proc } from './procSweep.ts';
+import { MACHINES_DIR, machineDesk, releaseDirs, releaseMachine } from './workspace.ts';
 
 // #227: nothing an agent starts outlives its session.
 
@@ -58,6 +58,18 @@ describe('orphans', () => {
     ];
     expect(orphans(procs, machines, ['m2'], ['/lab/desks/testlab'], [100]).map((p) => p.pid)).toEqual([103, 108]);
     expect(protectedPids(procs, [100])).toEqual(new Set([100, 101, 102]));
+  });
+});
+
+describe('heldPorts', () => {
+  it("counts the reserved port whoever holds it, and a preview-block port only when it's held from the worktree", () => {
+    const procs = [
+      proc(1, work('m1'), { ports: [16301] }), // the agent's own demo office, still up
+      proc(2, '/usr/bin', { ports: [16302] }), // a system service in the shared block (the tunnel)
+      proc(3, work('m2'), { ports: [16303] }), // a teammate's demo office sharing the block
+      proc(4, '/elsewhere', { ports: [5300] }), // on the reserved port
+    ];
+    expect(heldPorts(procs, [5300], [16301, 16302, 16303], [work('m1')], [])).toEqual([5300, 16301]);
   });
 });
 
@@ -173,5 +185,25 @@ describe.runIf(process.platform === 'linux')('a session that leaves a server run
     expect(alive(leftover)).toBe(false);
     expect(await listening(port)).toBe(false);
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("leaves alone what listens on the agent's preview block from outside their worktree (a tunnel, a teammate)", async () => {
+    // A reserved port nothing listens on, so the by-port kill touches nobody's process.
+    let agentPort = 5200 + Math.floor(Math.random() * 700);
+    while (await listening(agentPort)) agentPort = 5200 + ((agentPort - 5200 + 1) % 700);
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-'));
+    const port = await freePort(agentPreviewBase(agentPort) + 150);
+    const pids = path.join(elsewhere, 'pids.json');
+    await fakeSession(elsewhere, port, pids);
+    const [server, helper] = await started(pids);
+    left.push(server, helper);
+    fs.mkdirSync(machineDesk('feed0002', 'acme/keel'), { recursive: true });
+
+    const busy = await releaseMachine('feed0002', 'acme/keel', agentPort);
+    expect(busy).toEqual([]); // not the agent's: no "still in use" warning either
+    expect(alive(server)).toBe(true);
+    expect(await listening(port)).toBe(true);
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+    fs.rmSync(path.join(MACHINES_DIR, 'feed0002'), { recursive: true, force: true });
   });
 });

@@ -134,15 +134,27 @@ export async function listeners(): Promise<Map<number, number[]>> {
   return parseListeners(await run('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fpn']).catch(() => ''));
 }
 
-/** The port-free check after a clean-up: which of `ports` something other than `spare` still listens on (a killed process's socket can take a moment). */
-export async function stillHeld(ports: readonly number[], spare: readonly number[]): Promise<number[]> {
+/**
+ * Which ports are still taken after a clean-up: `ports` (the agent's reserved one) by anything but `spare`, and `block`
+ * (their preview block, which teammates and system services may share) only by a process in `dirs`.
+ */
+export function heldPorts(procs: readonly Proc[], ports: readonly number[], block: readonly number[], dirs: readonly string[], spare: readonly number[]): number[] {
+  const busy = procs
+    .filter((p) => !spare.includes(p.pid))
+    .flatMap((p) => p.ports.filter((x) => ports.includes(x) || (block.includes(x) && !!p.cwd && dirs.some((d) => inside(d, p.cwd!)))));
+  return [...new Set(busy)].sort((a, b) => a - b);
+}
+
+/** The port-free check (heldPorts), retried a moment: a killed process's socket can take a while to close. */
+export async function stillHeld(ports: readonly number[], spare: readonly number[], block: readonly number[] = [], dirs: readonly string[] = []): Promise<number[]> {
   let busy: number[] = [];
   for (let i = 0; i < 10; i++) {
-    busy = [...(await listeners())].filter(([pid]) => !spare.includes(pid)).flatMap(([, ps]) => ps.filter((p) => ports.includes(p)));
+    const procs = process.platform === 'linux' ? await readProcs() : [...(await listeners())].map(([pid, ps]) => ({ pid, ppid: 0, pgid: pid, cwd: null, ports: ps }));
+    busy = heldPorts(procs, ports, block, dirs, spare);
     if (!busy.length) break;
     await new Promise((r) => setTimeout(r, 200));
   }
-  return [...new Set(busy)].sort((a, b) => a - b);
+  return busy;
 }
 
 /**
