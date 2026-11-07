@@ -63,3 +63,23 @@ test('the 500-message chat opens fast, types smoothly and loads older pages with
   expect(await page.evaluate(() => document.scrollingElement!.scrollWidth <= window.innerWidth)).toBe(true);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 });
+
+test('the ⋯ menu hides a CEO message and deletes one of mine, each with Undo', async ({ page }) => {
+  await page.goto('/?pocket=1&tab=chat');
+  const log = page.locator('.chat-log');
+  const menu = page.locator('.chat-menu');
+  for (const [row, label, notice] of [
+    [log.locator('.bubble-row:not(.bubble-row-me)').last(), 'Hide', 'Message hidden'],
+    [log.locator('.bubble-row-me').last(), 'Delete', 'Message deleted'],
+  ] as const) {
+    const id = await row.getAttribute('data-msg');
+    await row.getByRole('button', { name: 'Message actions' }).focus();
+    await page.keyboard.press('Enter');
+    await menu.getByRole('button', { name: label }).click();
+    await expect(log.locator(`[data-msg="${id}"]`)).toHaveCount(0);
+    await expect(page.locator('.chat-undo')).toContainText(notice);
+    await page.locator('.chat-undo').getByRole('button', { name: 'Undo' }).click();
+    await expect(page.locator('.chat-undo')).toHaveCount(0);
+    await expect(log.locator(`[data-msg="${id}"]`)).toHaveCount(1);
+  }
+});

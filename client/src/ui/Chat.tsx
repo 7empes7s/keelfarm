@@ -252,6 +252,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
       ...(hasVersionsSheet(m) ? [{ label: `Versions (${(m.versions?.length ?? 0) + 1})`, icon: 'clock' as const, run: () => setVersions(m) }] : []),
       ...(m.id === last('ceo') ? [{ label: 'Retry', icon: 'refresh-cw' as const, run: () => void attempt(api.ceoRetry) }] : []),
       { label: 'Remember this', icon: 'pin' as const, run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)) },
+      removals.action(m),
     ];
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
