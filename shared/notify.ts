@@ -12,14 +12,15 @@ export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
   { id: 'usage', label: "Claude's usage limit pauses or paces the office" },
   { id: 'memory', label: 'Work waits for memory, or a session was stopped for it' },
   { id: 'merge', label: 'Every merge' },
+  { id: 'decisions', label: 'A daily digest of decisions waiting on me' },
 ];
 
 export const NOTIFY_WEBHOOKS: NotifyWebhook[] = ['ntfy'];
 export const NOTIFY_CHANNELS: NotifyChannel[] = ['desktop', 'push', ...NOTIFY_WEBHOOKS, 'telegram'];
 
-/** Merges are optional: on a busy office they're the noisiest event. */
+/** Merges are optional: on a busy office they're the noisiest event. The decisions digest is opt-in (#114). */
 export const DEFAULT_NOTIFY: NotifySettings = {
-  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, merge: false },
+  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, merge: false, decisions: false },
   channels: { desktop: true, push: true, ntfy: true, telegram: true },
   officeUrl: '',
   telegramMirror: false,
@@ -61,7 +62,7 @@ export function notifySettings(base: NotifySettings, patch: unknown): NotifySett
 
 /** The pocket tab a notification about `event` opens. */
 export function noteTab(event: NotifyEvent | 'test'): string {
-  if (event === 'needsHuman' || event === 'hire') return 'approvals';
+  if (event === 'needsHuman' || event === 'hire' || event === 'decisions') return 'approvals';
   if (event === 'ceoMessage' || event === 'question') return 'chat';
   if (event === 'agentError') return 'team';
   return 'company';
