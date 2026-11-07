@@ -34,7 +34,7 @@ import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { useChatMode } from '../ui/chatMode';
-import { useChatFull, useChatFullBack } from '../ui/chatFull';
+import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
 import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
@@ -456,10 +456,18 @@ export default function Pocket() {
   const reopen = (p: PanelEntry) => (p.slot === 'main' ? setSettings(p.value as ConsoleSection) : useStore.getState().openOverlay(p.value as Overlay));
   // The rail and links to a page bring the page to the front: the console closes, and a pane covering the page too.
   const show = (t: PocketTab) => {
+    if (full) leaveFullFor(wide);
     setTab(t);
     setSettings(null);
     const p = paneHost.current;
     if (useStore.getState().overlay && inPane(useStore.getState().overlay) && (!wide || (p && getComputedStyle(p).position === 'absolute'))) useStore.getState().openOverlay(null);
+  };
+  // The rail's Console toggles it; from the full chat it shows it (#242).
+  const railConsole = () => {
+    if (full) leaveFullFor(wide);
+    if (!settings) setSettings('menu');
+    else if (top?.slot === 'main' && !full) setSettings(null);
+    else panels.focus('console');
   };
   const go = (t: PocketTab, repo?: string) => {
     if (repo) setRepoId(repo);
@@ -648,7 +656,7 @@ export default function Pocket() {
             );
           })}
           {wide && (
-            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => (!settings ? setSettings('menu') : top?.slot === 'main' ? setSettings(null) : panels.focus('console'))} title="Settings and notifications">
+            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={railConsole} title="Settings and notifications">
               <span className="pk-tab-icon">
                 <Icon name="settings" />
               </span>
