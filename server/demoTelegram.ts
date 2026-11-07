@@ -37,6 +37,9 @@ export function demoTelegram(): TelegramApi {
           console.log(`✈️ demo Telegram would send: ${String(params.text).replace(/\n/g, ' ⏎ ')}${labels ? ` ${labels}` : ''}`);
           return { message_id: ++nextMessage };
         }
+        case 'editMessageText':
+          console.log(`✈️ demo Telegram would edit message ${String(params.message_id)}: ${String(params.text).replace(/\n/g, ' ⏎ ')}`);
+          return true;
         case 'answerCallbackQuery':
           console.log(`✈️ demo Telegram would answer the button: ${String(params.text)}`);
           return true;
