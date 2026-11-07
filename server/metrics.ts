@@ -1,4 +1,5 @@
 import { prStage } from '../shared/ops.ts';
+import { excludedCause, isRoundCause, type RoundCause } from '../shared/rounds.ts';
 import type { AgentRole, AgentStatus, OpsAlarm, OpsFloor, OpsNumbers, OpsView, PullInfo, QaView } from '../shared/types.ts';
 
 // Mission control's numbers (#216): pure functions over the office's state now, plus a compact rolling history of
@@ -17,10 +18,10 @@ const MAX_ENTRIES = 4000; // per list, however busy the week was
 export type MergeEntry = [at: number, repo: string, pr: number, leadMs: number | null];
 /**
  * A QA verdict: when, the repo, whether it passed, how long the PR waited for an agent to test it (null: unknown), and
- * the PR and its 1-based QA round (absent on entries from before they were recorded). lab: 1 when the round was a lab
- * error (#189): the lab failed, not the code, so it counts in none of the QA rates, only as a lab error.
+ * the PR and its 1-based QA round (absent on entries from before they were recorded), and a fail's cause (#188). A
+ * lab-error round (#189) is the lab's fail, not the code's: it counts in none of the QA rates, only as a lab error.
  */
-export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null, pr?: number, round?: number, lab?: 1];
+export type QaEntry = [at: number, repo: string, pass: boolean, waitMs: number | null, pr?: number, round?: number, cause?: RoundCause];
 /** GitHub's check runs on a commit, all finished: when, the repo, the commit (8 characters), passed, how long they took. */
 export type CheckEntry = [at: number, repo: string, sha: string, pass: boolean, ms: number];
 /** A finished session's reported cost: when, the repo ('' for the CEO), dollars. */
@@ -60,7 +61,8 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
     merges: list(r.merges).filter((e) => isNum(e[2]) && orNull(e[3])) as MergeEntry[],
     qa: list(r.qa)
       .filter((e) => typeof e[2] === 'boolean' && orNull(e[3]))
-      .map((e) => (isNum(e[4]) && isNum(e[5]) ? (e[6] === 1 ? e.slice(0, 7) : e.slice(0, 6)) : e.slice(0, 4))) as QaEntry[],
+      .map((e) => (e[6] === 1 ? [...e.slice(0, 6), 'lab-error'] : e)) // #189 wrote a lab error as 1
+      .map((e) => (isNum(e[4]) && isNum(e[5]) ? e.slice(0, isRoundCause(e[6]) ? 7 : 6) : e.slice(0, 4))) as QaEntry[],
     checks: list(r.checks).filter((e) => typeof e[2] === 'string' && typeof e[3] === 'boolean' && isNum(e[4])) as CheckEntry[],
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
   };
@@ -105,9 +107,10 @@ export function recordChecks(h: OpsHistory, repo: string, pulls: Pick<PullInfo, 
   return added;
 }
 
-export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: number | null, now: number, pr: number, round: number, lab = false) {
-  const wait = waitMs === null ? null : Math.max(0, waitMs);
-  h.qa.push(lab ? [now, repo, false, wait, pr, round, 1] : [now, repo, pass, wait, pr, round]);
+export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: number | null, now: number, pr: number, round: number, cause?: RoundCause) {
+  const entry: QaEntry = [now, repo, pass, waitMs === null ? null : Math.max(0, waitMs), pr, round];
+  if (cause) entry.push(cause);
+  h.qa.push(entry);
   prune(h, now);
 }
 
@@ -150,11 +153,14 @@ export function hourlyCounts(times: number[], now: number, hours = 24): number[]
 
 const share = (hits: number, n: number) => (n ? hits / n : null);
 
-/** The average number of QA verdicts per PR merged in the history, over merges QA tested with their PR recorded (lab errors aren't verdicts). */
+/**
+ * The average number of QA verdicts per PR merged in the history, over merges QA tested with their PR recorded. Rounds
+ * failed by an outage or the lab aren't the PR's (#188) and are left out.
+ */
 export function qaRoundsPerMerge(merges: MergeEntry[], qa: QaEntry[]): number | null {
   const rounds = new Map<string, number>();
   for (const q of qa) {
-    if (q[4] === undefined || q[6]) continue;
+    if (q[4] === undefined || excludedCause(q[6])) continue;
     const key = `${q[1]}#${q[4]}`;
     rounds.set(key, (rounds.get(key) ?? 0) + 1);
   }
@@ -170,7 +176,7 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
   const day = (e: [number, ...unknown[]]) => now - e[0] <= DAY_MS;
   const merges = h.merges.filter((m) => mine(m[1]));
   const tested = h.qa.filter((q) => mine(q[1]));
-  const qa = tested.filter((q) => !q[6]); // verdicts: lab errors are counted on their own
+  const qa = tested.filter((q) => !excludedCause(q[6])); // verdicts: lab errors and outages aren't the PR's
   const checks = h.checks.filter((c) => mine(c[1]));
   return {
     mergedToday: merges.filter((m) => m[0] >= today).length,
@@ -181,7 +187,7 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
     qaPass: share(qa.filter((q) => q[2]).length, qa.length),
     qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1).length),
     qaRoundsPerMerge: qaRoundsPerMerge(merges, qa),
-    qaLabErrors: tested.length - qa.length,
+    qaLabErrors: tested.filter((q) => q[6] === 'lab-error').length,
     ciPass: share(checks.filter((c) => c[3]).length, checks.length),
     ciRuns: checks.length,
     ciMs: median(checks.map((c) => c[4])),

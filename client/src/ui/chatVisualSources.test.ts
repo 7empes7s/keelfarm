@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CostDayRow, CostSplit, CostsView } from '../../../shared/costs';
 import type { OpsNumbers, OpsView } from '../../../shared/ops';
+import { roundsView } from '../../../shared/rounds';
 import { parseVisual, type ChatVisual, type VisualChart, type VisualDashboard, type VisualTable } from '../../../shared/chatVisuals';
 import { costDays, resolveVisual, type SourceData } from './chatVisualSources';
 
@@ -21,6 +22,7 @@ const costs: CostsView = {
   waste: [{ at: 0, repoId: 'acme/shop', agent: 'a', kind: 'qa', issue: 1, pr: 2, usd: 2, why: 'QA round 3', cause: 'QA past round 2', streak: 1 }],
   kinds: [],
   startup: [],
+  rounds: roundsView([], 0, 0),
 };
 
 const nums = (o: Partial<OpsNumbers> = {}): OpsNumbers => ({
