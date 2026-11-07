@@ -10,6 +10,7 @@ import { AgentSetup } from './AgentSettings';
 import { AgentProfile } from './CareerCard';
 import { copyText } from './clipboard';
 import { canPickWork, taskLine, taskSteps } from './agentWindow';
+import { CloseButton, Icon } from './Icon';
 
 export type DetailsTab = 'now' | 'profile' | 'setup';
 
@@ -52,9 +53,7 @@ export function AgentDetails(p: Props) {
           </button>
         ))}
         <span className="spacer" />
-        <button type="button" className="aw-icon aw-details-x" aria-label="Close the details" onClick={p.onClose}>
-          ✕
-        </button>
+        <CloseButton className="aw-details-x" label="Close the details" onClick={p.onClose} />
       </div>
       <div className="aw-tab-body" role="tabpanel" aria-label={TABS.find(([id]) => id === p.tab)![1]}>
         {p.tab === 'now' && <NowTab {...p} />}
@@ -86,12 +85,12 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
         <div className="aw-chips">
           {issueUrl && !idle && (
             <a className="chip" href={issueUrl} target="_blank" rel="noreferrer">
-              Issue #{agent.issueNumber} ↗
+              Issue #{agent.issueNumber} <Icon name="external-link" />
             </a>
           )}
           {agent.prUrl && !idle && (
             <a className="chip chip-good" href={agent.prUrl} target="_blank" rel="noreferrer">
-              PR #{agent.prNumber} ↗
+              PR #{agent.prNumber} <Icon name="external-link" />
             </a>
           )}
           {qa && !idle && (
@@ -102,7 +101,7 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
           )}
           {qa?.commentUrl && !idle && (
             <a className="chip" href={qa.commentUrl} target="_blank" rel="noreferrer">
-              QA report ↗
+              QA report <Icon name="external-link" />
             </a>
           )}
           {agent.branch && (
@@ -115,7 +114,15 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
           <ol className="aw-steps" aria-label="This task's steps">
             {steps.map((s, i) => (
               <li key={i} className={`aw-step aw-step-${s.state}`} aria-current={s.state === 'now' ? 'step' : undefined}>
-                {s.state === 'done' ? '✓ ' : s.state === 'now' ? '● ' : ''}
+                {s.state === 'done' ? (
+                  <>
+                    <Icon name="check" />{' '}
+                  </>
+                ) : s.state === 'now' ? (
+                  '● '
+                ) : (
+                  ''
+                )}
                 {s.label}
               </li>
             ))}
@@ -153,19 +160,27 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
               })
             }
           >
-            {chosen?.kind === 'qa' ? `🔍 Test PR #${chosen.number}` : '▶ Start issue'}
+            {chosen?.kind === 'qa' ? (
+              <>
+                <Icon name="search" /> Test PR #{chosen.number}
+              </>
+            ) : (
+              <>
+                <Icon name="play" /> Start issue
+              </>
+            )}
           </button>
         </section>
       )}
       <div className="aw-chips" aria-label="How they work">
         <span className="chip" title="Their coding agent">
-          ⌨️ {cli}
+          <Icon name="keyboard" /> {cli}
         </span>
         <span className="chip" title="Their model">
-          🧠 {model}
+          <Icon name="brain" /> {model}
         </span>
         <span className="chip" title="How long the model thinks on each step">
-          ⚡ {effort} effort
+          <Icon name="zap" /> {effort} effort
         </span>
       </div>
       <dl className="aw-facts">

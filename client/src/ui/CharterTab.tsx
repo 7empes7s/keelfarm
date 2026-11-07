@@ -10,6 +10,7 @@ import { Menu } from './Menu';
 import { reduceMotion } from './a11y';
 import { InsightStrip, ObjectiveCard } from './CharterStats';
 import { EmptyState } from './EmptyState';
+import { Icon } from './Icon';
 import './charter.css';
 
 // The manager's console → Charter (#48), also in pocket mode: each floor's charter as a page to read (#105), the
@@ -54,7 +55,7 @@ export function ProposalCard({ repo, proposal, onEdit }: { repo: RepoView; propo
   return (
     <div className="card charter-proposal" role="group" aria-label={`Charter proposal from ${proposal.by}`}>
       <h3>
-        🧠 {proposal.by} proposes a change{onEdit ? '' : ` · floor ${repo.floor}`}
+        <Icon name="brain" /> {proposal.by} proposes a change{onEdit ? '' : ` · floor ${repo.floor}`}
       </h3>
       <p className="small">
         {proposal.reason} <span className="muted">({ago(proposal.at)})</span>
@@ -115,7 +116,7 @@ function Editor({ repo, start, fromProposal, onDone }: { repo: RepoView; start: 
   };
   const remove = async (i: number) => {
     const o = draft.objectives[i];
-    const ok = await confirmDialog({ tone: 'danger', icon: '🗑️', title: `Remove ${o.id}?`, body: `"${o.outcome || 'This objective'}" leaves the charter when you save it. Issues that name ${o.id} keep their tag.`, confirm: `Remove ${o.id}` });
+    const ok = await confirmDialog({ tone: 'danger', icon: 'trash-2', title: `Remove ${o.id}?`, body: `"${o.outcome || 'This objective'}" leaves the charter when you save it. Issues that name ${o.id} keep their tag.`, confirm: `Remove ${o.id}` });
     if (ok) setDraft((d) => ({ ...d, objectives: d.objectives.filter((x) => x !== o) }));
   };
   const save = async () => {
@@ -197,7 +198,7 @@ function Drift({ repo }: { repo: RepoView }) {
   const merged = groups.reduce((n, g) => n + g.prs.length, 0);
   return (
     <div className="card">
-      <h3>🧭 Where the last 7 days went</h3>
+      <h3><Icon name="compass" /> Where the last 7 days went</h3>
       {merged === 0 ? (
         <EmptyState kind="drift" compact target={{ kind: 'ceo', text: `Plan floor ${repo.floor}'s next issues against its charter objectives.` }} />
       ) : (
@@ -230,7 +231,7 @@ function Drift({ repo }: { repo: RepoView }) {
 function History({ repo }: { repo: RepoView }) {
   return (
     <div className="card">
-      <h3>🕓 Changes</h3>
+      <h3><Icon name="clock" /> Changes</h3>
       {repo.charter.history.length === 0 ? (
         <p className="muted small">No changes yet.</p>
       ) : (
@@ -324,7 +325,7 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
   const start = fromProposal ? proposal.charter : charterOf(repo.mission, repo.charter);
   const exportIt = async () => {
     const ok = await confirmDialog({
-      icon: '📄',
+      icon: 'file-text',
       title: 'Export the charter?',
       body: `The office commits docs/CHARTER.md to the cubefarm/charter branch of ${repo.fullName} and opens a pull request for you to merge. QA leaves it alone.`,
       confirm: 'Export',
@@ -360,14 +361,16 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
         <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
           <div className="ds-card-head">
             <div className="ds-row-main">
-              <h3 className="ds-row-title">{fromProposal ? `🎯 ${proposal.by}'s proposal, your edits` : editing ? '🎯 Editing the charter' : '🎯 Charter'}</h3>
+              <h3 className="ds-row-title">
+                <Icon name="target" /> {fromProposal ? `${proposal.by}'s proposal, your edits` : editing ? 'Editing the charter' : 'Charter'}
+              </h3>
             </div>
             {!editing && (
               <button className="btn btn-small" onClick={() => setEditing('charter')}>
-                ✏️ Edit
+                <Icon name="pencil" /> Edit
               </button>
             )}
-            <Menu label="More for the charter" title="Charter" items={[{ label: '📄 Export to docs/CHARTER.md…', hint: 'Opens a pull request for you to merge', onSelect: () => void exportIt() }]} />
+            <Menu label="More for the charter" title="Charter" items={[{ label: 'Export to docs/CHARTER.md…', hint: 'Opens a pull request for you to merge', onSelect: () => void exportIt() }]} />
           </div>
           <p className="muted small">Every build, fix and QA prompt on this floor starts with it, and QA fails a PR that breaks a standard.</p>
           {exported && (

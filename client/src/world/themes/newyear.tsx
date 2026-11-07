@@ -208,7 +208,7 @@ export default function NewYear({ kind, repoId }: ThemeProps) {
   }, [celebrate]);
 
   useEffect(() => {
-    useThemeRuntime.setState({ status: s.phase === 'waiting' ? `🥂 ${s.year} in ${timeToGo(s.seconds)}` : s.phase === 'countdown' ? `🥂 ${countdownNumber(s)}…` : `🎆 Happy New Year ${s.year}!` });
+    useThemeRuntime.setState({ status: s.phase === 'waiting' ? `${s.year} in ${timeToGo(s.seconds)}` : s.phase === 'countdown' ? `${countdownNumber(s)}…` : `Happy New Year ${s.year}!` });
   }, [s]);
   useEffect(() => () => useThemeRuntime.setState({ status: null }), []);
 

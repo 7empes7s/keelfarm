@@ -5,7 +5,7 @@
 // (shared/agentChat.ts) only while the window is open; the newest are drawn first, more on "Show earlier".
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { chatRows, statusReaction, type ChatItem, type ChatRow } from '../../../shared/agentChat';
-import type { Reaction } from '../../../shared/reactions';
+import { STATUS_EMOJI, type AgentStatusReaction, type Reaction } from '../../../shared/reactions';
 import type { AgentView, RepoView } from '../../../shared/types';
 import { api } from '../api';
 import { isBusy, qaKey, useStore } from '../store';
@@ -14,12 +14,13 @@ import { prChip } from './chatMode';
 import { Markdown } from './Markdown';
 import { Reactable, ReactionChips } from './Reactions';
 import './agentChat.css';
+import { Icon } from './Icon';
 
 /** Rows drawn at first, and how many more each "Show earlier" adds. */
 const PAGE = 60;
 
 const NONE: ChatItem[] = [];
-const STATUS_LABEL = { '👀': 'Seen', '⏳': 'Working on it', '✅': 'Answered' } as const;
+const statusWord = (s: AgentStatusReaction) => (s === STATUS_EMOJI.seen ? 'Seen' : s === STATUS_EMOJI.working ? 'Working on it' : 'Answered');
 
 function since(t: number | null) {
   if (!t) return '';
@@ -31,7 +32,7 @@ function StepBody({ step }: { step: ChatItem }) {
   return (
     <div className="ac-step-body">
       <div className={`ac-step-line ${step.error ? 'ac-bad' : ''}`}>
-        {step.error ? '✗' : step.done ? '✓' : '…'} {step.text}
+        {step.error ? <Icon name="x" /> : step.done ? <Icon name="check" /> : '…'} {step.text}
         {step.outcome && <span className="ac-outcome"> · {step.outcome}</span>}
       </div>
       {step.error && <div className="ac-error">{step.error}</div>}
@@ -94,7 +95,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
           <details className={`ac-steps ${r.failed ? 'ac-steps-bad' : ''}`}>
             <summary>
               <span className="ac-step-icon" aria-hidden>
-                {r.failed ? '✗' : r.running ? '◌' : '✓'}
+                {r.failed ? <Icon name="x" /> : r.running ? '◌' : <Icon name="check" />}
               </span>
               <span className="ac-step-label">{r.label}</span>
             </summary>
@@ -111,7 +112,9 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
       return (
         <details key={it.id} className="ac-card ac-prompt">
           <summary>
-            <b>{agent.task === 'fix' ? '🔧 Fix' : agent.task === 'qa' ? '🔍 Test' : '📋 Task'}</b> <span className="ac-prompt-line">{it.text.split('\n').find((l) => l.trim())}</span>
+            <b>
+              <Icon name={agent.task === 'fix' ? 'wrench' : agent.task === 'qa' ? 'search' : 'clipboard-list'} /> {agent.task === 'fix' ? 'Fix' : agent.task === 'qa' ? 'Test' : 'Task'}
+            </b> <span className="ac-prompt-line">{it.text.split('\n').find((l) => l.trim())}</span>
           </summary>
           <pre className="ac-pre">{it.text}</pre>
         </details>
@@ -125,7 +128,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
             {it.who && it.who !== 'Manager' && <div className="ac-who">{it.who}</div>}
             {it.text}
           </div>
-          {statuses && <ReactionChips status={st} statusLabel={`${agent.name}: ${STATUS_LABEL[st]}`} />}
+          {statuses && <ReactionChips status={st} statusLabel={`${agent.name}: ${statusWord(st)}`} />}
         </div>
       );
     }
@@ -133,7 +136,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
       const chip = it.pr ? chipFor(it.pr) : null;
       return (
         <div key={it.id} className="ac-card ac-milestone">
-          <span>{it.milestone === 'pr' ? '🔀' : '⬆️'}</span>
+          <Icon name={it.milestone === 'pr' ? 'git-merge' : 'arrow-up'} />
           {it.url ? (
             <a href={it.url} target="_blank" rel="noopener noreferrer">
               {it.text}
@@ -141,7 +144,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
           ) : (
             <span>{it.text}</span>
           )}
-          {chip && <span className={`ac-chip ac-chip-${chip.tone}`}>{chip.icon} {chip.label}</span>}
+          {chip && <span className={`ac-chip ac-chip-${chip.tone}`}><Icon name={chip.icon} /> {chip.label}</span>}
         </div>
       );
     }
@@ -175,7 +178,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
         {visible.map(row)}
         {verdict?.verdict && (
           <div className={`ac-card ac-milestone ac-verdict ac-verdict-${verdict.tone}`} role="status">
-            <span>{verdict.icon}</span>
+            <Icon name={verdict.icon} />
             <span>
               PR #{prNumber}: {verdict.label}
             </span>
@@ -192,7 +195,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
         {working && (
           <>
             <button type="button" className="btn btn-small" title={`Stop ${agent.name} (asks first)`} onClick={onStop}>
-              ■ Stop
+              <Icon name="square" /> Stop
             </button>
             <button type="button" className="btn btn-small" onClick={() => onSend("What's your status? One or two lines.")}>
               Ask for status

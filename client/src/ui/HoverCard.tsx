@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { createPeek, placePeek, type Box, type PeekController, type PeekMode } from './hoverRules';
 import { pushLayer } from './backStack';
 import './hoverCard.css';
+import { Icon } from './Icon';
 
 // Hover cards (#213): explain or preview a thing in place. A card after 350 ms of hover or keyboard focus, beside its
 // trigger and never over the CEO chat; a small sheet after a long-press on touch, while a tap still does the trigger's
@@ -120,7 +121,7 @@ export function Peek({ peek, label, children }: { peek: ReturnType<typeof usePee
       >
         {sheet && (
           <button type="button" className="peek-x" aria-label="Close" onClick={() => ctl.close()}>
-            ✕
+            <Icon name="x" />
           </button>
         )}
         {children}

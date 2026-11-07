@@ -6,6 +6,7 @@ import type { Where } from './consoleNavRules';
 import { go, openSearch, useFinder } from './goTo';
 import { buildIndex, loadRecent, saveRecent, searchAll, withRecent, type Item } from './searchIndex';
 import { Sheet } from './Sheet';
+import { Icon } from './Icon';
 import { XLabel } from './HoverCard';
 
 const close = () => useFinder.setState({ search: false });
@@ -60,7 +61,7 @@ function Palette({ where }: { where: Where }) {
   };
   let n = -1;
   return (
-    <Sheet title="🔍 Search everything" onClose={close} className="search-sheet" top>
+    <Sheet title={<><Icon name="search" /> Search everything</>} onClose={close} className="search-sheet" top>
       <input
         className="search-input"
         type="search"
@@ -96,8 +97,8 @@ function Palette({ where }: { where: Where }) {
                     onPointerMove={() => setActive(at)}
                     onClick={() => pick(i)}
                   >
-                    <span className="search-icon" aria-hidden>
-                      {i.icon}
+                    <span className="search-icon">
+                      <Icon name={i.icon} />
                     </span>
                     <span className="search-text">
                       <span className="search-label">{i.label}</span>
@@ -127,7 +128,7 @@ export function SearchPalette({ where }: { where: Where }) {
 export function SearchButton({ className }: { className?: string }) {
   return (
     <button data-tour="search" className={`${className ?? 'pill pill-search'} xbtn`} onClick={openSearch} aria-label="Search everything (Ctrl+K)" title="Search everything (Ctrl+K)">
-      🔍
+      <Icon name="search" />
       <XLabel text="Search everything" keys="Ctrl K" />
     </button>
   );

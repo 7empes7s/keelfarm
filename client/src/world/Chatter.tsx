@@ -366,7 +366,7 @@ export function greetPick(id: string, desk: string): AimPick {
     const top = headY(b) + 0.45;
     if (Math.hypot(point.x - b.x, point.z - b.z) > AIM_RADIUS || point.y < 0.55 || point.y > top) return null;
     const name = useStore.getState().agents[id]?.name ?? 'them';
-    const focus: Focus = { id: `greet-${id}`, label: `Say hi to ${name} 👋 · aim at the desk ${desk}`, action: { kind: 'greet', agentId: id } };
+    const focus: Focus = { id: `greet-${id}`, label: `Say hi to ${name} · aim at the desk ${desk}`, action: { kind: 'greet', agentId: id } };
     return focus;
   };
 }

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { zoneHints } from '../world/touch/thumbs';
 import { useTouchLook, useTouchStick } from '../world/touch/touchState';
 import { appViewport } from '../viewport';
+import { Icon } from './Icon';
 
 // The touch zones' first-time hints (#123): where to put each thumb and that a tap walks you to things, each gone
 // for good on this device once it's been used (touchState.ts's markUsed).
@@ -25,12 +26,24 @@ export function TouchZoneHints({ walked, looked }: { walked: boolean; looked: bo
     <>
       {!looked && (
         <div className="touch-zone-hint" style={at(spots.look)}>
-          {prefs.classic ? 'Drag here to look' : '👆 Look'}
+          {prefs.classic ? (
+            'Drag here to look'
+          ) : (
+            <>
+              <Icon name="mouse-pointer-click" /> Look
+            </>
+          )}
         </div>
       )}
       {!walked && (
         <div className="touch-zone-hint" style={at(spots.move)}>
-          {prefs.classic ? 'Drag here to move' : '👆 Move'}
+          {prefs.classic ? (
+            'Drag here to move'
+          ) : (
+            <>
+              <Icon name="mouse-pointer-click" /> Move
+            </>
+          )}
         </div>
       )}
       {!tapped && spots.world && (

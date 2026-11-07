@@ -5,6 +5,7 @@ import { isTouch, requestGyro, setTouchPrefs, useTouchLook } from '../world/touc
 import { TOUCH_DEFAULTS, TOUCH_SENS_MAX, TOUCH_SENS_MIN, type StickSide, type StickSize } from '../world/touch/thumbs';
 import { clearBinding, resetControls, setBinding, setPadSensitivity, useControls } from './controls';
 import { ACTIONS, PAD_SENSITIVITY_MAX, PAD_SENSITIVITY_MIN, SLOTS, actionDef, exactKeyLabel, findConflicts, keyLabel, type ActionDef, type ActionId } from './keymap';
+import { Icon } from './Icon';
 
 // Help → Controls: every key action rebindable (click a key, press the new one), conflicts called out, the mouse's
 // sensitivity and invert-Y, the gamepad's sensitivity and button map, and a reset. All saved in this browser.
@@ -53,7 +54,9 @@ function GamepadSettings() {
   const name = useSyncExternalStore(subscribePads, padNow);
   return (
     <div className="mouse-settings">
-      <div className="pad-status">{name ? `🎮 ${name} is connected` : '🎮 No controller yet: plug one in and press a button.'}</div>
+      <div className="pad-status">
+        <Icon name="gamepad-2" /> {name ? `${name} is connected` : 'No controller yet: plug one in and press a button.'}
+      </div>
       <label className="mouse-sens">
         <span>Gamepad sensitivity</span>
         <input type="range" min={PAD_SENSITIVITY_MIN} max={PAD_SENSITIVITY_MAX} step={0.05} value={sens} onChange={(e) => setPadSensitivity(Number(e.target.value))} />
@@ -195,7 +198,7 @@ export function ControlsSettings() {
                       </button>
                       {code && slot > 0 && (
                         <button className="key-clear" title="Remove this key" aria-label={`Remove ${exactKeyLabel(code)} from ${a.label}`} onClick={() => clearBinding(a.id, slot)}>
-                          ✕
+                          <Icon name="x" />
                         </button>
                       )}
                     </span>
@@ -213,7 +216,7 @@ export function ControlsSettings() {
       )}
       {conflicts.length > 0 && (
         <p className="controls-clash" role="alert">
-          ⚠️ {conflicts.map((c) => `${keyLabel(c.code)} does both ${actionDef(c.actions[0]).label} and ${actionDef(c.actions[1]).label}`).join('; ')}. Give one of them another key.
+          <Icon name="triangle-alert" /> {conflicts.map((c) => `${keyLabel(c.code)} does both ${actionDef(c.actions[0]).label} and ${actionDef(c.actions[1]).label}`).join('; ')}. Give one of them another key.
         </p>
       )}
       <h3>Mouse</h3>
@@ -228,7 +231,7 @@ export function ControlsSettings() {
       <GamepadSettings />
       <div className="controls-reset">
         <button className="btn btn-small" onClick={reset}>
-          ↺ Reset to defaults
+          <Icon name="rotate-ccw" /> Reset to defaults
         </button>
       </div>
     </div>

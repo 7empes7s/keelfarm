@@ -5,6 +5,7 @@ import { randomSeed } from './rng';
 import { blip } from './sounds';
 import { bestScore, recordScore } from './storage';
 import { COLS, ROWS, dropDistance, dropMs, hardDrop, move, newTetris, pieceCells, previewCells, rotate, softDrop, tick, type PieceType, type TetrisState } from './tetris';
+import { Icon } from '../Icon';
 
 // Cubetris on the phone: falling office blocks in the floors' colours, with a line-clear confetti pop.
 
@@ -255,24 +256,24 @@ export function Tetris({ onBack }: { onBack: () => void }) {
   return (
     <div className="game">
       <GameHeader title="Cubetris" color={TETRIS_COLOR} onBack={onBack}>
-        <button type="button" className="game-mini" tabIndex={-1} onPointerDown={(e) => e.preventDefault()} onClick={() => (status === 'playing' ? pause() : start())} title={status === 'playing' ? 'Pause (Enter)' : 'Play (Space)'}>
-          {status === 'playing' ? '⏸' : '▶'}
+        <button type="button" className="game-mini" tabIndex={-1} onPointerDown={(e) => e.preventDefault()} onClick={() => (status === 'playing' ? pause() : start())} aria-label={status === 'playing' ? 'Pause' : 'Play'} title={status === 'playing' ? 'Pause (Enter)' : 'Play (Space)'}>
+          <Icon name={status === 'playing' ? 'pause' : 'play'} />
         </button>
       </GameHeader>
       <GameCanvas width={W} height={H} frame={frame} label="Cubetris board" onPointer={(kind) => kind === 'down' && pad(() => turn(1))()} />
       <div className="game-pads">
         <PadButton label="Move left" repeat onPress={pad(() => shift(-1))}>
-          ◀
+          <Icon name="arrow-left" />
         </PadButton>
         <PadButton label="Soft drop" repeat onPress={pad(down)}>
-          ▼
+          <Icon name="arrow-down" />
         </PadButton>
         <PadButton label="Move right" repeat onPress={pad(() => shift(1))}>
-          ▶
+          <Icon name="arrow-right" />
         </PadButton>
         <span className="game-pad-gap" />
         <PadButton label="Rotate" className="game-pad-round" onPress={pad(() => turn(1))}>
-          ⟳
+          <Icon name="rotate-ccw" />
         </PadButton>
         <PadButton label="Drop" className="game-pad-round game-pad-hot" onPress={pad(drop)}>
           ⤓
