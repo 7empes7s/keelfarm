@@ -282,7 +282,20 @@ html[data-reduce-motion] .pocket input[type='checkbox']::after {
 }
 .pk-dock .phone-chat {
   width: 100%;
+  min-width: 0;
   background: var(--paper);
+}
+.pk-dock-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* expanded: the threads column beside the chat (#132), and the artifact or file it opens beside the dock, not over it */
+.pk-dock-threads {
+  width: clamp(580px, 46vw, 760px);
+}
+html:has(.pk-dock-threads) .artifact-back {
+  right: clamp(580px, 46vw, 760px);
 }
 
 /* Company: the floors as a grid of cards, usage and the CEO in a column beside them (above them when it's narrower) */

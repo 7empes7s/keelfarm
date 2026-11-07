@@ -7,7 +7,7 @@ import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (conversations, search and memory; artifacts; files; hands-free).
+// prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; hands-free).
 
 interface PlusProps {
   text: string;
@@ -90,29 +90,22 @@ function Sheet({ actions, ceoName, onPick, onClose }: { actions: SheetAction[]; 
 
 interface ToolsProps {
   ceoName: string;
-  artifacts: number;
-  files: number;
+  files: number; // the thread's artifacts and files (#132)
   onChats: () => void;
-  onArtifacts: () => void;
   onFiles: () => void;
   /** Where to draw them: pocket mode's header (null until it's there); undefined draws them in place. */
   into?: HTMLElement | null;
 }
 
-/** Icon buttons with their counts as badges: conversations and search, artifacts, files, hands-free. */
-export function ChatTools({ ceoName, artifacts, files, onChats, onArtifacts, onFiles, into }: ToolsProps) {
+/** Icon buttons with their counts as badges: threads and search, files & artifacts, hands-free. */
+export function ChatTools({ ceoName, files, onChats, onFiles, into }: ToolsProps) {
   const tools = (
     <>
-      <button type="button" className="chat-tool" onClick={onChats} aria-haspopup="dialog" aria-label="Conversations and search" title="Conversations: a new one, an earlier one, search them all, and what the CEO remembers">
+      <button type="button" className="chat-tool" onClick={onChats} aria-haspopup="dialog" aria-label="Threads and search" title="Threads: a new one, an earlier one, search them all, and what the CEO remembers">
         🔍
       </button>
-      {artifacts > 0 && (
-        <button type="button" className="chat-tool" onClick={onArtifacts} aria-haspopup="dialog" aria-label={`Artifacts (${artifacts})`} title="Every artifact in this conversation, newest first">
-          📄<span className="badge badge-dot chat-tool-n" aria-hidden>{artifacts}</span>
-        </button>
-      )}
       {files > 0 && (
-        <button type="button" className="chat-tool" onClick={onFiles} aria-haspopup="dialog" aria-label={`Files (${files})`} title="Every file in this conversation: keep or delete them">
+        <button type="button" className="chat-tool" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
           📎<span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
         </button>
       )}

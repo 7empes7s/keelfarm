@@ -10,6 +10,7 @@ import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
+import { ThreadsColumn } from '../ui/ChatHistory';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
 import { isConfirmOpen } from '../ui/Confirm';
@@ -522,7 +523,7 @@ export default function Pocket() {
           </div>
         </div>
         {wide && dock && (
-          <aside className="pk-dock" aria-label={`Chat with ${ceoName}`}>
+          <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`}>
             <div className="pk-dock-head">
               <b className="pk-ellipsis">💬 {ceoName}</b>
               <span className="spacer" />
@@ -531,7 +532,11 @@ export default function Pocket() {
                 ✕
               </button>
             </div>
-            {chat}
+            {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}
+            <div className="pk-dock-body">
+              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} />}
+              {chat}
+            </div>
           </aside>
         )}
       </div>

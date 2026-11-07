@@ -27,6 +27,7 @@ import { PresenceHub } from './presence.ts';
 import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 import { HttpError, Swarm } from './swarm.ts';
 import { historyFilter } from './history.ts';
+import { libraryQuery } from '../shared/library.ts';
 
 if (PUBLIC_DEMO) {
   const why = publicDemoProblem({ demo: DEMO, loopback: isLoopback(HOST), home: process.env.SWARM_HOME, defaultHome: path.join(os.homedir(), '.cubefarm') });
@@ -382,10 +383,12 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
-app.post('/api/ceo/conversations', route(() => swarm.newConversation()));
+app.post('/api/ceo/conversations', route((req) => swarm.newConversation(req.body?.repoId ?? null)));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));
-app.post('/api/ceo/conversations/:id/pin', route((req) => swarm.pinConversation(String(req.params.id), req.body?.pinned === true)));
+app.post('/api/ceo/conversations/:id/pin', route((req) => swarm.editConversation(String(req.params.id), { pinned: req.body?.pinned === true })));
+app.post('/api/ceo/conversations/:id/edit', route((req) => swarm.editConversation(String(req.params.id), req.body)));
+app.get('/api/ceo/library', route((req) => swarm.library(libraryQuery(req.query))));
 app.get('/api/ceo/notes', route(() => swarm.ceoNotes()));
 app.post('/api/ceo/memory', route((req) => swarm.addMemory(str(req.body?.text))));
 app.put('/api/ceo/memory/:id', route((req) => swarm.editMemory(String(req.params.id), str(req.body?.text))));

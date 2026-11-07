@@ -39,7 +39,7 @@ import { quickPicks } from '../ceoFiles.ts';
 import { ceoSessionStep } from '../ceoWaits.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView, ServerDelivery } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
-import { conversationsView, touchConversation } from '../../shared/conversations.ts';
+import { conversationsView, projectLine, touchConversation } from '../../shared/conversations.ts';
 import { renotifyDue, toldCeo } from '../../shared/questions.ts';
 import {
   type PersistedRepo,
@@ -384,7 +384,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
     if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via);
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
     const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), delivery: 'sent', ...(via && { telegram: 'in' as const }), ...(attachments.length && { attachments }) });
-    const forward = [forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
+    const forward = [projectLine(this.state.ceo.chats, this.state.messages, m, this.state.repos), forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const asked = this.holds.answer(replyTo, [t, this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n')); // no quote: it answers the question asked
     if (asked && !asked.resume) {
       // ask_manager's answer: it goes to the waiting tool call, not into the session as a new message (#28).

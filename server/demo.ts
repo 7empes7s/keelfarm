@@ -39,6 +39,7 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { demoThreads } from './demoThreads.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 
@@ -987,6 +988,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedLab: sampleLab,
     seedNotices: sampleNotices,
     seedChat: demoEditedChat,
+    seedThreads: demoThreads,
     demoCharter,
     demoHeldUpdate,
     simulateUsage: demoUsage,

@@ -177,19 +177,45 @@ const SCREENS: Screen[] = [
     tabs: ['', { name: 'collapsed', go: (root) => root.getByRole('button', { name: /^Hide the/ }).click() }],
   },
   {
-    // the phone's chat with every button it can have (its own 🔍, 📄, 📎 and hands-free), the header's name still whole (#109)
+    // the phone's chat with every button it can have (its own 🔍, 📎 and hands-free), the header's name still whole (#109)
     name: 'pocket chat header',
     widths: [360, 390, 430],
     open: async (page) => {
       await page.request.post('/api/files', { headers: { 'Content-Type': 'image/png', 'X-File-Name': 'f.png' }, data: png(40, 40) });
       await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
       const root = await pocket(page, 'chat');
-      await expect(root.getByRole('button', { name: /^Artifacts \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
-      await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible();
+      await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
       await expect(root.getByRole('button', { name: /search/i })).toHaveCount(1); // the chat's own, not two 🔍 side by side
       return root;
     },
     tabs: [],
+  },
+  {
+    // threads (#132): the sheet from the chat's 🔍 on a phone, the column beside the docked chat on a wide screen
+    name: 'pocket chat threads',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      if ((page.viewportSize()?.width ?? 0) >= 1200) {
+        await expect(root.getByRole('navigation', { name: 'Threads' })).toBeVisible();
+        return root;
+      }
+      await root.getByRole('button', { name: 'Threads and search' }).click();
+      return dialog(page, /^Threads$/);
+    },
+    tabs: [],
+  },
+  {
+    // the Chat | Files segment, its cards, and the reader opened from one (#132)
+    name: 'pocket chat files',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      await root.getByRole('tab', { name: /^Files/ }).click();
+      await expect(root.locator('.chat-library')).toBeVisible();
+      return root;
+    },
+    tabs: ['', { name: 'everything', go: (root) => root.getByRole('button', { name: 'Everything' }).click() }],
   },
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },

@@ -3631,18 +3631,6 @@ input.inline:focus {
   border-top: 2px solid rgba(31, 29, 43, 0.12);
   background: var(--ds-surface-raised);
 }
-.artifact-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.artifact-items li {
-  margin-bottom: 10px;
-}
-.artifact-when {
-  display: block;
-  margin: 2px 0 0 4px;
-}
 /* files in the CEO chat (ui/ChatFiles.tsx) */
 .file-card {
   display: flex;

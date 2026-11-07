@@ -90,8 +90,9 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
 }
 
 /** One file full size (images, PDFs, video) or its details, with Download, Share and Keep. */
-export function FileViewer({ id, onClose }: { id: string; onClose: () => void }) {
+export function FileViewer({ id, onClose, onOpenInThread }: { id: string; onClose: () => void; onOpenInThread?: () => void }) {
   const f = useStore((s) => s.files.find((x) => x.id === id));
+  const [zoom, setZoom] = useState(false);
   useEffect(() => {
     if (!f) onClose();
   }, [f, onClose]);
@@ -102,7 +103,10 @@ export function FileViewer({ id, onClose }: { id: string; onClose: () => void })
     <Sheet label={`${fileIcon(f)} ${f.name}`} onClose={onClose} className="file-viewer">
       <div className="artifact-body file-view-body">
         {drawable(f.type) ? (
-          <img src={url(f.id)} alt={f.name} className="file-full" />
+          // a tap zooms to full size (scroll to pan), another fits it again
+          <button type="button" className={`file-zoom ${zoom ? 'file-zoomed' : ''}`} aria-pressed={zoom} aria-label={zoom ? 'Fit to the screen' : 'Zoom in'} onClick={() => setZoom(!zoom)}>
+            <img src={url(f.id)} alt={f.name} className="file-full" />
+          </button>
         ) : k === 'pdf' ? (
           <iframe src={url(f.id)} title={f.name} className="file-full file-pdf" />
         ) : k === 'video' ? (
@@ -124,6 +128,11 @@ export function FileViewer({ id, onClose }: { id: string; onClose: () => void })
           </button>
         )}
         <KeepButton f={f} />
+        {onOpenInThread && (
+          <button type="button" className="btn btn-small" onClick={() => (onClose(), onOpenInThread())}>
+            💬 Open in thread
+          </button>
+        )}
       </div>
     </Sheet>
   );

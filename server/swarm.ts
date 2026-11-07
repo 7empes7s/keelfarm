@@ -31,7 +31,7 @@ import { cleanSwitches, DEFAULT_TOOL_SETTINGS, toolSettings } from '../shared/to
 import { describePractices, emptyEveryProject, everyProjectSettings } from '../shared/practices.ts';
 import { legacyAgent, legacyRequest } from '../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, followupSettings, loadFollowups, mandateList } from '../shared/followups.ts';
-import { conversationsView, loadChats, openConversation, pinConversation, searchConversations, startConversation } from '../shared/conversations.ts';
+import { conversationPatch, conversationsView, currentConversation, editConversation, loadChats, openConversation, projectLine, searchConversations, startConversation, unfilled } from '../shared/conversations.ts';
 import { loadMemory, removeNote, saveNote, type MemoryNote } from '../shared/ceoMemory.ts';
 import { finishedSteps, stopReply } from '../shared/ceoStream.ts';
 import { forwardText } from '../shared/chat.ts';
@@ -152,6 +152,7 @@ export class Swarm extends SwarmCeoTools {
         experiments: loadLab(loaded.experiments, Date.now()),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
+      void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
       if (!isCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
@@ -280,6 +281,7 @@ export class Swarm extends SwarmCeoTools {
       // Mission control opens on a week that already happened.
       this.state.ops = this.backend.seedOps?.(this.state.repos.map((r) => r.id), Date.now()) ?? this.state.ops;
       for (const m of this.backend.seedChat?.(Date.now()) ?? []) this.state.messages.push({ ...m, id: this.messageSeq++ }); // edits of every kind (#125)
+      if (this.backend.seedThreads) this.messageSeq = await this.ceoChat.seed(this.state.ceo.chats, this.state.messages, this.backend.seedThreads(this.state.repos, Date.now()), this.files, this.messageSeq); // threads across floors (#132)
     }
     for (const r of this.state.repos) this.ensureAgent(r);
     this.ensureCeo(interrupted);
@@ -531,7 +533,7 @@ export class Swarm extends SwarmCeoTools {
   /** A manager's message as the CEO gets it: with the message it replies to, and its files. */
   private forwardOf(m: PhoneMessage) {
     const quoted = m.replyTo === undefined ? undefined : this.state.messages.find((x) => x.id === m.replyTo);
-    return [forwardText(m.text, quoted), this.ceoFiles.forwardLines(m.attachments ?? [])].filter(Boolean).join('\n');
+    return [projectLine(this.state.ceo.chats, this.state.messages, m, this.state.repos), forwardText(m.text, quoted), this.ceoFiles.forwardLines(m.attachments ?? [])].filter(Boolean).join('\n');
   }
 
   /** POST /api/ceo/stop: ends the CEO's job. Tools it called stay done (the office finishes them); its reply says what they did. */
@@ -596,14 +598,16 @@ export class Swarm extends SwarmCeoTools {
     this.save();
   }
 
-  /** POST /api/ceo/conversations: a new conversation, with a fresh CEO session; the CEO's notes carry over. */
-  async newConversation() {
+  /** POST /api/ceo/conversations: a new conversation, with a fresh CEO session, in a floor's project (`repoId`) or the Company's; the CEO's notes carry over. */
+  async newConversation(repoId: unknown = null) {
     this.chatFree();
     const s = this.state.ceo.chats;
+    const project = typeof repoId === 'string' ? repoId : null;
+    if (project && !this.state.repos.some((r) => r.id === project)) throw new HttpError(400, 'That floor is no longer in the office.');
     if (this.state.messages.length) {
       await this.ceoChat.saveThread(s.current, this.state.messages);
-      void this.ceoChat.dropThreads(startConversation(s, this.ceo().sessionId, Date.now()));
-    }
+      void this.ceoChat.dropThreads(startConversation(s, this.ceo().sessionId, Date.now(), project));
+    } else editConversation(s, currentConversation(s).id, { repoId: project });
     this.switchThread([], null);
     return { id: s.current };
   }
@@ -619,14 +623,20 @@ export class Swarm extends SwarmCeoTools {
     this.switchThread(thread, openConversation(s, id, this.ceo().sessionId));
   }
 
-  pinConversation(id: string, pinned: boolean) {
+  /** POST /api/ceo/conversations/:id/edit (and /pin): a thread renamed, pinned, archived or moved to another project (#132). */
+  editConversation(id: string, raw: unknown) {
     try {
-      pinConversation(this.state.ceo.chats, id, pinned);
+      editConversation(this.state.ceo.chats, id, conversationPatch(raw, this.state.repos.map((r) => r.id)));
     } catch (err) {
-      throw new HttpError(404, (err as Error).message);
+      throw new HttpError(this.state.ceo.chats.list.some((c) => c.id === id) ? 400 : 404, (err as Error).message);
     }
     this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
     this.save();
+  }
+
+  /** GET /api/ceo/library: a project's, the Company's or the whole office's artifacts and files, a page at a time (#132). */
+  library(q: Parameters<CeoChat['library']>[3]) {
+    return this.ceoChat.library(this.state.ceo.chats, this.state.messages, this.files.list(), q);
   }
 
   /** GET /api/ceo/conversations/search?q=: conversations whose title or messages match, with a snippet each. */
