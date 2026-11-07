@@ -10,7 +10,8 @@ import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
 import type { ServerEvent } from '../shared/types.ts';
-import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
+import { liveLaneRefusal } from './portLanes.ts';
+import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PREVIEW_PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
@@ -178,7 +179,7 @@ app.post(
   route((req) => {
     const pr = req.body?.pr;
     if (pr !== undefined && pr !== null && (typeof pr !== 'number' || !Number.isInteger(pr) || pr <= 0)) throw new HttpError(400, 'pr must be a positive integer');
-    return swarm.startPreview(repoId(req), pr ?? null);
+    return swarm.startPreview(repoId(req), pr ?? null, req.body?.otherPort === true);
   }),
 );
 app.delete('/api/repos/:repo/preview', route((req) => swarm.stopPreview(repoId(req))));
@@ -502,6 +503,8 @@ server.listen(PORT, HOST, () => {
   if (PUBLIC_DEMO) console.log(`     public demo: visitors change nothing that matters; resets every ${PUBLIC_DEMO_RESET_H} h and 30 min after the last visitor leaves`);
   console.log(`     state: ${STATE_FILE}`);
   console.log(`     workspaces: ${WORKSPACE_ROOT}`);
+  const refused = liveLaneRefusal(PREVIEW_PORT, DEMO);
+  if (refused) console.warn(`     ⚠ previews won't start: ${refused}`);
   console.log(`     agents' machines: ${DEMO ? '(pretend ones, in the demo)' : MACHINES_DIR}\n`);
 });
 
