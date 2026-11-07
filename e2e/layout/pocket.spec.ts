@@ -110,3 +110,39 @@ for (const [width, height] of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+// ---------- the CEO chat opens from the header (#214) ----------
+
+for (const width of [820, 1280]) {
+  test(`at ${width}px the chat opens from the header, and the rail only navigates`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const root = await pocket(page, 'kanban');
+    await expect(root.locator('.pk-tabs .pk-tab')).toHaveText([/Company/, /Kanban/, /Team/, /Approvals/, /Console/]);
+    const button = root.locator('.pk-head .pk-chat-btn');
+    const main = root.locator('.pk-main');
+    let open = width >= 1024; // docked when wide, a drawer closed at first in between
+    for (let i = 0; i < 3; i++) {
+      if (i) {
+        await button.click();
+        open = !open;
+      }
+      await expect(button).toHaveAttribute('aria-pressed', String(open));
+      await expect(root.locator('.pk-dock')).toHaveCount(open ? 1 : 0);
+      const box = (await button.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      // nothing covers it, and its label is centred (#170)
+      const hit = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.pk-chat-btn'), [box.x + box.width / 2, box.y + box.height / 2]);
+      expect(hit).toBe(true);
+      const avatar = (await button.locator('.pk-chat-avatar').boundingBox())!;
+      expect(Math.abs(avatar.y + avatar.height / 2 - (box.y + box.height / 2))).toBeLessThan(3);
+      // the pages keep their place: only the docked column comes and goes beside them
+      const m = (await main.boundingBox())!;
+      expect(m.x).toBeLessThan(100);
+      if (width >= 1024) {
+        const dock = open ? (await root.locator('.pk-dock').boundingBox())! : null;
+        expect(m.x + m.width).toBeLessThanOrEqual((dock?.x ?? width) + 1);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  });
+}

@@ -26,6 +26,7 @@ export interface PhoneMessage {
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
+  quiet?: true; // the CEO's: its notification wasn't sent, as the manager was in the app (#210)
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
   clientId?: string; // the manager's: the phone's id for the send, so a resend after a reload is taken once (#216)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
@@ -107,7 +108,7 @@ export interface ChatArtifact {
   markdown?: string; // absent when the snapshot left it out: GET /api/messages/:id/artifacts/:artifactId
 }
 
-export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup' | 'research';
+export type CeoJobKind = 'onboard' | 'plan' | 'review' | 'chat' | 'triage' | 'followup' | 'research' | 'changes';
 
 export interface CeoInfo {
   queue: { kind: CeoJobKind; label: string }[]; // jobs waiting for the CEO

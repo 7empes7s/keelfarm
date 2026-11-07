@@ -7,6 +7,7 @@ import { currentWatch } from './watch';
 import { hitchWs } from './hitches';
 import { onResume, onTick, type SocketLook } from '../../shared/heartbeat';
 import { socketUrl } from './socketUrl';
+import { report, watchAttention } from './attention';
 
 let retry = 0;
 let socket: WebSocket | null = null;
@@ -27,7 +28,7 @@ let watching = false;
 // Back from the time-lapse: everything waits for the fresh snapshot asked for, so nothing applies on top of the replay.
 let awaitingSnapshot = false;
 // Presence too: the other visitors are live people, there in a replay as much as in the live office.
-const OUTSIDE_REPLAY = new Set<ServerEvent['type']>(['notify', 'notifyChannels', 'settings', 'officeUpdate', 'clis', 'models', 'voiceKey', 'voiceCache', 'progress', 'visitors', 'visitorPose', 'visitorEmote', 'visitorPing']);
+const OUTSIDE_REPLAY = new Set<ServerEvent['type']>(['notify', 'notifyClear', 'notifyChannels', 'settings', 'officeUpdate', 'clis', 'models', 'voiceKey', 'voiceCache', 'progress', 'visitors', 'visitorPose', 'visitorEmote', 'visitorPing']);
 let opens = 0;
 /** Characters in and out on /ws since the page loaded, and in for presence alone (its probe turns them into rates). */
 export const wsTraffic = { in: 0, out: 0, presence: 0 };
@@ -89,6 +90,7 @@ function listen() {
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && resume());
   for (const ev of ['pageshow', 'online', 'focus', 'cubefarm:open']) window.addEventListener(ev, resume);
   setInterval(() => onTick(look(), Date.now()) === 'reconnect' && reconnectNow(), 5_000);
+  watchAttention(sendWs);
 }
 
 export function connect() {
@@ -106,6 +108,7 @@ export function connect() {
     opens++;
     useStore.getState().setConnected(true);
     sendWatch();
+    report(sendWs, false, true); // a new socket is a tab the office doesn't know yet
   };
   ws.onmessage = (e) => {
     const bytes = typeof e.data === 'string' ? e.data.length : 0;
