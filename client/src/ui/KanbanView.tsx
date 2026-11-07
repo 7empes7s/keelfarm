@@ -13,6 +13,7 @@ import type { EmptyKind } from './emptyStates';
 import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
+import { TaskBar, taskSince } from './TaskProgress';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
@@ -213,6 +214,16 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
               {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
             </div>
+            {cls !== 'kcol-merged' && cls !== 'kcol-backlog' && (
+              <TaskBar
+                input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
+                repoId={repo.id}
+                since={taskSince(repo, c.number, c.prNumber ?? null)}
+                name={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}
+                compact
+                {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
+              />
+            )}
             {c.prNumber != null && cls !== 'kcol-merged' && (
               <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
             )}

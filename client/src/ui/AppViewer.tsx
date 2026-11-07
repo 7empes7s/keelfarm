@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type Ref } from 'react';
 import { api } from '../api';
 import { qaKey, useStore } from '../store';
 import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../../shared/previewEnv';
+import { previewSteps } from '../../../shared/progressBars';
+import { ProgressBar } from './ProgressBar';
 import type { PreviewStatus, PreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
 import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSync, onOfficeComputer, prAsPreview, QA_BADGE, qaShotUrl, reachable, relayPath, type Channel, type Side } from './channels';
 import { sendToCeo } from './chatSend';
@@ -242,18 +244,23 @@ function PreviewStage({
   }
   if (ACTIVE.includes(preview.status)) {
     const at = STEPS.findIndex((x) => x.status === preview.status);
+    const steps = previewSteps(preview.status);
+    const now = STEPS[at];
     return (
       <div className={`app-state ${compact ? 'app-state-compact' : ''}`} role="status">
         <div className="app-state-icon app-spin">⚙️</div>
         <h3>Starting {label}…</h3>
-        <ol className="app-steps">
-          {STEPS.map((s, i) => (
-            <li key={s.status} className={i < at ? 'app-step-done' : i === at ? 'app-step-now' : ''}>
-              {i < at ? '✓' : i === at ? '●' : '○'} {s.label}
-              {s.status === 'starting' && preview.port ? ` on port ${preview.port}` : ''}
-            </li>
-          ))}
-        </ol>
+        {steps && now && (
+          <div className="app-steps">
+            <ProgressBar
+              label={`${now.label}${now.status === 'starting' && preview.port ? ` on port ${preview.port}` : ''}`}
+              value={`step ${at + 1} of ${STEPS.length}`}
+              steps={steps}
+              tone={steps.tone}
+              aria={`Starting ${label}: ${now.label}, step ${at + 1} of ${STEPS.length}`}
+            />
+          </div>
+        )}
         {preview.logTail.length > 0 && <pre className="term app-log">{preview.logTail.slice(-8).join('\n')}</pre>}
       </div>
     );

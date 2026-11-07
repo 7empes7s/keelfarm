@@ -128,6 +128,18 @@ const charterEditor: View = {
   },
 };
 
+/** Charter, with an objective's progress bar tapped open to the list it counts (#140). */
+const objectiveProgress: View = {
+  name: 'Charter: an objective’s progress listed',
+  go: async (root) => {
+    await pocketSection(root, 'Charter');
+    const bar = root.locator('.cs-objective .pb-tap').first();
+    await bar.scrollIntoViewIfNeeded();
+    await bar.click();
+    await expect(bar).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -138,7 +150,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, objectiveProgress, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

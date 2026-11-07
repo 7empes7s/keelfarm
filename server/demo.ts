@@ -175,6 +175,25 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
 ], [], true);
 
+const closedFiled = new Map<string, string>(); // `${fullName}#${n}` → when a seeded plan's closed issue was filed
+
+/** A plan the CEO filed together hours ago (#140's plan bars): its `open` issues still open, `merged` already shipped. */
+function seedPlan(fullName: string, name: string, open: string[], merged: string[]) {
+  const r = repos.get(fullName)!;
+  const filedAt = Date.now() - 6 * 3_600_000;
+  const at = (i: number) => new Date(filedAt + i * 2 * 60_000).toISOString();
+  for (const [i, title] of merged.entries()) {
+    const closed = r.nextNumber++; // its issue, closed by the merge: issueDetails still knows when it was filed
+    closedFiled.set(`${fullName}#${closed}`, at(i));
+    r.pulls.push({ ...shippedPull(fullName, r.nextNumber++, `${name}: ${title}`, (i + 2) * 3_600_000), closesIssues: [closed] });
+  }
+  for (const [i, title] of open.entries()) {
+    const body = `Part of the ${name} plan.\n\nObjective: O2\n\n---\n_Filed by Mimoun, the cubefarm CEO._`;
+    r.issues.push({ ...issue(r.nextNumber++, `${name}: ${title}`, body, fullName), createdAt: at(merged.length + i) });
+  }
+}
+seedPlan('demo-co/weather-api', 'API polish', ['Units in every response', 'ETag on /forecast'], ['Consistent error bodies']);
+
 // ---------- the big company (--floors / --agents, #228) ----------
 
 const PRODUCTS: [string, string][] = [
@@ -895,7 +914,7 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     readRepoFile: async (fullName, _branch, rel) => demoRepoFile(fullName, rel) ?? Promise.reject(new Error(`${rel} isn't on the default branch.`)),
     issueDetails: async (fullName, number) => {
       const i = repos.get(fullName)?.issues.find((x) => x.number === number);
-      return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt };
+      return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt ?? closedFiled.get(`${fullName}#${number}`) };
     },
     commentPull: async (fullName, number) => `https://github.com/${fullName}/pull/${number}#issuecomment-${Date.now()}`,
     uploadEvidence: async (fullName, filePath) => `https://github.com/${fullName}/raw/swarm-qa-evidence/${filePath}`,

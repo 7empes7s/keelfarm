@@ -6,6 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
+import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { Panel } from '../ui/Panel';
@@ -166,7 +167,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       <GuideCard />
       <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
         <b className="small">🤖 Claude usage</b>
-        <UsageBars />
+        <UsageBars link={false} />
       </button>
       <button className="btn pk-wide" onClick={() => settings('map')}>
         🗺️ Memory map
@@ -216,6 +217,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
               </div>
             ))}
           </div>
+          <BacklogBar repo={repo} onOpen={() => go('kanban', repo.id)} compact />
           <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
             <span className="muted">

@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { TeamStats } from './CareerCard';
 import { AgentRing } from './AgentRing';
+import { ProgressBar } from './ProgressBar';
+import { updateSteps } from '../../../shared/progressBars';
 import { keyStats } from '../../../shared/careers';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
@@ -49,6 +51,7 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
     void attempt(() => api.updateOffice(action)).finally(() => setBusy(false));
   };
   const deadline = drainDeadline(update);
+  const steps = updateSteps(update.state);
   const pending = update.state !== 'none';
   const tone = update.state === 'failed' ? 'office-state-bad' : update.state === 'none' ? 'office-state-ok' : 'office-state-busy';
   const tip = (enabled: boolean, text: string) => (update.launcher ? (enabled ? text : undefined) : NO_LAUNCHER);
@@ -80,6 +83,17 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
           </div>
         )}
       </div>
+      {steps && (
+        <ProgressBar
+          label="Update"
+          value={update.state === 'failed' ? 'failed' : `step ${steps.at + 1} of ${steps.labels.length}`}
+          steps={steps}
+          tone={steps.tone}
+          aria={`The office's update: ${steps.labels[steps.at]}, step ${steps.at + 1} of ${steps.labels.length}${update.state === 'failed' ? ', failed' : ''}`}
+          onClick={() => useStore.getState().openOverlay({ kind: 'manager', tab: 'about' })}
+          tap="See the commit it runs in About this office"
+        />
+      )}
       {update.detail && update.state !== 'failed' && <div className="muted small">{update.detail}</div>}
       {deadline && update.running > 0 && (
         <div className="muted small">Sessions a restart would stop that are still running at {new Date(deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} are stopped, and their work goes back to the queue.</div>
