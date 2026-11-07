@@ -2,10 +2,14 @@
 // for this device. Push needs a secure context: HTTPS, or localhost on the office's own PC.
 import { api } from './api';
 import { askPermission, ensureWorker, fromB64u, StepError, subscribe } from './pushSteps';
+import { mountOf } from './socketUrl';
 
-/** Registers the worker in a built office (the dev server has none). A new office version replaces it on its own. */
+/**
+ * Registers the worker in a built office (the dev server has none). A new office version replaces it on its own. Not
+ * in an office seen through another's preview gateway: its /sw.js is that office's, and the preview worker runs it.
+ */
 export function registerServiceWorker() {
-  if (!import.meta.env.PROD || !('serviceWorker' in navigator) || !window.isSecureContext) return;
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator) || !window.isSecureContext || mountOf(location.pathname)) return;
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err: unknown) => {
     console.warn('no service worker:', err);
     void api.pushReport('worker', `The service worker couldn't be registered: ${err instanceof Error ? err.message : String(err)}`).catch(() => undefined);
