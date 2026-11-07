@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../helpers';
-import { checkScreens, MODES, PHONES, png, pocket, POCKET, type Screen } from './helpers';
+import { checkScreens, dialog, MODES, PHONES, png, pocket, POCKET, type Screen } from './helpers';
 
 // The chat with the CEO: its screens, the message box on an iPhone (#73), the decisions tray (#114) and ref chips (#100).
 
@@ -45,19 +45,45 @@ const SCREENS: Screen[] = [
     tabs: ['', { name: 'collapsed', go: (root) => root.getByRole('button', { name: /^Hide the/ }).click() }],
   },
   {
-    // the phone's chat with every button it can have (its own 🔍, 📄, 📎 and hands-free), the header's name still whole (#109)
+    // the phone's chat with every button it can have (its own 🔍, 📎 and hands-free), the header's name still whole (#109)
     name: 'pocket chat header',
     widths: [360, 390, 430],
     open: async (page) => {
       await page.request.post('/api/files', { headers: { 'Content-Type': 'image/png', 'X-File-Name': 'f.png' }, data: png(40, 40) });
       await page.request.post('/api/ceo/message', { data: { text: 'Plan the next milestone for floor 1' } });
       const root = await pocket(page, 'chat');
-      await expect(root.getByRole('button', { name: /^Artifacts \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
-      await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible();
+      await expect(root.getByRole('button', { name: /^Files \(\d+\)$/ })).toBeVisible({ timeout: 90_000 });
       await expect(root.getByRole('button', { name: /search/i })).toHaveCount(1); // the chat's own, not two 🔍 side by side
       return root;
     },
     tabs: [],
+  },
+  {
+    // threads (#132): the sheet from the chat's 🔍 on a phone, the column beside the docked chat on a wide screen
+    name: 'pocket chat threads',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      if ((page.viewportSize()?.width ?? 0) >= 1200) {
+        await expect(root.getByRole('navigation', { name: 'Threads' })).toBeVisible();
+        return root;
+      }
+      await root.getByRole('button', { name: 'Threads and search' }).click();
+      return dialog(page, /^Threads$/);
+    },
+    tabs: [],
+  },
+  {
+    // the Chat | Files segment, its cards, and the reader opened from one (#132)
+    name: 'pocket chat files',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      await root.getByRole('tab', { name: /^Files/ }).click();
+      await expect(root.locator('.chat-library')).toBeVisible();
+      return root;
+    },
+    tabs: ['', { name: 'everything', go: (root) => root.getByRole('button', { name: 'Everything' }).click() }],
   },
 ];
 
@@ -193,6 +219,33 @@ for (const width of PHONES) {
       return out;
     });
     expect(problems).toEqual([]);
+  });
+}
+
+// Full screen when wide (#242): the rail stays and works, the chat fills the rest from the rail's right edge.
+for (const width of [1024, 1280, 1440, 1920]) {
+  test(`chat full screen keeps the rail at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/?pocket=1&tab=chat');
+    const root = page.locator('.pocket');
+    if (!(await root.locator('.pk-dock').isVisible())) await root.locator('.pk-chat-btn').click();
+    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen', exact: true }).click();
+    await expect(root).toHaveClass(/pk-chat-full/);
+    const rail = root.locator('.pk-tabs');
+    await expect(rail).toBeVisible();
+    const [r, d] = [(await rail.boundingBox())!, (await root.locator('.pk-dock').boundingBox())!];
+    expect(Math.abs(d.x - (r.x + r.width))).toBeLessThanOrEqual(1);
+    expect(Math.abs(d.x + d.width - width)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    // a rail item navigates and leaves full screen; ⛶ brings it back
+    await rail.getByRole('button', { name: /Team/ }).click();
+    await expect(root).not.toHaveClass(/pk-chat-full/);
+    await expect(rail.getByRole('button', { name: /Team/ })).toHaveAttribute('aria-current', 'page');
+    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen', exact: true }).click();
+    await expect(root).toHaveClass(/pk-chat-full/);
+    await rail.getByRole('button', { name: /Console/ }).click();
+    await expect(root).not.toHaveClass(/pk-chat-full/);
+    await expect(root.locator('.pk-settings')).toBeVisible();
   });
 }
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { useStore } from '../store';
-import type { ChatArtifact, PhoneMessage } from '../../../shared/types';
+import type { ChatArtifact } from '../../../shared/types';
 import { artifactFileName } from '../../../shared/chatParts';
 import { Markdown } from './Markdown';
 import { useDialogFocus } from './dialogFocus';
@@ -11,7 +11,7 @@ import { CloseButton, Icon } from './Icon';
 import { ChatTextPill, useChatPinch } from './ChatZoom';
 
 // The CEO's artifacts in the phone chat (shared/chatParts.ts): a card in the bubble, the document full-screen on a
-// phone (a side panel on a desktop) with Copy, Share / Download and "Reply about this", and the list of every one.
+// phone (a side panel on a desktop) with Copy, Share / Download, "Reply about this" and "Open in thread" (#132).
 
 const toast = (ok: boolean, yes: string, no: string) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? yes : no);
 
@@ -99,12 +99,13 @@ interface ViewProps {
   artifact: ChatArtifact;
   linked: (text: string) => string;
   onFloor: (floor: number) => void;
-  onReplyAbout: (messageId: number, title: string) => void;
+  onReplyAbout?: (messageId: number, title: string) => void; // absent: another thread's
+  onOpenInThread?: () => void; // from Files & artifacts: back to the message it came in (#132)
   onClose: () => void;
 }
 
 /** One artifact, full-screen (a side panel on a wide screen). Its markdown is fetched when the snapshot left it out. */
-export function ArtifactView({ messageId, artifact, linked, onFloor, onReplyAbout, onClose }: ViewProps) {
+export function ArtifactView({ messageId, artifact, linked, onFloor, onReplyAbout, onOpenInThread, onClose }: ViewProps) {
   const [fetched, setFetched] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const markdown = artifact.markdown ?? fetched;
@@ -141,38 +142,22 @@ export function ArtifactView({ messageId, artifact, linked, onFloor, onReplyAbou
         <button type="button" className="btn btn-small" disabled={markdown === null} onClick={() => markdown !== null && download(artifact.title, markdown)}>
           <Icon name="download" /> Download .md
         </button>
-        <button
-          type="button"
-          className="btn btn-small btn-good"
-          onClick={() => {
-            onClose();
-            onReplyAbout(messageId, artifact.title);
-          }}
-        >
-          <Icon name="reply" /> Reply about this
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
-/** Every artifact in the conversation, newest first. */
-export function ArtifactList({ messages, onOpen, onClose }: { messages: readonly PhoneMessage[]; onOpen: (messageId: number, artifactId: string) => void; onClose: () => void }) {
-  const all = messages.flatMap((m) => (m.artifacts ?? []).map((a) => ({ m, a }))).reverse();
-  return (
-    <Sheet label={`Artifacts (${all.length})`} onClose={onClose} className="artifact-list">
-      <div className="artifact-body">
-        {all.length === 0 ? (
-          <p className="muted">No artifacts yet. When the CEO sends a plan, a report or a list, it shows up here.</p>
-        ) : (
-          <ul className="artifact-items">
-            {all.map(({ m, a }) => (
-              <li key={a.id}>
-                <ArtifactCard artifact={a} onOpen={() => onOpen(m.id, a.id)} />
-                <span className="muted small artifact-when">{new Date(m.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-              </li>
-            ))}
-          </ul>
+        {onOpenInThread && (
+          <button type="button" className="btn btn-small" onClick={() => (onClose(), onOpenInThread())}>
+            <Icon name="message-circle" /> Open in thread
+          </button>
+        )}
+        {onReplyAbout && (
+          <button
+            type="button"
+            className="btn btn-small btn-good"
+            onClick={() => {
+              onClose();
+              onReplyAbout(messageId, artifact.title);
+            }}
+          >
+            <Icon name="reply" /> Reply about this
+          </button>
         )}
       </div>
     </Sheet>

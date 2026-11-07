@@ -598,10 +598,11 @@ export abstract class SwarmSessions extends SwarmAgents {
     if (this.silenced.delete(a.id)) return; // the demo's pretend restart cut it off: reconciled like after a real one
     rt.session = null;
     rt.currentTool = null;
-    a.costUsd += result.costUsd;
+    const turn = this.spend.perTurn(a.id, this.spend.sid(a.id), result);
+    a.costUsd += turn.costUsd;
     a.turns += result.turns;
-    recordCost(this.state.ops, repo.id, result.costUsd, Date.now());
-    void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...result, ok: false }, { stopped: false });
+    recordCost(this.state.ops, repo.id, turn.costUsd, Date.now());
+    void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...turn, ok: false }, { stopped: false });
     // The login its servers turned away is forgotten, so the Box reads as signed out until the manager signs it in again.
     await this.boxMachines.signOut(this.machineOf(a), cli).catch(() => undefined);
     this.holdForSignIn(a, cli, again, true);
@@ -615,7 +616,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     return costsRequest(this.spend.ledger.all(), days, repoId, (id) => this.state.repos.some((r) => r.id === id));
   }
 
-  protected async onFinished(a: PersistedAgent, repo: PersistedRepo, result: SessionResult) {
+  protected async onFinished(a: PersistedAgent, repo: PersistedRepo, ran: SessionResult) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return; // fired
     if (this.officeUpdate.cutOff.has(a.id)) return; // stopped for the office's update: recovered like after a restart
@@ -623,6 +624,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     rt.session = null;
     rt.currentTool = rt.blocked = null;
     const run = this.spend.take(a.id);
+    const result = this.spend.perTurn(a.id, run?.sessionId, ran); // a CLI kept or resumed across runs reports a running total (#254)
     a.endedAt = Date.now();
     a.costUsd += result.costUsd;
     a.turns += result.turns;

@@ -12,7 +12,8 @@ import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
-import type { ConversationHit } from '../../shared/conversations';
+import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
+import type { LibraryFilter, LibraryPage } from '../../shared/library';
 import type { HealthView } from '../../shared/health';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
@@ -120,7 +121,7 @@ export const api = {
   sendToQa: (repoId: string, n: number, agentId?: string) => call('POST', `${r(repoId)}/pulls/${n}/qa`, agentId ? { agentId } : {}),
   sendBack: (repoId: string, n: number, note?: string) => call('POST', `${r(repoId)}/pulls/${n}/fix`, { note }),
   /** A new agent on the floor (refused past Settings → Most agents per floor). Empty settings use the office's defaults. */
-  hireAgent: (repoId: string, opts: AgentSetupPatch & { name?: string } = {}) => call<AgentView>('POST', `${r(repoId)}/agents`, opts),
+  hireAgent: (repoId: string, opts: AgentSetupPatch & { name?: string } = {}, toast = true) => call<AgentView>('POST', `${r(repoId)}/agents`, opts, toast),
   updateAgent: (id: string, patch: AgentSetupPatch & { name?: string; look?: 'feminine' | 'masculine'; style?: AgentStyle | null; voiceId?: string; voiceName?: string }) => call('PATCH', `/api/agents/${id}`, patch),
   fireAgent: (id: string) => call('DELETE', `/api/agents/${id}`),
   /** waitForDeps: refuse an issue that still waits for open ones, as the whiteboard's stickies do. */
@@ -168,9 +169,10 @@ export const api = {
   ceoRetry: () => call('POST', '/api/ceo/retry'),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
-  newConversation: () => call<{ id: string }>('POST', '/api/ceo/conversations'),
+  newConversation: (repoId: string | null = null) => call<{ id: string }>('POST', '/api/ceo/conversations', { repoId }),
   openConversation: (id: string) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/open`),
-  pinConversation: (id: string, pinned: boolean) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/pin`, { pinned }),
+  editConversation: (id: string, patch: ConversationPatch) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/edit`, patch),
+  library: (scope: string, filter: LibraryFilter, after?: string) => call<LibraryPage>('GET', `/api/ceo/library?${new URLSearchParams({ scope, filter, ...(after && { after }) })}`, undefined, false),
   searchConversations: (q: string) => call<{ hits: ConversationHit[] }>('GET', `/api/ceo/conversations/search?q=${encodeURIComponent(q)}`, undefined, false),
   ceoNotes: () => call<{ text: string; truncated: boolean; at: number | null }>('GET', '/api/ceo/notes'),
   addMemory: (text: string) => call('POST', '/api/ceo/memory', { text }),

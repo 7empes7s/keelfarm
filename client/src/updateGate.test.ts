@@ -5,6 +5,7 @@ import { markBusy, readyAfter, tryLoad } from './updateGate';
 afterEach(() => {
   markBusy('draft:ceo', 'draft', false);
   markBusy('upload:ceo', 'uploading', false);
+  markBusy('voice-call', 'call', false);
 });
 
 const idle = { sending: false, sheet: false };
@@ -37,5 +38,14 @@ describe('tryLoad', () => {
     const load = vi.fn();
     expect(tryLoad(null, { kind: 'tap' }, idle, load)).toEqual({ loaded: false, waitsFor: null });
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it('never loads during a voice call (it would hang up on the CEO), and loads once the call ends', () => {
+    const load = vi.fn();
+    markBusy('voice-call', 'call', true);
+    for (const moment of [{ kind: 'nav' }, { kind: 'tap' }, { kind: 'visible', hiddenMs: 60_000 }] as const) expect(tryLoad('def5678', moment, idle, load)).toEqual({ loaded: false, waitsFor: 'the call ends' });
+    expect(load).not.toHaveBeenCalled();
+    markBusy('voice-call', 'call', false);
+    expect(tryLoad('def5678', { kind: 'nav' }, idle, load).loaded).toBe(true);
   });
 });

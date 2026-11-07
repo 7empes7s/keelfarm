@@ -44,7 +44,7 @@ import { demoAwake, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { demoEditedChat, demoThreads, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
@@ -1129,10 +1129,11 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
-    seedChat: (now) => {
+    seedChat: (now, cards) => {
       const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
-      return [...edits, ...sampleChat(now, edits.length + 1)];
+      return [...edits, ...sampleChat(now, edits.length + 1, scale ? undefined : cards)]; // the big company measures the office (scale.test.ts), not the cards' example
     },
+    seedThreads: demoThreads,
     demoCharter,
     seedQaReport: (fullName) => {
       if (scale) return null; // the big company measures the office (scale.test.ts), not this example
@@ -1863,12 +1864,13 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
 // ---------- voice ----------
 
 /**
- * A short two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, a little longer for longer text, and
- * pitched by the voice, so a replayed clip is audibly the one made in the voice of its day, and shorter when faster.
+ * A two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, longer for longer text (up to 6 s, so a
+ * voice call can be paused, skipped and talked over mid-reply), and pitched by the voice, so a replayed clip is
+ * audibly the one made in the voice of its day, and shorter when faster.
  */
 export function demoChime(chars: number, voiceId = '', speed = 1): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 400, 2) / speed;
+  const seconds = Math.min(0.4 + chars / 40, 6) / speed;
   const n = Math.round(rate * seconds);
   const wav = Buffer.alloc(44 + n);
   wav.write('RIFF', 0);
