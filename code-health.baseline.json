@@ -602,6 +602,6 @@
     "server/demo.ts": 1940,
     "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
-    "shared/types.ts": 900
+    "shared/types.ts": 946
   }
 }

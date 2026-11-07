@@ -824,8 +824,7 @@ export type ServerEvent =
   | { type: 'logs'; tails: Record<string, LogLine[]>; catchUp?: boolean }
   /** The latest line worth listing of agents it doesn't watch, for the workers list. */
   | { type: 'latest'; lines: Record<string, LogLine> }
-  /** New or changed chat items (#120) of the agents whose window this tab has open; `catchUp`: all of them, replacing. */
-  | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean }
+  | { type: 'agentChat'; chats: Record<string, ChatItem[]>; catchUp?: boolean } // chat items (#120) of the agent windows a tab has open; catchUp replaces
   | { type: 'screen'; agentId: string; url: string | null; at: number }
   | { type: 'qa'; qa: QaView }
   | { type: 'qaRemoved'; repoId: string; prNumber: number }
