@@ -1,6 +1,7 @@
 // The demo's made-up cost ledger (#18): a week of sessions on each floor (issues, QA rounds, fixes, the odd wasted
 // session) and the CEO's jobs, with the PRs that merged, so the usage view has something to show. Pure and seeded.
 import type { CostMerge, CostRecord, CostSession, SessionOutcome, TaskKind } from '../shared/costs.ts';
+import type { RoundCause } from '../shared/rounds.ts';
 import type { EffortLevel } from '../shared/types.ts';
 import { startupParts, type StartupContext } from '../shared/startup.ts';
 import { DAY_MS, HOUR_MS, startOfDay } from './metrics.ts';
@@ -15,6 +16,9 @@ function sampleStartup(kind: TaskKind, usd: number): StartupContext {
     { label: 'Task prompt', tokens: ceo ? 250 : 120 },
   ]);
 }
+
+/** Why the sample's QA rounds failed (#188), as often as each turns up. */
+const QA_CAUSES: RoundCause[] = ['bug', 'bug', 'bug', 'bug', 'nit', 'nit', 'nit', 'spec-missing', 'spec-missing', 'lab-error'];
 
 export interface SampleFloor {
   repoId: string;
@@ -51,7 +55,7 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
         const dev = pick(f.agents);
         let when = at();
         const base = { repoId: f.repoId, issue, effort: 'medium' as EffortLevel };
-        const add = (kind: TaskKind, agent: { id: string; name: string }, usd: number, outcome: SessionOutcome, pr: number | null, extra: { round?: number; effort?: EffortLevel } = {}) => {
+        const add = (kind: TaskKind, agent: { id: string; name: string }, usd: number, outcome: SessionOutcome, pr: number | null, extra: { round?: number; effort?: EffortLevel; cause?: RoundCause } = {}) => {
           const ms = Math.round(between(4, 40) * 60_000);
           when = Math.min(now, when + ms);
           session({ ...base, ...extra, at: when, ms, agentId: agent.id, agent: agent.name, kind, pr, usd, outcome });
@@ -62,14 +66,15 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
         }
         const pr = prNo++;
         add('issue', dev, between(1.2, 5.5), 'pr', pr);
-        if (rand() < 0.15) add('fix-conflict', dev, between(0.2, 0.9), 'commit', pr, { effort: 'low' });
+        if (rand() < 0.15) add('fix-conflict', dev, between(0.2, 0.9), 'commit', pr, { effort: 'low', cause: 'conflict' });
         const rounds = rand() < 0.55 ? 1 : rand() < 0.7 ? 2 : 3 + Math.floor(rand() * 2);
         for (let r = 1; r <= rounds; r++) {
           const pass = r === rounds;
-          add('qa', pick(f.agents), between(0.4, 1.6), pass ? 'qa-pass' : 'qa-fail', pr, { round: r });
-          if (!pass) add('fix-qa', dev, between(0.5, 2.2), rand() < 0.1 ? 'no-commit' : 'commit', pr);
+          const cause = pass ? undefined : pick(QA_CAUSES);
+          add('qa', pick(f.agents), between(0.4, 1.6), pass ? 'qa-pass' : 'qa-fail', pr, { round: r, cause });
+          if (cause && cause !== 'lab-error') add('fix-qa', dev, between(0.5, 2.2), rand() < 0.1 ? 'no-commit' : 'commit', pr, { cause }); // a lab error is re-tested as it is
         }
-        if (rand() < 0.2) add('fix-checks', dev, between(0.2, 1), 'commit', pr, { effort: 'low' });
+        if (rand() < 0.2) add('fix-checks', dev, between(0.2, 1), 'commit', pr, { effort: 'low', cause: rand() < 0.25 ? 'outage' : 'checks' });
         if (when < now && rand() < 0.85) out.push({ type: 'merge', at: Math.min(now, when + 5 * 60_000), repoId: f.repoId, pr, issues: [issue] } satisfies CostMerge);
       }
     }
@@ -85,15 +90,15 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
     const [stuck, open] = f.open ?? [];
     const dev = f.agents[0];
     if (!dev) continue;
-    const flight = (hoursAgo: number, kind: TaskKind, issue: number, pr: number | null, usd: number, outcome: SessionOutcome, round?: number) =>
-      session({ repoId: f.repoId, issue, pr, effort: 'medium', at: now - hoursAgo * HOUR_MS, ms: 20 * 60_000, agentId: dev.id, agent: dev.name, kind, usd, outcome, ...(round === undefined ? {} : { round }) });
+    const flight = (hoursAgo: number, kind: TaskKind, issue: number, pr: number | null, usd: number, outcome: SessionOutcome, round?: number, cause?: RoundCause) =>
+      session({ repoId: f.repoId, issue, pr, effort: 'medium', at: now - hoursAgo * HOUR_MS, ms: 20 * 60_000, agentId: dev.id, agent: dev.name, kind, usd, outcome, ...(round === undefined ? {} : { round }), ...(cause ? { cause } : {}) });
     if (stuck !== undefined) for (const h of [5, 3.5, 2]) flight(h, 'issue', stuck, null, between(0.8, 2), 'no-pr');
     if (open !== undefined) {
       const pr = prNo++;
       flight(6, 'issue', open, pr, between(8, 11), 'pr');
-      flight(4.5, 'qa', open, pr, between(0.6, 1.4), 'qa-fail', 1);
-      flight(4, 'fix-qa', open, pr, between(0.8, 1.8), 'no-commit');
-      flight(1.5, 'qa', open, pr, between(0.6, 1.4), 'qa-fail', 2);
+      flight(4.5, 'qa', open, pr, between(0.6, 1.4), 'qa-fail', 1, 'bug');
+      flight(4, 'fix-qa', open, pr, between(0.8, 1.8), 'no-commit', undefined, 'bug');
+      flight(1.5, 'qa', open, pr, between(0.6, 1.4), 'qa-fail', 2, 'bug');
     }
   }
   return out.filter((r) => r.at <= now).sort((a, b) => a.at - b.at);

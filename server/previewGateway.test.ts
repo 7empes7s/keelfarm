@@ -1,7 +1,8 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BOOT_SCRIPT, escapedTo, gatewayLocation, handleGateway, injectBoot, parseMount, WORKER_SOURCE } from './previewGateway.ts';
+import type net from 'node:net';
+import { BOOT_SCRIPT, escapedTo, gatewayLocation, handleGateway, injectBoot, mountAssets, parseMount, upgradeGateway, WORKER_SOURCE } from './previewGateway.ts';
 
 describe('gateway paths', () => {
   it("reads the preview's port and the app's own path", () => {
@@ -40,6 +41,18 @@ describe('gateway paths', () => {
     expect(load('/api/state', 'https://office.ts.net/preview/6301/')).toBeNull();
     expect(load('/preview/6301/x', 'https://office.ts.net/preview/6301/')).toBeNull();
     expect(load('/about', 'not a url')).toBeNull();
+  });
+});
+
+describe("the page's root-path assets", () => {
+  it('go under the mount, so a module script runs once (#192)', () => {
+    const page = `<link rel="stylesheet" href="/assets/app.css"><script type="module" crossorigin src='/assets/index.js'></script>`;
+    expect(mountAssets(page, 6401)).toBe(`<link rel="stylesheet" href="/preview/6401/assets/app.css"><script type="module" crossorigin src='/preview/6401/assets/index.js'></script>`);
+  });
+
+  it('leave relative, protocol-relative, mounted and other addresses alone', () => {
+    const page = `<script src="assets/a.js"></script><script src="//cdn.example.com/b.js"></script><link href="/preview/6401/c.css"><link href="https://x.org/d.css"><a href="/about">about</a><img src="/logo.png">`;
+    expect(mountAssets(page, 6401)).toBe(page);
   });
 });
 
@@ -135,5 +148,23 @@ describe('the gateway in front of an app (loopback only)', () => {
     const other = await fetch(`${at}/preview/${target + 1}/`);
     expect(other.status).toBe(404);
     expect(await (await fetch(`${at}/`)).text()).toBe('the office');
+  });
+
+  it("never serves the office's own /api/state or /ws from a preview, even asked from one (#192)", async () => {
+    const seen: string[] = [];
+    const target = await listen(http.createServer((req, res) => void (seen.push(req.url ?? ''), res.end('the preview'))));
+    const office = http.createServer((req, res) => {
+      if (!handleGateway(req, res, (p) => p === target)) res.writeHead(200).end('the office');
+    });
+    const at = `http://127.0.0.1:${await listen(office)}`;
+    const fromPreview = { referer: `${at}/preview/${target}/`, 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty' };
+    expect(await (await fetch(`${at}/api/state`, { headers: fromPreview })).text()).toBe('the office');
+    expect(await (await fetch(`${at}/api/state`, { headers: { ...fromPreview, 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' } })).text()).toBe('the office');
+    expect(seen).toEqual([]);
+
+    const socket = { destroy: () => expect.unreachable('the office keeps its own sockets') } as unknown as net.Socket;
+    for (const url of ['/ws', '/ws/term?agent=a']) {
+      expect(upgradeGateway({ url, headers: { referer: `${at}/preview/${target}/` } } as http.IncomingMessage, socket, Buffer.alloc(0), (p) => p === target)).toBe(false);
+    }
   });
 });

@@ -24,6 +24,7 @@ import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
+import type { RoundCause } from '../../shared/rounds.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -132,6 +133,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   testedSha: string | null; // the head commit QA is testing
   passedSha: string | null; // the head commit QA signed off on: auto-merge merges exactly that
   fixReason: 'qa' | 'checks' | 'conflict' | null; // why it was last sent back to a developer
+  qaCause?: RoundCause | null; // why QA last failed it (#188): a QA fix's cause
   mergeFixes: number; // times it went back for failing checks or conflicts
   retests: number; // QA rounds caused by merge fixes or new commits rather than by QA failing it
   preQa: PreQa | null; // a conflict found before QA tested the head is being fixed
