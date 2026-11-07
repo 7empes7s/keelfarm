@@ -279,33 +279,33 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 <EmptyState kind={id} compact {...emptyAction[id]} />
               </div>
             )}
-        {cards.map((c) => (
-          <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
-            <div className="kcard-title">
-              <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
-                <button className="linkish" title="Open the card" onClick={() => openCard(c)}>
-                  {c.prNumber ? 'PR ' : ''}#{c.number}
-                </button>
-              </HoverCard>{' '}
-              {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
-              {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
-            </div>
-            {cls !== 'kcol-merged' && cls !== 'kcol-backlog' && (
-              <TaskBar
-                input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
-                repoId={repo.id}
-                since={taskSince(repo, c.number, c.prNumber ?? null)}
-                name={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}
-                compact
-                {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
-              />
-            )}
-            {c.prNumber != null && cls !== 'kcol-merged' && !c.untrusted && (
-              <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
-            )}
-            {render(c)}
-          </div>
-        ))}
+            {cards.map((c) => (
+              <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
+                <div className="kcard-title">
+                  <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
+                    <button className="linkish" title="Open the card" onClick={() => openCard(c)}>
+                      {c.prNumber ? 'PR ' : ''}#{c.number}
+                    </button>
+                  </HoverCard>{' '}
+                  {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
+                  {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
+                </div>
+                {cls !== 'kcol-merged' && cls !== 'kcol-backlog' && (
+                  <TaskBar
+                    input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
+                    repoId={repo.id}
+                    since={taskSince(repo, c.number, c.prNumber ?? null)}
+                    name={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}
+                    compact
+                    {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
+                  />
+                )}
+                {c.prNumber != null && cls !== 'kcol-merged' && !c.untrusted && (
+                  <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
+                )}
+                {render(c)}
+              </div>
+            ))}
           </div>
         </div>
       </div>

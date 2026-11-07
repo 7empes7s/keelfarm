@@ -23,6 +23,7 @@ test('a phone folds the Backlog: In progress on the first screen, the choice kep
   await expect(head('kcol-merged')).toHaveAttribute('aria-expanded', 'false');
   await expect(head('kcol-progress')).toHaveAttribute('aria-expanded', 'true');
   await expect(head('kcol-progress')).toBeInViewport();
+  await root.getByRole('navigation', { name: 'Kanban columns' }).getByRole('button', { name: /^In QA/ }).click();
   await expect(head('kcol-qa')).toBeInViewport();
   expect(Number(await head('kcol-backlog').locator('.count').innerText())).toBeGreaterThanOrEqual(30);
   await expect(head('kcol-backlog').locator('.kcol-summary')).toContainText(/ready/);
@@ -68,4 +69,13 @@ test('side by side, a folded column is a narrow strip', async ({ page }) => {
   expect(count.x + count.width).toBeLessThanOrEqual(strip.x + strip.width);
   await backlog.locator('.kcol-head').click();
   await expect.poll(async () => (await backlog.boundingBox())!.width).toBeGreaterThan(150);
+});
+
+test('folding preserves main card detail navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await kanban(page);
+  const backlog = root.locator('.kcol-backlog');
+  await backlog.locator('.kcol-head').click();
+  await backlog.locator('.kcard').first().getByRole('button', { name: /^#/ }).click();
+  await expect(page.locator('.cardview')).toBeVisible();
 });
