@@ -152,6 +152,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
+  cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */

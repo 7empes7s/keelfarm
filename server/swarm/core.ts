@@ -423,9 +423,9 @@ export abstract class SwarmCore extends SwarmContract {
     return effectivePractices(this.state.settings.everyProject.practices, r.practices, variant);
   }
 
-  /** Whether any of the floor's work may run with leases: the floor's switch, or a running experiment's variant. */
+  /** Whether any of the floor's work may run with leases or conflict-aware scheduling (#256): the floor's switch, or a running experiment's variant. */
   protected leasesWanted(r: PersistedRepo) {
-    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases');
+    return this.practicesOf(r).leases || this.lab.tries(r.id, 'leases') || this.practicesOf(r).busyFiles || this.lab.tries(r.id, 'busyFiles');
   }
 
   /** The floor's leases now: each agent building or fixing an issue, and each open swarm PR (shared/practices.ts). */

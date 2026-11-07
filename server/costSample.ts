@@ -42,7 +42,7 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
   const today = startOfDay(now);
   let issueNo = 300;
   let prNo = 600;
-  const session = (s: Omit<CostSession, 'type' | 'tokens' | 'model' | 'round'> & { round?: number }) =>
+  const session = (s: Omit<CostSession, 'type' | 'tokens' | 'model' | 'round'> & { round?: number; model?: string }) =>
     out.push({ type: 'session', tokens: null, model: 'claude-opus-5-5', round: null, ...s, usd: Math.round(s.usd * 100) / 100, startup: sampleStartup(s.kind, s.usd) });
   for (let d = days - 1; d >= 0; d--) {
     const start = today - d * DAY_MS + 8 * HOUR_MS; // the working day starts at 8
@@ -57,7 +57,7 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
         const dev = pick(f.agents);
         let when = at();
         const base = { repoId: f.repoId, issue, effort: 'medium' as EffortLevel };
-        const add = (kind: TaskKind, agent: { id: string; name: string }, usd: number, outcome: SessionOutcome, pr: number | null, extra: { round?: number; effort?: EffortLevel; cause?: RoundCause } = {}) => {
+        const add = (kind: TaskKind, agent: { id: string; name: string }, usd: number, outcome: SessionOutcome, pr: number | null, extra: { round?: number; effort?: EffortLevel; cause?: RoundCause; cheap?: boolean; model?: string } = {}) => {
           const ms = Math.round(between(4, 40) * 60_000);
           when = Math.min(now, when + ms);
           session({ ...base, ...extra, at: when, ms, agentId: agent.id, agent: agent.name, kind, pr, usd, outcome });
@@ -68,7 +68,8 @@ export function sampleCosts(floors: SampleFloor[], ceo: { id: string; name: stri
         }
         const pr = prNo++;
         add('issue', dev, between(1.2, 5.5), 'pr', pr);
-        if (rand() < 0.15) add('fix-conflict', dev, between(0.2, 0.9), 'commit', pr, { effort: 'low', cause: 'conflict' });
+        // Every other conflict fix ran on the cheaper model (#256), without a draw, so the rest of the sample stays as it was.
+        if (rand() < 0.15) add('fix-conflict', dev, between(0.2, 0.9) * (issue % 2 ? 1 : 0.4), 'commit', pr, { effort: 'low', cause: 'conflict', ...(issue % 2 ? {} : { cheap: true, model: 'claude-sonnet-5' }) });
         const rounds = rand() < 0.55 ? 1 : rand() < 0.7 ? 2 : 3 + Math.floor(rand() * 2);
         for (let r = 1; r <= rounds; r++) {
           const pass = r === rounds;

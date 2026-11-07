@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { PRACTICES_OFF, type PracticeOverrides, type Practices } from '../../../shared/practices';
+import { holdReason } from '../../../shared/conflicts';
 import type { RepoView } from '../../../shared/types';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -10,12 +11,13 @@ import type { IconName } from './icons';
 // floor's leases, held-back issues and hot files, and the lease chip on a held issue's Kanban card. Every switch is
 // off until the lab proves it; a proven variant becomes every project's default from its experiment's results.
 
-type Switch = 'upToDate' | 'leases' | 'autoRebase';
+type Switch = 'upToDate' | 'leases' | 'autoRebase' | 'busyFiles';
 
 const SWITCHES: { key: Switch; icon: IconName; label: string; hint: string }[] = [
   { key: 'upToDate', icon: 'git-merge', label: 'Up to date before merge', hint: "Before auto-merge, merge the base into the PR and wait for CI on that result; a PR that only fails then goes back as a conflict" },
   { key: 'leases', icon: 'lock', label: 'File leases', hint: "Agents declare the files they'll touch; issues overlapping work in flight wait (at most 45 minutes)" },
   { key: 'autoRebase', icon: 'repeat', label: 'Auto-rebase', hint: 'A PR waiting for QA or its merge that conflicts after main moves goes straight to a developer to update' },
+  { key: 'busyFiles', icon: 'flame', label: 'Conflict-aware scheduling', hint: "Issues touching files 2+ PRs or builds already touch wait for one that doesn't (nobody idles over it; a priority label skips the wait); the PR on the hottest files merges first. Area lines in the floor playbook (area chat: client/src/ui/Chat*) help predict files" },
 ];
 
 /** api() already toasted the error. */
@@ -160,8 +162,14 @@ export function FloorPractices({ repo }: { repo: RepoView }) {
 export function LeaseChip({ repo, issue }: { repo: RepoView; issue: number }) {
   const h = repo.leaseHolds?.find((x) => x.issue === issue);
   if (!h) return null;
+  const busy = repo.practices?.busyFiles;
   const by = h.by.issue > 0 ? `#${h.by.issue}` : `PR #${h.by.pr}`;
-  return (
+  // Conflict-aware scheduling (#256) says which files; file leases keep their short chip.
+  return busy ? (
+    <span className="chip" title={`Both touch ${h.files.join(', ')}. It starts when no other ready issue avoids those files, or once ${by} is done.`}>
+      <Icon name="flame" /> {holdReason(h)}
+    </span>
+  ) : (
     <span className="chip" title={`Waits for ${by}: both touch ${h.files.join(', ')}. It starts anyway after 45 minutes.`}>
       <Icon name="lock" /> waits for {by}
     </span>

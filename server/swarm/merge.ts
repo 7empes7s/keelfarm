@@ -22,6 +22,7 @@ import { CHECKS_ALERT_MS, failedRunIds, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeSt
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { rebaseHandOffs } from '../../shared/practices.ts';
+import { mergeOrder } from '../../shared/conflicts.ts';
 import { spared } from '../../shared/managerChanges.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
 import type { LogLine, PullInfo } from '../../shared/types.ts';
@@ -51,7 +52,8 @@ export abstract class SwarmMerge extends SwarmRepos {
     let merged = false;
     try {
       await this.outageReruns(repo, rt);
-      for (const rec of this.state.qa.filter((q) => q.repoId === repo.id && q.status === 'passed' && q.ciOutage == null)) {
+      for (const rec of this.mergeQueue(repo, rt)) {
+        if (merged && this.busyWanted(repo)) break; // #256: one merge per pass, so the sync that follows hands the PRs it conflicts with to a developer first
         const pr = rt.pulls.find((p) => p.number === rec.prNumber && p.state === 'OPEN');
         if (!pr || pr.untrusted || !pr.headRefName.startsWith('swarm/')) continue; // people's own PRs are theirs to merge, outsiders' too (#185)
         // Only act on PR data fetched after the record last changed (a fix may have just pushed).
@@ -70,6 +72,25 @@ export abstract class SwarmMerge extends SwarmRepos {
       await this.syncRepo(repo.id);
       setTimeout(() => this.schedule(), 200);
     }
+  }
+
+  /** Whether any of the floor's work may run with conflict-aware scheduling (#256): the floor's switch, or a running experiment's variant. */
+  protected busyWanted(r: PersistedRepo) {
+    return this.practicesOf(r).busyFiles || this.lab.tries(r.id, 'busyFiles');
+  }
+
+  /**
+   * The QA-passed PRs in the order they try to merge: as they come, unless conflict-aware scheduling (#256) is wanted on
+   * the floor, when the one touching the most hot files goes first (shared/conflicts.ts mergeOrder).
+   */
+  protected mergeQueue(repo: PersistedRepo, rt: RepoRuntime) {
+    const passed = this.state.qa.filter((q) => q.repoId === repo.id && q.status === 'passed' && q.ciOutage == null);
+    if (passed.length < 2 || !this.busyWanted(repo)) return passed;
+    const fp = this.floorPractice(repo.id);
+    const files = (n: number) => fp.prFiles.get(n)?.files ?? [];
+    const open = rt.pulls.filter((p) => p.state === 'OPEN' && p.headRefName.startsWith('swarm/')).map((p) => ({ number: p.number, files: files(p.number) }));
+    const order = mergeOrder(passed.map((q) => ({ number: q.prNumber, files: files(q.prNumber) })), fp.hot.map((h) => h.path), open);
+    return order.map((n) => passed.find((q) => q.prNumber === n)!);
   }
 
   /** One step toward merging a QA-passed PR. Returns true when it merged. */
@@ -277,7 +298,11 @@ export abstract class SwarmMerge extends SwarmRepos {
   protected rebaseConflicting(repo: PersistedRepo) {
     const rt = this.repoRt.get(repo.id);
     if (!rt) return;
-    const records = this.state.qa.filter((q) => q.repoId === repo.id && (rt.fetchedAt ?? 0) >= q.updatedAt && this.practicesOf(repo, q.issueNumber, q.prNumber).autoRebase);
+    const records = this.state.qa.filter((q) => {
+      if (q.repoId !== repo.id || (rt.fetchedAt ?? 0) < q.updatedAt) return false;
+      const p = this.practicesOf(repo, q.issueNumber, q.prNumber);
+      return p.autoRebase || p.busyFiles; // conflict-aware scheduling refreshes them too (#256)
+    });
     for (const n of rebaseHandOffs(rt.pulls, records, true)) {
       const rec = records.find((q) => q.prNumber === n)!;
       const pr = rt.pulls.find((p) => p.number === n)!;

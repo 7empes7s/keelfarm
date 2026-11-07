@@ -3,11 +3,14 @@
 // and a small-PR budget. Settings → Every project holds the office's defaults; a floor overrides any of them, and an
 // experiment's variant overrides both for the issues it covers. Pure, shared by the server and the settings.
 
+import { conflictFixSettings, type ConflictFixSettings } from './conflicts.ts';
+
 /** The switches. All off (PRACTICES_OFF) is the office as it was before them. */
 export interface Practices {
   upToDate: boolean; // before auto-merge, bring the PR up to date with the base and wait for CI on that result
   leases: boolean; // agents declare the files they expect to touch; the scheduler holds back issues that overlap
   autoRebase: boolean; // an open PR that conflicts after the base moves goes to a developer to update before QA
+  busyFiles: boolean; // conflict-aware scheduling (#256): issues overlapping busy files wait, the hottest PR merges first
   generated: string[]; // files agents regenerate instead of hand-merging (e.g. docs/coverage.md)
   appendOnly: string[]; // append-only logs: on a conflict keep both sides' entries (e.g. STATE.md)
   diffBudget: number; // lines added + deleted a PR should stay under; over it the builder says why or splits it; 0: none
@@ -19,11 +22,12 @@ export type PracticeOverrides = Partial<Practices>;
 /** Settings → Every project: what every floor inherits unless it overrides it. */
 export interface EveryProject {
   practices: Practices; // (its playbook is settings.officePlaybook, edited in the CEO tab's project briefs)
+  conflictFix?: ConflictFixSettings; // the cheaper model for conflict-only fix rounds (#256), set in Settings → Agents
 }
 
-export const PRACTICES_OFF: Practices = { upToDate: false, leases: false, autoRebase: false, generated: [], appendOnly: [], diffBudget: 0 };
+export const PRACTICES_OFF: Practices = { upToDate: false, leases: false, autoRebase: false, busyFiles: false, generated: [], appendOnly: [], diffBudget: 0 };
 
-export const emptyEveryProject = (): EveryProject => ({ practices: { ...PRACTICES_OFF } });
+export const emptyEveryProject = (): EveryProject => ({ practices: { ...PRACTICES_OFF }, conflictFix: conflictFixSettings(undefined, {}) });
 const MAX_FILES = 30;
 const MAX_BUDGET = 100_000;
 
@@ -52,7 +56,7 @@ export function cleanOverrides(raw: unknown): PracticeOverrides {
   if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('practices must be an object of switches');
   const r = raw as Record<string, unknown>;
   const out: PracticeOverrides = {};
-  for (const k of ['upToDate', 'leases', 'autoRebase'] as const) {
+  for (const k of ['upToDate', 'leases', 'autoRebase', 'busyFiles'] as const) {
     if (r[k] === undefined || r[k] === null) continue;
     if (typeof r[k] !== 'boolean') throw new Error(`${k} must be true or false`);
     out[k] = r[k];
@@ -70,9 +74,10 @@ export function cleanOverrides(raw: unknown): PracticeOverrides {
 /** Every project's settings after a patch from Settings. */
 export function everyProjectSettings(prev: EveryProject | undefined, patch: unknown): EveryProject {
   const base = prev ?? emptyEveryProject();
-  const p = (patch ?? {}) as { practices?: unknown };
+  const p = (patch ?? {}) as { practices?: unknown; conflictFix?: unknown };
   return {
     practices: { ...PRACTICES_OFF, ...base.practices, ...cleanOverrides(p.practices) },
+    conflictFix: conflictFixSettings(base.conflictFix, p.conflictFix ?? {}),
   };
 }
 
@@ -95,6 +100,7 @@ export function describePractices(p: PracticeOverrides): string {
   if (p.upToDate !== undefined) parts.push(`up to date before merge ${p.upToDate ? 'on' : 'off'}`);
   if (p.leases !== undefined) parts.push(`file leases ${p.leases ? 'on' : 'off'}`);
   if (p.autoRebase !== undefined) parts.push(`auto-rebase ${p.autoRebase ? 'on' : 'off'}`);
+  if (p.busyFiles !== undefined) parts.push(`conflict-aware scheduling ${p.busyFiles ? 'on' : 'off'}`);
   if (p.generated?.length) parts.push(`regenerate ${p.generated.join(', ')}`);
   if (p.appendOnly?.length) parts.push(`append-only ${p.appendOnly.join(', ')}`);
   if (p.diffBudget !== undefined) parts.push(p.diffBudget ? `${p.diffBudget}-line PR budget` : 'no PR budget');
@@ -167,7 +173,7 @@ export function predictFiles(text: string, known: string[] = []): string[] {
 }
 
 /** A lease against a path from another issue: a bare file name ("Phone.tsx") matches that file in any folder. */
-function leaseOverlap(files: string[], lease: string[]): string[] {
+export function leaseOverlap(files: string[], lease: string[]): string[] {
   return files.filter((f) => lease.some((l) => touches(f, l) || (!f.includes('/') && l.endsWith(`/${f}`)) || (!l.includes('/') && f.endsWith(`/${l}`))));
 }
 
