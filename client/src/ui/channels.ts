@@ -1,7 +1,7 @@
 // The PR theatre's channels, as pure helpers: a floor's big screen and app viewer show "main" (the floor's own
 // preview) or one of its open PRs, each PR running in a preview of its own.
 
-import type { PreviewStatus, PreviewView, PrPreviewView, PullInfo, QaStatus, QaView } from '../../../shared/types';
+import type { AgentView, PreviewStatus, PreviewView, PrPreviewView, PullInfo, QaStatus, QaView } from '../../../shared/types';
 
 /** What a floor's screen shows: its main preview (null) or an open PR's. */
 export type Channel = number | null;
@@ -26,8 +26,48 @@ export function channelLabel(pull: Pick<PullInfo, 'number' | 'title'>, qa?: Pick
   return [`PR #${pull.number}`, clip(pull.title.trim(), max), qaBadge(qa)].filter(Boolean).join(' · ');
 }
 
-/** A floor's open PRs, in channel order (oldest first, like channel numbers). */
-export const channelPulls = (pulls: PullInfo[]) => pulls.filter((p) => p.state === 'OPEN').sort((a, b) => a.number - b.number);
+/** PR previews that run at once (server/prTheatre.ts MAX_PR_PREVIEWS). */
+export const PR_PREVIEW_SLOTS = 2;
+
+/** A floor's open PRs, in channel order (oldest first, like channel numbers). Never an outsider's: it isn't previewed (#185). */
+export const channelPulls = (pulls: PullInfo[]) => pulls.filter((p) => p.state === 'OPEN' && !p.untrusted).sort((a, b) => a.number - b.number);
+
+/** What decides which open PRs get a chip of their own (#204). */
+export interface LiveInputs {
+  busy: Set<number>; // PRs an agent is building, fixing or testing now
+  previewing: Set<number>; // PRs whose preview is starting or running
+  current: Channel; // the one on screen keeps its chip
+  now: number;
+  recentHours: number; // settings.previewRecentHours
+}
+
+/**
+ * The chips: main, then the open PRs an agent works on now, that have a preview starting or running, are on screen,
+ * or were updated in the last `recentHours`. Every other open PR folds under one "Older (N)" chip. Merged or closed
+ * PRs never show (channelPulls).
+ */
+export function liveChannels(pulls: PullInfo[], x: LiveInputs): { live: PullInfo[]; older: PullInfo[] } {
+  const recent = (p: PullInfo) => x.now - (Date.parse(p.updatedAt ?? p.createdAt) || 0) <= x.recentHours * 3_600_000;
+  const live: PullInfo[] = [];
+  const older: PullInfo[] = [];
+  for (const p of channelPulls(pulls)) (x.busy.has(p.number) || x.previewing.has(p.number) || x.current === p.number || recent(p) ? live : older).push(p);
+  return { live, older };
+}
+
+/** The floor's PRs an agent is on now (preparing or working on a task that has a PR). */
+export const busyPrs = (agents: Pick<AgentView, 'repoId' | 'status' | 'prNumber'>[], repoId: string) =>
+  new Set(agents.flatMap((a) => (a.repoId === repoId && a.prNumber != null && (a.status === 'preparing' || a.status === 'working') ? [a.prNumber] : [])));
+
+/** The floor's PRs whose preview is being set up or running. */
+export const previewingPrs = (prPreviews: Record<string, Pick<PrPreviewView, 'repoId' | 'pr' | 'status'>>, repoId: string) =>
+  new Set(Object.values(prPreviews).flatMap((p) => (p.repoId === repoId && channelLed(p.status) !== 'off' && channelLed(p.status) !== 'bad' ? [p.pr] : [])));
+
+/** "stops in 12 min" for an unwatched preview with an idle stop; '' when it won't stop by itself. */
+export function stopsLabel(stopsAt: number | null | undefined, now: number): string {
+  if (stopsAt == null) return '';
+  const min = Math.max(1, Math.ceil((stopsAt - now) / 60_000));
+  return `stops in ${min} min`;
+}
 
 /** The channel on screen: the picked PR while it's still open, otherwise main. */
 export function currentChannel(picked: Channel | undefined, pulls: Pick<PullInfo, 'number' | 'state'>[]): Channel {
@@ -46,6 +86,8 @@ export function prAsPreview(p: PrPreviewView | undefined, pr: number): PreviewVi
     startedAt: p?.startedAt ?? null,
     error: p?.error ?? null,
     logTail: p?.logTail ?? [],
+    stopsAt: p?.stopsAt ?? null,
+    heldBy: p?.heldBy ?? null,
   };
 }
 

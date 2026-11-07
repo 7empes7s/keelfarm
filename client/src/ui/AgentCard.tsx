@@ -5,6 +5,7 @@ import { reportCard } from '../world/activityProbe';
 import { useKeyName } from './controls';
 import { agentLabel, signInFor } from './floorRows';
 import { isTouch, openHoldMenu } from '../world/touch/touchState';
+import { agentTask, TaskBar, taskSince } from './TaskProgress';
 
 // The card at the left edge (clear of their monitor) when you keep someone in your sights for a moment: who they are,
 // what they're on and for how long, what they're doing now and their last few steps, turns and cost on this task, and
@@ -41,6 +42,7 @@ export function AgentCard() {
   const agent = useStore((s) => (id ? s.agents[id] : undefined));
   const log = useStore((s) => (id ? s.logs[id] : undefined));
   const qa = useStore((s) => (agent?.prNumber ? s.qa[qaKey(agent.repoId, agent.prNumber)] : undefined));
+  const repo = useStore((s) => (agent ? s.repos.find((r) => r.id === agent.repoId) : undefined));
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
   const use = useKeyName('interact');
@@ -94,6 +96,9 @@ export function AgentCard() {
         </div>
       )}
       {on && <div className="ac-on">{clipText(redact(on), 64)}</div>}
+      <div className="ac-stage">
+        <TaskBar input={agentTask(agent, qa)} repoId={agent.repoId} since={taskSince(repo, agent.issueNumber, agent.prNumber)} name={`${agent.name}'s task`} compact />
+      </div>
       {act && (
         <div className="ac-now">
           {ACTIVITY_ICONS[act.kind]} {ACTIVITY_LABELS[act.kind]}

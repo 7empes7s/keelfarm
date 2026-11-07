@@ -1,11 +1,13 @@
 import type { AgentPatch, AgentView, ClientEvent, LogLine, RepoPatch, RepoView, ServerEvent } from '../shared/types.ts';
+import type { ChatItem } from '../shared/agentChat.ts';
 import { catchUp, latestListed, NO_WATCH, parseWatch, sameWatch, seesAll, type Watch } from '../shared/watch.ts';
 
 // What the office sends its tabs over /ws, made to scale (#228). Most events go out as they happen, but those that come
 // many times a second with a big company are batched on one short tick: agents' changes (their tool, their activity)
 // and floors' (every sync and merge resends a floor's issues and PRs) go out as patches of just the fields that
 // changed, and terminal lines go only to the tabs that show them (shared/watch.ts): every line for agents on the tab's
-// floor or with their panel open, the latest one for the workers list, nothing otherwise.
+// floor or with their panel open, the latest one for the workers list, nothing otherwise. Chat items (#120) go only to
+// the tabs with that agent's window open.
 
 export type Agent = Omit<AgentView, 'log'>;
 
@@ -21,6 +23,8 @@ export interface OutboxHost {
   agents(): { id: string; floor: number | null }[];
   /** An agent's terminal buffer, for catching a tab up. */
   log(agentId: string): readonly LogLine[];
+  /** An agent's chat items, for catching a tab up when it opens their window. */
+  chat?(agentId: string): readonly ChatItem[];
   /** Just before a batch goes out, with the agents that have new lines (the office updates their activity signs). */
   beforeFlush?(agentIds: string[]): void;
 }
@@ -94,6 +98,7 @@ export class Outbox {
   private agents = new Patches<Agent>();
   private repos = new Patches<RepoView>();
   private lines = new Map<string, LogLine[]>();
+  private chats = new Map<string, Map<number, ChatItem>>();
   private timer: NodeJS.Timeout | null = null;
   /** Bytes and messages sent, for the scale test and the benchmark. */
   readonly stats = { bytes: 0, messages: 0 };
@@ -134,6 +139,15 @@ export class Outbox {
     if (next && prev && !sameWatch(prev, next)) this.watch(tab, prev, next);
   }
 
+  /** A fresh snapshot (JSON) to every tab, each caught up again on what it shows: the demo's new office commit (#216). */
+  resendAll(snapshot: string) {
+    for (const tab of this.tabs.keys()) {
+      if (tab.readyState !== tab.OPEN) continue;
+      tab.send(snapshot);
+      this.resync(tab);
+    }
+  }
+
   /** The tab was sent a fresh snapshot (it has no lines now): catch it up again on what it shows. */
   resync(tab: Tab) {
     const w = this.tabs.get(tab);
@@ -144,6 +158,9 @@ export class Outbox {
     this.tabs.set(tab, next);
     const { tails, latest } = catchUp(prev, next, this.host.agents());
     if (tails.length) this.send(tab, { type: 'logs', catchUp: true, tails: Object.fromEntries(tails.map(([id, n]) => [id, this.host.log(id).slice(-n)])) });
+    const opened = next.agents.filter((id) => !prev.agents.includes(id));
+    const chats = Object.fromEntries(opened.map((id) => [id, [...(this.host.chat?.(id) ?? [])]]).filter(([, items]) => items.length));
+    if (Object.keys(chats).length) this.send(tab, { type: 'agentChat', catchUp: true, chats });
     if (latest) {
       const lines: Record<string, LogLine> = {};
       for (const a of this.host.agents()) {
@@ -161,6 +178,7 @@ export class Outbox {
     if (ev.type === 'agentRemoved') {
       this.agents.drop(ev.agentId);
       this.lines.delete(ev.agentId);
+      this.chats.delete(ev.agentId);
     }
     if (ev.type === 'repoRemoved') this.repos.drop(ev.repoId);
     if (!this.tabs.size) return;
@@ -189,6 +207,15 @@ export class Outbox {
     this.soon();
   }
 
+  /** New or changed chat items: the newest version of each goes out with the next batch, to the tabs with their window open. */
+  chat(agentId: string, items: readonly ChatItem[]) {
+    if (!items.length) return;
+    const q = this.chats.get(agentId) ?? new Map<number, ChatItem>();
+    for (const it of items) q.set(it.id, it);
+    this.chats.set(agentId, q);
+    this.soon();
+  }
+
   /** Sends what's queued now (the tick does this; tests and shutdown may call it). */
   flush() {
     if (this.timer) clearTimeout(this.timer);
@@ -201,6 +228,12 @@ export class Outbox {
     if (agents.length) this.broadcast({ type: 'agents', agents });
     const repos: RepoPatch[] = this.repos.take();
     if (repos.length) this.broadcast({ type: 'repos', repos });
+    const chats = this.chats;
+    this.chats = new Map();
+    for (const [tab, w] of this.tabs) {
+      const mine = w.agents.filter((id) => chats.has(id));
+      if (mine.length) this.send(tab, { type: 'agentChat', chats: Object.fromEntries(mine.map((id) => [id, [...chats.get(id)!.values()]])) });
+    }
 
     if (!lines.size || !this.tabs.size) return;
     const floors = new Map(this.host.agents().map((a) => [a.id, a.floor]));

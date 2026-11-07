@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appViewport, blocksPinch, insetsCovered } from './viewport';
+import { appViewport, blocksPinch, insetsCovered, typing } from './viewport';
 
 describe('appViewport', () => {
   it('is the visible part of the page: the keyboard and the browser bars taken off', () => {
@@ -37,5 +37,15 @@ describe('insetsCovered', () => {
     expect(insetsCovered(safari, false)).toBe(false);
     expect(insetsCovered(chromeIos, true)).toBe(false);
     expect(insetsCovered(safari, true)).toBe(false);
+  });
+});
+
+describe('typing', () => {
+  it('is a touch screen with the keyboard up or a text field focused', () => {
+    expect(typing(true, 844, 508, false)).toBe(true); // iOS: the visual viewport shrinks under the keyboard
+    expect(typing(true, 508, 508, true)).toBe(true); // Android resizing the page itself: the focus tells
+    expect(typing(true, 844, 800, false)).toBe(false); // browser bars, not a keyboard
+    expect(typing(true, 844, 844, false)).toBe(false);
+    expect(typing(false, 844, 508, true)).toBe(false); // a computer keeps its tabs
   });
 });

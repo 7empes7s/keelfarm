@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, officeUpdateChip, officeUpdateText, restartExpected, shouldReload } from './officeUpdate';
+import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, HIDDEN_LOAD_MS, loadBlocker, loadNow, officeUpdateChip, officeUpdateText, restartExpected, shouldReload, type LoadBlockers } from './officeUpdate';
 import type { OfficeUpdateView } from '../../shared/types';
 
 const u = (over: Partial<OfficeUpdateView>): OfficeUpdateView => ({ state: 'none', behind: 0, launcher: true, drainingSince: null, running: 0, updateAt: null, holds: false, detail: null, ...over });
@@ -75,5 +75,24 @@ describe('shouldReload', () => {
   it('at most once per commit', () => {
     expect(shouldReload('abc1234', 'def5678', 'def5678')).toBe(false);
     expect(shouldReload('def5678', 'fed9999', 'def5678')).toBe(true);
+  });
+});
+
+describe('loadNow (#216)', () => {
+  const free: LoadBlockers = { draft: false, uploading: false, sending: false, sheet: false };
+  it('loads a ready client on a tab change, the tap, or back after a while away', () => {
+    expect(loadNow(true, { kind: 'nav' }, free)).toBe(true);
+    expect(loadNow(true, { kind: 'tap' }, free)).toBe(true);
+    expect(loadNow(true, { kind: 'visible', hiddenMs: HIDDEN_LOAD_MS }, free)).toBe(true);
+    expect(loadNow(true, { kind: 'visible', hiddenMs: HIDDEN_LOAD_MS - 1 }, free)).toBe(false);
+    expect(loadNow(false, { kind: 'tap' }, free)).toBe(false);
+  });
+  it('never while a draft, an upload, a send or a sheet is under way, and says what it waits for', () => {
+    for (const k of ['draft', 'uploading', 'sending', 'sheet'] as const) {
+      expect(loadNow(true, { kind: 'tap' }, { ...free, [k]: true })).toBe(false);
+      expect(loadBlocker({ ...free, [k]: true })).toBeTruthy();
+    }
+    expect(loadBlocker(free)).toBeNull();
+    expect(loadBlocker({ ...free, uploading: true })).toBe('the upload finishes');
   });
 });

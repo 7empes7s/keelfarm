@@ -3,6 +3,7 @@
 import type { HireRequestView, QaView, RepoView } from '../../../shared/types';
 import { needsManager } from '../qaCard';
 import type { Agent, KanbanColumns } from '../store';
+import type { PocketLayout } from './mode';
 
 export interface Pipeline {
   backlog: number;
@@ -46,9 +47,9 @@ export interface AssignChoice {
 /** What can be handed to an agent: backlog issues, then untested, queued or stuck PRs. */
 export function assignChoices(cols: KanbanColumns | null): AssignChoice[] {
   if (!cols) return [];
-  const testable = cols.qa.filter((c) => !c.qa || c.qa.status === 'needs-human' || c.qa.status === 'queued');
+  const testable = cols.qa.filter((c) => !c.untrusted && (!c.qa || c.qa.status === 'needs-human' || c.qa.status === 'queued'));
   return [
-    ...cols.backlog.map((c) => ({ key: c.key, kind: 'issue' as const, number: c.number, title: c.title })),
+    ...cols.backlog.filter((c) => !c.untrusted).map((c) => ({ key: c.key, kind: 'issue' as const, number: c.number, title: c.title })),
     ...testable.map((c) => ({ key: c.key, kind: 'qa' as const, number: c.number, title: c.title })),
   ];
 }
@@ -85,3 +86,18 @@ export function waitingOnYou(repos: RepoView[], qa: Record<string, QaView>, requ
 
 /** The Approvals tab's badge: decisions only the manager can make right now. */
 export const approvalsBadge = (w: Waiting) => w.requests.length + w.stuck.filter((s) => needsManager(s.qa)).length;
+
+// ---------- tabs ----------
+
+/** Pocket mode's pages, in the order of their keys (1-5). */
+export const POCKET_TABS = ['company', 'chat', 'kanban', 'team', 'approvals'] as const;
+export type PocketTab = (typeof POCKET_TABS)[number];
+
+/** The tabs the bar or rail shows (#214): on a phone the chat is a page; wide, it's a window opened from the header. */
+export const railTabs = (layout: PocketLayout): PocketTab[] => POCKET_TABS.filter((t) => layout === 'compact' || t !== 'chat');
+
+/** The header's chat button's tooltip: what the CEO is doing and their last message. */
+export function ceoChatHint(name: string, doing: string, last: string | undefined, key: string): string {
+  const said = last ? `\n“${last.length > 80 ? `${last.slice(0, 79)}…` : last}”` : '';
+  return `Chat with ${name} (${key}) · ${doing}${said}`;
+}

@@ -50,6 +50,7 @@ export const TOUR: TourEntry[] = [
 
   // pocket mode's tabs
   { id: 'pocket-tabs', tracks: POCKET, title: 'Five tabs', text: 'Company, the chat with {ceo}, Kanban, Team and Approvals; a badge says what waits on you.', targets: ['pocket-tabs'], added: 2 },
+  { id: 'chat-button', tracks: ['desk'], title: 'The chat, top right', text: "{ceo}'s avatar at the top right opens and closes the chat beside the pages, with a badge for unread messages and a dot while they work.", targets: ['chat'], added: 5 },
   { id: 'desk-keys', tracks: ['desk'], title: 'Keyboard first', text: 'Keys 1 to 5 open the tabs, / jumps to the chat beside them, and 🏢 3D office walks around the building.', targets: ['switch'], added: 2 },
 
   // every track (#102 to #109)
@@ -57,10 +58,12 @@ export const TOUR: TourEntry[] = [
   { id: 'guide', tracks: ALL, title: 'Get the most out of it', text: 'The ✅ guide is a checklist that ticks itself, with a Do it on each open item.', targets: ['guide'], tryIt: 'guide', added: 1 },
   { id: 'bell', tracks: ALL, title: 'Notifications', text: "🔔 keeps every notification with its buttons, so you can approve or retry right from it.", targets: ['bell'], tryIt: 'bell', added: 2 },
   { id: 'chat-cards', tracks: ALL, title: 'Ask the CEO', text: "In the chat, tap a starter or type / for commands like /plan; action cards show each job's live steps.", targets: ['chat', 'phone'], tryIt: 'plan', added: 2 },
-  { id: 'console', tracks: ALL, title: "The manager's console", text: 'Five tabs, each with a side menu, and a search box that finds any setting.', targets: ['console-search', 'console'], tryIt: 'console', added: 2 },
+  { id: 'console', tracks: ALL, title: "The manager's console", text: 'Five tabs, each with a row of sections, and a 🔍 that finds any setting.', targets: ['console-search', 'console'], tryIt: 'console', added: 2 },
   { id: 'charter', tracks: ALL, title: 'Charters', text: "A floor's Charter leads with its numbers for each objective; editing is tucked away.", targets: ['charter', 'console'], tryIt: 'charter', added: 2 },
   { id: 'costs', tracks: ALL, title: 'Where the plan goes', text: "Mission control's costs: insights first, the priciest issues as cards and waste grouped by cause.", targets: ['costs', 'console'], tryIt: 'costs', added: 2 },
   { id: 'info', tracks: POCKET, title: 'What can I do here?', text: "Every screen's ⓘ says what you can do there, and brings back What's new.", targets: ['info'], added: 2 },
+  { id: 'agent-chat', tracks: ALL, title: 'Their chat', text: "An agent's window shows 💬 Chat or ⌨ Terminal, and 💬 Chat turns chat mode on for every desk; hold a message or step to react, and 👍 👎 🤔 ⚠️ reach them after their current step.", added: 3 },
+  { id: 'chat-full', tracks: ALL, title: 'Full screen chat', text: "⛶ in the chat's header (or {key:chatFull} in the chat) gives {ceo} the whole window for long replies; Esc or Back puts everything back.", touchText: "⛶ in the chat's header gives {ceo} the whole screen, tab bar and all; ⛶ again or Back puts it back.", targets: ['chat-full', 'chat', 'phone'], added: 4 },
   { id: 'switch', tracks: ['office'], title: 'The 2D office', text: 'Press {key:switchOffice} for the office as pages, with the chat beside them: quicker for getting work done.', targets: ['switch'], added: 2 },
 
   // features still to come: their PRs replace these hooks with steps
@@ -68,7 +71,6 @@ export const TOUR: TourEntry[] = [
   { id: 'agent-window', hook: 117 },
   { id: 'open-decisions', hook: 114 },
   { id: 'reactions', hook: 118 },
-  { id: 'agent-chat', hook: 120 },
 
   { id: 'office', tracks: ['office'], title: 'Your office', text: "Your glass office at the back left of the lobby has the manager's console; press {key:help} for help. Enjoy running {company}!", added: 1 },
 ];

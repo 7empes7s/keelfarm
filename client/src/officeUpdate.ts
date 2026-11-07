@@ -1,4 +1,4 @@
-// The office's own update, in plain words for the console and the HUD, and the reload that brings in the new client.
+// The office's own update, in plain words for the console and the HUD, and when the new client may load (#216).
 import type { OfficeUpdateView } from '../../shared/types';
 
 /** The server stops the sessions still running this long after it started draining (#37). */
@@ -50,9 +50,40 @@ export const canPostpone = (u: OfficeUpdateView) => u.launcher && (u.state === '
 export const restartExpected = (u: OfficeUpdateView | undefined) => u?.state === 'draining' || u?.state === 'updating';
 
 /**
- * Reload when the server comes back on a different commit, so the manager gets the matching client. At most once
- * per commit (remembered in sessionStorage), so a server that keeps reporting a new commit can't loop the page.
+ * The server came back on a different commit: its client is ready to load (at a safe moment, `loadNow`). At most
+ * once per commit (remembered in sessionStorage), so a server that keeps reporting a new commit can't loop the page.
  */
 export function shouldReload(before: string | null | undefined, after: string | null | undefined, reloadedFor: string | null): boolean {
   return !!before && !!after && before !== after && reloadedFor !== after;
+}
+
+// ---------- loading the new client at a safe moment (#216) ----------
+
+/** What the manager is in the middle of: any of it holds the new client back, so nothing they're doing is lost. */
+export interface LoadBlockers {
+  draft: boolean; // a message box with text or files in it
+  uploading: boolean;
+  sending: boolean; // a message on its way to the office
+  sheet: boolean; // a sheet, menu or confirmation open
+}
+
+/** Back from the background after this long, the app may load the new client. */
+export const HIDDEN_LOAD_MS = 30_000;
+
+/** A moment the new client may load at: a tab or section change, coming back to the app, or the pill's tap. */
+export type LoadMoment = { kind: 'nav' } | { kind: 'visible'; hiddenMs: number } | { kind: 'tap' };
+
+/** What the new client waits for, in a few words ("the upload finishes"); null when nothing holds it. */
+export function loadBlocker(b: LoadBlockers): string | null {
+  if (b.uploading) return 'the upload finishes';
+  if (b.sending) return 'your message is sent';
+  if (b.draft) return 'you send or clear your message';
+  if (b.sheet) return 'the sheet closes';
+  return null;
+}
+
+/** Loads the new client now: there is one, this moment counts, and nothing holds it back. */
+export function loadNow(ready: boolean, moment: LoadMoment, b: LoadBlockers): boolean {
+  if (!ready || (moment.kind === 'visible' && moment.hiddenMs < HIDDEN_LOAD_MS)) return false;
+  return loadBlocker(b) === null;
 }

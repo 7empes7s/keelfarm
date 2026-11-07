@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { MANAGER_DESK } from '../client/src/world/layout';
 import { GROUPS, sectionsIn, type Where } from '../client/src/ui/consoleNavRules';
+import { consoleSection, pocketSection } from './layout/helpers';
 import { enterOffice, expect, overflowProblems, startAt, test } from './helpers';
 
 // Nothing drags sideways (#149). The manager's own words are longer than the demo's: with a charter of unbroken paths
@@ -44,21 +45,9 @@ async function openConsole(page: Page, where: Where) {
   return page.getByRole('dialog', { name: /Manager's console/ });
 }
 
-const starts = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
-
-/** Opens a section: a top tab then its side menu, or on a phone pocket mode's list (back to it first). */
 async function openSection(root: Locator, group: string, label: string) {
-  if (!(await root.locator('.cn-menu').isVisible())) {
-    const back = root.getByRole('button', { name: 'Back to settings' });
-    if (await back.isVisible()) await back.click();
-    await root.getByRole('button', { name: starts(label) }).click();
-    await expect(root.getByRole('region', { name: label })).toBeVisible();
-    return;
-  }
-  await root.locator('.cn-groups').getByRole('tab', { name: new RegExp(group) }).click();
-  const t = root.locator('.cn-menu').getByRole('tab', { name: starts(label) });
-  await t.click();
-  await expect(t).toHaveAttribute('aria-selected', 'true');
+  if (await root.locator('.cn-groups').isVisible()) await consoleSection(root, group, label);
+  else await pocketSection(root, label);
 }
 
 /**
@@ -97,7 +86,7 @@ for (const [where, widths] of [
         const restore = await longCharters(page);
         try {
           const root = await openConsole(page, where);
-          await expect(root.locator('.cn-menu, .cn-list').first()).toBeVisible(); // the side menu, or a phone's list
+          await expect(root.locator('.cn-sections, .cn-list').first()).toBeVisible(); // the side menu, or a phone's list
           const problems: string[] = [];
           for (const g of GROUPS) {
             for (const s of sectionsIn(g.id, where)) {

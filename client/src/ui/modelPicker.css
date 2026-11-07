@@ -1,0 +1,69 @@
+/* The model picker (ModelPicker.tsx): the select or the phone's sheet trigger, "Other…"'s id field and its warning. */
+.model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.model-picker > select,
+.model-picker > .model-other {
+  width: 100%;
+  min-height: var(--ds-target);
+}
+.model-pick {
+  width: 100%;
+}
+.model-pick-text {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.model-warn {
+  color: var(--ds-warn-text);
+  font-size: var(--ds-text-xs);
+}
+
+/* the phone's sheet: one choice per row, a checkmark on the picked one */
+.model-options {
+  display: flex;
+  flex-direction: column;
+}
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-line);
+  cursor: pointer;
+}
+.model-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.model-option:has(input:focus-visible) {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+.model-option-text {
+  flex: 1;
+  min-width: 0;
+}
+.model-option-check {
+  color: var(--ds-link);
+  font-weight: var(--ds-weight-strong);
+}
+
+/* a saved model the catalog doesn't have */
+.model-missing {
+  padding: 1px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}

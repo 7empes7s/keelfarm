@@ -3,7 +3,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_TEST_LAB, testLabSettings, type TestLabView } from '../shared/testLab.ts';
 import type { SessionKind } from '../shared/health.ts';
-import { estimateWaitMs, labCommand, labFile, labOutDir, labPattern, pickNext, TestLab, type LabRunner, type Requester, type TestLabHost } from './testLab.ts';
+import { browsersPath, estimateWaitMs, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
 import { createLabTools } from './testLabTools.ts';
 import { demoLabRunner, fakeShot } from './demoTestLab.ts';
 import { devSystemPrompt, qaSystemPrompt } from './prompts.ts';
@@ -110,7 +110,7 @@ describe('where results go', () => {
 
 // ---------- the lab ----------
 
-function fakeRunner(log: string[], ms = 0): LabRunner & { release(): void } {
+function fakeRunner(log: string[], ms = 0, runs: Partial<RunResult>[] = []): LabRunner & { release(): void } {
   let gate: (() => void)[] = [];
   const wait = () => (ms < 0 ? new Promise<void>((r) => gate.push(r)) : Promise.resolve());
   return {
@@ -128,8 +128,10 @@ function fakeRunner(log: string[], ms = 0): LabRunner & { release(): void } {
     checkout: async (o) => `${o.worktree}-lab`,
     async run(o) {
       log.push(`run ${o.argv.join(' ')} in ${o.dir}`);
-      return { code: 1, ms: 1000, timedOut: false, tail: ['1 failed'], artifacts: ['test-results/a.png'] };
+      return { code: 1, ms: 1000, timedOut: false, tail: ['1 failed'], artifacts: ['test-results/a.png'], ...runs.shift() };
     },
+    installBrowser: async (dir) => (log.push(`install browser in ${dir}`), true),
+    warm: async () => true,
     close: async () => undefined,
     release() {
       const g = gate;
@@ -230,6 +232,52 @@ describe('TestLab', () => {
     expect(log).toEqual(['check http://localhost:6300/r1/7']);
     expect(report).toBe('FAIL: 1 of 2 steps failed.\n1. ok expect_visible\n2. FAIL no_horizontal_scroll: the page scrolls sideways by 40px');
     expect(shots).toEqual([]); // that failure had no screenshot
+  });
+});
+
+describe('lab problems (#189)', () => {
+  it('runs Playwright with the line reporter, and gives it longer to be quiet', () => {
+    expect(labArgv(['npx', 'playwright', 'test', 'e2e/overflow.spec.ts'])).toEqual(['npx', 'playwright', 'test', 'e2e/overflow.spec.ts', '--reporter=line']);
+    expect(labArgv(['npm', 'run', 'test:e2e'])).toEqual(['npm', 'run', 'test:e2e', '--', '--reporter=line']);
+    expect(labArgv(['npm', 'run', 'test:e2e', '--', 'e2e/a.spec.ts'])).toEqual(['npm', 'run', 'test:e2e', '--', 'e2e/a.spec.ts', '--reporter=line']);
+    expect(labArgv(['npx', 'playwright', 'test', '--reporter=list'])).toEqual(['npx', 'playwright', 'test', '--reporter=list']);
+    expect(labArgv(['npm', 'test'])).toEqual(['npm', 'test']);
+    expect(silenceMs(['npx', 'playwright', 'test'])).toBe(600_000);
+    expect(silenceMs(['npm', 'test'])).toBeNull(); // a quiet typecheck or build only has its timeout
+  });
+
+  it("tells the lab's failures from the code's", () => {
+    const r = { code: 1, tail: ['1 failed'] };
+    expect(labProblem(r)).toBeNull();
+    expect(labProblem({ ...r, code: null, silent: true })).toBe('silent');
+    expect(labProblem({ ...r, tail: ["browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium-1187/chrome"] })).toBe('browser');
+    expect(labProblem({ ...r, tail: ['FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory'] })).toBe('oom');
+    expect(labProblem({ ...r, code: 137 })).toBe('oom');
+    expect(labProblem({ ...r, tail: ['Error: listen EADDRINUSE: address already in use :::4399'] })).toBe('port');
+    expect(labProblem({ code: 0, tail: ['EADDRINUSE mentioned in a passing test'] })).toBeNull();
+  });
+
+  it('reports a run the watchdog stopped as a LAB ERROR', async () => {
+    const { lab: l, views } = lab(fakeRunner([], 0, [{ code: null, silent: true, ms: 600_000, tail: ['Running 12 tests using 1 worker'] }]));
+    const report = await l.submit(who('a'), { kind: 'run', command: 'npx playwright test e2e/overflow.spec.ts' });
+    expect(report).toMatch(/^npx playwright test e2e\/overflow\.spec\.ts --reporter=line: went silent for 600 s and was stopped after 600 s\.\nLAB ERROR \(silent\)/);
+    expect(views.at(-1)!.recent[0]).toMatchObject({ ok: false, summary: 'lab error: silent' });
+  });
+
+  it('installs a missing browser once and runs again', async () => {
+    const log: string[] = [];
+    const { lab: l } = lab(fakeRunner(log, 0, [{ tail: ["Executable doesn't exist at /x/chrome"] }, { code: 0, tail: ['12 passed'] }]));
+    const report = await l.submit(who('a'), { kind: 'run', command: 'npx playwright test' });
+    const dir = `${who('a').worktree}-lab`;
+    expect(log).toEqual([`run npx playwright test --reporter=line in ${dir}`, `install browser in ${dir}`, `run npx playwright test --reporter=line in ${dir}`]);
+    expect(report).toMatch(/exit code 0/);
+    expect(report).not.toMatch(/LAB ERROR/);
+  });
+
+  it('shares one browser cache', () => {
+    expect(browsersPath({ PLAYWRIGHT_BROWSERS_PATH: '/srv/pw' }, '/home/m', 'linux')).toBe('/srv/pw');
+    expect(browsersPath({}, '/home/m', 'linux')).toBe(path.join('/home/m', '.cache', 'ms-playwright'));
+    expect(browsersPath({ LOCALAPPDATA: 'C:\\L' }, 'C:\\U', 'win32')).toBe(path.join('C:\\L', 'ms-playwright'));
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDemoBackend } from './demo.ts';
+import { createDemoBackend, demoCatalog } from './demo.ts';
 import { HttpError } from './httpError.ts';
 import { Swarm } from './swarm.ts';
 
@@ -118,5 +118,23 @@ describe('team changes applied straight away', () => {
     internals.applyTeamChanges();
     expect(team()).toHaveLength(1);
     expect(swarm.snapshot().requests.find((r) => r.agentId === keep[1])).toMatchObject({ status: 'rejected', decidedBy: 'auto' });
+  });
+});
+
+describe("the CEO's model picks (#198)", () => {
+  type Ceo = { models: unknown; scaleTeam(x: object): string; configureAgent(x: object): string };
+  it('refuses a model that is not in the catalog for that coding agent, listing the valid ids', async () => {
+    const { swarm, team } = await office();
+    const ceo = swarm as unknown as Ceo;
+    ceo.models = demoCatalog(0);
+    expect(() => ceo.scaleTeam({ floor: 1, size: 4, reason: 'Busy.', model: 'claude-haiku-4-5' })).toThrow(/Valid: claude-opus-5-5, .*opus, sonnet, haiku/);
+    expect(() => ceo.scaleTeam({ floor: 1, size: 4, reason: 'Busy.', cli: 'codex', model: 'claude-opus-5-5' })).toThrow(/gpt-6.1-sol/);
+    const id = team()[0].id;
+    expect(() => ceo.configureAgent({ agent_id: id, model: 'gpt-5.5-codex' })).toThrow(/isn't one of claude's models/);
+    ceo.configureAgent({ agent_id: id, model: 'sonnet' });
+    expect(team()[0].model).toBe('sonnet');
+    // a new coding agent without their model: back to its default
+    ceo.configureAgent({ agent_id: id, cli: 'codex' });
+    expect(team()[0]).toMatchObject({ cli: 'codex', model: '' });
   });
 });
