@@ -680,10 +680,7 @@ export interface PhoneMessage {
 
 /** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */
 export type StatusReaction = 'queued' | 'seen' | 'working' | 'done' | 'failed';
-export interface MessageReaction {
-  emoji: string;
-  by: 'ceo' | 'manager';
-}
+export interface MessageReaction { emoji: string; by: 'ceo' | 'manager' }
 
 /** A system notice in the chat (#138), shown as a card headed by the message's text: the cleaned output behind it, and links to what it's about. */
 export interface ChatNotice {
