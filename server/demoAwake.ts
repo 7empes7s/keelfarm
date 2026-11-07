@@ -82,12 +82,12 @@ export async function demoRound(text: string, floors: (Floor & { pullRequests: {
   if (!/\b(look into|investigate|dig into)\b/i.test(text)) return null;
   const f = floors[0];
   if (!f) return 'There are no floors yet, so there is nothing to look into.';
-  await step('Read', 'Read docs/how-it-works.md', 'Read 212 lines');
+  await step('Read', 'Read client/src/pocket/touch/joystickThumbZone.tsx', 'Read 212 lines'); // a long step, for the strip at 390 px
   await step('Grep', 'Grep "joystick"', 'Found 6 matches in 4 files');
   await step('WebSearch', 'Search "mobile joystick UX"', 'Did 1 search');
   await step('WebFetch', 'Fetch https://example.com/joystick-study', '403 Forbidden', true);
-  const pr = f.pullRequests[0]?.number;
-  if (pr) await use('pr_diff', { floor: f.floor, pr });
+  const withPr = floors.find((x) => x.pullRequests[0]?.number); // floor 1 may have none
+  if (withPr) await use('pr_diff', { floor: withPr.floor, pr: withPr.pullRequests[0].number });
   await use('wait_for', { conditions: [{ kind: 'usage', usage: 'normal' }], timeout_min: 1 });
   const filed = await use('file_issue', { floor: f.floor, title: 'Mobile joystick: a bigger thumb zone', body: `Make the on-screen joystick easier to hit at 390 px.\n\nAcceptance criteria:\n- A 120 px thumb zone\n- Works one-handed${objective ? `\n\nObjective: ${objective}` : ''}` });
   const n = filed.match(/#(\d+)/)?.[1];
