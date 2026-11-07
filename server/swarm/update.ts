@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { HttpError } from '../httpError.ts';
 import { drainDecision, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
+import { packCareers } from '../../shared/careers.ts';
 import type { OfficeUpdateView } from '../../shared/types.ts';
 import { BUSY, oneLine, type PersistedAgent } from './model.ts';
 import { SwarmScheduling } from './scheduling.ts';
@@ -29,7 +30,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   demoNewCommit() {
     if (!this.backend.demo || !this.officeHead) throw new HttpError(404, 'Only the demo office makes up office updates');
     this.officeHead = crypto.randomBytes(20).toString('hex');
-    this.outbox.resendAll(JSON.stringify(this.snapshotEvent()));
+    this.outbox.resendAll(JSON.stringify({ type: 'snapshot', data: packCareers(this.snapshot()) }));
     return { commit: this.officeHead.slice(0, 7) };
   }
 

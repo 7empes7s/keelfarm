@@ -378,8 +378,7 @@ export const useStore = create<State>((set, get) => ({
         const logs: Record<string, LogLine[]> = {};
         const screens: Record<string, number> = {};
         for (const { log, ...a } of d.agents) {
-          const row = d.careers?.[a.id];
-          agents[a.id] = row ? { ...a, career: careerOfRow(row) } : a;
+          agents[a.id] = d.careers?.[a.id] ? { ...a, career: careerOfRow(d.careers[a.id]) } : a;
           logs[a.id] = log;
           if (a.screenshotAt) screens[a.id] = a.screenshotAt;
         }

@@ -57,7 +57,7 @@ describe('the merge gong trigger', () => {
   it('turns a snapshot’s career rows back into careers (#291)', () => {
     const career = { ...newCareer(1_000), merged: 2, recent: [[4, 'Dark mode', 2_000]] as CareerView['recent'] };
     const ada = { id: 'a1', name: 'Ada', role: 'agent', repoId: 'acme/floor1', log: [], career: null } as Partial<AgentView>;
-    const ceo = { id: 'ceo', name: 'CEO', role: 'ceo', repoId: null, log: [], career: null } as Partial<AgentView>;
+    const ceo = { id: 'ceo', name: 'CEO', role: 'ceo', log: [], career: null } as Partial<AgentView>;
     const s = snapshot([repo(1)], [ada, ceo]);
     useStore.getState().apply({ ...s, data: { ...s.data, careers: { a1: careerRow(career) } } });
     expect(useStore.getState().agents.a1.career).toEqual(career);
