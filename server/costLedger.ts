@@ -284,6 +284,7 @@ export interface CostRun {
   cwd?: string;
   sessionId?: string | null;
   title?: string;
+  account?: string; // the account it ran on (#247)
 }
 
 /** The agent fields a session's line is made from. */
@@ -342,6 +343,12 @@ export class SessionCosts {
     if (cause) this.causes.set(agentId, cause);
   }
 
+  /** The account the agent's running session is on (#247). */
+  account(agentId: string, id: string) {
+    const run = this.runs.get(agentId);
+    if (run) run.account = id;
+  }
+
   watchdogStopped(agentId: string) {
     this.watchdogStops.add(agentId);
   }
@@ -382,6 +389,7 @@ export class SessionCosts {
       ...(run?.exp ? { exp: run.exp } : {}),
       ...(cause ? { cause } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
+      ...(run?.account ? { account: run.account } : {}),
     };
     this.onSession({ type: 'session', ...line }, run);
     return this.ledger.session(line);

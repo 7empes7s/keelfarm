@@ -56,6 +56,12 @@ export function nonInteractiveEnv(env: Record<string, string | undefined>): Reco
 }
 
 /**
+ * Claude Code's apiKeyHelper for a key the session has in its environment (#247): it prints the variable, so the key is
+ * never written to a settings file and never set as ANTHROPIC_API_KEY (which asks "use this key?" first).
+ */
+export const keyHelperCommand = (envName: string, node = process.execPath) => `"${node.replaceAll('\\', '/')}" -e "process.stdout.write(process.env.${envName}||'')"`;
+
+/**
  * A CLI's environment. Each agent must be a clean instance on the account its CLI is logged into: no API keys (they
  * would switch Claude Code's billing to the API) and nothing inherited from a Claude Code session the office itself
  * was started from. In a Box nothing of the office's own environment goes along (a Windows PATH, the manager's other

@@ -75,6 +75,7 @@ export interface CostSession {
   outcome: SessionOutcome;
   exp?: string; // `${experiment}/${variant}` while its issue is in a running experiment (shared/experiments.ts)
   startup?: StartupContext; // what its first turn loaded (shared/startup.ts), when the CLI reported it
+  account?: string; // the account it ran on (#247, shared/accounts.ts)
 }
 
 /** A merged PR, one line of the cost ledger: what the sessions' cost is divided by. */

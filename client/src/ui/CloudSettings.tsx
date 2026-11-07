@@ -265,6 +265,9 @@ export function CloudSettings() {
       <p className="muted small">
         GitHub is set up once for every Box. Coding agents sign in with your own subscription in each cloud agent's terminal, once per cloud machine, unless you give them a key here.
       </p>
+      <p className="muted small">
+        Keys here are for cloud agents only: they never reach agents on this computer, the CEO or your subscription's login. Those are in <a href="#settings/accounts">Settings → Providers & accounts</a>.
+      </p>
       <div className="notify-hook">
         <div className="row wrap">
           <b className="grow">GitHub</b>

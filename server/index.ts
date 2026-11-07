@@ -287,6 +287,14 @@ app.put(
 app.post('/api/cloud/test', route(() => swarm.testCloud()));
 app.post('/api/cloud/orphans', route(() => swarm.deleteCloudOrphans()));
 app.post('/api/cloud/demo-expire', route(() => swarm.expireSignIns()));
+// Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
+app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
+app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
+app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
+app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
+app.post('/api/accounts/:id/test', route(async (req) => ({ note: await swarm.accounts.test(String(req.params.id)) })));
+app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id))));
+app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
 app.get('/api/voice/voices', route(() => swarm.voice.voices()));
 app.get(
   '/api/voice/messages/:id',

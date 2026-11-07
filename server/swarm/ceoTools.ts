@@ -25,6 +25,7 @@ import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
 import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
 import { readingsLabel } from '../../shared/usage.ts';
+import { checkBinding } from '../../shared/accounts.ts';
 import { usageLabel } from '../pacing.ts';
 import { floorRoundsByCause, floorSpend } from '../costLedger.ts';
 import { checkRestart, sessionKind } from '../health.ts';
@@ -248,6 +249,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now(), this.usageCheck)}`,
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
         },
         floors,
@@ -306,11 +308,12 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   }
 
   /** configure_agent: an agent's coding agent, model or effort, from their next task. */
-  protected configureAgent(x: { agent_id: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
+  protected configureAgent(x: { agent_id: string; account?: string; cli?: string; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }) {
     const a = this.agentByRef(x.agent_id);
     if (a.role === 'ceo') throw new Error("That's you: the manager sets the CEO up.");
     const switches = [...(x.tools_off ?? []).map((r) => [r, false] as const), ...(x.tools_on ?? []).map((r) => [r, true] as const), ...(x.tools_reset ?? []).map((r) => [r, null] as const)];
-    if (x.cli === undefined && x.model === undefined && x.effort === undefined && !switches.length) throw new Error('Nothing to change: pass cli, model, effort, tools_off, tools_on, tools_reset or a mix.');
+    if (x.account === undefined && x.cli === undefined && x.model === undefined && x.effort === undefined && !switches.length) throw new Error('Nothing to change: pass account, cli, model, effort, tools_off, tools_on, tools_reset or a mix.');
+    const account = x.account === undefined ? undefined : checkBinding(this.accounts.list(), x.account); // checked before anything changes
     // Switching off only takes away. Turning on, or undoing a switch, can undo the manager's own: only when they asked.
     if (!this.ceoAsked && switches.some(([, on]) => on !== false)) throw new Error('tools_on and tools_reset only when the manager asks for it in their message; tools_off is always allowed.');
     // Every name is checked before anything changes.
@@ -328,7 +331,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const model = x.model ?? (x.cli !== undefined ? modelAfterCliChange(a.model, cli, this.models) : undefined);
     if (x.cli !== undefined || model !== undefined || x.effort !== undefined) this.updateAgent(a.id, { cli: x.cli, model, effort: x.effort });
     for (const { item, on } of picked) this.setToolSwitch(a.id, item.id, on);
-    const setup = this.setupLabel(a) || 'the office defaults';
+    if (x.account !== undefined) this.updateAgent(a.id, { account: account ?? '' });
+    const setup = [this.setupLabel(a) || 'the office defaults', x.account !== undefined ? `on ${account ?? 'the rotation'}` : ''].filter(Boolean).join(' ');
     const tools = picked.map(({ item, on }) => `${item.name} ${on === null ? 'as the office has it' : on ? 'on' : 'off'}`).join(', ');
     this.appendLog(a, [{ kind: 'system', text: `⚙️ ${this.ceo().name} set ${a.name} up with ${setup}${tools ? `; ${tools}` : ''}.` }]);
     return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.`;
