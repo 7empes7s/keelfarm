@@ -455,7 +455,7 @@ export default function Pocket() {
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
-        {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
+        {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
         {wide ? (
           <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
             🏢 3D office <kbd>{switchKey}</kbd>

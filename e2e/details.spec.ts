@@ -43,7 +43,7 @@ const big = async (buttons: Locator) => {
 for (const width of [390, 1280]) {
   test(`Mission control's cards and the back bar's ⓘ at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto('/?pocket=1#settings/ops');
+    await page.goto('/?pocket=1#company/ops');
     const settings = page.getByRole('dialog', { name: /Settings/ });
     if (width < 900) {
       const info = settings.locator('.cn-back-bar').getByRole('button', { name: /What can I do on/ });
