@@ -3,7 +3,7 @@
 // lines and the "/" picks. Kept out of swarm.ts; the store itself is files.ts.
 
 import os from 'node:os';
-import { attachedIds, attachmentLines, MAX_FILES_PER_MESSAGE, type FileRef } from '../shared/files.ts';
+import { attachedIds, attachmentLines, fileKind, MAX_FILES_PER_MESSAGE, type FileRef } from '../shared/files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import { groupUsed, toolCalls, type QuickPicks, type ToolCall } from '../shared/used.ts';
 import { checkAttachPath, type FileStore } from './files.ts';
@@ -64,6 +64,17 @@ export class CeoFiles {
     const f = await this.store.addCopy(ok.real, { name: ok.name, from: 'ceo' });
     this.attachments.push(f);
     return `Attached ${f.name} (file id ${f.id}). It goes with your next message and is deleted after 30 days unless kept (keep_file). Agents can read it when an issue says "Attached: ${f.id}".`;
+  }
+
+  /** propose_design's screenshots: images the CEO made, copied into the store (attach_file's folders and rules). */
+  async addShots(paths: readonly string[]): Promise<FileRef[]> {
+    const out: FileRef[] = [];
+    for (const p of paths) {
+      const ok = await checkAttachPath(p, [this.ceoDir, os.tmpdir(), this.store.root]);
+      if (fileKind(ok.name) !== 'image') throw new Error(`${ok.name} is not an image: shots are png, jpg, webp or svg screenshots.`);
+      out.push(await this.store.addCopy(ok.real, { name: ok.name, from: 'ceo' }));
+    }
+    return out;
   }
 
   /** keep_file: keep a file past its 30 days, or let it go again. */
