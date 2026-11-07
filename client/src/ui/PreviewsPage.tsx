@@ -162,7 +162,7 @@ function StatsBar({ now }: { now: number }) {
 }
 
 /** The page. `repoId`/`pr`: what to show first (a floor card, a tile or a link); else the first running preview, else floor 1's live app. */
-export function PreviewsPage({ repoId, pr, qa }: { repoId?: string; pr?: number | null; qa?: boolean }) {
+export function PreviewsPage({ repoId, pr, qa, merged }: { repoId?: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } }) {
   const repos = useStore((s) => s.repos);
   const prPreviews = useStore((s) => s.prPreviews);
   const runningPr = Object.values(prPreviews).find((x) => x.status === 'running');
@@ -212,7 +212,7 @@ export function PreviewsPage({ repoId, pr, qa }: { repoId?: string; pr?: number 
           )}
           <div className="pv-stage">
             {repo && shown ? (
-              <AppViewer key={repo.id} repoId={repo.id} pr={shown.pr} qa={qa && shown.repoId === repoId && shown.pr === (pr ?? null)} bare />
+              <AppViewer key={repo.id} repoId={repo.id} pr={shown.pr} qa={qa && shown.repoId === repoId && shown.pr === (pr ?? null)} merged={shown.repoId === repoId && shown.pr == null ? merged : undefined} bare />
             ) : (
               <p className="muted pv-empty">No projects yet: move one in from Floors &amp; repos and its live app shows here.</p>
             )}

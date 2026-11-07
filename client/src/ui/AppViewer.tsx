@@ -177,6 +177,7 @@ function PreviewStage({
   compact,
   shots,
   onAsk,
+  onOtherPort,
 }: {
   repo: RepoView;
   preview: PreviewView;
@@ -190,6 +191,7 @@ function PreviewStage({
   compact?: boolean;
   shots?: { url: string; caption: string }[]; // QA's screenshots of it, shown when the app won't show in the frame
   onAsk?: () => void; // a failed start: ask the CEO about it
+  onOtherPort?: () => void; // its port is someone else's: move the floor to the next free port in its lane (#225)
 }) {
   const [loaded, setLoaded] = useState(false);
   const [slow, setSlow] = useState(false);
@@ -274,7 +276,12 @@ function PreviewStage({
           {preview.logTail.length ? preview.logTail.join('\n') : '(no output)'}
         </pre>
         <div className="row wrap">
-          <button className="btn btn-good" disabled={busy} onClick={onStart}>
+          {preview.portOwner && onOtherPort && (
+            <button className="btn btn-good" disabled={busy} onClick={onOtherPort}>
+              ⇢ Use another port
+            </button>
+          )}
+          <button className={`btn ${preview.portOwner && onOtherPort ? '' : 'btn-good'}`} disabled={busy} onClick={onStart}>
             ↻ Try again
           </button>
           <button className="btn" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
@@ -484,8 +491,8 @@ function Bare({ title, className, accent, children }: { title: ReactNode; classN
 }
 
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `bare`: inside the Previews page, which lists the channels. */
-export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: number | null; qa?: boolean; bare?: boolean }) {
+/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). `bare`: inside the Previews page, which lists the channels. */
+export function AppViewer({ repoId, pr, qa, merged, bare }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; bare?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
   const qaRecords = useStore((s) => s.qa);
@@ -501,10 +508,10 @@ export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: numbe
   const [stats, setStats] = useState(false);
   const toolbar = useRef<HTMLDivElement>(null);
 
-  // Opened on a channel (a chip on the big screen, a Kanban PR card): tune to it.
+  // Opened on a channel (a chip on the big screen, a Kanban PR card, a merged PR's card): tune to it, again on every open.
   useEffect(() => {
     if (pr !== undefined) tuneChannel(repoId, pr);
-  }, [repoId, pr]);
+  }, [repoId, pr, merged]);
   useWatch(repoId, channel);
   const changes = usePrChanges(repo, channel, qa);
 
@@ -542,6 +549,8 @@ export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: numbe
   const current = prView ?? main;
   const pull = channel == null ? undefined : repo.pulls.find((p) => p.number === channel);
   const startMain = () => run(() => api.startPreview(repo.id));
+  const otherPort = () => void run(() => api.startPreview(repo.id, undefined, true));
+  const mergedHere = channel == null ? merged : undefined;
   const startPr = (restart = false) => channel != null && run(() => api.startPrPreview(repo.id, channel, restart));
   const pickWidth = (w: typeof width) => {
     lastWidth = w;
@@ -564,7 +573,7 @@ export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: numbe
     setCompare(!compare);
   };
   const toggleQa = () => changes.setOpen(!changes.open);
-  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : url); // a PR opens at the page to look at
+  const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : url); // a PR (or a merged one, on main) opens at the page to look at
   const held = !!current.heldBy;
   const heldWhy = held ? `@${current.heldBy} is testing in this` : undefined;
   const startStop = active ? (
@@ -632,6 +641,18 @@ export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: numbe
       <div ref={toolbar}>
         {!bare && <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />}
         {active && <HeldNote preview={current} label={label} repo={repo} />}
+        {mergedHere && (
+          <p className="app-merged" role="note">
+            🟣 PR #{mergedHere.pr} is merged into {repo.defaultBranch}
+            {mergedHere.sha && (
+              <>
+                {' '}
+                in <code>{mergedHere.sha}</code>
+              </>
+            )}
+            : this is {repo.defaultBranch}'s preview, with that change in it.
+          </p>
+        )}
         {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
           {active && (
             <button className="btn btn-small" disabled={busy || held} onClick={() => void (channel == null ? startMain() : startPr(true))} title={heldWhy ?? `Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
@@ -680,7 +701,7 @@ export function AppViewer({ repoId, pr, qa, bare }: { repoId: string; pr?: numbe
           ) : comparing ? (
             <CompareView key={changes.path} repo={repo} main={main} pr={prView} width={width} reloads={reloads} busy={busy} onStartMain={() => void startMain()} onStartPr={() => void startPr()} start={changes.path} />
           ) : (
-            <PreviewStage repo={repo} preview={current} label={label} src={at(openUrl)} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} shots={shots} onAsk={ask} />
+            <PreviewStage repo={repo} preview={current} label={label} src={at(openUrl)} width={width} reloads={reloads} busy={busy} onStart={() => void (channel == null ? startMain() : startPr())} shots={shots} onAsk={ask} onOtherPort={channel == null ? otherPort : undefined} />
           )}
         </div>
         {stats && <PreviewStats repo={repo} onClose={() => setStats(false)} />}

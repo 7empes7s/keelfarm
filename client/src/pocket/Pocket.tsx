@@ -360,7 +360,7 @@ function PocketOverlay() {
 function PreviewsHost() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind !== 'app' && overlay?.kind !== 'previews') return null;
-  return <PreviewsPage key={`${overlay.repoId}:${overlay.pr}`} repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
+  return <PreviewsPage key={`${overlay.repoId}:${overlay.pr}`} repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
 }
 
 function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {

@@ -46,9 +46,9 @@ export type Overlay =
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
-  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean } // pr: open the viewer on that channel (null: main); qa: with its QA panel
+  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } } // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so
   /** The Previews page (#226): every floor's previews in one list, one on stage. Pocket mode opens 'app' here too. */
-  | { kind: 'previews'; repoId?: string; pr?: number | null; qa?: boolean }
+  | { kind: 'previews'; repoId?: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string } }
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string; full?: boolean }
