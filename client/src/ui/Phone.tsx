@@ -21,6 +21,7 @@ import { LiveBubble, LongText, StepsList } from './ChatLive';
 import { ActionCards, DaySeparator, IdeaCard, NoticeCard, Starters, WorkingStrip } from './ChatCards';
 import { DecisionList, DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
+import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
@@ -560,6 +561,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const scroller = useRef<HTMLDivElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const stick = useRef(true);
+  const lastTop = useRef(0);
   const opened = useRef(false);
 
   const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
@@ -751,7 +753,8 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           tabIndex={0}
           onScroll={(e) => {
             const el = e.currentTarget;
-            const end = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            const end = keepsFollowing(stick.current, el.scrollTop, lastTop.current, el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+            lastTop.current = el.scrollTop;
             stick.current = end;
             if (end === atEnd) return;
             setAtEnd(end);
