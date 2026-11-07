@@ -102,7 +102,7 @@ function MemoryBanner({ open }: { open: () => void }) {
       <span>
         <IconText text={text} />
       </span>
-      <span aria-hidden>›</span>
+      <Icon name="chevron-right" />
     </button>
   );
 }
@@ -175,7 +175,9 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
           <span>
             <Icon name="triangle-alert" /> <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
           </span>
-          <span>Approvals →</span>
+          <span>
+            Approvals <Icon name="chevron-right" />
+          </span>
         </button>
       )}
       <TourInvite track={track} />

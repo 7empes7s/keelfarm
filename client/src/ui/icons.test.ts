@@ -18,6 +18,7 @@ const CONTENT: Record<string, string> = {
   'ui/captionRules.ts': "captions' direction arrows, part of the caption text",
   'ui/ChatReactions.tsx': 'the reactions people and the CEO pick',
   'ui/chatterLines.ts': "agents' chatter lines",
+  'ui/keymap.ts': "the arrow keys' names, as their key caps show them",
   'ui/statusLook.ts': 'status shapes drawn into canvas textures (KIND_ICON_NAME has the icons)',
   'ui/games/PetGame.tsx': "the desk pet's treats, toys and moods",
   'ui/games/SnakeGame.tsx': 'game pieces and messages on the game canvas',
@@ -58,7 +59,10 @@ const CONTENT: Record<string, string> = {
 };
 
 // Emoji, plus the text glyphs the UI used as icons. × stays: it is the multiplication sign in "4×" and "600× speed".
-const ICON_CHAR = /\p{Extended_Pictographic}|[✕✖↗↩↪↺⟲⟳▲▼▶◀■✓✔⋯✻✳♪ⓘ]/u;
+const ICON_CHAR = /\p{Extended_Pictographic}|[✕✖↗↩↪↺⟲⟳▲▼▶◀■✓✔⋯✻✳♪ⓘ‹›✦]/u;
+// A text arrow is a glyph when it leads or ends a short label ("Next →"); in prose ("Settings → Voice") and as a
+// separator (' → ') it is a word.
+const ARROW_LABEL = /^[←→]\s*\S+(\s+\S+)?$|^(\S+\s+)?\S+\s*[←→]$|^[←→]$/u;
 const NOT_ICONS = /[©®™‼⁉]/gu;
 
 function files(dir: string): string[] {
@@ -80,7 +84,8 @@ function iconTexts(file: string, source: string): string[] {
     let text: string | undefined;
     if ((n.type === 'Literal' || n.type === 'JSXText') && typeof n.value === 'string') text = n.value;
     if (n.type === 'TemplateElement') text = (n.value as { cooked?: string; raw: string }).cooked ?? (n.value as { raw: string }).raw;
-    if (text && ICON_CHAR.test(text.replace(NOT_ICONS, ''))) found.push(`${lineAt(n.start ?? 0)}: ${text.trim().slice(0, 60)}`);
+    const glyph = (t: string) => ICON_CHAR.test(t.replace(NOT_ICONS, '')) || (!/^\s+[←→]\s+$/.test(t) && ARROW_LABEL.test(t.trim()));
+    if (text && glyph(text)) found.push(`${lineAt(n.start ?? 0)}: ${text.trim().slice(0, 60)}`);
     for (const [k, v] of Object.entries(n)) if (k !== 'value' || n.type !== 'TemplateElement') visit(v);
   };
   visit(parseSync(file, source).program);
@@ -89,8 +94,8 @@ function iconTexts(file: string, source: string): string[] {
 
 describe('one icon pack (#134)', () => {
   it('finds emoji and icon glyphs in strings and JSX, not in comments', () => {
-    const src = "// ⚙️ settings\nconst a = '⚙️ Settings';\nconst b = <b>✕</b>;\nconst c = `${n}× ok`;\nconst d = 'Café ©';";
-    expect(iconTexts('x.tsx', src)).toEqual(['2: ⚙️ Settings', '3: ✕']);
+    const src = "// ⚙️ settings\nconst a = '⚙️ Settings';\nconst b = <b>✕</b>;\nconst c = `${n}× ok`;\nconst d = 'Café ©';\nconst e = <b>Next →</b>;\nconst f = 'Settings → Voice';\nconst g = list.join(' → ');\nconst h = <b>‹ Back</b>;";
+    expect(iconTexts('x.tsx', src)).toEqual(['2: ⚙️ Settings', '3: ✕', '6: Next →', '9: ‹ Back']);
   });
 
   it('draws glyphs that still arrive as data with their icon', () => {

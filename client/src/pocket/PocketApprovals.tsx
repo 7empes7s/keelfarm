@@ -129,7 +129,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
       group: 'charter',
       groupLabel: (
         <>
-          <Icon name="target" /> Charter changes (edit them in <Icon name="settings" /> → Charter)
+          <Icon name="target" /> Charter changes (edit them in <Icon name="settings" /> Settings → Charter)
         </>
       ),
       label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`,

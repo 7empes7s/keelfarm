@@ -4810,7 +4810,8 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   gap: 6px;
 }
 /* iOS-style icon buttons (#134): a soft fill and a hairline, the glyph at about 55% of the button */
-.pk-icon-btn {
+.pk-icon-btn,
+.pk-head .info-btn {
   flex: none;
   display: inline-flex;
   align-items: center;

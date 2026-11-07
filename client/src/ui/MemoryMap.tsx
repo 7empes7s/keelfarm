@@ -368,9 +368,15 @@ function NodeSheet({ node, graph, onClose, onGo, onLocal, onOpen }: { node: MapN
             <li key={`${l.kind}-${l.other.id}`}>
               <button type="button" className="mm-link" onClick={() => onGo(l.other.id)}>
                 <span className="mm-dot" style={{ background: TYPE_LOOK[l.other.type][0] }} aria-hidden />
-                <span className="muted small mm-link-kind">{l.out ? EDGE_WORDS[l.kind] : `← ${EDGE_WORDS[l.kind]}`}</span>
+                <span className="muted small mm-link-kind">{l.out ? (
+                    EDGE_WORDS[l.kind]
+                  ) : (
+                    <>
+                      <Icon name="arrow-left" /> {EDGE_WORDS[l.kind]}
+                    </>
+                  )}</span>
                 <span className="grow mm-ellipsis">{l.other.title}</span>
-                <span aria-hidden>›</span>
+                <Icon name="chevron-right" />
               </button>
             </li>
           ))}

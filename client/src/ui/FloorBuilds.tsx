@@ -71,7 +71,8 @@ export function FloorBuilds({ repoId }: { repoId: string }) {
                     <Icon name={GLYPH[c.status]} /> {BUILD_LABEL[c.status]}
                   </span>
                 </span>
-                <span className="fb-open">{action(c.preview)} ›</span>
+                <span className="fb-open">{action(c.preview)} <Icon name="chevron-right" />
+                </span>
               </button>
             </div>
           );

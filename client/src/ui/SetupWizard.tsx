@@ -255,7 +255,7 @@ export function SetupWizard() {
         {step > 0 && step < 4 && (
           <div className="wizard-nav">
             <button className="btn btn-ghost" onClick={() => setStep(step - 1)} disabled={busy}>
-              ← Back
+              <Icon name="chevron-left" /> Back
             </button>
             <span className="spacer" />
             {step === 3 && !project && (
@@ -265,7 +265,7 @@ export function SetupWizard() {
             )}
             {(step !== 3 || project) && (
               <button className="btn btn-good" onClick={() => void next()} disabled={busy}>
-                Next →
+                Next <Icon name="chevron-right" />
               </button>
             )}
           </div>

@@ -185,7 +185,7 @@ function HistorySession({ id, back }: { id: string; back: () => void }) {
   return (
     <div className="history">
       <button className="btn btn-small btn-ghost" onClick={back}>
-        ← All sessions
+        <Icon name="chevron-left" /> All sessions
       </button>
       {!e ? (
         <p className="muted small">{failed ? 'This session is no longer in the history.' : 'Opening the session…'}</p>

@@ -4,7 +4,7 @@
 // The rules are pure, in desktopRules.ts.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { pushLayer } from './backStack';
-import { Icon } from './Icon';
+import { CloseButton, Icon } from './Icon';
 import { desktopFit, realFullscreen, showRotateHint, viewerLayout, type Width } from './desktopRules';
 import { platformOf } from './notifySteps';
 
@@ -186,12 +186,10 @@ export function FloatingBar({ forced, onBack, onClose, menu }: { forced: boolean
     >
       {forced ? (
         <button className="btn btn-small app-float-btn" onClick={onBack} aria-label="Leave full screen">
-          ‹ Back
+          <Icon name="chevron-left" /> Back
         </button>
       ) : (
-        <button className="btn btn-small app-float-btn" onClick={onClose} aria-label="Close">
-          <Icon name="x" />
-        </button>
+        <CloseButton onClick={onClose} />
       )}
       <span className="spacer" />
       {menu}

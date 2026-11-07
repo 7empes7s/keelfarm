@@ -41,7 +41,7 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
       <div className="pk-console" ref={body}>
         <div className="cn-back-bar">
           <button className="btn btn-ghost cn-back" onClick={() => pick('menu')} aria-label="Back to settings">
-            ‹ Settings
+            <Icon name="chevron-left" /> Settings
           </button>
           <h2 className="cn-title">
             <Icon name={open.icon} /> {open.label}
@@ -80,7 +80,7 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
                     <span className="cn-item-text">{s.label}</span>
                     <Badge n={badges[s.id]} />
                     <span className="cn-chevron" aria-hidden>
-                      ›
+                      <Icon name="chevron-right" />
                     </span>
                   </button>
                 </li>

@@ -141,7 +141,7 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
     <>
       {chips.map((c) => (
         <button key={c} type="button" className="quick-chip starter-chip" onClick={() => onPick(c)} aria-label={`Start a message: ${c}`}>
-          ✦ {c.trim()}
+          <Icon name="sparkle" /> {c.trim()}
           {c.endsWith(' ') && '…'}
         </button>
       ))}

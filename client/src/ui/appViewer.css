@@ -142,6 +142,7 @@
   pointer-events: auto;
 }
 .app-float .btn,
+.app-float .ds-close,
 .app-float .ds-menu-wrap > .ds-btn {
   min-width: var(--ds-target);
   min-height: var(--ds-target);

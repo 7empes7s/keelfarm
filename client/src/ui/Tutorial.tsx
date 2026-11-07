@@ -246,12 +246,20 @@ export function Tutorial({ track }: { track: Track }) {
         <div className="tour-nav">
           {at > 0 && (
             <button className="btn btn-small btn-ghost" onClick={() => go(at - 1)}>
-              ← Back
+              <Icon name="chevron-left" /> Back
             </button>
           )}
           <span className="spacer" />
           <button className="btn btn-small btn-good" onClick={() => go(at + 1)}>
-            {last ? (tour ? 'Finish' : 'Done') : auto ? 'Skip step' : 'Next →'}
+            {last ? (
+              tour ? 'Finish' : 'Done'
+            ) : auto ? (
+              'Skip step'
+            ) : (
+              <>
+                Next <Icon name="chevron-right" />
+              </>
+            )}
           </button>
         </div>
       </section>
