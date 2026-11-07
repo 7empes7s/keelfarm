@@ -154,7 +154,7 @@ const SCREENS: Screen[] = [
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket chat', widths: POCKET, open: (page) => pocket(page, 'chat'), tabs: [] },
   {
-    // a CEO reply's action cards, idea card and artifact (#108)
+    // a CEO reply's action cards, idea card and artifact (#108), at the chat's smallest, normal and biggest text (#135)
     name: 'pocket chat cards',
     widths: POCKET,
     open: async (page) => {
@@ -164,7 +164,9 @@ const SCREENS: Screen[] = [
       await expect(root.locator('.action-card').first()).toBeVisible();
       return root;
     },
-    tabs: [],
+    tabs: [80, 100, 200].map((v) => ({
+      name: `text ${v}%`, go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
+    })),
   },
   {
     // the questions waiting on the manager, in the tray above the message box, open and collapsed (#114)

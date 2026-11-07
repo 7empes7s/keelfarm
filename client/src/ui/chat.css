@@ -235,3 +235,54 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* the chat's text size (#135): pinch, Ctrl + wheel, A−/A+ or Settings scale what's in the messages and the readers,
+   which reflow to the narrower room; the page's own zoom stays locked */
+.chat-log > *,
+.artifact-body > * {
+  zoom: var(--chat-text, 1);
+}
+.artifact-sheet {
+  position: relative;
+}
+.chat-text-pill {
+  position: absolute;
+  top: var(--ds-space-2);
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 0 var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.artifact-sheet .chat-text-pill {
+  top: calc(var(--ds-target) + var(--ds-space-4));
+}
+.chat-text-step,
+.chat-text-reset {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: none;
+  color: var(--ds-link);
+  font: inherit;
+  cursor: pointer;
+}
+.chat-text-step:hover,
+.chat-text-reset:hover {
+  background: var(--ds-surface-hover);
+}
+.a11y-chat-preview {
+  border-radius: var(--ds-radius-md);
+}
