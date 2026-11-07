@@ -17,8 +17,8 @@ async function ceoWorking(page: Page) {
       const ev = JSON.parse(data);
       const job = { kind: 'review', label: 'Reviewing the company' };
       if (ev.type === 'snapshot') {
-        ev.snapshot.ceo.job = job;
-        for (const a of ev.snapshot.agents) if (a.id === 'ceo') a.status = 'working';
+        ev.data.ceo.job = job;
+        for (const a of ev.data.agents) if (a.id === 'ceo') a.status = 'working';
       } else if (ev.type === 'ceo') ev.ceo.job = job;
       else if (ev.type === 'agent' && ev.agent.id === 'ceo') ev.agent.status = 'working';
       else if (ev.type === 'agents') for (const a of ev.agents) if (a.id === 'ceo' && 'status' in a) a.status = 'working';
@@ -68,7 +68,7 @@ function stackProblems(page: Page) {
     if (rect(log).height < 60) problems.push(`the conversation is ${Math.round(rect(log).height)}px tall`);
     const tabs = q('.pk-tabs');
     if (tabs && rect(tabs).height > 0) problems.push('the tab bar takes room while typing');
-    const box = q<HTMLTextAreaElement>('.chat-input textarea')!;
+    const box = document.querySelector<HTMLTextAreaElement>('.chat-input textarea')!;
     const line = parseFloat(getComputedStyle(box).lineHeight);
     if (box.clientHeight > 5 * line + 16 + 1) problems.push(`the message box is ${Math.round(box.clientHeight / line)} lines tall`);
     if (box.scrollHeight <= box.clientHeight) problems.push("the draft fits the box: it isn't six lines");
@@ -107,6 +107,7 @@ test.describe('the chat composer with the keyboard up', () => {
     test(`at ${size.width}x${size.height}: strip, tray and box in one column, Stop and every × on screen`, async ({ page }) => {
       await page.setViewportSize({ width: size.width, height: size.height });
       await ceoWorking(page);
+      await page.request.post('/api/phone/read', { data: { at: Date.now() + 60_000 } }); // opens at the end, not at a "New messages" divider
       await page.goto('/?pocket=1&tab=chat');
       await expect(page.locator('.working-strip')).toBeVisible();
       const files = [1965, 1964, 1963].map((n) => ({ name: `IMG_${n}-a-long-screenshot-name.png`, mimeType: 'image/png', buffer: PNG }));
@@ -118,12 +119,12 @@ test.describe('the chat composer with the keyboard up', () => {
       await keyboard(page, size.keyboard);
       expect(await stackProblems(page)).toEqual([]);
 
-      // Scrolled up, "↓ Latest" floats between the header and the stack.
+      // Scrolled up, "↓ Latest" floats in the conversation: under the headers, above the stack.
       await page.locator('.chat-log').evaluate((el) => el.scrollTo(0, 0));
       const jump = page.locator('.chat-jump');
       await expect(jump).toBeVisible();
-      const [pill, head, strip] = await Promise.all([jump, page.locator('.chat-head'), page.locator('.working-strip')].map(async (l) => (await l.boundingBox())!));
-      expect(pill.y, '↓ Latest under the header').toBeGreaterThanOrEqual(head.y + head.height - 0.5);
+      const [pill, log, strip] = await Promise.all([jump, page.locator('.chat-log-wrap'), page.locator('.working-strip')].map(async (l) => (await l.boundingBox())!));
+      expect(pill.y, '↓ Latest under the headers').toBeGreaterThanOrEqual(log.y - 0.5);
       expect(pill.y + pill.height, '↓ Latest above the working strip').toBeLessThanOrEqual(strip.y + 0.5);
 
       // The keyboard goes away: the tab bar is back.
