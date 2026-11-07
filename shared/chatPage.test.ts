@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchoredTop, CHAT_KEEP, CHAT_PAGE, CHAT_PAGE_MAX, firstUnread, LOAD_OLDER_PX, pageBefore, removal, removeMessage, wantsOlder, withNewest, withOlder } from './chatPage.ts';
+import { anchoredTop, CHAT_KEEP, CHAT_PAGE, CHAT_PAGE_MAX, FIRST_PAINT, firstPaintFrom, firstUnread, LOAD_OLDER_PX, pageBefore, removal, removeMessage, wantsOlder, withNewest, withOlder } from './chatPage.ts';
 import type { PhoneMessage } from './types.ts';
 
 const m = (id: number, from: PhoneMessage['from'] = 'manager', extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id, from, text: `#${id}`, at: id, ...extra });
@@ -88,5 +88,19 @@ describe('removing a message', () => {
   it('says when there is nothing to remove', () => {
     expect(removeMessage([m(1)], 9)).toBeNull();
     expect(removeMessage([m(1, 'ceo', { hidden: true })], 1)).toBeNull();
+  });
+});
+
+describe('the first frame of an opening chat', () => {
+  const ids = Array.from({ length: CHAT_PAGE }, (_, i) => i + 1);
+  it('draws the newest screenful first, then the whole page', () => {
+    expect(firstPaintFrom(ids, null, false)).toBe(CHAT_PAGE - FIRST_PAINT);
+    expect(firstPaintFrom(ids, null, true)).toBe(0);
+    expect(firstPaintFrom(ids.slice(0, 5), null, false)).toBe(0);
+  });
+  it('reaches back to the unread divider', () => {
+    expect(firstPaintFrom(ids, 3, false)).toBe(2);
+    expect(firstPaintFrom(ids, CHAT_PAGE, false)).toBe(CHAT_PAGE - FIRST_PAINT);
+    expect(firstPaintFrom(ids, 999, false)).toBe(CHAT_PAGE - FIRST_PAINT); // hidden or not on this page
   });
 });

@@ -59,6 +59,17 @@ export const wantsOlder = (top: number, s: { older: boolean; loading: boolean })
  * may begin on a page not loaded yet (no read CEO message before it and `older`), so the chat opens at the end
  * instead of at its top, which would pull in the page before.
  */
+/** The bubbles a chat draws on its first frame (#145): a screenful, so opening it is quick; the rest of the page a frame later. */
+export const FIRST_PAINT = 15;
+
+/** Where the first frame starts in the `ids` shown: the newest FIRST_PAINT, back to the unread divider; 0 once warm. */
+export function firstPaintFrom(ids: readonly number[], unread: number | null, warm: boolean): number {
+  if (warm) return 0;
+  const start = Math.max(0, ids.length - FIRST_PAINT);
+  const at = unread === null ? -1 : ids.indexOf(unread);
+  return at === -1 ? start : Math.min(start, at);
+}
+
 export function firstUnread(messages: readonly PhoneMessage[], readAt: number, older: boolean): number | null {
   const fromCeo = (m: PhoneMessage) => m.from === 'ceo' && !m.requestId;
   const i = messages.findIndex((m) => fromCeo(m) && m.at > readAt);

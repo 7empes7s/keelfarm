@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { CEO_ID, type PhoneMessage } from '../../../shared/types';
 import { excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
-import { takeChatScroll, useMentions, useRefNav } from './RefChips';
+import { hasChatScroll, takeChatScroll, useMentions, useRefNav } from './RefChips';
 import { linkCeoText, type FloorRef } from './chatLinks';
 import { sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
@@ -13,7 +13,7 @@ import { QuestionChips } from './QuestionChips';
 import { ArtifactList, ArtifactView } from './ChatArtifacts';
 import { itemOf, MessageActions, who, type Item } from './ChatActions';
 import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
-import { firstUnread as firstUnreadId } from '../../../shared/chatPage';
+import { firstPaintFrom, firstUnread as firstUnreadId } from '../../../shared/chatPage';
 import { messageActions } from './chatMessageActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
@@ -92,6 +92,14 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
   // The first message that was unread when the chat opened: the "New messages" divider goes above it.
   const [firstUnread] = useState(() => firstUnreadId(messages, readAt, chatOlder));
+  // Opening draws the newest screenful first, the rest of the page two frames later (after a paint); all at once when
+  // it must find a message or a scroll position at once.
+  const [warm, setWarm] = useState(() => jumpTo !== null || hasChatScroll());
+  useEffect(() => {
+    let r = requestAnimationFrame(() => (r = requestAnimationFrame(() => setWarm(true))));
+    return () => cancelAnimationFrame(r);
+  }, []);
+  const coldHeight = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const [logWrap, setLogWrap] = useState<HTMLDivElement | null>(null);
   useChatPinch(logWrap, useCallback(() => scroller.current, []));
@@ -106,10 +114,11 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   // The bubbles' handlers, the same functions every render; `on` has this render's.
   const on = useRef<{ floor: (n: number) => void; quote: (id: number) => void; reply: (id: number) => void }>(null);
   const stable = useMemo(() => ({ floor: (n: number) => on.current?.floor(n), quote: (id: number) => on.current?.quote(id), reply: (id: number) => on.current?.reply(id), artifact: (messageId: number, artifactId: string) => setArtifact({ messageId, artifactId }) }), []);
-  const pages = useOlderPages(scroller, { first: messages[0]?.id, older: chatOlder, fetch: fetchChatPage, apply: applyChatPage });
+  const pages = useOlderPages(scroller, { first: messages[0]?.id, older: chatOlder && warm, fetch: fetchChatPage, apply: applyChatPage });
   const removals = useRemovals();
   const listed = useMemo(() => messages.filter((m) => !removals.hidden.some((x) => x.id === m.id)), [messages, removals.hidden]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const start = firstPaintFrom(listed.map((m) => m.id), firstUnread, warm);
   const openFloor = (n: number) => {
     const repo = repos.find((r) => r.floor === n);
     if (!repo) return;
@@ -167,6 +176,16 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     }
     if (stick.current) el.scrollTop = el.scrollHeight;
   }, [messages.length, outbox.length, info.job?.kind, chat.live]);
+  // The rest of the first page going in above keeps the view where it was: the end, or the unread divider.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    if (!warm) coldHeight.current = el.scrollHeight;
+    else if (coldHeight.current) {
+      el.scrollTop = stick.current ? el.scrollHeight : el.scrollTop + el.scrollHeight - coldHeight.current;
+      coldHeight.current = 0;
+    }
+  });
   // At the end, the newest message stays in view while the log resizes (the keyboard), a picture loads, or the page is put back.
   const hasCeo = ceo !== undefined;
   useEffect(() => {
@@ -334,7 +353,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
               Say hi to {ceo.name}. Ask how things are going, hand over a project brief, or ask whether a team should grow. Replies land here, and the phone buzzes when {ceo.name} needs you.
             </p>
           )}
-          {listed.map((m, i, all) => (
+          {listed.map((m, i, all) => i < start ? null : (
             <Fragment key={m.id}>
               <DaySeparator prev={all[i - 1]?.at} at={m.at} />
               {m.id === firstUnread && (

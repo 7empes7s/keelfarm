@@ -31,6 +31,9 @@ export function takeChatScroll(): number | null {
   return at;
 }
 
+/** Whether the chat will take a scroll position back when it opens. */
+export const hasChatScroll = () => chatScroll !== null;
+
 /** Opens a panel, riding to `floor` first when you're elsewhere; closing it goes back to the phone it came from. */
 export function openFrom(overlay: Overlay, floor?: number) {
   const s = useStore.getState();
