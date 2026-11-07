@@ -57,6 +57,15 @@ test('side by side, a folded column is a narrow strip', async ({ page }) => {
   const [strip, progress] = [(await backlog.boundingBox())!, (await root.locator('.kcol-progress').boundingBox())!];
   expect(Math.abs(progress.y - strip.y)).toBeLessThan(2); // still beside it, not under it
   expect(progress.x).toBeGreaterThan(strip.x);
+  // the strip's chevron points the way it opens (upright ›), its count stacked above the name with room
+  const chev = backlog.locator('.kcol-chev');
+  expect(await chev.evaluate((el) => [getComputedStyle(el).writingMode, getComputedStyle(el).transform])).toEqual(['horizontal-tb', 'none']);
+  const [count, name] = [(await backlog.locator('.kcol-head > .count').boundingBox())!, (await backlog.locator('.kcol-name').boundingBox())!];
+  expect(count.width).toBeGreaterThanOrEqual(24);
+  expect(count.height).toBeGreaterThanOrEqual(24);
+  expect(count.y + count.height).toBeLessThanOrEqual(name.y + 1);
+  expect(count.x).toBeGreaterThanOrEqual(strip.x);
+  expect(count.x + count.width).toBeLessThanOrEqual(strip.x + strip.width);
   await backlog.locator('.kcol-head').click();
   await expect.poll(async () => (await backlog.boundingBox())!.width).toBeGreaterThan(150);
 });

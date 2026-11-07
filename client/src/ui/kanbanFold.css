@@ -84,9 +84,21 @@
 .kanban-strips .kcol-shut :is(.kcol-fold, .kcol-summary) {
   display: none;
 }
+/* the chevron and count stay upright (vertical text would turn › downwards), stacked above the name */
+.kanban-strips .kcol-shut :is(.kcol-chev, .kcol-head > .count) {
+  writing-mode: horizontal-tb;
+}
 .kanban-strips .kcol-shut .kcol-chev {
-  margin: 0 0 6px;
+  margin: 0;
+  order: -2;
+}
+.kanban-strips .kcol-shut .kcol-head > .count {
   order: -1;
+  box-sizing: border-box;
+  min-width: 24px;
+  min-height: 24px;
+  line-height: 20px;
+  text-align: center;
 }
 
 /* a phone's jump row: each column's name and count, scrolling to it and opening it */
