@@ -91,7 +91,12 @@ export type Where = 'office' | 'pocket';
 
 const shows = (s: Section, where: Where) => !s.only || s.only === where;
 
-export const sectionsIn = (group: GroupId, where: Where) => SECTIONS.filter((s) => s.group === group && shows(s, where));
+/** Sections shown in a second tab too (#246): Team sits beside Agents under Settings, where the manager looks for it. Same section, opened in that tab. */
+const ALSO: { id: SectionId; group: GroupId; after: SectionId }[] = [{ id: 'team', group: 'settings', after: 'agents' }];
+const PLACED = ALSO.map(({ id, group, after }) => ({ section: { ...SECTIONS.find((s) => s.id === id)!, group }, after }));
+
+export const sectionsIn = (group: GroupId, where: Where) =>
+  SECTIONS.filter((s) => s.group === group && shows(s, where)).flatMap((s) => [s, ...PLACED.filter((p) => p.section.group === group && p.after === s.id && shows(p.section, where)).map((p) => p.section)]);
 
 /** The sections row under the top tabs (#199): a group's sections, or none when it has only one. */
 export const sectionRow = (group: GroupId, where: Where) => {
@@ -129,8 +134,7 @@ export function resolve(id: string | undefined, where: Where, remembered: Partia
 /** `#settings/cloud-agents` → that section; anything else → undefined. */
 export function parseHash(hash: string, where: Where): Section | undefined {
   const [group, section] = hash.replace(/^#/, '').split('/');
-  const s = section ? sectionById(section) : undefined;
-  return s && s.group === group && shows(s, where) ? s : undefined;
+  return section && isGroup(group) ? sectionsIn(group, where).find((s) => s.id === section) : undefined;
 }
 
 export const hashFor = (s: Section) => `#${s.group}/${s.id}`;
