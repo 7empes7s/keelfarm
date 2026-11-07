@@ -47,6 +47,7 @@ const NO_LAUNCHER = 'Start the office with npm run dev or npm start so it can in
 function OfficeRow({ update }: { update: OfficeUpdateView }) {
   const commit = useStore((s) => s.officeCommit);
   const autoUpdate = useStore((s) => s.settings.autoUpdate);
+  const demo = useStore((s) => s.demo);
   const [busy, setBusy] = useState(false);
   const act = (action: 'now' | 'later') => {
     setBusy(true);
@@ -105,6 +106,14 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
         <label className="toggle" title="When merges have settled, check the update while agents keep working, then restart the office for a few seconds">
           <input type="checkbox" checked={autoUpdate} onChange={(e) => void attempt(() => api.updateSettings({ autoUpdate: e.target.checked }))} /> Update automatically
         </label>
+      )}
+      {demo && (
+        <div className="row wrap">
+          <span className="muted small">Demo:</span>
+          <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
+            ⟳ Simulate an office update
+          </button>
+        </div>
       )}
     </div>
   );

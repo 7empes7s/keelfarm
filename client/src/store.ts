@@ -172,6 +172,7 @@ interface State {
   historySeq: number; // bumped by each new history entry (#49): an open History tab reloads its page
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard by repo id, best first
   restarting: boolean; // the connection dropped because the office is restarting to update
+  updateReady: string | null; // the office came back on this commit: its client loads at a safe moment (updateLoad.ts, #216)
   visitors: VisitorView[]; // everyone else appearing in the office, any floor (presence; their poses skip the store)
   replaying: boolean; // the time-lapse (replay.ts) is showing a recorded day: live events wait, live actions are off
 
@@ -339,6 +340,7 @@ export const useStore = create<State>((set, get) => ({
   historySeq: 0,
   pong: {},
   restarting: false,
+  updateReady: null,
   visitors: [],
   replaying: false,
 

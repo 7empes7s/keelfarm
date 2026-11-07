@@ -1,5 +1,7 @@
 import { useStore } from './store';
-import { restartExpected, shouldReload } from './officeUpdate';
+import { restartExpected } from './officeUpdate';
+import { installUpdateLoader, noteCommit } from './updateLoad';
+import { keepOutbox } from './ui/chatSend';
 import type { ClientEvent, ServerEvent } from '../../shared/types';
 import { currentWatch } from './watch';
 import { hitchWs } from './hitches';
@@ -48,29 +50,6 @@ export function requestSnapshot() {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resync' } satisfies ClientEvent));
 }
 
-// The commit this tab last reloaded for, so a new office commit reloads the page at most once.
-const RELOAD_KEY = 'office-swarm:reloaded-for';
-
-function reloadedFor(): string | null {
-  try {
-    return sessionStorage.getItem(RELOAD_KEY);
-  } catch {
-    return null;
-  }
-}
-
-/** The server came back on a different commit: load the client that goes with it. */
-function reloadForNewCommit(commit: string): boolean {
-  if (!shouldReload(useStore.getState().officeCommit, commit, reloadedFor())) return false;
-  try {
-    sessionStorage.setItem(RELOAD_KEY, commit);
-  } catch {
-    return false; // without storage we can't promise a single reload, so keep the old client
-  }
-  location.reload();
-  return true;
-}
-
 const look = (): SocketLook => ({ readyState: socket?.readyState ?? WebSocket.CLOSED, startedAt, heardAt });
 
 /** The socket is gone (closed, or dropped by us as dead): the HUD says so, and the office's restart is looked for. */
@@ -105,6 +84,8 @@ function resume() {
 function listen() {
   // subscribed here, not as the module loads: the store imports this module (through presence) before it exists
   useStore.subscribe(sendWatch);
+  installUpdateLoader();
+  keepOutbox();
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && resume());
   for (const ev of ['pageshow', 'online', 'focus', 'cubefarm:open']) window.addEventListener(ev, resume);
   setInterval(() => onTick(look(), Date.now()) === 'reconnect' && reconnectNow(), 5_000);
@@ -137,7 +118,7 @@ export function connect() {
       type = ev.type;
       if (ev.type === 'beat') return;
       if (ev.type.startsWith('visitor')) wsTraffic.presence += e.data.length;
-      if (ev.type === 'snapshot' && ev.data.officeCommit && reloadForNewCommit(ev.data.officeCommit)) return;
+      if (ev.type === 'snapshot' && ev.data.officeCommit) noteCommit(ev.data.officeCommit); // no reload: it loads at a safe moment (#216)
       // While the time-lapse plays it owns the office; it asks for a fresh snapshot when it stops. What isn't part of
       // the replayed office (notifications, settings, the office's own update…) still applies.
       if (!OUTSIDE_REPLAY.has(ev.type)) {

@@ -16,6 +16,7 @@ import { keyStats } from '../../../shared/careers';
 import { toolVerb } from '../world/draw';
 import { agentActions, assignChoices, doing } from './pocketData';
 import { EmptyState } from '../ui/EmptyState';
+import { useDraft } from '../drafts';
 
 
 /** Runs one REST call at a time per card; api() already toasts errors. */
@@ -45,7 +46,7 @@ function AgentCard({ agent, repo }: { agent: Agent; repo: RepoView }) {
   const [busy, run] = useBusy();
   const [pick, setPick] = useState('');
   const [writing, setWriting] = useState(false);
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`agent:${agent.id}`); // kept through a reload (#216)
   const can = agentActions(agent);
   const choices = assignChoices(cols);
   const chosen = choices.find((c) => c.key === pick);

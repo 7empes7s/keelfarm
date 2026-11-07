@@ -27,6 +27,7 @@ export interface PhoneMessage {
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
+  clientId?: string; // the manager's: the phone's id for the send, so a resend after a reload is taken once (#216)
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   ask?: string; // the CEO's: the question those replies answer, when it named one (a `? …` first line, #183)

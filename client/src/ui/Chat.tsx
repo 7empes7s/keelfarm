@@ -23,6 +23,7 @@ import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachTray, FilesList, FileViewer, useDropZone, useSlash } from './ChatFiles';
 import { useAttachments } from './chatUpload';
+import { useDraft } from '../drafts';
 import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
@@ -49,19 +50,20 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const info = useStore((s) => s.ceo);
   const repos = useStore((s) => s.repos);
   const goToFloor = useStore((s) => s.goToFloor);
-  const [text, setText] = useState('');
-  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const chat = useStore((s) => s.chat);
   const [editing, setEditing] = useState<number | null>(null); // one of the manager's messages, being edited (#125)
+  const draftKey = `ceo:${chat?.current ?? ''}`; // kept through a reload or crash (#216), not while it holds an edit
+  const [text, setText] = useDraft(draftKey, editing === null);
+  const [replyTo, setReplyTo] = useState<number | null>(null);
   const [versions, setVersions] = useState<PhoneMessage | null>(null);
   const endEdit = () => (setEditing(null), setText(''));
   const [sheet, setSheet] = useState<'chats' | 'memory' | null>(null);
-  const chat = useStore((s) => s.chat);
   const [menu, setMenu] = useState<Item | null>(null);
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string } | null>(null);
   const [artifactList, setArtifactList] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
-  const att = useAttachments();
+  const att = useAttachments(draftKey);
   const fileCount = useStore((s) => s.files.length);
   const drop = useDropZone(att.add);
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
@@ -72,7 +74,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     setText(draft);
     useCeoDraft.setState({ text: null });
     setTimeout(() => form.current?.querySelector('textarea')?.focus(), 0);
-  }, [draft]);
+  }, [draft, setText]);
   // The decision log's "Replied to message N" (#208): that message, once the chat has laid out.
   const jumpTo = useCeoDraft((s) => s.jump ?? null);
   useEffect(() => {
