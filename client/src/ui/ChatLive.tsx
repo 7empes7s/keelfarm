@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { currentStep, liveText, type CeoLive } from '../../../shared/ceoStream';
+import { Icon } from './Icon';
 import { Markdown } from './Markdown';
 import { isLong } from './longText';
 import './chat.css';
@@ -28,7 +29,7 @@ export function LiveBubble({ live, ceoName, linked, onFloor }: { live: CeoLive |
         {step && (
           <div className="live-foot">
             <span className={`live-step live-step-${step.state}`} title={`${count} step${count === 1 ? '' : 's'} so far`}>
-              {step.state === 'running' ? '⏺' : step.state === 'failed' ? '✗' : '✓'} {step.label}
+              <Icon name={step.state === 'running' ? 'circle-dot' : step.state === 'failed' ? 'x' : 'check'} /> {step.label}
               {step.state === 'running' && '…'}
               {count > 1 && <span className="muted"> · {count} steps</span>}
             </span>

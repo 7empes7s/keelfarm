@@ -7,6 +7,7 @@ import { fileUrl } from '../../../shared/chatRefs';
 import { chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type Jump, type RefWorld } from './chatRefs';
 import { qaShotUrl } from './channels';
 import { Sheet } from './ChatArtifacts';
+import { Icon } from './Icon';
 import { Peek, usePeek } from './HoverCard';
 import { firstFailing, whoIsOn } from './peekFacts';
 import './chatRefs.css';
@@ -114,7 +115,7 @@ export function RefChip({ messageId, index, children }: { messageId: number; ind
         }}
         onClick={jump}
       >
-        <span aria-hidden>{info.icon}</span>
+        <span aria-hidden><Icon name={info.icon} /></span>
         <span className="ref-chip-label">{label}</span>
         {info.status && <span className="ref-chip-status">{` ${info.status}`}</span>}
       </button>
@@ -199,7 +200,7 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
     return (
       <>
         <b>
-          ▶️ {name} · {n === undefined ? repo.defaultBranch : `PR #${n}`}
+          <Icon name="play" /> {name} · {n === undefined ? repo.defaultBranch : `PR #${n}`}
         </b>
         <p className="small">{p ? `${p.status}${p.url ? ` at ${p.url}` : ''}` : pull?.state === 'OPEN' ? 'Not started: opening it starts it.' : 'This PR is no longer open.'}</p>
       </>
@@ -216,7 +217,7 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
         {pull ? `${pull.state.toLowerCase()} · checks ${pull.checks}` : issue ? 'open' : 'Not on the board: opens on GitHub.'}
         {qa ? ` · QA ${qa.status}${qa.round > 1 ? ` (round ${qa.round})` : ''}` : ''}
       </p>
-      {(pull || issue) && <p className="small">👤 {who.length ? who.join(', ') : 'Nobody on it yet'}</p>}
+      {(pull || issue) && <p className="small"><Icon name="user" /> {who.length ? who.join(', ') : 'Nobody on it yet'}</p>}
       {fail && <p className="small ref-peek-clip">✗ {fail.name}: {fail.line}</p>}
       {qa?.summary && <p className="small ref-peek-clip">{qa.summary}</p>}
       {chip.kind === 'qa' && n !== undefined && qa?.shots?.length ? <img className="ref-peek-shot" src={qaShotUrl(repo.id, n, 0, qa.updatedAt)} alt={qa.shots[0].caption} /> : null}
@@ -272,7 +273,7 @@ function FilePeek({ messageId, index }: { messageId: number; index: number }) {
   return (
     <>
       <b className="ref-peek-path">
-        📄 {f.path}
+        <Icon name="file-text" /> {f.path}
         {f.line ? `:${f.line}` : ''}
       </b>
       <Code path={f.path} {...w} mark={f.line} />
@@ -293,7 +294,7 @@ function RefFileViewer({ messageId, index, onClose }: { messageId: number; index
   if (ref?.kind !== 'file') return null;
   const url = loaded ? f.url : repo ? fileUrl(repo.fullName, repo.defaultBranch, ref.path, ref.line) : null;
   return (
-    <Sheet label={`📄 ${ref.path}${ref.line ? `:${ref.line}` : ''}`} onClose={onClose} className="ref-file-viewer">
+    <Sheet label={<><Icon name="file-text" /> {ref.path}{ref.line ? `:${ref.line}` : ''}</>} onClose={onClose} className="ref-file-viewer">
       <div className="artifact-body" ref={body}>
         {f === null ? <p className="muted">Loading…</p> : typeof f === 'string' ? <p>{f}</p> : <Code path={f.path} from={1} lines={f.text.replace(/\r\n?/g, '\n').split('\n')} mark={f.line} />}
       </div>

@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useStore, type Agent } from '../store';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { Markdown } from './Markdown';
 import { checkTally, groupChecks, type ChipTone, type StatusRow } from './detailsRules';
 import type { QaCheck } from '../../../shared/types';
@@ -10,7 +12,7 @@ import './details.css';
 // a QA report's checks as disclosure cards, status rows and real buttons. CardView.tsx and pocket's Approvals use
 // them so every details page looks the same; the rules are pure in detailsRules.ts.
 
-const GLYPH: Record<QaCheck['result'], string> = { pass: '✓', fail: '✗', skip: '–' };
+const GLYPH: Record<QaCheck['result'], IconName | null> = { pass: 'check', fail: 'x', skip: null };
 
 /** The card at the top: an eyebrow (PR #12 · floor), the title wrapping to two lines, chips, then who and when. */
 export function DetailsHeader({ eyebrow, title, chips, children }: { eyebrow: ReactNode; title: string; chips?: ReactNode; children?: ReactNode }) {
@@ -106,7 +108,7 @@ function CheckCard({ check, open: start }: { check: QaCheck; open: boolean }) {
     <li className={`dp-check dp-check-${check.result}`}>
       <button type="button" className="dp-check-row" aria-expanded={open} onClick={() => setOpen(!open)} disabled={!check.details}>
         <b className="dp-glyph" aria-label={check.result === 'pass' ? 'passed' : check.result === 'fail' ? 'failed' : 'skipped'}>
-          {GLYPH[check.result]}
+          {GLYPH[check.result] ? <Icon name={GLYPH[check.result]!} /> : '–'}
         </b>
         <span className="dp-check-name">{check.name}</span>
         {check.details && <span className="dp-chev" aria-hidden />}
@@ -167,13 +169,13 @@ export function StatusRows({ rows }: { rows: StatusRow[] }) {
         const inner = (
           <>
             <b className={`dp-row-icon dp-tone-${r.tone}`} aria-hidden>
-              {r.icon}
+              {r.icon ? <Icon name={r.icon} /> : '–'}
             </b>
             <span className="dp-row-main">
               <span className="dp-row-label">{r.label}</span>
               {r.detail && <span className="dp-row-detail">{r.detail}</span>}
             </span>
-            {r.url && <span aria-hidden>↗</span>}
+            {r.url && <Icon name="external-link" />}
           </>
         );
         return (

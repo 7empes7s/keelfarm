@@ -11,6 +11,7 @@ import { AgentProfile } from './CareerCard';
 import { copyText } from './clipboard';
 import { canPickWork, taskLine, taskSteps } from './agentWindow';
 import { Actions, Chip, DetailsHeader, LinkButton, Section, Stat, StatStrip } from './DetailsPage';
+import { CloseButton, Icon } from './Icon';
 
 export type DetailsTab = 'now' | 'profile' | 'setup';
 
@@ -53,9 +54,7 @@ export function AgentDetails(p: Props) {
           </button>
         ))}
         <span className="spacer" />
-        <button type="button" className="aw-icon aw-details-x" aria-label="Close the details" onClick={p.onClose}>
-          ✕
-        </button>
+        <CloseButton className="aw-details-x" label="Close the details" onClick={p.onClose} />
       </div>
       <div className="aw-tab-body" role="tabpanel" aria-label={TABS.find(([id]) => id === p.tab)![1]}>
         {p.tab === 'now' && <NowTab {...p} />}
@@ -87,7 +86,15 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
           <ol className="aw-steps" aria-label="This task's steps">
             {steps.map((s, i) => (
               <li key={i} className={`aw-step aw-step-${s.state}`} aria-current={s.state === 'now' ? 'step' : undefined}>
-                {s.state === 'done' ? '✓ ' : s.state === 'now' ? '● ' : ''}
+                {s.state === 'done' ? (
+                  <>
+                    <Icon name="check" />{' '}
+                  </>
+                ) : s.state === 'now' ? (
+                  '● '
+                ) : (
+                  ''
+                )}
                 {s.label}
               </li>
             ))}
@@ -125,7 +132,15 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
               })
             }
           >
-            {chosen?.kind === 'qa' ? `🔍 Test PR #${chosen.number}` : '▶ Start issue'}
+            {chosen?.kind === 'qa' ? (
+              <>
+                <Icon name="search" /> Test PR #{chosen.number}
+              </>
+            ) : (
+              <>
+                <Icon name="play" /> Start issue
+              </>
+            )}
           </button>
         </Section>
       )}
@@ -137,18 +152,24 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
       </StatStrip>
       <Section title="How they work">
         <div className="dp-chips">
-          <Chip>⌨️ {cli}</Chip>
-          <Chip>🧠 {model}</Chip>
-          <Chip>⚡ {effort} effort</Chip>
+          <Chip>
+            <Icon name="keyboard" /> {cli}
+          </Chip>
+          <Chip>
+            <Icon name="brain" /> {model}
+          </Chip>
+          <Chip>
+            <Icon name="zap" /> {effort} effort
+          </Chip>
         </div>
       </Section>
       <Actions>
-        {issueUrl && !idle && <LinkButton href={issueUrl}>Issue #{agent.issueNumber} ↗</LinkButton>}
-        {agent.prUrl && !idle && <LinkButton href={agent.prUrl}>PR #{agent.prNumber} ↗</LinkButton>}
-        {qa?.commentUrl && !idle && <LinkButton href={qa.commentUrl}>QA report ↗</LinkButton>}
+        {issueUrl && !idle && <LinkButton href={issueUrl}>Issue #{agent.issueNumber} <Icon name="external-link" /></LinkButton>}
+        {agent.prUrl && !idle && <LinkButton href={agent.prUrl}>PR #{agent.prNumber} <Icon name="external-link" /></LinkButton>}
+        {qa?.commentUrl && !idle && <LinkButton href={qa.commentUrl}>QA report <Icon name="external-link" /></LinkButton>}
         {agent.branch && (
           <button type="button" className="ds-btn" title={`Copy ${agent.branch}`} onClick={() => copyBranch(agent.branch!)}>
-            ⑂ Copy branch
+            <Icon name="git-branch" /> Copy branch
           </button>
         )}
         {actions}

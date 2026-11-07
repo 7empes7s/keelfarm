@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react';
 import type { BarPart, BarTone } from '../../../shared/progressBars';
 import './progressBar.css';
+import { Icon } from './Icon';
 
 export interface ProgressBarProps {
   label: ReactNode;
@@ -79,7 +80,7 @@ export function ProgressBar(p: ProgressBarProps) {
         {p.value !== undefined && <span className="pb-value">{p.value}</span>}
         {interactive && (
           <span className="pb-chevron" aria-hidden>
-            {p.href ? '↗' : '›'}
+            <Icon name={p.href ? 'external-link' : 'chevron-right'} />
           </span>
         )}
       </span>

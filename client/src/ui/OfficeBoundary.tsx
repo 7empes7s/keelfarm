@@ -3,6 +3,7 @@
 import { Component, type ReactNode } from 'react';
 import { bootDone } from '../pocket/officeBoot';
 import { setMode } from '../pocket/mode';
+import { Icon } from './Icon';
 
 /** A dynamic import that failed: retrying the same URL won't help, a fresh page load gets the current build. */
 const chunkFailed = (err: Error) => /dynamically imported module|importing a module script failed|failed to fetch|error loading/i.test(err.message);
@@ -41,7 +42,7 @@ export class OfficeBoundary extends Component<{ children: ReactNode; onRetry: ()
             Try again
           </button>
           <button className="btn btn-good" onClick={() => setMode('pocket')}>
-            📱 Back to pocket
+            <Icon name="smartphone" /> Back to pocket
           </button>
         </div>
       </div>

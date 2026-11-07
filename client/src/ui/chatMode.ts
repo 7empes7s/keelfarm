@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import type { AgentView, QaView, SwarmSettings } from '../../../shared/types';
 import { workerCli } from './floorRows';
 import { PHONE_WINDOW_QUERY } from './termLayout';
+import type { IconName } from './icons';
 
 const PREF = 'cubefarm:chatMode';
 
@@ -53,21 +54,21 @@ export const useChatMode = create<{ on: boolean; set: (on: boolean) => void }>((
 }));
 
 /** A PR's live state as a chip in the chat (its milestone card and the verdict card): QA's status, or merged. */
-export function prChip(qa: Pick<QaView, 'status' | 'round'> | undefined, merged: boolean): { icon: string; label: string; tone: 'good' | 'bad' | 'warn' | 'plain'; verdict: boolean } {
-  if (merged) return { icon: '🎉', label: 'Merged', tone: 'good', verdict: true };
+export function prChip(qa: Pick<QaView, 'status' | 'round'> | undefined, merged: boolean): { icon: IconName; label: string; tone: 'good' | 'bad' | 'warn' | 'plain'; verdict: boolean } {
+  if (merged) return { icon: 'party-popper', label: 'Merged', tone: 'good', verdict: true };
   switch (qa?.status) {
     case 'passed':
-      return { icon: '✅', label: `QA passed · round ${qa.round}`, tone: 'good', verdict: true };
+      return { icon: 'circle-check', label: `QA passed · round ${qa.round}`, tone: 'good', verdict: true };
     case 'failed':
-      return { icon: '❌', label: `QA failed · round ${qa.round}`, tone: 'bad', verdict: true };
+      return { icon: 'circle-x', label: `QA failed · round ${qa.round}`, tone: 'bad', verdict: true };
     case 'fixing':
-      return { icon: '🔧', label: `Fix round ${qa.round}`, tone: 'warn', verdict: true };
+      return { icon: 'wrench', label: `Fix round ${qa.round}`, tone: 'warn', verdict: true };
     case 'needs-human':
-      return { icon: '✋', label: 'Needs you', tone: 'bad', verdict: true };
+      return { icon: 'hand', label: 'Needs you', tone: 'bad', verdict: true };
     case 'testing':
-      return { icon: '🔍', label: `QA testing · round ${qa.round}`, tone: 'warn', verdict: false };
+      return { icon: 'search', label: `QA testing · round ${qa.round}`, tone: 'warn', verdict: false };
     case 'queued':
-      return { icon: '⏳', label: 'Waiting for QA', tone: 'plain', verdict: false };
+      return { icon: 'hourglass', label: 'Waiting for QA', tone: 'plain', verdict: false };
   }
-  return { icon: '•', label: 'Opened', tone: 'plain', verdict: false };
+  return { icon: 'git-branch', label: 'Opened', tone: 'plain', verdict: false };
 }

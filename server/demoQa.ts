@@ -9,12 +9,18 @@ export interface DemoQaReport {
   fixInstructions: string;
 }
 
+/** The issue the stuck PR closes: a title long enough to wrap on a phone, as the details header's must (#155). */
+export const DEMO_QA_ISSUE = {
+  title: 'Checkout steps on a phone: a sticky action bar and a stepper that wraps at 390px',
+  body: 'At phone width the stepper is cut off and the Pay button scrolls out of view. Keep the action bar on screen and let the steps wrap.\n\nObjective: O1',
+};
+
 /** The PR (opened `agoMs` ago, closing `issue`) and QA's report on it. */
 export function demoQaReport(fullName: string, number: number, issue: { number: number; title: string }, agoMs: number, sha: string): DemoQaReport {
   return {
     pull: {
       number,
-      title: `${issue.title}, on every screen: a sticky action bar and a stepper that wraps at phone width`,
+      title: `${issue.title}, on every screen`,
       url: `https://github.com/${fullName}/pull/${number}`,
       headRefName: `swarm/issue-${issue.number}-demo`,
       state: 'OPEN',

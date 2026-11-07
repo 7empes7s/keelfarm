@@ -8,6 +8,7 @@ import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '
 import { elapsedLabel } from '../qaCard';
 import { cardLabel, canPeel, locateCard } from '../world/whiteboard';
 import type { Col } from '../world/stickies';
+import { Icon } from './Icon';
 import { copyText } from './clipboard';
 import { Actions, AgentChip, ChecksList, ChecksStat, Chip, DetailsHeader, LinkButton, Section, Stat as Tile, StatStrip, StatusRows, Verdict } from './DetailsPage';
 import { mergeRows, stateChip, type ChipTone } from './detailsRules';
@@ -51,7 +52,14 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
 
   if (!repo || !at) {
     return (
-      <Panel title={`📌 ${cardLabel({ number, pr })}`} className="cardview">
+      <Panel
+        title={
+          <span>
+            <Icon name="pin" /> {cardLabel({ number, pr })}
+          </span>
+        }
+        className="cardview"
+      >
         <p className="muted">That card isn't on the board any more.</p>
       </Panel>
     );
@@ -113,7 +121,12 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
     void copyText(url ?? '').then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Link copied' : "Couldn't copy the link"));
 
   return (
-    <Panel className="cardview" accent={repo.color} title={`📌 ${cardLabel(card)}`}>
+    <Panel className="cardview" accent={repo.color} title={
+        <>
+          <Icon name="pin" /> {cardLabel(card)}
+        </>
+      }
+    >
       <DetailsHeader
         eyebrow={`${cardLabel(card)} · floor ${repo.floor} · ${repo.fullName.split('/')[1]}`}
         title={title || cardLabel(card)}
@@ -135,23 +148,23 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
       <div className="cardview-strip">
         <Who card={card} col={col} filed={issue?.createdAt} opened={pull?.createdAt} mergedAt={pull?.mergedAt} />
         {waits.map((n) => (
-          <Stat key={`w${n}`} icon="⏳" title="Waits for" tone="warn" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
+          <Stat key={`w${n}`} icon={<Icon name="hourglass" />} title="Waits for" tone="warn" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
             #{n} {repo.issues.find((i) => i.number === n)?.title}
           </Stat>
         ))}
         {waiters.map((n) => (
-          <Stat key={`h${n}`} icon="🔗" title="Holds up" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
+          <Stat key={`h${n}`} icon={<Icon name="link" />} title="Holds up" onTap={() => go({ kind: 'overlay', overlay: { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } })}>
             #{n} {repo.issues.find((i) => i.number === n)?.title}
           </Stat>
         ))}
         {pull && (
-          <Stat icon="🔀" title={`PR #${pull.number}`} tone={pull.checks === 'failing' || card.qa?.status === 'failed' ? 'bad' : undefined} href={card.qa?.commentUrl ?? pull.url}>
+          <Stat icon={<Icon name="git-merge" />} title={`PR #${pull.number}`} tone={pull.checks === 'failing' || card.qa?.status === 'failed' ? 'bad' : undefined} href={card.qa?.commentUrl ?? pull.url}>
             {checksWord(pull)}
             {card.qa ? ` · QA round ${card.qa.round}: ${card.qa.status}` : ' · not in QA yet'}
           </Stat>
         )}
         {pull?.state === 'OPEN' && !pull.untrusted && (
-          <Stat icon="▶" title="Preview" onTap={() => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number } })}>
+          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number } })}>
             Run PR #{pull.number} beside {repo.defaultBranch}
           </Stat>
         )}
@@ -190,7 +203,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           <ol className="cardview-timeline">
             {timeline.map((e, i) => (
               <li key={i} className={e.tone ? `cardview-tl-${e.tone}` : undefined}>
-                <span aria-hidden>{e.icon}</span>
+                <Icon name={e.icon} />
                 <span className="grow">{e.text}</span>
                 <time className="muted small" dateTime={new Date(e.at).toISOString()}>
                   {day(e.at)} {clock(e.at)}
@@ -222,8 +235,8 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </>
         }
       >
-        {url && <LinkButton href={url}>Open on GitHub ↗</LinkButton>}
-        {q?.commentUrl && <LinkButton href={q.commentUrl}>QA report ↗</LinkButton>}
+        {url && <LinkButton href={url}>Open on GitHub <Icon name="external-link" /></LinkButton>}
+        {q?.commentUrl && <LinkButton href={q.commentUrl}>QA report <Icon name="external-link" /></LinkButton>}
         <button type="button" className="ds-btn" onClick={() => go({ kind: 'ceo', text: ask })}>
           Ask {ceo?.name ?? 'the CEO'} about this
         </button>
@@ -238,7 +251,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
 }
 
 const checksWord = (p: Pick<PullInfo, 'checks' | 'mergeable'>) =>
-  `${p.checks === 'passing' ? '✓ checks pass' : p.checks === 'failing' ? '✗ checks failing' : p.checks === 'pending' ? '… checks running' : 'no checks'}${p.mergeable === 'CONFLICTING' ? ' · conflicts' : ''}`;
+  `${p.checks === 'passing' ? 'checks pass' : p.checks === 'failing' ? 'checks failing' : p.checks === 'pending' ? 'checks running' : 'no checks'}${p.mergeable === 'CONFLICTING' ? ' · conflicts' : ''}`;
 
 /** One card of the status strip: a 44 px button or link to what it's about. */
 function Stat({ icon, title, tone, onTap, href, label, children }: { icon: ReactNode; title: string; tone?: 'warn' | 'bad'; onTap?: () => void; href?: string; label?: string; children: ReactNode }) {
@@ -292,7 +305,7 @@ function Who({ card, col, filed, opened, mergedAt }: { card: KanbanCard; col: Co
       {a.name[0]}
     </span>
   ) : (
-    '👤'
+    <Icon name="user" />
   );
   return (
     <Stat icon={avatar} title={title} onTap={a ? () => go({ kind: 'overlay', overlay: { kind: 'terminal', agentId: a.id } }) : undefined} label={a ? `${line(title, sub)}: open their terminal` : undefined}>
@@ -329,7 +342,15 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
         {pull && <Tile title="CI" value={CI[pull.checks]} note={blocked ? 'merge blocked' : 'merge clear'} tone={blocked ? 'warn' : pull.checks === 'passing' ? 'good' : undefined} to={id('ci')} />}
       </StatStrip>
 
-      <Section id={id('qa')} title={`🔍 QA${q ? ` · round ${q.round}` : ''}`} tone={failed ? 'bad' : undefined}>
+      <Section
+        id={id('qa')}
+        title={
+          <>
+            <Icon name="search" /> QA{q ? ` · round ${q.round}` : ''}
+          </>
+        }
+        tone={failed ? 'bad' : undefined}
+      >
         {!q && <p className="muted small">Not sent to QA yet.</p>}
         {q && !q.summary && <p className="muted small">No report yet{q.status === 'testing' ? ': the test is running' : ''}.</p>}
         {q && <Verdict summary={q.summary} fix={q.fixInstructions} failed={failed} />}
@@ -342,7 +363,12 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
       )}
 
       {pull && (
-        <Section id={id('ci')} title="⚙️ CI and merge">
+        <Section id={id('ci')} title={
+            <>
+              <Icon name="settings" /> CI and merge
+            </>
+          }
+        >
           <StatusRows rows={rows} />
         </Section>
       )}

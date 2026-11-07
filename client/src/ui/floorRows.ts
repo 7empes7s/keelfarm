@@ -3,7 +3,8 @@
 
 import type { AgentCli, AgentStatus, CliView, SwarmSettings } from '../../../shared/types';
 import type { Agent } from '../store';
-import { KIND_ICON, STATUS_KIND, type StatusKind } from './statusLook';
+import type { IconName } from './icons';
+import { KIND_ICON_NAME, STATUS_KIND, type StatusKind } from './statusLook';
 
 export interface FloorRow {
   id: string;
@@ -12,7 +13,7 @@ export interface FloorRow {
   agent: string;
   status: string;
   kind: StatusKind;
-  icon: string;
+  icon: IconName;
   doing: string;
   /** A cloud agent waiting to be signed in: the coding agent to sign in (signInFor), else null. */
   signIn: string | null;
@@ -72,7 +73,7 @@ export function floorRows(agents: Agent[], settings: Runtime, clis: CliView[]): 
       agent: agentLabel(a, settings, clis),
       status: signIn ? 'Needs you to sign in' : STATUS_WORDS[a.status],
       kind,
-      icon: KIND_ICON[kind],
+      icon: KIND_ICON_NAME[kind],
       doing: signIn ? `Waiting for ${signIn} to be signed in${a.status === 'idle' ? '' : ` · ${doingText(a)}`}` : doingText(a),
       signIn,
     };

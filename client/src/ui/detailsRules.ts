@@ -2,6 +2,7 @@
 // Passed with the failed ones open, charter violations pulled out with the standard they name, the PR's state chip,
 // and CI and merge blockers as status rows.
 import type { PullInfo, QaCheck, QaView } from '../../../shared/types';
+import type { IconName } from './icons';
 
 type CheckGroupId = 'fail' | 'skip' | 'pass';
 
@@ -78,7 +79,8 @@ export function stateChip(qa: Pick<QaView, 'status'> | undefined, pull: Pick<Pul
 export interface StatusRow {
   key: string;
   tone: ChipTone;
-  icon: string;
+  /** Lucide icon, or null for a plain dash (no checks). */
+  icon: IconName | null;
   label: string;
   detail?: string;
   url?: string | null;
@@ -87,15 +89,15 @@ export interface StatusRow {
 /** GitHub's checks and what stands between the PR and a merge, one row each. */
 export function mergeRows(pull: Pick<PullInfo, 'state' | 'checks' | 'failedChecks' | 'pendingChecks' | 'mergeable' | 'mergeState' | 'isDraft'>, base: string): StatusRow[] {
   const rows: StatusRow[] = [];
-  if (pull.checks === 'passing') rows.push({ key: 'checks', tone: 'good', icon: '✓', label: 'All checks pass' });
-  else if (pull.checks === 'failing') rows.push({ key: 'checks', tone: 'bad', icon: '✗', label: 'Checks failing' });
-  else if (pull.checks === 'pending') rows.push({ key: 'checks', tone: 'warn', icon: '…', label: 'Checks running', detail: pull.pendingChecks.join(', ') || undefined });
-  else rows.push({ key: 'checks', tone: 'plain', icon: '–', label: 'No checks' });
-  for (const c of pull.failedChecks) rows.push({ key: `fail:${c.name}`, tone: 'bad', icon: '✗', label: c.name, detail: 'failed', url: c.url });
+  if (pull.checks === 'passing') rows.push({ key: 'checks', tone: 'good', icon: 'check', label: 'All checks pass' });
+  else if (pull.checks === 'failing') rows.push({ key: 'checks', tone: 'bad', icon: 'x', label: 'Checks failing' });
+  else if (pull.checks === 'pending') rows.push({ key: 'checks', tone: 'warn', icon: 'hourglass', label: 'Checks running', detail: pull.pendingChecks.join(', ') || undefined });
+  else rows.push({ key: 'checks', tone: 'plain', icon: null, label: 'No checks' });
+  for (const c of pull.failedChecks) rows.push({ key: `fail:${c.name}`, tone: 'bad', icon: 'x', label: c.name, detail: 'failed', url: c.url });
   if (pull.state !== 'OPEN') return rows;
-  if (pull.mergeable === 'CONFLICTING' || pull.mergeState === 'DIRTY') rows.push({ key: 'conflict', tone: 'bad', icon: '⚠', label: `Conflicts with ${base}`, detail: 'It has to merge the base branch before it can land' });
-  else if (pull.mergeState === 'BEHIND') rows.push({ key: 'behind', tone: 'warn', icon: '↓', label: `Behind ${base}`, detail: 'The office brings it up to date before merging' });
-  else if (pull.mergeState === 'BLOCKED') rows.push({ key: 'blocked', tone: 'warn', icon: '⛔', label: 'Blocked by branch rules', detail: 'A required review or check is missing' });
-  if (pull.isDraft) rows.push({ key: 'draft', tone: 'plain', icon: '✎', label: 'Draft', detail: 'GitHub will not merge a draft' });
+  if (pull.mergeable === 'CONFLICTING' || pull.mergeState === 'DIRTY') rows.push({ key: 'conflict', tone: 'bad', icon: 'triangle-alert', label: `Conflicts with ${base}`, detail: 'It has to merge the base branch before it can land' });
+  else if (pull.mergeState === 'BEHIND') rows.push({ key: 'behind', tone: 'warn', icon: 'arrow-down', label: `Behind ${base}`, detail: 'The office brings it up to date before merging' });
+  else if (pull.mergeState === 'BLOCKED') rows.push({ key: 'blocked', tone: 'warn', icon: 'ban', label: 'Blocked by branch rules', detail: 'A required review or check is missing' });
+  if (pull.isDraft) rows.push({ key: 'draft', tone: 'plain', icon: 'pencil', label: 'Draft', detail: 'GitHub will not merge a draft' });
   return rows;
 }
