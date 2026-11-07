@@ -58,6 +58,10 @@ function scrollBoxProblems(root: Locator) {
 }
 
 async function openSection(root: Locator, group: string, label: string) {
+  // Demo approvals can toast over the Settings back button while walking all sections.
+  for (const dismiss of await root.page().locator('.toasts .notice-x').all()) {
+    if (await dismiss.isVisible()) await dismiss.click();
+  }
   if (await root.locator('.cn-groups').isVisible()) await consoleSection(root, group, label);
   else await pocketSection(root, label);
 }
