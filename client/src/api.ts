@@ -157,7 +157,7 @@ export const api = {
   /** The demo only: the office doctor's scenarios. */
   demoDoctor: (action: 'restart' | 'stuck' | 'later' | 'unclosed' | 'check') => call<{ text: string; doctor: DoctorFinding[] }>('POST', '/api/doctor/demo', { action }),
   /** A message for the CEO, replying to message `replyTo` if given; answers with the posted message's id. */
-  messageCeo: (text: string, replyTo?: number, files?: string[]) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }) }),
+  messageCeo: (text: string, replyTo?: number, files?: string[], clientId?: string) => call<{ id: number } | undefined>('POST', '/api/ceo/message', { text, replyTo, ...(files?.length && { files }), ...(clientId && { clientId }) }),
   ceoPicks: () => call<QuickPicks>('GET', '/api/ceo/picks', undefined, false),
   keepFile: (id: string, keep: boolean) => call('POST', `/api/files/${id}/keep`, { keep }),
   deleteFile: (id: string, toast = true) => call('DELETE', `/api/files/${id}`, undefined, toast),
@@ -188,6 +188,7 @@ export const api = {
   decideOpen: (id: string, action: 'snooze' | 'drop' | 'answered' | 'open' | 'reopen') => call('POST', `/api/decisions/${encodeURIComponent(id)}`, { action }),
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
+  demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),

@@ -6,6 +6,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
+import { UpdatePill } from '../ui/UpdatePill';
+import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
@@ -326,6 +328,8 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
 
 export default function Pocket() {
   const [tab, setTab] = useState<PocketTab>(() => tabFrom(location.href) ?? 'company');
+  // a tab change is a safe moment for the office's new client (#216): it opens on the tab picked
+  useEffect(() => void loadUpdate({ kind: 'nav' }, () => window.history.replaceState(window.history.state, '', `?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), tab })}`)), [tab]);
   const [repoId, setRepoId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
   const company = useStore((s) => s.settings.companyName);
@@ -493,6 +497,7 @@ export default function Pocket() {
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
+        <UpdatePill className="btn btn-small btn-good pk-update" short={!wide} />
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
