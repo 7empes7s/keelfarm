@@ -160,6 +160,8 @@ describe('office tools', () => {
       consult: async (a) => (calls.push(['consult', a]), `Ada on floor 1 says:\n${'x'.repeat(20_000)}`),
       defineExperiment: (a) => (calls.push(['define_experiment', a]), 'defined'),
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
+      react: (a) => (calls.push(['react', a]), 'reacted'),
+      reply: (a) => (calls.push(['reply', a]), 'answered'),
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -192,6 +194,8 @@ describe('office tools', () => {
       'pr_diff',
       'propose_charter',
       'qa_report',
+      'react',
+      'reply',
       'rerun_checks',
       'resolve_decision',
       'restart_agent',
@@ -225,6 +229,18 @@ describe('office tools', () => {
     expect(await ok('set_mandate', { text: 'x'.repeat(MANDATE_MAX_CHARS + 1) })).toBe(false);
     expect(await ok('set_mandate', { text: 'forever', expires_in_hours: 24 * 91 })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['agent_log', 'worktree_file', 'pr_diff', 'set_mandate']);
+  });
+
+  it("checks the chat tools' inputs (#118): react takes only its fixed emoji, reply needs a message and words", async () => {
+    const { client, calls } = await connect();
+    const ok = async (name: string, args: Record<string, unknown>) => !(await client.callTool({ name, arguments: args })).isError;
+    expect(await ok('react', { emoji: '👍' })).toBe(true);
+    expect(await ok('react', { emoji: '✅', message_id: 4 })).toBe(true);
+    expect(await ok('react', { emoji: '💩' })).toBe(false);
+    expect(await ok('reply', { message_id: 4, text: 'Done.' })).toBe(true);
+    expect(await ok('reply', { message_id: 4, text: '' })).toBe(false);
+    expect(await ok('reply', { text: 'Done.' })).toBe(false);
+    expect(calls.map(([n]) => n)).toEqual(['react', 'react', 'reply']);
   });
 
   it("checks the waiting tools' inputs (#28)", async () => {
@@ -596,7 +612,7 @@ describe('follow-ups (#27)', () => {
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, messageAgent: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok,
-          waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok',
+          waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
         },
         () => researching,
       ),

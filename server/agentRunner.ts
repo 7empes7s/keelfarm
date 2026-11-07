@@ -307,6 +307,10 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `📂 worktree_file ${String(input.agent_id ?? '')} · ${String(input.mode ?? '')}${input.path ? ` ${clip(String(input.path), 80)}` : ''}`;
     case 'pr_diff':
       return `🔀 pr_diff PR #${String(input.pr ?? '?')}${floor}`;
+    case 'react':
+      return `${String(input.emoji ?? '')} react to message ${String(input.message_id ?? 'the latest')}`;
+    case 'reply':
+      return `↩ reply to message ${String(input.message_id ?? '?')}: ${clip(String(input.text ?? ''), 90)}`;
     case 'send_telegram':
       return `✈️ send_telegram: ${clip(String(input.text ?? ''), 90)}`;
     case 'answer_agent':
