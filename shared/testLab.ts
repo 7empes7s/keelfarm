@@ -8,6 +8,12 @@ export type LabJobKind = 'screenshot' | 'check' | 'run';
 /** Browser profiles: Chromium at a desktop size, a phone, or an iPhone's (touch, 3× pixels, its user agent). */
 export type LabProfile = 'desktop' | 'phone' | 'iphone';
 
+/**
+ * How the lab's browser draws a 3D page (#301): 'lab', the default, is the office's light graphics profile (same UI and
+ * layout, far less memory); 'full' is the real graphics, for one pass on its own with the browser restarted after.
+ */
+export type LabGraphics = 'lab' | 'full';
+
 export const laneOf = (kind: LabJobKind): LabLane => (kind === 'run' ? 'heavy' : 'browser');
 
 export interface TestLabSettings {

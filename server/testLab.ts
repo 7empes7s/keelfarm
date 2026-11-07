@@ -5,7 +5,7 @@
 // commands themselves are a LabRunner (server/testLabRunner.ts; the demo fakes it).
 import path from 'node:path';
 import type { SessionKind } from '../shared/health.ts';
-import { laneOf, type LabJobKind, type LabJobView, type LabLane, type LabProfile, type LabResultView, type TestLabSettings, type TestLabView } from '../shared/testLab.ts';
+import { laneOf, type LabGraphics, type LabJobKind, type LabJobView, type LabLane, type LabProfile, type LabResultView, type TestLabSettings, type TestLabView } from '../shared/testLab.ts';
 
 // ---------- rules ----------
 
@@ -20,14 +20,20 @@ interface Queued {
   kind: LabJobKind;
   repoId: string;
   queuedAt: number;
+  /** Runs with nothing else in the lab: a full-quality browser pass (#301). */
+  alone?: boolean;
 }
 
 /**
  * The jobs to start now. Each lane runs up to its limit; among the waiting jobs the floor with the fewest running jobs
  * goes first, then the floor served longest ago, then the oldest request. Two heavy jobs of one floor never run at once:
- * they share the floor's lab checkout.
+ * they share the floor's lab checkout. A job that runs alone goes first once the lab is empty, and nothing new starts
+ * while it waits for that or runs.
  */
 export function pickNext<J extends Queued>(queue: readonly J[], running: readonly J[], limits: Record<LabLane, number>, servedAt: ReadonlyMap<string, number>): J[] {
+  if (running.some((j) => j.alone)) return [];
+  const solo = queue.filter((j) => j.alone).sort((a, b) => a.queuedAt - b.queuedAt)[0];
+  if (solo) return running.length ? [] : [solo];
   const now = [...running];
   const served = new Map(servedAt);
   const picked: J[] = [];
@@ -134,6 +140,40 @@ const PROBLEM_TEXT: Record<LabProblem, string> = {
   port: 'a port it needs is already in use',
 };
 
+// ---------- the browser's memory (#301) ----------
+
+/** The shared browser restarts between jobs once its processes use this much: a software-rendered 3D page grows it. */
+export const LAB_BROWSER_MAX_MB = 1200;
+
+/**
+ * The shared browser's command-line flags, each measured on a 3D demo office and kept only where it lowered the peak
+ * (PR #301's table): /dev/shm can be tiny in containers; at most two renderers; the GPU and network services inside the
+ * browser process and no zygotes (Linux), fewer processes each with its own copy of Chrome's memory. Playwright passes
+ * its own --enable-features, and only the last one counts, so its feature is repeated here.
+ */
+export function labLaunchArgs(): string[] {
+  return ['--disable-dev-shm-usage', '--renderer-process-limit=2', '--in-process-gpu', '--no-zygote', '--enable-features=CDPScreenshotNewSurface,NetworkServiceInProcess2'];
+}
+
+/**
+ * What runs in every page before its own scripts: the lab profile's flag the office's 3D client reads
+ * (client/src/world/gfx/device.ts); for a full-quality pass on a desktop, the High preset unless one was picked, since
+ * Auto would step down on the lab's software rendering. Other apps never read either.
+ */
+export function labInitScript(graphics: LabGraphics, profile: LabProfile): string {
+  if (graphics === 'lab') return 'window.__swarmLabGfx = true;';
+  return profile === 'desktop' ? "try { if (!localStorage.getItem('cubefarm:graphics')) localStorage.setItem('cubefarm:graphics', 'high'); } catch {}" : '';
+}
+
+/**
+ * Restart the shared browser now that a job ended? Always after a full-quality pass, and when its processes have grown
+ * past the limit; never while another browser job still uses it (the next job to end decides again).
+ */
+export function restartBrowser(x: { full: boolean; rssMb: number | null; busy: boolean; limitMb?: number }): boolean {
+  if (x.busy) return false;
+  return x.full || (x.rssMb !== null && x.rssMb >= (x.limitMb ?? LAB_BROWSER_MAX_MB));
+}
+
 /** Installing a browser needs this much free memory: it unpacks a few hundred MB next to running agents. */
 export const BROWSER_INSTALL_MIN_MB = 2048;
 
@@ -222,20 +262,21 @@ export interface RunResult {
 }
 
 /** lab_screenshot's answer: the files, and what went wrong on the page. Small: agents pay for every line. */
-function shotReport(r: ShotResult): string {
+function shotReport(r: ShotResult, graphics: LabGraphics): string {
   const issues = r.consoleErrors.length + r.pageErrors.length + r.failedRequests.length;
   return [
     `${r.shots.length} screenshot${r.shots.length === 1 ? '' : 's'} (in your worktree, not committed; Read a file to see it):`,
     ...r.shots.map((s) => `  ${s.label}: ${s.file}`),
+    graphics === 'full' ? 'Full-quality pass: real graphics settings, shadows and lighting included; ran alone, browser restarted after.' : 'Lab graphics profile (light 3D, same UI and layout).',
     ...(issues ? [...few('Console errors', r.consoleErrors), ...few('Page errors', r.pageErrors), ...few('Failed requests', r.failedRequests)] : ['No console errors, page errors or failed requests.']),
   ].join('\n');
 }
 
 /** lab_browser_check's answer: pass/fail per step, with a screenshot of each failure. */
-function checkReport(r: CheckResult): string {
+function checkReport(r: CheckResult, graphics: LabGraphics): string {
   const failed = r.steps.filter((s) => !s.ok).length;
   return [
-    failed ? `FAIL: ${failed} of ${r.steps.length} steps failed.` : `PASS: all ${r.steps.length} steps.`,
+    `${failed ? `FAIL: ${failed} of ${r.steps.length} steps failed.` : `PASS: all ${r.steps.length} steps.`}${graphics === 'full' ? ' Full-quality graphics.' : ''}`,
     ...r.steps.map((s, i) => `${i + 1}. ${s.ok ? 'ok' : 'FAIL'} ${clip(s.step, 120)}${s.detail ? `: ${clip(s.detail, 240)}` : ''}${s.shot ? ` (screenshot ${s.shot})` : ''}`),
     ...few('Console errors', r.consoleErrors),
     ...few('Page errors', r.pageErrors),
@@ -284,6 +325,7 @@ export interface BrowserOpts {
   url: string;
   profile: LabProfile;
   theme: 'light' | 'dark';
+  graphics: LabGraphics;
   outDir: string;
 }
 
@@ -300,7 +342,9 @@ export interface LabRunner {
   installBrowser(dir: string): Promise<boolean>;
   /** At office start: install that browser with the office's own Playwright, so no session has to. */
   warm(): Promise<boolean>;
-  /** Close the browser (idle, or the office stops). */
+  /** What the shared browser's processes use now, MB; null when it isn't running or can't be measured. */
+  browserMb(): Promise<number | null>;
+  /** Close the browser (idle, restarting it between jobs, or the office stops). */
   close(): Promise<void>;
 }
 
@@ -318,8 +362,8 @@ export interface Requester {
 }
 
 type JobInput =
-  | ({ kind: 'screenshot'; viewports: number[]; profile: LabProfile; theme: 'light' | 'dark'; waitFor?: string; actions: LabAction[]; fullPage: boolean } & LabTarget)
-  | ({ kind: 'check'; viewport: number; profile: LabProfile; theme: 'light' | 'dark'; steps: LabStep[] } & LabTarget)
+  | ({ kind: 'screenshot'; viewports: number[]; profile: LabProfile; theme: 'light' | 'dark'; graphics?: LabGraphics; waitFor?: string; actions: LabAction[]; fullPage: boolean } & LabTarget)
+  | ({ kind: 'check'; viewport: number; profile: LabProfile; theme: 'light' | 'dark'; graphics?: LabGraphics; steps: LabStep[] } & LabTarget)
   | { kind: 'run'; command: string; branch?: string; timeoutMin?: number };
 
 interface Job extends Queued {
@@ -376,7 +420,7 @@ export class TestLab {
     labOutDir(who.worktree, 'x', this.host.forbidden());
     return new Promise((done) => {
       const id = `${now.toString(36)}${(++seq).toString(36)}`;
-      this.queue.push({ id, kind: input.kind, repoId: who.repoId, queuedAt: now, input, who, title: titleOf(input), startedAt: null, done });
+      this.queue.push({ id, kind: input.kind, repoId: who.repoId, queuedAt: now, alone: input.kind !== 'run' && input.graphics === 'full', input, who, title: titleOf(input), startedAt: null, done });
       this.pump();
     });
   }
@@ -481,22 +525,31 @@ export class TestLab {
         text = runReport(argv.join(' '), r);
       } else {
         const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr, j.who.agentId);
-        const base = { url, profile: input.profile, theme: input.theme, outDir };
+        const graphics = input.graphics ?? 'lab';
+        const base = { url, profile: input.profile, theme: input.theme, graphics, outDir };
+        // Whatever happens on the page, the browser restarts after a full pass (and between jobs once it has grown).
+        const recycled = async <T>(p: Promise<T>): Promise<T> => {
+          try {
+            return await p;
+          } finally {
+            await this.recycleBrowser(j, graphics === 'full');
+          }
+        };
         if (input.kind === 'screenshot') {
-          const r = await runner.screenshot({ ...base, viewports: input.viewports, waitFor: input.waitFor, actions: input.actions, fullPage: input.fullPage });
+          const r = await recycled(runner.screenshot({ ...base, viewports: input.viewports, waitFor: input.waitFor, actions: input.actions, fullPage: input.fullPage }));
           ok = !r.pageErrors.length && !r.consoleErrors.length;
-          summary = `${r.shots.length} shots, ${r.consoleErrors.length + r.pageErrors.length} errors`;
+          summary = `${r.shots.length} shots${graphics === 'full' ? ' (full quality)' : ''}, ${r.consoleErrors.length + r.pageErrors.length} errors`;
           file = r.shots[0]?.file;
           for (const s of r.shots) this.host.shot(j.who.agentId, s.file, url);
-          text = shotReport(r);
+          text = shotReport(r, graphics);
         } else {
-          const r = await runner.check({ ...base, viewport: input.viewport, steps: input.steps });
+          const r = await recycled(runner.check({ ...base, viewport: input.viewport, steps: input.steps }));
           const failed = r.steps.filter((s) => !s.ok);
           ok = !failed.length;
           summary = ok ? `pass, ${r.steps.length} steps` : `${failed.length} of ${r.steps.length} steps failed`;
           file = failed.find((s) => s.shot)?.shot;
           if (file) this.host.shot(j.who.agentId, file, url);
-          text = checkReport(r);
+          text = checkReport(r, graphics);
         }
       }
     } catch (err) {
@@ -515,6 +568,14 @@ export class TestLab {
     this.pump();
   }
 
+  /** After a browser job, before the next starts: restart the shared browser when restartBrowser says so. */
+  private async recycleBrowser(j: Job, full: boolean) {
+    const runner = this.host.runner();
+    const busy = this.running.some((r) => r !== j && laneOf(r.kind) === 'browser');
+    const rssMb = busy || full ? null : await runner.browserMb().catch(() => null);
+    if (restartBrowser({ full, rssMb, busy })) await runner.close().catch(() => undefined);
+  }
+
   private emit() {
     this.host.emit(this.view());
   }
@@ -523,6 +584,7 @@ export class TestLab {
 function titleOf(i: JobInput): string {
   if (i.kind === 'run') return clip(i.command.trim(), 80);
   const where = i.url ? clip(i.url.replace(/^https?:\/\//, ''), 60) : 'the floor preview';
+  if (i.graphics === 'full') return `full-quality ${i.kind} ${where}`;
   return i.kind === 'screenshot' ? `screenshot ${where}${i.viewports.length > 1 ? ` × ${i.viewports.length}` : ''}` : `check ${where} (${i.steps.length} steps)`;
 }
 

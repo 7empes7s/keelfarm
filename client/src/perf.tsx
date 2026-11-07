@@ -35,6 +35,17 @@ export function useRenderPaused() {
   return covered || hidden;
 }
 
+/** Lives inside the Canvas on demand frames (the test lab's profile, #301): draws at most `fps` frames a second. */
+export function FrameCap({ fps, paused }: { fps: number; paused: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    if (paused) return;
+    const t = setInterval(() => invalidate(), 1000 / fps);
+    return () => clearInterval(t);
+  }, [fps, paused, invalidate]);
+  return null;
+}
+
 /**
  * Lives inside the Canvas. With the loop stopped nothing redraws, so if the window is resized (which
  * clears the canvas) while paused, draw one frame so the edges around the panel aren't left blank.
