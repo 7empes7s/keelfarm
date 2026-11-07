@@ -15,7 +15,7 @@ import { parseForwarded } from '../shared/chat.ts';
 import { keyName } from '../shared/termKeys.ts';
 import type { LocalFolder } from './workspace.ts';
 import { HOME_DIR, type DemoScale } from './config.ts';
-import { takeLastUpdate, underLauncher, type OfficeHost } from './officeUpdate.ts';
+import { takeLastUpdate, underLauncher, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
 import type { WeatherApi } from './weather.ts';
@@ -32,9 +32,11 @@ import { sampleOffice } from './costSample.ts';
 import { sampleLog } from './charterSample.ts';
 import { demoTranscript } from './historySample.ts';
 import { demoPastWeek } from './opsSample.ts';
+import { sampleCareers } from './careerSample.ts';
 import { demoPrFiles, pastPulls } from './demoMap.ts';
-import { DEMO_REF_FILES, demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from './demoReads.ts';
+import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
 import { logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
@@ -981,10 +983,12 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
+    seedCareers: sampleCareers,
     demoTeam: (floor) => demoTeam(scale, floor),
     seedLab: sampleLab,
     seedNotices: sampleNotices,
     demoCharter,
+    demoHeldUpdate,
     simulateUsage: demoUsage,
     demoDoctor: {
       dropDesk: (dir) => {
@@ -1062,6 +1066,13 @@ const demoOffice: OfficeHost = {
     return { from, to: lastFakeUpdate.to, ok: true, installed: true, built: true, at: Date.now() };
   },
 };
+
+/** A fresh demo office's chat: an update the preflight held back, with vitest's colour codes and rules in its output (#138). */
+function demoHeldUpdate(): LastUpdate {
+  const target = fakeSha();
+  const output = `\x1b[31mFAIL\x1b[39m server/swarm.test.ts > schedules work \x1b[2m${'─'.repeat(120)}[1/1]\x1b[22m\x1b[39m`;
+  return { from: DEMO_HEAD, to: DEMO_HEAD, target, ok: false, stage: 'preflight', error: `tests failed (npm test failed (exit 1): ${output})`, installed: false, built: false, at: Date.now() };
+}
 
 // ---------- the demo preview ----------
 
@@ -1258,29 +1269,11 @@ export interface DemoFloor {
   agents?: { name: string }[];
 }
 
-/** The demo CEO's pointers into the office: every kind of chat ref (shared/chatRefs.ts) the busiest floor has. */
-export function demoRefsLine(floors: readonly DemoFloor[]): string {
-  const f = [...floors].sort((a, b) => b.pullRequests.length - a.pullRequests.length || b.backlog.length - a.backlog.length)[0];
-  if (!f) return '';
-  const who = f.agents?.[0]?.name;
-  const pr = f.pullRequests[0]?.number;
-  const issue = f.backlog[0]?.number;
-  return [
-    `Around the office: floor ${f.floor}`,
-    who && `@${who} (watch @${who}/terminal)`,
-    issue && `#${issue} is next`,
-    `the app starts in file: floor ${f.floor} ${DEMO_REF_FILES[0]}:5`,
-    pr ? `PR floor ${f.floor} #${pr} has qa: floor ${f.floor} #${pr} and preview: floor ${f.floor} #${pr}` : '',
-    `and main runs at preview: floor ${f.floor}.`,
-  ]
-    .filter(Boolean)
-    .join(', ');
-}
-
 interface DemoStatus {
   company: { scaling: string; officePlaybook: string | null }; // how team changes go, in words ("team changes apply straight away"); the office playbook
   floors: DemoFloor[];
   pendingChanges: unknown[];
+  openDecisions?: { id: string; question: string }[];
 }
 
 /** The objective ids in a floor's charter, in order. */
@@ -1485,6 +1478,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
       if (awake) return awake;
+      const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
+      if (resolved) return resolved;
       // "send me the status on Telegram": through the real tool, refused when Telegram isn't linked.
       if (/\btelegram\b/i.test(text)) {
         const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);

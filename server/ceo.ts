@@ -6,6 +6,7 @@ import { followupLabel, MANDATE_MAX_CHARS, type CeoMandate, type FollowupEvent }
 import { followupPrompt } from './followupPrompt.ts';
 import { PREVIEW_ENV_MAX_CHARS } from '../shared/previewEnv.ts';
 import { PROPOSE_CHARTER, PROPOSE_CHARTER_TEXT, type CharterProposalArgs } from './charterTool.ts';
+import { RESOLVE_DECISION, RESOLVE_DECISION_TEXT } from './decisionTool.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type AgentCli, type CeoJobKind, type EffortLevel, type QaStatus } from '../shared/types.ts';
 import { LAB_KINDS, type ExperimentInput } from '../shared/experiments.ts';
 import type { TaskKind } from '../shared/costs.ts';
@@ -168,6 +169,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
   setMandate(a: { text: string; floors?: number[]; expires_in_hours?: number }): string;
   proposeCharter(a: CharterProposalArgs): string;
+  resolveDecision(a: { id: string; outcome: string }): string;
   defineExperiment(a: ExperimentToolInput): string;
   agentLog(a: { agent_id: string; lines?: number }): string;
   restartAgent(a: { agent_id: string }): string;
@@ -392,6 +394,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.setMandate(a)),
     ),
     tool('propose_charter', PROPOSE_CHARTER_TEXT, PROPOSE_CHARTER, (a) => run(() => h.proposeCharter(a))),
+    tool('resolve_decision', RESOLVE_DECISION_TEXT, RESOLVE_DECISION, (a) => run(() => h.resolveDecision(a))),
     tool(
       'define_experiment',
       "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
@@ -578,6 +581,7 @@ export function ceoSystemPrompt(o: {
     '- Nothing to say? react and end with no text. Several messages: reply to each.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',
+    "- company_status's openDecisions wait in the manager's tray: bring one up only if it bears on this message or before acting on its topic, at most one per reply, none marked trayOnly, and don't re-ask it in text. Answered in words: resolve_decision.",
     "- When it would help, end with one ```idea <kind> block (kind: objective, focus, mandate, experiment, research, charter, team or plan) suggesting a change to how the office works: a title line, then the message the manager sends by tapping Accept. At most one per reply.",
     '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
   ].join('\n');

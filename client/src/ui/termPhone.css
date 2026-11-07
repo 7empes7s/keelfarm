@@ -1,5 +1,6 @@
 /* On phones and touch tablets (TerminalView.tsx, #86) the window is terminal first: it fills what the keyboard leaves
-   of the screen, with one header row, the terminal in all the rest and one bottom bar; the details fold into a sheet. */
+   of the screen, with one header row, the terminal in all the rest and one bottom bar; the details are a bottom sheet
+   (agentWindow.css). */
 .overlay:has(> .term-phone) {
   top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
   bottom: auto;
@@ -15,74 +16,7 @@
   box-shadow: none;
 }
 .panel.term-phone .panel-head {
-  gap: var(--ds-space-2);
-  padding: max(6px, var(--ds-safe-top)) max(8px, var(--ds-safe-right)) 6px max(12px, var(--ds-safe-left));
   border-bottom-width: 3px;
-}
-.term-phone .panel-title {
-  font-size: 1.05rem;
-}
-.term-phone .term-title {
-  gap: var(--ds-space-2);
-}
-.term-phone .avatar {
-  width: 28px;
-  height: 28px;
-  border-width: 2px;
-}
-.term-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  min-height: var(--ds-target);
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.status-dot {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  font-size: 0;
-}
-.term-details-toggle {
-  flex: none;
-  margin-left: auto;
-}
-.panel.term-phone .panel-body {
-  padding: 0;
-  overflow: hidden;
-}
-.term-details {
-  flex: none;
-  max-height: 60%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-2) max(12px, var(--ds-safe-right)) var(--ds-space-3) max(12px, var(--ds-safe-left));
-  border-bottom: 3px solid var(--ds-outline);
-}
-.term-details .term-meta,
-.term-details .term-actions {
-  margin: 0;
-}
-.term-details .browser-view {
-  max-height: 40vh;
-}
-.term-details-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-2);
 }
 .term-phone :is(.term-error, .sign-in-note) {
   flex: none;

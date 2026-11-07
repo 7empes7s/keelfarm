@@ -13,6 +13,7 @@ import { cliLabel } from '../clis.ts';
 import type { LedgerState } from '../ledger.ts';
 import type { LabState } from '../experiments.ts';
 import type { AgentTerminal } from '../terminal.ts';
+import { cleanTerminalText } from '../../shared/terminalText.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
@@ -21,6 +22,7 @@ import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
+import type { DecisionsState } from '../../shared/decisions.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -182,6 +184,7 @@ export interface Persisted {
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
+  decisions: DecisionsState; // questions waiting on the manager (#114, shared/decisions.ts)
 }
 
 export interface Shot {
@@ -264,7 +267,7 @@ export const OPS_EVENTS = new Set<ServerEvent['type']>(['repo', 'repoRemoved', '
 export const OPS_TICK_MS = 30_000;
 // How often the watchdog looks for stuck work (watchdog.ts).
 export const WATCHDOG_MS = 60_000;
-export const oneLine = (err: unknown) => (err instanceof Error ? err.message : String(err)).split(/\r?\n/)[0].slice(0, 200);
+export const oneLine = (err: unknown) => cleanTerminalText(err instanceof Error ? err.message : String(err), Infinity).split('\n')[0].slice(0, 200);
 // While a cloud agent signs in, the office looks whether it's done this often (someone watching their terminal), else less.
 export const SIGN_IN_POLL_MS = 8_000;
 export const SIGN_IN_IDLE_POLL_MS = 60_000;

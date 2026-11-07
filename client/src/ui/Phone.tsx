@@ -3,7 +3,7 @@ import { api } from '../api';
 import { floorPrCounts, isBusy, pendingRequests, unreadMessages, useStore, type PhoneTab } from '../store';
 import { CEO_ID, type AgentCli, type CliView, type Delivery, type EffortLevel, type HireRequestView, type MachineHost, type PhoneMessage, type SwarmSettings } from '../../../shared/types';
 import { DELIVERY_LABEL, excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
-import { suggestionsFor } from '../../../shared/chatParts';
+import { officeText, suggestionsFor } from '../../../shared/chatParts';
 import { refParts, refsMarkdown } from '../../../shared/chatRefs';
 import { RefChip, takeChatScroll, useMentions, useRefNav } from './RefChips';
 import { speechText } from '../../../shared/speech';
@@ -18,7 +18,8 @@ import { MessageActions, who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble, LongText, StepsList } from './ChatLive';
-import { ActionCards, DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
+import { ActionCards, DaySeparator, IdeaCard, NoticeCard, Starters, WorkingStrip } from './ChatCards';
+import { DecisionList, DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
 import { Conversations } from './ChatHistory';
 import { CeoMemory } from './CeoMemory';
@@ -36,6 +37,7 @@ import { Games, type GameId } from './games/Games';
 import { HolidayStrip } from './HolidayStrip';
 import { replayKind } from './voiceQueue';
 import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared/models';
+import { useCeoDraft } from './goTo';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -285,6 +287,7 @@ function TeamChanges({ focusId }: { focusId?: string }) {
       {pending.map((r) => (
         <Resume key={r.id} req={r} highlight={r.id === focusId} />
       ))}
+      <DecisionList heading={(t) => <h3 className="phone-h">{t}</h3>} />
       {demo && (
         <div className="row wrap">
           <span className="muted small">Demo:</span>
@@ -388,7 +391,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
   const [dx, setDx] = useState(0);
   const press = useRef<{ x: number; y: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
-  if (m?.from === 'office') return <div className="bubble-office">{m.text}</div>;
+  if (m?.from === 'office') return m.notice ? <NoticeCard text={officeText(m.text)} notice={m.notice} /> : <div className="bubble-office">{officeText(m.text)}</div>;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
@@ -538,6 +541,14 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
   const fileCount = useStore((s) => s.files.length);
   const drop = useDropZone(att.add);
   const slash = useSlash(text, setText, () => form.current?.querySelector('textarea')?.focus());
+  // A message the search, the guide or an empty list prepared for the CEO (goTo.ts): in the box, ready to finish and send.
+  const draft = useCeoDraft((s) => s.text);
+  useEffect(() => {
+    if (draft === null) return;
+    setText(draft);
+    useCeoDraft.setState({ text: null });
+    setTimeout(() => form.current?.querySelector('textarea')?.focus(), 0);
+  }, [draft]);
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
@@ -807,6 +818,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
           />
         )}
       </div>
+      <DecisionTray hide={offered?.id} typing={!!text.trim()} onPick={(d, option) => send(option, d.messageId)} onJump={jump} />
       {/* answers to a pending question stay inline; everything else is behind the + */}
       <div className="quick">
         {question !== null && !answered && (

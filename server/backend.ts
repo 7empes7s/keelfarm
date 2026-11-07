@@ -15,7 +15,7 @@ import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realPreviews, type PreviewBackend } from './previewRunner.ts';
-import { realOffice, type OfficeHost } from './officeUpdate.ts';
+import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import { elevenLabs } from './elevenlabs.ts';
 import { httpTransport, type NotifyTransport } from './notifier.ts';
 import { telegramHttp, type TelegramApi } from './telegramBot.ts';
@@ -27,6 +27,7 @@ import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
 import type { DemoCharter } from './demoCharters.ts';
+import type { CareerView } from '../shared/careers.ts';
 import type { CharterParts, ObjectiveLog } from '../shared/charter.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import type { LabState } from './experiments.ts';
@@ -153,10 +154,14 @@ export interface Backend {
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
   seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
+  /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
+  seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
   /** The demo only: an objective log over the made-up ledger (#105), so the Charter tab's numbers show from the start. */
   seedCharterLog?(charter: CharterParts, ledger: CostRecord[], now: number): ObjectiveLog;
   /** The demo only: the charter a fresh demo office gives a floor, and a CEO proposal waiting on it. */
   demoCharter?(fullName: string): DemoCharter;
+  /** The demo only: an update the preflight held back (#138), so a fresh demo office's chat shows its card. */
+  demoHeldUpdate?(): LastUpdate;
   /** The demo only: how many agents a fresh demo office hires on floor `floor`. */
   demoTeam?(floor: number): number;
   /** The demo only: an experiment with made-up results (#23), when the lab has no issues in one yet. */

@@ -600,7 +600,7 @@
     "client/src/world/toys/dogBrain.ts": 1257,
     "server/cliRunner.ts": 989,
     "server/demo.ts": 1844,
-    "server/swarm/core.ts": 802,
+    "server/swarm/core.ts": 843,
     "server/workspace.ts": 909,
     "shared/types.ts": 900
   }

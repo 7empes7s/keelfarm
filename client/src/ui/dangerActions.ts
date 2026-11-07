@@ -34,3 +34,13 @@ export async function clearDesk(agent: { id: string; name: string }): Promise<bo
     () => false,
   );
 }
+
+/** Asks, then stops the agent's session (#117: Stop always asks, wherever it is). */
+export async function stopAgent(agent: { id: string; name: string }): Promise<boolean> {
+  const ok = await confirmDialog({ tone: 'danger', icon: '■', title: `Stop ${agent.name}?`, body: 'Their session ends now. A message picks it back up.', confirm: 'Stop' });
+  if (!ok) return false;
+  return api.stop(agent.id).then(
+    () => true,
+    () => false,
+  );
+}

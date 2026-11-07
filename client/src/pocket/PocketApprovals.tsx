@@ -1,6 +1,7 @@
 // Pocket mode's Approvals tab: everything waiting on the manager's decision. Team changes (new agents and let-gos, the
 // phone's cards), stuck PRs with the Kanban's Retry QA / Send back / Merge / Close, and passed PRs on floors that don't
-// merge on their own, and charter changes the CEO proposed (#48). On a desktop (#104) a list beside the one picked.
+// merge on their own, charter changes the CEO proposed (#48), and the CEO's questions still open (#114). On a desktop
+// (#104) a list beside the one picked.
 import { Fragment, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -11,6 +12,9 @@ import { Menu } from '../ui/Menu';
 import { Resume } from '../ui/Phone';
 import { ProposalCard } from '../ui/CharterTab';
 import { waitingOnYou } from './pocketData';
+import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';
+import { chatDecisions } from '../../../shared/decisions';
+import { EmptyState } from '../ui/EmptyState';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
   const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
@@ -109,12 +113,15 @@ export function Approvals({ wide }: { wide?: boolean }) {
   const repos = useStore((s) => s.repos);
   const qa = useStore((s) => s.qa);
   const requests = useStore((s) => s.requests);
+  const decisions = useStore((s) => s.decisions);
+  const now = useMinute();
   const [picked, setPicked] = useState<string | null>(null);
   const w = waitingOnYou(repos, qa, requests);
   const charters = repos.filter((r) => r.charter.proposal);
   const pr = (s: (typeof w.stuck)[number]) => `PR #${s.qa.prNumber} ${s.repo.pulls.find((p) => p.number === s.qa.prNumber)?.title ?? ''}`;
   const items: Decision[] = [
     ...w.requests.map((r) => ({ key: `req:${r.id}`, group: '👥 Team changes', label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} /> })),
+    ...chatDecisions(decisions, now).map((d) => ({ key: d.id, group: DECISIONS_GROUP, label: d.question, card: <DecisionCard key={d.id} d={d} now={now} /> })),
     ...charters.map((r) => ({ key: `charter:${r.id}`, group: '🎯 Charter changes (edit them in ⚙️ → Charter)', label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
     ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: '⚠️ Pull requests that need you', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} /> })),
     ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
@@ -123,7 +130,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
   if (items.length === 0) {
     return (
       <div className="pk-page">
-        <p className="pk-empty">Nothing waits on you. The team carries on, and your phone hears when that changes.</p>
+        <EmptyState kind="approvals" />
       </div>
     );
   }
