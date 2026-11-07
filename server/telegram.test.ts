@@ -14,6 +14,8 @@ import {
   parseDecision,
   parseToken,
   parseUpdate,
+  POLL_ADVICE_AFTER,
+  pollAdvice,
   pollBackoff,
   splitMessage,
   startCode,
@@ -22,6 +24,7 @@ import {
   teamKeyboard,
   telegramError,
   telegramNote,
+  telegramPolls,
   type TgUpdate,
 } from './telegram.ts';
 import { TelegramBot, TelegramCallError, type TelegramApi } from './telegramBot.ts';
@@ -151,6 +154,18 @@ describe('the long poll backoff', () => {
     expect([0, 1, 2, 3, 6, 7, 20].map((n) => pollBackoff(n))).toEqual([0, 1000, 2000, 4000, 32_000, BACKOFF_MAX_MS, BACKOFF_MAX_MS]);
     expect(pollBackoff(1, 5)).toBe(5000);
   });
+
+  it('reads the bot only with a token and the switch on (#126)', () => {
+    expect(telegramPolls(true, true)).toBe(true);
+    expect(telegramPolls(true, false)).toBe(false);
+    expect(telegramPolls(false, true)).toBe(false);
+  });
+
+  it('says what to check only after repeated failures', () => {
+    expect(pollAdvice(POLL_ADVICE_AFTER - 1, 0)).toBe('');
+    expect(pollAdvice(POLL_ADVICE_AFTER, 0)).toMatch(/internet connection/);
+    expect(pollAdvice(POLL_ADVICE_AFTER, 401)).toMatch(/revoked/);
+  });
 });
 
 // ---------- the bot, on a fake Bot API ----------
@@ -193,7 +208,7 @@ const until = async (ok: () => boolean) => {
   expect(ok()).toBe(true);
 };
 
-function bot() {
+function bot(switchOn = { on: true }) {
   const fake = fakeApi();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-telegram-'));
   const secretsFile = path.join(dir, 'secrets.json');
@@ -203,6 +218,7 @@ function bot() {
   const b = new TelegramBot({
     api: fake.api,
     secretsFile,
+    on: () => switchOn.on,
     message: async (t) => void messages.push(t),
     decide: (verdict, id) => {
       if (id === 'gone') throw new Error('That team change no longer exists');
@@ -290,5 +306,38 @@ describe('the Telegram bot', () => {
     await b.remove();
     expect(b.view()).toMatchObject({ set: false, linked: false, polling: 'off' });
     expect(JSON.parse(fs.readFileSync(secretsFile, 'utf8')).telegram).toBeUndefined();
+  });
+
+  it('switched off: stops reading and retrying, sends nothing, keeps the chat; on again resumes without relinking (#126)', async () => {
+    const switchOn = { on: true };
+    const { b, fake } = bot(switchOn);
+    const { startUrl: url } = await b.setToken(TOKEN);
+    fake.push({ ...text(42, `/start ${new URL(url).searchParams.get('start')}`), update_id: 1 });
+    await until(() => b.linked());
+    await until(() => b.view().okAt !== null);
+    fake.failNext(1000); // Telegram down: the poll retries
+    fake.push({ update_id: 2, edited_message: {} });
+    await until(() => b.view().polling === 'retrying');
+
+    switchOn.on = false;
+    b.refresh();
+    expect(b.view()).toMatchObject({ on: false, polling: 'off', error: '', advice: '', linked: true, chat: 'Ana' });
+    await new Promise((r) => setTimeout(r, 20));
+    const polls = () => fake.calls.filter((c) => c.method === 'getUpdates').length;
+    const before = { polls: polls(), all: fake.calls.length };
+    expect(await b.send('hi')).toMatch(/off/);
+    expect(b.active()).toBe(false);
+    expect(() => b.retryNow()).toThrow(/off/);
+    await new Promise((r) => setTimeout(r, 1200)); // past the first backoff: nothing retries
+    expect(fake.calls.length).toBe(before.all);
+
+    fake.failNext(0);
+    switchOn.on = true;
+    b.refresh();
+    await until(() => polls() > before.polls);
+    expect(b.view()).toMatchObject({ on: true, polling: 'ok', linked: true });
+    expect(await b.send('back')).toBeNull();
+    expect(fake.calls.filter((c) => c.method === 'sendMessage').at(-1)?.params.chat_id).toBe(42);
+    await b.stop();
   });
 });

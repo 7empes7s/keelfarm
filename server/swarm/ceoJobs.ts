@@ -714,7 +714,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   /** CEO messages go to Telegram too: the manager's last message came from there, or Settings mirrors the whole chat. */
   protected mirrorsToTelegram(): boolean {
-    if (!this.telegram.linked()) return false;
+    if (!this.telegram.active()) return false;
     if (this.state.settings.notify.telegramMirror) return true;
     return [...this.state.messages].reverse().find((m) => m.from === 'manager')?.telegram === 'in';
   }
@@ -729,7 +729,7 @@ export abstract class SwarmCeo extends SwarmUpdate {
 
   /** The CEO's send_telegram: to the manager's linked chat only. */
   protected async sendTelegram(a: { text: string }): Promise<string> {
-    if (!this.telegram.linked()) throw new Error("Telegram isn't set up: the manager links their chat in Settings → Notifications → Telegram. Answer here instead.");
+    if (!this.telegram.active()) throw new Error(this.telegram.linked() ? 'The manager switched Telegram off in Settings → Notifications. Answer here instead.' : "Telegram isn't set up: the manager links their chat in Settings → Notifications → Telegram. Answer here instead.");
     const text = String(a.text ?? '').trim();
     if (!text) throw new Error('Write the message.');
     const why = await this.telegram.send(telegramChat(this.ceo().name, text.slice(0, 4000)));

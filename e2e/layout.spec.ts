@@ -128,6 +128,24 @@ const charterEditor: View = {
   },
 };
 
+/** Settings → Notifications with the demo bot linked and Telegram on, off, or on but unreachable (#126). */
+const telegramState = (state: 'on' | 'off' | 'error'): View => ({
+  name: `Notifications: Telegram ${state}`,
+  go: async (root) => {
+    const req = root.page().request;
+    if (!(await (await req.get('/api/state')).json()).notifyChannels?.telegram?.linked) {
+      await req.post('/api/notify/telegram/link');
+      await req.post('/api/notify/telegram/demo', { data: { kind: 'start' } });
+    }
+    await req.patch('/api/settings', { data: { notify: { channels: { telegram: state !== 'off' } } } });
+    if (state !== 'off') await req.post('/api/notify/telegram/demo', { data: { kind: state === 'error' ? 'outage' : 'online' } });
+    await pocketSection(root, 'Notifications');
+    const shows = { on: root.getByRole('button', { name: 'Send test' }), off: root.getByRole('button', { name: 'Turn on', exact: true }), error: root.getByRole('button', { name: 'Retry now' }) }[state];
+    await shows.scrollIntoViewIfNeeded();
+    await expect(shows).toBeVisible();
+  },
+});
+
 const SCREENS: Screen[] = [
   {
     name: 'pocket console',
@@ -138,7 +156,7 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Settings and notifications' }).click();
       return dialog(page, /Settings/);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), charterEditor, telegramState('on'), telegramState('off'), telegramState('error'), telegramState('on'), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

@@ -5346,6 +5346,13 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .telegram-demo input {
   min-width: 0;
 }
+.telegram-off {
+  margin: var(--ds-space-2) 0;
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--ds-line);
+}
 .bubble-via {
   opacity: 0.8;
 }

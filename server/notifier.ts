@@ -85,7 +85,7 @@ interface TelegramChannel {
   view(): TelegramView;
 }
 
-const NO_TELEGRAM: TelegramView = { set: false, bot: '', linked: false, chat: '', linking: false, polling: 'off', error: '', last: null };
+const NO_TELEGRAM: TelegramView = { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null };
 
 const LABEL: Record<NotifyChannel, string> = { desktop: 'Desktop', push: 'Push', ntfy: 'ntfy', telegram: 'Telegram' };
 const MAX_DEVICES = 20;
@@ -202,6 +202,7 @@ export class Notifier {
     if (isWebhook(channel) && !this.webhooks[channel]) throw new HttpError(409, `Save the ${LABEL[channel]} settings first.`);
     if (channel === 'push' && !this.push.devices.length) throw new HttpError(409, 'No device gets push yet: turn push on on a device first.');
     if (channel === 'telegram' && !this.deps.telegram?.linked()) throw new HttpError(409, 'Link your Telegram chat first: open your bot and press Start.');
+    if (channel === 'telegram' && !this.deps.settings().channels.telegram) throw new HttpError(409, 'Telegram is off: turn it on first.');
     const n = note('test', 'Test from cubefarm', channel === 'desktop' ? 'Desktop notifications work in this browser.' : `${LABEL[channel]} notifications from the office work.`);
     const results = await this.deliver(n, channel);
     const failed = results.filter((r) => r !== null);
