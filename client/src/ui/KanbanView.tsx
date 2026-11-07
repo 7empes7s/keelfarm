@@ -239,7 +239,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         return { label: 'Close PR…', icon: 'x', hint: 'Closed without merging; the branch stays', disabled: busy, run: () => void closePr(c) };
     }
   };
-  // the label hides on a narrow card, leaving the icon with the label as its tooltip (kanbanFold.css)
+  // the label hides on a narrow card, leaving the icon with the label as its tooltip (kanbanCard.css)
   const actionButton = (c: KanbanCard, a: CardAction) => {
     const x = actionSpec(c, a);
     return (
