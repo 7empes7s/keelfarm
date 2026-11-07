@@ -13,6 +13,7 @@ import { type PersistedRepo, type PersistedAgent, EFFORTS, KEEP_DECIDED_REQUESTS
 import { SHIRTS, HAIR, SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmUpkeep } from './upkeep.ts';
 import { DEMO_DECISION_MESSAGES, DEMO_REASK } from '../demoDecisions.ts';
+import type { SampleFloor } from '../chatSample.ts';
 import { actionCards } from '../../shared/ceoActions.ts';
 import { designDecision } from '../../shared/designs.ts';
 import type { ProposeDesignInput } from '../designTool.ts';
@@ -403,5 +404,12 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     if (d.status !== 'open') return `"${d.question}" was already ${d.status}.`;
     this.setDecisions(closeDecision(this.state.decisions.list, d.id, x.superseded ? 'superseded' : 'resolved', x.outcome, Date.now()));
     return `${x.superseded ? 'Superseded' : 'Closed'} "${d.question}": ${plainText(x.outcome, 120)}.`;
+  }
+
+  /** Demo only: the first floor and its newest agent, for the sample chat's action cards of every kind (#151). */
+  protected sampleCardFloor(): SampleFloor | undefined {
+    const floor = this.state.repos[0];
+    const team = floor ? this.state.agents.filter((a) => a.repoId === floor.id && a.role !== 'ceo') : [];
+    return floor && team.length ? { floor: floor.floor, repoId: floor.id, agent: team[team.length - 1], size: team.length } : undefined;
   }
 }

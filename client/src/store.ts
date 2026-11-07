@@ -287,7 +287,7 @@ export const useStore = create<State>((set, get) => ({
     mainPreviewIdleMin: 30,
     dailyLogDir: '',
     historyDays: 90,
-    voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7 },
+    voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7, speed: 1, favourites: [] },
     themes: { mode: 'auto', disabled: [], birthday: null },
     weather: DEFAULT_WEATHER,
     worldEvents: DEFAULT_WORLD_EVENTS,

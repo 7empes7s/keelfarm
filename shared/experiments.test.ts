@@ -231,7 +231,7 @@ describe('definitions', () => {
 
   it('has the starter experiments as drafts, the practice switches among them', () => {
     const s = starterExperiments(NOW);
-    expect(s.map((e) => e.id)).toEqual(['test-first', 'plan-in-pr', 'self-review', 'cross-model-qa', 'fix-effort', 'up-to-date', 'file-leases', 'auto-rebase', 'small-prs']);
+    expect(s.map((e) => e.id)).toEqual(['test-first', 'plan-in-pr', 'self-review', 'cross-model-qa', 'fix-effort', 'up-to-date', 'file-leases', 'auto-rebase', 'busy-files', 'small-prs']);
     expect(s.every((e) => e.status === 'draft' && e.variants.length === 2)).toBe(true);
     expect(s.find((e) => e.id === 'cross-model-qa')!.variants[1].settings.qaCli).toBe('codex');
   });

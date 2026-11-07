@@ -122,7 +122,7 @@ let warned = false;
 /** Reads a live message with the voice in the settings, or replays one (`replay`) the way the phone's ▶ chose. */
 async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
   const { settings, voiceKeySet } = useStore.getState();
-  const { voiceName } = settings.voice;
+  const { voiceName, speed } = settings.voice;
   const call = !replay && m.from === 'ceo' && callOn();
   const set = settings.voice.provider === 'off' && call ? 'browser' : settings.voice.provider; // a call always speaks
   const provider = replay ? (replay === 'clip' ? 'elevenlabs' : 'browser') : set;
@@ -143,8 +143,8 @@ async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
   };
   const sentence = (index: number) => call && dispatchCall({ type: 'sentence', index });
   try {
-    if (provider === 'browser' && call) await speakSentences(m.id, words, voiceName, () => began(null), sentence);
-    else if (provider === 'browser') await speak(words, voiceName, () => began(null), (i) => speechWord(m.id, i));
+    if (provider === 'browser' && call) await speakSentences(m.id, words, voiceName, speed, () => began(null), sentence);
+    else if (provider === 'browser') await speak(words, voiceName, speed, () => began(null), (i) => speechWord(m.id, i));
     else if (replay) await playClip(m.id, words, began, sentence, true);
     else if (!voiceKeySet) throw new Error('no ElevenLabs key is saved');
     else await playClip(m.id, words, began, sentence);
@@ -290,8 +290,8 @@ async function browserVoices(synth: SpeechSynthesis): Promise<SpeechSynthesisVoi
   return synth.getVoices();
 }
 
-/** Says `text` in the voice called `voiceName` (the browser's default when it's gone), telling `word` where it is. Rejects when it can't. */
-async function speak(text: string, voiceName: string, began: () => void, word: (charIndex: number) => void, stopper: (stop: () => void) => void = (stop) => (stopCurrent = stop)) {
+/** Says `text` in the voice called `voiceName` (the browser's default when it's gone) at `rate`, telling `word` where it is. Rejects when it can't. */
+async function speak(text: string, voiceName: string, rate: number, began: () => void, word: (charIndex: number) => void, stopper: (stop: () => void) => void = (stop) => (stopCurrent = stop)) {
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') throw new Error("this browser can't speak");
   if (!text) return;
@@ -302,6 +302,7 @@ async function speak(text: string, voiceName: string, began: () => void, word: (
     u.lang = v.lang;
   }
   u.volume = level();
+  u.rate = rate;
   await new Promise<void>((resolve, reject) => {
     // An utterance's volume is fixed once it starts, so muting stops it instead; a stuck engine gets a deadline.
     const unsubscribe = subscribeAudio(() => getAudioPrefs().muted && stop());
@@ -329,7 +330,7 @@ async function speak(text: string, voiceName: string, began: () => void, word: (
 }
 
 /** A call's reply in the browser's voice: one sentence at a time, so Skip moves on and Pause picks the sentence up again. */
-async function speakSentences(id: number, text: string, voiceName: string, began: () => void, sentence: (index: number) => void) {
+async function speakSentences(id: number, text: string, voiceName: string, rate: number, began: () => void, sentence: (index: number) => void) {
   const parts = splitSentences(text);
   let i = 0;
   let stopped = false;
@@ -365,7 +366,7 @@ async function speakSentences(id: number, text: string, voiceName: string, began
       wake = null;
       continue;
     }
-    await speak(parts[i], voiceName, () => {
+    await speak(parts[i], voiceName, rate, () => {
       since = performance.now();
       if (first) began();
       first = false;

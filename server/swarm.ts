@@ -67,7 +67,7 @@ import {
 } from './swarm/model.ts';
 import { lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmCeoTools } from './swarm/ceoTools.ts';
+import { SwarmVoices } from './swarm/voices.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -75,7 +75,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmCeoTools {
+export class Swarm extends SwarmVoices {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null);
 
   // ---------- lifecycle ----------
@@ -276,14 +276,14 @@ export class Swarm extends SwarmCeoTools {
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
         for (let i = 1; i < size; i++) this.hireAgent(repo.id, {}); // connecting hired the first
-        this.updateRepo(repo.id, { autoAssign: true });
+        this.updateRepo(repo.id, { autoAssign: true, ...(repo.floor === 1 ? { practices: { busyFiles: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
       }
       // Mission control opens on a week that already happened.
       this.state.ops = this.backend.seedOps?.(this.state.repos.map((r) => r.id), Date.now()) ?? this.state.ops;
       const base = this.messageSeq - 1; // edits of every kind (#125), reactions and quoted replies (#118)
-      for (const m of this.backend.seedChat?.(Date.now()) ?? []) this.state.messages.push({ ...m, id: m.id + base, ...(m.replyTo && { replyTo: m.replyTo + base }) });
+      for (const m of this.backend.seedChat?.(Date.now(), this.sampleCardFloor()) ?? []) this.state.messages.push({ ...m, id: m.id + base, ...(m.replyTo && { replyTo: m.replyTo + base }) });
       this.messageSeq = Math.max(this.messageSeq, ...this.state.messages.map((m) => m.id + 1));
       if (this.backend.seedThreads) this.messageSeq = await this.ceoChat.seed(this.state.ceo.chats, this.state.messages, this.backend.seedThreads(this.state.repos, Date.now()), this.files, this.messageSeq); // threads across floors (#132)
     }
@@ -708,9 +708,9 @@ export class Swarm extends SwarmCeoTools {
       setTimeout(() => void this.sweepHistory(), 500);
     }
     if (patch.voice !== undefined) {
-      const keepDays = s.voice.keepDays;
-      s.voice = voiceSettings(s.voice, patch.voice);
-      if (s.voice.keepDays !== keepDays) setTimeout(() => void this.voice.prune(), 500);
+      const was = s.voice;
+      s.voice = voiceSettings(was, patch.voice);
+      this.voiceSettingsChanged(was);
     }
     if (patch.themes !== undefined) {
       s.themes = themeSettings(s.themes, patch.themes);

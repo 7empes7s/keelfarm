@@ -90,6 +90,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
+  | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.

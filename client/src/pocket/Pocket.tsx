@@ -42,6 +42,8 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
+import { pushLayer } from '../ui/backStack';
+import { markTeamLanding, pocketJump } from './pocketJump';
 import { Icon, IconText } from '../ui/Icon';
 import type { IconName } from '../ui/icons';
 import { floorColumns, statusLine } from './companyLayout';
@@ -519,14 +521,34 @@ export default function Pocket() {
   const [history, setHistory] = useState<HistoryFocus | undefined>();
   const [focusRepo, setFocusRepo] = useState<string | undefined>();
   const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
+  // A floor's team asked for (a chat link, #151) is the Team tab here, at that floor; from the Chat tab, with a Back to it.
+  const [teamJump, setTeamJump] = useState(0);
+  const [backToChat, setBackToChat] = useState(false);
+  const onChat = useRef(false);
+  onChat.current = tab === 'chat';
   useEffect(() => {
     if (!wantsSection) return;
+    const jump = pocketJump(wantsSection, onChat.current, useStore.getState().back);
+    if (jump.clearBack) useStore.setState({ back: null }); // the chat stays here, under the tab or the console
     useStore.getState().openOverlay(null);
+    if (jump.to === 'team') {
+      setSettings(null);
+      setBackToChat(jump.backToChat);
+      markTeamLanding();
+      setTeamJump((n) => n + 1);
+      setRepoId(jump.repoId);
+      return setTab('team'); // go()'s console and overlay closing is done above
+    }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
     panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
+  useEffect(() => {
+    if (!backToChat) return;
+    if (tab !== 'team') return setBackToChat(false);
+    return pushLayer(() => setTab('chat'));
+  }, [backToChat, tab]);
   // The guide asked for (the search's "Get the most out of the office") is the Company tab's card.
   const guide = useFinder((s) => s.guide);
   useEffect(() => {
@@ -688,7 +710,24 @@ export default function Pocket() {
                 {/* drawn while away (#145), as iOS keeps a tab: opening it only shows it */}
                 {!wide && <Activity mode={tab === 'chat' ? 'visible' : 'hidden'}>{chat}</Activity>}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
-                {tab === 'team' && <Team focusRepo={repoId} top={<MemoryBanner open={() => setSettings('ops')} />} />}
+                {tab === 'team' && (
+                  <Team
+                    focusRepo={repoId}
+                    flash={teamJump}
+                    top={
+                      <>
+                        {backToChat && (
+                          <div className="pk-back-bar">
+                            <button className="btn btn-ghost cn-back" onClick={() => setTab('chat')} aria-label="Back to the chat">
+                              <Icon name="chevron-left" /> Chat
+                            </button>
+                          </div>
+                        )}
+                        <MemoryBanner open={() => setSettings('ops')} />
+                      </>
+                    }
+                  />
+                )}
                 {tab === 'approvals' && <Approvals wide={layout === 'expanded'} />}
               </>
             )}

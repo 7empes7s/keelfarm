@@ -1,12 +1,39 @@
 // The demo's chat with the CEO (#118): a made-up thread showing every status reaction (✅ ⚠️ ⏳ 👀 🕓), a job that
-// ended with only the CEO's reaction, two messages in a row each answered with its own quote, and the manager's reactions.
-// Before it, a long history (#145): the chat opens on its latest page and loads the rest as the manager scrolls up.
+// ended with only the CEO's reaction, two messages in a row each answered with its own quote, the manager's reactions,
+// and a reply with one action card of each kind (#151), each landing on what it names. Before it, a long history
+// (#145): the chat opens on its latest page and loads the rest as the manager scrolls up.
+import { actionCards } from '../shared/ceoActions.ts';
+import type { OfficeCall } from '../shared/ceoStream.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import { CHAT_KEEP } from '../shared/chatPage.ts';
 import { demoEditedChat } from './demoChat.ts';
 
-/** Ids from `first`; it starts after #125's edited chat (20 minutes ago). */
-export function sampleChat(now: number, first = 1): PhoneMessage[] {
+/** The floor the action cards are about, and one of its agents. */
+export interface SampleFloor {
+  floor: number;
+  repoId: string;
+  agent: { id: string; name: string };
+  size: number; // its team's size
+}
+
+/** The cards of a reply that touched every part of `f` (#151), made the way a real reply's are. */
+function sampleCards(f: SampleFloor) {
+  const n = f.floor;
+  const calls: OfficeCall[] = [
+    { tool: 'scale_team', ok: true, out: `Floor ${n} goes from ${f.size - 1} to ${f.size} agents: ${f.agent.name} joined.`, args: { floor: n, size: f.size } },
+    { tool: 'configure_agent', ok: true, out: `${f.agent.name} uses opus from their next task.`, args: { agent_id: f.agent.id, model: 'opus' } },
+    { tool: 'message_agent', ok: true, out: `Sent to ${f.agent.name}.`, args: { agent_id: f.agent.id } },
+    { tool: 'file_issue', ok: true, out: `Filed #1 on floor ${n}: Checkout fix.`, args: { floor: n } },
+    { tool: 'send_back', ok: true, out: 'Sent back for a fix.', args: { floor: n, pr: 2 } },
+    { tool: 'retry_qa', ok: true, out: 'QA runs again.', args: { floor: n, pr: 2 } },
+    { tool: 'propose_charter', ok: true, out: 'Proposed: it waits for the manager.', args: { floor: n } },
+    { tool: 'set_floor_profile', ok: true, out: `Saved floor ${n}'s QA brief.`, args: { floor: n } },
+  ];
+  return actionCards(calls, (x) => (x === n ? f.repoId : null));
+}
+
+/** Ids from `first`; it starts after #125's edited chat (20 minutes ago). `cards`: the floor of the action cards' reply. */
+export function sampleChat(now: number, first = 1, cards?: SampleFloor): PhoneMessage[] {
   let id = first - 1;
   const msg = (from: PhoneMessage['from'], text: string, minAgo: number, extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id: ++id, from, text, at: now - minAgo * 60_000, ...extra });
   const done = { delivery: 'replied', status: 'done' } as const;
@@ -19,6 +46,7 @@ export function sampleChat(now: number, first = 1): PhoneMessage[] {
     msg('ceo', 'Filed the checkout fix; the next free agent picks it up.', 14, { replyTo: first + 3 }),
     msg('ceo', "Yes: floor 1's QA brief now checks 390 px before anything else.", 13.5, { replyTo: first + 4, reactions: [{ by: 'manager', emoji: '❤️' }, { by: 'manager', emoji: '👍' }] }),
     msg('manager', 'Go ahead and merge it once the checks are green', 10, { ...done, reactions: [{ by: 'ceo', emoji: '✅' }] }),
+    ...(cards ? [msg('ceo', `Done: floor ${cards.floor}'s team, charter and QA brief are sorted. Tap a card to see each.`, 9.5, { actions: sampleCards(cards) })] : []),
     msg('manager', 'How do I see what landed on main and where the merge happens?', 9, done),
     // code blocks (#200): a long one-line command and a TypeScript block long enough to fold
     msg('ceo', [
@@ -75,8 +103,8 @@ export function pastChat(now: number, count: number): PhoneMessage[] {
 }
 
 /** The demo's thread: a full one (#145, it opens on the latest page), then the edited messages and the sample. */
-export function demoThread(now: number): PhoneMessage[] {
-  const past = pastChat(now, CHAT_KEEP - demoEditedChat(now).length - sampleChat(now).length);
+export function demoThread(now: number, cards?: SampleFloor): PhoneMessage[] {
+  const past = pastChat(now, CHAT_KEEP - demoEditedChat(now).length - sampleChat(now, 1, cards).length);
   const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: past.length + i + 1 }));
-  return [...past, ...edits, ...sampleChat(now, past.length + edits.length + 1)];
+  return [...past, ...edits, ...sampleChat(now, past.length + edits.length + 1, cards)];
 }

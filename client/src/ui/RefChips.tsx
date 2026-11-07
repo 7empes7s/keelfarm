@@ -69,8 +69,9 @@ export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (flo
         if (!pocket) return useStore.getState().openOverlay({ kind: 'phone', tab: 'hires' });
         window.dispatchEvent(new CustomEvent('cubefarm:open', { detail: '/?tab=approvals' }));
       } else {
-        // Pocket mode keeps the chat under the panel; the 3D phone closes for it, so it remembers where it was.
-        if (!pocket) chatScroll = scroller.current?.scrollTop ?? null;
+        // Pocket mode keeps the chat under the panel (not under a tab: a team, #151); the 3D phone closes for it, so it
+        // remembers where it was.
+        if (!pocket || (j.overlay.kind === 'manager' && j.overlay.tab === 'team')) chatScroll = scroller.current?.scrollTop ?? null;
         openFrom(j.overlay, j.floor);
       }
     },

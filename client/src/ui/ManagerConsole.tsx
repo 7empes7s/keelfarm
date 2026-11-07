@@ -28,6 +28,7 @@ import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
+import { flashInto } from './jumpFlash';
 import { Icon } from './Icon';
 
 // The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
@@ -258,12 +259,15 @@ export function FloorsTab() {
 
 // ---------- CEO ----------
 
-function FloorBrief({ repo }: { repo: RepoView }) {
+/** `focused`: a chat link to this floor's brief (#151): scrolled to and lit up, its QA brief open. */
+function FloorBrief({ repo, focused }: { repo: RepoView; focused: boolean }) {
   const [mission, setMission] = useState(repo.mission);
   const [research, setResearch] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
   useEffect(() => setMission(repo.mission), [repo.mission]);
+  useEffect(() => void (focused && flashInto(card.current)), [focused]);
   return (
-    <div className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
+    <div ref={card} className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
       <div className="ds-card-head">
         <span className="floor-badge">{repo.floor}</span>
         <div className="ds-row-main">
@@ -308,7 +312,7 @@ function FloorBrief({ repo }: { repo: RepoView }) {
           )}
         </button>
       </div>
-      <details className="small">
+      <details className="small" open={focused}>
         <summary>QA brief{repo.qaBrief ? '' : ' (none yet)'}</summary>
         <textarea
           key={repo.qaBrief}
@@ -347,7 +351,7 @@ function FloorBrief({ repo }: { repo: RepoView }) {
   );
 }
 
-export function CeoTab() {
+export function CeoTab({ focusRepo }: { focusRepo?: string }) {
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const log = useStore((s) => s.logs[CEO_ID]) ?? [];
   const info = useStore((s) => s.ceo);
@@ -474,7 +478,7 @@ export function CeoTab() {
         <OfficePlaybook />
         {repos.length === 0 && <p className="muted small">Connect a repo first.</p>}
         {[...repos].sort((a, b) => a.floor - b.floor).map((r) => (
-          <FloorBrief key={r.id} repo={r} />
+          <FloorBrief key={r.id} repo={r} focused={r.id === focusRepo} />
         ))}
       </div>
     </div>
@@ -483,7 +487,8 @@ export function CeoTab() {
 
 // ---------- team ----------
 
-export function TeamTab() {
+/** `focusRepo`: the floor a chat link opened it at (#151), scrolled to and lit up. */
+export function TeamTab({ focusRepo }: { focusRepo?: string }) {
   const repos = useStore((s) => s.repos);
   const agents = useStore((s) => s.agents);
   const settings = useStore((s) => s.settings);
@@ -492,13 +497,15 @@ export function TeamTab() {
   const openOverlay = useStore((s) => s.openOverlay);
   const terminal = settings.runtime === 'terminal';
   const [openLook, setOpenLook] = useState<string | null>(null);
+  const focus = useRef<HTMLDivElement>(null);
+  useEffect(() => flashInto(focus.current), []);
   if (repos.length === 0) return <EmptyState kind="projects" />;
   return (
     <div>
       {[...repos].sort((a, b) => a.floor - b.floor).map((repo) => {
         const team = agentsOnRepo(agents, repo.id).filter((a) => a.role !== 'ceo');
         return (
-          <div key={repo.id} className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
+          <div key={repo.id} ref={repo.id === focusRepo ? focus : undefined} className="card floor-card" style={{ ['--accent' as string]: repo.color }}>
             <div className="ds-card-head">
               <span className="floor-badge">{repo.floor}</span>
               <b className="ds-row-main ds-row-title" title={repo.fullName}>

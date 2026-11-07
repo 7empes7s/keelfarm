@@ -123,7 +123,7 @@ export const api = {
   sendBack: (repoId: string, n: number, note?: string) => call('POST', `${r(repoId)}/pulls/${n}/fix`, { note }),
   /** A new agent on the floor (refused past Settings → Most agents per floor). Empty settings use the office's defaults. */
   hireAgent: (repoId: string, opts: AgentSetupPatch & { name?: string } = {}, toast = true) => call<AgentView>('POST', `${r(repoId)}/agents`, opts, toast),
-  updateAgent: (id: string, patch: AgentSetupPatch & { name?: string; look?: 'feminine' | 'masculine'; style?: AgentStyle | null }) => call('PATCH', `/api/agents/${id}`, patch),
+  updateAgent: (id: string, patch: AgentSetupPatch & { name?: string; look?: 'feminine' | 'masculine'; style?: AgentStyle | null; voiceId?: string; voiceName?: string }) => call('PATCH', `/api/agents/${id}`, patch),
   fireAgent: (id: string) => call('DELETE', `/api/agents/${id}`),
   /** waitForDeps: refuse an issue that still waits for open ones, as the whiteboard's stickies do. */
   assign: (id: string, issueNumber: number, note?: string, waitForDeps?: boolean) => call('POST', `/api/agents/${id}/assign`, { issueNumber, note, waitForDeps }),
