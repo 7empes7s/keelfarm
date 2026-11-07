@@ -404,7 +404,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
 .pk-floor .fb-row {
   --fb-n: 1;
   padding-inline: 0;
-  mask-image: linear-gradient(to right, #000 calc(100% - var(--fb-fade)), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - var(--fb-fade)), transparent);
 }
 .pk-floor .fb-card {
   width: calc((100cqi - (var(--fb-n) - 1) * var(--ds-space-2)) / var(--fb-n));
