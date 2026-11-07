@@ -355,36 +355,37 @@ describe('quiet while in the app (#210)', () => {
   /** A notifier with push devices, ntfy and a linked Telegram, and the open tabs' attention it reads. */
   async function office(quietInApp = true) {
     fakeClock();
-    const tabs: { visible: boolean; at: number }[] = [];
     const tg: string[] = [];
     const posts: NotifyRequest[] = [];
     const notes: NoteView[] = [];
-    const quiet: string[] = [];
+    const quiet: number[] = [];
     const cleared: string[][] = [];
     const dir = tmpDir();
     const telegram = { linked: () => true, mirrors: () => false, send: async (text: string) => (tg.push(text), null), view: () => ({ set: true, bot: 'b', linked: true, chat: 'Ana', linking: false, on: true, polling: 'off' as const, error: '', okAt: null, advice: '', last: null }) };
     const settings = notifySettings(DEFAULT_NOTIFY, { quietInApp });
-    const n = new Notifier({ transport: { post: async (req) => (posts.push(req), 201) }, secretsFile: path.join(dir, 'secrets.json'), pushFile: path.join(dir, 'push.json'), settings: () => settings, broadcast: (x) => notes.push(x), channelsChanged: () => undefined, log: () => undefined, telegram, attention: () => tabs, quiet: (ids) => quiet.push(...ids), cleared: (e) => cleared.push(e) });
+    const n = new Notifier({ transport: { post: async (req) => (posts.push(req), 201) }, secretsFile: path.join(dir, 'secrets.json'), pushFile: path.join(dir, 'push.json'), settings: () => settings, broadcast: (x) => notes.push(x), channelsChanged: () => undefined, log: () => undefined, telegram, quiet: (ids) => quiet.push(...ids), cleared: (e) => cleared.push(e) });
     await n.setWebhook('ntfy', SECRETS.ntfy);
     await n.pushKey();
     await n.subscribe(subscription('https://push.example.net/push/phone'));
     await n.subscribe(subscription('https://push.example.net/push/laptop'));
-    return { n, tabs, tg, posts, notes, quiet, cleared };
+    const tab = (visible: boolean) => n.attention.receive({ OPEN: 1, readyState: 1 }, JSON.stringify({ type: 'attention', visible }));
+    return { n, tab, tg, posts, notes, quiet, cleared };
   }
 
   it('sends to no device, ntfy or Telegram while the manager uses the app on one device, and counts it', async () => {
     const o = await office();
-    o.tabs.push({ visible: false, at: Date.now() }, { visible: true, at: Date.now() });
-    o.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.', undefined, undefined, 'n1');
+    o.tab(false);
+    o.tab(true);
+    o.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.', undefined, undefined, 'n1', 7);
     await pastGrace();
     expect([o.posts, o.tg, o.notes]).toEqual([[], [], []]);
-    expect(o.quiet).toEqual(['n1']);
+    expect(o.quiet).toEqual([7]);
     expect(o.n.channelsView().today).toEqual({ sent: 0, skipped: 1 });
   });
 
   it('sends once after the grace when the app is only open out of sight, and as usual with the switch off', async () => {
     const o = await office();
-    o.tabs.push({ visible: false, at: Date.now() });
+    o.tab(false);
     o.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.');
     await pastGrace();
     expect(o.posts.map((p) => p.channel)).toEqual(['ntfy', 'push', 'push']);
@@ -392,7 +393,7 @@ describe('quiet while in the app (#210)', () => {
     expect(o.n.channelsView().today).toEqual({ sent: 1, skipped: 0 });
     vi.useRealTimers();
     const loud = await office(false);
-    loud.tabs.push({ visible: true, at: Date.now() });
+    loud.tab(true);
     loud.n.notify('ceoMessage', 'Mimoun', 'Floor 2 is done.');
     await pastGrace();
     expect(loud.posts).toHaveLength(3);

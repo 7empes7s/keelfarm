@@ -672,9 +672,7 @@ export abstract class SwarmCeo extends SwarmReactions {
     // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
     if (from === 'ceo' && !requestId && !m.question) {
       const said = m.text || (m.visuals ? withVisualsText('', m.visuals) : `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`);
-      const noticeId = this.notice({ kind: 'ceo', title: this.ceo().name, text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.ceo().name}: ${plainText(said, 100)}` });
-      this.noticeMessages.set(noticeId, m.id);
-      if (this.noticeMessages.size > 50) this.noticeMessages.delete(this.noticeMessages.keys().next().value!);
+      this.notice({ kind: 'ceo', title: this.ceo().name, text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.ceo().name}: ${plainText(said, 100)}`, message: m.id });
     }
     return m;
   }
@@ -796,7 +794,6 @@ export abstract class SwarmCeo extends SwarmReactions {
     const t = Math.min(Number(at) || Date.now(), Date.now());
     if (t <= this.state.phoneReadAt) return;
     this.state.phoneReadAt = t;
-    this.notifier.readTab('chat'); // read on one device: cancelled or cleared on every other (#210)
     this.broadcast({ type: 'phoneRead', at: t });
     this.save();
   }

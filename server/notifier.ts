@@ -10,6 +10,7 @@ import { NOTIFY_EVENTS, NOTIFY_WEBHOOKS, noteTab } from '../shared/notify.ts';
 import { NTFY_SERVER, ntfyTopic } from '../shared/ntfy.ts';
 import type { NoteView, NotifyChannel, NotifyChannelsView, NotifyEvent, NotifyHealth, NotifySettings, NotifyWebhook, PushTestView, TelegramView } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
+import { AppAttention } from './appAttention.ts';
 import {
   due,
   inApp,
@@ -29,7 +30,6 @@ import {
   webhookHint,
   type Note,
   type Step,
-  type TabAttention,
   type TeamChange,
   type Threads,
   type WebhookSecrets,
@@ -77,10 +77,8 @@ export interface NotifierDeps {
   log(line: string): void;
   /** The manager's Telegram bot, when the office has one. */
   telegram?: TelegramChannel;
-  /** The open tabs' attention (#210): while one is in use, nothing goes out. */
-  attention?(): Iterable<TabAttention>;
-  /** Notes not sent because the manager was in the app, by their notice ids. */
-  quiet?(ids: string[]): void;
+  /** The CEO messages whose notes weren't sent because the manager was in the app (#210). */
+  quiet?(messageIds: number[]): void;
   /** Notifications read or seen on some device, to close in the open tabs (their tags' events). */
   cleared?(events: string[]): void;
   now?(): number;
@@ -143,6 +141,8 @@ export class Notifier {
   private webhooks: WebhookSecrets = {};
   private push: PushStore = { vapid: null, devices: [] };
   private threads: Threads = {};
+  /** The open tabs' attention (#210): while one is in use, nothing goes out. */
+  readonly attention = new AppAttention();
   /** Today's notes, sent and not sent as the manager was in the app (#210). */
   private today = { day: '', sent: 0, skipped: 0 };
   private timer: NodeJS.Timeout | null = null;
@@ -192,9 +192,10 @@ export class Notifier {
     return { webhooks, pushDevices: devices.length, devices, desktop: last('desktop'), telegram: this.deps.telegram?.view() ?? NO_TELEGRAM, today: { sent, skipped } };
   }
 
-  /** Something happened: tell the manager on every channel that's on, after a short wait, unless the event is off or they're in the app. */
-  notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[], id?: string) {
+  /** Something happened: tell the manager on every channel that's on, after a short wait, unless the event is off or they're in the app; `message`: the CEO message it's about. */
+  notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[], id?: string, message?: number) {
     if (!this.deps.settings().events[event]) return;
+    if (id && message !== undefined) this.attention.link(id, message);
     this.step(queue(this.threads, note(event, title, body, line, changes, id), this.now(), this.present()));
   }
 
@@ -215,7 +216,7 @@ export class Notifier {
 
   /** Whether the manager is using the app on some device right now (and wants quiet then). */
   private present(): boolean {
-    return this.deps.settings().quietInApp !== false && inApp(this.deps.attention?.() ?? [], this.now());
+    return this.deps.settings().quietInApp !== false && inApp(this.attention.all(), this.now());
   }
 
   private step(r: Step) {
@@ -228,7 +229,7 @@ export class Notifier {
       c.skipped += r.skipped.length;
     }
     if (r.skipped.length) this.deps.log(redact(`notify: not sent, the manager is in the app: ${r.skipped.map((n) => n.title).join(', ')}`, this.secrets()));
-    const ids = r.skipped.flatMap((n) => (n.id ? [n.id] : []));
+    const ids = this.attention.take(r.skipped.flatMap((n) => (n.id ? [n.id] : [])));
     if (ids.length) this.deps.quiet?.(ids);
     if (r.clear.length) void this.clear(r.clear);
     if (r.skipped.length && !r.send.length) this.changed();
