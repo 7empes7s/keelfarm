@@ -33,6 +33,7 @@ import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
 import { pushLayer } from '../ui/backStack';
+import { markTeamLanding, pocketJump } from './pocketJump';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
@@ -376,13 +377,15 @@ export default function Pocket() {
   onChat.current = tab === 'chat';
   useEffect(() => {
     if (!wantsSection) return;
-    useStore.setState({ back: null }); // a chat link's: the chat stays here, under the tab or the console
+    const jump = pocketJump(wantsSection, onChat.current);
+    if (jump.clearBack) useStore.setState({ back: null }); // the chat stays here, under the tab
     useStore.getState().openOverlay(null);
-    if (wantsSection.tab === 'team' && wantsSection.repoId) {
+    if (jump.to === 'team') {
       setSettings(null);
-      setBackToChat(onChat.current);
+      setBackToChat(jump.backToChat);
+      markTeamLanding();
       setTeamJump((n) => n + 1);
-      return go('team', wantsSection.repoId);
+      return go('team', jump.repoId);
     }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
@@ -537,9 +540,11 @@ export default function Pocket() {
                     top={
                       <>
                         {backToChat && (
-                          <button className="btn btn-ghost cn-back" onClick={() => setTab('chat')} aria-label="Back to the chat">
-                            ‹ Chat
-                          </button>
+                          <div className="pk-back-bar">
+                            <button className="btn btn-ghost cn-back" onClick={() => setTab('chat')} aria-label="Back to the chat">
+                              ‹ Chat
+                            </button>
+                          </div>
                         )}
                         <MemoryBanner open={() => setSettings('ops')} />
                       </>
