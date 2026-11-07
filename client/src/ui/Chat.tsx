@@ -73,6 +73,13 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     useCeoDraft.setState({ text: null });
     setTimeout(() => form.current?.querySelector('textarea')?.focus(), 0);
   }, [draft]);
+  // The decision log's "Replied to message N" (#208): that message, once the chat has laid out.
+  const jumpTo = useCeoDraft((s) => s.jump ?? null);
+  useEffect(() => {
+    if (jumpTo === null) return;
+    useCeoDraft.setState({ jump: null });
+    requestAnimationFrame(() => jump(jumpTo));
+  }, [jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
