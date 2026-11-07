@@ -384,23 +384,19 @@ async function setUpWorktree(main: string, wt: string, fullName: string, base: D
   const real = (p: string) => fs.realpath(p).catch(() => p);
   const listWorktrees = async () => Promise.all(parseWorktrees(await git(['worktree', 'list', '--porcelain'], { cwd: main })).map(async (w) => ({ ...w, path: await real(w.path) })));
   let worktrees = await listWorktrees();
-  // The desk's folder may be gone (a half-made desk is), so take the real path of its parent: realpath of a missing
-  // folder would keep Windows' 8.3 short names while git lists long ones.
+  // A `git worktree add` killed half-way (a restart, OOM) leaves its entry locked, which prune never clears: its branch
+  // stays checked out in a missing folder. Free a branch held that way by a desk next to this one, never another worktree.
+  // The parent's real path: realpath of a missing folder keeps Windows' 8.3 short names, and git lists long ones.
   const realDir = await real(path.dirname(wt));
   const realWt = path.join(realDir, path.basename(wt));
-  // A `git worktree add` killed half-way (a restart, an OOM kill) leaves its entry locked ("initializing"), which prune
-  // never clears, so its branch stays checked out in a folder that doesn't exist. Free a branch held that way by a
-  // desk next to this one; never a worktree whose folder exists, nor one outside this desks folder.
   let halfMade = false;
   for (const w of worktrees.slice(1)) {
     if (w.branch !== branch || samePath(w.path, realWt) || !samePath(path.dirname(w.path), realDir) || (await exists(w.path))) continue;
     await dropWorktree(main, w.path);
     halfMade = true;
   }
-  if (halfMade) {
-    worktrees = await listWorktrees();
-    note?.(HALF_MADE);
-  }
+  if (halfMade) note?.(HALF_MADE);
+  if (halfMade) worktrees = await listWorktrees();
   const holder = branchHolder(worktrees, branch, realWt);
   const local = holder ? null : branch;
   if (holder) note?.(`${branch} is checked out at ${holder}, so this desk works on it as a detached HEAD at ${ref}; push with git push origin HEAD:${branch}.`);
