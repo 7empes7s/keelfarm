@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { HOME_DIR, WORKSPACE_ROOT } from './config.ts';
 import { type CommandError, gh, git, run } from './exec.ts';
+import { agentPorts } from './portLanes.ts';
+import { kill, killPlan, listeners, readProcs, sessionLeftovers, stillHeld } from './procSweep.ts';
 
 // Layout on disk:
 //   <your projects folder>/<repo>                    the floor's main checkout: your own folder, only fetched and fast-forwarded (syncMain)
@@ -803,12 +805,13 @@ export function leftoversInDesk(listing: string, desk: string, keep: OfficeProce
  * desk, plus the shell/node chain that launched it. Never the office's own processes (the keeper, the CLIs in agents'
  * terminals): the walk up from a leftover stops at them.
  */
-export function releaseDesk(fullName: string, agentSlug: string, port: number, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<void> {
-  return releaseDirs([deskDir(fullName, agentSlug)], port, keep);
+export async function releaseDesk(fullName: string, agentSlug: string, port: number, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<void> {
+  await releaseDirs([deskDir(fullName, agentSlug)], [port], keep);
 }
 
-/** releaseDesk's work: what listens on `port`, or whose command line points into one of `dirs`. */
-async function releaseDirs(dirs: string[], port: number, keep: OfficeProcesses): Promise<void> {
+/** releaseDesk's work: what listens on one of `ports` or (Linux, #227) from inside `dirs`, with its process group, or
+ * whose command line points into one of `dirs`. Returns the ports still held afterwards. */
+export async function releaseDirs(dirs: string[], ports: number[], keep: OfficeProcesses): Promise<number[]> {
   const spare = [process.pid, ...keep.pids];
   if (process.platform === 'win32') {
     const psList = (paths: string[]) => paths.flatMap(pathForms).map((d) => `'${d.toLowerCase().replaceAll("'", "''")}'`).join(', ');
@@ -816,7 +819,8 @@ async function releaseDirs(dirs: string[], port: number, keep: OfficeProcesses):
 $ErrorActionPreference = 'SilentlyContinue'
 $spare = @(${spare.join(', ')})
 $seed = @()
-Get-NetTCPConnection -LocalPort ${port} -State Listen | ForEach-Object { $seed += [int]$_.OwningProcess }
+$ports = @(${ports.join(', ')})
+Get-NetTCPConnection -State Listen | Where-Object { $ports -contains [int]$_.LocalPort } | ForEach-Object { $seed += [int]$_.OwningProcess }
 $desks = @(${psList(dirs)})
 $marks = @(${psList(keep.markers)})
 $all = Get-CimInstance Win32_Process
@@ -843,19 +847,15 @@ foreach ($id in $seed) {
 foreach ($id in $kill) { taskkill /PID $id /T /F 2>&1 | Out-Null }
 Write-Output $kill.Count`;
     await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeoutMs: 30_000 }).catch(() => undefined);
-    return;
+    return [];
   }
-  const listening = await run('sh', ['-c', `lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null || true`]).catch(() => '');
+  const [procs, held] = await Promise.all([readProcs(), listeners()]);
   const listing = await run('ps', ['-A', '-ww', '-o', 'pid=,args=']).catch(() => '');
-  const pids = new Set([...listening.split(/\s+/).map(Number), ...dirs.flatMap((d) => leftoversInDesk(listing, d, keep))]);
-  for (const pid of pids) {
-    if (!pid || spare.includes(pid)) continue;
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-  }
+  const plan = killPlan(sessionLeftovers(procs, dirs, ports, spare), procs, spare);
+  const listening = [...held].filter(([, ps]) => ps.some((p) => ports.includes(p))).map(([pid]) => pid);
+  const pids = new Set([...listening, ...dirs.flatMap((d) => leftoversInDesk(listing, d, keep)), ...plan.pids]);
+  kill({ groups: plan.groups, pids: [...pids].filter((pid) => pid && !spare.includes(pid)) });
+  return stillHeld(ports, spare);
 }
 
 // ---------- agents' machines ----------
@@ -901,11 +901,12 @@ export function trimMachineDesk(machine: string, fullName: string, stillIdle: ()
 }
 
 /**
- * Stop what an agent left running on its machine: on its port, or started in its worktree. Not what's in its temp
- * folder: that's where the browser of a CLI still waiting at its prompt keeps its profile.
+ * Stop what an agent left running on its machine: on its ports (its reserved one and its demo office's preview block),
+ * or started in its worktree; returns the ports still held after. Not what's in its temp folder: that's where the
+ * browser of a CLI still waiting at its prompt keeps its profile.
  */
-export function releaseMachine(machine: string, fullName: string, port: number, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<void> {
-  return releaseDirs([machineDesk(machine, fullName)], port, keep);
+export function releaseMachine(machine: string, fullName: string, port: number, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<number[]> {
+  return releaseDirs([machineDesk(machine, fullName)], agentPorts(port), keep);
 }
 
 /** Finished swarm/issue-* and qa/pr-* branches in a machine's clone that its worktree doesn't have out and `keep` doesn't name. */
