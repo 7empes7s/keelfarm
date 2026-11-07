@@ -734,6 +734,29 @@ for (const width of PHONES) {
   });
 }
 
+// A code block (#200): a 150-character command wraps whole inside its card, Copy in the header above it, never over it.
+for (const width of [360, 390, 1280]) {
+  test(`chat code blocks are readable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/?pocket=1&tab=chat');
+    const block = page.locator('.md-code-shell').filter({ hasText: 'merge.ts server/swarm/qa.ts' }).last();
+    await expect(block.locator('.md-code-lang')).toHaveText('Terminal');
+    const problems = await block.evaluate((el) => {
+      const out: string[] = [];
+      const vw = document.documentElement.clientWidth;
+      if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
+      const pre = el.querySelector('pre')!;
+      const code = pre.getBoundingClientRect();
+      const copy = el.querySelector('.md-copy')!.getBoundingClientRect();
+      if (pre.scrollWidth > pre.clientWidth + 1) out.push(`the command is cut off (${pre.scrollWidth} > ${pre.clientWidth}px)`);
+      if (copy.bottom > code.top + 0.5) out.push('Copy overlaps the code');
+      if (el.getBoundingClientRect().right > vw + 1) out.push('the block sticks out of the screen');
+      return out;
+    });
+    expect(problems).toEqual([]);
+  });
+}
+
 // Every card at every column width, from the desktop board's narrowest to a phone's one column: nothing in it wider
 // than the card, no button's label clipped.
 for (const width of [390, 1280]) {
