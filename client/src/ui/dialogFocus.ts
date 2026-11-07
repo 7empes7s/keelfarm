@@ -43,6 +43,13 @@ export function raiseIn<T>(list: T[], el: T): boolean {
 /** Makes an open dialog the top one (panels side by side: the one clicked or focused, #212). */
 export const raiseDialog = (el: HTMLElement) => void raiseIn(open, el);
 
+/**
+ * Whether a focus event reaching `dialog` should raise it: only when `target` is really inside it in the page. React's
+ * focus events also bubble up from portals (a Sheet opened inside a panel lives in document.body), and raising the
+ * panel then would pull Tab out of the sheet.
+ */
+export const focusRaises = (dialog: Pick<Node, 'contains'> | null, target: Node | null) => !!dialog && dialog.contains(target);
+
 /** Whether `el` is the top dialog: the one Tab stays in and Esc closes. */
 export const isTopDialog = (el: HTMLElement | null) => !!el && open[open.length - 1] === el;
 

@@ -4,7 +4,7 @@
 import { useEffect, useId, useRef, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { pushLayer } from './backStack';
-import { isTopDialog, raiseDialog, useDialogFocus } from './dialogFocus';
+import { focusRaises, isTopDialog, raiseDialog, useDialogFocus } from './dialogFocus';
 
 // Closing a panel grabs the mouse again right away (world/lookLock.ts; "Grab the mouse when panels
 // close" in help turns that off), and mouse presses are swallowed for a moment so a double click on
@@ -80,7 +80,8 @@ export function Panel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        onFocus={() => {
+        onFocus={(e) => {
+          if (!focusRaises(box.current, e.target)) return;
           raiseDialog(box.current!);
           raiseBack();
         }}

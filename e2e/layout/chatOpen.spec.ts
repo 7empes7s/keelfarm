@@ -11,7 +11,7 @@ const WIDTHS = [1280, 820];
 async function withChat(page: Page, tab: string) {
   const root = await pocket(page, tab);
   const dock = root.locator('.pk-dock');
-  if (!(await dock.isVisible())) await root.locator('.pk-tabs').getByRole('button', { name: /Morgan|CEO/ }).click();
+  if (!(await dock.isVisible())) await root.locator('.pk-chat-btn').click();
   await expect(dock).toBeVisible();
   return root;
 }
@@ -76,7 +76,7 @@ for (const width of WIDTHS) {
     await root.locator('.pk-tab-console').click();
     await expect(root.locator('.pk-settings')).toBeVisible();
     const dock = root.locator('.pk-dock');
-    if (!(await dock.isVisible())) await root.locator('.pk-tabs').getByRole('button', { name: /Morgan|CEO/ }).click(); // the drawer at 820
+    if (!(await dock.isVisible())) await root.locator('.pk-chat-btn').click(); // the drawer at 820
     await dock.locator('.bubble-text', { hasText: '(#212)' }).last().getByRole('button', { name: new RegExp(name) }).click();
     const panel = root.locator('.pk-pane .panel');
     await expect(panel).toBeVisible();
@@ -107,6 +107,19 @@ for (const width of WIDTHS) {
     expect(top).toBe(true);
   });
 }
+
+test('Tab stays in an ⓘ sheet opened from the console', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const root = await pocket(page, 'company');
+  await root.locator('.pk-tab-console').click();
+  await root.locator('.pk-settings .info-btn').first().click();
+  const sheet = page.locator('.info-sheet');
+  await expect(sheet).toBeVisible();
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('Tab');
+    expect(await sheet.evaluate((x) => x.contains(document.activeElement))).toBe(true);
+  }
+});
 
 test('a second window replaces the first and leaves a back chip', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });

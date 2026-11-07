@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { raiseIn, wrapIndex } from './dialogFocus';
+import { focusRaises, raiseIn, wrapIndex } from './dialogFocus';
 
 describe('wrapIndex', () => {
   it('steps forward and back through a dialog, wrapping at the ends', () => {
@@ -27,5 +27,15 @@ describe('raiseIn (#212)', () => {
     expect(raiseIn(list, 'console')).toBe(false);
     expect(raiseIn(list, 'missing')).toBe(false);
     expect(list).toEqual(['terminal', 'card', 'console']);
+  });
+});
+
+describe('focusRaises (#212)', () => {
+  it('raises a panel for focus inside it, not for focus in a sheet portaled out of it', () => {
+    const inside = {};
+    const panel = { contains: (n: unknown) => n === inside } as Pick<Node, 'contains'>;
+    expect(focusRaises(panel, inside as Node)).toBe(true);
+    expect(focusRaises(panel, {} as Node)).toBe(false); // the ⓘ sheet in document.body
+    expect(focusRaises(null, inside as Node)).toBe(false);
   });
 });
