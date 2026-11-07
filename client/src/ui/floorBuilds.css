@@ -41,6 +41,11 @@
 .fb-card:hover {
   background: var(--ds-surface-hover);
 }
+.fb-card-still,
+.fb-card-still:hover {
+  cursor: default;
+  background: var(--ds-surface-raised);
+}
 .fb-card:focus-visible {
   outline: 3px solid var(--ds-focus);
   outline-offset: 2px;

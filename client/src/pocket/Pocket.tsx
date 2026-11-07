@@ -2,10 +2,10 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore, type Overlay } from '../store';
 import { CEO_ID } from '../../../shared/types';
-import { officeUpdateChip } from '../officeUpdate';
+import { officeUpdateChip, restartExpected } from '../officeUpdate';
 import { UpdatePill } from '../ui/UpdatePill';
 import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
@@ -42,6 +42,7 @@ import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
 import { Icon, IconText } from '../ui/Icon';
 import type { IconName } from '../ui/icons';
+import { floorColumns, statusLine } from './companyLayout';
 import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
 import { DockGrip, useDockWidth } from './DockGrip';
 import './pocket.css';
@@ -120,7 +121,9 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
   const connected = useStore((s) => s.connected);
   const loaded = useStore((s) => s.loaded);
   const usage = useStore((s) => s.usage);
-  const update = useStore((s) => (s.restarting ? 'The office is restarting…' : officeUpdateChip(s.officeUpdate)));
+  const restarting = useStore((s) => s.restarting || restartExpected(s.officeUpdate));
+  const update = useStore((s) => officeUpdateChip(s.officeUpdate));
+  const status = statusLine({ connected, loaded, restarting, update });
   const closedLast = useMode((s) => s.closedLast);
   const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   return (
@@ -133,9 +136,11 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
           </button>
         </div>
       )}
-      {!connected && (
-        <div className="pk-banner pk-banner-bad">
-          <Icon name="radio-tower" /> {loaded ? 'Reconnecting to the office…' : 'Connecting to the office…'}
+      {status && (
+        <div className="pk-status" role="status">
+          <div className={`pk-banner ${status.bad ? 'pk-banner-bad' : ''}`}>
+            {status.icon && <Icon name={status.icon} />} {status.text}
+          </div>
         </div>
       )}
       {usage.state === 'paused' && (
@@ -148,7 +153,6 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
           <Icon name="turtle" /> Pacing new work after a usage warning{until ? ` until ${until}` : ''}.
         </div>
       )}
-      {update && <div className="pk-banner">{update}</div>}
       <MemoryBanner open={() => settings('ops')} />
     </>
   );
@@ -172,6 +176,13 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       }),
     [repos, agents, qa],
   );
+  const [floorsWidth, setFloorsWidth] = useState(0);
+  const measureFloors = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setFloorsWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const decisions = useStore((s) => s.decisions);
   const waiting = approvalsBadge(waitingOnYou(repos, qa, requests)) + chatDecisions(decisions, Date.now()).length;
   return (
@@ -181,10 +192,13 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       <div className="pk-company-side">
       {waiting > 0 && (
         <button className="pk-callout" onClick={() => go('approvals')}>
-          <span>
-            <Icon name="triangle-alert" /> <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
+          <span className="pk-callout-icon" aria-hidden>
+            <Icon name="triangle-alert" />
           </span>
-          <span>
+          <span className="pk-callout-text">
+            <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
+          </span>
+          <span className="pk-callout-go">
             Approvals <Icon name="chevron-right" />
           </span>
         </button>
@@ -215,7 +229,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
         </div>
       )}
       </div>
-      <div className="pk-company-floors">
+      <div className="pk-company-floors" ref={measureFloors} style={{ '--pk-cols': floorColumns(floorsWidth, floors.length) } as CSSProperties}>
       {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
         <Icon name="plus" /> Move in a project
@@ -241,7 +255,9 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
                   </span>
                   {p[k]}
                 </span>
-                <span className="pk-stage-label">{label}</span>
+                <span className="pk-stage-label" title={label}>
+                  {label}
+                </span>
               </div>
             ))}
           </div>
@@ -249,16 +265,17 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
           <CiOutageBanner repo={repo} />
           <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
-            <span className="muted">
-              <Icon name="users" /> {team} · {busy} busy · <Icon name="clipboard-list" /> {p.backlog} in backlog
+            <span className="muted pk-ellipsis" title={`${team} on this floor, ${busy} busy, ${p.backlog} in backlog`}>
+              <Icon name="users" /> {team} · {busy} busy · <Icon name="clipboard-list" /> {p.backlog}
             </span>
-            <span className="spacer" />
-            <button className="btn btn-small" onClick={() => go('kanban', repo.id)}>
-              Board
-            </button>
-            <button className="btn btn-small" onClick={() => go('team', repo.id)}>
-              Team
-            </button>
+            <span className="pk-floor-actions">
+              <button className="btn btn-small" onClick={() => go('kanban', repo.id)}>
+                Board
+              </button>
+              <button className="btn btn-small" onClick={() => go('team', repo.id)}>
+                Team
+              </button>
+            </span>
           </div>
         </div>
       ))}
@@ -352,7 +369,7 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} profile={overlay.profile} />;
-  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
+  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
   return null;

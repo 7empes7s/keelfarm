@@ -454,7 +454,7 @@ export function Overlays() {
     case 'card':
       return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
     case 'app':
-      return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} />;
+      return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} />;
     case 'elevator':
       return <ElevatorPanel />;
     case 'manager':

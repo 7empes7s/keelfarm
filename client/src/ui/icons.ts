@@ -56,6 +56,7 @@ import {
   Compass,
   Copy,
   Cpu,
+  CreditCard,
   Dices,
   DoorOpen,
   Download,
@@ -240,6 +241,7 @@ export const ICONS = {
   compass: Compass,
   copy: Copy,
   cpu: Cpu,
+  'credit-card': CreditCard,
   dices: Dices,
   'door-open': DoorOpen,
   download: Download,
@@ -396,7 +398,7 @@ export const EMOJI_ICONS: Record<string, IconName> = {
   '📞': 'phone', '🏷': 'tag', '🪪': 'id-card', '🛍': 'shopping-bag', '🎂': 'cake', '☕': 'coffee', '🪑': 'armchair',
   '♪': 'music', '🎵': 'music', '🎼': 'music', '👀': 'eye', '👁': 'eye', '💼': 'briefcase-business', '🌀': 'orbit',
   '👍': 'thumbs-up', '❤': 'heart', '♥': 'heart', '🚩': 'flag', '📘': 'book-open', '🛑': 'circle-stop', '💥': 'circle-alert',
-  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info', '☺': 'smile-plus', '🛡': 'shield',
+  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info', '☺': 'smile-plus', '🛡': 'shield', '💳': 'credit-card',
 };
 
 /** An emoji or icon glyph that still arrives as data (shared/ helpers, saved messages) → its icon, else `fallback`. */
