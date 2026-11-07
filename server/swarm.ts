@@ -313,7 +313,7 @@ export class Swarm extends SwarmCeoTools {
     for (const r of this.state.repos) void this.previews.refreshDefault(r);
     // A fresh demo office opens with floor 1's app running; the others' stay stopped until started (#129).
     if (seeded && this.state.repos[0]) void this.startPreview(this.state.repos[0].id).catch(() => undefined);
-    for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber); // a CI outage's banner (#191)
+    for (const p of seeded ? (this.backend.demoParked?.() ?? []) : []) await this.seedParked(p.fullName, p.prNumber, p.stuck); // a CI outage's banner (#191)
     void this.cleanPreviews();
     await this.health.tick(); // resumed sessions are admitted against real memory
     this.finishRestart(restart);

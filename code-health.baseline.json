@@ -594,7 +594,7 @@
     "server/ceo.ts": 802,
     "server/cliRunner.ts": 989,
     "server/demo.ts": 2038,
-    "server/swarm/core.ts": 843,
+    "server/swarm/core.ts": 844,
     "server/workspace.ts": 909
   }
 }
