@@ -51,6 +51,13 @@ export interface IssueInfo {
   url: string;
   labels: string[];
   createdAt: string;
+  /** Its author's login (null: a deleted user) and GitHub's authorAssociation, for trust (shared/trust.ts, #185). */
+  author?: string | null;
+  authorAssociation?: string;
+  /** Who last added the office-trusted label. */
+  trustedBy?: string | null;
+  /** Not from a trusted author: listed, never built (set by the sync). */
+  untrusted?: boolean;
 }
 
 export interface PullInfo {
@@ -77,6 +84,10 @@ export interface PullInfo {
   checkRun?: { ms: number; doneAt: number } | null;
   /** The paths it changes (up to PR_FILES_MAX), for the memory map's hot files and conflict risk (shared/memoryMap.ts). */
   files?: string[];
+  author?: string | null;
+  isCrossRepository?: boolean;
+  /** From a fork or an untrusted author: never QA'd, fixed, previewed or merged by the office (set by the sync, #185). */
+  untrusted?: boolean;
 }
 
 export const PR_FILES_MAX = 30;
@@ -98,6 +109,7 @@ export interface RepoView extends FloorPracticeView {
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
   playbook: string; // the floor's architecture map, conventions, skills to use and traps, for every agent's prompt (up to PLAYBOOK_MAX)
+  trustedAuthors?: string[]; // GitHub logins trusted besides the owner, the office and write collaborators (#185)
   localPath: string | null; // the manager's own project folder, when the floor lives in one
   checkoutPath: string; // where the floor's main checkout is on disk (localPath, or a clone the office manages)
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';

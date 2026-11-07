@@ -47,6 +47,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** The logins of collaborators with write access, for trust (#185). */
+  writers(fullName: string): Promise<string[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
   /** OPEN or CLOSED; null when there is no such issue. */
   issueState(fullName: string, number: number): Promise<'OPEN' | 'CLOSED' | null>;
@@ -231,6 +233,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  writers: github.writers,
   createIssue: github.createIssue,
   exportCharter: github.exportCharter,
   issueState: github.issueState,

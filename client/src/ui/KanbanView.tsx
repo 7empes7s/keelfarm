@@ -13,6 +13,7 @@ import type { EmptyKind } from './emptyStates';
 import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
+import { TRUST_LABEL } from '../../../shared/trust';
 
 /** Who has the card; "QA" while they're testing it. */
 function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
@@ -157,6 +158,21 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     });
     if (ok) void act(c.key, () => api.sendBack(repo.id, c.number, note.trim() || undefined));
   };
+  const trust = async (c: KanbanCard) => {
+    const ok = await confirmDialog({
+      tone: 'warn',
+      icon: '🛡',
+      title: `Trust issue #${c.number}?`,
+      body: `“${c.title}” is from someone outside the team. Agents will build it as written, with a shell on this server: read it on GitHub first. The office adds the ${TRUST_LABEL} label, and the chat records that you let it in.`,
+      confirm: 'Trust this issue',
+    });
+    if (ok) void act(c.key, () => api.trustIssue(repo.id, c.number));
+  };
+  const reviewOnGitHub = (c: KanbanCard) => (
+    <a className="btn btn-small" href={c.url} target="_blank" rel="noreferrer">
+      Review on GitHub ↗
+    </a>
+  );
   const closePr = async (c: KanbanCard) => {
     const ok = await confirmDialog({
       tone: 'danger',
@@ -213,7 +229,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
               {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
               {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
             </div>
-            {c.prNumber != null && cls !== 'kcol-merged' && (
+            {c.prNumber != null && cls !== 'kcol-merged' && !c.untrusted && (
               <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
             )}
             {render(c)}
@@ -268,7 +284,16 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           '📋 Backlog',
           'kcol-backlog',
           cols.backlog,
-          (c) => (
+          (c) =>
+            c.untrusted ? (
+              <div className="kcard-foot">
+                <span className="muted small">{c.note}</span>
+                <span className="spacer" />
+                <button className="btn btn-small" disabled={pending === c.key} onClick={() => void trust(c)}>
+                  Trust this issue
+                </button>
+              </div>
+            ) : (
             <div className="kcard-foot">
               {c.note && <span className="muted small">{c.note}</span>}
               <select
@@ -308,6 +333,16 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           cols.qa,
           (c) => {
             const st = c.qa?.status;
+            if (c.untrusted) {
+              return (
+                <div className="kcard-foot">
+                  <span className="muted small">{c.note}</span>
+                  <span className="spacer" />
+                  {reviewOnGitHub(c)}
+                  {closeButton(c)}
+                </div>
+              );
+            }
             return (
               <div className="kcard-foot">
                 <AgentChip agent={c.agent} card={c} />

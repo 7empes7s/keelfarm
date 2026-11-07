@@ -349,6 +349,7 @@ export abstract class SwarmCore extends SwarmContract {
       summary: r.summary,
       qaBrief: r.qaBrief,
       playbook: r.playbook,
+      trustedAuthors: r.trustedAuthors ?? [],
       localPath: r.localPath,
       checkoutPath: this.backend.mainDir(r.fullName),
       cloneStatus: rt.cloneStatus,

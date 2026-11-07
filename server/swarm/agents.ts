@@ -569,7 +569,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     return issueTaken(
       n,
       this.state.agents.filter((a) => a.repoId === repo.id),
-      this.repoRt.get(repo.id)?.pulls ?? [],
+      (this.repoRt.get(repo.id)?.pulls ?? []).filter((p) => !p.untrusted), // an outsider's "Closes #n" doesn't hold #n up
       Date.now(),
     );
   }
@@ -592,6 +592,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     const issues = this.repoRt.get(repo.id)?.issues ?? [];
     const issue = issues.find((i) => i.number === issueNumber);
     if (!issue) throw new HttpError(404, `Issue #${issueNumber} is not open on ${repo.fullName}`);
+    if (issue.untrusted) throw new HttpError(403, `#${issueNumber} is from @${issue.author ?? 'ghost'}, who isn't trusted on ${repo.fullName}: only the manager can let it in (Trust this issue on the Kanban).`);
     const waits = waitForDeps ? blockers(issue.body, new Set(issues.map((i) => i.number))) : [];
     if (waits.length) throw new HttpError(409, waitsMessage(issueNumber, waits));
     const holder = this.state.agents.find((x) => x.id !== a.id && x.repoId === repo.id && x.issueNumber === issueNumber && BUSY.includes(x.status));
