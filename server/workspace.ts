@@ -384,14 +384,16 @@ async function setUpWorktree(main: string, wt: string, fullName: string, base: D
   const real = (p: string) => fs.realpath(p).catch(() => p);
   const listWorktrees = async () => Promise.all(parseWorktrees(await git(['worktree', 'list', '--porcelain'], { cwd: main })).map(async (w) => ({ ...w, path: await real(w.path) })));
   let worktrees = await listWorktrees();
-  const realWt = await real(wt);
+  // The desk's folder may be gone (a half-made desk is), so take the real path of its parent: realpath of a missing
+  // folder would keep Windows' 8.3 short names while git lists long ones.
+  const realDir = await real(path.dirname(wt));
+  const realWt = path.join(realDir, path.basename(wt));
   // A `git worktree add` killed half-way (a restart, an OOM kill) leaves its entry locked ("initializing"), which prune
   // never clears, so its branch stays checked out in a folder that doesn't exist. Free a branch held that way by a
   // desk next to this one; never a worktree whose folder exists, nor one outside this desks folder.
-  const desks = [path.dirname(wt), path.dirname(realWt)];
   let halfMade = false;
   for (const w of worktrees.slice(1)) {
-    if (w.branch !== branch || samePath(w.path, realWt) || !desks.some((d) => samePath(path.dirname(w.path), d)) || (await exists(w.path))) continue;
+    if (w.branch !== branch || samePath(w.path, realWt) || !samePath(path.dirname(w.path), realDir) || (await exists(w.path))) continue;
     await dropWorktree(main, w.path);
     halfMade = true;
   }
@@ -428,8 +430,9 @@ async function setUpWorktree(main: string, wt: string, fullName: string, base: D
   }
 
   // This desk's own entry, locked by an interrupted add: unlocked and removed, or add refuses its branch or folder.
-  if (worktrees.some((w) => w.locked && samePath(w.path, realWt))) {
-    await dropWorktree(main, wt);
+  const own = worktrees.find((w) => w.locked && samePath(w.path, realWt));
+  if (own) {
+    await dropWorktree(main, own.path);
     if (!halfMade) note?.(HALF_MADE);
   }
   if (await exists(wt)) {
