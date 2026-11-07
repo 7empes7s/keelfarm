@@ -31,7 +31,7 @@ import { Lab, loadLab } from '../experiments.ts';
 import { FloorPractice } from '../practiceState.ts';
 import { effectivePractices, emptyEveryProject, floorLeases, predictFiles, type Lease } from '../../shared/practices.ts';
 import { sampleDay, seeded } from '../journalSample.ts';
-import { emptyLedger, pastCareers, workOf } from '../ledger.ts';
+import { emptyLedger, pastCareers } from '../ledger.ts';
 import { DEFAULT_MEMORY, memorySettings, OfficeHealth, sessionKind } from '../health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../../shared/testLab.ts';
 import { Ticker } from '../ticker.ts';
@@ -615,14 +615,6 @@ export abstract class SwarmCore extends SwarmContract {
     for (const item of this.ticker.observe(ev)) this.broadcast({ type: 'ticker', item });
     if (OPS_EVENTS.has(ev.type)) this.opsSoon();
     this.journal.record(ev);
-  }
-
-  /** A finished session into its agent's career (#205): what they ran, the weekly totals, time working and waste. */
-  protected careerWork(line: CostSession) {
-    const a = this.state.agents.find((x) => x.id === line.agentId);
-    if (!a || a.role === 'ceo') return;
-    this.ledger({ kind: 'rig', agentId: a.id, cli: a.cli || this.state.settings.defaultCli, model: line.model, effort: line.effort, at: line.at }, false);
-    this.ledger({ kind: 'work', agentId: a.id, ...workOf(line) });
   }
 
   // ---------- the daily log and session history (#49) ----------

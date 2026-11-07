@@ -33,12 +33,13 @@ import {
   type CommandResult,
   type Effects,
   type LedgerEvent,
+  workOf,
 } from '../ledger.ts';
 import { careerTimeline, type TimelineView } from '../../shared/careerTimeline.ts';
 import { followupEvents } from '../../shared/followups.ts';
 import { achievementDef, type ProgressView } from '../../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
-import type { CostRecord } from '../../shared/costs.ts';
+import type { CostRecord, CostSession } from '../../shared/costs.ts';
 import type { DoctorFinding, DoctorFix, PullInfo } from '../../shared/types.ts';
 import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
 import { slugify } from './flavour.ts';
@@ -368,6 +369,14 @@ export abstract class SwarmUpkeep extends SwarmCeo {
   /** Tell the ledger something happened; send on whatever it changed. emitAgents false: the caller emits them. */
   protected ledger(ev: LedgerEvent, emitAgents = true) {
     this.fanout(applyLedger(this.state.progress, ev), emitAgents);
+  }
+
+  /** A finished session into its agent's career (#205): what they ran, the weekly totals, time working and waste. */
+  protected careerWork(line: CostSession) {
+    const a = this.state.agents.find((x) => x.id === line.agentId);
+    if (!a || a.role === 'ceo') return;
+    this.ledger({ kind: 'rig', agentId: a.id, cli: a.cli || this.state.settings.defaultCli, model: line.model, effort: line.effort, at: line.at }, false);
+    this.ledger({ kind: 'work', agentId: a.id, ...workOf(line) });
   }
 
   protected fanout(fx: Effects, emitAgents = true) {

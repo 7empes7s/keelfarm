@@ -77,6 +77,7 @@ export abstract class SwarmContract {
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
 
   // upkeep.ts
+  protected abstract careerWork(...a: Parameters<Swarm['careerWork']>): ReturnType<Swarm['careerWork']>;
   protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
   protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
   protected abstract prAuthor(...a: Parameters<Swarm['prAuthor']>): ReturnType<Swarm['prAuthor']>;
