@@ -1,0 +1,29 @@
+/* A floor's CI outage banner (CiOutageBanner.tsx, #191): on its board and its pocket Company card. */
+
+.ci-outage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+  margin: var(--ds-space-2) 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-warn-fill);
+  box-shadow: var(--ds-shadow-1);
+  color: var(--ds-on-color);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ci-outage-title {
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+}
+.ci-outage-ask {
+  font-weight: var(--ds-weight-strong);
+}
+.ci-outage-btn {
+  min-height: var(--ds-target);
+  display: inline-flex;
+  align-items: center;
+}

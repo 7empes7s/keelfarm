@@ -73,6 +73,15 @@ export interface PersistedRepo {
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
+  ciOutage?: CiOutageState | null; // GitHub won't run its checks (#191)
+}
+
+/** A floor's CI outage (#191): why, since when, the last probe re-run, and when a run was last seen really starting. */
+interface CiOutageState {
+  reason: string;
+  since: number;
+  probeAt: number | null;
+  back: number | null;
 }
 
 export interface PersistedAgent {
@@ -135,6 +144,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
+  ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
 }
 
 /** The PR work a desk is being set up for. author: the PR's author before a fix was handed out (restored if it can't start). */
@@ -176,6 +186,7 @@ export interface Persisted {
   phoneReadAt: number;
   notices: NoticeView[]; // the notification centre (shared/notices.ts)
   prLimits: number; // the PR budgets (PR_LIMITS_VERSION) needs-human records were judged by
+  outageReleased: boolean; // PRs a CI outage made needs-human before #191 went back to the merge gate
   ops: OpsHistory; // mission control's rolling week of merges, QA verdicts, check runs and costs
   held: HeldIssue[];
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)

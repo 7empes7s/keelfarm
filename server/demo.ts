@@ -113,6 +113,7 @@ let runSeq = 1000; // fake Actions run ids, so the office can re-run a failed on
  */
 function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
   Object.assign(pr, { checks: 'pending', pendingChecks: ['CI / build', 'Vercel'], failedChecks: [], checkRun: null });
+  if (ciDown(pr.url)) return void setTimeout(() => Object.assign(pr, refusedChecks(pr.url)), 3_000);
   setTimeout(() => {
     Object.assign(pr, {
       checks: fail ? 'failing' : 'passing',
@@ -122,6 +123,19 @@ function runChecks(pr: PullInfo, fail = Math.random() < 0.2) {
     });
   }, 12_000 + Math.random() * 10_000);
 }
+
+// A CI outage (#191): GitHub refuses to start recipe-box's checks for the demo's first 20 minutes, with a QA-passed
+// PR parked at the start, so the floor's banner shows and then clears as its PRs merge by themselves.
+const CI_DOWN_REPO = 'demo-co/recipe-box';
+const CI_DOWN_UNTIL = Date.now() + 20 * 60_000;
+const CI_DOWN_NOTE = "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings.";
+const ciDown = (url: string) => url.includes(`/${CI_DOWN_REPO}/`) && Date.now() < CI_DOWN_UNTIL;
+const refusedChecks = (url: string): Partial<PullInfo> => ({
+  checks: 'failing',
+  pendingChecks: [],
+  failedChecks: [{ name: 'CI / build', url: `${url.replace(/\/pull\/\d+$/, '')}/actions/runs/${++runSeq}/job/1`, neverStarted: true }],
+  checkRun: { ms: 1_000, doneAt: Date.now() },
+});
 
 function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
@@ -174,6 +188,12 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Recipe page on a phone', 'Ingredients, then steps, at 375px.\n\nObjective: O2'],
   ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
 ], [], true);
+{
+  const r = repos.get(CI_DOWN_REPO)!;
+  const n = r.nextNumber++;
+  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3] };
+  r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
+}
 
 // ---------- the big company (--floors / --agents, #228) ----------
 
@@ -832,6 +852,8 @@ export function createDemoBackend(scale: DemoScale | null = null): Backend {
         'build\tRun npm test\t2025-01-01T00:00:02Z Test Files  1 failed | 7 passed (8)',
         'build\tRun npm test\t2025-01-01T00:00:02Z ##[error]Process completed with exit code 1.',
       ].join('\n'),
+    checkAnnotations: async (fullName) => (ciDown(`/${fullName}/`) ? [CI_DOWN_NOTE] : []),
+    demoParked: () => repos.get(CI_DOWN_REPO)?.pulls.filter((p) => p.state === 'OPEN' && ciDown(p.url)).map((p) => ({ fullName: CI_DOWN_REPO, prNumber: p.number })) ?? [],
     rerunFailedJobs: async (fullName, runIds) => {
       // The re-run passes: a flake, as the office hoped.
       for (const pr of repos.get(fullName)?.pulls ?? []) {

@@ -8,6 +8,7 @@ import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip } from '../officeUpdate';
 import { KanbanView } from '../ui/KanbanView';
 import { FloorBuilds } from '../ui/FloorBuilds';
+import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Phone';
 import { setMode, useLayout, useMode } from './mode';
@@ -216,6 +217,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
               </div>
             ))}
           </div>
+          <CiOutageBanner repo={repo} />
           <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
             <span className="muted">

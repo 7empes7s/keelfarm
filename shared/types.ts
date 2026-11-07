@@ -70,7 +70,7 @@ export interface PullInfo {
   checks: 'pending' | 'passing' | 'failing' | 'none';
   headSha: string;
   mergeState: string; // GitHub's mergeStateStatus: CLEAN | BEHIND | BLOCKED | DIRTY | UNSTABLE | DRAFT | UNKNOWN …
-  failedChecks: { name: string; url: string | null }[];
+  failedChecks: { name: string; url: string | null; neverStarted?: boolean }[]; // neverStarted: GitHub ended it within seconds without running it (an outage, #191)
   pendingChecks: string[];
   issueCreatedAt?: string | null; // when the issue it closes was filed, as far as the office knows (the whiteboard's issue → merge time)
   /** GitHub's check runs on the head commit once all have finished: how long they took (first start to last finish) and when they finished. */
@@ -110,6 +110,14 @@ export interface RepoView extends FloorPracticeView {
   previewConfig: PreviewConfig;
   preview: PreviewView;
   charter: CharterView; // the rest of the floor's charter (#48); `mission` above is its mission
+  ciOutage?: CiOutageView | null; // GitHub won't run the floor's checks: QA-passed PRs wait for it, not for fixes (#191)
+}
+
+/** A floor's CI outage (#191): why, since when, and the QA-passed PRs parked until CI runs again. */
+interface CiOutageView {
+  reason: string;
+  since: number;
+  parked: number[];
 }
 
 /**
