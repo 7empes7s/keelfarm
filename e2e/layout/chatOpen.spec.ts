@@ -51,6 +51,7 @@ checkScreens(SCREENS);
 
 /** Whether `el` is what's on top at its centre, and how far it runs under the chat column (0: not at all). */
 async function frontAndClear(el: Locator, dock: Locator) {
+  await el.page().addStyleTag({ content: '.toasts { display: none !important; }' }); // the demo's toasts come and go over anything
   const [box, chat] = await Promise.all([el.boundingBox(), dock.count().then((n) => (n ? dock.boundingBox() : null))]); // the drawer unmounts when it makes way
   const top = await el.evaluate((x) => {
     const r = x.getBoundingClientRect();
