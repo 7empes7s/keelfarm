@@ -5,6 +5,7 @@
 
 import type { AgentStatus, PreviewStatus, QaStatus } from '../../../shared/types';
 import type { CardTone } from '../qaCard';
+import type { IconName } from './icons';
 
 export const PALETTES = ['standard', 'deuteranopia', 'protanopia', 'tritanopia'] as const;
 export type Palette = (typeof PALETTES)[number];
@@ -19,8 +20,11 @@ export const PALETTE_LABELS: Record<Palette, string> = {
 export const STATUS_KINDS = ['idle', 'waiting', 'busy', 'ok', 'attention', 'bad'] as const;
 export type StatusKind = (typeof STATUS_KINDS)[number];
 
-/** The shape each kind carries, so colour is never the only cue. */
+/** The shape each kind carries, so colour is never the only cue. Drawn into the whiteboard and name-tag canvases (world/draw.ts). */
 export const KIND_ICON: Record<StatusKind, string> = { idle: '○', waiting: '⏳', busy: '▶', ok: '✓', attention: '!', bad: '✕' };
+
+/** The same shapes, as Lucide icons, for HTML (not canvas) uses. */
+export const KIND_ICON_NAME: Record<StatusKind, IconName> = { idle: 'circle-dot', waiting: 'hourglass', busy: 'play', ok: 'check', attention: 'circle-alert', bad: 'x' };
 
 /** Words for screen readers and tooltips. */
 export const KIND_WORD: Record<StatusKind, string> = { idle: 'idle', waiting: 'waiting', busy: 'busy', ok: 'done', attention: 'needs attention', bad: 'failed' };

@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ArrowUpDown,
   ArrowUpLeft,
   ArrowUpRight,
   Asterisk,
@@ -30,6 +31,7 @@ import {
   Camera,
   ChartColumn,
   Check,
+  CheckCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -55,7 +57,9 @@ import {
   Copy,
   Cpu,
   Dices,
+  DoorOpen,
   Download,
+  Drumstick,
   Ellipsis,
   ExternalLink,
   Eye,
@@ -63,6 +67,7 @@ import {
   FastForward,
   FileText,
   Film,
+  Flag,
   Flame,
   FlaskConical,
   Folder,
@@ -101,6 +106,7 @@ import {
   Minimize2,
   Monitor,
   Moon,
+  MoonStar,
   MousePointerClick,
   Music,
   NotebookPen,
@@ -125,6 +131,7 @@ import {
   Rewind,
   Rocket,
   RotateCcw,
+  RotateCw,
   Satellite,
   Save,
   ScrollText,
@@ -139,6 +146,7 @@ import {
   SkipForward,
   SlidersHorizontal,
   Smartphone,
+  Snail,
   Snowflake,
   Sparkle,
   Sparkles,
@@ -148,6 +156,7 @@ import {
   Stethoscope,
   Store,
   Sun,
+  Sunset,
   Tag,
   Target,
   Telescope,
@@ -187,6 +196,7 @@ export const ICONS = {
   'arrow-left': ArrowLeft,
   'arrow-right': ArrowRight,
   'arrow-up': ArrowUp,
+  'arrow-up-down': ArrowUpDown,
   'arrow-up-left': ArrowUpLeft,
   'arrow-up-right': ArrowUpRight,
   asterisk: Asterisk,
@@ -203,6 +213,7 @@ export const ICONS = {
   camera: Camera,
   'chart-column': ChartColumn,
   check: Check,
+  'check-check': CheckCheck,
   'chevron-down': ChevronDown,
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
@@ -228,7 +239,9 @@ export const ICONS = {
   copy: Copy,
   cpu: Cpu,
   dices: Dices,
+  'door-open': DoorOpen,
   download: Download,
+  drumstick: Drumstick,
   ellipsis: Ellipsis,
   'external-link': ExternalLink,
   eye: Eye,
@@ -236,6 +249,7 @@ export const ICONS = {
   'fast-forward': FastForward,
   'file-text': FileText,
   film: Film,
+  flag: Flag,
   flame: Flame,
   'flask-conical': FlaskConical,
   folder: Folder,
@@ -274,6 +288,7 @@ export const ICONS = {
   'minimize-2': Minimize2,
   monitor: Monitor,
   moon: Moon,
+  'moon-star': MoonStar,
   'mouse-pointer-click': MousePointerClick,
   music: Music,
   'notebook-pen': NotebookPen,
@@ -298,6 +313,7 @@ export const ICONS = {
   rewind: Rewind,
   rocket: Rocket,
   'rotate-ccw': RotateCcw,
+  'rotate-cw': RotateCw,
   satellite: Satellite,
   save: Save,
   'scroll-text': ScrollText,
@@ -312,6 +328,7 @@ export const ICONS = {
   'skip-forward': SkipForward,
   'sliders-horizontal': SlidersHorizontal,
   smartphone: Smartphone,
+  snail: Snail,
   snowflake: Snowflake,
   sparkle: Sparkle,
   sparkles: Sparkles,
@@ -321,6 +338,7 @@ export const ICONS = {
   stethoscope: Stethoscope,
   store: Store,
   sun: Sun,
+  sunset: Sunset,
   tag: Tag,
   target: Target,
   telescope: Telescope,
@@ -373,5 +391,18 @@ export const EMOJI_ICONS: Record<string, IconName> = {
   '🚨': 'siren', '📌': 'pin', '📍': 'map-pin', '💾': 'save', '🔋': 'battery-full', '📶': 'signal', '📣': 'megaphone',
   '📞': 'phone', '🏷': 'tag', '🪪': 'id-card', '🛍': 'shopping-bag', '🎂': 'cake', '☕': 'coffee', '🪑': 'armchair',
   '♪': 'music', '🎵': 'music', '🎼': 'music', '👀': 'eye', '👁': 'eye', '💼': 'briefcase-business', '🌀': 'orbit',
-  '👍': 'thumbs-up', '❤': 'heart', '♥': 'heart',
+  '👍': 'thumbs-up', '❤': 'heart', '♥': 'heart', '🚩': 'flag', '📘': 'book-open', '🛑': 'circle-stop', '💥': 'circle-alert',
+  '⬆': 'arrow-up', '🐌': 'snail', '⟲': 'rotate-ccw', 'ⓘ': 'info',
 };
+
+/** An emoji or icon glyph that still arrives as data (shared/ helpers, saved messages) → its icon, else `fallback`. */
+export function iconFor(glyph: string, fallback: IconName): IconName {
+  return EMOJI_ICONS[glyph.replace(/\uFE0F/g, '').trim()] ?? fallback;
+}
+
+/** Text that starts with an emoji or icon glyph ("⏳ 2 tasks waiting…"), split into that glyph's icon and the rest. */
+export function leadingIcon(text: string): { icon: IconName | null; text: string } {
+  const m = /^(\p{Extended_Pictographic}|[^\p{L}\p{N}\s])\uFE0F?\s*/u.exec(text);
+  const icon = m ? EMOJI_ICONS[m[1]] : undefined;
+  return icon && m ? { icon, text: text.slice(m[0].length) } : { icon: null, text };
+}

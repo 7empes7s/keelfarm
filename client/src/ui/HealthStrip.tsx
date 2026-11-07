@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { gb, type MemorySettings } from '../../../shared/health';
+import { Icon } from './Icon';
 
 const RECENT_MS = 6 * 3_600_000; // a stop older than this is history, not news
 
@@ -30,7 +31,7 @@ export function HealthStrip() {
     <div className="card office-card" id="ops-card-health">
       <div className="row wrap">
         <span className="floor-badge office-badge" aria-hidden>
-          🩺
+          <Icon name="stethoscope" />
         </span>
         <div className="grow">
           <b>Server</b>{' '}

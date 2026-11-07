@@ -143,11 +143,11 @@ describe('mission control in the store', () => {
     const issue = (number: number, body = '', labels: string[] = []) => ({ number, title: `#${number}`, body, url: '', labels, createdAt: '' }) as IssueInfo;
     const r = { ...repo(1), issues: [issue(1), issue(2, 'Depends on #1'), issue(3, '', ['bug'])], autoAssign: true, autoMerge: true } as RepoView;
     const notes = (usage?: { state: 'normal' | 'pacing' | 'paused' }, autoAssign = true) => kanbanFor({ ...r, autoAssign }, [], {}, usage).backlog.map((c) => c.note);
-    expect(notes()).toEqual([undefined, '⏳ after #1', 'bug']);
-    expect(notes({ state: 'normal' })).toEqual([undefined, '⏳ after #1', 'bug']);
-    expect(notes({ state: 'pacing' })).toEqual(['⏸ paced', '⏳ after #1', '⏸ paced · bug']);
-    expect(notes({ state: 'paused' })).toEqual(['⏸ paused', '⏳ after #1', '⏸ paused · bug']);
-    expect(notes({ state: 'pacing' }, false)).toEqual([undefined, '⏳ after #1', 'bug']); // nothing starts on its own there anyway
+    expect(notes()).toEqual([undefined, 'after #1', 'bug']);
+    expect(notes({ state: 'normal' })).toEqual([undefined, 'after #1', 'bug']);
+    expect(notes({ state: 'pacing' })).toEqual(['paced', 'after #1', 'paced · bug']);
+    expect(notes({ state: 'paused' })).toEqual(['paused', 'after #1', 'paused · bug']);
+    expect(notes({ state: 'pacing' }, false)).toEqual([undefined, 'after #1', 'bug']); // nothing starts on its own there anyway
   });
 });
 
@@ -182,7 +182,7 @@ describe('kanbanFor: In progress', () => {
 
   it('marks an issue whose PR was closed as waiting for the manager, in the backlog', () => {
     const held = { ...r(), held: [{ issue: 192, pr: 198 }] } as RepoView;
-    expect(kanbanFor(held, [], {}).backlog).toMatchObject([{ number: 192, note: '⏸ PR #198 closed · assign by hand', tone: 'warn' }]);
+    expect(kanbanFor(held, [], {}).backlog).toMatchObject([{ number: 192, note: 'PR #198 closed · assign by hand', tone: 'warn' }]);
     expect(kanbanFor(r(), [], {}).backlog[0].tone).toBeUndefined();
   });
 });

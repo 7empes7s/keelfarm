@@ -15,6 +15,7 @@ import { waitingOnYou } from './pocketData';
 import { DecisionCard, DECISIONS_GROUP, useMinute } from '../ui/Decisions';
 import { chatDecisions } from '../../../shared/decisions';
 import { EmptyState } from '../ui/EmptyState';
+import { Icon } from '../ui/Icon';
 
 function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boolean }) {
   const author = useStore((s) => (qa.devAgentId ? s.agents[qa.devAgentId] : undefined));
@@ -35,7 +36,7 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
   const merge = async () => {
     const ok = await confirmDialog(
       ready
-        ? { icon: '🎉', title: `Merge PR #${pr.number}?`, body: `“${pr.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
+        ? { icon: 'party-popper', title: `Merge PR #${pr.number}?`, body: `“${pr.title}” passed QA. It will be squash-merged into ${repo.defaultBranch}.`, confirm: 'Squash & merge' }
         : { tone: 'warn', title: `Merge PR #${pr.number} without QA?`, body: `“${pr.title}” has not passed QA. Merge it into ${repo.defaultBranch} anyway?`, confirm: 'Merge anyway' },
     );
     if (ok) await act(() => api.mergePull(repo.id, pr.number));
@@ -43,7 +44,7 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
   const sendBack = async () => {
     let text = '';
     const ok = await confirmDialog({
-      icon: '🔧',
+      icon: 'wrench',
       title: `Send PR #${pr.number} back for a fix?`,
       body: (
         <>
@@ -77,7 +78,7 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
       {qa.summary && <div className="small pk-pr-summary">{qa.summary}</div>}
       {qa.commentUrl && (
         <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-          QA report ↗
+          QA report <Icon name="external-link" />
         </a>
       )}
       <div className="pk-actions">
@@ -105,6 +106,7 @@ function PrCard({ repo, qa, ready }: { repo: RepoView; qa: QaView; ready?: boole
 interface Decision {
   key: string;
   group: string;
+  groupLabel: ReactNode;
   label: string;
   card: ReactNode;
 }
@@ -120,13 +122,23 @@ export function Approvals({ wide }: { wide?: boolean }) {
   const charters = repos.filter((r) => r.charter.proposal);
   const pr = (s: (typeof w.stuck)[number]) => `PR #${s.qa.prNumber} ${s.repo.pulls.find((p) => p.number === s.qa.prNumber)?.title ?? ''}`;
   const items: Decision[] = [
-    ...w.requests.map((r) => ({ key: `req:${r.id}`, group: '👥 Team changes', label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} /> })),
-    ...chatDecisions(decisions, now).map((d) => ({ key: d.id, group: DECISIONS_GROUP, label: d.question, card: <DecisionCard key={d.id} d={d} now={now} /> })),
-    ...charters.map((r) => ({ key: `charter:${r.id}`, group: '🎯 Charter changes (edit them in ⚙️ → Charter)', label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} /> })),
-    ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: '⚠️ Pull requests that need you', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} /> })),
-    ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: '✅ Ready to merge', label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
+    ...w.requests.map((r) => ({ key: `req:${r.id}`, group: 'team', groupLabel: <><Icon name="users" /> Team changes</>, label: r.kind === 'hire' ? `Hire ${r.name}` : `Let ${r.name} go`, card: <Resume key={r.id} req={r} /> })),
+    ...chatDecisions(decisions, now).map((d) => ({ key: d.id, group: DECISIONS_GROUP, groupLabel: DECISIONS_GROUP, label: d.question, card: <DecisionCard key={d.id} d={d} now={now} /> })),
+    ...charters.map((r) => ({
+      key: `charter:${r.id}`,
+      group: 'charter',
+      groupLabel: (
+        <>
+          <Icon name="target" /> Charter changes (edit them in <Icon name="settings" /> → Charter)
+        </>
+      ),
+      label: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`,
+      card: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />,
+    })),
+    ...w.stuck.map((s) => ({ key: `stuck:${s.repo.id}#${s.qa.prNumber}`, group: 'stuck', groupLabel: <><Icon name="triangle-alert" /> Pull requests that need you</>, label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} /> })),
+    ...w.ready.map((s) => ({ key: `ready:${s.repo.id}#${s.qa.prNumber}`, group: 'ready', groupLabel: <><Icon name="circle-check" /> Ready to merge</>, label: pr(s), card: <PrCard key={`${s.repo.id}#${s.qa.prNumber}`} repo={s.repo} qa={s.qa} ready /> })),
   ];
-  const heading = (d: Decision, i: number) => (i === 0 || items[i - 1].group !== d.group ? d.group : null);
+  const heading = (d: Decision, i: number) => (i === 0 || items[i - 1].group !== d.group ? d.groupLabel : null);
   if (items.length === 0) {
     return (
       <div className="pk-page">
@@ -139,7 +151,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
       <div className="pk-page">
         {items.map((d, i) => (
           <Fragment key={d.key}>
-            {heading(d, i) && <h3 className="pk-h">{d.group}</h3>}
+            {heading(d, i) && <h3 className="pk-h">{d.groupLabel}</h3>}
             {d.card}
           </Fragment>
         ))}
@@ -152,7 +164,7 @@ export function Approvals({ wide }: { wide?: boolean }) {
       <ul className="pk-split-list" aria-label="Decisions waiting on you">
         {items.map((d, i) => (
           <Fragment key={d.key}>
-            {heading(d, i) && <li className="pk-h">{d.group}</li>}
+            {heading(d, i) && <li className="pk-h">{d.groupLabel}</li>}
             <li>
               <button className={`pk-split-item ${d === open ? 'pk-split-on' : ''}`} aria-current={d === open ? 'true' : undefined} onClick={() => setPicked(d.key)}>
                 {d.label}

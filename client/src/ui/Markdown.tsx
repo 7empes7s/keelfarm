@@ -6,6 +6,7 @@ import { FLOOR_HREF } from './chatLinks';
 import { copyText } from './clipboard';
 import './chat.css';
 import { REF_HREF } from '../../../shared/chatRefs';
+import { Icon } from './Icon';
 
 // Agent-written prose (the CEO's texts and reasons, issues, QA reports) rendered as Markdown.
 // Safe by default: raw HTML is shown as text, never parsed, and only http(s)/mailto links work.
@@ -52,7 +53,17 @@ function CodeBlock({ children }: { children?: ReactNode }) {
         {children}
       </pre>
       <button type="button" className="md-copy" onClick={copy} aria-label="Copy the code">
-        {copied === null ? '📋 Copy' : copied ? '✓ Copied' : "Couldn't copy"}
+        {copied === null ? (
+          <>
+            <Icon name="clipboard-list" /> Copy
+          </>
+        ) : copied ? (
+          <>
+            <Icon name="check" /> Copied
+          </>
+        ) : (
+          "Couldn't copy"
+        )}
       </button>
     </div>
   );
@@ -64,10 +75,12 @@ const components: Components = {
   img: ({ src, alt }) =>
     typeof src === 'string' && src ? (
       <a href={src} target="_blank" rel="noopener noreferrer">
-        🖼 {alt || src}
+        <Icon name="image" /> {alt || src}
       </a>
     ) : (
-      <span>🖼 {alt}</span>
+      <span>
+        <Icon name="image" /> {alt}
+      </span>
     ),
   table: ({ children }) => (
     <div className="md-table" tabIndex={0}>

@@ -6,7 +6,7 @@ import { Markdown } from './Markdown';
 import { backdropClose, closeOverlay, useBackLayer } from './Panel';
 import { HireSetupFields, cliLabel, hireCli, hireOverrides, setupOf, type HireSetup } from './Phone';
 import { CLAUDE_MODELS, effectiveModel } from '../../../shared/models';
-import { CloseButton } from './Icon';
+import { CloseButton, Icon } from './Icon';
 
 // A team change face to face (#227), as an office document: a new agent waiting in the lobby (E on them, world/
 // Candidates.tsx), set up here before they're created (name, coding agent, model, effort), or the CEO's let-go note in
@@ -40,7 +40,9 @@ export function Interview({ requestId }: { requestId: string }) {
       <div className="overlay interview-overlay" {...backdropClose(closeOverlay)}>
         <div className="doc" role="dialog" aria-label="Team change">
           <div className="doc-head">
-            <span>✻ {company} · personnel</span>
+            <span>
+              <Icon name="asterisk" /> {company} · personnel
+            </span>
           </div>
           <p>This team change no longer exists.</p>
           <div className="doc-actions">
@@ -77,7 +79,9 @@ export function Interview({ requestId }: { requestId: string }) {
     <div className="overlay interview-overlay" {...backdropClose(closeOverlay)}>
       <div className={`doc ${hire ? '' : 'doc-letgo'}`} role="dialog" aria-label={hire ? `Setting up ${name}` : `Letting ${req.name} go`}>
         <div className="doc-head">
-          <span>✻ {company} · personnel</span>
+          <span>
+            <Icon name="asterisk" /> {company} · personnel
+          </span>
           <span>{hire ? 'New agent' : 'Confidential'}</span>
         </div>
         <div className="doc-who">
@@ -98,7 +102,9 @@ export function Interview({ requestId }: { requestId: string }) {
         {hire && pending && (
           <>
             <HireSetupFields value={setup} onChange={setSetup} disabled={busy} />
-            <p className="muted small doc-tip">Hiring creates {name} and their own machine. You can change these later in their ⚙️ Setup.</p>
+            <p className="muted small doc-tip">
+              Hiring creates {name} and their own machine. You can change these later in their <Icon name="settings" /> Setup.
+            </p>
           </>
         )}
         {hire && !pending && (
@@ -110,7 +116,17 @@ export function Interview({ requestId }: { requestId: string }) {
             <dt>Effort</dt>
             <dd>{req.effort || settings.defaultEffort}</dd>
             <dt>Works on</dt>
-            <dd>{req.host === 'box' ? '☁️ An Upstash Box' : '🖥️ This computer'}</dd>
+            <dd>
+              {req.host === 'box' ? (
+                <>
+                  <Icon name="cloud" /> An Upstash Box
+                </>
+              ) : (
+                <>
+                  <Icon name="monitor" /> This computer
+                </>
+              )}
+            </dd>
           </dl>
         )}
         {pending ? (

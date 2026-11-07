@@ -30,10 +30,11 @@ import { togglePhoto, usePhotoGate } from '../photo/gate';
 import { isTouch, openHoldMenu, useTouchLook, useTouchStick } from '../world/touch/touchState';
 import { TouchZoneHints } from './TouchZoneHints';
 import { switchOffice } from '../pocket/switchOffice';
+import { Icon, IconText } from './Icon';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
-  const text = useStore((s) => (s.restarting ? '⟳ Office restarting…' : officeUpdateChip(s.officeUpdate)));
+  const text = useStore((s) => (s.restarting ? 'Office restarting…' : officeUpdateChip(s.officeUpdate)));
   const overlay = useStore((s) => s.overlay);
   const openOverlay = useStore((s) => s.openOverlay);
   if (!text || overlay?.kind === 'manager') return null;
@@ -67,7 +68,7 @@ function MemoryChip() {
   if (!text || overlay?.kind === 'manager') return null;
   return (
     <button className="office-chip memory-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'ops', card: 'health' })} title="Work waits for memory and starts by itself. Open Mission control">
-      {text}
+      <IconText text={text} />
     </button>
   );
 }
@@ -80,7 +81,7 @@ function DoctorChip() {
   if (!count || overlay?.kind === 'manager') return null;
   return (
     <button className="office-chip doctor-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'ops', card: 'doctor' })} title="The office doctor found something stuck. Open Mission control">
-      🩺 {count} to check
+      <Icon name="stethoscope" /> {count} to check
     </button>
   );
 }
@@ -97,7 +98,9 @@ function PhoneButton() {
   const busy = ceo?.status === 'working';
   return (
     <button data-tour="phone" className={`phone-btn ${badge ? 'phone-btn-ring' : ''}`} onClick={() => openOverlay({ kind: 'phone' })} title={`Your phone (${key})`}>
-      <span className="phone-btn-icon">📱</span>
+      <span className="phone-btn-icon">
+        <Icon name="smartphone" />
+      </span>
       {badge > 0 && <span className="badge phone-btn-badge">{badge}</span>}
       <span className="phone-btn-label">
         <Key action="phone" /> {badge ? `${badge} waiting` : busy ? `${ceo.name} is working` : 'Phone'}
@@ -115,7 +118,7 @@ function PhotoButton() {
   if (!started) return null;
   return (
     <button className="pill pill-photo" onClick={togglePhoto} title={replay ? `Photo mode (${photoKey}). Instant replay is on: ${replayKey} saves the last 15 s` : `Photo mode (${photoKey}): freeze the office, frame a shot, record a clip`}>
-      📷 <kbd>{photoKey}</kbd>
+      <Icon name="camera" /> <kbd>{photoKey}</kbd>
       {replay && <span className="pill-photo-rec" aria-label="Instant replay on" />}
     </button>
   );
@@ -126,7 +129,7 @@ function SwitchButton() {
   const key = useKeyName('switchOffice');
   return (
     <button data-tour="switch" className="pill pill-switch" onClick={switchOffice} title={`The 2D office: every floor, the CEO's chat and your approvals as pages (${key})`}>
-      🗺️ 2D office <kbd>{key}</kbd>
+      <Icon name="map" /> 2D office <kbd>{key}</kbd>
     </button>
   );
 }
@@ -138,7 +141,7 @@ function VoiceIndicator() {
   if (!started || speaking === null) return null;
   return (
     <button className="voice-speaking" onClick={() => void import('./voiceMessages').then((v) => v.stopSpeaking())} title="Reading a message aloud. Click to stop" aria-label="Stop reading the message aloud">
-      🔊
+      <Icon name="volume-2" />
     </button>
   );
 }
@@ -169,7 +172,14 @@ export function HUD() {
   const sip = eAction(held, focus?.action.kind ?? null) === 'sip';
   // With a sticky in hand, the hint says what E does with it here.
   const drop = stickyDrop(focus);
-  const dropLabel = !drop || drop.kind === 'none' ? null : drop.kind === 'refuse' ? `⚠️ ${drop.label}` : drop.label;
+  const dropLabel =
+    !drop || drop.kind === 'none' ? null : drop.kind === 'refuse' ? (
+      <>
+        <Icon name="triangle-alert" /> {drop.label}
+      </>
+    ) : (
+      drop.label
+    );
   const overlay = useStore((s) => s.overlay);
   const locked = useStore((s) => s.locked);
   const started = useStore((s) => s.started);
@@ -210,12 +220,28 @@ export function HUD() {
       <div className="hud-status">
         <NoticeBell className="pill" />
         {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
-        <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>{replaying ? '▶ replay' : connected ? '● live' : restarting ? '○ restarting' : '○ reconnecting'}</span>
+        <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>
+          {replaying ? (
+            <>
+              <Icon name="play" /> replay
+            </>
+          ) : connected ? (
+            '● live'
+          ) : restarting ? (
+            '○ restarting'
+          ) : (
+            '○ reconnecting'
+          )}
+        </span>
         <span className="pill">
-          ⚙️ {settings.sessionLimit ? `${running}/${settings.sessionLimit}` : running} sessions
+          <Icon name="settings" /> {settings.sessionLimit ? `${running}/${settings.sessionLimit}` : running} sessions
         </span>
         <CoinChip />
-        {user && <span className="pill">🐙 {user}</span>}
+        {user && (
+          <span className="pill">
+            <Icon name="git-branch" /> {user}
+          </span>
+        )}
         <PhotoButton />
         <SearchButton />
         <GuideButton />
@@ -230,7 +256,11 @@ export function HUD() {
         <DoctorChip />
       </div>
 
-      {!ghReady && ghError && <div className="hud-banner">⚠️ {ghError}</div>}
+      {!ghReady && ghError && (
+        <div className="hud-banner">
+          <Icon name="triangle-alert" /> {ghError}
+        </div>
+      )}
 
       {/* the centre dot (Settings → Accessibility) is a bolder crosshair that stays through the elevator's fade too */}
       {started && !overlay && (!travel || centerDot) && onFoot && !scope && held?.kind !== 'paddle' && <div className={`crosshair ${focus ? 'crosshair-hot' : ''} ${centerDot ? 'crosshair-dot' : ''}`} />}
@@ -258,7 +288,7 @@ export function HUD() {
           )}
           {isTouch && focus && !sip && (
             <button className="hint-more" onClick={() => openHoldMenu(focus)} aria-label={`More for ${focus.label}`} title="More options">
-              ⋯
+              <Icon name="ellipsis" />
             </button>
           )}
         </div>
@@ -267,7 +297,10 @@ export function HUD() {
       {started && !overlay && !locked && !travel && onFoot && !isTouch && <div className="hud-resume">Click to look around</div>}
       {started && !overlay && !travel && onFoot && isTouch && <TouchZoneHints walked={walked} looked={looked} />}
       {started && !(settings.setupDone && settings.tutorialStep >= 0) && isTouch && (
-        <div className="hud-help">{touchClassic ? 'Drag low to walk (far to run) · drag high to look' : 'Thumb on the ghost stick walks (far to run) · the other bottom corner looks · tap things to go there'} · hold, then let go, for more · 📱 for the phone</div>
+        <div className="hud-help">
+          {touchClassic ? 'Drag low to walk (far to run) · drag high to look' : 'Thumb on the ghost stick walks (far to run) · the other bottom corner looks · tap things to go there'} · hold, then let go, for more ·{' '}
+          <Icon name="smartphone" /> for the phone
+        </div>
       )}
       {started && !(settings.setupDone && settings.tutorialStep >= 0) && !isTouch && (
         <div className="hud-help">

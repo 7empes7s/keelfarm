@@ -4,6 +4,8 @@ import { isBusy, qaKey, useStore, type Agent } from '../store';
 import { reportCard } from '../world/activityProbe';
 import { useKeyName } from './controls';
 import { agentLabel, signInFor } from './floorRows';
+import { Icon } from './Icon';
+import { iconFor } from './icons';
 import { isTouch, openHoldMenu } from '../world/touch/touchState';
 
 // The card at the left edge (clear of their monitor) when you keep someone in your sights for a moment: who they are,
@@ -75,28 +77,38 @@ export function AgentCard() {
             {agent.host === 'box' && (
               <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
                 {' '}
-                ☁ cloud
+                <Icon name="cloud" /> cloud
               </span>
             )}
           </span>
           <span className="ac-title">{agentLabel(agent, settings, clis)}</span>
         </span>
-        <span className="ac-time">{busy && agent.startedAt ? `⏱ ${elapsed(now - agent.startedAt)}` : agent.waiting && !busy ? `waiting for ${agent.waiting === 'ceo' ? 'CEO' : 'you'}` : STATUS[agent.status]}</span>
+        <span className="ac-time">
+          {busy && agent.startedAt ? (
+            <>
+              <Icon name="clock" /> {elapsed(now - agent.startedAt)}
+            </>
+          ) : agent.waiting && !busy ? (
+            `waiting for ${agent.waiting === 'ceo' ? 'CEO' : 'you'}`
+          ) : (
+            STATUS[agent.status]
+          )}
+        </span>
         {isTouch && (
           <button className="ac-more" onClick={() => openHoldMenu({ id: `agent-${agent.id}`, label: `Watch ${agent.name}`, action: { kind: 'terminal', agentId: agent.id } })} aria-label={`More for ${agent.name}`} title="More options">
-            ⋯
+            <Icon name="ellipsis" />
           </button>
         )}
       </div>
       {signIn && (
         <div className="ac-sign-in">
-          🔑 Sign {signIn} in: <kbd>{use}</kbd> opens their terminal
+          <Icon name="key-round" /> Sign {signIn} in: <kbd>{use}</kbd> opens their terminal
         </div>
       )}
       {on && <div className="ac-on">{clipText(redact(on), 64)}</div>}
       {act && (
         <div className="ac-now">
-          {ACTIVITY_ICONS[act.kind]} {ACTIVITY_LABELS[act.kind]}
+          <Icon name={iconFor(ACTIVITY_ICONS[act.kind], 'circle-dot')} /> {ACTIVITY_LABELS[act.kind]}
           {act.detail && <span className="ac-detail"> · {act.detail}</span>}
         </div>
       )}

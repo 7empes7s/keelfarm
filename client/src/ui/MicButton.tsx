@@ -1,21 +1,41 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { finishListening, keepListening, listen, micProblem, registerTarget, stopListening, useMic, type MicTarget, type MicView } from './mic';
 import { TAP_MS } from './micKeys';
 import { useKeyName } from './controls';
+import { Icon } from './Icon';
 
-// The 🎙 next to a message box's Send (mic.ts does the listening). Hold it (or V) to talk; a quick tap listens until
-// you stop talking; tap again to finish. The live transcript goes into the box, to edit before sending. Put it in the
-// box's <form>: sending by hand stops the listening, and V talks while the caret is in that form's box.
+// The mic button next to a message box's Send (mic.ts does the listening). Hold it (or V) to talk; a quick tap
+// listens until you stop talking; tap again to finish. The live transcript goes into the box, to edit before
+// sending. Put it in the box's <form>: sending by hand stops the listening, and V talks while the caret is in that
+// form's box.
 
-/** What the bubble over the 🎙 says. */
-function statusLine(view: MicView, mine: boolean, chiming: boolean): string {
-  if (!mine) return chiming ? '🎧 Listening in a moment…' : '';
+/** What the bubble over the mic button says. */
+function statusLine(view: MicView, mine: boolean, chiming: boolean): ReactNode {
+  if (!mine)
+    return chiming ? (
+      <>
+        <Icon name="headphones" /> Listening in a moment…
+      </>
+    ) : (
+      ''
+    );
   if (view.state === 'transcribing') return 'Turning your words into text…';
   if (view.state !== 'listening') return '';
   if (!view.live) return 'Starting the mic…';
-  if (view.mode === 'handsfree') return '🎧 Listening… just talk';
-  return view.mode === 'tap' ? 'Listening… stop talking or tap 🎙️ to finish' : 'Listening… let go to finish';
+  if (view.mode === 'handsfree')
+    return (
+      <>
+        <Icon name="headphones" /> Listening… just talk
+      </>
+    );
+  return view.mode === 'tap' ? (
+    <>
+      Listening… stop talking or tap <Icon name="mic" /> to finish
+    </>
+  ) : (
+    'Listening… let go to finish'
+  );
 }
 
 interface Props {
@@ -131,7 +151,7 @@ export function MicButton({ kind, value, onChange, onSend, disabled }: Props) {
           }
         }}
       >
-        {state === 'transcribing' ? '⏳' : '🎙️'}
+        <Icon name={state === 'transcribing' ? 'hourglass' : 'mic'} />
       </button>
     </span>
   );

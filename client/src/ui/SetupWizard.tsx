@@ -5,6 +5,7 @@ import { requestLook } from '../world/Player';
 import { CEO_ID, type RepoView } from '../../../shared/types';
 import { Key } from './Key';
 import { ProjectPicker } from './ProjectPicker';
+import { Icon } from './Icon';
 
 // First run: who you are, the company, your CEO and your first project. Every field has a default, so
 // "Skip" (or just pressing Next) gets a working office.
@@ -97,15 +98,27 @@ export function SetupWizard() {
 
         {step === 0 && (
           <>
-            <div className="start-logo">✻</div>
+            <div className="start-logo">
+              <Icon name="asterisk" />
+            </div>
             <h1>cubefarm</h1>
             <p className="start-tag">Your own cartoon software company, staffed by AI coding agents.</p>
             <ul className="start-list">
-              <li>🏢 Every project gets its own floor, with a team of coding agents building and testing its GitHub issues.</li>
-              <li>🧠 A CEO studies each project, plans the work you ask for and sizes each team. You approve every new agent.</li>
-              <li>📱 Your phone keeps you in the loop from anywhere in the building.</li>
+              <li>
+                <Icon name="building-2" /> Every project gets its own floor, with a team of coding agents building and testing its GitHub issues.
+              </li>
+              <li>
+                <Icon name="brain" /> A CEO studies each project, plans the work you ask for and sizes each team. You approve every new agent.
+              </li>
+              <li>
+                <Icon name="smartphone" /> Your phone keeps you in the loop from anywhere in the building.
+              </li>
             </ul>
-            {!ghReady && ghError && <div className="term-error small">⚠️ {ghError}</div>}
+            {!ghReady && ghError && (
+              <div className="term-error small">
+                <Icon name="triangle-alert" /> {ghError}
+              </div>
+            )}
             <button className="btn btn-big" onClick={() => setStep(1)}>
               Let's set up your company
             </button>
@@ -120,7 +133,9 @@ export function SetupWizard() {
 
         {step === 1 && (
           <>
-            <div className="wizard-icon">🧑‍💼</div>
+            <div className="wizard-icon">
+              <Icon name="briefcase-business" />
+            </div>
             <h2>Who's the boss?</h2>
             <p className="start-tag">That's you. You run the company; the agents do the typing.</p>
             <label className="field">
@@ -131,8 +146,8 @@ export function SetupWizard() {
               <span>Company name</span>
               <div className="row" style={{ margin: 0 }}>
                 <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder={COMPANIES[0]} />
-                <button type="button" className="btn btn-small" title="Suggest another name" onClick={() => setCompanyName(pickOther(COMPANIES, companyName))}>
-                  🎲
+                <button type="button" className="btn btn-small" aria-label="Suggest another name" title="Suggest another name" onClick={() => setCompanyName(pickOther(COMPANIES, companyName))}>
+                  <Icon name="dices" />
                 </button>
               </div>
             </label>
@@ -150,17 +165,17 @@ export function SetupWizard() {
                   <span>Name</span>
                   <div className="row" style={{ margin: 0 }}>
                     <input value={ceoName} onChange={(e) => setCeoName(e.target.value)} placeholder="Morgan" autoFocus />
-                    <button type="button" className="btn btn-small" title="Suggest another name" onClick={() => setCeoName(pickOther(CEO_NAMES, ceoName))}>
-                      🎲
+                    <button type="button" className="btn btn-small" aria-label="Suggest another name" title="Suggest another name" onClick={() => setCeoName(pickOther(CEO_NAMES, ceoName))}>
+                      <Icon name="dices" />
                     </button>
                   </div>
                 </label>
                 <div className="row">
                   <label className="toggle">
-                    <input type="radio" checked={ceoLook === 'feminine'} onChange={() => setCeoLook('feminine')} /> 👩 She
+                    <input type="radio" checked={ceoLook === 'feminine'} onChange={() => setCeoLook('feminine')} /> <Icon name="user" /> She
                   </label>
                   <label className="toggle">
-                    <input type="radio" checked={ceoLook === 'masculine'} onChange={() => setCeoLook('masculine')} /> 👨 He
+                    <input type="radio" checked={ceoLook === 'masculine'} onChange={() => setCeoLook('masculine')} /> <Icon name="user" /> He
                   </label>
                   <span className="spacer" />
                   {TIES.map((c) => (
@@ -193,7 +208,9 @@ export function SetupWizard() {
             <h2>Your first project</h2>
             {project ? (
               <div className="wizard-done">
-                <div className="wizard-icon">🎉</div>
+                <div className="wizard-icon">
+                  <Icon name="party-popper" />
+                </div>
                 <p>
                   <b>{project.fullName}</b> moved into floor {project.floor}.
                 </p>
@@ -212,18 +229,21 @@ export function SetupWizard() {
 
         {step === 4 && (
           <>
-            <div className="wizard-icon">🏢</div>
+            <div className="wizard-icon">
+              <Icon name="building-2" />
+            </div>
             <h2>{company} is open for business</h2>
             <ul className="start-list">
               <li>
-                🧠 {ceo}{project ? ` is studying ${project.fullName.split('/')[1]}` : ' is waiting for your first project'}.{' '}
+                <Icon name="brain" /> {ceo}
+                {project ? ` is studying ${project.fullName.split('/')[1]}` : ' is waiting for your first project'}.{' '}
                 {scaling === 'approve' ? 'Team changes wait for your OK.' : `Team changes up to ${maxAgents} agents per floor go through on their own.`}
               </li>
               <li>
-                📱 Press <Key action="phone" /> anywhere for your phone: chat with {ceo}, approve team changes, and see every project at a glance.
+                <Icon name="smartphone" /> Press <Key action="phone" /> anywhere for your phone: chat with {ceo}, approve team changes, and see every project at a glance.
               </li>
               <li>
-                🧭 A short tour starts when you walk in. Press <Key action="help" /> any time for help.
+                <Icon name="compass" /> A short tour starts when you walk in. Press <Key action="help" /> any time for help.
               </li>
             </ul>
             <button className="btn btn-big" onClick={finish} disabled={busy}>

@@ -5,17 +5,59 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseSync } from 'oxc-parser';
 import { describe, expect, it } from 'vitest';
-import { EMOJI_ICONS, ICONS } from './icons';
+import { EMOJI_ICONS, ICONS, iconFor, leadingIcon } from './icons';
 
 const ROOT = path.resolve(__dirname, '..');
 
 /** client/src-relative files (forward slashes) whose emoji are content, and why. */
 const CONTENT: Record<string, string> = {
   'ui/icons.ts': 'the emoji → icon map itself',
+  'ops.ts': "the floor's wall sign, a canvas texture",
+  'photo/overlay.ts': 'the stamp drawn onto a saved photo',
+  'ui/AccessibilitySettings.tsx': 'a sample caption, as the caption strip shows it',
+  'ui/captionRules.ts': "captions' direction arrows, part of the caption text",
+  'ui/chatterLines.ts': "agents' chatter lines",
+  'ui/statusLook.ts': 'status shapes drawn into canvas textures (KIND_ICON_NAME has the icons)',
+  'ui/games/PetGame.tsx': "the desk pet's treats, toys and moods",
+  'ui/games/SnakeGame.tsx': 'game pieces and messages on the game canvas',
+  'ui/games/TetrisGame.tsx': 'messages on the game canvas',
+  'ui/games/pet.ts': "the desk pet's moods and lines",
+  'ui/games/petStore.ts': "the desk pet's lines",
+  'world/Desk.tsx': "drawn into the 3D scene's canvas textures",
+  'world/Jukebox.tsx': "drawn into the 3D scene's canvas textures",
+  'world/Lobby.tsx': "drawn into the 3D scene's canvas textures",
+  'world/OfficeFloor.tsx': "drawn into the 3D scene's canvas textures",
+  'world/PongTable.tsx': "drawn into the 3D scene's canvas textures",
+  'world/TestLabScreen.tsx': "drawn into the 3D scene's canvas textures",
+  'world/TimeLapseScreen.tsx': "drawn into the 3D scene's canvas textures",
+  'world/boardStats.ts': "drawn into the 3D scene's canvas textures",
+  'world/camera/BuildingView.tsx': "drawn into the 3D scene's canvas textures",
+  'world/decor/Decorations.tsx': "drawn into the 3D scene's canvas textures",
+  'world/decor/RewardsCorner.tsx': "drawn into the 3D scene's canvas textures",
+  'world/desk/DeskStory.tsx': "drawn into the 3D scene's canvas textures",
+  'world/draw.ts': "drawn into the 3D scene's canvas textures",
+  'world/drawOps.ts': "drawn into the 3D scene's canvas textures",
+  'world/events/news.ts': "drawn into the 3D scene's canvas textures",
+  'world/presence/Visitors.tsx': "drawn into the 3D scene's canvas textures",
+  'world/roof/Roof.tsx': "drawn into the 3D scene's canvas textures",
+  'world/toys/Blasters.tsx': "drawn into the 3D scene's canvas textures",
+  'world/Candidates.tsx': "people's speech bubbles in the 3D scene",
+  'world/events/watchPlan.ts': "people's speech bubbles in the 3D scene",
+  'world/hiring.ts': "people's speech bubbles in the 3D scene",
+  'world/meals.ts': "people's speech bubbles in the 3D scene",
+  'world/ritualRunner.ts': "people's speech bubbles in the 3D scene",
+  'world/roof/RoofPeople.tsx': "people's speech bubbles in the 3D scene",
+  'world/socials.ts': "people's speech bubbles in the 3D scene",
+  'world/toys/pongRunner.ts': "people's speech bubbles in the 3D scene",
+  'world/themes/birthday.tsx': 'holiday screens and speech bubbles in the 3D scene',
+  'world/themes/christmas.tsx': 'holiday screens and speech bubbles in the 3D scene',
+  'world/themes/newyear.tsx': 'holiday screens and speech bubbles in the 3D scene',
+  'world/themes/valentines.tsx': 'holiday screens and speech bubbles in the 3D scene',
+  'world/fridge.ts': "the fridge's snacks",
 };
 
 // Emoji, plus the text glyphs the UI used as icons. × stays: it is the multiplication sign in "4×" and "600× speed".
-const ICON_CHAR = /\p{Extended_Pictographic}|[✕✖↗↩↪↺⟳▲▼▶◀■✓✔⋯✻✳♪]/u;
+const ICON_CHAR = /\p{Extended_Pictographic}|[✕✖↗↩↪↺⟲⟳▲▼▶◀■✓✔⋯✻✳♪ⓘ]/u;
 const NOT_ICONS = /[©®™‼⁉]/gu;
 
 function files(dir: string): string[] {
@@ -48,6 +90,15 @@ describe('one icon pack (#134)', () => {
   it('finds emoji and icon glyphs in strings and JSX, not in comments', () => {
     const src = "// ⚙️ settings\nconst a = '⚙️ Settings';\nconst b = <b>✕</b>;\nconst c = `${n}× ok`;\nconst d = 'Café ©';";
     expect(iconTexts('x.tsx', src)).toEqual(['2: ⚙️ Settings', '3: ✕']);
+  });
+
+  it('draws glyphs that still arrive as data with their icon', () => {
+    expect(iconFor('⚙️', 'zap')).toBe('settings');
+    expect(iconFor('🦄', 'zap')).toBe('zap');
+    expect(leadingIcon('⏳ 2 tasks waiting for memory')).toEqual({ icon: 'hourglass', text: '2 tasks waiting for memory' });
+    expect(leadingIcon('⭐ 5 first-time passes')).toEqual({ icon: 'star', text: '5 first-time passes' });
+    expect(leadingIcon('Plain words')).toEqual({ icon: null, text: 'Plain words' });
+    expect(leadingIcon('#3 open')).toEqual({ icon: null, text: '#3 open' });
   });
 
   it('maps every old glyph to an icon that exists', () => {

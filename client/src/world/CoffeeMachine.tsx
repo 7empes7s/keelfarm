@@ -86,7 +86,7 @@ export function coffeeAction(op: CoffeeOp) {
     if (r.result === 'busy') return; // already brewing: the button does nothing
     if (r.result !== 'started') {
       sounds.nope();
-      s.pushToast('info', r.result === 'noMug' ? '☕ Put a mug under the machine first' : '☕ Your coffee is ready: take the mug');
+      s.pushToast('info', r.result === 'noMug' ? 'Put a mug under the machine first' : 'Your coffee is ready: take the mug');
       return;
     }
     set(r.state);

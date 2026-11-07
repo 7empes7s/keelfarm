@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import { go, useFinder } from './goTo';
 import { dismissGuide, guideDismissed, guideItems, guideProgress, type GuideItem } from './guide';
 import { Sheet } from './Sheet';
-import { CloseButton } from './Icon';
+import { CloseButton, Icon } from './Icon';
 
 const installed = () => {
   try {
@@ -32,7 +32,7 @@ function Checklist({ items, onGo, open }: { items: GuideItem[]; onGo?: () => voi
       {sorted.map((i) => (
         <li key={i.id} className={`gm-item ${i.done ? 'gm-item-done' : ''}`} data-guide={i.id} data-done={i.done}>
           <span className="gm-tick" aria-label={i.done ? 'Done' : 'Not done yet'}>
-            {i.done ? '✓' : ''}
+            {i.done ? <Icon name="check" /> : ''}
           </span>
           <div className="gm-text">
             <b>{i.title}</b>
@@ -70,7 +70,7 @@ function Progress({ items }: { items: GuideItem[] }) {
   );
 }
 
-/** Pocket's Company tab: the card, until it's all done or dismissed (🔍 → "Get the most out of the office" brings it back). */
+/** Pocket's Company tab: the card, until it's all done or dismissed (the search brings it back). */
 export function GuideCard() {
   const items = useGuide();
   const asked = useFinder((s) => s.guide);
@@ -80,12 +80,14 @@ export function GuideCard() {
   return (
     <section data-tour="guide" className="pk-card gm-card" aria-label="Get the most out of the office">
       <div className="gm-head">
-        <b className="grow">✅ Get the most out of the office</b>
+        <b className="grow">
+          <Icon name="circle-check" /> Get the most out of the office
+        </b>
         <Progress items={items} />
         <CloseButton
           className="gm-x"
           label="Dismiss the guide"
-          title="Dismiss (🔍 brings it back)"
+          title="Dismiss (the search brings it back)"
           onClick={() => {
             dismissGuide(true);
             setHidden(true);
@@ -96,7 +98,7 @@ export function GuideCard() {
       <Checklist items={items} open />
       {p.done > 0 && (
         <p className="muted small gm-done">
-          ✓ {p.done} done: {items.filter((i) => i.done).map((i) => i.title.toLowerCase()).join(' · ')}
+          <Icon name="check" /> {p.done} done: {items.filter((i) => i.done).map((i) => i.title.toLowerCase()).join(' · ')}
         </p>
       )}
     </section>
@@ -110,7 +112,7 @@ export function GuideButton() {
   if (p.done === p.total) return null;
   return (
     <button data-tour="guide" className="pill pill-guide" onClick={() => go({ kind: 'guide' })} title="Get the most out of the office" aria-label={`Guide: ${p.done} of ${p.total} done`}>
-      ✅ {p.done}/{p.total}
+      <Icon name="circle-check" /> {p.done}/{p.total}
     </button>
   );
 }
@@ -121,7 +123,15 @@ export function GuideSheet() {
   if (!open) return null;
   const close = () => useFinder.setState({ guide: false });
   return (
-    <Sheet title="✅ Get the most out of the office" onClose={close} className="gm-sheet">
+    <Sheet
+      title={
+        <>
+          <Icon name="circle-check" /> Get the most out of the office
+        </>
+      }
+      onClose={close}
+      className="gm-sheet"
+    >
       <div className="gm-head">
         <span className="muted small grow">It ticks itself as you go.</span>
         <Progress items={items} />

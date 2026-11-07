@@ -40,6 +40,7 @@ import { useCeoDraft } from './goTo';
 import { hasVersionsSheet, struckText } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { CloseButton, Icon } from './Icon';
+import type { IconName } from './icons';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -161,10 +162,10 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
         <label className="field" htmlFor={`${id}-host`}>
           <span>Works on</span>
           <select id={`${id}-host`} value={value.host} disabled={disabled} onChange={(e) => set({ host: e.target.value as MachineHost | '' })}>
-            <option value="">{settings.cloud.machineKind === 'box' ? '☁️ Upstash Box' : '🖥️ This computer'} (default)</option>
-            <option value="local">🖥️ This computer</option>
+            <option value="">{settings.cloud.machineKind === 'box' ? 'Upstash Box' : 'This computer'} (default)</option>
+            <option value="local">This computer</option>
             <option value="box" disabled={cli === 'opencode'}>
-              ☁️ Upstash Box{cli === 'opencode' ? " (OpenCode can't run there)" : ''}
+              Upstash Box{cli === 'opencode' ? " (OpenCode can't run there)" : ''}
             </option>
           </select>
         </label>
@@ -198,7 +199,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
     await attempt(fn);
     setBusy(false);
   };
-  const outcome = req.status === 'approved' ? (hire ? '✅ hired' : '👋 left') : hire ? '✋ declined' : '🤝 kept';
+  const [outIcon, outcome]: [IconName, string] = req.status === 'approved' ? (hire ? ['circle-check', 'hired'] : ['hand', 'left']) : hire ? ['hand', 'declined'] : ['handshake', 'kept'];
   return (
     <div ref={ref} className={`resume ${hire ? '' : 'resume-letgo'} ${highlight ? 'resume-hot' : ''} ${pending ? '' : 'resume-done'}`}>
       <div className="resume-head">
@@ -207,7 +208,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
           <div className="resume-name">{hire ? name : `Let ${req.name} go?`}</div>
           <div className="resume-title">{hire ? 'A new agent' : 'Leaving the team'}</div>
         </div>
-        {!pending && <span className={`chip ${req.status === 'approved' ? 'chip-good' : ''}`}>{outcome}</span>}
+        {!pending && <span className={`chip ${req.status === 'approved' ? 'chip-good' : ''}`}><Icon name={outIcon} /> {outcome}</span>}
       </div>
       <div className="resume-meta">
         <span className="chip" style={{ background: repo?.color }}>
@@ -218,7 +219,7 @@ export function Resume({ req, highlight }: { req: HireRequestView; highlight?: b
       {req.reason && <Markdown className="resume-reason" text={req.reason} />}
       {hire && (
         <div className="resume-meta small">
-          <span className="grow">⚙️ {setupLine(pending ? setup : req, settings, clis)}</span>
+          <span className="grow"><Icon name="settings" /> {setupLine(pending ? setup : req, settings, clis)}</span>
           {pending && (
             <button className="linkish small" aria-expanded={editing} onClick={() => setEditing(!editing)}>
               {editing ? 'Done' : 'Change'}
@@ -264,7 +265,7 @@ function LobbyNudge() {
   if (!n) return null;
   return (
     <div className="phone-nudge" role="status">
-      <span>🪑</span>
+      <span><Icon name="armchair" /></span>
       <span className="grow">
         {n} new agent{n === 1 ? ' is' : 's are'} waiting in the lobby
       </span>
@@ -284,7 +285,7 @@ function TeamChanges({ focusId }: { focusId?: string }) {
   const decided = requests.filter((r) => r.status !== 'pending').slice(-8).reverse();
   return (
     <div className="phone-scroll">
-      <h3 className="phone-h">👥 Waiting on you {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
+      <h3 className="phone-h"><Icon name="users" /> Waiting on you {pending.length > 0 && <span className="badge">{pending.length}</span>}</h3>
       {pending.length === 0 && <p className="muted small phone-empty">Nothing waiting. When the CEO wants a floor's team to grow or shrink, the change shows up here for your OK.</p>}
       {pending.map((r) => (
         <Resume key={r.id} req={r} highlight={r.id === focusId} />
@@ -294,10 +295,10 @@ function TeamChanges({ focusId }: { focusId?: string }) {
         <div className="row wrap">
           <span className="muted small">Demo:</span>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(() => api.demoPropose('hire'))}>
-            👥 Grow a floor
+            <Icon name="users" /> Grow a floor
           </button>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(() => api.demoPropose('let-go'))}>
-            ✉️ Shrink a floor
+            <Icon name="mail" /> Shrink a floor
           </button>
         </div>
       )}
@@ -331,7 +332,7 @@ function ReplayButton({ m }: { m: PhoneMessage }) {
       aria-label={playing ? 'Stop this message' : 'Play this message'}
       onClick={() => void import('./voiceMessages').then((v) => (playing ? v.stopSpeaking() : kind !== 'gone' && v.replayMessage(m, kind)))}
     >
-      {playing ? '⏹' : '▶'}
+      <Icon name={playing ? 'square' : 'play'} />
     </button>
   );
 }
@@ -357,10 +358,10 @@ interface BubbleProps {
 
 
 function DeliveryTick({ d }: { d: Delivery }) {
-  const icon = { sending: '🕓', sent: '✓', read: '✓✓', replied: '↩', failed: '⚠' }[d];
+  const icon: Record<Delivery, ReactNode> = { sending: <Icon name="clock" />, sent: <Icon name="check" />, read: <Icon name="check-check" />, replied: <Icon name="reply" />, failed: <Icon name="triangle-alert" /> };
   return (
     <span className={`bubble-tick bubble-tick-${d}`} title={DELIVERY_LABEL[d]}>
-      <span aria-hidden>{icon}</span>
+      <span aria-hidden>{icon[d]}</span>
       <span className="sr-only">{DELIVERY_LABEL[d]}</span>
     </span>
   );
@@ -372,11 +373,11 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
     <div className="bubble-tools">
       {id !== undefined && (
         <button type="button" className="bubble-tool" aria-label="Reply to this message" title="Reply" onClick={() => onReply(id)}>
-          ↩
+          <Icon name="reply" />
         </button>
       )}
       <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
-        ⋯
+        <Icon name="ellipsis" />
       </button>
     </div>
   );
@@ -436,7 +437,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
 
   const quote =
     quoted === undefined ? null : quoted === null ? (
-      <div className="bubble-quote bubble-quote-gone">↩ The original message is no longer saved</div>
+      <div className="bubble-quote bubble-quote-gone"><Icon name="reply" /> The original message is no longer saved</div>
     ) : (
       <button
         type="button"
@@ -444,7 +445,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         onClick={() => onQuote(quoted.id)}
         aria-label={`In reply to ${who(quoted, ceoName)}: ${excerpt(speechText(quoted.text, 300), 140)}. Show the original message.`}
       >
-        <span className="bubble-quote-from">↩ {quoted.from === 'manager' ? 'You' : who(quoted, ceoName)}</span>
+        <span className="bubble-quote-from"><Icon name="reply" /> {quoted.from === 'manager' ? 'You' : who(quoted, ceoName)}</span>
         <span className="bubble-quote-text">{excerpt(quoted.text, 140)}</span>
       </button>
     );
@@ -455,7 +456,7 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
       <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (
           <span className={`bubble-swipe ${dx > SWIPE_PX ? 'bubble-swipe-on' : ''}`} aria-hidden>
-            ↩
+            <Icon name="reply" />
           </span>
         )}
         {!mine && <div className="bubble-from">{ceoName}</div>}
@@ -494,14 +495,16 @@ function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, on
         <div className="bubble-time">
           {m && !mine && <ReplayButton m={m} />}
           {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
-          {m?.telegram === 'out' && <span className="bubble-via">✈️ sent to Telegram · </span>}
+          {m?.telegram === 'out' && (
+            <span className="bubble-via"><Icon name="plane" /> sent to Telegram ·{' '}</span>
+          )}
           {m?.edited && <span className="bubble-via">edited {clock(m.edited)} · </span>}
           {clock(at)}
           {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
         </div>
         {delivery === 'failed' && (
           <button type="button" className="bubble-retry" onClick={() => retrySend(item.out!.key)}>
-            ⚠ Failed, tap to retry
+            <Icon name="triangle-alert" /> Failed, tap to retry
           </button>
         )}
       </div>
@@ -677,10 +680,10 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
     const m = item.m;
     if (!m || m.from === 'office') return [];
     return [
-      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? '✏️ Edit and resend' : '✏️ Edit', run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
-      ...(hasVersionsSheet(m) ? [{ label: `🕘 Versions (${(m.versions?.length ?? 0) + 1})`, run: () => setVersions(m) }] : []),
-      ...(m.id === last('ceo') ? [{ label: '⟳ Retry', run: () => void attempt(api.ceoRetry) }] : []),
-      { label: '📌 Remember this', run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (🧠 to see or edit)`)) },
+      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? 'Edit and resend' : 'Edit', icon: 'pencil' as const, run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
+      ...(hasVersionsSheet(m) ? [{ label: `Versions (${(m.versions?.length ?? 0) + 1})`, icon: 'clock' as const, run: () => setVersions(m) }] : []),
+      ...(m.id === last('ceo') ? [{ label: 'Retry', icon: 'refresh-cw' as const, run: () => void attempt(api.ceoRetry) }] : []),
+      { label: 'Remember this', icon: 'pin' as const, run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)) },
     ];
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
@@ -770,7 +773,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
                 <div className="suggestions" role="group" aria-label={`Suggested replies to ${ceo.name}`}>
                   {offered.suggestions!.map((s) => (
                     <button key={s} type="button" className="suggestion-chip" onClick={() => send(s, offered.id)} aria-label={`Reply “${s}” to ${ceo.name}`}>
-                      ↩ {s}
+                      <Icon name="reply" /> {s}
                     </button>
                   ))}
                 </div>
@@ -823,39 +826,39 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         {question !== null && !answered && (
           <>
             <button className="quick-chip quick-answer" onClick={() => send('Yes', question)} aria-label={`Reply Yes to ${ceo.name}'s question`}>
-              ↩ Yes
+              <Icon name="reply" /> Yes
             </button>
             <button className="quick-chip quick-answer" onClick={() => send('No', question)} aria-label={`Reply No to ${ceo.name}'s question`}>
-              ↩ No
+              <Icon name="reply" /> No
             </button>
           </>
         )}
         {!text && question === null && !offered && editing === null && ceo.status !== 'working' && <Starters onPick={fill} />}
         {(ceo.status === 'error' || ceo.status === 'stopped') && last('manager') !== undefined && (
-          <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>⟳ Retry</button>
+          <button className="quick-chip quick-answer" onClick={() => void attempt(api.ceoRetry)}>
+            <Icon name="refresh-cw" /> Retry
+          </button>
         )}
       </div>
       {editing !== null && (
         <div className="chat-reply">
-          <b className="grow small">✏️ Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}</b>
+          <b className="grow small">
+            <Icon name="pencil" /> Editing your message: {editing === last('manager') ? `Send replaces it, and ${ceo.name} answers the new version` : `Save replaces it, and ${ceo.name} gets a note of the change`}
+          </b>
           <CloseButton className="chat-reply-x" label="Cancel the edit" onClick={endEdit} />
         </div>
       )}
       {replyTo !== null && (
         <div className="chat-reply">
           <div className="grow chat-reply-body">
-            <b className="small">
-              <Icon name="reply" /> Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'your message' : who(quotedNow, ceo.name)) : 'a message'}
-            </b>
+            <b className="small"><Icon name="reply" /> Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'your message' : who(quotedNow, ceo.name)) : 'a message'}</b>
             <div className="chat-reply-text small">{quotedNow ? excerpt(quotedNow.text, 140) : 'The original message is no longer saved'}</div>
           </div>
           <CloseButton className="chat-reply-x" label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)} />
         </div>
       )}
       {chatQueued && info.held && (
-        <div className="chat-held small" role="status">
-          ⏸ {heldBanner(info.held)}
-        </div>
+        <div className="chat-held small" role="status"><Icon name="pause" /> {heldBanner(info.held)}</div>
       )}
       <WorkingStrip onStop={stop} />
       <AttachTray pending={att.pending} onRemove={att.remove} />
@@ -903,7 +906,7 @@ export function Chat({ autoFocus = true, onFloor, tools }: { autoFocus?: boolean
         <MicButton kind="phone" value={text} onChange={setText} onSend={send} />
         {ceo.status === 'working' && editing === null && !text.trim() && !att.ready.length ? (
           <button type="button" className="btn btn-small btn-bad" onClick={stop} aria-label={`Stop ${ceo.name}`} title="Stop: what's done stays done, and the reply says what that was">
-            ■
+            <Icon name="square" />
           </button>
         ) : (
           <button className="btn btn-small btn-good" disabled={att.busy || (!text.trim() && !att.ready.length)} title={att.busy ? 'Waiting for the files to upload' : undefined}>
@@ -948,18 +951,18 @@ function useCompany() {
     const pending = pendingRequests(requests).length;
 
     // The report: a few plain sentences, most urgent first.
-    const report: { icon: string; text: string; tone?: 'good' | 'warn' }[] = [];
+    const report: { icon: IconName; text: string; tone?: 'good' | 'warn' }[] = [];
     const readyList = floors.filter((f) => f.ready > 0);
     if (readyList.length)
       report.push({
-        icon: '✅',
+        icon: 'circle-check',
         text: `${sum('ready')} pull request${sum('ready') === 1 ? ' passed' : 's passed'} QA and ${sum('ready') === 1 ? 'is' : 'are'} ready for you to merge (${readyList.map((f) => `${f.repo.fullName.split('/')[1]}: ${f.ready}`).join(', ')}).`,
         tone: 'good',
       });
-    if (sum('stuck')) report.push({ icon: '⚠️', text: `${sum('stuck')} pull request${sum('stuck') === 1 ? '' : 's'} need${sum('stuck') === 1 ? 's' : ''} your call: the team can't move ${sum('stuck') === 1 ? 'it' : 'them'} on alone.`, tone: 'warn' });
-    if (pending) report.push({ icon: '👥', text: `${pending} team change${pending === 1 ? ' is' : 's are'} waiting in Team.`, tone: 'warn' });
+    if (sum('stuck')) report.push({ icon: 'triangle-alert', text: `${sum('stuck')} pull request${sum('stuck') === 1 ? '' : 's'} need${sum('stuck') === 1 ? 's' : ''} your call: the team can't move ${sum('stuck') === 1 ? 'it' : 'them'} on alone.`, tone: 'warn' });
+    if (pending) report.push({ icon: 'users', text: `${pending} team change${pending === 1 ? ' is' : 's are'} waiting in Team.`, tone: 'warn' });
     report.push({
-      icon: '⚙️',
+      icon: 'settings',
       text: settings.sessionLimit
         ? running
           ? `${running} of ${settings.sessionLimit} session slots are busy right now.`
@@ -970,16 +973,16 @@ function useCompany() {
     });
     for (const f of floors) {
       if (f.issues > 0 && !f.repo.autoAssign && f.working === 0 && f.idle > 0) {
-        report.push({ icon: '💤', text: `${f.repo.fullName.split('/')[1]} has ${f.issues} open issue${f.issues === 1 ? '' : 's'} and free agents, but auto-assign is off.` });
+        report.push({ icon: 'moon', text: `${f.repo.fullName.split('/')[1]} has ${f.issues} open issue${f.issues === 1 ? '' : 's'} and free agents, but auto-assign is off.` });
       }
     }
     const busiest = [...floors].sort((a, b) => b.issues + b.prs - (a.issues + a.prs))[0];
     if (busiest && busiest.issues + busiest.prs > 0 && floors.length > 1) {
-      report.push({ icon: '🔥', text: `Most work in flight: ${busiest.repo.fullName.split('/')[1]} (${busiest.issues} issues, ${busiest.prs} PRs).` });
+      report.push({ icon: 'flame', text: `Most work in flight: ${busiest.repo.fullName.split('/')[1]} (${busiest.issues} issues, ${busiest.prs} PRs).` });
     }
     if (ceo) {
       report.push({
-        icon: '🧠',
+        icon: 'brain',
         text:
           ceo.status === 'working'
             ? `${ceo.name} is ${(info.job?.label ?? 'working').replace(/^\w/, (c) => c.toLowerCase())}.`
@@ -988,7 +991,7 @@ function useCompany() {
               : `${ceo.name}'s periodic reviews are off.`,
       });
     }
-    if (floors.length === 0) report.splice(0, report.length, { icon: '👋', text: "No projects yet. Connect a repo in the manager's office (lobby, back left) and the CEO will staff it." });
+    if (floors.length === 0) report.splice(0, report.length, { icon: 'hand', text: "No projects yet. Connect a repo in the manager's office (lobby, back left) and the CEO will staff it." });
     return { floors, staff: staff.length, running, max: settings.sessionLimit, issues: sum('issues'), prs: sum('prs'), report };
   }, [repos, agents, qa, requests, settings, info]);
 }
@@ -1000,21 +1003,21 @@ function Shortcuts() {
   return (
     <nav className="phone-links" aria-label="Open a panel">
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager' })}>
-        🧑‍💼 Console
+        <Icon name="briefcase-business" /> Console
       </button>
       {repoId && (
         <button className="btn btn-small" onClick={() => openOverlay({ kind: 'kanban', repoId })}>
-          📋 Kanban
+          <Icon name="clipboard-list" /> Kanban
         </button>
       )}
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
-        👥 Floor list
+        <Icon name="users" /> Floor list
       </button>
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'help' })}>
-        ❓ Help
+        <Icon name="circle-help" /> Help
       </button>
       <button className="btn btn-small" onClick={() => openOverlay({ kind: 'manager', tab: 'access' })}>
-        ♿ Accessibility
+        <Icon name="accessibility" /> Accessibility
       </button>
     </nav>
   );
@@ -1023,21 +1026,19 @@ function Shortcuts() {
 function Company() {
   const c = useCompany();
   const goToFloor = useStore((s) => s.goToFloor);
-  const tiles: [string, string | number, string][] = [
-    ['🏢', c.floors.length, c.floors.length === 1 ? 'project' : 'projects'],
-    ['📋', c.issues, 'open issues'],
-    ['🔀', c.prs, 'open PRs'],
-    ['👥', c.staff, 'on staff'],
-    ['⚙️', c.max ? `${c.running}/${c.max}` : `${c.running}`, 'working now'],
+  const tiles: [IconName, string | number, string][] = [
+    ['building-2', c.floors.length, c.floors.length === 1 ? 'project' : 'projects'],
+    ['clipboard-list', c.issues, 'open issues'],
+    ['git-merge', c.prs, 'open PRs'],
+    ['users', c.staff, 'on staff'],
+    ['settings', c.max ? `${c.running}/${c.max}` : `${c.running}`, 'working now'],
   ];
   return (
     <div className="phone-scroll">
       <div className="tiles">
         {tiles.map(([icon, value, label]) => (
           <div key={label} className="tile">
-            <div className="tile-value">
-              {icon} {value}
-            </div>
+            <div className="tile-value"><Icon name={icon} /> {value}</div>
             <div className="tile-label">{label}</div>
           </div>
         ))}
@@ -1047,7 +1048,7 @@ function Company() {
       <ul className="report">
         {c.report.map((r, i) => (
           <li key={i} className={r.tone ? `report-${r.tone}` : ''}>
-            <span>{r.icon}</span>
+            <span><Icon name={r.icon} /></span>
             <span>{r.text}</span>
           </li>
         ))}
@@ -1067,13 +1068,13 @@ function Company() {
           </div>
           <div className="proj-stats small">
             <span>
-              👥 {f.team}
+              <Icon name="users" /> {f.team}
               {f.working ? ` (${f.working} busy)` : ''}
             </span>
-            <span>📋 {f.issues}</span>
-            <span>🔍 {f.inQa}</span>
-            <span className={f.ready ? 'proj-ready' : ''}>✅ {f.ready}</span>
-            <span>🎉 {f.merged}</span>
+            <span><Icon name="clipboard-list" /> {f.issues}</span>
+            <span><Icon name="search" /> {f.inQa}</span>
+            <span className={f.ready ? 'proj-ready' : ''}><Icon name="circle-check" /> {f.ready}</span>
+            <span><Icon name="party-popper" /> {f.merged}</span>
           </div>
         </div>
       ))}
@@ -1142,11 +1143,11 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
 
   const pending = pendingRequests(requests).length;
   const unread = unreadMessages(messages, readAt);
-  const tabs: [PhoneTab, string, string, number][] = [
-    ['chat', '💬', ceoName, tab === 'chat' ? 0 : unread],
-    ['hires', '👥', 'Team', pending],
-    ['company', '📊', 'Company', 0],
-    ['games', '🎮', 'Games', 0],
+  const tabs: [PhoneTab, IconName, string, number][] = [
+    ['chat', 'message-circle', ceoName, tab === 'chat' ? 0 : unread],
+    ['hires', 'users', 'Team', pending],
+    ['company', 'chart-column', 'Company', 0],
+    ['games', 'gamepad-2', 'Games', 0],
   ];
   return (
     <div className="overlay phone-overlay" {...backdropClose(closeOverlay)}>
@@ -1155,7 +1156,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
         <div className="phone-status" aria-hidden>
           <span>{clock(now)}</span>
           <span className="phone-notch" />
-          <span>📶 🔋</span>
+          <span><Icon name="signal" /> <Icon name="battery-full" /></span>
         </div>
         <HolidayStrip />
         <div className="phone-screen">
@@ -1176,7 +1177,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
               onClick={() => (k === 'games' && tab === 'games' ? setGame(null) : setTab(k))}
             >
               <span className="phone-tab-icon" aria-hidden>
-                {icon}
+                <Icon name={icon} />
                 {badge > 0 && <span className="badge badge-dot">{badge}</span>}
               </span>
               <span>{label}</span>

@@ -24,7 +24,7 @@ export function useChannel(repoId: string): Channel {
 export function tuneChannel(repoId: string, pr: Channel) {
   // The time-lapse shows a recorded day: the theatre's previews are live, so they're off while it plays.
   if (useStore.getState().replaying) {
-    useStore.getState().pushToast('info', '▶ Replaying: the PR theatre is live only. Press Esc to go back to the live office.');
+    useStore.getState().pushToast('info', 'Replaying: the PR theatre is live only. Press Esc to go back to the live office.');
     return;
   }
   useChannels.setState((s) => ({ channels: { ...s.channels, [repoId]: pr } }));

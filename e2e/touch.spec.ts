@@ -164,12 +164,12 @@ test("windows' buttons answer one tap each, and the view stops drawing under the
 
   // help and the floor list, from the phone's Company tab, then their ✕
   for (const [link, title] of [
-    ['❓ Help', 'How the office works'],
-    ['👥 Floor list', /Lobby|Floor/],
+    ['Help', 'How the office works'],
+    ['Floor list', /Lobby|Floor/],
   ] as const) {
     await phoneButton(page).tap();
     await page.getByRole('tab', { name: /Company/ }).tap();
-    await page.getByRole('button', { name: link }).tap();
+    await page.getByRole('button', { name: link, exact: true }).tap();
     const panel = page.getByRole('dialog', { name: title });
     await expect(panel).toBeVisible();
     expect(await drawsOver(page, 2000), `draw calls under ${link}`).toBe(0);
@@ -180,11 +180,11 @@ test("windows' buttons answer one tap each, and the view stops drawing under the
   // the console: a tab, then its ✕
   await phoneButton(page).tap();
   await page.getByRole('tab', { name: /Company/ }).tap();
-  await page.getByRole('button', { name: '🧑‍💼 Console' }).tap();
+  await page.getByRole('button', { name: 'Console', exact: true }).tap();
   const consolePanel = page.getByRole('dialog', { name: /Manager's console/ });
   await expect(consolePanel).toBeVisible();
-  await consolePanel.getByRole('tab', { name: '📜 History' }).tap();
-  await expect(consolePanel.getByRole('tab', { name: '📜 History' })).toHaveAttribute('aria-selected', 'true');
+  await consolePanel.getByRole('tab', { name: 'History', exact: true }).tap();
+  await expect(consolePanel.getByRole('tab', { name: 'History', exact: true })).toHaveAttribute('aria-selected', 'true');
   await consolePanel.getByRole('button', { name: 'Close' }).tap();
   await expect(consolePanel).toBeHidden();
 });
@@ -193,7 +193,7 @@ test('windows fit a 390px phone: no sideways scroll, a 44px ✕', async ({ page 
   await inside(page);
   await phoneButton(page).tap();
   await page.getByRole('tab', { name: /Company/ }).tap();
-  await page.getByRole('button', { name: '❓ Help' }).tap();
+  await page.getByRole('button', { name: 'Help', exact: true }).tap();
   const panel = page.locator('.panel');
   await expect(panel).toBeVisible();
   // full width, under a band of the dimmed view to tap it closed (48px at the 115% UI scale)
@@ -223,15 +223,15 @@ for (const [i, spot] of SPOTS.entries()) {
 /** Three windows: how to open each, its ✕, and two tabs to tap between (the phone's are its footer). */
 const WINDOWS = [
   { name: 'the phone', dialog: 'Your phone', tabs: [/Team/, /Company/], link: null },
-  { name: 'help', dialog: 'How the office works', tabs: ['🎮 Controls', '📖 The office'], link: '❓ Help' },
-  { name: 'the console', dialog: /Manager's console/, tabs: ['📜 History', /^Time-lapse/], link: '🧑‍💼 Console' },
+  { name: 'help', dialog: 'How the office works', tabs: ['Controls', 'The office'], link: 'Help' },
+  { name: 'the console', dialog: /Manager's console/, tabs: [/^History$/, /^Time-lapse/], link: 'Console' },
 ] as const;
 
 async function open(page: Page, w: (typeof WINDOWS)[number]) {
   await phoneButton(page).tap();
   if (w.link) {
     await page.getByRole('tab', { name: /Company/ }).tap();
-    await page.getByRole('button', { name: w.link }).tap();
+    await page.getByRole('button', { name: w.link, exact: true }).tap();
   }
   const dialog = page.getByRole('dialog', { name: w.dialog });
   await expect(dialog).toBeVisible();

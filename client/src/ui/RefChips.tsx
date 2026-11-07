@@ -8,6 +8,7 @@ import { fileUrl } from '../../../shared/chatRefs';
 import { chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type Jump, type RefWorld } from './chatRefs';
 import { qaShotUrl } from './channels';
 import { Sheet } from './ChatArtifacts';
+import { Icon } from './Icon';
 import './chatRefs.css';
 
 // The chat's refs (#26): chips in the bubbles with a preview on hover (mouse) or press and hold (touch), a tap that
@@ -140,7 +141,7 @@ export function RefChip({ messageId, index, children }: { messageId: number; ind
           else jump();
         }}
       >
-        <span aria-hidden>{info.icon}</span>
+        <span aria-hidden><Icon name={info.icon} /></span>
         <span className="ref-chip-label">{label}</span>
         {info.status && <span className="ref-chip-status">{` ${info.status}`}</span>}
       </button>
@@ -261,7 +262,7 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
     return (
       <>
         <b>
-          ▶️ {name} · {n === undefined ? repo.defaultBranch : `PR #${n}`}
+          <Icon name="play" /> {name} · {n === undefined ? repo.defaultBranch : `PR #${n}`}
         </b>
         <p className="small">{p ? `${p.status}${p.url ? ` at ${p.url}` : ''}` : pull?.state === 'OPEN' ? 'Not started: opening it starts it.' : 'This PR is no longer open.'}</p>
       </>
@@ -331,7 +332,7 @@ function FilePeek({ messageId, index }: { messageId: number; index: number }) {
   return (
     <>
       <b className="ref-peek-path">
-        📄 {f.path}
+        <Icon name="file-text" /> {f.path}
         {f.line ? `:${f.line}` : ''}
       </b>
       <Code path={f.path} {...w} mark={f.line} />
@@ -352,7 +353,7 @@ function RefFileViewer({ messageId, index, onClose }: { messageId: number; index
   if (ref?.kind !== 'file') return null;
   const url = loaded ? f.url : repo ? fileUrl(repo.fullName, repo.defaultBranch, ref.path, ref.line) : null;
   return (
-    <Sheet label={`📄 ${ref.path}${ref.line ? `:${ref.line}` : ''}`} onClose={onClose} className="ref-file-viewer">
+    <Sheet label={<><Icon name="file-text" /> {ref.path}{ref.line ? `:${ref.line}` : ''}</>} onClose={onClose} className="ref-file-viewer">
       <div className="artifact-body" ref={body}>
         {f === null ? <p className="muted">Loading…</p> : typeof f === 'string' ? <p>{f}</p> : <Code path={f.path} from={1} lines={f.text.replace(/\r\n?/g, '\n').split('\n')} mark={f.line} />}
       </div>

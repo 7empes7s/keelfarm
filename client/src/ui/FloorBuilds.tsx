@@ -4,9 +4,21 @@ import { useMemo } from 'react';
 import { useStore } from '../store';
 import type { PreviewStatus } from '../../../shared/types';
 import { BUILD_LABEL, floorBuilds, type BuildCard, type BuildStatus } from './floorBuildCards';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import './floorBuilds.css';
 
-const GLYPH: Record<BuildStatus, string> = { live: '🟢', building: '🔨', qa: '🔍', fixing: '🔧', passed: '✅', failed: '❌', 'needs-you': '🙋', open: '🔀', merged: '🟣' };
+const GLYPH: Record<BuildStatus, IconName> = {
+  live: 'circle-dot',
+  building: 'hammer',
+  qa: 'search',
+  fixing: 'wrench',
+  passed: 'circle-check',
+  failed: 'circle-x',
+  'needs-you': 'hand',
+  open: 'git-merge',
+  merged: 'party-popper',
+};
 
 function action(preview: PreviewStatus | null): string {
   if (preview == null) return 'Watch them build';
@@ -36,7 +48,13 @@ export function FloorBuilds({ repoId }: { repoId: string }) {
             <div key={c.key} role="listitem" className="fb-item">
               <button className={`fb-card fb-${c.status}`} onClick={() => open(c)} title={c.pr ? `PR #${c.pr} ${c.title}` : c.title}>
                 <span className="fb-thumb" aria-hidden>
-                  {c.shot ? <img src={c.shot} alt="" loading="lazy" /> : <span className="fb-thumb-glyph">{c.status === 'live' ? '🖥️' : GLYPH[c.status]}</span>}
+                  {c.shot ? (
+                    <img src={c.shot} alt="" loading="lazy" />
+                  ) : (
+                    <span className="fb-thumb-glyph">
+                      <Icon name={c.status === 'live' ? 'monitor' : GLYPH[c.status]} />
+                    </span>
+                  )}
                   {c.preview === 'running' && <span className="fb-running">● live</span>}
                 </span>
                 <span className="fb-title">
@@ -50,7 +68,7 @@ export function FloorBuilds({ repoId }: { repoId: string }) {
                     </span>
                   )}
                   <span className="fb-chip">
-                    {GLYPH[c.status]} {BUILD_LABEL[c.status]}
+                    <Icon name={GLYPH[c.status]} /> {BUILD_LABEL[c.status]}
                   </span>
                 </span>
                 <span className="fb-open">{action(c.preview)} ›</span>

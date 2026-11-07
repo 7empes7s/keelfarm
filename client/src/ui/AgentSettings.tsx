@@ -7,6 +7,7 @@ import { CLAUDE_MODELS, effectiveModel, modelSuggestions } from '../../../shared
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { workerCli } from './floorRows';
 import { confirmDialog } from './Confirm';
+import { Icon } from './Icon';
 import { AgentTools } from './ToolsSettings';
 
 // One agent's setup (name, look, coding agent, model, effort), edited in place: the Team tab's row cells and the
@@ -104,9 +105,9 @@ export function HostSelect({ agent, id, style }: FieldProps) {
   };
   return (
     <select id={id} value={box ? 'box' : 'local'} disabled={busy} style={style} title={busy ? 'Move them once their task is done' : 'Where they work'} aria-label={id ? undefined : 'Works on'} onChange={(e) => void move(e.target.value as MachineHost)}>
-      <option value="local">🖥️ This computer</option>
+      <option value="local">This computer</option>
       <option value="box" disabled={!box && (!keySet || opencode)}>
-        ☁️ Upstash Box{!box && !keySet ? ' (connect Upstash in Settings first)' : !box && opencode ? " (OpenCode can't run there)" : ''}
+        Upstash Box{!box && !keySet ? ' (connect Upstash in Settings first)' : !box && opencode ? " (OpenCode can't run there)" : ''}
       </option>
     </select>
   );
@@ -156,8 +157,8 @@ export function EffortSelect({ agent, id, style }: FieldProps) {
 export function LookSelect({ agent, id }: FieldProps) {
   return (
     <select id={id} value={agent.look} title="Character look" aria-label={id ? undefined : 'Drawn as'} style={{ width: 'auto' }} onChange={(e) => void save(agent.id, { look: e.target.value as 'feminine' | 'masculine' })}>
-      <option value="feminine">👩 She</option>
-      <option value="masculine">👨 He</option>
+      <option value="feminine">She</option>
+      <option value="masculine">He</option>
     </select>
   );
 }
@@ -253,10 +254,10 @@ export function LookEditor({ agent }: { agent: Agent }) {
       </div>
       <div className="row wrap">
         <button type="button" className="btn btn-small" onClick={() => void save(agent.id, { style: randomStyle(agent) })}>
-          🎲 Shuffle
+          <Icon name="dices" /> Shuffle
         </button>
         <button type="button" className="btn btn-small btn-ghost" disabled={!agent.style} onClick={() => void save(agent.id, { style: null })}>
-          ↺ Back to their seeded look
+          <Icon name="rotate-ccw" /> Back to their seeded look
         </button>
         <span className="muted small">Accent: glasses frames, hats and the stripe.</span>
       </div>
@@ -329,7 +330,9 @@ export function AgentSetup({ agent }: { agent: Agent }) {
   return (
     <section className="card agent-setup" aria-label={`${agent.name}'s setup`}>
       <div className="row wrap">
-        <h3 className="grow">⚙️ Setup</h3>
+        <h3 className="grow">
+          <Icon name="settings" /> Setup
+        </h3>
         {isBusy(agent) && (
           <span className="chip chip-warn" role="status">
             Applies from their next task

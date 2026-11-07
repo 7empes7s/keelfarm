@@ -1,6 +1,8 @@
 // The manager's console's map (#102): five top tabs, each a group of sections shown one at a time beside a side menu
 // (a list you tap into on a phone), deep links like #settings/cloud-agents, the last section each tab showed, and the
 // side menu's search over every setting's label. Pure; ConsoleNav.tsx draws it.
+import type { IconName } from './icons';
+
 export type GroupId = 'work' | 'company' | 'ceo' | 'history' | 'settings';
 
 export type SectionId =
@@ -32,14 +34,14 @@ export type SectionId =
 
 export interface Group {
   id: GroupId;
-  icon: string;
+  icon: IconName;
   label: string;
 }
 
 export interface Section {
   id: SectionId;
   group: GroupId;
-  icon: string;
+  icon: IconName;
   label: string;
   /** Only in the 3D office's console, or only on a phone. */
   only?: 'office' | 'pocket';
@@ -48,39 +50,39 @@ export interface Section {
 }
 
 export const GROUPS: Group[] = [
-  { id: 'work', icon: '🏢', label: 'Work' },
-  { id: 'company', icon: '🛰️', label: 'Company' },
-  { id: 'ceo', icon: '🧠', label: 'CEO' },
-  { id: 'history', icon: '📜', label: 'History' },
-  { id: 'settings', icon: '⚙️', label: 'Settings' },
+  { id: 'work', icon: 'building-2', label: 'Work' },
+  { id: 'company', icon: 'satellite', label: 'Company' },
+  { id: 'ceo', icon: 'brain', label: 'CEO' },
+  { id: 'history', icon: 'scroll-text', label: 'History' },
+  { id: 'settings', icon: 'settings', label: 'Settings' },
 ];
 
 export const SECTIONS: Section[] = [
-  { id: 'floors', group: 'work', icon: '🏢', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices'] },
-  { id: 'issues', group: 'work', icon: '📝', label: 'Issues', only: 'office', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
-  { id: 'team', group: 'work', icon: '👩‍💻', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
-  { id: 'ops', group: 'company', icon: '🛰️', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Test lab'] },
-  { id: 'charter', group: 'company', icon: '🎯', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
-  { id: 'map', group: 'company', icon: '🗺️', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
-  { id: 'ceo', group: 'ceo', icon: '🧠', label: 'The CEO', find: ['Message the CEO', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
-  { id: 'ceo-settings', group: 'ceo', icon: '🎛️', label: 'CEO settings', find: ['Team changes from the CEO', 'I approve each one', 'Apply straight away', 'Company review every', 'Research time budget', 'Follow-ups', 'Staying awake, waits and consults'] },
-  { id: 'tools', group: 'ceo', icon: '🧰', label: 'Tools & skills', find: ['Plugins', 'Skills', 'MCP servers', 'Switches for', 'Lean sessions'] },
-  { id: 'history', group: 'history', icon: '📜', label: 'Sessions', find: ['Session history', 'Transcripts', 'Daily log entries'] },
-  { id: 'daily-log', group: 'history', icon: '🗂️', label: 'Daily log', find: ['Daily log folder', 'Keep transcripts for', 'History storage'] },
-  { id: 'timelapse', group: 'history', icon: '📼', label: 'Time-lapse', only: 'office', find: ['Replay the day', 'Since I was last here'] },
-  { id: 'agents', group: 'settings', icon: '🧑‍💻', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'Most agents per floor'] },
-  { id: 'projects', group: 'settings', icon: '🏗️', label: 'Every project', find: ['Version control', "Every project's playbook"] },
-  { id: 'runtime', group: 'settings', icon: '⌨️', label: 'How agents run', find: ['Real terminals', 'Agent SDK'] },
-  { id: 'office', group: 'settings', icon: '🏬', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
-  { id: 'profile', group: 'settings', icon: '👤', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
-  { id: 'cloud-agents', group: 'settings', icon: '☁️', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
-  { id: 'voice', group: 'settings', icon: '🔊', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text'] },
-  { id: 'outside', group: 'settings', icon: '🌦️', label: 'Weather & world', find: ['Weather', 'Your city', 'Keep it calm', 'World events'] },
-  { id: 'notifications', group: 'settings', icon: '🔔', label: 'Notifications', find: ['Push to my devices', 'Desktop notifications', 'Tell me when', 'Office address for links', 'Telegram', 'Channels'] },
-  { id: 'themes', group: 'settings', icon: '🎉', label: 'Themes', find: ['Holiday themes', 'Theme to show', 'Birthday'] },
-  { id: 'access', group: 'settings', icon: '♿', label: 'Accessibility', find: ['Captions', 'Caption size', 'Colour and status', 'Motion', 'UI scale', 'Readable font', 'High contrast', 'Keyboard and screen readers'] },
-  { id: 'pocket', group: 'settings', icon: '📱', label: 'Pocket mode', only: 'pocket', find: ['Open the 3D office'] },
-  { id: 'about', group: 'settings', icon: 'ℹ️', label: 'About this office', find: ['Version', 'Commit', 'GitHub account', "Agents' machines", 'Environment'] },
+  { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices'] },
+  { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', only: 'office', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
+  { id: 'team', group: 'work', icon: 'laptop', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
+  { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Test lab'] },
+  { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
+  { id: 'map', group: 'company', icon: 'map', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
+  { id: 'ceo', group: 'ceo', icon: 'brain', label: 'The CEO', find: ['Message the CEO', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
+  { id: 'ceo-settings', group: 'ceo', icon: 'sliders-horizontal', label: 'CEO settings', find: ['Team changes from the CEO', 'I approve each one', 'Apply straight away', 'Company review every', 'Research time budget', 'Follow-ups', 'Staying awake, waits and consults'] },
+  { id: 'tools', group: 'ceo', icon: 'toolbox', label: 'Tools & skills', find: ['Plugins', 'Skills', 'MCP servers', 'Switches for', 'Lean sessions'] },
+  { id: 'history', group: 'history', icon: 'scroll-text', label: 'Sessions', find: ['Session history', 'Transcripts', 'Daily log entries'] },
+  { id: 'daily-log', group: 'history', icon: 'archive', label: 'Daily log', find: ['Daily log folder', 'Keep transcripts for', 'History storage'] },
+  { id: 'timelapse', group: 'history', icon: 'film', label: 'Time-lapse', only: 'office', find: ['Replay the day', 'Since I was last here'] },
+  { id: 'agents', group: 'settings', icon: 'laptop', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'Most agents per floor'] },
+  { id: 'projects', group: 'settings', icon: 'hard-hat', label: 'Every project', find: ['Version control', "Every project's playbook"] },
+  { id: 'runtime', group: 'settings', icon: 'keyboard', label: 'How agents run', find: ['Real terminals', 'Agent SDK'] },
+  { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
+  { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
+  { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
+  { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text'] },
+  { id: 'outside', group: 'settings', icon: 'cloud-sun-rain', label: 'Weather & world', find: ['Weather', 'Your city', 'Keep it calm', 'World events'] },
+  { id: 'notifications', group: 'settings', icon: 'bell', label: 'Notifications', find: ['Push to my devices', 'Desktop notifications', 'Tell me when', 'Office address for links', 'Telegram', 'Channels'] },
+  { id: 'themes', group: 'settings', icon: 'party-popper', label: 'Themes', find: ['Holiday themes', 'Theme to show', 'Birthday'] },
+  { id: 'access', group: 'settings', icon: 'accessibility', label: 'Accessibility', find: ['Captions', 'Caption size', 'Colour and status', 'Motion', 'UI scale', 'Readable font', 'High contrast', 'Keyboard and screen readers'] },
+  { id: 'pocket', group: 'settings', icon: 'smartphone', label: 'Pocket mode', only: 'pocket', find: ['Open the 3D office'] },
+  { id: 'about', group: 'settings', icon: 'info', label: 'About this office', find: ['Version', 'Commit', 'GitHub account', "Agents' machines", 'Environment'] },
 ];
 
 export type Where = 'office' | 'pocket';

@@ -5,6 +5,8 @@ import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../
 import type { PreviewStatus, PreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
 import { atPath, channelLabel, channelLed, channelPulls, comparePath, newPathSync, onOfficeComputer, prAsPreview, QA_BADGE, qaShotUrl, reachable, relayPath, type Channel, type Side } from './channels';
 import { sendToCeo } from './chatSend';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { Panel } from './Panel';
@@ -31,9 +33,9 @@ const STEPS: { status: PreviewStatus; label: string }[] = [
 
 type Width = 'desktop' | 'tablet' | 'phone';
 const WIDTHS: [Width, string][] = [
-  ['phone', '📱 Phone'],
-  ['tablet', '▭ Tablet'],
-  ['desktop', '🖥 Desktop'],
+  ['phone', 'Phone'],
+  ['tablet', 'Tablet'],
+  ['desktop', 'Desktop'],
 ];
 
 // The last width picked, so reopening the viewer keeps it.
@@ -140,7 +142,9 @@ export function PreviewSettings({ repo, saveLabel = 'Save', onSaved }: { repo: R
           Environment: {envChars.toLocaleString('en-US')} of {PREVIEW_ENV_MAX_CHARS.toLocaleString('en-US')} characters (each variable counts as KEY=value).
         </p>
       )}
-      {error && <div className="term-error">⚠️ {error}</div>}
+      {error && (
+        <div className="term-error"><Icon name="triangle-alert" /> {error}</div>
+      )}
       <div className="row">
         <button className="btn btn-small btn-good" disabled={busy || (!dirty && !onSaved) || (unconfigured && !command.trim())}>
           {busy ? 'Saving…' : saveLabel}
@@ -229,9 +233,7 @@ function PreviewStage({
         {slow && !loaded && (
           <div className="app-frame-hint" role="status">
             <b>The app isn't showing up here.</b> It may refuse to be shown inside another page (X-Frame-Options or a CSP frame-ancestors rule).{' '}
-            <a href={src} target="_blank" rel="noreferrer">
-              Open it in a new tab ↗
-            </a>
+            <a href={src} target="_blank" rel="noreferrer">Open it in a new tab <Icon name="external-link" /></a>
             {!!shots?.length && (
               <>
                 <div className="small">QA's screenshots of it meanwhile:</div>
@@ -253,12 +255,12 @@ function PreviewStage({
     const at = STEPS.findIndex((x) => x.status === preview.status);
     return (
       <div className={`app-state ${compact ? 'app-state-compact' : ''}`} role="status">
-        <div className="app-state-icon app-spin">⚙️</div>
+        <div className="app-state-icon app-spin"><Icon name="settings" /></div>
         <h3>Starting {label}…</h3>
         <ol className="app-steps">
           {STEPS.map((s, i) => (
             <li key={s.status} className={i < at ? 'app-step-done' : i === at ? 'app-step-now' : ''}>
-              {i < at ? '✓' : i === at ? '●' : '○'} {s.label}
+              {i < at ? <Icon name="check" /> : i === at ? '●' : '○'} {s.label}
               {s.status === 'starting' && preview.port ? ` on port ${preview.port}` : ''}
             </li>
           ))}
@@ -270,22 +272,18 @@ function PreviewStage({
   if (preview.status === 'error') {
     return (
       <div className={`app-state app-state-left ${compact ? 'app-state-compact' : ''}`}>
-        <h3>⚠️ {label} didn't run</h3>
+        <h3><Icon name="triangle-alert" /> {label} didn't run</h3>
         <div className="term-error">{preview.error ?? 'The app stopped unexpectedly.'}</div>
         <pre className="term app-log" aria-label="Last output">
           {preview.logTail.length ? preview.logTail.join('\n') : '(no output)'}
         </pre>
         <div className="row wrap">
-          <button className="btn btn-good" disabled={busy} onClick={onStart}>
-            ↻ Try again
-          </button>
+          <button className="btn btn-good" disabled={busy} onClick={onStart}><Icon name="rotate-ccw" /> Try again</button>
           <button className="btn" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
-            ⚙️ Run settings
+            <Icon name="settings" /> Run settings
           </button>
           {onAsk && (
-            <button className="btn" onClick={onAsk}>
-              💬 Ask the CEO
-            </button>
+            <button className="btn" onClick={onAsk}><Icon name="message-circle" /> Ask the CEO</button>
           )}
         </div>
         {showSettings && <PreviewSettings repo={repo} />}
@@ -295,7 +293,7 @@ function PreviewStage({
   if (preview.status === 'unconfigured') {
     return (
       <div className="app-state app-state-left">
-        <h3>🛠️ How should the office run this app?</h3>
+        <h3><Icon name="wrench" /> How should the office run this app?</h3>
         <p className="muted">{preview.error ?? 'This floor has no package.json to fall back on.'} Give it a command that serves the app on the floor's port.</p>
         <PreviewSettings repo={repo} saveLabel="Save & start" onSaved={onStart} />
       </div>
@@ -303,20 +301,18 @@ function PreviewStage({
   }
   return (
     <div className={`app-state ${compact ? 'app-state-compact' : ''}`}>
-      <div className="app-state-icon">🖥️</div>
+      <div className="app-state-icon"><Icon name="monitor" /></div>
       <h3>{label} isn't running</h3>
       <p className="muted">
         {preview.pr
           ? `Start it to try the PR's head right here, beside ${repo.defaultBranch}. It runs from a worktree of its own and stops after a while unwatched.`
           : `Start it to use it right here. It runs from the floor's own preview worktree on port ${preview.port}.`}
       </p>
-      <button className="btn btn-good" disabled={busy} onClick={onStart}>
-        ▶ Start {label} (about 1 min)
-      </button>
+      <button className="btn btn-good" disabled={busy} onClick={onStart}><Icon name="play" /> Start {label} (about 1 min)</button>
       {!preview.pr && !compact && (
         <>
           <button className="btn btn-ghost btn-small" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
-            ⚙️ Run settings
+            <Icon name="settings" /> Run settings
           </button>
           {showSettings && (
             <div className="app-state-left app-settings">
@@ -354,17 +350,23 @@ function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel: Channe
   );
 }
 
-const CHECKS_LABEL: Record<PullInfo['checks'], string> = { passing: '✅ passing', failing: '❌ failing', pending: '⏳ running', none: 'none' };
-const CHECK_ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
+const CHECKS_BADGE: Record<PullInfo['checks'], { icon: IconName; text: string } | null> = {
+  passing: { icon: 'circle-check', text: 'passing' },
+  failing: { icon: 'circle-x', text: 'failing' },
+  pending: { icon: 'hourglass', text: 'running' },
+  none: null,
+};
+const CHECK_ICON: Record<'pass' | 'fail' | 'skip', IconName> = { pass: 'circle-check', fail: 'circle-x', skip: 'skip-forward' };
 
 /** The PR beside its app: GitHub's checks, and QA's latest report with its screenshots. */
 function QaPanel({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa?: QaView }) {
   const shots = qa?.shots ?? [];
+  const checksBadge = CHECKS_BADGE[pull.checks];
   return (
     <aside className="qa-side" aria-label={`PR #${pull.number}: checks and QA`}>
       <h4 className="qa-side-title">
         <a href={pull.url} target="_blank" rel="noreferrer">
-          PR #{pull.number} ↗
+          PR #{pull.number} <Icon name="external-link" />
         </a>{' '}
         {pull.title}
       </h4>
@@ -373,7 +375,14 @@ function QaPanel({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa?: QaVi
           +{pull.additions} −{pull.deletions}
         </span>
         <a href={`${pull.url}/checks`} target="_blank" rel="noreferrer">
-          Checks: {CHECKS_LABEL[pull.checks]}
+          Checks:{' '}
+          {checksBadge ? (
+            <>
+              <Icon name={checksBadge.icon} /> {checksBadge.text}
+            </>
+          ) : (
+            'none'
+          )}
         </a>
         {pull.isDraft && <span>draft</span>}
       </div>
@@ -382,11 +391,11 @@ function QaPanel({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa?: QaVi
           {pull.failedChecks.map((c) => (
             <li key={c.name}>
               {c.url ? (
-                <a href={c.url} target="_blank" rel="noreferrer">
-                  ❌ {c.name}
-                </a>
+                <a href={c.url} target="_blank" rel="noreferrer"><Icon name="circle-x" /> {c.name}</a>
               ) : (
-                `❌ ${c.name}`
+                <>
+                  <Icon name="circle-x" /> {c.name}
+                </>
               )}
             </li>
           ))}
@@ -395,12 +404,10 @@ function QaPanel({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa?: QaVi
       {qa ? (
         <>
           <div className="qa-side-status">
-            <span className={`qa-badge qa-badge-${qa.status}`}>{QA_BADGE[qa.status]}</span>
+            <span className={`qa-badge qa-badge-${qa.status}`}><Icon name={QA_BADGE[qa.status].icon} /> {QA_BADGE[qa.status].text}</span>
             <span className="muted small">round {qa.round}</span>
             {qa.commentUrl && (
-              <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">
-                Full report ↗
-              </a>
+              <a className="small" href={qa.commentUrl} target="_blank" rel="noreferrer">Full report <Icon name="external-link" /></a>
             )}
           </div>
           {qa.summary ? <Markdown className="qa-summary" text={qa.summary} /> : <p className="muted small">{qa.status === 'testing' ? 'QA is testing it now.' : 'No QA report yet.'}</p>}
@@ -408,7 +415,7 @@ function QaPanel({ repo, pull, qa }: { repo: RepoView; pull: PullInfo; qa?: QaVi
             <ul className="qa-checks">
               {qa.checks.map((c, i) => (
                 <li key={i} className={`qa-check qa-check-${c.result}`}>
-                  <span aria-label={c.result}>{CHECK_ICON[c.result]}</span>
+                  <span aria-label={c.result}><Icon name={CHECK_ICON[c.result]} /></span>
                   <div>
                     <b>{c.name}</b>
                     {c.details && <div className="muted small">{c.details}</div>}
@@ -662,11 +669,11 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
   };
   const startStop = active ? (
     <button className="btn btn-small btn-bad" disabled={busy} onClick={() => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel)))}>
-      ■ Stop
+      <Icon name="square" /> Stop
     </button>
   ) : (
     <button className="btn btn-small btn-good" disabled={busy || current.status === 'unconfigured'} onClick={() => void (channel == null ? startMain() : startPr())}>
-      ▶ Start
+      <Icon name="play" /> Start
     </button>
   );
   // On a phone: one button, compare's side, and the rest in ⋯.
@@ -688,12 +695,12 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
         label="More for the app"
         title={`${name} · ${label}`}
         items={[
-          { label: 'Open in browser ↗', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
-          { label: '⟳ Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
-          active && { label: '↻ Restart', onSelect: () => void (channel == null ? startMain() : startPr(true)) },
-          ...WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' ✓' : ''}`, onSelect: () => pickWidth(w) })),
-          prView && { label: comparing ? `⇆ Stop comparing` : `⇆ Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
-          prView && { label: showQa ? '📋 Hide the QA report' : '📋 QA report', onSelect: toggleQa },
+          { label: 'Open in browser', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
+          { label: 'Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
+          active && { label: 'Restart', onSelect: () => void (channel == null ? startMain() : startPr(true)) },
+          ...WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' (current)' : ''}`, onSelect: () => pickWidth(w) })),
+          prView && { label: comparing ? `Stop comparing` : `Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
+          prView && { label: showQa ? 'Hide the QA report' : 'QA report', onSelect: toggleQa },
         ]}
       />
     </div>
@@ -706,7 +713,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
       accent={repo.color}
       title={
         <span className="app-title">
-          <span className="app-title-name">🖥️ {name}</span>
+          <span className="app-title-name"><Icon name="monitor" /> {name}</span>
           <PreviewPill status={current.status} />
           {current.ref && current.status !== 'stopped' && current.status !== 'unconfigured' && (
             <span className="muted small app-title-ref">
@@ -732,7 +739,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
             </button>
           )}
           <button className="btn btn-small" disabled={current.status !== 'running' && !(comparing && main.status === 'running')} onClick={() => setReloads((n) => n + 1)} title="Reload the app">
-            ⟳ Reload
+            <Icon name="refresh-cw" /> Reload
           </button>
           <div className="seg" role="group" aria-label="Viewport width">
             {WIDTHS.map(([w, text]) => (
@@ -743,18 +750,12 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
           </div>
           <span className="spacer" />
           {prView && (
-            <button className={`btn btn-small ${showQa ? 'btn-on' : ''}`} aria-pressed={showQa} onClick={toggleQa}>
-              📋 QA
-            </button>
+            <button className={`btn btn-small ${showQa ? 'btn-on' : ''}`} aria-pressed={showQa} onClick={toggleQa}><Icon name="clipboard-list" /> QA</button>
           )}
           {openUrl ? (
-            <a className="btn btn-small" href={openUrl} target="_blank" rel="noreferrer">
-              Open in new tab ↗
-            </a>
+            <a className="btn btn-small" href={openUrl} target="_blank" rel="noreferrer">Open in new tab <Icon name="external-link" /></a>
           ) : (
-            <button className="btn btn-small" disabled>
-              Open in new tab ↗
-            </button>
+            <button className="btn btn-small" disabled>Open in new tab <Icon name="external-link" /></button>
           )}
         </div>}
       </div>
@@ -778,7 +779,7 @@ export function AppViewer({ repoId, pr, qa }: { repoId: string; pr?: number | nu
       {current.status === 'running' && !narrow && (
         <p className="muted small app-foot">
           Blank, or “refused to connect”? The app may block being framed: use <b>Open in new tab</b>. Keys typed in the app stay in the app, so <kbd>Esc</kbd> only closes this panel
-          when focus is outside it; <b>✕</b> always does.
+          when focus is outside it; the close button always does.
           {prView && ' A PR preview stops after a while with nobody watching it, and when its PR merges or closes.'}
         </p>
       )}

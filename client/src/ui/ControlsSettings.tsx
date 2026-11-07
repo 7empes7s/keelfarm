@@ -54,7 +54,9 @@ function GamepadSettings() {
   const name = useSyncExternalStore(subscribePads, padNow);
   return (
     <div className="mouse-settings">
-      <div className="pad-status">{name ? `🎮 ${name} is connected` : '🎮 No controller yet: plug one in and press a button.'}</div>
+      <div className="pad-status">
+        <Icon name="gamepad-2" /> {name ? `${name} is connected` : 'No controller yet: plug one in and press a button.'}
+      </div>
       <label className="mouse-sens">
         <span>Gamepad sensitivity</span>
         <input type="range" min={PAD_SENSITIVITY_MIN} max={PAD_SENSITIVITY_MAX} step={0.05} value={sens} onChange={(e) => setPadSensitivity(Number(e.target.value))} />
@@ -214,7 +216,7 @@ export function ControlsSettings() {
       )}
       {conflicts.length > 0 && (
         <p className="controls-clash" role="alert">
-          ⚠️ {conflicts.map((c) => `${keyLabel(c.code)} does both ${actionDef(c.actions[0]).label} and ${actionDef(c.actions[1]).label}`).join('; ')}. Give one of them another key.
+          <Icon name="triangle-alert" /> {conflicts.map((c) => `${keyLabel(c.code)} does both ${actionDef(c.actions[0]).label} and ${actionDef(c.actions[1]).label}`).join('; ')}. Give one of them another key.
         </p>
       )}
       <h3>Mouse</h3>
@@ -229,7 +231,7 @@ export function ControlsSettings() {
       <GamepadSettings />
       <div className="controls-reset">
         <button className="btn btn-small" onClick={reset}>
-          ↺ Reset to defaults
+          <Icon name="rotate-ccw" /> Reset to defaults
         </button>
       </div>
     </div>

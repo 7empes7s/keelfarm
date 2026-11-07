@@ -5,6 +5,8 @@ import { useId } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import type { EventFrequency, WeatherKind, WeatherMode, WeatherSettings, WorldEventSettings } from '../../../shared/outside';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 const MODES: [WeatherMode, string, string][] = [
   ['cycle', 'Calm cycle', 'a gentle, mostly fair day of its own, different every date'],
@@ -19,14 +21,24 @@ const FREQUENCIES: [EventFrequency, string][] = [
   ['chaos', 'Chaos (every minute or two)'],
 ];
 
-export const WEATHER_LABELS: Record<WeatherKind, string> = {
-  clear: '☀️ clear',
-  cloudy: '☁️ cloudy',
-  'light-rain': '🌦️ light rain',
-  'heavy-rain': '🌧️ heavy rain',
-  storm: '⛈️ thunderstorm',
-  fog: '🌫️ fog',
-  snow: '🌨️ snow',
+const WEATHER_WORDS: Record<WeatherKind, string> = {
+  clear: 'clear',
+  cloudy: 'cloudy',
+  'light-rain': 'light rain',
+  'heavy-rain': 'heavy rain',
+  storm: 'thunderstorm',
+  fog: 'fog',
+  snow: 'snow',
+};
+
+const WEATHER_ICONS: Record<WeatherKind, IconName> = {
+  clear: 'sun',
+  cloudy: 'cloud',
+  'light-rain': 'cloud-sun-rain',
+  'heavy-rain': 'cloud-rain',
+  storm: 'cloud-lightning',
+  fog: 'cloud-fog',
+  snow: 'cloud-snow',
 };
 
 function ago(at: number) {
@@ -44,7 +56,9 @@ export function OutsideSettings() {
   const real = weather.mode === 'real';
   return (
     <div className="card">
-      <h3>🌦️ Weather</h3>
+      <h3>
+        <Icon name="cloud-sun-rain" /> Weather
+      </h3>
       <div role="radiogroup" aria-label="Where the weather comes from">
         {MODES.map(([m, label, note]) => (
           <label key={m} className="toggle block">
@@ -70,7 +84,11 @@ export function OutsideSettings() {
           </label>
           <p className="small" aria-live="polite">
             {view.place && <b>{view.place.name}</b>}
-            {view.place && view.reading && `: ${WEATHER_LABELS[view.reading.kind]}, read ${ago(view.reading.at)}`}
+            {view.place && view.reading && (
+              <>
+                : <Icon name={WEATHER_ICONS[view.reading.kind]} /> {WEATHER_WORDS[view.reading.kind]}, read {ago(view.reading.at)}
+              </>
+            )}
             {view.place && !view.reading && !view.error && ': looking it up…'}
             {view.error && <span className="muted"> {view.error}</span>}
           </p>
@@ -80,7 +98,9 @@ export function OutsideSettings() {
           </p>
         </>
       )}
-      <h3>🛸 World events</h3>
+      <h3>
+        <Icon name="orbit" /> World events
+      </h3>
       <p className="muted small">Now and then something happens outside: a plane, a blimp with the office's news, fireworks at night, a UFO… and very rarely a friendly kaiju. Idle agents run to the windows to watch.</p>
       <label className="field">
         <span>How often</span>

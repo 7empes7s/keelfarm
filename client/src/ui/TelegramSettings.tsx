@@ -1,14 +1,14 @@
 // Settings → Notifications → Telegram (docs/pocket.md): the manager's own bot. BotFather's token goes in once and only
 // the bot's name comes back; pressing Start with the one-time link links their chat. Then the On switch, mirroring the
 // CEO chat, a test and Remove; the demo office adds buttons that play the manager on Telegram.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
+import { Icon } from './Icon';
 import { BOTFATHER, telegramSteps } from './telegramSteps';
 
-const MARK = { done: '✓', todo: '!', waiting: '·' } as const;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 export function TelegramSettings() {
@@ -19,7 +19,7 @@ export function TelegramSettings() {
   const [startUrl, setStartUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: ReactNode } | null>(null);
   const [demoText, setDemoText] = useState('');
   const errorId = useId();
   useEffect(() => {
@@ -49,7 +49,14 @@ export function TelegramSettings() {
       setResult(null);
       try {
         await api.testNotify('telegram');
-        setResult({ ok: true, text: '✓ Sent: check Telegram' });
+        setResult({
+          ok: true,
+          text: (
+            <>
+              <Icon name="check" /> Sent: check Telegram
+            </>
+          ),
+        });
       } catch (err) {
         setResult({ ok: false, text: errorText(err) });
       }
@@ -69,7 +76,9 @@ export function TelegramSettings() {
   return (
     <div className="notify-hook telegram">
       <div className="row wrap">
-        <b className="grow">✈️ Telegram</b>
+        <b className="grow">
+          <Icon name="plane" /> Telegram
+        </b>
         {view.linked && (
           <label className="toggle small">
             <input type="checkbox" checked={notify.channels.telegram} onChange={(e) => save({ channels: { ...notify.channels, telegram: e.target.checked } })} /> On
@@ -81,7 +90,7 @@ export function TelegramSettings() {
         {steps.map((s, i) => (
           <li key={s.id} className={`guide-step guide-${s.state}`}>
             <span className="guide-mark" aria-label={s.state === 'done' ? 'Done' : s.state === 'todo' ? 'To do' : 'Waiting'}>
-              {s.state === 'done' ? MARK.done : i + 1}
+              {s.state === 'done' ? <Icon name="check" /> : i + 1}
             </span>
             <div className="grow">
               <div className="guide-title">{s.title}</div>
@@ -203,10 +212,10 @@ export function TelegramSettings() {
           </form>
           <div className="row wrap">
             <button className="btn btn-small btn-ghost" onClick={() => void act(() => api.telegramDemo('approve'))}>
-              Press ✅ on the last team change
+              Press Approve on the last team change
             </button>
             <button className="btn btn-small btn-ghost" onClick={() => void act(() => api.telegramDemo('decline'))}>
-              Press ✋
+              Press Decline
             </button>
           </div>
         </details>

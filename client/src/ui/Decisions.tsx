@@ -5,13 +5,15 @@ import { chatDecisions, waitingDecisions, type Decision } from '../../../shared/
 import { ago } from '../../../shared/usage';
 import { Menu } from './Menu';
 import { sendToCeo } from './chatSend';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import './decisions.css';
 
 // Open decisions (#114, shared/decisions.ts): the chat's "Waiting on you" tray just above the message box, and the
 // CEO's open questions in the approvals. An option answers it the way its own buttons would: a reply to the message
-// that asked it, or the team change's or charter's own call. Not now / Drop it are in its ⋯.
+// that asked it, or the team change's or charter's own call. Not now / Drop it are in its menu.
 
-const ICON: Record<Decision['kind'], string> = { suggestion: '🧭', question: '❓', team: '👥', charter: '🎯' };
+const ICON: Record<Decision['kind'], IconName> = { suggestion: 'compass', question: 'circle-help', team: 'users', charter: 'target' };
 /** api() already toasted a failure. */
 const attempt = (fn: () => Promise<unknown>) => fn().catch(() => undefined);
 
@@ -42,7 +44,7 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
     <article className="decision-card" aria-label={d.question}>
       <div className="decision-head">
         <span className="decision-icon" aria-hidden>
-          {ICON[d.kind]}
+          <Icon name={ICON[d.kind]} />
         </span>
         <div className="grow">
           <div className="decision-q">{d.question}</div>
@@ -51,9 +53,9 @@ export function DecisionCard({ d, now, onPick, onJump }: { d: Decision; now: num
         <Menu
           label={`More for “${d.question}”`}
           items={[
-            { label: '⏰ Not now', hint: 'Back in 24 hours', onSelect: () => void attempt(() => api.decideOpen(d.id, 'snooze')) },
-            { label: '🗑 Drop it', hint: 'Never raised again', onSelect: () => void attempt(() => api.decideOpen(d.id, 'drop')) },
-            onJump && d.messageId !== null && { label: '↪ Jump to the message', onSelect: () => onJump(d.messageId!) },
+            { label: 'Not now', hint: 'Back in 24 hours', onSelect: () => void attempt(() => api.decideOpen(d.id, 'snooze')) },
+            { label: 'Drop it', hint: 'Never raised again', onSelect: () => void attempt(() => api.decideOpen(d.id, 'drop')) },
+            onJump && d.messageId !== null && { label: 'Jump to the message', onSelect: () => onJump(d.messageId!) },
           ]}
         />
       </div>
@@ -95,14 +97,16 @@ export function DecisionTray({ hide, typing, onPick, onJump }: { hide?: number; 
     return (
       <div className="decision-tray decision-tray-closed">
         <button type="button" className="decision-pill" aria-expanded={false} onClick={() => setOpen(true)}>
-          🧭 {label}
+          <Icon name="compass" /> {label}
         </button>
       </div>
     );
   return (
     <section className="decision-tray" aria-label="Waiting on you">
       <div className="decision-tray-head">
-        <b className="small grow">🧭 Waiting on you · {list.length}</b>
+        <b className="small grow">
+          <Icon name="compass" /> Waiting on you · {list.length}
+        </b>
         <button type="button" className="decision-collapse" aria-expanded aria-label={`Hide the ${label}`} onClick={() => setOpen(false)}>
           ⌄
         </button>
@@ -116,7 +120,7 @@ export function DecisionTray({ hide, typing, onPick, onJump }: { hide?: number; 
   );
 }
 
-export const DECISIONS_GROUP = '🧭 Questions from the CEO';
+export const DECISIONS_GROUP = 'Questions from the CEO';
 
 /** The CEO's open questions for the approvals (their team changes and charter changes are cards there already). */
 export function DecisionList({ heading }: { heading: (text: string) => ReactNode }) {

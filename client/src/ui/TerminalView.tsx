@@ -24,6 +24,7 @@ import { HistoryButton } from './HistoryTab';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
+import { Icon } from './Icon';
 import { useMode } from '../pocket/mode';
 import './termPhone.css';
 
@@ -196,13 +197,21 @@ export function TerminalView({ agentId }: { agentId: string }) {
 
   const notes = (
     <>
-      {agent.lastError && agent.status !== 'working' && !signIn && <div className="term-error">⚠️ {agent.lastError}</div>}
-      {agent.blocked && agent.status === 'working' && <div className="term-error">⛔ Blocked: {agent.blocked}. Answer it in the terminal.</div>}
+      {agent.lastError && agent.status !== 'working' && !signIn && (
+        <div className="term-error">
+          <Icon name="triangle-alert" /> {agent.lastError}
+        </div>
+      )}
+      {agent.blocked && agent.status === 'working' && (
+        <div className="term-error">
+          <Icon name="ban" /> Blocked: {agent.blocked}. Answer it in the terminal.
+        </div>
+      )}
       {signIn && (
         <div className="sign-in-note" role="status">
           <span className="grow">
             <b>
-              🔑 Sign {agent.name}'s {signIn} in
+              <Icon name="key-round" /> Sign {agent.name}'s {signIn} in
             </b>
             <br />
             {signIn === 'Codex'
@@ -211,7 +220,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
             Their cloud machine keeps the sign-in{agent.task && isBusy(agent) ? ', and their task starts once it’s done' : ''}.
           </span>
           <button className="btn btn-small" disabled={busy} title="Close this sign-in and show a new link" onClick={() => run(() => api.signIn(agent.id))}>
-            ↻ Start over
+            <Icon name="rotate-ccw" /> Start over
           </button>
         </div>
       )}
@@ -220,7 +229,9 @@ export function TerminalView({ agentId }: { agentId: string }) {
 
   const browser = agent.hasScreenshot && (
     <div className="browser">
-      <div className="browser-bar">🔒 {agent.browserUrl ?? 'about:blank'}</div>
+      <div className="browser-bar">
+        <Icon name="lock" /> {agent.browserUrl ?? 'about:blank'}
+      </div>
       <div className="browser-view" ref={shotView} tabIndex={0} role="region" aria-label="Their browser" />
       <div className="muted small">Latest Playwright screenshot{agent.screenshotAt ? ` · ${new Date(agent.screenshotAt).toLocaleTimeString()}` : ''}</div>
     </div>
@@ -245,7 +256,11 @@ export function TerminalView({ agentId }: { agentId: string }) {
               {l.text || ' '}
             </div>
           ))}
-          {working && <div className="term-line term-spin">✻ {agent.status === 'preparing' ? (agent.currentTool ?? 'Setting up worktree') : toolVerb(agent.currentTool) || 'Thinking'}… ({elapsed(agent.startedAt, null)})</div>}
+          {working && (
+            <div className="term-line term-spin">
+              <Icon name="asterisk" /> {agent.status === 'preparing' ? (agent.currentTool ?? 'Setting up worktree') : toolVerb(agent.currentTool) || 'Thinking'}… ({elapsed(agent.startedAt, null)})
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -274,7 +289,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
     >
       {phone && agent.terminal && (
         <button type="button" className="btn term-keys-toggle" aria-pressed={keysOn} aria-label="Terminal keys" title={keysOn ? 'Hide the terminal key bar' : 'Show a bar of terminal keys: Esc, Tab, arrows, Ctrl…'} onPointerDown={(e) => e.preventDefault()} onClick={() => setKeysOn(!keysOn)}>
-          ⌨
+          <Icon name="keyboard" />
         </button>
       )}
       <MessageBox value={text} onChange={setText} aria-label={`Message ${agent.name}`} title="Enter sends · Shift+Enter adds a new line" placeholder={placeholder} disabled={!canMessage} autoFocus={!agent.terminal && !phone} />
@@ -290,7 +305,7 @@ export function TerminalView({ agentId }: { agentId: string }) {
       <HistoryButton focus={{ agent: agent.id }} label={`${agent.name}'s past sessions and transcripts`} />
       {office && (
         <button className="btn btn-small btn-ghost" title={`Trail ${agent.name} with the camera wherever they go (a movement key or Esc gives you the controls back)`} onClick={() => followAgent(agent.id)}>
-          🎥 Follow
+          <Icon name="video" /> Follow
         </button>
       )}
     </>
@@ -303,14 +318,14 @@ export function TerminalView({ agentId }: { agentId: string }) {
       className="aw-more"
       items={[
         { label: details ? 'Hide the details' : 'Show the details', hint: 'Task, profile and setup', onSelect: () => setDetails(!details) },
-        { label: '🏅 Profile', hint: 'Their stats beside the floor’s', onSelect: () => openTab('profile') },
-        { label: '⚙️ Setup', hint: 'Coding agent, model, effort, tools', onSelect: () => openTab('setup') },
-        { label: '📜 History', hint: 'Past sessions and transcripts', onSelect: () => useStore.getState().openOverlay({ kind: 'manager', tab: 'history', history: { agent: agent.id } }) },
-        office && { label: '🎥 Follow with the camera', hint: 'A movement key or Esc gives you the controls back', onSelect: () => followAgent(agent.id) },
+        { label: 'Profile', hint: 'Their stats beside the floor’s', onSelect: () => openTab('profile') },
+        { label: 'Setup', hint: 'Coding agent, model, effort, tools', onSelect: () => openTab('setup') },
+        { label: 'History', hint: 'Past sessions and transcripts', onSelect: () => useStore.getState().openOverlay({ kind: 'manager', tab: 'history', history: { agent: agent.id } }) },
+        office && { label: 'Follow with the camera', hint: 'A movement key or Esc gives you the controls back', onSelect: () => followAgent(agent.id) },
         { label: 'A+ Bigger terminal text', onSelect: () => stepFontSize(1) },
         { label: 'A− Smaller terminal text', onSelect: () => stepFontSize(-1) },
-        working && { label: `■ Stop ${agent.name}…`, hint: 'Ends their session; a message picks it back up', danger: true, disabled: busy, onSelect: () => void stop() },
-        !working && agent.status !== 'idle' && { label: '↺ Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
+        working && { label: `Stop ${agent.name}…`, hint: 'Ends their session; a message picks it back up', danger: true, disabled: busy, onSelect: () => void stop() },
+        !working && agent.status !== 'idle' && { label: 'Clear desk…', hint: 'Drop their task so they take new work', danger: true, disabled: busy, onSelect: () => void clearDesk(agent) },
         { label: `Let ${agent.name} go…`, hint: 'Their worktree is removed', danger: true, disabled: busy, onSelect: () => void letGo(agent).then((gone) => gone && closeOverlay()) },
       ]}
     />
@@ -322,14 +337,19 @@ export function TerminalView({ agentId }: { agentId: string }) {
       <button type="button" className="aw-who" aria-expanded={details} aria-controls="aw-details" title={details ? 'Hide the details' : 'Task, profile and setup (or swipe up)'} {...swipe}>
         <span className="aw-name">
           {agent.name}
-          {signIn && <span title={`Waiting for you to sign ${signIn} in, in their terminal`}> 🔑</span>}
+          {signIn && (
+            <span title={`Waiting for you to sign ${signIn} in, in their terminal`}>
+              {' '}
+              <Icon name="key-round" />
+            </span>
+          )}
           {time && <span className="aw-time"> · {time}</span>}
         </span>
         <span className="aw-task">{taskLine(agent)}</span>
       </button>
       {working && (
         <button type="button" className="aw-icon aw-stop" aria-label={`Stop ${agent.name}…`} title={`Stop ${agent.name} (asks first)`} disabled={busy} onClick={() => void stop()}>
-          ■
+          <Icon name="square" />
         </button>
       )}
       {menu}

@@ -2,7 +2,7 @@
 // colour. Beside text it is 1.2em; an icon-only button sizes it iOS-style through --ds-icon (design.css). An icon is
 // decoration (aria-hidden) unless it is given a label; an icon-only button carries the label itself.
 import type { MouseEvent } from 'react';
-import { ICONS, type IconName } from './icons';
+import { ICONS, leadingIcon, type IconName } from './icons';
 
 export function Icon({ name, label, className }: { name: IconName; label?: string; className?: string }) {
   const Svg = ICONS[name];
@@ -15,6 +15,18 @@ export function Icon({ name, label, className }: { name: IconName; label?: strin
       role={label ? 'img' : undefined}
       focusable="false"
     />
+  );
+}
+
+/** Text from shared/ or saved data that may start with an emoji ("⏳ 2 tasks waiting…"): that emoji drawn as its icon. */
+export function IconText({ text }: { text: string }) {
+  const t = leadingIcon(text);
+  return t.icon ? (
+    <>
+      <Icon name={t.icon} /> {t.text}
+    </>
+  ) : (
+    <>{text}</>
   );
 }
 

@@ -4,6 +4,7 @@ import { fmtUsd } from '../ops';
 import { useStore, type Overlay } from '../store';
 import { kindLabel, OUTCOME_LABELS, utcDay, workLabel, type HistoryDetail, type HistoryEntry, type HistoryOutcome, type HistoryUsage, type TranscriptItem } from '../../../shared/history';
 import { EmptyState } from './EmptyState';
+import { Icon } from './Icon';
 import './history.css';
 
 // The console's 📜 History (#49): every session the office ran and every PR it merged, from the session history, loaded
@@ -38,7 +39,7 @@ const openHistory = (history: HistoryFocus) => useStore.getState().openOverlay({
 export function HistoryButton({ focus, label }: { focus: HistoryFocus; label: string }) {
   return (
     <button className="btn btn-small btn-ghost" title={label} onClick={() => openHistory(focus)}>
-      📜 History
+      <Icon name="scroll-text" /> History
     </button>
   );
 }
@@ -130,7 +131,7 @@ export function HistoryTab({ focus }: { focus?: HistoryFocus }) {
         </select>
         {pr !== undefined && (
           <button className="chip history-chip" title="Show every PR" onClick={() => setPr(undefined)}>
-            PR #{pr} ✕
+            PR #{pr} <Icon name="x" />
           </button>
         )}
       </div>
@@ -211,7 +212,7 @@ function HistorySession({ id, back }: { id: string; back: () => void }) {
                   <>
                     {' · '}
                     <a href={`${base}/issues/${e.issue}`} target="_blank" rel="noreferrer">
-                      issue #{e.issue} ↗
+                      issue #{e.issue} <Icon name="external-link" />
                     </a>
                   </>
                 )}
@@ -219,7 +220,7 @@ function HistorySession({ id, back }: { id: string; back: () => void }) {
                   <>
                     {' · '}
                     <a href={`${base}/pull/${e.pr}`} target="_blank" rel="noreferrer">
-                      PR #{e.pr} ↗
+                      PR #{e.pr} <Icon name="external-link" />
                     </a>
                   </>
                 )}
@@ -266,7 +267,19 @@ function Transcript({ items, cut }: { items: TranscriptItem[]; cut: boolean }) {
             ) : (
               <details>
                 <summary>
-                  <span className="history-who small">{it.role === 'tool' ? `🔧 ${it.tool}` : it.role === 'error' ? '⚠️ Error' : '↳ Result'}</span>
+                  <span className="history-who small">
+                    {it.role === 'tool' ? (
+                      <>
+                        <Icon name="wrench" /> {it.tool}
+                      </>
+                    ) : it.role === 'error' ? (
+                      <>
+                        <Icon name="triangle-alert" /> Error
+                      </>
+                    ) : (
+                      '↳ Result'
+                    )}
+                  </span>
                   <span className="history-peek">{it.text.split('\n')[0]}</span>
                 </summary>
                 <pre className="history-text">{it.text}</pre>
@@ -290,7 +303,7 @@ export function HistorySettings() {
   const set = (p: Parameters<typeof api.updateSettings>[0]) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
   return (
     <div className="card">
-      <h3>📜 Daily log & history</h3>
+      <h3><Icon name="scroll-text" /> Daily log & history</h3>
       <p className="muted small">After every session, the office adds an entry to the day's log file and keeps a copy of the session's transcript, so it outlives Claude Code's own cleanup.</p>
       <label className="field">
         <span>Daily log folder (empty: the machine's /opt/ai-vault/daily if it has one, else the office's own)</span>

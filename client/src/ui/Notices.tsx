@@ -11,7 +11,8 @@ import { noticeJump, noticeStep, type NoticeStep } from './noticeNav';
 import { openFrom } from './RefChips';
 import { Panel } from './Panel';
 import './notices.css';
-import { CloseButton } from './Icon';
+import { CloseButton, Icon } from './Icon';
+import { iconFor } from './icons';
 
 const SWIPE_PX = 80;
 
@@ -72,7 +73,7 @@ function NoticeBody({ n, pocket, after }: { n: NoticeView; pocket: boolean; afte
       }}
     >
       <span className="notice-icon" aria-hidden>
-        {noticeIcon(n.kind)}
+        <Icon name={iconFor(noticeIcon(n.kind), 'bell')} />
       </span>
       <span className="notice-main">
         <b className="notice-title">{n.title}</b>
@@ -223,7 +224,7 @@ export function NoticeBell({ className }: { className: string }) {
   const label = unread ? `Notifications, ${unread} unread` : 'Notifications';
   return (
     <button type="button" data-tour="bell" className={`notice-bell ${className}`} onClick={() => useStore.getState().openOverlay({ kind: 'notices' })} aria-label={label} title={label}>
-      🔔
+      <Icon name="bell" />
       {unread > 0 && <span className="badge badge-dot">{unread > 99 ? '99+' : unread}</span>}
     </button>
   );
@@ -241,7 +242,15 @@ export function NoticeCentre() {
   const groups = noticeGroups(notices, Date.now(), { ...(floor && { floor: Number(floor) }), ...(kind && { kind: kind as NoticeKind }) });
   const close = () => useStore.getState().openOverlay(null);
   return (
-    <Panel title="🔔 Notifications" onClose={close} className="notice-centre">
+    <Panel
+      title={
+        <>
+          <Icon name="bell" /> Notifications
+        </>
+      }
+      onClose={close}
+      className="notice-centre"
+    >
       <div className="notice-filters">
         <select aria-label="Floor" value={floor} onChange={(e) => setFloor(e.target.value)}>
           <option value="">Every floor</option>
@@ -255,7 +264,7 @@ export function NoticeCentre() {
           <option value="">Everything</option>
           {NOTICE_KINDS.map((k) => (
             <option key={k.id} value={k.id}>
-              {k.icon} {k.label}
+              {k.label}
             </option>
           ))}
         </select>

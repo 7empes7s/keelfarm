@@ -124,7 +124,7 @@ const charterEditor: View = {
   name: 'Charter editor',
   go: async (root) => {
     await pocketSection(root, 'Charter');
-    await root.getByRole('button', { name: '✏️ Edit', exact: true }).click();
+    await root.getByRole('button', { name: 'Edit', exact: true }).click();
   },
 };
 

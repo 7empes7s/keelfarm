@@ -7,6 +7,7 @@ import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLab
 import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import { InfoButton } from '../ui/InfoButton';
+import { Icon } from '../ui/Icon';
 
 /** A section, or 'menu': the list of them. */
 export type ConsoleSection = SectionId | 'menu';
@@ -43,7 +44,7 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
             ‹ Settings
           </button>
           <h2 className="cn-title">
-            <span aria-hidden>{open.icon}</span> {open.label}
+            <Icon name={open.icon} /> {open.label}
           </h2>
           <InfoButton screen={open.id} />
         </div>
@@ -69,13 +70,13 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
         GROUPS.map((g) => (
           <section key={g.id} className="cn-list" aria-label={g.label}>
             <h3 className="cn-list-head">
-              {g.icon} {g.label}
+              <Icon name={g.icon} /> {g.label}
             </h3>
             <ul>
               {sectionsIn(g.id, 'pocket').map((s) => (
                 <li key={s.id}>
                   <button className="cn-item cn-row" onClick={() => pick(s.id)}>
-                    <span aria-hidden>{s.icon}</span>
+                    <Icon name={s.icon} />
                     <span className="cn-item-text">{s.label}</span>
                     <Badge n={badges[s.id]} />
                     <span className="cn-chevron" aria-hidden>

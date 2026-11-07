@@ -11,6 +11,7 @@ import { TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
 import { AwakeSettings, FollowupSettings } from './CeoFollowups';
 import { openWhatsNew, useTour } from './tour';
+import { Icon } from './Icon';
 
 type SettingsPatch = Parameters<typeof api.updateSettings>[0];
 const set = (p: SettingsPatch) => void api.updateSettings(p).catch(() => undefined); // api() already toasted the error
@@ -22,7 +23,9 @@ export function AgentsSettings() {
   const defaultCli = terminal ? settings.defaultCli : 'claude';
   return (
     <div className="card">
-      <h3>🧑‍💻 Agents</h3>
+      <h3>
+        <Icon name="laptop" /> Agents
+      </h3>
       {terminal && (
         <label className="field">
           <span>Default coding agent</span>
@@ -107,7 +110,9 @@ export function CeoSettings() {
   const settings = useStore((s) => s.settings);
   return (
     <div className="card">
-      <h3>🎛️ CEO settings</h3>
+      <h3>
+        <Icon name="sliders-horizontal" /> CEO settings
+      </h3>
       <div role="radiogroup" aria-label="Team changes from the CEO">
         <div className="small">
           <b>Team changes from the CEO</b>
@@ -135,7 +140,9 @@ export function CeoSettings() {
         <span>Research time budget (minutes)</span>
         <input type="number" min={5} max={120} defaultValue={settings.researchMin} onBlur={(e) => set({ researchMin: Number(e.target.value) })} />
       </label>
-      <p className="muted small">Research (🔎 in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.</p>
+      <p className="muted small">
+        Research (<Icon name="search" /> in the chat, or "Research first" in a floor's brief) only starts when you ask. At the budget the CEO wraps up with what it has; like every CEO job, it waits while Claude's usage is paused.
+      </p>
       <FollowupSettings />
       <AwakeSettings />
     </div>
@@ -146,7 +153,9 @@ export function RuntimeSettings() {
   const runtime = useStore((s) => s.settings.runtime);
   return (
     <div className="card">
-      <h3>⌨️ How agents run</h3>
+      <h3>
+        <Icon name="keyboard" /> How agents run
+      </h3>
       <label className="toggle block">
         <input type="radio" checked={runtime === 'terminal'} onChange={() => set({ runtime: 'terminal' })} />
         <span>
@@ -172,7 +181,9 @@ export function CompanySettings() {
   const user = useStore((s) => s.user);
   return (
     <div className="card">
-      <h3>🏬 Company</h3>
+      <h3>
+        <Icon name="store" /> Company
+      </h3>
       <label className="field">
         <span>Your name</span>
         <input defaultValue={settings.managerName} placeholder={user ?? 'Boss'} onBlur={(e) => e.target.value !== settings.managerName && set({ managerName: e.target.value })} />
@@ -218,10 +229,10 @@ export function CompanySettings() {
             set({ tutorialStep: 0 });
           }}
         >
-          🧭 Replay the tour
+          <Icon name="compass" /> Replay the tour
         </button>
         <button className="btn btn-small" onClick={() => openWhatsNew()}>
-          ✨ What's new
+          <Icon name="sparkles" /> What's new
         </button>
       </div>
     </div>
@@ -237,7 +248,9 @@ export function AboutOffice() {
   const commit = useStore((s) => s.officeCommit);
   return (
     <div className="card">
-      <h3>ℹ️ About this office</h3>
+      <h3>
+        <Icon name="info" /> About this office
+      </h3>
       <dl className="cn-facts small">
         <dt>Version</dt>
         <dd>

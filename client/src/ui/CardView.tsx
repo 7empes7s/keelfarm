@@ -4,6 +4,8 @@ import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '
 import { elapsedLabel } from '../qaCard';
 import { bodyExcerpt, cardLabel, canPeel, locateCard } from '../world/whiteboard';
 import type { Col } from '../world/stickies';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { Key } from './Key';
 import { Markdown } from './Markdown';
 import { Panel } from './Panel';
@@ -12,8 +14,14 @@ import { Panel } from './Panel';
 // what it waits for, and for a PR its QA round, QA's latest report and checks, and CI. It reads the office's state as
 // it stands (and follows the card as it moves); nothing here asks the server for more.
 
-const COLUMN: Record<Col, string> = { backlog: '📋 Backlog', progress: '🔨 In progress', qa: '🔍 In QA', ready: '✅ Ready to merge', merged: '🎉 Merged' };
-const QA_ICON = { pass: '✓', fail: '✗', skip: '–' } as const;
+const COLUMN: Record<Col, { icon: IconName; text: string }> = {
+  backlog: { icon: 'clipboard-list', text: 'Backlog' },
+  progress: { icon: 'hammer', text: 'In progress' },
+  qa: { icon: 'search', text: 'In QA' },
+  ready: { icon: 'circle-check', text: 'Ready to merge' },
+  merged: { icon: 'party-popper', text: 'Merged' },
+};
+const QA_ICON: Record<'pass' | 'fail' | 'skip', IconName | null> = { pass: 'check', fail: 'x', skip: null };
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const since = (t: number | null | undefined) => (t && Number.isFinite(t) ? `since ${clock(t)} (${elapsedLabel(Date.now() - t)})` : '');
@@ -41,7 +49,14 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
 
   if (!repo || !at) {
     return (
-      <Panel title={`📌 ${cardLabel({ number, pr })}`} className="cardview">
+      <Panel
+        title={
+          <span>
+            <Icon name="pin" /> {cardLabel({ number, pr })}
+          </span>
+        }
+        className="cardview"
+      >
         <p className="muted">That card isn't on the board any more.</p>
       </Panel>
     );
@@ -62,15 +77,25 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
       accent={repo.color}
       title={
         <span>
-          📌 {cardLabel(card)} {card.title}
+          <Icon name="pin" /> {cardLabel(card)} {card.title}
         </span>
       }
     >
       <div className="cardview-tags">
-        <span className="pill">{COLUMN[col]}</span>
+        <span className="pill">
+          <Icon name={COLUMN[col].icon} /> {COLUMN[col].text}
+        </span>
         {card.note && <span className={`pill ${card.tone ? `cardview-${card.tone}` : ''}`}>{card.note}</span>}
-        {waits.length > 0 && <span className="pill cardview-warn">⏳ waits for #{waits.join(', #')}</span>}
-        {waiters.length > 0 && <span className="pill">🔗 #{waiters.join(', #')} wait{waiters.length === 1 ? 's' : ''} for this</span>}
+        {waits.length > 0 && (
+          <span className="pill cardview-warn">
+            <Icon name="hourglass" /> waits for #{waits.join(', #')}
+          </span>
+        )}
+        {waiters.length > 0 && (
+          <span className="pill">
+            <Icon name="link" /> #{waiters.join(', #')} wait{waiters.length === 1 ? 's' : ''} for this
+          </span>
+        )}
         {issue?.labels.map((l) => (
           <span key={l} className="pill cardview-label">
             {l}
@@ -99,12 +124,12 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
       <div className="cardview-foot">
         {url && (
           <a href={url} target="_blank" rel="noreferrer">
-            Open {cardLabel(card)} on GitHub ↗
+            Open {cardLabel(card)} on GitHub <Icon name="external-link" />
           </a>
         )}
         {card.qa?.commentUrl && (
           <a href={card.qa.commentUrl} target="_blank" rel="noreferrer">
-            QA report ↗
+            QA report <Icon name="external-link" />
           </a>
         )}
         <span className="spacer" />
@@ -127,9 +152,18 @@ function WhoHasIt({ card, col, filed, opened, mergedAt }: { card: KanbanCard; co
   if (col === 'progress') return <Who agent={a}>{a ? `${a.name} has it ${since(a.startedAt)}` : 'Someone has it'}</Who>;
   if (col === 'merged') return <Who agent={a}>{`Merged${mergedAt ? ` ${ago(mergedAt)}` : ''}${a ? ` · written by ${a.name}` : ''}`}</Who>;
   if (card.qa?.status === 'testing') {
-    return <Who agent={a}>{`🔍 ${a?.name ?? 'QA'} is testing it · round ${card.qa.round} ${since(card.qa.updatedAt)}`}</Who>;
+    return (
+      <Who agent={a}>
+        <Icon name="search" /> {a?.name ?? 'QA'} is testing it · round {card.qa.round} {since(card.qa.updatedAt)}
+      </Who>
+    );
   }
-  if (card.qa?.status === 'fixing') return <Who agent={a}>{`🔧 ${a?.name ?? 'An agent'} is fixing it ${since(card.qa.updatedAt)}`}</Who>;
+  if (card.qa?.status === 'fixing')
+    return (
+      <Who agent={a}>
+        <Icon name="wrench" /> {a?.name ?? 'An agent'} is fixing it {since(card.qa.updatedAt)}
+      </Who>
+    );
   return <Who agent={a}>{`${a ? `${a.name} wrote it` : 'Opened outside the office'}${opened ? ` · opened ${ago(opened)}` : ''}`}</Who>;
 }
 
@@ -138,7 +172,9 @@ function PrDetails({ card, pull }: { card: KanbanCard; pull?: { checks: string; 
   return (
     <div className="cardview-pr">
       <div className="cardview-section">
-        <h4 className="cardview-h">🔍 QA{q ? ` · round ${q.round}` : ''}</h4>
+        <h4 className="cardview-h">
+          <Icon name="search" /> QA{q ? ` · round ${q.round}` : ''}
+        </h4>
         {!q && <p className="muted small">Not sent to QA yet.</p>}
         {q?.summary && <Markdown text={q.summary} className="cardview-summary" />}
         {q && !q.summary && <p className="muted small">No report yet{q.status === 'testing' ? ': the test is running' : ''}.</p>}
@@ -146,7 +182,7 @@ function PrDetails({ card, pull }: { card: KanbanCard; pull?: { checks: string; 
           <ul className="cardview-checks">
             {q.checks.map((c, i) => (
               <li key={i} className={`cardview-check cardview-check-${c.result}`}>
-                <b>{QA_ICON[c.result]}</b> {c.name}
+                <b>{QA_ICON[c.result] ? <Icon name={QA_ICON[c.result]!} /> : '–'}</b> {c.name}
                 {c.details && <span className="muted"> · {c.details}</span>}
               </li>
             ))}
@@ -155,9 +191,23 @@ function PrDetails({ card, pull }: { card: KanbanCard; pull?: { checks: string; 
       </div>
       {pull && (
         <div className="cardview-section">
-          <h4 className="cardview-h">⚙️ CI</h4>
+          <h4 className="cardview-h">
+            <Icon name="settings" /> CI
+          </h4>
           <div className="small">
-            {pull.checks === 'passing' ? '✓ All checks pass' : pull.checks === 'failing' ? '✗ Checks failing' : pull.checks === 'pending' ? '… Checks running' : 'No checks'}
+            {pull.checks === 'passing' ? (
+              <>
+                <Icon name="check" /> All checks pass
+              </>
+            ) : pull.checks === 'failing' ? (
+              <>
+                <Icon name="x" /> Checks failing
+              </>
+            ) : pull.checks === 'pending' ? (
+              'Checks running'
+            ) : (
+              'No checks'
+            )}
             {pull.mergeable === 'CONFLICTING' && <span className="cardview-bad-text"> · conflicts with the base branch</span>}
             {pull.isDraft && <span className="muted"> · draft</span>}
           </div>
@@ -165,7 +215,9 @@ function PrDetails({ card, pull }: { card: KanbanCard; pull?: { checks: string; 
             <ul className="cardview-checks">
               {pull.failedChecks.map((c) => (
                 <li key={c.name} className="cardview-check cardview-check-fail">
-                  <b>✗</b>{' '}
+                  <b>
+                    <Icon name="x" />
+                  </b>{' '}
                   {c.url ? (
                     <a href={c.url} target="_blank" rel="noreferrer">
                       {c.name}

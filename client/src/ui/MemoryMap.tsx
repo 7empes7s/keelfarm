@@ -15,6 +15,7 @@ import { sendToCeo } from './chatSend';
 import { MapCanvas, type MapPaint } from './MapCanvas';
 import './memoryMap.css';
 import { CloseButton, Icon } from './Icon';
+import { iconFor } from './icons';
 
 const TYPE_LOOK: Record<MapNodeType, [string, string]> = {
   company: ['#ff9f1c', 'Company'],
@@ -172,7 +173,7 @@ export function MemoryMap() {
           )}
         </div>
         <button type="button" className="btn mm-filter-btn" onClick={() => setSheet('filters')} aria-label={`Filters and groups${nFilters ? `, ${nFilters} on` : ''}`}>
-          ⚙︎ Filters{nFilters > 0 && <span className="badge">{nFilters}</span>}
+          <Icon name="sliders-horizontal" /> Filters{nFilters > 0 && <span className="badge">{nFilters}</span>}
         </button>
       </div>
 
@@ -180,7 +181,7 @@ export function MemoryMap() {
         {insights.map((i) => (
           <button key={i.id} type="button" className={`mm-insight ${insight?.id === i.id ? 'mm-insight-on' : ''}`} aria-pressed={insight?.id === i.id} disabled={!i.ids.length} onClick={() => (setSelected(null), setInsight(insight?.id === i.id ? null : i))}>
             <span className="mm-insight-label">
-              {i.icon} {i.label}
+              <Icon name={iconFor(i.icon, 'info')} /> {i.label}
             </span>
             <b className="mm-insight-value mm-ellipsis">{i.value}</b>
           </button>
@@ -211,7 +212,7 @@ export function MemoryMap() {
 
       <div className="mm-time">
         <button type="button" className="btn btn-small mm-play" onClick={() => (playing ? setPlaying(false) : (setUntil(first), setPlaying(true)))} aria-label={playing ? 'Pause the replay' : 'Replay how the map grew'}>
-          {playing ? '⏸' : '▶'}
+          <Icon name={playing ? 'pause' : 'play'} />
         </button>
         <input type="range" min={first} max={Date.now()} step={3_600_000} value={until ?? Date.now()} aria-label="Show the map as it was on" aria-valuetext={until ? dayLabel(until) : 'now'} onChange={(e) => (setPlaying(false), setUntil(Number(e.target.value) >= Date.now() - 3_600_000 ? null : Number(e.target.value)))} />
         <span className="small mm-time-label">{until ? dayLabel(until) : 'Now'}</span>
@@ -387,7 +388,7 @@ function NodeSheet({ node, graph, onClose, onGo, onLocal, onOpen }: { node: MapN
         >
           <textarea value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} aria-label="Your message to the CEO" />
           <button type="submit" className="btn btn-small" disabled={!ask.trim()}>
-            💬 Send
+            <Icon name="message-circle" /> Send
           </button>
         </form>
       </div>

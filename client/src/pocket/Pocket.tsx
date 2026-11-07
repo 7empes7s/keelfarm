@@ -32,14 +32,15 @@ import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
-import { CloseButton } from '../ui/Icon';
+import { CloseButton, Icon, IconText } from '../ui/Icon';
+import type { IconName } from '../ui/icons';
 import './pocket.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
 const AppViewer = lazy(() => import('../ui/AppViewer').then((m) => ({ default: m.AppViewer })));
 const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.CardView })));
-// The console's tabs, loaded when ⚙️ is first opened.
+// The console's tabs, loaded when Settings is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
 
 export type PocketTab = 'company' | 'chat' | 'kanban' | 'team' | 'approvals';
@@ -84,12 +85,12 @@ function openOffice() {
 
 // ---------- company ----------
 
-const STAGES: [keyof Pipeline, string, string][] = [
-  ['building', '🔨', 'Building'],
-  ['qa', '🔍', 'QA'],
-  ['fixing', '🔧', 'Fixing'],
-  ['ready', '✅', 'Ready'],
-  ['needsYou', '⚠️', 'Needs you'],
+const STAGES: [keyof Pipeline, IconName, string][] = [
+  ['building', 'hammer', 'Building'],
+  ['qa', 'search', 'QA'],
+  ['fixing', 'wrench', 'Fixing'],
+  ['ready', 'circle-check', 'Ready'],
+  ['needsYou', 'triangle-alert', 'Needs you'],
 ];
 
 /** While work waits for memory (#115): a quiet note, no sound; a tap opens Mission control (the server's health). */
@@ -98,7 +99,9 @@ function MemoryBanner({ open }: { open: () => void }) {
   if (!text) return null;
   return (
     <button className="pk-banner pk-banner-tap" onClick={open} title="It starts by itself. Open Mission control">
-      <span>{text}</span>
+      <span>
+        <IconText text={text} />
+      </span>
       <span aria-hidden>›</span>
     </button>
   );
@@ -108,7 +111,7 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
   const connected = useStore((s) => s.connected);
   const loaded = useStore((s) => s.loaded);
   const usage = useStore((s) => s.usage);
-  const update = useStore((s) => (s.restarting ? '⟳ The office is restarting…' : officeUpdateChip(s.officeUpdate)));
+  const update = useStore((s) => (s.restarting ? 'The office is restarting…' : officeUpdateChip(s.officeUpdate)));
   const closedLast = useMode((s) => s.closedLast);
   const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   return (
@@ -121,9 +124,21 @@ function Banners({ settings }: { settings: (section: ConsoleSection) => void }) 
           </button>
         </div>
       )}
-      {!connected && <div className="pk-banner pk-banner-bad">{loaded ? '📡 Reconnecting to the office…' : '📡 Connecting to the office…'}</div>}
-      {usage.state === 'paused' && <div className="pk-banner pk-banner-bad">⏸ Claude's usage limit was reached: no new work starts{until ? ` until ${until}` : ''}.</div>}
-      {usage.state === 'pacing' && <div className="pk-banner">🐢 Pacing new work after a usage warning{until ? ` until ${until}` : ''}.</div>}
+      {!connected && (
+        <div className="pk-banner pk-banner-bad">
+          <Icon name="radio-tower" /> {loaded ? 'Reconnecting to the office…' : 'Connecting to the office…'}
+        </div>
+      )}
+      {usage.state === 'paused' && (
+        <div className="pk-banner pk-banner-bad">
+          <Icon name="pause" /> Claude's usage limit was reached: no new work starts{until ? ` until ${until}` : ''}.
+        </div>
+      )}
+      {usage.state === 'pacing' && (
+        <div className="pk-banner">
+          <Icon name="turtle" /> Pacing new work after a usage warning{until ? ` until ${until}` : ''}.
+        </div>
+      )}
       {update && <div className="pk-banner">{update}</div>}
       <MemoryBanner open={() => settings('ops')} />
     </>
@@ -158,7 +173,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       {waiting > 0 && (
         <button className="pk-callout" onClick={() => go('approvals')}>
           <span>
-            ⚠️ <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
+            <Icon name="triangle-alert" /> <b>{waiting}</b> decision{waiting === 1 ? '' : 's'} waiting on you
           </span>
           <span>Approvals →</span>
         </button>
@@ -166,11 +181,13 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       <TourInvite track={track} />
       <GuideCard />
       <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
-        <b className="small">🤖 Claude usage</b>
+        <b className="small">
+          <Icon name="bot" /> Claude usage
+        </b>
         <UsageBars />
       </button>
       <button className="btn pk-wide" onClick={() => settings('map')}>
-        🗺️ Memory map
+        <Icon name="map" /> Memory map
       </button>
       {ceo && (
         <div className="pk-card pk-ceo">
@@ -182,7 +199,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
             <div className="small">{ceo.status === 'working' ? (ceoInfo.job?.label ?? 'Working') : ceoInfo.queue.length ? `Next: ${ceoInfo.queue[0].label}` : 'Free'}</div>
           </div>
           <button className="btn btn-small" onClick={() => go('chat')}>
-            💬 Chat
+            <Icon name="message-circle" /> Chat
           </button>
         </div>
       )}
@@ -190,7 +207,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       <div className="pk-company-floors">
       {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
-        ➕ Move in a project
+        <Icon name="plus" /> Move in a project
       </button>
       {floors.map(({ repo, team, busy, p }) => (
         <div key={repo.id} className="pk-card pk-floor" style={{ ['--accent' as string]: repo.color }}>
@@ -201,7 +218,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
               <div className="muted small pk-ellipsis">{repo.summary || repo.description || repo.fullName}</div>
             </div>
             <button className="pk-icon-btn pk-floor-settings" onClick={() => settings('floors')} aria-label={`Floor ${repo.floor} settings`} title="Floor settings">
-              ⚙️
+              <Icon name="settings" />
             </button>
           </div>
           <div className="pk-pipeline" role="list" aria-label={`Floor ${repo.floor} pipeline`}>
@@ -209,7 +226,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
               <div key={k} role="listitem" className={`pk-stage ${p[k] ? '' : 'pk-stage-zero'} ${k === 'needsYou' && p[k] ? 'pk-stage-hot' : ''}`}>
                 <span className="pk-stage-n">
                   <span className="pk-stage-icon" aria-hidden>
-                    {icon}
+                    <Icon name={icon} />
                   </span>
                   {p[k]}
                 </span>
@@ -220,7 +237,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
           <FloorBuilds repoId={repo.id} />
           <div className="pk-floor-foot small">
             <span className="muted">
-              👥 {team} · {busy} busy · 📋 {p.backlog} in backlog
+              <Icon name="users" /> {team} · {busy} busy · <Icon name="clipboard-list" /> {p.backlog} in backlog
             </span>
             <span className="spacer" />
             <button className="btn btn-small" onClick={() => go('kanban', repo.id)}>
@@ -235,7 +252,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       </div>
       </div>
       <button className="btn pk-wide" onClick={openOffice}>
-        🏢 Open the 3D office
+        <Icon name="building-2" /> Open the 3D office
       </button>
       {demo && <div className="pk-center small muted">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO MODE: fake repos, fake agents'}</div>}
       {version && <div className="pk-center small muted">cubefarm {version}</div>}
@@ -284,7 +301,15 @@ function PocketOverlay() {
 
 function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {
   return (
-    <Panel title="⚙️ Settings" onClose={onClose} className="pk-settings ds-console">
+    <Panel
+      title={
+        <>
+          <Icon name="settings" /> Settings
+        </>
+      }
+      onClose={onClose}
+      className="pk-settings ds-console"
+    >
       <Suspense fallback={<p className="muted">Loading…</p>}>
         <PocketConsole section={section} pick={pick} history={history} repoId={repoId} wide={wide} />
       </Suspense>
@@ -423,12 +448,12 @@ export default function Pocket() {
     return () => void (document.title = 'cubefarm');
   }, [company]);
 
-  const tabs: [PocketTab, string, string, number][] = [
-    ['company', '📊', 'Company', 0],
-    ['chat', '💬', ceoName, tab === 'chat' || (wide && dock) ? 0 : unread],
-    ['kanban', '📋', 'Kanban', 0],
-    ['team', '👥', 'Team', 0],
-    ['approvals', '✋', 'Approvals', waiting],
+  const tabs: [PocketTab, IconName, string, number][] = [
+    ['company', 'chart-column', 'Company', 0],
+    ['chat', 'message-circle', ceoName, tab === 'chat' || (wide && dock) ? 0 : unread],
+    ['kanban', 'clipboard-list', 'Kanban', 0],
+    ['team', 'users', 'Team', 0],
+    ['approvals', 'hand', 'Approvals', waiting],
   ];
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
   const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} />;
@@ -436,7 +461,7 @@ export default function Pocket() {
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''}`}>
       <header className="pk-head">
         <span className="pk-logo" aria-hidden>
-          ✻
+          <Icon name="asterisk" />
         </span>
         <b className="pk-title">{company || 'cubefarm'}</b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
@@ -449,7 +474,7 @@ export default function Pocket() {
         {usage !== 'normal' && (
           // Only its icon: the header's buttons need the room (the Company tab's banner says it in words).
           <span className="chip chip-warn" title={usage === 'paused' ? 'Paused by the usage limit' : 'Pacing new work'}>
-            {usage === 'paused' ? '⏸' : '🐢'}
+            <Icon name={usage === 'paused' ? 'pause' : 'turtle'} />
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
@@ -459,11 +484,11 @@ export default function Pocket() {
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} />}
         {wide ? (
           <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>
-            🏢 3D office <kbd>{switchKey}</kbd>
+            <Icon name="building-2" /> 3D office <kbd>{switchKey}</kbd>
           </button>
         ) : (
           <button data-tour="console" className="pk-icon-btn" onClick={() => setSettings('menu')} aria-label="Settings and notifications" title="Settings and notifications">
-            ⚙️
+            <Icon name="settings" />
           </button>
         )}
       </header>
@@ -485,7 +510,7 @@ export default function Pocket() {
                 onClick={() => (docked ? setDock(!dock) : setTab(k))}
               >
                 <span className="pk-tab-icon">
-                  {icon}
+                  <Icon name={icon} />
                   {badge > 0 && <span className="badge badge-dot">{badge}</span>}
                 </span>
                 <span className="pk-tab-label">{label}</span>
@@ -494,7 +519,9 @@ export default function Pocket() {
           })}
           {wide && (
             <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={() => setSettings(settings ? null : 'menu')} title="Settings and notifications">
-              <span className="pk-tab-icon">⚙️</span>
+              <span className="pk-tab-icon">
+                <Icon name="settings" />
+              </span>
               <span className="pk-tab-label">Console</span>
             </button>
           )}
@@ -505,7 +532,7 @@ export default function Pocket() {
               <div className="pk-page">
                 <p>The office isn't set up yet. Finish the setup in the 3D office (on a computer is easiest), then come back.</p>
                 <button className="btn" onClick={openOffice}>
-                  🏢 Open the 3D office
+                  <Icon name="building-2" /> Open the 3D office
                 </button>
               </div>
             ) : (
@@ -530,7 +557,9 @@ export default function Pocket() {
         {wide && dock && (
           <aside className="pk-dock" aria-label={`Chat with ${ceoName}`}>
             <div className="pk-dock-head">
-              <b className="pk-ellipsis">💬 {ceoName}</b>
+              <b className="pk-ellipsis">
+                <Icon name="message-circle" /> {ceoName}
+              </b>
               <span className="spacer" />
               <div className="pk-head-tools" ref={setChatTools} />
               <CloseButton className="pk-dock-x" onClick={() => setDock(false)} label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'} />

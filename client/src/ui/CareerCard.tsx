@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { avgFixRounds, badges, knownFor, mergesThisWeek, passRate, profileStats, rank, tenureDays, weeklyMerges, type CareerView } from '../../../shared/careers';
 import { agentsOnRepo, useStore, type Agent } from '../store';
+import { Icon, IconText } from './Icon';
 import { drawPortrait } from './portrait';
 import './charter.css'; // the stat cards (docs/design.md)
 
@@ -66,7 +67,9 @@ function CareerCard({ agent, compact = false }: { agent: Agent; compact?: boolea
           </div>
           {c.firstPass >= 10 && (
             <div className="career-badges">
-              <span className="career-badge career-star">⭐ 10 first-time passes</span>
+              <span className="career-badge career-star">
+                <Icon name="star" /> 10 first-time passes
+              </span>
             </div>
           )}
           <div className="career-known">“{knownFor(c)}”</div>
@@ -158,7 +161,7 @@ export function AgentProfile({ agent }: { agent: Agent }) {
         <div className="career-badges">
           {earned.map((b) => (
             <span key={b} className="career-badge">
-              {b}
+              <IconText text={b} />
             </span>
           ))}
         </div>
@@ -245,14 +248,16 @@ export function TeamStats() {
     <th key={key} title={title} aria-sort={sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
       <button className="sort-btn" onClick={() => setSort({ key, dir: sort.key === key ? (-sort.dir as 1 | -1) : key === 'name' || key === 'floor' ? 1 : -1 })}>
         {label}
-        {sort.key === key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
+        {sort.key === key ? (sort.dir === 1 ? <Icon name="chevron-up" /> : <Icon name="chevron-down" />) : ''}
       </button>
     </th>
   );
   return (
     <div className="card team-stats">
       <div className="row">
-        <b className="grow">🏅 Careers</b>
+        <b className="grow">
+          <Icon name="medal" /> Careers
+        </b>
         <span className="muted small">Counted from what the office sees: PRs, QA rounds, fixes and merges. Look at a desk for a moment to see its card.</span>
       </div>
       <div className="team-stats-scroll">

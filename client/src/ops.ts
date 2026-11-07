@@ -50,12 +50,12 @@ export const fmtPct = (x: number | null) => (x === null ? '—' : `${Math.round(
 /** Dollars: "$4.20", "$0.35"; whole dollars from $100. */
 export const fmtUsd = (n: number) => (n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`);
 
-/** The HUD's chip while new work is held back (null at full speed), e.g. "🐢 Paced until Tue 00:00: new issues start when fewer than 3 sessions run". */
+/** The HUD's chip while new work is held back (null at full speed), e.g. "Paced until Tue 00:00: new issues start when fewer than 3 sessions run". */
 export function usageChip(u: UsageView, pacingSessions: number, now: number): string | null {
   if (u.state === 'normal' || u.until === null) return null;
   const until = clock(u.until, now);
-  if (u.state === 'paused') return `⏸ Paused until ${until}: at Claude's usage limit, nothing new starts`;
-  return `🐢 Paced until ${until}: new issues start when fewer than ${pacingSessions} session${pacingSessions === 1 ? '' : 's'} run`;
+  if (u.state === 'paused') return `Paused until ${until}: at Claude's usage limit, nothing new starts`;
+  return `Paced until ${until}: new issues start when fewer than ${pacingSessions} session${pacingSessions === 1 ? '' : 's'} run`;
 }
 
 /** The usage meter's headline and details: the state, and the last warning's limit, fill and reset time. */

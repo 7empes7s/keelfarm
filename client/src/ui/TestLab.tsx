@@ -3,6 +3,7 @@
 // the console's Floors tab (so pocket mode shows it too); and its settings (Settings → Office).
 import { useStore } from '../store';
 import type { LabJobView, TestLabSettings } from '../../../shared/testLab';
+import { Icon } from './Icon';
 import './testLab.css';
 
 const ago = (at: number) => `${Math.max(0, Math.round((Date.now() - at) / 60_000))} min ago`;
@@ -32,7 +33,7 @@ export function TestLabCard() {
     <div className="card office-card">
       <div className="row wrap">
         <span className="floor-badge office-badge" aria-hidden>
-          🧪
+          <Icon name="flask-conical" />
         </span>
         <div className="grow">
           <b>Test lab</b>{' '}
@@ -52,7 +53,9 @@ export function TestLabCard() {
               {lab.recent.slice(0, 6).map((r) => (
                 <li key={r.id} className="row wrap small">
                   {r.shot && <img className="lab-thumb" src={`/api/testlab/shot/${r.id}`} alt={`Screenshot: ${r.title}`} loading="lazy" />}
-                  <span className={r.ok ? 'office-state-ok' : 'office-state-bad'}>{r.ok ? '✓' : '✗'}</span>
+                  <span className={r.ok ? 'office-state-ok' : 'office-state-bad'}>
+                    <Icon name={r.ok ? 'check' : 'x'} />
+                  </span>
                   <span className="grow">
                     {r.title} · {r.summary} · {ago(r.endedAt)}
                   </span>

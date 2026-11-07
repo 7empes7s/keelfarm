@@ -1,6 +1,6 @@
 // Settings → Notifications (docs/pocket.md): which events, the office URL messages link to, this device (desktop
 // notifications, Web Push), ntfy and Telegram (TelegramSettings.tsx). Its topic URL and token are write-only: the browser sees a hint of them.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { NOTIFY_EVENTS } from '../../../shared/notify';
@@ -12,6 +12,7 @@ import { currentPush, disablePush, pushSupport } from '../pwa';
 import { ChannelHealth, NotifyGuide, NtfyQuick } from './NotifyGuide';
 import { suggestOfficeUrl } from './notifySteps';
 import { TelegramSettings } from './TelegramSettings';
+import { Icon } from './Icon';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md';
 
@@ -33,12 +34,20 @@ type Save = (patch: Partial<Notify>) => void;
 
 /** A Test button's answer, shown beside it. */
 function useTest(channel: NotifyChannel) {
-  const [state, setState] = useState<{ busy: boolean; result: string | null; ok: boolean }>({ busy: false, result: null, ok: false });
+  const [state, setState] = useState<{ busy: boolean; result: ReactNode | null; ok: boolean }>({ busy: false, result: null, ok: false });
   const run = async () => {
     setState({ busy: true, result: null, ok: false });
     try {
       await api.testNotify(channel);
-      setState({ busy: false, result: '✓ Sent', ok: true });
+      setState({
+        busy: false,
+        result: (
+          <>
+            <Icon name="check" /> Sent
+          </>
+        ),
+        ok: true,
+      });
     } catch (err) {
       setState({ busy: false, result: err instanceof Error ? err.message : String(err), ok: false });
     }
@@ -46,7 +55,7 @@ function useTest(channel: NotifyChannel) {
   return { ...state, run };
 }
 
-function TestResult({ result, ok }: { result: string | null; ok: boolean }) {
+function TestResult({ result, ok }: { result: ReactNode | null; ok: boolean }) {
   if (!result) return null;
   return (
     <span className={`small ${ok ? 'notify-ok' : 'term-error'}`} role="status">
@@ -90,7 +99,7 @@ function WebhookRow({ hook, notify, save }: { hook: (typeof WEBHOOKS)[number]; n
       {view.set && !editing ? (
         <div className="row wrap">
           <span className="grow small">
-            🔑 Saved <code>{view.hint}</code>
+            <Icon name="key-round" /> Saved <code>{view.hint}</code>
           </span>
           <button className="btn btn-small" disabled={test.busy} onClick={() => void test.run()}>
             {test.busy ? 'Sending…' : 'Test'}
@@ -206,7 +215,11 @@ function ThisDevice({ notify, save }: { notify: Notify; save: Save }) {
         </div>
         <p className="muted small">From any browser with the office open in a background tab.</p>
         <div className="row wrap">
-          {permission === 'granted' && <span className="small grow">✓ Allowed in this browser</span>}
+          {permission === 'granted' && (
+            <span className="small grow">
+              <Icon name="check" /> Allowed in this browser
+            </span>
+          )}
           {permission === 'denied' && <span className="small grow term-error">Blocked in this browser: allow notifications for this site in its settings.</span>}
           {permission === 'unsupported' && <span className="small grow muted">This browser can't show notifications.</span>}
           {permission === 'default' && (
@@ -238,7 +251,9 @@ export function NotifySettings() {
   }, [suggested]);
   return (
     <div className="card notify-settings">
-      <h3>🔔 Notifications</h3>
+      <h3>
+        <Icon name="bell" /> Notifications
+      </h3>
       <p className="muted small">What the office tells you when you're not looking. At most one of each kind a minute; a burst arrives as one summary.</p>
       <div className="notify-events" role="group" aria-label="Tell me when">
         {NOTIFY_EVENTS.map((e) => (

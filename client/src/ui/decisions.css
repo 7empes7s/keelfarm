@@ -72,8 +72,8 @@
   min-width: 0;
 }
 .decision-icon {
-  font-size: var(--ds-text-lg);
-  line-height: var(--ds-leading-tight);
+  display: inline-flex;
+  --ds-icon: var(--ds-icon-md);
 }
 .decision-q {
   font-weight: var(--ds-weight-strong);

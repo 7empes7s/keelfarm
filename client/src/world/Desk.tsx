@@ -415,8 +415,8 @@ export const Desk = memo(function Desk({
             agent.role === 'ceo'
               ? `Open ${agent.name}'s desk (CEO) · P texts them from anywhere`
               : signIn
-                ? `🔑 Sign ${agent.name}'s ${signIn} in, in their terminal`
-                : `View ${agent.name}'s terminal · ⚙️ Setup inside`,
+                ? `Sign ${agent.name}'s ${signIn} in, in their terminal`
+                : `View ${agent.name}'s terminal · Setup inside`,
           action: { kind: 'terminal', agentId: agent.id },
         }
       : full || spare

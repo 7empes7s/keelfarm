@@ -5,13 +5,15 @@ import { costInsights, KIND_GROUP_LABELS, kindGroup, wasteGroups, type CostItem,
 import { dayKey } from '../../../shared/journal';
 import { ago } from '../../../shared/usage';
 import type { RepoView } from '../../../shared/types';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 // Mission control → Where the plan goes (#106): the insight strip, the most expensive issues as ranked cards and the
 // waste grouped by cause. The numbers are shared/costs.ts's; these only draw them (docs/design.md: stat card, ranked
 // card, share bar).
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
-const KIND_ICON: Record<KindGroup, string> = { build: '🔨', qa: '🔍', fix: '🔧', ceo: '👔' };
+const KIND_ICON: Record<KindGroup, IconName> = { build: 'hammer', qa: 'search', fix: 'wrench', ceo: 'briefcase-business' };
 const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
 /** ↑ 24% / ↓ 10%, red when the cost went up. */
@@ -122,7 +124,7 @@ export function InsightStrip({ view, floorName, onCause }: { view: CostsView; fl
 const issueTitle = (repo: RepoView | undefined, issue: number | null, pr: number | null) =>
   (issue !== null ? repo?.issues.find((x) => x.number === issue)?.title : undefined) ?? (pr !== null ? repo?.pulls.find((x) => x.number === pr)?.title : undefined);
 
-/** #12 ↗ and PR #40 ↗, linking to GitHub. */
+/** #12 and PR #40, linking to GitHub. */
 function WorkChips({ repo, issue, pr }: { repo: RepoView | undefined; issue: number | null; pr: number | null }) {
   const gh = repo && `https://github.com/${repo.fullName}`;
   return (
@@ -130,7 +132,7 @@ function WorkChips({ repo, issue, pr }: { repo: RepoView | undefined; issue: num
       {issue !== null &&
         (gh ? (
           <a className="costs-chip" href={`${gh}/issues/${issue}`} target="_blank" rel="noreferrer">
-            #{issue} ↗
+            #{issue} <Icon name="external-link" />
           </a>
         ) : (
           <span className="costs-chip">#{issue}</span>
@@ -138,7 +140,7 @@ function WorkChips({ repo, issue, pr }: { repo: RepoView | undefined; issue: num
       {pr !== null &&
         (gh ? (
           <a className="costs-chip" href={`${gh}/pull/${pr}`} target="_blank" rel="noreferrer">
-            PR #{pr} ↗
+            PR #{pr} <Icon name="external-link" />
           </a>
         ) : (
           <span className="costs-chip">PR #{pr}</span>
@@ -156,13 +158,13 @@ function FloorChip({ repo }: { repo: RepoView | undefined }) {
   );
 }
 
-/** The 📋 in a card's corner: the floor's Kanban. */
+/** The Kanban icon in a card's corner: the floor's Kanban. */
 function KanbanJump({ repo }: { repo: RepoView | undefined }) {
   const openOverlay = useStore((s) => s.openOverlay);
   if (!repo) return null;
   return (
     <button className="costs-corner" aria-label={`Floor ${repo.floor}'s Kanban`} title={`Floor ${repo.floor}'s Kanban`} onClick={() => openOverlay({ kind: 'kanban', repoId: repo.id })}>
-      📋
+      <Icon name="clipboard-list" />
     </button>
   );
 }
@@ -238,7 +240,7 @@ function WasteSession({ items, usd, repo }: { items: CostWaste[]; usd: number; r
         <span className="costs-session-head">
           <b className="costs-usd">{fmtUsd(usd)}</b>
           <span title={KIND_GROUP_LABELS[g]} aria-label={KIND_GROUP_LABELS[g]}>
-            {KIND_ICON[g]}
+            <Icon name={KIND_ICON[g]} />
           </span>
           <span className="costs-who">
             <span className="costs-avatar" aria-hidden="true">

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { SCREEN_HELP, type ScreenId } from './screenHelp';
 import { Sheet } from './Sheet';
 import { openWhatsNew } from './tour';
+import { Icon } from './Icon';
 
 export function InfoButton({ screen }: { screen: ScreenId }) {
   const [open, setOpen] = useState(false);
@@ -10,10 +11,18 @@ export function InfoButton({ screen }: { screen: ScreenId }) {
   return (
     <>
       <button className="info-btn" data-tour="info" onClick={() => setOpen(true)} aria-label={`What can I do on ${h.title}?`} title="What can I do here?">
-        ⓘ
+        <Icon name="info" />
       </button>
       {open && (
-        <Sheet title={`ⓘ ${h.title}`} onClose={() => setOpen(false)} className="info-sheet">
+        <Sheet
+          title={
+            <>
+              <Icon name="info" /> {h.title}
+            </>
+          }
+          onClose={() => setOpen(false)}
+          className="info-sheet"
+        >
           <p>{h.shows}</p>
           <h3 className="info-h">What you can do</h3>
           <ol className="info-list">
@@ -23,7 +32,7 @@ export function InfoButton({ screen }: { screen: ScreenId }) {
           </ol>
           <div className="row wrap">
             <a className="btn btn-small" href={h.docs} target="_blank" rel="noreferrer">
-              📖 Read more in the docs ↗
+              <Icon name="book-open" /> Read more in the docs <Icon name="external-link" />
             </a>
             <button
               className="btn btn-small"
@@ -32,7 +41,7 @@ export function InfoButton({ screen }: { screen: ScreenId }) {
                 openWhatsNew();
               }}
             >
-              ✨ What's new
+              <Icon name="sparkles" /> What's new
             </button>
           </div>
         </Sheet>

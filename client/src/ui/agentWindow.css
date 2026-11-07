@@ -34,6 +34,7 @@
   font-size: 9px;
   font-weight: var(--ds-weight-strong);
   line-height: 1;
+  --ds-icon: 11px;
 }
 .aw-ring-working {
   --ring: var(--st-working, #74c0fc);
@@ -117,6 +118,7 @@
   font-size: var(--ds-text-md);
   font-weight: var(--ds-weight-strong);
   cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
 }
 .aw-stop {
   background: var(--ds-bad-fill);

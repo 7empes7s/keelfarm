@@ -1110,8 +1110,7 @@ input.inline:focus {
   overflow: auto;
 }
 .start-logo {
-  font-size: 4rem;
-  line-height: 1;
+  --ds-icon: 4rem;
   color: var(--accent);
   animation: spin 12s linear infinite;
   display: inline-block;
@@ -2081,6 +2080,7 @@ input.inline:focus {
 .app-state-icon {
   font-size: 2.6rem;
   line-height: 1;
+  --ds-icon: 2.6rem;
 }
 .app-spin {
   animation: spin 2.4s linear infinite;
@@ -2651,7 +2651,7 @@ input.inline:focus {
   font-size: 1.9rem;
 }
 .wizard-icon {
-  font-size: 3rem;
+  --ds-icon: 3rem;
   line-height: 1.1;
 }
 .wizard .start-logo {
@@ -3105,10 +3105,12 @@ input.inline:focus {
   width: 30px;
   height: 30px;
   padding: 0;
-  font-size: 0.95rem;
-  line-height: 1;
-  background: var(--paper);
-  border: 2px solid var(--ds-outline);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--ds-line);
   border-radius: 50%;
   box-shadow: 0 0 0 0 rgba(255, 138, 91, 0.7);
   cursor: pointer;
@@ -4127,13 +4129,17 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 2px solid var(--ds-outline);
+  border: 1px solid var(--ds-line);
   border-radius: 50%;
-  background: var(--ds-surface-raised);
+  background: var(--ds-surface-sunken);
   color: var(--ink);
   font-size: 1.05rem;
   line-height: 1;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
 }
 .chat-tool {
   border-radius: 12px;
@@ -4223,15 +4229,19 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   width: 34px;
   height: 34px;
   padding: 0;
-  border: 2px solid var(--ds-outline);
+  border: 1px solid var(--ds-line);
   border-radius: 50%;
-  background: var(--ds-surface-raised);
+  background: var(--ds-surface-sunken);
   color: var(--ink);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   touch-action: none;
   user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
 }
 .mic-btn:hover:not(:disabled) {
   background: #ffe9a8;
@@ -4772,10 +4782,9 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   border-bottom: 3px solid var(--ds-outline);
 }
 .pk-logo {
-  font-size: 1.5rem;
-  line-height: 1;
+  display: inline-flex;
+  --ds-icon: var(--ds-icon-md);
   color: #fff;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
 }
 .pk-title {
   min-width: 0;
@@ -4877,7 +4886,8 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 }
 .pk-tab-icon {
   position: relative;
-  font-size: 1.3rem;
+  display: inline-flex;
+  --ds-icon: 25px;
 }
 .pk-tab-label {
   max-width: 100%;
@@ -4973,9 +4983,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
   line-height: 1.1;
 }
 .pk-stage-icon {
+  display: inline-flex;
   margin-right: 3px;
-  font-size: 0.8rem;
-  vertical-align: 2px;
+  --ds-icon: 16px;
+  vertical-align: -2px;
 }
 .pk-stage-label {
   max-width: 100%;
@@ -6261,13 +6272,23 @@ html[data-high-contrast] .touch-knob {
   margin-left: 8px;
   font: 700 20px var(--font);
   color: var(--ink);
-  background: var(--ds-surface-raised);
-  border: 2.5px solid var(--ds-outline);
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--ds-line);
   border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
 }
 .ac-more {
   flex: none;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface-sunken);
 }
 
 /* No selection, long-press menu, double-tap zoom or pull-to-refresh over the view; text panels give them back. */

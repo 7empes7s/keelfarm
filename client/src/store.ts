@@ -668,7 +668,7 @@ export const useStore = create<State>((set, get) => ({
   openOverlay(overlay) {
     // Terminals and the floor's app are live, whatever the time-lapse shows.
     if (overlay && get().replaying && (overlay.kind === 'terminal' || overlay.kind === 'app')) {
-      get().pushToast('info', '▶ That shows the live office: press Esc to leave the replay first.');
+      get().pushToast('info', 'That shows the live office: press Esc to leave the replay first.');
       return;
     }
     // Closing a panel a chat chip opened goes back to the chat.
@@ -817,7 +817,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
   const claimed = new Set<number>([...progress.map((c) => c.number), ...openPulls.flatMap((p) => p.closesIssues)]);
   const open = new Set(repo.issues.map((i) => i.number));
   const held = new Map((repo.held ?? []).map((h) => [h.issue, h.pr]));
-  const paced = repo.autoAssign && usage && usage.state !== 'normal' ? (usage.state === 'paused' ? '⏸ paused' : '⏸ paced') : '';
+  const paced = repo.autoAssign && usage && usage.state !== 'normal' ? (usage.state === 'paused' ? 'paused' : 'paced') : '';
   const backlog: KanbanCard[] = repo.issues
     .filter((i) => !claimed.has(i.number))
     .map((i) => {
@@ -825,8 +825,8 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       const labels = i.labels.slice(0, 2).join(', ');
       const card = { key: `i-${i.number}`, number: i.number, title: i.title, url: i.url };
       // Its PR was closed: it waits for the manager rather than going back to auto-assign.
-      if (held.has(i.number)) return { ...card, note: `⏸ PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
-      return { ...card, note: (waits.length ? `⏳ after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };
+      if (held.has(i.number)) return { ...card, note: `PR #${held.get(i.number)} closed · assign by hand`, tone: 'warn' as const };
+      return { ...card, note: (waits.length ? `after #${waits.join(', #')}` : [paced, labels].filter(Boolean).join(' · ')) || undefined };
     });
 
   const merged: KanbanCard[] = repo.pulls

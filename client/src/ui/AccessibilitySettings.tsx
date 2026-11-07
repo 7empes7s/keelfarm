@@ -3,10 +3,11 @@
 // 3D-only parts (motion, the field of view) are left out.
 import { useId, type ReactNode } from 'react';
 import { useStore } from '../store';
+import { Icon } from './Icon';
 import { Key } from './Key';
 import { resetA11y, setA11y, useA11y } from './a11y';
 import { DEFAULT_A11Y, LIMITS, reducesMotion, showsShapes, type A11yPrefs, type ReduceMotion } from './a11yPrefs';
-import { KIND_ICON, KIND_WORD, kindStrong, PALETTE_LABELS, PALETTES, STATUS_KINDS, type Palette } from './statusLook';
+import { KIND_ICON_NAME, KIND_WORD, kindStrong, PALETTE_LABELS, PALETTES, STATUS_KINDS, type Palette } from './statusLook';
 
 function Toggle({ k, children, hint, disabled }: { k: 'captions' | 'statusShapes' | 'headBob' | 'cameraShake' | 'centerDot' | 'readableFont' | 'highContrast'; children: ReactNode; hint?: string; disabled?: boolean }) {
   const on = useA11y((s) => s.prefs[k]);
@@ -53,7 +54,7 @@ function Swatches({ palette, shapes }: { palette: Palette; shapes: boolean }) {
     <ul className="status-swatches" aria-label="How statuses look">
       {STATUS_KINDS.map((k) => (
         <li key={k} className={`status-kind status-kind-${k}`} style={{ ['--kind' as string]: kindStrong(k, palette) }}>
-          {shapes && <span aria-hidden>{KIND_ICON[k]}</span>} {KIND_WORD[k]}
+          {shapes && <Icon name={KIND_ICON_NAME[k]} />} {KIND_WORD[k]}
         </li>
       ))}
     </ul>
@@ -72,7 +73,9 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
   return (
     <>
       <section className="card a11y-card" aria-labelledby={`${name}-cap`}>
-        <h3 id={`${name}-cap`}>💬 Captions</h3>
+        <h3 id={`${name}-cap`}>
+          <Icon name="message-circle" /> Captions
+        </h3>
         <Toggle k="captions" hint="The CEO's messages written out as they're read aloud, and short captions for important sounds (the gong, a merge cheer, alarms, the jukebox) with an arrow towards where they came from.">
           Show captions
         </Toggle>
@@ -87,7 +90,9 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
       </section>
 
       <section className="card a11y-card" aria-labelledby={`${name}-col`}>
-        <h3 id={`${name}-col`}>🎨 Colour and status</h3>
+        <h3 id={`${name}-col`}>
+          <Icon name="palette" /> Colour and status
+        </h3>
         <fieldset className="a11y-fieldset">
           <legend>Status colours</legend>
           {PALETTES.map((p) => (
@@ -97,14 +102,16 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
           ))}
         </fieldset>
         <Toggle k="statusShapes" disabled={prefs.palette !== 'standard'} hint={prefs.palette !== 'standard' ? 'Always on with a colour-blind palette.' : 'On name tags, the whiteboard, Kanban cards, status pills and toasts.'}>
-          Shapes beside status colours (✓ ✕ ! ⏳)
+          Shapes beside status colours
         </Toggle>
         <Swatches palette={prefs.palette} shapes={shapes} />
       </section>
 
       {!pocket && (
         <section className="card a11y-card" aria-labelledby={`${name}-mot`}>
-          <h3 id={`${name}-mot`}>🌀 Motion</h3>
+          <h3 id={`${name}-mot`}>
+            <Icon name="orbit" /> Motion
+          </h3>
           <Slider k="fov" label="Field of view" unit="°" describe={(v) => (v < 72 ? 'narrower' : v > 72 ? 'wider' : 'normal')} />
           <Toggle k="headBob">Head bob while walking</Toggle>
           <Toggle k="cameraShake" hint="The view tipping back when you sip a coffee, and any screen shake.">
@@ -130,7 +137,9 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
       )}
 
       <section className="card a11y-card" aria-labelledby={`${name}-read`}>
-        <h3 id={`${name}-read`}>🔎 Size and readability</h3>
+        <h3 id={`${name}-read`}>
+          <Icon name="search" /> Size and readability
+        </h3>
         <Slider k="uiScale" label="UI scale" unit="%" />
         <p className="muted small">The HUD, the phone, the console and every panel, from 80% to 150%.</p>
         <Toggle k="readableFont" hint="Verdana, with wider letter, word and line spacing, as dyslexia style guides recommend.">
@@ -143,7 +152,9 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
 
       {!pocket && (
         <section className="card a11y-card" aria-labelledby={`${name}-kb`}>
-          <h3 id={`${name}-kb`}>⌨️ Keyboard and screen readers</h3>
+          <h3 id={`${name}-kb`}>
+            <Icon name="keyboard" /> Keyboard and screen readers
+          </h3>
           <p className="small">
             <Key action="phone" /> opens your phone from anywhere: its <b>Company</b> tab opens the console, this floor's Kanban, the floor list, help and these settings. <Key action="help" /> opens help. In any panel,{' '}
             <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd> move between controls, <kbd>Enter</kbd> or <kbd>Space</kbd> uses one and <kbd>Esc</kbd> closes it; focus goes back where it was.
@@ -151,7 +162,7 @@ export function AccessibilitySettings({ pocket = false }: { pocket?: boolean }) 
           </p>
           <div className="row wrap">
             <button className="btn btn-small" onClick={() => openOverlay({ kind: 'floorList' })}>
-              👥 List view of this floor
+              <Icon name="users" /> List view of this floor
             </button>
           </div>
         </section>

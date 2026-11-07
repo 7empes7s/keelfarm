@@ -7,6 +7,8 @@ import { confirmDialog } from './Confirm';
 import { CostsSection } from './CostsSection';
 import { clearDesk } from './dangerActions';
 import { ExperimentsSection } from './ExperimentsSection';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { HealthStrip } from './HealthStrip';
@@ -31,7 +33,7 @@ export async function confirmResume() {
   if (document.pointerLockElement) document.exitPointerLock();
   const m = usageMeter(usage, Date.now());
   const ok = await confirmDialog({
-    icon: '⏩',
+    icon: 'fast-forward',
     tone: 'warn',
     title: 'Resume full speed?',
     body: (
@@ -61,7 +63,9 @@ function UsageCard({ hot }: { hot: boolean }) {
   return (
     <div id="ops-card-usage" className={`card usage-card usage-${m.tone} ${hot ? 'ops-card-hot' : ''}`}>
       <div className="row wrap">
-        <b>🤖 Claude usage</b>
+        <b>
+          <Icon name="bot" /> Claude usage
+        </b>
         <span className={`pill usage-pill-${m.tone}`}>{m.state}</span>
         <span className="spacer" />
         <button
@@ -70,7 +74,7 @@ function UsageCard({ hot }: { hot: boolean }) {
           title={usage.state === 'paused' ? "A pause at the limit can't be cleared early" : usage.state === 'normal' ? 'Already at full speed' : 'Stop pacing new issues now'}
           onClick={() => void confirmResume()}
         >
-          ⏩ Resume full speed
+          <Icon name="fast-forward" /> Resume full speed
         </button>
       </div>
       <UsageBars />
@@ -105,7 +109,9 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
       <div className="row">
         <span className="floor-badge">{alarm.floor}</span>
         <div className="grow">
-          <b>🚨 {alarm.text}</b>
+          <b>
+            <Icon name="siren" /> {alarm.text}
+          </b>
           <div className="muted small">
             {repo?.fullName ?? alarm.repoId}
             {pr ? ` · ${pr.title}` : ''} · since {new Date(alarm.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -116,7 +122,7 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
         {alarm.kind === 'pr' && alarm.prNumber !== null ? (
           <>
             <button className="btn btn-small" onClick={() => openOverlay({ kind: 'kanban', repoId: alarm.repoId })}>
-              📋 Open the Kanban
+              <Icon name="clipboard-list" /> Open the Kanban
             </button>
             <button className="btn btn-small btn-good" onClick={() => void attempt(() => api.sendToQa(alarm.repoId, alarm.prNumber!))}>
               Retry QA
@@ -126,7 +132,7 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
             </button>
             {pr && (
               <a className="small" href={pr.url} target="_blank" rel="noreferrer">
-                PR on GitHub ↗
+                PR on GitHub <Icon name="external-link" />
               </a>
             )}
           </>
@@ -144,7 +150,7 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
           Visit floor {alarm.floor}
         </button>
         {alarm.kind !== 'pr' && alarm.agentId && (
-          <Menu label="More for this alarm" title={alarm.text} items={[{ label: '↺ Clear desk…', hint: 'Clear their desk so they take new work', danger: true, onSelect: () => void clearDeskOf(alarm.agentId!) }]} />
+          <Menu label="More for this alarm" title={alarm.text} items={[{ label: 'Clear desk…', hint: 'Clear their desk so they take new work', danger: true, onSelect: () => void clearDeskOf(alarm.agentId!) }]} />
         )}
       </div>
     </div>
@@ -152,13 +158,16 @@ function AlarmCard({ alarm, repo, hot }: { alarm: OpsAlarm; repo: RepoView | und
 }
 
 const FIXES: Record<DoctorFix, [string, string]> = {
-  clear: ['↺ Clear desk', 'Clear their desk so they take new work'],
-  stop: ['■ Stop', 'Stop their session'],
-  requeue: ['↩ Requeue', 'Stop them and put the work back in line, without a strike'],
+  clear: ['Clear desk', 'Clear their desk so they take new work'],
+  stop: ['Stop', 'Stop their session'],
+  requeue: ['Requeue', 'Stop them and put the work back in line, without a strike'],
   'retry-qa': ['Retry QA', 'Queue the PR for a fresh QA run'],
   'send-back': ['Send back for a fix', 'Hand the PR to its author, or any free agent'],
   'close-issue': ['Close issue', 'Close the issue on GitHub as completed'],
 };
+
+/** The icon beside a fix's button, where one makes it clearer. */
+const FIX_ICON: Partial<Record<DoctorFix, IconName>> = { clear: 'rotate-ccw', stop: 'square', requeue: 'reply' };
 
 /** Fixes that are hard to undo: they go in the card's ⋯ and confirm first (docs/design.md). */
 const RISKY: DoctorFix[] = ['clear', 'close-issue'];
@@ -172,7 +181,7 @@ async function applyFix(f: DoctorFinding, fix: DoctorFix) {
   if (RISKY.includes(fix) && document.pointerLockElement) document.exitPointerLock();
   if (fix === 'clear') {
     const ok = await confirmDialog({
-      icon: '↺',
+      icon: 'rotate-ccw',
       tone: 'danger',
       title: 'Clear their desk?',
       body: 'They drop the task they had and take new work.',
@@ -182,7 +191,7 @@ async function applyFix(f: DoctorFinding, fix: DoctorFix) {
   }
   if (fix === 'close-issue') {
     const ok = await confirmDialog({
-      icon: '🩺',
+      icon: 'stethoscope',
       tone: 'danger',
       title: `Close issue #${f.issueNumber}?`,
       body: <p>It's closed on GitHub as completed, with a comment saying PR #{f.prNumber} resolved it.</p>,
@@ -200,7 +209,9 @@ function DoctorCard({ finding: f, repo }: { finding: DoctorFinding; repo: RepoVi
       <div className="row">
         <span className="floor-badge">{repo?.floor ?? '?'}</span>
         <div className="grow">
-          <b>🩺 {f.text}</b>
+          <b>
+            <Icon name="stethoscope" /> {f.text}
+          </b>
           <div className="muted small">
             {repo?.fullName ?? f.repoId} · since {new Date(f.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
@@ -211,7 +222,7 @@ function DoctorCard({ finding: f, repo }: { finding: DoctorFinding; repo: RepoVi
           .filter((fix) => !RISKY.includes(fix))
           .map((fix, i) => (
             <button key={fix} className={`btn btn-small ${i === 0 ? 'btn-good' : ''}`} title={FIXES[fix][1]} onClick={() => void applyFix(f, fix)}>
-              {FIXES[fix][0]}
+              {FIX_ICON[fix] && <Icon name={FIX_ICON[fix]!} />} {FIXES[fix][0]}
             </button>
           ))}
         {f.agentId && (
@@ -246,7 +257,9 @@ function DoctorSection({ hot }: { hot: boolean }) {
   const demo = useStore((s) => s.demo);
   return (
     <div id="ops-card-doctor" className={hot ? 'ops-card-hot' : ''}>
-      <h3 className="section">🩺 Office doctor {doctor.length > 0 && <span className="badge">{doctor.length}</span>}</h3>
+      <h3 className="section">
+        <Icon name="stethoscope" /> Office doctor {doctor.length > 0 && <span className="badge">{doctor.length}</span>}
+      </h3>
       {doctor.length === 0 && (
         <p className="muted small">Nothing stuck. Every minute the watchdog nudges quiet sessions, frees stuck desks and puts orphaned work back in line by itself; what it can't safely fix shows up here.</p>
       )}
@@ -280,7 +293,7 @@ const COLUMNS: [string, (n: OpsNumbers) => string, string?][] = [
   ['In QA', (n) => String(n.inQa)],
   ['Fixing', (n) => String(n.fixing), 'Back with an agent: QA findings, checks or a conflict'],
   ['To merge', (n) => String(n.toMerge)],
-  ['Needs you', (n) => `${n.needsYou}${n.triage ? ` (+${n.triage} 🧭)` : ''}`, '🧭: the CEO is looking first'],
+  ['Needs you', (n) => `${n.needsYou}${n.triage ? ` (+${n.triage})` : ''}`, 'The number in parentheses: the CEO is looking first'],
   ['Merged today', (n) => `${n.mergedToday} (${n.mergedHour} last hour)`],
   ['Lead time', (n) => fmtDuration(n.leadMs), 'Median issue → merge over the last 24 hours'],
   ['QA wait', (n) => fmtDuration(n.qaWaitMs), 'Median wait for a free agent over the last 24 hours'],
@@ -345,7 +358,9 @@ export function OpsTab({ card }: { card?: string }) {
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
         <TestLabCard />
-        <h3 className="section">🚨 Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}</h3>
+        <h3 className="section">
+          <Icon name="siren" /> Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}
+        </h3>
         {alarms.length === 0 && <p className="muted small">All clear. The beacon on the lobby's mission control wall spins when a PR needs you or an agent has been stuck on an error for 10 minutes.</p>}
         {alarms.map((a) => (
           <AlarmCard key={a.id} alarm={a} repo={repos.find((r) => r.id === a.repoId)} hot={a.id === card} />
@@ -353,7 +368,9 @@ export function OpsTab({ card }: { card?: string }) {
         <DoctorSection hot={card === 'doctor'} />
       </div>
       <div>
-        <h3 className="section">🛰️ The numbers</h3>
+        <h3 className="section">
+          <Icon name="satellite" /> The numbers
+        </h3>
         <OpsTable />
         <CostsSection />
         <ExperimentsSection />
