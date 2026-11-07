@@ -4,6 +4,7 @@ import { NEVER_STARTED_MS } from './mergeGate.ts';
 import { PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import { TRUST_LABEL } from '../shared/trust.ts';
+import { prSummary } from '../shared/prSummary.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
 
@@ -141,6 +142,7 @@ interface RawPull {
   createdAt: string;
   updatedAt?: string;
   mergedAt: string | null;
+  body?: string | null;
   additions: number;
   deletions: number;
   headRefOid: string;
@@ -155,7 +157,7 @@ interface RawPull {
 }
 
 const PR_FIELDS =
-  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,updatedAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository';
+  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,updatedAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository,body';
 
 type Check = NonNullable<RawPull['statusCheckRollup']>[number];
 const BAD = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
@@ -213,6 +215,7 @@ function toPull(p: RawPull): PullInfo {
     pendingChecks: (p.statusCheckRollup ?? []).filter(pending).map(checkName),
     checkRun: checkRunOf(p.statusCheckRollup),
     files: (p.files ?? []).slice(0, PR_FILES_MAX).map((f) => f.path),
+    summary: p.state === 'OPEN' ? prSummary(p.body) : undefined, // the open ones' only: a short line in the snapshot
     author: p.author?.login ?? null,
     isCrossRepository: p.isCrossRepository ?? true, // unknown: treated as a fork's
   };

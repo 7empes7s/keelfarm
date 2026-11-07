@@ -299,6 +299,22 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   width: 100%;
   background: var(--paper);
 }
+/* the chat full screen (#201): wide, the docked chat covers the rail and the pages, which keep their place behind it;
+   on a phone the tab bar and the working strip's second line step aside */
+.pk-railed.pk-chat-full .pk-dock {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: auto;
+  border-left: none;
+  box-shadow: none;
+}
+.pk-railed.pk-chat-full :is(.pk-tabs, .pk-work) {
+  visibility: hidden;
+}
+.pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
+  display: none;
+}
 
 /* Company: the floors as a grid of cards, usage and the CEO in a column beside them (above them when it's narrower) */
 .pk-railed .pk-company {
