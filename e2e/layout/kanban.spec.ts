@@ -53,6 +53,10 @@ for (const [width, chat] of [[390, false], [1280, false], [1280, true], [1920, f
     if (chat && !(await dock.isVisible())) await root.locator('.pk-chat-btn').click();
     if (!chat && (await dock.isVisible())) await dock.getByRole('button', { name: 'Hide the chat' }).click();
     await expect(page.locator('.kcol-qa .kcard-actions').first()).toBeVisible({ timeout: 30_000 });
+    // a folded column's cards are clipped to nothing, not hidden from checkVisibility(): open them all, let the folds settle
+    for (const head of await page.locator('.kcol-shut .kcol-head').all()) await head.click();
+    await expect(page.locator('.kcol-shut')).toHaveCount(0);
+    await page.waitForFunction(() => document.getAnimations().every((a) => !(a.effect as KeyframeEffect | null)?.target?.closest('.kanban') || a.playState !== 'running'));
     const problems = await page.evaluate(() => {
       const out: string[] = [];
       const cards = [...document.querySelectorAll<HTMLElement>('.kcard')].filter((c) => c.checkVisibility());
