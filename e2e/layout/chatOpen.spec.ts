@@ -33,7 +33,7 @@ const SCREENS: Screen[] = [
       await page.locator('.pk-tab-console').click();
       return work.locator('.pk-settings');
     },
-    tabs: consoleSections('pocket').slice(0, 4),
+    tabs: ['', ...consoleSections('pocket').slice(0, 4)], // '' first: the lazy console settles before its sections
   },
   {
     name: 'chat open: terminal',
@@ -51,7 +51,7 @@ checkScreens(SCREENS);
 
 /** Whether `el` is what's on top at its centre, and how far it runs under the chat column (0: not at all). */
 async function frontAndClear(el: Locator, dock: Locator) {
-  const [box, chat] = await Promise.all([el.boundingBox(), dock.boundingBox()]);
+  const [box, chat] = await Promise.all([el.boundingBox(), dock.count().then((n) => (n ? dock.boundingBox() : null))]); // the drawer unmounts when it makes way
   const top = await el.evaluate((x) => {
     const r = x.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
