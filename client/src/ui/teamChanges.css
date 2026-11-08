@@ -1,0 +1,78 @@
+/* team changes: a new agent (with their setup) or a let-go, as a card (ui/Phone.tsx Resume) */
+.resume {
+  background: var(--ds-surface-raised);
+  border: 3px solid var(--ds-outline);
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink);
+}
+.bubble .resume {
+  margin: 6px 0 2px;
+  border-width: 2px;
+}
+.resume-letgo {
+  background: #fff4f2;
+}
+.resume-hot {
+  box-shadow: 0 0 0 4px var(--accent);
+}
+.resume-done {
+  opacity: 0.75;
+}
+.resume-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.resume-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.resume-title {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.resume-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.resume-reason {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  padding-left: 9px;
+  border-left: 3px solid rgba(31, 29, 43, 0.2);
+}
+/* a new agent's settings before they're hired (HireSetupFields): two to a row, room for more */
+.hire-setup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+.hire-setup .field {
+  margin: 3px 0;
+  min-width: 0;
+}
+.resume .hire-setup {
+  padding: 2px 8px 4px;
+  background: var(--ds-surface-sunken);
+  border-radius: 10px;
+}
+.resume .hire-setup .field {
+  font-size: 0.8rem;
+}
+.resume .hire-setup input,
+.resume .hire-setup select {
+  padding: 5px 7px;
+  font-size: 0.85rem;
+}
+.doc .hire-setup input,
+.doc .hire-setup select {
+  background: rgba(255, 255, 255, 0.85);
+}

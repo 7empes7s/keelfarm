@@ -1,0 +1,181 @@
+/* ---------- touch screens in the 3D view (ui/touchMode.ts, world/touch/) ---------- */
+
+/* The floating joystick: a faint ring where the finger landed and the knob under it, only while it walks. */
+.touch-stick {
+  position: fixed;
+  z-index: var(--ds-z-panel);
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(31, 29, 43, 0.12);
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  animation: touch-in 0.12s ease-out;
+}
+.touch-stick-run {
+  border-color: rgba(255, 209, 102, 0.8);
+}
+/* Where the stick rests in the thumb zones (#123), above the home indicator: touch anywhere near it to walk. */
+.touch-ghost {
+  margin-top: calc(-1 * env(safe-area-inset-bottom, 0px));
+  opacity: 0.45;
+  border-style: dashed;
+  animation: none;
+}
+.touch-knob {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 2px rgba(31, 29, 43, 0.25);
+}
+.touch-armed {
+  position: fixed;
+  z-index: var(--ds-z-panel);
+  width: 88px;
+  height: 88px;
+  transform: translate(-50%, -50%);
+  border: 3px solid #ffd166;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: touch-in 0.15s ease-out;
+}
+.touch-armed span {
+  position: absolute;
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: var(--paper);
+  border: 2px solid var(--ds-outline);
+  font-weight: 700;
+  font-size: 16px;
+}
+@keyframes touch-in {
+  from {
+    opacity: 0;
+  }
+}
+html[data-reduce-motion] :is(.touch-stick, .touch-armed) {
+  animation: none;
+}
+html[data-high-contrast] .touch-stick {
+  border: 4px solid #fff;
+  outline: 3px solid #000;
+  background: rgba(0, 0, 0, 0.35);
+}
+html[data-high-contrast] .touch-knob {
+  background: var(--ds-surface-raised);
+  box-shadow: 0 0 0 3px #000;
+}
+
+/* The hold menu: a bottom sheet over the view. */
+.hold-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-z-sheet);
+  background: rgba(31, 29, 43, 0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.hold-sheet {
+  width: min(480px, 100%);
+  margin: 0 8px max(8px, env(safe-area-inset-bottom));
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+}
+.hold-title {
+  font-weight: 700;
+  font-size: 16px;
+  padding: 4px 6px;
+}
+.hold-option {
+  min-height: 52px;
+  padding: 10px 14px;
+  font: 600 17px var(--font);
+  text-align: left;
+  color: var(--ink);
+  background: var(--ds-surface-raised);
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 12px;
+}
+.hold-cancel {
+  text-align: center;
+  background: transparent;
+}
+.ac-more,
+.hint-more {
+  pointer-events: auto;
+  min-width: 48px;
+  min-height: 48px;
+  margin-left: 8px;
+  font: 700 20px var(--font);
+  color: var(--ink);
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--ds-line);
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
+}
+.ac-more {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface-sunken);
+}
+
+/* No selection, long-press menu, double-tap zoom or pull-to-refresh over the view; text panels give them back. */
+html[data-touch],
+html[data-touch] body {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+html[data-touch] canvas {
+  touch-action: none;
+}
+html[data-touch]:not([data-full-window]) :is(canvas, .hud, .overlay, .hold-backdrop) {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+html[data-touch] :is(input, textarea, [contenteditable='true']) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Thumb-sized targets: at least 48 px whatever the UI scale (it zooms these), 8 px apart, 16 px labels. */
+html[data-touch] :is(.hud, .overlay, .confirm-overlay, .tour, .start) :is(button, [role='button'], select, summary, .toggle, .tab, .phone-tab) {
+  min-height: calc(48px / var(--ui-scale, 1));
+  min-width: calc(48px / var(--ui-scale, 1));
+  font-size: max(1em, calc(16px / var(--ui-scale, 1)));
+}
+html[data-touch] :is(.hud, .overlay, .confirm-overlay) :is(input[type='checkbox'], input[type='radio']) {
+  width: calc(24px / var(--ui-scale, 1));
+  height: calc(24px / var(--ui-scale, 1));
+}
+html[data-touch] :is(.hud, .overlay, .confirm-overlay) input[type='range'] {
+  min-height: calc(48px / var(--ui-scale, 1));
+}
+html[data-touch] :is(.hud, .overlay, .confirm-overlay) :is(.row, .tabs, .phone-tabs, .hud-status, .elevator, .toggle) {
+  gap: calc(8px / var(--ui-scale, 1));
+}
+html[data-touch] :is(.hud, .overlay) :is(label, li, .small, .muted, .pill) {
+  font-size: max(1em, calc(16px / var(--ui-scale, 1)));
+}

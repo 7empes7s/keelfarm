@@ -88,7 +88,7 @@ server/  Node + Express + ws
   workspace.ts    clones + per-agent git worktrees
   previews.ts     one preview per floor, and the PR theatre's PR previews: ports, statuses, start / stop
   previewRunner.ts  checkout, install and run a floor's app in its preview worktree
-  demo.ts         fake GitHub and fake agents for `npm run demo`
+  demo.ts         fake GitHub and fake agents for `npm run demo`, from each feature's module in demo/
 shared/types.ts   the websocket / REST contract (one file per area in shared/types/)
 ```
 

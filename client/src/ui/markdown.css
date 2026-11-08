@@ -1,0 +1,237 @@
+/* code blocks and tables don't size the bubble (see .md pre), so give them its full width */
+.bubble:has(.md pre, .md-table) {
+  width: 86%;
+}
+
+/* markdown (ui/Markdown.tsx): agent-written prose in bubbles, team changes and reports.
+   Tints are translucent so it reads on any bubble colour. */
+.md {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md pre,
+.md blockquote,
+.md .md-table {
+  margin: 0 0 0.55em;
+}
+.md ul,
+.md ol {
+  padding-left: 1.3em;
+}
+.md li > ul,
+.md li > ol {
+  margin: 0.15em 0 0.2em;
+}
+.md li + li {
+  margin-top: 0.15em;
+}
+.md li > p {
+  margin: 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 0.7em 0 0.3em;
+  line-height: 1.25;
+  font-size: 1em;
+}
+.md h1 {
+  font-size: 1.15em;
+}
+.md h2 {
+  font-size: 1.08em;
+}
+.md h5,
+.md h6 {
+  color: var(--muted);
+}
+.md a {
+  color: #3a56d4;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.md a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+.md-deadlink {
+  text-decoration: underline dotted;
+}
+.md code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: rgba(31, 29, 43, 0.08);
+  border-radius: 5px;
+  padding: 0.1em 0.3em;
+}
+/* Scroll sideways instead of stretching: contain keeps their width out of the layout above
+   (otherwise a long line widens the phone overlay's grid track past a 390px screen). */
+.md pre,
+.md-table {
+  contain: inline-size;
+  overflow-x: auto;
+}
+.md pre {
+  background: rgba(31, 29, 43, 0.08);
+  border-radius: 8px;
+  padding: 7px 9px;
+  line-height: 1.35;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.md blockquote {
+  padding: 0 0 0 9px;
+  border-left: 3px solid rgba(31, 29, 43, 0.25);
+  color: #4a4e69;
+}
+.md hr {
+  border: none;
+  border-top: 1.5px solid rgba(31, 29, 43, 0.15);
+  margin: 0.6em 0;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.md th,
+.md td {
+  border: 1px solid rgba(31, 29, 43, 0.2);
+  padding: 3px 7px;
+  text-align: left;
+  overflow-wrap: normal;
+}
+.md th {
+  background: rgba(31, 29, 43, 0.06);
+}
+.md td code {
+  white-space: nowrap;
+}
+.md input[type='checkbox'] {
+  margin: 0 4px 0 0;
+  vertical-align: middle;
+}
+.md li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -1.1em;
+}
+
+.bubble-time {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.bubble-play {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--ds-outline);
+  border-radius: 50%;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.bubble-play:hover:not(:disabled),
+.bubble-play-on {
+  background: #ffe9a8;
+}
+.bubble-play:focus-visible {
+  outline: 2px solid var(--ds-outline);
+  outline-offset: 2px;
+}
+.bubble-play:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.bubble-office {
+  align-self: center;
+  max-width: 92%;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--ds-text);
+  background: rgba(31, 29, 43, 0.07);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.bubble-typing {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.bubble-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: typing 1.2s infinite;
+}
+.bubble-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.bubble-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+.quick:empty {
+  display: none;
+}
+.quick {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 10px 0;
+  background: var(--ds-surface-raised);
+}
+.quick-chip {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: 999px;
+  background: var(--ds-surface-raised);
+  cursor: pointer;
+}
+.quick-chip:hover {
+  border-color: var(--accent);
+}
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  background: var(--ds-surface-raised);
+}
