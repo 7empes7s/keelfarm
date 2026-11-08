@@ -75,11 +75,24 @@ export type MachineHost = 'local' | 'box';
 /** An Upstash Box's size. */
 export type BoxSize = 'small' | 'medium' | 'large';
 
+/** Where new agents work: one place, or 'hybrid': this computer while it has room, else a Box (#260). */
+export type MachineKind = MachineHost | 'hybrid';
+
+/** Settings → Cloud agents → Hybrid (#260). */
+export interface HybridSettings {
+  localMax: number; // most agents on this computer (0: no cap besides memory and the session limit)
+  burst: boolean; // add a cloud agent by itself when ready work waits for memory
+  burstAfterMin: number; // how long work waits for memory before one is added
+  burstMax: number; // most cloud agents added that way at once
+  burstIdleMin: number; // an added one leaves after this long without a task
+}
+
 /** Settings → Cloud agents. */
 export interface CloudSettings {
-  machineKind: MachineHost; // where new agents work ('local' unless the manager turns the cloud on)
+  machineKind: MachineKind; // where new agents work ('local' unless the manager turns the cloud on)
   boxSize: BoxSize;
   boxLimit: number; // the Upstash plan's most Boxes (the free plan's 10), counted before a cloud agent is hired
+  hybrid: HybridSettings;
 }
 
 /** How a cloud agent's machine is doing, on their card. */
@@ -165,6 +178,7 @@ export interface AgentView {
   cli: AgentCli | ''; // the CLI they run in the terminal runtime ('' = the office default)
   host?: MachineHost; // where their machine is: an Upstash Box, or this computer (absent: local; the CEO always is)
   cloud?: CloudMachineState; // their Box's state (absent for local agents)
+  burst?: number; // when Hybrid's burst added them because this computer was full (#260); they leave when idle
   needsSignIn?: boolean; // a cloud agent whose coding agent waits for the manager to sign it in, in their terminal (docs/cloud.md)
   signInWhy?: KeyTrouble; // while needsSignIn: the office's API key stopped working, so they switched to their own login
   terminal: boolean; // they have a terminal to watch (the terminal runtime); otherwise their log lines are the screen

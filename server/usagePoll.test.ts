@@ -133,4 +133,32 @@ describe('the idle usage check', () => {
     await opus.poll();
     expect(opus.x.pausedUntil).toBe(0);
   });
+
+  it("with rotation, a full window on the built-in login rests that login, not the office, while another account is free", async () => {
+    const resetsAt = Date.now() + 3 * 24 * 60 * MIN; // the weekly window: days away
+    const week = await idleOffice(async () => ({ readings: [{ type: 'seven_day', pct: 100, resetsAt, at: Date.now() }] }), 0);
+    await week.swarm.accounts.init(); // the demo's seeded accounts
+    week.swarm.accounts.update('claude-apikey', { enabled: false }); // only logins: the second one is what's free
+    await week.swarm.accounts.test('claude-keelop'); // its second Max is signed in
+    await week.poll();
+    expect(week.x.pausedUntil).toBe(0);
+    const status = (id: string) => week.swarm.accounts.view().accounts.find((a) => a.id === id)?.status;
+    expect(status('claude-login')).toBe('limited');
+    expect(status('claude-keelop')).not.toBe('limited');
+    await week.swarm.accounts.flushed();
+  });
+
+  it('with rotation, pauses until the first account is back once every Claude account is out', async () => {
+    const resetsAt = Date.now() + 3 * 24 * 60 * MIN;
+    const week = await idleOffice(async () => ({ readings: [{ type: 'seven_day', pct: 100, resetsAt, at: Date.now() }] }), 0);
+    await week.swarm.accounts.init();
+    week.swarm.accounts.update('claude-apikey', { enabled: false });
+    await week.swarm.accounts.test('claude-keelop');
+    const sooner = Date.now() + 2 * 60 * MIN;
+    week.swarm.accounts.limited('claude-keelop', sooner); // the other login is out too, back sooner
+    await week.poll();
+    expect(week.x.pausedUntil).toBeGreaterThanOrEqual(sooner);
+    expect(week.x.pausedUntil).toBeLessThan(resetsAt);
+    await week.swarm.accounts.flushed();
+  });
 });
