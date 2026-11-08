@@ -4,6 +4,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { checkUsage, oauthReadings } from './usagePoll.ts';
+import { readCodexLimits } from './codexLimits.ts';
+import { codexReadings } from '../shared/usageSources.ts';
 import type { AccountCli, AccountKind, UsageReading } from '../shared/types.ts';
 
 export interface AccountCheck {
@@ -37,7 +39,9 @@ export async function checkAccount(a: CheckTarget, dir: string, secret: string):
   if (a.kind === 'subscription-login') {
     if (a.cli === 'codex') {
       const ok = !!(await fs.stat(path.join(dir, 'auth.json')).catch(() => null));
-      return { signedIn: ok, readings: [], note: ok ? '✓ Signed in.' : 'Not signed in yet: tap Sign in.' };
+      if (!ok) return { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
+      const readings = codexReadings(await readCodexLimits(dir), Date.now());
+      return { signedIn: true, readings, note: readings.length ? '✓ Signed in; usage read.' : '✓ Signed in.' };
     }
     const res = await checkUsage({ CLAUDE_CONFIG_DIR: dir });
     if ('readings' in res) return { signedIn: true, readings: res.readings, note: '✓ Signed in; usage read.' };

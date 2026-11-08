@@ -24,7 +24,7 @@ import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
 import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
-import { readingsLabel } from '../../shared/usage.ts';
+import { usageLine } from '../../shared/usageSources.ts';
 import { checkBinding } from '../../shared/accounts.ts';
 import { usageLabel } from '../pacing.ts';
 import { ceoSpend, floorRoundsByCause, floorSpend } from '../costLedger.ts';
@@ -253,7 +253,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now(), this.usageCheck)}`,
+          usage: `${usageLabel(this.usageNow(), Date.now())} · ${usageLine(this.usageSources())}`, // every account and provider (#361); pacing follows the agents' Claude login
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
