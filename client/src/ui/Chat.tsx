@@ -36,7 +36,7 @@ import { useCeoDraft } from './goTo';
 import { hasVersionsSheet } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { ChatTextPill, useChatPinch } from './ChatZoom';
-import { Bubble } from './ChatBubble';
+import { Bubble, placeTools } from './ChatBubble';
 import { attempt, Avatar } from './phoneParts';
 import { isKey } from './controls';
 import { togglesFull, useChatFull } from './chatFull';
@@ -208,6 +208,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
     if (!el) return;
     const follow = () => {
       if (stick.current) el.scrollTop = el.scrollHeight;
+      el.querySelectorAll<HTMLElement>('.bubble-row:hover, .bubble-row:focus-within').forEach(placeTools);
     };
     const resized = new ResizeObserver(follow);
     resized.observe(el);
@@ -363,6 +364,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
           onScroll={(e) => {
             const el = e.currentTarget;
             pages.onScroll(el);
+            el.querySelectorAll<HTMLElement>('.bubble-row:hover, .bubble-row:focus-within').forEach(placeTools);
             const end = keepsFollowing(stick.current, el.scrollTop, lastTop.current, el.scrollHeight - el.scrollTop - el.clientHeight < 40);
             lastTop.current = el.scrollTop;
             stick.current = end;

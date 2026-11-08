@@ -25,6 +25,8 @@ import { isPinching, lastPinchAt } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
 import { Icon } from './Icon';
 import { SignInCard } from './SignInCard';
+import { toolsOffset } from './bubbleTools';
+import { XLabel } from './HoverCard';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -82,25 +84,38 @@ function DeliveryTick({ d }: { d: Delivery }) {
   );
 }
 
-/** The hover (and keyboard) buttons by a bubble: Reply, and the actions menu. */
+/** The hover (and keyboard) buttons by a bubble, stacked on its outer side (#289): Reply, React, and the actions menu. */
 function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined; item: Item; onReply: (id: number) => void; onActions: (item: Item) => void }) {
   return (
     <div className="bubble-tools">
       {id !== undefined && (
-        <button type="button" className="bubble-tool" aria-label="Reply to this message" title="Reply" onClick={() => onReply(id)}>
+        <button type="button" className="ds-btn ds-btn-icon xbtn bubble-tool" aria-label="Reply to this message" onClick={() => onReply(id)}>
           <Icon name="reply" />
+          <XLabel text="Reply" />
         </button>
       )}
       {item.m?.from === 'ceo' && (
-        <button type="button" className="bubble-tool" aria-label="React to this message" aria-haspopup="dialog" title="React" onClick={() => onActions(item)}>
+        <button type="button" className="ds-btn ds-btn-icon xbtn bubble-tool" aria-label="React to this message" aria-haspopup="dialog" onClick={() => onActions(item)}>
           <Icon name="smile-plus" />
+          <XLabel text="React" />
         </button>
       )}
-      <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
+      <button type="button" className="ds-btn ds-btn-icon xbtn bubble-tool" aria-label="Message actions" aria-haspopup="dialog" onClick={() => onActions(item)}>
         <Icon name="ellipsis" />
+        <XLabel text="More" />
       </button>
     </div>
   );
+}
+
+/** Keep the active stack inside the log, including when a tall bubble is partly scrolled away. */
+export function placeTools(row: HTMLElement) {
+  const buttons = row.querySelectorAll<HTMLElement>('.bubble-tool');
+  const log = row.closest('.chat-log');
+  const tools = row.querySelector<HTMLElement>('.bubble-tools');
+  if (!buttons.length || !log || !tools) return;
+  const stack = buttons[buttons.length - 1].getBoundingClientRect().bottom - buttons[0].getBoundingClientRect().top;
+  tools.style.top = `${toolsOffset(row.getBoundingClientRect().top, stack, log.getBoundingClientRect())}px`;
 }
 
 // Memoised (#145): a keystroke or another message's event leaves the bubble as it is.
@@ -189,7 +204,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
     );
 
   return (
-    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1}>
+    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1} onPointerEnter={(e) => placeTools(e.currentTarget)} onFocus={(e) => placeTools(e.currentTarget)}>
       {mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
       <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (
