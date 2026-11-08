@@ -19,12 +19,12 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 const KIND_ICON: Record<KindGroup, IconName> = { build: 'hammer', qa: 'search', fix: 'wrench', ceo: 'briefcase-business' };
 const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-/** ↑ 24% / ↓ 10%, red when the cost went up. */
-function Change({ change }: { change: number | null }) {
+/** ↑ 24% / ↓ 10%, red when the cost went up; screen readers hear "Up 24%" / "Down 10%". */
+export function Change({ change }: { change: number | null }) {
   if (change === null || Math.round(change * 100) === 0) return <span className="muted">level</span>;
   return (
     <span className={change > 0 ? 'costs-up' : 'costs-down'}>
-      <Icon name={change > 0 ? 'arrow-up' : 'arrow-down'} /> {pct(Math.abs(change))}
+      <Icon name={change > 0 ? 'arrow-up' : 'arrow-down'} label={change > 0 ? 'Up' : 'Down'} /> {pct(Math.abs(change))}
     </span>
   );
 }
