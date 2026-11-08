@@ -1,9 +1,11 @@
 // The CEO chat's reactions (#118): the status reaction under the manager's messages as the CEO's job on them moves,
 // the CEO's react and reply tools, the manager's reactions (👍 / 👎 on a CEO reply become feedback for its next job),
-// and their Telegram side; and the threads' edits and library (#132).
+// and their Telegram side; the threads' edits and library (#132); and the chat's paging and removals (#145, shared/chatPage.ts).
 import { HttpError } from '../httpError.ts';
 import { CEO_REACTIONS, feedbackLine, isOpen, isReaction, nextStatus, react, reactTarget, telegramReaction, type StatusEvent } from '../../shared/reactions.ts';
 import { nextDelivery } from '../../shared/chat.ts';
+import { pageBefore, removeMessage, type ChatPage } from '../../shared/chatPage.ts';
+import { snapshotMessages } from '../../shared/chatParts.ts';
 import { conversationPatch, conversationsView, editConversation } from '../../shared/conversations.ts';
 import type { CeoChat } from '../ceoChat.ts';
 import type { MessageReaction, PhoneMessage, ServerDelivery, ServerEvent, StatusReaction } from '../../shared/types.ts';
@@ -124,5 +126,20 @@ export abstract class SwarmReactions extends SwarmUpdate {
     const line = had ? null : feedbackLine(m, emoji, note);
     if (line) this.ceoFeedback = [...this.ceoFeedback, line].slice(-5);
     return { reactions: m.reactions ?? [] };
+  }
+
+  /** GET /api/ceo/messages?before=&limit=: the page of the chat before a message, as the manager scrolls up. */
+  chatMessages(before: number, limit: number): ChatPage {
+    const page = pageBefore(this.state.messages, Number.isFinite(before) ? before : Infinity, limit);
+    return { ...page, messages: snapshotMessages(page.messages) };
+  }
+
+  /** DELETE /api/ceo/messages/:id: the manager's own or an office notice is deleted, a CEO message hidden from the phone. */
+  removeChatMessage(id: number) {
+    const next = removeMessage(this.state.messages, id);
+    if (!next) throw new HttpError(404, 'That message is no longer in this conversation.');
+    this.state.messages = next;
+    this.broadcast({ type: 'ceoChat', removed: [id] });
+    this.save();
   }
 }
