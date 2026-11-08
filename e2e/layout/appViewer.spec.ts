@@ -110,6 +110,8 @@ test('on a phone the toolbar is one row with Start/Stop, Mobile | Desktop and â‹
   expect((await bar.boundingBox())!.height).toBeLessThan(80); // one row of 44 px buttons
   await expect(bar.getByRole('button', { name: /^(Start|Stop)$/ })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'More for the app' })).toBeVisible();
+  const start = bar.getByRole('button', { name: 'Start' });
+  if (await start.count()) await start.click(); // the stage shows once the app runs
   const mobile = bar.getByRole('button', { name: 'Mobile' });
   const desktop = bar.getByRole('button', { name: 'Desktop' });
   await mobile.click();
