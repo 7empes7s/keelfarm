@@ -14,7 +14,7 @@ import { isConfirmOpen } from './Confirm';
 import { bindings, keyName, useKeyName } from './controls';
 import { Peek, usePeek } from './HoverCard';
 import { Icon } from './Icon';
-import { flip, quickKey, setCaptions, setMuted, type QuickToggle } from './quickToggles';
+import { flip, quickKey, setCaptions, setMuted, type QuickToggle } from './quickToggleRules';
 import { getAudioPrefs, setAudioPrefs, subscribeAudio } from './sfx';
 import './quickToggles.css';
 

@@ -63,6 +63,15 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    name: 'sound & captions sheet (#267)',
+    widths: PHONES.filter((w) => w < 800),
+    open: async (page) => {
+      await (await pocket(page, 'company')).getByRole('button', { name: /^Sound & captions/ }).click();
+      return dialog(page, /Sound & captions/);
+    },
+    tabs: [],
+  },
+  {
     name: 'team: + Agent sheet (#243)',
     widths: [390, 1280],
     open: async (page) => {
@@ -196,4 +205,52 @@ for (const width of [820, 1280]) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
   });
+}
+
+// ---------- Sound and CC in the top bar (#267) ----------
+
+for (const width of [390, 768, 1280]) {
+  for (const chat of [false, true]) {
+    test(`at ${width}px with the chat ${chat ? 'open' : 'closed'} the top bar has sound and captions, and a tap toggles them`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      const wide = width > 760;
+      const root = await pocket(page, chat && !wide ? 'chat' : 'company'); // a phone's chat is a tab
+      if (wide) {
+        const button = root.locator('.pk-head .pk-chat-btn');
+        if ((await button.getAttribute('aria-pressed')) !== String(chat)) await button.click();
+        await expect(root.locator('.pk-dock')).toHaveCount(chat ? 1 : 0);
+      }
+      const head = root.locator('.pk-head');
+      const inView = async (b: Locator) => {
+        const box = (await b.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(43.5);
+        expect(box.height).toBeGreaterThanOrEqual(43.5);
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+        expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.className ?? '', [box.x + box.width / 2, box.y + box.height / 2])).toContain('qt-btn');
+      };
+      if (wide) {
+        const sound = head.getByRole('button', { name: 'Mute sound' });
+        const cc = head.getByRole('button', { name: 'Captions', exact: true });
+        await inView(sound);
+        await inView(cc);
+        await expect(cc).toHaveAttribute('aria-pressed', 'false');
+        await cc.click();
+        await expect(cc).toHaveAttribute('aria-pressed', 'true');
+        await sound.click();
+        await expect(head.getByRole('button', { name: 'Unmute sound' })).toBeVisible();
+      } else {
+        const both = head.getByRole('button', { name: /^Sound & captions: sound on, captions off/ });
+        await inView(both);
+        await both.click();
+        const sheet = dialog(page, /Sound & captions/);
+        await sheet.getByRole('checkbox', { name: 'Captions' }).check();
+        await sheet.getByRole('checkbox', { name: 'Sound' }).uncheck();
+        await sheet.getByRole('button', { name: 'Close' }).click();
+        await expect(head.getByRole('button', { name: /^Sound & captions: sound off, captions on/ })).toBeVisible();
+      }
+      expect(await head.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
 }

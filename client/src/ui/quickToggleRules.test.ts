@@ -2,6 +2,9 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { defaultBindings } from './keymap';
 import { parseAudioPrefs } from './audioPrefs';
 import { parseA11yPrefs } from './a11yPrefs';
+import type * as QuickToggles from './quickToggleRules';
+import type * as Sfx from './sfx';
+import type { KeyPress } from './quickToggleRules';
 
 // sfx.ts and a11y.ts touch the page when they load: a stand-in window, page and storage.
 const stored = new Map<string, string>();
@@ -9,14 +12,14 @@ vi.stubGlobal('localStorage', { getItem: (k: string) => stored.get(k) ?? null, s
 vi.stubGlobal('window', { addEventListener: () => undefined });
 vi.stubGlobal('document', { documentElement: { setAttribute: () => undefined, removeAttribute: () => undefined, style: { setProperty: () => undefined, removeProperty: () => undefined } } });
 
-let q: typeof import('./quickToggles');
-let sfx: typeof import('./sfx');
+let q: typeof QuickToggles;
+let sfx: typeof Sfx;
 beforeAll(async () => {
-  q = await import('./quickToggles');
+  q = await import('./quickToggleRules');
   sfx = await import('./sfx');
 });
 
-const press = (code: string, more: Partial<import('./quickToggles').KeyPress> = {}) => ({ code, repeat: false, ctrlKey: false, metaKey: false, altKey: false, ...more });
+const press = (code: string, more: Partial<KeyPress> = {}) => ({ code, repeat: false, ctrlKey: false, metaKey: false, altKey: false, ...more });
 
 describe('the Sound button', () => {
   it('mutes and unmutes keeping the volume and every level', () => {
