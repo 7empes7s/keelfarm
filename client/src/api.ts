@@ -15,6 +15,7 @@ import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
 import type { LibraryFilter, LibraryPage } from '../../shared/library';
 import type { HealthView } from '../../shared/health';
+import type { ChatPage } from '../../shared/chatPage';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -173,6 +174,8 @@ export const api = {
   ceoRetry: () => call('POST', '/api/ceo/retry'),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
+  chatMessages: (before: number) => call<ChatPage>('GET', `/api/ceo/messages?before=${before}`),
+  removeMessage: (id: number) => call('DELETE', `/api/ceo/messages/${id}`),
   newConversation: (repoId: string | null = null) => call<{ id: string }>('POST', '/api/ceo/conversations', { repoId }),
   openConversation: (id: string) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/open`),
   editConversation: (id: string, patch: ConversationPatch) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/edit`, patch),
