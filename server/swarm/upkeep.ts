@@ -516,10 +516,11 @@ export abstract class SwarmUpkeep extends SwarmCeo {
     const demo = this.health.simulated; // the demo's Simulate low memory shows a burst within half a minute
     const starting = (a: PersistedAgent) => !!a.needsSignIn || ['none', 'creating', 'setting-up'].includes(this.boxMachines.stateOf(a.machine ?? machineName(a.id)));
     const agents = this.state.agents.map((a) => ({ id: a.id, burst: a.burst, busy: busy(a), starting: starting(a), endedAt: a.endedAt }));
-    const leaving = burstLeavers({ now, idleMs: demo ? 120_000 : cloud.hybrid.burstIdleMin * 60_000, localRoom: !held && !this.localRoomWhy(), agents });
+    const room = !held && !this.localRoomWhy();
+    const leaving = burstLeavers({ now, idleMs: demo ? 120_000 : cloud.hybrid.burstIdleMin * 60_000, localRoom: room, agents });
     for (const id of leaving) {
       const a = this.state.agents.find((x) => x.id === id)!;
-      const why = !held && !this.localRoomWhy() ? 'this computer has room again' : `idle for ${Math.round((now - Math.max(a.burst!, a.endedAt ?? 0)) / 60_000)} minutes`;
+      const why = room ? 'this computer has room again' : `idle for ${Math.round((now - Math.max(a.burst!, a.endedAt ?? 0)) / 60_000)} minutes`;
       try {
         this.fireAgent(id);
         this.postMessage('office', `☁️ ${a.name} left the cloud: ${why}. Their Box is deleted.`);
