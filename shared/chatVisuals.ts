@@ -3,7 +3,7 @@
 // inline or named by a live `source` ("costs:7d:byFloor") that the phone resolves from the office's own numbers
 // (client/src/ui/chatVisualSources.ts). A block that can't be read stays in the text as written. Percentages are 0-100.
 
-export type VisualUnit = 'usd' | 'pct' | 'ms' | 'count' | '';
+export type VisualUnit = 'usd' | 'pct' | 'ms' | 'count' | 'mb' | '';
 type ChartType = 'bar' | 'stacked-bar' | 'line' | 'area' | 'donut' | 'progress';
 /** Colours by design token (client: --ds-series-*, --ds-good-fill…), never raw CSS. */
 export type VisualColor = 'accent' | 'good' | 'warn' | 'bad' | 'blue' | 'muted';
@@ -84,16 +84,19 @@ const COLORS: readonly VisualColor[] = ['accent', 'good', 'warn', 'bad', 'blue',
 const COST_VIEWS = ['byFloor', 'byDay', 'byKind', 'wasteByCause', 'perMerge', 'total', 'costPerMerge', 'waste', 'wasteShare', 'merges'] as const;
 const FLOW_METRICS = ['mergedToday', 'mergedHour', 'qaPass', 'qaFirstPass', 'qaRounds', 'lead', 'qaWait', 'ciPass'] as const;
 const STAGES = ['ready', 'building', 'inQa', 'fixing', 'toMerge', 'needsYou', 'triage'] as const;
+const SERVER_VIEWS = ['now', 'byProgram', 'byAgent', 'previews', '24h', 'waiting', 'cpu', 'memory', 'available', 'swap', 'disk'] as const;
 type CostView = (typeof COST_VIEWS)[number];
 type FlowMetric = (typeof FLOW_METRICS)[number];
 type Stage = (typeof STAGES)[number];
+type ServerView = (typeof SERVER_VIEWS)[number];
 
 /** A live source: `null` view or metric is the whole thing (a costs dashboard, merges per hour, every stage, every limit). */
 export type VisualSource =
   | { kind: 'costs'; days: number; view: CostView | null }
   | { kind: 'throughput'; floor: number | null; metric: FlowMetric | null; byFloor?: true }
   | { kind: 'backlog'; floor: number | null; stage: Stage | null }
-  | { kind: 'usage'; limit: string | null };
+  | { kind: 'usage'; limit: string | null }
+  | { kind: 'server'; view: ServerView | null };
 
 const pick = <T extends string>(list: readonly T[], s: string | undefined): T | null => (s === undefined ? null : (list.find((x) => x.toLowerCase() === s.toLowerCase()) ?? null));
 
@@ -105,7 +108,8 @@ function scope(parts: string[]): { floor: number | null; rest: string[] } | null
 }
 
 /**
- * costs:<N>d[:view] · throughput:office|floor:N|byFloor[:metric] · backlog:office|floor:N[:stage] · usage[:limit].
+ * costs:<N>d[:view] · throughput:office|floor:N|byFloor[:metric] · backlog:office|floor:N[:stage] · usage[:limit] ·
+ * server[:view] (#271).
  * Anything else is null, so the block falls back to its inline values.
  */
 export function parseSource(raw: unknown): VisualSource | null {
@@ -133,6 +137,10 @@ export function parseSource(raw: unknown): VisualSource | null {
     return s.rest.length && !stage ? null : { kind: 'backlog', floor: s.floor, stage };
   }
   if (head === 'usage') return parts.length > 1 ? null : { kind: 'usage', limit: parts[0] ?? null };
+  if (head === 'server') {
+    const view = pick(SERVER_VIEWS, parts[0]);
+    return parts.length > 1 || (parts.length && !view) ? null : { kind: 'server', view };
+  }
   return null;
 }
 
@@ -158,6 +166,7 @@ function unitOf(x: unknown, fallback: VisualUnit = 'count'): VisualUnit {
   if (['pct', '%', 'percent', 'share'].includes(u)) return 'pct';
   if (['ms', 'duration', 'time'].includes(u)) return 'ms';
   if (['count', 'number', 'n'].includes(u)) return 'count';
+  if (['mb', 'memory', 'bytes'].includes(u)) return 'mb';
   if (['text', 'string', 'label'].includes(u)) return '';
   return fallback;
 }
@@ -297,6 +306,7 @@ export function formatValue(v: number | string | null | undefined, unit: VisualU
   }
   if (unit === 'pct') return `${Math.round(v * 10) / 10}%`;
   if (unit === 'ms') return formatDuration(v);
+  if (unit === 'mb') return Math.abs(v) >= 1024 ? `${(v / 1024).toFixed(short && Math.abs(v) >= 10_240 ? 0 : 1)} GB` : `${Math.round(v)} MB`;
   if (Math.abs(v) >= 10_000 && short) return `${Math.round(v / 1000)}k`;
   return (Math.round(v * 100) / 100).toLocaleString('en-US');
 }

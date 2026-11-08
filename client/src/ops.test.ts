@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OpsAlarm, UsageView } from '../../shared/types';
-import { EMPTY_NUMBERS, fmtDuration, fmtPct, fmtUsd, newAlarms, signLine, usageChip, usageMeter } from './ops';
+import { EMPTY_NUMBERS, fmtDuration, fmtPct, fmtUsd, newAlarms, signLine, usageChip, usageMeter, waitTile, WAIT_TARGET_MS } from './ops';
 
 const NOW = new Date(2026, 8, 28, 12, 0).getTime();
 const MIN = 60_000;
@@ -56,5 +56,20 @@ describe('newAlarms', () => {
     expect(newAlarms([], [alarm('a')]).map((a) => a.id)).toEqual(['a']);
     expect(newAlarms([alarm('a')], [alarm('a'), alarm('b')]).map((a) => a.id)).toEqual(['b']);
     expect(newAlarms([alarm('a'), alarm('b')], [alarm('b')])).toEqual([]);
+  });
+});
+
+describe('waitTile (#275)', () => {
+  it('rates the longest wait against the 30-minute target', () => {
+    expect(waitTile(EMPTY_NUMBERS)).toMatchObject({ value: 'Nothing waiting', tone: 'good', target: 1 });
+    expect(waitTile({ longestWaitMs: 20 * 60_000, waitTrend: [] }).tone).toBe('good');
+    expect(waitTile({ longestWaitMs: 90 * 60_000, waitTrend: [] })).toMatchObject({ value: '1h 30m', tone: 'warn' });
+    expect(waitTile({ longestWaitMs: 3 * 3_600_000, waitTrend: [] }).tone).toBe('bad');
+  });
+
+  it("scales the week's bars to the longest day, the target line included", () => {
+    const t = waitTile({ longestWaitMs: null, waitTrend: [null, 4 * WAIT_TARGET_MS, WAIT_TARGET_MS, null, null, null, 2 * WAIT_TARGET_MS] });
+    expect(t.bars).toEqual([null, 1, 0.25, null, null, null, 0.5]);
+    expect(t.target).toBe(0.25);
   });
 });

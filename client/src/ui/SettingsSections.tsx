@@ -301,6 +301,8 @@ export function CompanySettings() {
         <input key={settings.previewRecentHours} type="number" min={1} max={2160} defaultValue={settings.previewRecentHours} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== settings.previewRecentHours && set({ previewRecentHours: Number(e.target.value) })} />
       </label>
       <p className="muted small">Never while someone watches it or an agent tests in it. Older open PRs fold under “Older” in the app viewer.</p>
+      <NumberField label="Re-check a PR waiting for you after (minutes)" value={settings.stuckRecheckMin ?? 30} max={1440} onSave={(n) => set({ stuckRecheckMin: n })} />
+      <p className="muted small">If only a conflict or a CI outage holds it by then, it goes back to a developer or the merge gate by itself; otherwise the CEO looks at it again, at most every 2 hours.</p>
       {typeof settings.autoUpdate === 'boolean' && (
         <>
           <label className="field">

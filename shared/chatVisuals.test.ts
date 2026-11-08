@@ -16,6 +16,19 @@ describe('parseSource', () => {
     expect(parseSource('usage')).toEqual({ kind: 'usage', limit: null });
   });
 
+  it("reads the server's sources (#271)", () => {
+    expect(parseSource('server')).toEqual({ kind: 'server', view: null });
+    expect(parseSource('server:byProgram')).toEqual({ kind: 'server', view: 'byProgram' });
+    expect(parseSource('server:24H')).toEqual({ kind: 'server', view: '24h' });
+    for (const s of ['server:moon', 'server:now:extra']) expect(parseSource(s)).toBeNull();
+  });
+
+  it('shows memory in MB, then GB (#271)', () => {
+    expect(formatValue(340, 'mb')).toBe('340 MB');
+    expect(formatValue(1843, 'mb')).toBe('1.8 GB');
+    expect(parseVisual('chart', JSON.stringify({ unit: 'mb', labels: ['a'], series: [{ values: [1] }] }))).toMatchObject({ unit: 'mb' });
+  });
+
   it('refuses what it does not know, so the block keeps its inline values', () => {
     for (const s of ['costs:7d:byMoon', 'costs:90d', 'costs', 'throughput:floor:x', 'backlog:floor:2:soon', 'weather', 42, null]) expect(parseSource(s)).toBeNull();
   });

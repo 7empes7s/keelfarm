@@ -36,6 +36,12 @@ export function qaOutcome(pass: boolean, rec: QaRoundRecord, pr: QaPull | null):
   return conflicting && rec.mergeFixes < MAX_MERGE_FIXES ? 'conflict' : 'needs-human';
 }
 
+/** A finished QA round's decision and budget: a failed test that also conflicts spends a merge fix, unlike maintenance before QA. */
+export function qaRoundResult(pass: boolean, rec: QaRoundRecord, pr: QaPull | null): { next: QaNext; mergeFixes: number } {
+  const next = qaOutcome(pass, rec, pr);
+  return { next, mergeFixes: rec.mergeFixes + (next === 'conflict' ? 1 : 0) };
+}
+
 /**
  * After a lab-error report (#189): the lab failed, not the code, so the PR goes back to QA by itself once in a round
  * (retry) and to triage on a second one (stuck). Never a failed round, never to a developer.
@@ -53,14 +59,14 @@ export interface PreQa {
 /**
  * What happens before a queued PR goes to a tester, so QA never spends a session on a stale branch. test: go ahead.
  * update-branch: the repo only merges up-to-date branches, so GitHub merges the base in first, as the merge gate does.
- * send-back: it conflicts, so its developer merges the base first (needsHuman: the merge-fix budget ran out).
+ * send-back: it conflicts, so its developer merges the base first (never the manager, and no merge fix spent: #275).
  * People's own PRs are theirs: QA tests them as they are.
  */
-export type QaGate = { do: 'test' } | { do: 'update-branch' } | { do: 'send-back'; needsHuman: boolean };
+export type QaGate = { do: 'test' } | { do: 'update-branch' } | { do: 'send-back' };
 
-export function qaGate(pr: QaPull & { headRefName: string }, rec: Pick<QaRoundRecord, 'mergeFixes'>, autoMerge: boolean): QaGate {
+export function qaGate(pr: QaPull & { headRefName: string }, autoMerge: boolean): QaGate {
   if (!pr.headRefName.startsWith('swarm/')) return { do: 'test' };
-  if (pr.mergeable === 'CONFLICTING' || pr.mergeState === 'DIRTY') return { do: 'send-back', needsHuman: rec.mergeFixes >= MAX_MERGE_FIXES };
+  if (pr.mergeable === 'CONFLICTING' || pr.mergeState === 'DIRTY') return { do: 'send-back' };
   if (autoMerge && pr.mergeState === 'BEHIND') return { do: 'update-branch' };
   return { do: 'test' };
 }

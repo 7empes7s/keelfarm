@@ -16,10 +16,12 @@ import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { UsageSources } from './UsageSources';
 import { HealthStrip } from './HealthStrip';
+import { ServerCard } from './ServerCard';
 import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
+import { WaitTile } from './WaitTile';
 
-// The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
+// The manager's console → Mission control: Claude's usage with "Resume full speed", the server and what uses it, what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
 // from the wall as a table, and where the Claude plan goes (CostsSection.tsx).
 
@@ -290,6 +292,7 @@ const COLUMNS: [string, (n: OpsNumbers) => string, string?][] = [
   ['Fixing', (n) => String(n.fixing), 'Back with an agent: QA findings, checks or a conflict'],
   ['To merge', (n) => String(n.toMerge)],
   ['Needs you', (n) => `${n.needsYou}${n.triage ? ` (+${n.triage})` : ''}`, 'The number in parentheses: the CEO is looking first'],
+  ['Longest wait for you', (n) => fmtDuration(n.longestWaitMs), 'The longest a PR has waited in needs-you right now (the CEO looking included); target under 30 minutes'],
   ['Merged today', (n) => `${n.mergedToday} (${n.mergedHour} last hour)`],
   ['Lead time', (n) => fmtDuration(n.leadMs), 'Median issue → merge over the last 24 hours'],
   ['QA wait', (n) => fmtDuration(n.qaWaitMs), 'Median wait for a free agent over the last 24 hours'],
@@ -364,8 +367,10 @@ export function OpsTab({ card }: { card?: string }) {
         </Section>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <ServerCard />
         <CloudToday />
         <TestLabCard />
+        <WaitTile />
         <h3 className="section">
           <Icon name="siren" /> Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}
         </h3>

@@ -7,7 +7,7 @@ import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
-import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaNext } from '../qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaRoundResult, type QaNext } from '../qaOutcome.ts';
 import { fullQualityLine, qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
@@ -235,16 +235,12 @@ export abstract class SwarmQa extends SwarmSessions {
       return;
     }
     // QA never spends a session on a stale branch: a conflict goes to the developer first, a branch behind is updated.
-    const gate = qaGate(pr, rec, repo.autoMerge);
+    const gate = qaGate(pr, repo.autoMerge);
     if (gate.do === 'send-back') {
       this.appendLog(a, [{ kind: 'system', text: `PR #${pr.number} conflicts with ${repo.defaultBranch}; it goes back to its developer before QA.` }]);
       this.clearTask(a);
-      if (gate.needsHuman) {
-        this.sendBack(repo, rec, 'conflict', rec.fixInstructions ?? '', true);
-        return;
-      }
-      // QA's last findings stay on the record for the test QA was queued for, which follows the merge.
-      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeFixes: rec.mergeFixes + 1, mergeNote: null });
+      // QA's last findings stay on the record for the test QA was queued for, which follows the merge. Bringing it up to date isn't a merge fix (#275).
+      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeNote: null });
       setTimeout(() => this.schedule(), 200);
       return;
     }
@@ -369,7 +365,7 @@ export abstract class SwarmQa extends SwarmSessions {
       recordQa(this.state.ops, repo.id, pass, this.qaWaits.get(key) ?? null, Date.now(), rec.prNumber, rec.round, cause);
       if (report.charterCheck) noteCheck(repo.charter.log, { at: Date.now(), pr: rec.prNumber, ...citedRule(report.charterCheck, repo.charter) }, Date.now()); // the Charter tab's standards and non-goals (#105)
       this.qaWaits.delete(key);
-      const next = qaOutcome(pass, rec, pull);
+      const { next, mergeFixes } = qaRoundResult(pass, rec, pull);
       try {
         this.appendLog(a, [{ kind: 'system', text: '📎 Uploading evidence and posting the QA report on the PR…' }]);
         const body = await this.renderQaComment(a, repo, rec, report, rt.shots, next);
@@ -383,6 +379,7 @@ export abstract class SwarmQa extends SwarmSessions {
       const fixInstructions = report.fixInstructions ?? report.checks.filter((c) => c.result === 'fail').map((c) => `${c.name}: ${c.details}`).join('\n');
       this.setQa(rec, {
         status: nextStatus,
+        mergeFixes,
         summary: report.summary,
         checks: report.checks,
         commentUrl: commentUrl ?? rec.commentUrl,
@@ -399,8 +396,8 @@ export abstract class SwarmQa extends SwarmSessions {
         qaChecks: pull?.checks ?? null,
         shots,
       });
-      // QA's findings travel with the merge fix; the developer's push then gets one more QA round.
-      if (next === 'conflict') this.sendBack(repo, rec, 'conflict', conflictFixInstructions(fixInstructions, repo.defaultBranch), false);
+      // qaRoundResult already charged this failed test; sending its findings with the conflict must not charge twice.
+      if (next === 'conflict') this.sendBack(repo, rec, 'conflict', conflictFixInstructions(fixInstructions, repo.defaultBranch), false, false);
       const stillConflicts = pull && (pull.mergeable === 'CONFLICTING' || pull.mergeState === 'DIRTY') ? `, and it still conflicts with ${repo.defaultBranch} with its ${MAX_MERGE_FIXES} merge fixes used up` : '';
       const triaged = nextStatus === 'needs-human' && this.stuck(rec, {}, `it failed QA ${qaRounds} times, the most QA rounds a PR gets (${MAX_QA_ROUNDS})${stillConflicts}`);
       if (!pass && qaRounds >= 2) {

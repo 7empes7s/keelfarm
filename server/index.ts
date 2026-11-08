@@ -384,6 +384,9 @@ app.post('/api/usage/resume', route(() => swarm.resumeFullSpeed()));
 app.post('/api/usage/simulate', route((req) => swarm.simulateUsage(req.body?.kind)));
 // The health strip (#55): in the demo, low memory on demand
 app.post('/api/health/simulate', route((req) => swarm.health.simulate(req.body?.low === true)));
+// The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
+app.get('/api/server/trend', route(() => swarm.serverTrend()));
+app.post('/api/server/orphans/:pid/stop', route((req) => swarm.stopOrphan(Number(req.params.pid))));
 // The test lab desk's thumbnails (#56): a recent result's first screenshot.
 app.get('/api/testlab/shot/:id', (req, res) => {
   const file = swarm.testLab.shotFile(String(req.params.id));
