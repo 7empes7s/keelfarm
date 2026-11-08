@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { lazy, memo, Suspense, useCallback, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useStore } from '../store';
 import type { Delivery, PhoneMessage } from '../../../shared/types';
 import { DELIVERY_LABEL, excerpt, messageLook } from '../../../shared/chat';
@@ -59,7 +59,7 @@ const LONG_PRESS_MS = 500;
 interface BubbleProps {
   item: Item;
   ceoName: string;
-  quoted: PhoneMessage | null | undefined; // undefined: not a reply; null: its original is no longer saved
+  quoted: PhoneMessage | null | 'earlier' | undefined; // undefined: not a reply; null: its original is no longer saved; earlier: not loaded yet
   highlight: boolean;
   linked: (text: string) => string;
   onFloor: (floor: number) => void;
@@ -103,7 +103,8 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
   );
 }
 
-export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile, cont }: BubbleProps) {
+// Memoised (#145): a keystroke or another message's event leaves the bubble as it is.
+export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQuote, onReply, onActions, onArtifact, onFile, cont }: BubbleProps) {
   const m = item.m;
   const req = useStore((s) => (m?.requestId ? s.requests.find((r) => r.id === m.requestId) : undefined));
   const [dx, setDx] = useState(0);
@@ -111,10 +112,6 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   const look = m ? messageLook(m) : 'bubble';
   if (look === 'hidden') return null; // the CLI's own output (#193) stays backend
-  if (m?.signIn && look === 'card') return <SignInCard card={m.signIn} />;
-  if (m?.notice && look === 'card') return <NoticeCard text={officeText(m.text)} notice={m.notice} />;
-  if (m?.switch?.useKey) return <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />;
-  if (m && look === 'pill') return <NoticePill text={officeText(m.text)} />;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
   const delivery: Delivery | undefined = m ? m.delivery : item.out!.delivery;
@@ -164,10 +161,20 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
     },
   };
 
+  // An office note: hold or right-click it for its actions (Delete).
+  if (m && (look === 'pill' || m.switch?.useKey || ((m.notice || m.signIn) && look === 'card')))
+    return (
+      <div className="bubble-row-office" data-msg={id} {...gestures}>
+        {m.signIn && look === 'card' ? <SignInCard card={m.signIn} />
+          : m.notice && look === 'card' ? <NoticeCard text={officeText(m.text)} notice={m.notice} />
+          : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
+          : <NoticePill text={officeText(m.text)} />}
+      </div>
+    );
   const quote =
-    quoted === undefined ? null : quoted === null ? (
+    quoted === undefined ? null : quoted === null || quoted === 'earlier' ? (
       <div className="bubble-quote bubble-quote-gone">
-        <Icon name="reply" /> The original message is no longer saved
+        <Icon name="reply" /> {quoted ? 'An earlier message' : 'The original message is no longer saved'}
       </div>
     ) : (
       <button
@@ -258,4 +265,4 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
       {!mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
     </div>
   );
-}
+});

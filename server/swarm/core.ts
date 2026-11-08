@@ -52,7 +52,7 @@ import { emptyChanges } from '../../shared/managerChanges.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS } from '../../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS } from '../../shared/themes.ts';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK } from '../../shared/types.ts';
-import { snapshotMessages } from '../../shared/chatParts.ts';
+import { latestPage } from '../../shared/chatPage.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
@@ -537,7 +537,7 @@ export abstract class SwarmCore extends SwarmContract {
       requests: this.state.requests,
       ceo: this.ceoInfo(),
       chat: this.chatView(),
-      messages: snapshotMessages(this.state.messages.slice(-100)),
+      ...latestPage(this.state.messages),
       phoneReadAt: this.state.phoneReadAt,
       notices: this.state.notices,
       usage: this.usageNow(),
