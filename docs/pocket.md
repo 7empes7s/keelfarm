@@ -92,6 +92,7 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `costs`: Mission control's cost insights and cards | ✓ | ✓ | ✓ |
 | `agent-chat`: an agent's chat, chat mode and reactions | ✓ | ✓ | ✓ |
 | `chat-full`: ⛶ the CEO chat full screen | ✓ | ✓ | ✓ |
+| `chat-charts`: 📊 ready chart prompts in the chat's header, pinned ones on top | ✓ | ✓ | ✓ |
 | `info`: every screen's ⓘ | ✓ | ✓ | |
 | `switch`: the 2D office | | | ✓ |
 
