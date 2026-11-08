@@ -9,9 +9,9 @@ const KEPT: ChatToolId[] = ['search', 'charts', 'full'];
 const BY_USE: ChatToolId[] = ['files', 'call', 'text', 'handsFree'];
 
 /** The header's own room: padding, the avatar, the name at its shortest, ⋯ and ✕. */
-export const HEAD_CHROME = 260;
+const HEAD_CHROME = 260;
 /** One 44 px button and its gap. */
-export const TOOL_SLOT = 50;
+const TOOL_SLOT = 50;
 
 /**
  * The tools present (`present`), split for a header `width` px wide: what shows in the row, in its order, and what goes

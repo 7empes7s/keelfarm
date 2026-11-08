@@ -19,7 +19,7 @@ export const CHART_PROMPTS = [
 export type ChartPromptId = (typeof CHART_PROMPTS)[number]['id'];
 
 /** At most this many pins, so the list stays a glance. */
-export const MAX_PINS = 8;
+const MAX_PINS = 8;
 
 /** The saved pins, as written to the device: prompt texts, deduplicated and capped; anything unreadable is none. */
 export function readPins(raw: string | null): string[] {
