@@ -9,7 +9,7 @@ import { seedBigCompany } from './demo/seedRepos.ts';
 import { repos, restoreNumbers } from './demo/world.ts';
 import './demo/index.ts';
 
-export { answerReply, demoGrow, demoMoneyAnswer, demoShrink, type DemoFloor } from './demo/ceo.ts';
+export { answerReply, demoGrow, demoMoneyAnswer, demoServerAnswer, demoShrink, type DemoFloor } from './demo/ceo.ts';
 export { demoTeam } from './demo/seedRepos.ts';
 export { fixPromptPull } from './demo/sessionScripts.ts';
 export { demoUsage } from './demo/sessions.ts';

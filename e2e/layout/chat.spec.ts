@@ -88,6 +88,17 @@ const SCREENS: Screen[] = [
     },
     tabs: ['', { name: 'everything', go: (root) => root.getByRole('button', { name: 'Everything' }).click() }],
   },
+  {
+    // one header row (#270): docked, the dock's header is the chat's (no second row); 📊 Charts' prompts, and the ⋯
+    name: 'pocket chat header row',
+    widths: [390, 1280, 1920],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      if ((page.viewportSize()?.width ?? 0) >= 1200) await expect(root.locator('.pk-dock .chat-head')).toHaveCount(0);
+      return root;
+    },
+    tabs: ['', { name: 'charts', go: (root) => root.getByRole('button', { name: 'Charts', exact: true }).click() }, { name: 'more', go: (root) => root.getByRole('button', { name: /^More for the chat/ }).click() }],
+  },
 ];
 
 checkScreens(SCREENS);

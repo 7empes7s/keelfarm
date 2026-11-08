@@ -12,7 +12,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { browserNote, DEFAULT_ESTIMATES, gb, type HealthView, type HeldWork, type MemoryReading, type MemorySettings, type SessionKind } from '../shared/health.ts';
+import type { ServerNow, ServerPoint } from '../shared/serverLoad.ts';
 import { HttpError } from './httpError.ts';
+import { realLoad, type LoadContext } from './serverLoad.ts';
 
 export { DEFAULT_MEMORY, memorySettings, type SessionKind } from '../shared/health.ts';
 
@@ -152,6 +154,12 @@ export interface ResourceProbe {
   kill(pids: number[]): void;
   /** What the test lab's browser uses (its whole process tree), MB; null when it isn't running or can't be measured. */
   browser?(): Promise<number | null>;
+  /** The server's load by program (#271, server/serverLoad.ts). */
+  server(ctx: LoadContext): Promise<ServerNow>;
+  /** Stop a process left over from an ended session, and what it started, by pid (#271). */
+  stopOrphan(pid: number, ctx: LoadContext): Promise<void>;
+  /** The 24 h trend's points from before the office started: the demo's made-up day; none for the real one. */
+  serverSeed(): ServerPoint[];
   /** The demo only: pretend memory is low, or back. */
   simulate?(low: boolean): void;
 }
@@ -244,7 +252,7 @@ function killPids(pids: number[]) {
   }
 }
 
-export const realResources: ResourceProbe = { memory: readMemory, usage: procUsage, kill: killPids, browser: () => labBrowserMb() };
+export const realResources: ResourceProbe = { memory: readMemory, usage: procUsage, kill: killPids, browser: () => labBrowserMb(), ...realLoad };
 
 // ---------- the office's side ----------
 
@@ -257,7 +265,7 @@ export interface LiveSession {
 }
 
 export interface HealthHost {
-  probe(): ResourceProbe;
+  probe(): Omit<ResourceProbe, 'server' | 'stopOrphan' | 'serverSeed'>; // the server's load is ServerLoad's (#271)
   settings(): MemorySettings;
   sessions(): LiveSession[];
   /** A line in the agent's feed. */

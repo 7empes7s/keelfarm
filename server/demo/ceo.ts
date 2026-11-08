@@ -80,6 +80,12 @@ export function demoMoneyAnswer(): string {
   return ["Here's where this week's money went: by floor, by kind of work, the waste and the cost per merge. Tap a floor to open it.", '', '```dashboard', JSON.stringify(dashboard), '```', '', '```chart', JSON.stringify(trend), '```', '', '```table', JSON.stringify(waste), '```'].join('\n');
 }
 
+/** The demo CEO's answer to "how much of the server is used?" (#271): the server's live sources, so it shows the demo's own. */
+export function demoServerAnswer(): string {
+  const previews = { type: 'bar', title: 'Memory by preview', unit: 'mb', source: 'server:previews' };
+  return ["Here's the server now: memory, swap, load and disk, what uses the memory and the last 24 hours. Tap an agent to open them.", '', '```dashboard', JSON.stringify({ title: 'The server', source: 'server' }), '```', '', '```chart', JSON.stringify(previews), '```'].join('\n');
+}
+
 /** A floor in company_status, as far as the demo CEO reads it. */
 export interface DemoFloor {
   floor: number;

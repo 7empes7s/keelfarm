@@ -1,0 +1,25 @@
+/* Mission control's "What uses the server" card (ui/ServerCard.tsx, #271): the chat's cards, then the leftovers. */
+.server-card {
+  min-width: 0;
+}
+.server-orphans {
+  margin-top: var(--ds-space-3);
+}
+.server-orphans-h {
+  margin: 0 0 var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-warn-text);
+}
+.server-orphan {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: 44px;
+  min-width: 0;
+  border-top: var(--ds-border) solid var(--ds-line);
+  overflow-wrap: anywhere;
+}
+.server-orphan > svg {
+  flex: none;
+  color: var(--ds-warn-text);
+}
