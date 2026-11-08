@@ -11,6 +11,8 @@ import {
   median,
   opsView,
   qaRoundsPerMerge,
+  recordBox,
+  recordBurst,
   recordChecks,
   recordCost,
   recordMerges,
@@ -245,5 +247,18 @@ describe('alarms', () => {
   it('stops once handled', () => {
     const f = floor({ agents: [agent({ status: 'working', endedAt: NOW - DAY_MS })], prs: [pr(7, 'queued')] });
     expect(floorAlarms(f, NOW)).toEqual([]);
+  });
+});
+
+describe('cloud today (#260)', () => {
+  it("counts today's bursts and Box hours with about what they cost, and is absent with none", () => {
+    const h = emptyHistory();
+    expect(opsView([], h, NOW).cloud).toBeUndefined();
+    recordBurst(h, 'r1', NOW - DAY_MS); // yesterday
+    recordBurst(h, 'r1', NOW - 10 * MIN);
+    recordBox(h, 'r1', 90 * MIN, 0.1, NOW - 5 * MIN);
+    recordBox(h, 'r1', 0, 0.1, NOW); // nothing ran
+    expect(opsView([], h, NOW).cloud).toEqual({ bursts: 1, boxHours: 1.5, boxUsd: 0.15 });
+    expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW)).toEqual(h);
   });
 });

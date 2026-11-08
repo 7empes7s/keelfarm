@@ -6,7 +6,7 @@ import { blockers } from './issues.ts';
 // file issues. Pure: the swarm keeps the state, the client shows the settings.
 
 /** Office events that wake the CEO for a follow-up job */
-export type FollowupKind = 'question' | 'merged' | 'qaFailed' | 'agentError' | 'stalled' | 'unblocked' | 'audit' | 'usage';
+export type FollowupKind = 'question' | 'merged' | 'qaFailed' | 'agentError' | 'stalled' | 'unblocked' | 'audit' | 'usage' | 'burst';
 
 export interface FollowupSettings {
   kinds: Record<FollowupKind, boolean>;
@@ -32,10 +32,11 @@ export const FOLLOWUP_KINDS: { id: FollowupKind; label: string }[] = [
   { id: 'unblocked', label: 'An issue could start once what it waited for closed' },
   { id: 'audit', label: 'A code-health audit (docs/code-health.md) landed' },
   { id: 'usage', label: "Claude's usage changed state" },
+  { id: 'burst', label: 'Hybrid added a cloud agent because this computer was full' },
 ];
 
 export const DEFAULT_FOLLOWUPS: FollowupSettings = {
-  kinds: { question: true, merged: true, qaFailed: true, agentError: true, stalled: true, unblocked: true, audit: true, usage: true },
+  kinds: { question: true, merged: true, qaFailed: true, agentError: true, stalled: true, unblocked: true, audit: true, usage: true, burst: true },
   windowMin: 10,
   perHour: 4,
 };
@@ -203,6 +204,10 @@ export const followupEvents = {
   stalled: (a: Who, what: string, mins: number, repoId?: string, where?: string): NewEvent => ({
     kind: 'stalled', key: `stalled:${a.id}:${what}`, label: `${a.name} stalled`, repoId,
     text: `${a.name} (${a.id}) stalled on ${what}${where ? ` on ${where}` : ''}: the watchdog put it back in line after ${mins} minutes. agent_log and worktree_file show how far they got.`,
+  }),
+  burst: (a: Who, repoId: string, where: string, waiting: number): NewEvent => ({
+    kind: 'burst', key: `burst:${a.id}`, label: `${a.name} added in the cloud`, repoId,
+    text: `Hybrid added ${a.name} (${a.id}) in the cloud on ${where}: this computer was full and ${waiting} task${waiting === 1 ? '' : 's'} waited for memory. They leave by themselves once idle.`,
   }),
   agentError: (a: Who, key: string, mins: number, error: string, repoId?: string, where?: string): NewEvent => ({
     kind: 'agentError', key: `error:${key}`, label: `${a.name}'s error`, repoId,
