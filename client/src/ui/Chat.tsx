@@ -241,6 +241,8 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     return [
       ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? 'Edit and resend' : 'Edit', icon: 'pencil' as const, run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
       ...(hasVersionsSheet(m) ? [{ label: `Versions (${(m.versions?.length ?? 0) + 1})`, icon: 'clock' as const, run: () => setVersions(m) }] : []),
+      // The voice reads the CEO's short summary (#282); this reads all of it.
+      ...(m.from === 'ceo' && useStore.getState().settings.voice.provider !== 'off' ? [{ label: 'Read the whole message', icon: 'volume-2' as const, run: () => void import('./voiceMessages').then((v) => v.replayMessage(m, 'whole')) }] : []),
       ...(m.id === last('ceo') ? [{ label: 'Retry', icon: 'refresh-cw' as const, run: () => void attempt(api.ceoRetry) }] : []),
       { label: 'Remember this', icon: 'pin' as const, run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)) },
     ];

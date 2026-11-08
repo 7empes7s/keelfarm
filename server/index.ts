@@ -320,8 +320,8 @@ app.get(
   '/api/voice/messages/:id',
   route(async (req, res) => {
     const { id } = parse(z.object({ id: z.coerce.number().int().positive() }), req.params);
-    const q = parse(z.object({ cached: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
-    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id));
+    const q = parse(z.object({ cached: z.literal('1').optional(), whole: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
+    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id, !!q.whole));
     // The phone's ▶: a saved clip or a 404, never a new synthesis. Not kept by the browser, so "Clear saved clips" holds.
     const { audio, parts } = await swarm.voice.cachedAudio(id, q.part);
     res.setHeader('X-Voice-Parts', String(parts));

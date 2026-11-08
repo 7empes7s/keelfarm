@@ -12,6 +12,8 @@ import { demoReactions } from '../demoReactions.ts';
 import { demoRefsLine } from '../demoReads.ts';
 import { researchBrief } from '../demoResearch.ts';
 import { parseForwarded } from '../../shared/chat.ts';
+import { parseCeoMessage } from '../../shared/chatParts.ts';
+import { briefSpeech, spokenLine } from '../../shared/speech.ts';
 import { ceoReply } from './registry.ts';
 
 interface Profile {
@@ -40,6 +42,13 @@ const GENERIC: Profile = {
   qa: '- The app builds and starts\n- The changed feature works end to end in the browser\n- Phone width: nothing overflows\n- No console errors',
   playbook: '## Conventions\n- Small modules, tests next to the code\n## Skills\n- frontend-design for UI work',
 };
+
+/** Real CEOs end with a ```spoken summary (#282); a demo reply without its own says its first sentence or two. */
+export function withSpoken(reply: string): string {
+  if (/^```spoken\s*$/m.test(reply)) return reply;
+  const said = spokenLine(briefSpeech(parseCeoMessage(reply).text, 2));
+  return said ? `${reply}\n\n\`\`\`spoken\n${said}\n\`\`\`` : reply;
+}
 
 /** The demo CEO's answer to a reply: the quote it answers, then a word on the answer. */
 export function answerReply({ quote, reply }: { quote: string; reply: string }): string {
@@ -360,6 +369,9 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
         ...(next
           ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
           : []),
+        '```spoken',
+        `Quick status: ${agents} agents are on ${issues} open issues${pending ? `, and ${pending} team change${pending === 1 ? ' waits' : 's wait'} for you` : ''}. The full report is in the card.${next ? ` Shall I keep the team on what's next?` : ''}`,
+        '```',
         ...(nextFloor ? ['```idea research', `Research how other teams test phone layouts before floor ${nextFloor.floor} builds more`, `Research: how other teams test phone layouts, for floor ${nextFloor.floor}`, '```'] : []),
       ].join('\n');
     },
@@ -398,7 +410,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     setTimeout(async () => {
       try {
         cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · CEO` }]);
-        const reply = await run();
+        const reply = withSpoken(await run());
         await writeReply(reply, opts, cb, () => stopped);
         finish(true, reply);
       } catch (err) {
@@ -415,7 +427,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
           const said = text.split('\n').slice(1).join(' ').replace(/^\(message \d+\) /, '').trim() || text;
           const reply = parseForwarded(said);
           cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
-          cb.turn?.(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`);
+          cb.turn?.(withSpoken(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`));
         }, 1500),
       );
     },

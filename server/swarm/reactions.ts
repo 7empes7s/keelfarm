@@ -4,6 +4,7 @@
 import { HttpError } from '../httpError.ts';
 import { CEO_REACTIONS, feedbackLine, isOpen, isReaction, nextStatus, react, reactTarget, telegramReaction, type StatusEvent } from '../../shared/reactions.ts';
 import { nextDelivery } from '../../shared/chat.ts';
+import { spokenOf } from '../../shared/speech.ts';
 import { conversationPatch, conversationsView, editConversation } from '../../shared/conversations.ts';
 import type { CeoChat } from '../ceoChat.ts';
 import type { MessageReaction, PhoneMessage, ServerDelivery, ServerEvent, StatusReaction } from '../../shared/types.ts';
@@ -95,6 +96,12 @@ export abstract class SwarmReactions extends SwarmUpdate {
     this.markDelivery([m.id], 'replied');
     this.markStatus([m.id], 'replied');
     return `Answered message ${m.id} on the phone. Don't repeat it in your final message; end with no text when every message is answered.`;
+  }
+
+  /** What a new CEO message says aloud (#282): a `closing` text after this job answered with the reply tool only with a useful spoken line. */
+  protected ceoSpoken(parts: { text: string; spoken?: string }, closing: boolean) {
+    const since = this.ceo().startedAt ?? 0;
+    return spokenOf(parts, closing && this.state.messages.some((m) => m.from === 'ceo' && m.replyTo !== undefined && m.at >= since));
   }
 
   /** POST /api/ceo/conversations/:id/edit (and /pin): a thread renamed, pinned, archived or moved to another project (#132). */
