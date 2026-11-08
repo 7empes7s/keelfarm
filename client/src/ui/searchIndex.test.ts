@@ -50,8 +50,9 @@ describe('search everything', () => {
 
   it('leaves out the manager’s own messages and office-only sections on a phone', () => {
     expect(items.some((i) => i.label === 'Hello there')).toBe(false);
-    expect(items.some((i) => i.id === 'set:issues')).toBe(false);
-    expect(buildIndex({ ...input, where: 'office' }).some((i) => i.id === 'set:issues')).toBe(true);
+    expect(items.some((i) => i.id === 'set:timelapse')).toBe(false);
+    expect(buildIndex({ ...input, where: 'office' }).some((i) => i.id === 'set:timelapse')).toBe(true);
+    expect(items.some((i) => i.id === 'set:issues')).toBe(true); // Issues on a phone too (#265)
   });
 
   it('matches fuzzily, best first', () => {

@@ -30,6 +30,16 @@ const wasteGroup = (where: Where, rounds = false): View =>
   tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
 const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
 
+/** Mission control's usage card (#361) with its worst source's detail open. */
+const usageDetail = (where: Where): View => ({
+  name: 'Mission control: a usage source open',
+  go: async (root) => {
+    await (where === 'pocket' ? pocketSection(root, 'Mission control') : consoleSection(root, 'Company', 'Mission control'));
+    await root.locator('#ops-card-sources .us-row').first().click();
+    await expect(root.page().locator('.us-sheet')).toBeVisible();
+  },
+});
+
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
   name: 'Charter editor',
@@ -64,7 +74,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office')],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office'), usageDetail('office')],
   },
   {
     name: 'pocket voice settings', // ElevenLabs on with a (demo) key: the voice picker with favourites, model and speed (#320)
@@ -76,6 +86,7 @@ const SCREENS: Screen[] = [
     },
     tabs: [{ name: 'Voice', go: (root) => pocketSection(root, 'Voice') }],
   },
+  { name: 'pocket usage detail', widths: [390, 1280], open: pocketSettings, tabs: [usageDetail('pocket')] }, // a screen of its own: the sheet stays open
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];
 

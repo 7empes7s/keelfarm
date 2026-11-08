@@ -19,6 +19,7 @@ import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
 import type { AccountsView } from './accounts.ts';
+import type { UsageSource } from './usage.ts';
 import type { VoiceCacheView, VoiceLine } from './voice.ts';
 
 export interface WorldSnapshot {
@@ -129,7 +130,8 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
-  | { type: 'accounts'; accounts: AccountsView }
+  | { type: 'accounts'; accounts: AccountsView } // without `sources`: they come in usageSources
+  | { type: 'usageSources'; sources: UsageSource[] } // the usage card's rows (#361), only when they changed
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
   | { type: 'managerChanges'; changes: ManagerChange[] }

@@ -66,7 +66,7 @@ export interface OfficeUpdateView {
 }
 
 /** What the manager did on a board (#207): the kinds of action the CEO hears about. */
-export type ManagerChangeKind = 'close-issue' | 'close-pr' | 'merge' | 're-qa' | 'send-back';
+export type ManagerChangeKind = 'close-issue' | 'close-pr' | 'merge' | 're-qa' | 'send-back' | 'assign';
 
 /** What the CEO did about a change that touched running work. */
 export type CeoVerdict = 'stopped' | 'redirected' | 'let-finish';
