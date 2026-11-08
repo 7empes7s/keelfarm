@@ -107,6 +107,7 @@ export interface PersistedAgent {
   cli: AgentCli | ''; // '' = the office's default CLI
   machine: string | null; // their machine (machines.ts); null for an agent from before machines, until their next task
   host?: MachineHost; // 'box': their machine is an Upstash Box (docs/cloud.md); absent: a folder on this computer
+  burst?: number; // when Hybrid's burst added them (#260): they leave once idle or when this computer has room again
   boxCli?: BoxCliRecord | null; // a cloud agent's live CLI in their Box, to pick up again after a restart
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
   ownLogin?: KeyTrouble; // a cloud agent off the office's API key, which stopped working: their CLI uses its own login (#258)

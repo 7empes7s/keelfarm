@@ -9,6 +9,7 @@ import { resolveEffort } from '../../shared/costs.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
 import { fixGoesTo, pickTester, prepHeld, runnerFor, runsHere } from '../handOut.ts';
+import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
@@ -62,9 +63,10 @@ export abstract class SwarmScheduling extends SwarmQa {
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
   }
 
-  /** A floor's agents who can take work now, by desk. */
+  /** A floor's agents who can take work now, by desk; in Hybrid this computer's first (#260: no Box CPU cost; runner() still sends work to a Box when memory is short). */
   protected available(repo: PersistedRepo) {
-    return this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && this.isFree(a)).sort((x, y) => x.desk - y.desk);
+    const free = this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && this.isFree(a)).sort((x, y) => x.desk - y.desk);
+    return this.state.settings.cloud.machineKind === 'hybrid' ? localFirst(free) : free;
   }
 
   protected scheduleOffset = 0;
