@@ -1,0 +1,19 @@
+/* the Kanban in pocket mode: one column under the other, so nothing scrolls sideways */
+.kanban-embedded {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.kanban-embedded-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.kanban-embedded .kanban,
+.kanban-embedded .kanban-5 {
+  grid-template-columns: minmax(0, 1fr);
+  overflow: visible;
+}
+.kanban-embedded .kcol-body {
+  overflow: visible;
+}

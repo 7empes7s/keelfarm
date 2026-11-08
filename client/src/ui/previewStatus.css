@@ -1,0 +1,13 @@
+/* app preview statuses (preparing, stopped and error share the agent colours) */
+.status-installing {
+  background: var(--st-installing, #ffe066);
+}
+.status-starting {
+  background: var(--st-starting, #ffe066);
+}
+.status-running {
+  background: var(--st-running, #8ce99a);
+}
+.status-unconfigured {
+  background: var(--st-unconfigured, #e9ecef);
+}

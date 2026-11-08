@@ -1,0 +1,166 @@
+/* ---------- manager console ---------- */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.tab {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 8px 14px;
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 12px;
+  background: var(--ds-surface-raised);
+  cursor: pointer;
+}
+.tab-on {
+  background: var(--accent);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+}
+.tab-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.tab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .tab-grid {
+    grid-template-columns: 1fr;
+  }
+  .kanban,
+  .kanban-5 {
+    grid-template-columns: repeat(5, 250px);
+  }
+  .term-split-2 {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(200px, 1fr) auto;
+  }
+}
+.section {
+  margin: 0 0 10px;
+}
+.card {
+  background: var(--ds-surface-raised);
+  border: 3px solid var(--ds-outline);
+  border-radius: 18px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card h3 {
+  margin: 0 0 4px;
+}
+.floor-card {
+  border-left: 12px solid var(--accent);
+}
+.floor-badge {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  border: 2.5px solid var(--ds-outline);
+  color: #fff;
+  font-weight: 700;
+  flex: none;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+.office-card {
+  border-left: 12px solid var(--ds-outline);
+}
+.office-badge {
+  background: #fff3c4;
+  text-shadow: none;
+}
+.office-card .grow {
+  min-width: 190px; /* narrow screens: the buttons wrap below instead of squeezing the status */
+}
+.mc-changes {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+.mc-changes li + li {
+  margin-top: 4px;
+}
+.office-state {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.office-state-ok {
+  color: #1b873a;
+}
+.office-state-busy {
+  color: #9a5b00;
+}
+.office-state-bad {
+  color: #c0223b;
+}
+.office-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+  margin-left: auto;
+}
+.repo-list {
+  max-height: 260px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 2px solid rgba(31, 29, 43, 0.12);
+  border-radius: 12px;
+  padding: 6px;
+}
+.repo-list.tall {
+  max-height: 520px;
+}
+.repo-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.repo-row:hover {
+  background: var(--ds-surface-hover);
+}
+.repo-row select {
+  width: auto;
+}
+.links {
+  font-size: 0.85rem;
+}
+.team {
+  width: 100%;
+  border-collapse: collapse;
+}
+.team td {
+  padding: 4px 6px;
+  border-top: 1.5px solid rgba(31, 29, 43, 0.08);
+  vertical-align: middle;
+}
+.team select {
+  width: auto;
+  padding: 4px 6px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin: 6px 0;
+}
