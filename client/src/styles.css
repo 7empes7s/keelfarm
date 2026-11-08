@@ -5178,6 +5178,10 @@ html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) 
 .notify-hook p {
   margin: 2px 0 6px;
 }
+/* The demo's full-computer row (#260): the text keeps a readable width; the button wraps below it on a phone. */
+.hybrid-sim > .grow {
+  flex-basis: 15rem;
+}
 .notify-form {
   display: flex;
   flex-direction: column;

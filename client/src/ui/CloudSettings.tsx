@@ -248,7 +248,7 @@ function SimulateFull() {
   if (!demo || !memory) return null;
   const full = memory.availableMb < headroom * 2;
   return (
-    <div className="row wrap">
+    <div className="row wrap hybrid-sim">
       <span className="grow muted small">{full ? 'This computer is full (demo): waiting work gets a cloud agent soon.' : 'Try a burst: fill this computer up and watch a cloud agent join, then leave once it has room again.'}</span>
       <button className="btn btn-small btn-ghost" onClick={() => void api.simulateMemory(!full)}>
         <Icon name="monitor" /> {full ? 'Free this computer (demo)' : 'Simulate full computer (demo)'}
