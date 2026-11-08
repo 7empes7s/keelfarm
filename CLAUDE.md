@@ -131,7 +131,10 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   holds the task) and runs the CLI's own login in their terminal (`cliRunner.ts` `startBoxSignIn`); the office never
   reads that login.
 - `demo.ts`: `createDemoBackend()`: fake GitHub, fake sessions (drawn into the agent's terminal in the terminal runtime), fake previews and machines for `--demo`;
-  `--floors N --agents N` (or `SWARM_DEMO_FLOORS` / `SWARM_DEMO_AGENTS`) makes it a big company for scale tests.
+  `--floors N --agents N` (or `SWARM_DEMO_FLOORS` / `SWARM_DEMO_AGENTS`) makes it a big company for scale tests. It only
+  wires `demo/`: each feature's module there registers its fakes (`registerDemo`) and the demo CEO's replies that show
+  its tools (`registerCeoReply`) in `demo/registry.ts`, `demo/index.ts` imports them, `demo/world.ts` is the fake GitHub's
+  state; `demo/parity.test.ts` checks every Backend member and CEO tool has a fake.
 - `github.ts`: all GitHub access through the `gh` CLI.
 - `workspace.ts`: floor checkouts, the preview worktrees (`<SWARM_HOME>/workspaces/<owner>__<repo>/desks/<name>`),
   local machines (clone, worktree, branch sweep, removal with leftovers), fast-forwarding main, a git lock per clone,
@@ -237,7 +240,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   `PhotoScene.tsx` (its own camera; frozen, the frame loop stops and it draws on change), `post.ts` (filters and depth
   of field on the finished picture), `recorder.ts` / `instantReplay.ts` (MediaRecorder; `webmRing.ts` keeps the last 15 s),
   `PhotoPanel.tsx`, and pure `flight.ts`, `shots.ts`, `filters.ts`.
-- `src/store.ts`: the zustand store; `apply(ServerEvent)` folds websocket events into UI state.
+- `src/store.ts`: the zustand store; `apply(ServerEvent)` folds websocket events into UI state through one handler per
+  event in `src/store/apply/<area>.ts` (each area also gives its share of the snapshot), merged in `store/apply/index.ts`.
 - `src/api.ts`: REST calls; errors become toasts.
 - `src/viewport.ts`: the phone's viewport (#73): `--app-height` / `--app-top` from visualViewport for every full-screen
   view (pocket mode divides them by the UI scale), put back after the keyboard, a send, a photo or `pageshow`; the
@@ -257,13 +261,13 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
 - Comments are sparse and say why: a short header comment per file describing its role, `/** */` on exported
   functions and interface fields when the name isn't enough, inline notes for Windows or safety reasons, and
   `// ---------- section ----------` dividers in long files. No commented-out code.
-- Demo parity: every new `Backend` method, CEO tool or capability gets a fake in `server/demo.ts`, so `--demo` works
-  with no GitHub, no git/npm and no Claude usage.
+- Demo parity: every new `Backend` method, CEO tool or capability gets a fake in its feature's module under
+  `server/demo/` (a new one, listed in `demo/index.ts`), so `--demo` works with no GitHub, no git/npm and no Claude usage.
 - UI state comes from the server: on connect the client gets a `snapshot`, then typed `ServerEvent`s (`repo`,
   `agent`, `qa`, `ceo`, `message`, `toast`, …) from `Swarm.broadcast`; agents' and floors' frequent changes come
   batched as `agents` / `repos` patches and terminal lines as `logs` / `latest`, only for what the tab shows
-  (`server/outbox.ts`). Add new state to `shared/types.ts`, the snapshot and an event, and handle it in `store.ts`'s
-  `apply`. REST is for commands, not for polling state. A big company must fit `server/scale.test.ts`'s budgets.
+  (`server/outbox.ts`). Add new state to `shared/types.ts`, the snapshot and an event, and handle it in its area's
+  `client/src/store/apply/<area>.ts` (or a new area listed in `index.ts`). REST is for commands, not for polling state. A big company must fit `server/scale.test.ts`'s budgets.
 - REST errors: throw `HttpError(4xx, message)`; the handler in `index.ts` returns `{ error }` JSON, anything else
   is a logged 500. Validate request bodies by hand at the route or in the swarm.
 - CEO tools: zod input schemas, errors worded so the CEO can act on them, small outputs.
@@ -274,7 +278,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   - kill process trees, not just the child (`taskkill /T /F` on Windows, process groups elsewhere);
   - `windowsHide: true` on spawns; npm on Windows goes through `cmd.exe`.
 - Agent prompts are paid for on every session: keep prompt text short and specific.
-- 2D UI follows docs/design.md: tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
+- 2D UI follows docs/design.md: new styles go in a css file next to their component, imported by it (`styles.css`
+  keeps tokens, resets and buttons; `sheets.css` keeps its old feature blocks in cascade order); tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
   `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to their screen's file in `e2e/layout/` (under 300 lines each).
 
 ## Code health

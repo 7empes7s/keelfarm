@@ -1,0 +1,249 @@
+/* files in the CEO chat (ui/ChatFiles.tsx) */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 6px 0 2px;
+  padding: 6px 8px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 10px;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+}
+.file-card .btn {
+  flex: none;
+  text-decoration: none;
+}
+.file-gone {
+  border-style: dashed;
+  color: var(--muted);
+}
+.file-icon {
+  font-size: 1.3rem;
+}
+.file-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.file-thumb {
+  display: block;
+  margin: 6px 0 2px;
+  padding: 0;
+  border: 2px solid var(--ds-outline);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ds-surface-raised);
+  cursor: zoom-in;
+}
+.file-thumb img {
+  display: block;
+  /* a fixed height, kept before the picture loads, so a tall screenshot never pushes the conversation away */
+  height: 180px;
+  max-width: 220px;
+  object-fit: cover;
+}
+.file-view-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.file-full {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.file-pdf {
+  width: 100%;
+  height: 70vh;
+  border: 2px solid rgba(31, 29, 43, 0.15);
+}
+.files-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.files-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(31, 29, 43, 0.1);
+}
+.files-open {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.attach-tray {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.attach-item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 3px 4px 3px 6px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 10px;
+  background: var(--ds-surface-raised);
+  font-size: 0.78rem;
+}
+.attach-failed {
+  border-color: var(--bad, #c0392b);
+}
+.attach-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.attach-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100px;
+}
+.attach-progress {
+  width: 48px;
+}
+.attach-error {
+  color: var(--bad, #c0392b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+.chat-dropping .chat-log-wrap {
+  outline: 3px dashed var(--accent);
+  outline-offset: -6px;
+}
+.used {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.used summary {
+  cursor: pointer;
+}
+.used ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+.slash-picks {
+  margin: 0 10px;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 2px solid var(--ds-outline);
+  border-radius: 10px;
+  background: var(--ds-surface-raised);
+}
+.slash-pick {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.slash-pick-on,
+.slash-pick:hover {
+  background: var(--ds-surface-hover);
+}
+html[data-high-contrast] :is(.artifact-sheet, .artifact-card, .suggestion-chip) {
+  background: var(--ds-surface-raised);
+  border-color: #000;
+}
+.chat-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 0;
+  background: var(--ds-surface-raised);
+}
+.chat-held {
+  margin: 6px 10px 0;
+  padding: 6px 10px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.chat-reply-body {
+  min-width: 0;
+  padding: 3px 8px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--ds-surface-sunken);
+}
+.chat-reply-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.quick-answer {
+  border-color: var(--accent);
+  background: var(--ds-surface-hover);
+}
+.bubble {
+  max-width: 86%;
+  padding: 8px 11px 5px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 16px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.bubble-them {
+  background: var(--ds-surface-raised);
+  border-bottom-left-radius: 4px;
+}
+.bubble-me {
+  background: #ffd6a5;
+  border-bottom-right-radius: 4px;
+}
+.bubble-me .bubble-time {
+  color: #4d5163; /* --muted is a touch light on the peach bubble */
+}
+.bubble-from {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.bubble-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,153 @@
+/* ---------- careers (#226) ---------- */
+
+.career-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 0 0 10px;
+  background: var(--ds-surface-raised);
+  border: 3px solid var(--ds-outline);
+  border-left: 10px solid var(--accent);
+  border-radius: 16px;
+}
+.career-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.career-portrait {
+  flex: none;
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 16px;
+}
+.career-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.career-name {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+.career-title {
+  font-weight: 600;
+  color: var(--muted);
+}
+.career-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.career-badge {
+  padding: 1px 8px;
+  border: 1.5px solid var(--ds-outline);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.career-star {
+  background: #ffd43b;
+}
+.career-known {
+  font-style: italic;
+}
+.career-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+}
+.career-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--ds-surface-hover);
+}
+.career-stat b {
+  font-size: 1.05rem;
+}
+.career-stat span {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.career-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.career-pr {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The card that pops up while you look at a desk: under the hover card at the left edge (.aim-cards), kept small. */
+.career-peek .career-card {
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+  margin: 0;
+  animation: fadein 0.15s ease-out;
+}
+.career-compact {
+  gap: 6px;
+  padding: 8px 10px;
+  border-width: 3px 3px 3px 8px;
+  border-radius: 14px;
+  font-size: 0.82rem;
+}
+.career-compact .career-head {
+  gap: 8px;
+  align-items: center;
+}
+.career-compact .career-name {
+  font-size: 0.95rem;
+}
+.career-compact .career-title,
+.career-compact .career-known {
+  font-size: 0.75rem;
+}
+.career-compact .career-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.career-compact .career-stat {
+  padding: 2px 5px;
+  border-radius: 8px;
+}
+.career-compact .career-stat b {
+  font-size: 0.88rem;
+}
+.career-compact .career-stat span {
+  font-size: 0.62rem;
+  line-height: 1.15;
+}
+.career-compact .career-pr {
+  font-size: 0.75rem;
+}
+.team-stats-scroll {
+  overflow-x: auto;
+}
+.stats-table th {
+  text-align: left;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.stats-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.sort-btn,
+.link-btn {
+  font: inherit;
+  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  color: var(--ink);
+}
+.link-btn {
+  color: #3a56d4;
+}

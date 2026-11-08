@@ -50,6 +50,9 @@ import { floorColumns, statusLine } from './companyLayout';
 import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
 import { DockGrip, useDockWidth } from './DockGrip';
 import './pocket.css';
+import './desktop.css'; // pocket.css's feature blocks (#257), in their old order
+import './dockedChat.css';
+import './pages.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));

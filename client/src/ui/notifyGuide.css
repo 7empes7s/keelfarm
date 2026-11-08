@@ -1,0 +1,84 @@
+/* ui/NotifyGuide.tsx */
+.notify-guide {
+  margin: 6px 0 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 138, 91, 0.08);
+}
+.guide-steps {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.guide-step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 5px 0;
+}
+.guide-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #fff;
+  background: #9a96a8;
+}
+.guide-done .guide-mark {
+  background: #1b873a;
+}
+.guide-todo .guide-mark {
+  background: #e0662f;
+}
+.guide-waiting {
+  color: var(--ds-text-muted); /* not opacity: faded text fails contrast */
+}
+.guide-title {
+  font-weight: 600;
+}
+.guide-how {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.guide-go {
+  width: 100%;
+  margin-top: 4px;
+  text-align: center;
+}
+.guide-ask {
+  margin: 4px 0 8px;
+}
+.notify-own {
+  margin: 6px 0;
+}
+.ntfy-links {
+  align-items: flex-start;
+  margin: 8px 0;
+}
+.ntfy-links > .grow {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.ntfy-links .btn {
+  white-space: normal;
+  max-width: 100%;
+}
+.ntfy-qr {
+  background: var(--ds-surface-raised);
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+.notify-health {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.notify-health li {
+  padding: 6px 0;
+  border-top: 1px dashed rgba(31, 29, 43, 0.15);
+  overflow-wrap: anywhere;
+}

@@ -243,6 +243,15 @@ export class Accounts {
     return a ? this.take(a) : null;
   }
 
+  /**
+   * Whether rotation would start a new session of `cli` on some account right now: rotation is on and one is ready
+   * (or near its limit). A full window on one login then only rests that login, not the office.
+   */
+  hasFree(cli: AccountCli, now = Date.now()): boolean {
+    const r = this.rotation();
+    return r.on && !!pickAccount(undefined, this.candidates(now), now, { cli, apiLast: r.apiLast });
+  }
+
   rotation(): RotationSettings {
     return this.deps.rotation?.() ?? { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false };
   }

@@ -157,7 +157,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
-  scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
+  scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string; where?: 'local' | 'cloud' | 'auto' }): string;
   configureAgent(a: { agent_id: string; account?: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
@@ -298,6 +298,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
         cli: CLI.optional().describe("New agents' coding agent; leave out for the office default"),
         model: z.string().optional().describe("New agents' model id (one of their coding agent's); leave out for the default"),
         effort: EFFORT.optional().describe("New agents' reasoning effort; leave out for the default"),
+        where: z.enum(['local', 'cloud', 'auto']).optional().describe("Where new agents work: this computer, the cloud, or auto (the office's setting, the default)"),
       },
       (a) => run(() => h.scaleTeam(a)),
     ),

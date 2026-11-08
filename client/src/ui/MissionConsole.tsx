@@ -16,6 +16,7 @@ import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { UsageSources } from './UsageSources';
 import { HealthStrip } from './HealthStrip';
+import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
@@ -363,6 +364,7 @@ export function OpsTab({ card }: { card?: string }) {
         </Section>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <CloudToday />
         <TestLabCard />
         <h3 className="section">
           <Icon name="siren" /> Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}

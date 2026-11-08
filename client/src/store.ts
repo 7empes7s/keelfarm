@@ -1,11 +1,10 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type WorldSnapshot } from '../../shared/types';
-import { careerOfRow, type PastCareer } from '../../shared/careers';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
+import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
-import { latestListed } from '../../shared/watch';
-import { mergeChat, type ChatItem } from '../../shared/agentChat';
+import type { ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
@@ -15,26 +14,17 @@ import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
 import { emptyLabView, type LabView } from '../../shared/experiments';
 import { emptyEveryProject } from '../../shared/practices';
-import { messageSpeech } from '../../shared/speech';
-import { addNotice, markRead, noticeOf, sticky } from '../../shared/notices';
-import { settleOutbox, type OutgoingMessage } from '../../shared/chat';
-import { applyChat, EMPTY_CHAT } from './ceoChat';
+import { sticky } from '../../shared/notices';
+import type { OutgoingMessage } from '../../shared/chat';
+import { EMPTY_CHAT } from './ceoChat';
 import type { FileView } from '../../shared/files';
 import type { Decision } from '../../shared/decisions';
-import { clearDesktopNotes, showDesktopNote } from './notifications';
-import { EMPTY_OPS, newAlarms } from './ops';
+import { EMPTY_OPS } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
-import { alarm, audioUnlocked, chirp, cue } from './ui/sfx';
-import { claimVoice } from './ui/voiceClaim';
-import { callOn, callVoice, holdNote } from './ui/voiceCallStore';
-import { speakable } from './ui/voiceQueue';
-import { emitMerge, mergeBursts, recentQaRecord, rememberQa } from './world/confetti';
-import { takeEmote, takePing, takePose, takeRoster } from './world/presence/presenceState';
-import { gongForMerge } from './world/gongRunner';
-import { ROOF } from './world/layout';
-import { emitReward } from './world/decor/rewards';
+import { APPLY, snapshotState } from './store/apply';
+import type { ApplyCtx } from './store/apply/types';
 import type { SnackId } from './world/fridge';
 import type { GroupId, SectionId } from './ui/consoleNavRules';
 
@@ -118,7 +108,7 @@ export interface Toast {
   notice?: NoticeView; // a rich toast (#107): ui/Notices.tsx draws it
 }
 
-interface State {
+export interface State {
   connected: boolean;
   loaded: boolean;
   user: string | null;
@@ -246,8 +236,6 @@ export function saveView(v: SavedView) {
     // storage may be unavailable (private mode); the view just won't be remembered
   }
 }
-const LOG_KEEP = 600;
-const TICKER_KEEP = 120; // ticker lines kept across every floor
 
 export const useStore = create<State>((set, get) => ({
   connected: false,
@@ -371,350 +359,9 @@ export const useStore = create<State>((set, get) => ({
     // Cues compare the old state with the new, so each change sounds once; snapshots (page load,
     // reconnect) never do, and nothing sounds before the first snapshot. A replay shows merges but makes no cues.
     const live = get().loaded && replay !== 'seek';
-    const cues = live && !replay;
-    switch (ev.type) {
-      case 'snapshot': {
-        const d: WorldSnapshot = ev.data;
-        const agents: Record<string, Agent> = {};
-        const logs: Record<string, LogLine[]> = {};
-        const screens: Record<string, number> = {};
-        for (const { log, ...a } of d.agents) {
-          agents[a.id] = d.careers?.[a.id] ? { ...a, career: careerOfRow(d.careers[a.id]) } : a;
-          logs[a.id] = log;
-          if (a.screenshotAt) screens[a.id] = a.screenshotAt;
-        }
-        const qa: Record<string, QaView> = {};
-        for (const q of d.qa) qa[qaKey(q.repoId, q.prNumber)] = q;
-        const prPreviews: Record<string, PrPreviewView> = {};
-        for (const p of d.prPreviews ?? []) prPreviews[qaKey(p.repoId, p.pr)] = p;
-        // Stay on the current (or remembered) floor if it still exists (the roof always does); otherwise go to the lobby.
-        const floorExists = get().floor === ROOF || d.repos.some((r) => r.floor === get().floor);
-        set({
-          loaded: true,
-          user: d.user,
-          ghReady: d.ghReady,
-          ghError: d.ghError,
-          demo: d.demo,
-          publicDemo: d.publicDemo ?? null,
-          machinesRoot: d.machinesRoot,
-          settings: d.settings,
-          repos: d.repos.sort((a, b) => a.floor - b.floor),
-          agents,
-          logs,
-          latest: {},
-          screens,
-          qa,
-          prPreviews,
-          previewStats: d.previewStats ?? { diskBytes: null, memMb: null, cleanedAt: null },
-          requests: d.requests,
-          ceo: d.ceo,
-          messages: d.messages,
-          chat: d.chat ?? EMPTY_CHAT,
-          files: d.files ?? [],
-          phoneReadAt: d.phoneReadAt,
-          notices: d.notices ?? [],
-          decisions: d.decisions ?? [],
-          version: d.version,
-          officeCommit: d.officeCommit,
-          officeUpdate: d.officeUpdate,
-          usage: d.usage,
-          health: d.health ?? null,
-          testLab: d.testLab ?? null,
-          claudeUsage: d.claudeUsage ?? [],
-          claudeUsageCheck: d.claudeUsageCheck ?? null,
-          ops: d.ops ?? EMPTY_OPS,
-          doctor: d.doctor ?? [],
-          clis: d.clis ?? [],
-          models: d.models ?? { entries: [], checkedAt: 0 },
-          voiceKeySet: d.voiceKeySet ?? false,
-          voiceKeyHint: d.voiceKeyHint ?? '',
-          voiceCache: d.voiceCache ?? { clips: 0, bytes: 0, saved: [] },
-          weather: d.weather ?? EMPTY_WEATHER_VIEW,
-          ticker: d.ticker ?? [],
-          notifyChannels: d.notifyChannels ?? get().notifyChannels,
-          cloud: d.cloud ?? EMPTY_CLOUD,
-          accounts: d.accounts ?? { accounts: [] },
-          tooling: d.tooling ?? EMPTY_INVENTORY,
-          experiments: d.experiments ?? emptyLabView(),
-          managerChanges: d.managerChanges ?? [],
-          progress: d.progress ?? { floors: {}, achievements: [], coffees: 0, merges: 0 },
-          pastCareers: d.pastCareers ?? [],
-          pong: d.pong ?? {},
-          restarting: false,
-          floor: floorExists ? get().floor : 0,
-        });
-        break;
-      }
-      case 'repo':
-      case 'repos': {
-        // one floor in full, or a batch of floors' changes (server/outbox.ts)
-        let repos = get().repos;
-        const bursts: ReturnType<typeof mergeBursts> = [];
-        const covered = coversView(get().overlay);
-        for (const patch of ev.type === 'repo' ? [ev.repo] : ev.repos) {
-          const before = repos.find((r) => r.id === patch.id);
-          if (!before && patch.fullName === undefined) continue; // a change to a floor this tab no longer has
-          const next = { ...before, ...patch } as RepoView;
-          const qaFor = (n: number) => get().qa[qaKey(next.id, n)] ?? recentQaRecord(qaKey(next.id, n));
-          const merged = mergeBursts(live, before, next, qaFor, Object.values(get().agents));
-          // A merge on the player's floor sends its author running to bang the gong (or it bangs by itself) and the
-          // floor celebrates; anywhere else it's the chime.
-          if (merged.map((b) => gongForMerge(b, covered)).includes('absent') && cues) cue('merged');
-          bursts.push(...merged);
-          repos = [...repos.filter((r) => r.id !== next.id), next];
-        }
-        set({ repos: repos.sort((a, b) => a.floor - b.floor) });
-        for (const b of bursts) emitMerge(b);
-        break;
-      }
-      case 'repoRemoved': {
-        const repos = get().repos.filter((r) => r.id !== ev.repoId);
-        const floor = get().floor > repos.length ? 0 : get().floor;
-        set({ repos, floor });
-        break;
-      }
-      case 'agent': {
-        const prev = get().agents[ev.agent.id];
-        if (cues && !prev && ev.agent.role !== 'ceo') cue('welcome');
-        if (cues && prev && prev.status !== 'error' && ev.agent.status === 'error') cue('error');
-        set({ agents: { ...get().agents, [ev.agent.id]: ev.agent } });
-        break;
-      }
-      case 'agents': {
-        // a batch of changes (server/outbox.ts): one update for all of them
-        const agents = { ...get().agents };
-        for (const patch of ev.agents) {
-          const prev = agents[patch.id];
-          if (!prev && patch.name === undefined) continue; // a change to someone this tab no longer has
-          const next = { ...prev, ...patch } as Agent;
-          if (cues && !prev && next.role !== 'ceo') cue('welcome');
-          if (cues && prev && prev.status !== 'error' && next.status === 'error') cue('error');
-          agents[patch.id] = next;
-        }
-        set({ agents });
-        break;
-      }
-      case 'agentRemoved': {
-        const { [ev.agentId]: _gone, ...agents } = get().agents;
-        set({ agents });
-        break;
-      }
-      case 'logs': {
-        const logs = { ...get().logs };
-        const latest = { ...get().latest };
-        for (const [id, lines] of Object.entries(ev.tails)) {
-          // a catch-up replaces the buffer; live lines it already had (sent again after one) are skipped
-          const prev = ev.catchUp ? [] : (logs[id] ?? []);
-          const last = prev.length ? prev[prev.length - 1].id : -1;
-          const fresh = ev.catchUp ? lines : lines.filter((l) => l.id > last);
-          if (!fresh.length && !ev.catchUp) continue;
-          const next = prev.concat(fresh);
-          logs[id] = next.length > LOG_KEEP ? next.slice(-LOG_KEEP) : next;
-          const listed = latestListed(fresh, 80);
-          if (listed) latest[id] = listed;
-        }
-        set({ logs, latest });
-        break;
-      }
-      case 'latest':
-        set({ latest: { ...get().latest, ...ev.lines } });
-        break;
-      case 'agentChat': {
-        const chats = { ...get().agentChat };
-        for (const [id, items] of Object.entries(ev.chats)) chats[id] = mergeChat(ev.catchUp ? [] : (chats[id] ?? []), items);
-        set({ agentChat: chats });
-        break;
-      }
-      case 'screen': {
-        const a = get().agents[ev.agentId];
-        set({
-          screens: { ...get().screens, [ev.agentId]: ev.at },
-          shotTimes: { ...get().shotTimes, [ev.agentId]: ev.earlier ?? [] },
-          agents: a ? { ...get().agents, [ev.agentId]: { ...a, hasScreenshot: true, screenshotAt: ev.at, browserUrl: ev.url || a.browserUrl } } : get().agents,
-        });
-        break;
-      }
-      case 'qa': {
-        const prev = get().qa[qaKey(ev.qa.repoId, ev.qa.prNumber)]?.status;
-        const failed = (st?: QaView['status']) => st === 'failed' || st === 'needs-human';
-        if (cues && ev.qa.status === 'passed' && prev !== 'passed') cue('ready');
-        if (cues && failed(ev.qa.status) && !failed(prev)) cue('qaFailed');
-        set({ qa: { ...get().qa, [qaKey(ev.qa.repoId, ev.qa.prNumber)]: ev.qa } });
-        break;
-      }
-      case 'qaRemoved': {
-        const { [qaKey(ev.repoId, ev.prNumber)]: gone, ...qa } = get().qa;
-        if (gone) rememberQa(qaKey(ev.repoId, ev.prNumber), gone);
-        set({ qa });
-        break;
-      }
-      case 'prPreview':
-        set({ prPreviews: { ...get().prPreviews, [qaKey(ev.preview.repoId, ev.preview.pr)]: ev.preview } });
-        break;
-      case 'previewStats':
-        set({ previewStats: ev.stats });
-        break;
-      case 'prPreviewRemoved': {
-        const { [qaKey(ev.repoId, ev.pr)]: _gone, ...prPreviews } = get().prPreviews;
-        set({ prPreviews });
-        break;
-      }
-      case 'settings':
-        set({ settings: ev.settings });
-        break;
-      case 'clis':
-        set({ clis: ev.clis });
-        break;
-      case 'models':
-        set({ models: ev.models });
-        break;
-      case 'request': {
-        const prev = get().requests.find((r) => r.id === ev.request.id);
-        if (cues && ev.request.kind === 'hire' && ev.request.status === 'approved' && prev?.status === 'pending') cue('welcome');
-        const requests = get().requests.filter((r) => r.id !== ev.request.id);
-        requests.push(ev.request);
-        set({ requests: requests.sort((a, b) => a.createdAt - b.createdAt) });
-        break;
-      }
-      case 'ceo':
-        set({ ceo: ev.ceo });
-        break;
-      case 'message': {
-        set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
-        if (replay) break; // a replayed message is only shown on the phone
-        const o = get().overlay;
-        const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
-        // Read aloud, in this tab or another (always in a voice call); the voice plays the chirp itself if it can't. Locked audio can't speak.
-        const speak = live && audioUnlocked() && speakable(ev.message, callVoice(get().settings.voice), Date.now());
-        if (speak) {
-          const arrived = Date.now();
-          const wait = claimVoice(ev.message.id);
-          void import('./ui/voiceMessages').then((v) => v.speakMessage(ev.message, arrived, wait));
-        }
-        // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
-        if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
-        if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
-        break;
-      }
-      case 'ceoChat':
-        set(applyChat(get(), ev));
-        break;
-      case 'files':
-        set({ files: ev.files });
-        break;
-      case 'delivery':
-        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) });
-        break;
-      case 'status':
-        set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, status: ev.status } : m)) });
-        break;
-      case 'phoneRead':
-        set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) });
-        break;
-      case 'decisions':
-        set({ decisions: ev.decisions });
-        break;
-      case 'toast': {
-        const n = noticeOf(ev);
-        if (n && !replay) set({ notices: addNotice(get().notices, n, Date.now()) }); // the centre is live-only
-        const o = get().overlay;
-        // The chat on screen shows the CEO's message itself (ui/Notices.tsx marks it read); a voice call holds it till its end.
-        if (!(n?.kind === 'ceo' && o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat') && !holdNote({ level: ev.level, text: ev.text, ...(n && { notice: n }) })) get().pushToast(ev.level, ev.text, n ?? undefined);
-        break;
-      }
-      case 'noticesRead':
-        set({ notices: markRead(get().notices, ev.ids) });
-        break;
-      case 'notifyClear':
-        clearDesktopNotes(ev.events);
-        break;
-      case 'officeUpdate':
-        set({ officeUpdate: ev.officeUpdate });
-        break;
-      case 'usage':
-        set({ usage: ev.usage });
-        break;
-      case 'health':
-        set({ health: ev.health });
-        break;
-      case 'testLab':
-        set({ testLab: ev.testLab });
-        break;
-      case 'claudeUsage':
-        set({ claudeUsage: ev.readings, claudeUsageCheck: ev.check ?? null });
-        break;
-      case 'ops':
-        // A new alarm sounds once (rate-limited); the beacons spin until it's handled.
-        if (cues && newAlarms(get().ops.alarms, ev.ops.alarms).length) alarm();
-        set({ ops: ev.ops });
-        break;
-      case 'doctor':
-        set({ doctor: ev.doctor });
-        break;
-      case 'voiceKey':
-        set({ voiceKeySet: ev.voiceKeySet, voiceKeyHint: ev.voiceKeyHint });
-        break;
-      case 'voiceCache':
-        set({ voiceCache: ev.voiceCache });
-        break;
-      case 'weather':
-        set({ weather: ev.weather });
-        break;
-      case 'ticker':
-        set({ ticker: [...get().ticker.slice(-(TICKER_KEEP - 1)), ev.item] });
-        break;
-      case 'notifyChannels':
-        set({ notifyChannels: ev.notifyChannels });
-        break;
-      case 'cloud':
-        set({ cloud: ev.cloud });
-        break;
-      case 'accounts':
-        set({ accounts: ev.accounts });
-        break;
-      case 'tooling':
-        set({ tooling: ev.tooling });
-        break;
-      case 'experiments':
-        set({ experiments: ev.experiments });
-        break;
-      case 'managerChanges':
-        set({ managerChanges: ev.changes });
-        break;
-      case 'history':
-        set({ historySeq: get().historySeq + 1 });
-        break;
-      case 'notify':
-        // This tab shows it only while it's hidden (notifications.ts); a visible office already chimes and toasts.
-        showDesktopNote(ev.note, get().settings.notify?.channels.desktop !== false && !callOn());
-        break;
-      // Presence: the list is state; poses, emotes and pings go straight to the 3D view (world/presence/presence.ts).
-      case 'visitors':
-        set({ visitors: ev.visitors });
-        takeRoster(ev, get().floor);
-        break;
-      case 'visitorPose':
-        takePose(ev, get().floor);
-        break;
-      case 'visitorEmote':
-        takeEmote(ev);
-        break;
-      case 'visitorPing':
-        takePing(ev);
-        break;
-      case 'progress':
-        set({ progress: ev.progress });
-        break;
-      case 'pastCareers':
-        set({ pastCareers: ev.past });
-        break;
-      case 'reward':
-        if (live) emitReward(ev.reward);
-        break;
-      case 'pong':
-        set({ pong: { ...get().pong, [ev.repoId]: ev.board } });
-        break;
-    }
+    const c = { set, get, live, cues: live && !replay, replay };
+    if (ev.type === 'snapshot') set({ ...snapshotState(ev.data, c), loaded: true, restarting: false });
+    else if (ev.type !== 'beat') (APPLY[ev.type] as (ev: ServerEvent, c: ApplyCtx) => void)(ev, c); // each event's handler: store/apply/<area>.ts
   },
 
   setConnected: (connected) => set({ connected }),
