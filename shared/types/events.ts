@@ -5,6 +5,7 @@ import type { Decision } from '../decisions.ts';
 import type { LabView } from '../experiments.ts';
 import type { FileView } from '../files.ts';
 import type { HealthView } from '../health.ts';
+import type { ServerNow } from '../serverLoad.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
 import type { WeatherView } from '../outside.ts';
@@ -45,6 +46,7 @@ export interface WorldSnapshot {
   publicDemo?: { resetHours: number }; // the demo for visitors (#95): what they can't change, and when it starts over
   usage: UsageView;
   health?: HealthView; // memory, load and sessions, for the health strip (#55); absent in a replay
+  serverLoad?: ServerNow | null; // the server's latest reading by program (#271); absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
   ops: OpsView;
@@ -114,6 +116,7 @@ export type ServerEvent =
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }
+  | { type: 'serverLoad'; serverLoad: ServerNow }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null }
   | { type: 'ops'; ops: OpsView }

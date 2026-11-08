@@ -15,9 +15,10 @@ import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { HealthStrip } from './HealthStrip';
+import { ServerCard } from './ServerCard';
 import { TestLabCard } from './TestLab';
 
-// The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
+// The manager's console → Mission control: Claude's usage with "Resume full speed", the server and what uses it, what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
 // from the wall as a table, and where the Claude plan goes (CostsSection.tsx).
 
@@ -352,6 +353,7 @@ export function OpsTab({ card }: { card?: string }) {
       <div>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <ServerCard />
         <TestLabCard />
         <h3 className="section">
           <Icon name="siren" /> Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}

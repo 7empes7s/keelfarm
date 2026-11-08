@@ -1,10 +1,12 @@
 // The live sources behind the CEO's charts (#146, shared/chatVisuals.ts), resolved in the tab from what it already has:
-// the costs view (GET /api/costs, fetched once per message), mission control's numbers, the floors and Claude's usage.
+// the costs view (GET /api/costs, fetched once per message), mission control's numbers, the floors, Claude's usage, and
+// the server's load by program (#271: the latest reading from the store, its 24 h trend fetched once per message).
 // Pure: a visual with a source comes back with its values filled in, or with `missing` saying why it can't be.
 
 import { KIND_GROUP_LABELS, kindShares, perMergeTrend, wasteGroups, type CostsView, type KindGroup } from '../../../shared/costs';
 import { capSlices, parseSource, type ChatVisual, type VisualChart, type VisualSource, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
 import type { OpsNumbers, OpsView } from '../../../shared/ops';
+import { bucketTrend, byAgent, byKind, KIND_LABELS, loadPct, memPct, memUsedMb, pointOf, swapPct, swapUsedMb, type ServerNow, type ServerPoint } from '../../../shared/serverLoad';
 import type { UsageReading } from '../../../shared/types';
 import { barName, usedPercent } from '../../../shared/usage';
 
@@ -14,6 +16,9 @@ export interface SourceData {
   floors: readonly { floor: number; repoId: string }[];
   usage: readonly UsageReading[];
   now: number;
+  server?: ServerNow | null;
+  serverTrend?: readonly ServerPoint[]; // undefined: not fetched yet
+  held?: number; // tasks waiting for memory
 }
 
 /** A source's numbers: a series (labels and values, refs per label), or one number with its trend. */
@@ -102,11 +107,78 @@ function costsData(view: CostsView, s: Extract<VisualSource, { kind: 'costs' }>,
   }
 }
 
+/** A day of the server in 10-minute points, oldest first, the latest reading last. */
+const TREND_BUCKET_MS = 10 * 60_000;
+const hhmm = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+const diskPct = (n: ServerNow) => (n.disks[0]?.totalMb ? Math.round(((n.disks[0].totalMb - n.disks[0].freeMb) / n.disks[0].totalMb) * 1000) / 10 : null);
+
+function serverData(s: Extract<VisualSource, { kind: 'server' }>, d: SourceData): Data | string {
+  if (s.view === 'waiting') return { tile: { value: d.held ?? 0, unit: 'count', good: 'down' } };
+  const n = d.server;
+  if (!n) return 'No reading of the server yet';
+  const trend = d.serverTrend ? bucketTrend([...d.serverTrend, pointOf(n)], TREND_BUCKET_MS) : undefined;
+  const spark = (f: (p: ServerPoint) => number | null) => trend?.slice(-36).map(f).filter((v): v is number => v !== null);
+  const sparkOf = (f: (p: ServerPoint) => number | null) => {
+    const sp = spark(f);
+    return sp && sp.length > 1 ? { spark: sp } : {};
+  };
+  const load = loadPct(n);
+  const disk = diskPct(n);
+  const unmeasured = 'Programs can only be told apart on Linux';
+  switch (s.view) {
+    case null:
+    case 'now':
+      return { chart: { type: 'progress', unit: 'pct', max: 100, labels: ['CPU load', 'Memory', 'Swap', ...(disk === null ? [] : ['Disk'])], series: [{ name: 'Used', values: [load === null ? null : Math.min(100, load), memPct(n), swapPct(n), ...(disk === null ? [] : [disk])] }] } };
+    case 'cpu':
+      return { tile: { value: n.load === null ? null : `${n.load.toFixed(1)} / ${n.cpus}`, unit: '', ...(load !== null && { progress: Math.min(100, Math.round(load)) }), ...sparkOf((p) => p.loadPct) } };
+    case 'memory':
+      return { tile: { value: memUsedMb(n), unit: 'mb', good: 'down', progress: Math.round(memPct(n)), ...sparkOf((p) => p.memPct) } };
+    case 'available':
+      return { tile: { value: n.availableMb, unit: 'mb' } };
+    case 'swap':
+      return { tile: { value: swapUsedMb(n), unit: 'mb', good: 'down', ...(n.swapTotalMb > 0 && { progress: Math.round(swapPct(n)) }), ...sparkOf((p) => p.swapPct) } };
+    case 'disk':
+      return disk === null ? 'No reading of the disk' : { tile: { value: disk, unit: 'pct', good: 'down', progress: Math.round(disk) } };
+    case 'byProgram': {
+      if (!n.measured) return unmeasured;
+      const kinds = byKind(n.programs);
+      return { chart: { type: 'donut', unit: 'mb', labels: kinds.map((k) => KIND_LABELS[k.kind]), series: [{ name: 'Memory', values: kinds.map((k) => k.rssMb) }] } };
+    }
+    case 'byAgent': {
+      if (!n.measured) return unmeasured;
+      const rows = byAgent(n.programs);
+      if (!rows.length) return 'No agent is using memory now';
+      return { chart: { type: 'bar', unit: 'mb', labels: rows.map((r) => r.name), series: [{ name: 'Memory', values: rows.map((r) => r.rssMb) }], refs: rows.map((r) => r.ref ?? null) } };
+    }
+    case 'previews': {
+      if (!n.measured) return unmeasured;
+      const rows = n.programs.filter((p) => p.kind === 'preview');
+      if (!rows.length) return 'No preview is running';
+      return { chart: { type: 'bar', unit: 'mb', labels: rows.map((r) => r.name.replace(/^Preview · /, '').replace(/^floor \d+ (PR #\d+)$/, '$1')), series: [{ name: 'Memory', values: rows.map((r) => r.rssMb) }], refs: rows.map((r) => r.ref ?? null) } };
+    }
+    case '24h':
+      if (!trend) return 'Loading…';
+      return {
+        chart: {
+          type: 'line',
+          unit: 'pct',
+          labels: trend.map((p) => hhmm(p.at)),
+          series: [
+            { name: 'Memory', color: 'accent', values: trend.map((p) => p.memPct) },
+            { name: 'Swap', color: 'warn', values: trend.map((p) => p.swapPct) },
+            { name: 'CPU load', color: 'blue', values: trend.map((p) => p.loadPct) },
+          ],
+        },
+      };
+  }
+}
+
 function opsOf(d: SourceData, floor: number | null): OpsNumbers | null {
   return floor === null ? d.ops.total : (d.ops.floors.find((f) => f.floor === floor) ?? null);
 }
 
 function sourceData(s: VisualSource, d: SourceData): Data | string {
+  if (s.kind === 'server') return serverData(s, d);
   if (s.kind === 'costs') {
     const view = d.costs[s.days];
     return view ? (costsData(view, s, d) ?? 'Unknown costs view') : 'Loading…';
@@ -189,6 +261,25 @@ function costsDashboard(days: number): Pick<Extract<ChatVisual, { kind: 'dashboa
   };
 }
 
+/** The server dashboard a bare `server` or `server:now` source stands for: tiles, memory by program and by agent, the day. */
+function serverDashboard(): Pick<Extract<ChatVisual, { kind: 'dashboard' }>, 'tiles' | 'charts'> {
+  const tile = (label: string, view: string, unit: VisualUnit): VisualTile => ({ label, value: null, unit, source: `server:${view}` });
+  return {
+    tiles: [tile('CPU load / cores', 'cpu', ''), tile('Memory used', 'memory', 'mb'), tile('Available', 'available', 'mb'), tile('Swap', 'swap', 'mb'), tile('Disk', 'disk', 'pct'), tile('Waiting for memory', 'waiting', 'count')],
+    charts: [
+      { kind: 'chart', type: 'donut', title: 'Memory by program', unit: 'mb', labels: [], series: [], source: 'server:byProgram' },
+      { kind: 'chart', type: 'bar', title: 'Memory by agent', unit: 'mb', labels: [], series: [], source: 'server:byAgent' },
+      { kind: 'chart', type: 'line', title: 'The last 24 hours', unit: 'pct', labels: [], series: [], source: 'server:24h' },
+    ],
+  };
+}
+
+/** Whether a visual needs the server's 24 h trend fetched (its own source, its tiles' and charts'). */
+export function needsServerTrend(v: ChatVisual): boolean {
+  const srcs = [v.source, ...(v.kind === 'dashboard' ? [...v.tiles.map((t) => t.source), ...v.charts.map((c) => c.source)] : [])];
+  return srcs.map(parseSource).some((s) => s?.kind === 'server' && (s.view === null || ['now', '24h', 'cpu', 'memory', 'swap'].includes(s.view)));
+}
+
 /** A visual with its sources' numbers filled in. Inline values are kept as written. */
 export function resolveVisual(v: ChatVisual, d: SourceData): Resolved {
   if (v.kind === 'chart') return resolveChart(v, d);
@@ -203,6 +294,7 @@ export function resolveVisual(v: ChatVisual, d: SourceData): Resolved {
   const s = parseSource(v.source);
   let base = v;
   if (s?.kind === 'costs' && s.view === null && !v.tiles.length && !v.charts.length) base = { ...v, ...costsDashboard(s.days) };
+  else if (s?.kind === 'server' && (s.view === null || s.view === 'now') && !v.tiles.length && !v.charts.length) base = { ...v, ...serverDashboard() };
   else if (s && !v.tiles.length && !v.charts.length) base = { ...v, charts: [{ kind: 'chart', type: 'bar', title: '', unit: 'count', labels: [], series: [], source: v.source }] };
   return { ...base, tiles: base.tiles.map((t) => resolveTile(t, d)), charts: base.charts.map((c) => resolveChart(c, d)) };
 }

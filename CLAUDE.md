@@ -92,6 +92,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
+  | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
@@ -163,6 +164,10 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `health.ts`: resource safety (#55): sessions start only when memory and swap leave the headroom (per-kind estimates
   learned from peaks; the CEO always starts), each agent's processes measured through /proc on Linux (stopped over the
   ceiling or under pressure), killed sessions resumed twice then re-queued, the health strip's view. `shared/health.ts` has the settings.
+- `serverLoad.ts`: the server's load by program (#271): /proc read every 15 s (memory, swap, load, disk, each process's RSS
+  and CPU) and grouped into programs (agents' CLI sessions, their test browsers and demo offices, previews, the office,
+  Postgres/Docker), orphans, and a 24 h trend in memory; pure parsing and grouping first. `shared/serverLoad.ts` has the
+  types and trend rules; the chat's `server:*` sources and Mission control's `ServerCard.tsx` draw it; `demoServerLoad.ts` is the demo's.
 - `presence.ts`: shared presence: relays tabs' poses, emotes and pings on `/ws` to their floor (pure interest and rate
   rules), never saved; `demoVisitors.ts` walks the demo's fake visitors. Names and limits in `shared/presence.ts`.
 - `voice.ts`: phone messages read aloud (docs/voice.md): the ElevenLabs key in `secrets.json`, voices, cached clips;

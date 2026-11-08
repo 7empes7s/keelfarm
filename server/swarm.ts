@@ -68,7 +68,7 @@ import {
 } from './swarm/model.ts';
 import { lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmVoices } from './swarm/voices.ts';
+import { SwarmServerLoad } from './swarm/serverLoad.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -76,7 +76,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmVoices {
+export class Swarm extends SwarmServerLoad {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null);
 
   // ---------- lifecycle ----------
@@ -356,6 +356,7 @@ export class Swarm extends SwarmVoices {
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
+    this.startServerLoad();
     void this.backend
       .detectClis()
       .then((clis) => {

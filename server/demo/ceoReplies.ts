@@ -1,6 +1,6 @@
 // The demo CEO's chat replies that show its office tools (#257), tried in this order through the real tools; a new
 // tool's demo registers its own reply here or in its feature's module.
-import { demoMoneyAnswer, objectiveIds, plannedSize, plural, refused, short } from './ceo.ts';
+import { demoMoneyAnswer, demoServerAnswer, objectiveIds, plannedSize, plural, refused, short } from './ceo.ts';
 import { registerCeoReply } from './registry.ts';
 
 // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
@@ -91,3 +91,6 @@ registerCeoReply('scale_team', ({ text, s, scale }) => {
     reason: `You asked for a bigger team, and floor ${f.floor} has the most work waiting: ${plural(ready, 'issue')} ready to start, ${plural(f.team.free, 'agent')} free.`,
   });
 });
+
+// "How much of the server is used, and by what?": its live sources (#271). Last, so a plan or a hire about a server isn't taken for it.
+registerCeoReply('server', ({ text }) => (/\b(how much|by what|which programs?)\b.*\b(server|memory|ram|cpu)\b|\b(server|memory|cpu) (use|usage|load)\b/i.test(text) ? demoServerAnswer() : null));

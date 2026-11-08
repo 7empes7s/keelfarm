@@ -8,6 +8,7 @@ import type { ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
+import type { ServerNow } from '../../shared/serverLoad';
 import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
@@ -146,6 +147,7 @@ export interface State {
   officeUpdate?: OfficeUpdateView;
   usage: UsageView; // Claude's subscription usage: normal, pacing after a warning, or paused at the limit
   health: HealthView | null; // memory, load and sessions for the health strip (null: a server without it, or a replay)
+  serverLoad: ServerNow | null; // the server's latest reading by program (#271)
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
@@ -310,6 +312,7 @@ export const useStore = create<State>((set, get) => ({
   decisions: [],
   usage: { state: 'normal', until: null, warning: null },
   health: null,
+  serverLoad: null,
   testLab: null,
   claudeUsage: [],
   claudeUsageCheck: null,
