@@ -14,8 +14,11 @@ import { secretMismatch } from '../shared/secretFormats.ts';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 
-/** Eleven v4 Turbo: expressive and real-time, and as cheap as Flash. A new office's model; a saved one is kept. */
-export const DEFAULT_VOICE_MODEL = 'eleven_v4_turbo';
+/**
+ * Eleven v4, ElevenLabs' richest model (elevenlabs.io/docs/models): messages are short spoken summaries (#282), so its
+ * higher price per character stays small. A new office's model; a saved one is kept.
+ */
+export const DEFAULT_VOICE_MODEL = 'eleven_v4';
 export const VOICES_TTL_MS = 10 * 60_000;
 export const SYNTH_TIMEOUT_MS = 20_000;
 /** ElevenLabs' Speech to Text model (Scribe v2). */
@@ -160,9 +163,9 @@ export function parseManifest(raw: unknown): ClipManifest {
   return out;
 }
 
-/** The phone messages that are spoken: the CEO's, and the office's own notes when the manager asked for them. */
+/** The phone messages that are spoken: the CEO's (not a silent one, #282), and the office's own notes when the manager asked for them. */
 export function speaks(m: PhoneMessage, s: VoiceSettings): boolean {
-  return m.from === 'ceo' || (m.from === 'office' && s.speakOffice);
+  return (m.from === 'ceo' && !m.silent) || (m.from === 'office' && s.speakOffice);
 }
 
 /** One clip to make: the voice, the model, the speed (0.7–1.2) and the words. */
@@ -174,16 +177,26 @@ export interface SynthRequest {
 }
 
 /**
+ * How every clip is voiced (POST /v1/text-to-speech's voice_settings, elevenlabs.io/docs/api-reference/text-to-speech):
+ * a little livelier than ElevenLabs' defaults (stability 0.5, similarity 0.75, style 0) for a colleague on the phone,
+ * with speaker boost for clarity. Stability stays 0.5, a value the v3 models accept too.
+ */
+const VOICE_TUNING = { stability: 0.5, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true } as const;
+
+type SynthBody = { text: string; model_id: string; voice_settings: typeof VOICE_TUNING & { speed: number } };
+
+/**
  * POST /v1/text-to-speech's body, the speed in voice_settings ("available for all voices and all models", ElevenLabs'
  * help centre; its Eleven v4 page says v4 has no Speed slider, so a v4 voice may keep its own pace).
  */
-export function synthBody({ model, speed, text }: SynthRequest): { text: string; model_id: string; voice_settings: { speed: number } } {
-  return { text, model_id: model, voice_settings: { speed: clampSpeed(speed) } };
+export function synthBody({ model, speed, text }: SynthRequest): SynthBody {
+  return { text, model_id: model, voice_settings: { ...VOICE_TUNING, speed: clampSpeed(speed) } };
 }
 
-/** A clip's cache name: the voice, model, speed and words, so a change to any of them never plays stale audio. */
-export function clipHash({ voiceId, model, speed, text }: SynthRequest): string {
-  return crypto.createHash('sha256').update(`${voiceId}\n${model}\n${clampSpeed(speed)}\n${text}`).digest('hex').slice(0, 12);
+/** A clip's cache name: the voice, model, voice settings and words, so a change to any of them never plays stale audio. */
+export function clipHash(req: SynthRequest): string {
+  const { model_id, voice_settings, text } = synthBody(req);
+  return crypto.createHash('sha256').update(`${req.voiceId}\n${model_id}\n${JSON.stringify(voice_settings)}\n${text}`).digest('hex').slice(0, 12);
 }
 
 /** An ElevenLabs call that failed; status 0 when it never answered. */
@@ -327,12 +340,20 @@ export class Voice {
     return id ? { voiceId: id, voiceName: list.find((v) => v.id === id)?.name ?? '' } : null;
   }
 
-  /** GET /api/voice/messages/:id: a phone message as mp3, made once and cached. */
-  async messageAudio(id: number): Promise<Buffer> {
+  /**
+   * GET /api/voice/messages/:id: a phone message's spoken summary as mp3, made once and cached. `whole` (?whole=1, the
+   * ⋯ menu's "Read the whole message"): its whole text, cached by its words but never the clip the ▶ replays.
+   */
+  async messageAudio(id: number, whole = false): Promise<Buffer> {
     const s = this.deps.settings();
     if (s.provider !== 'elevenlabs') throw new HttpError(404, "Messages aren't read by ElevenLabs right now.");
     const m = this.message(id);
     if (!m || !speaks(m, s)) throw new HttpError(404, `No spoken message ${id}`);
+    if (whole) {
+      const all = messageSpeech(m, { whole: true });
+      if (!all) throw new HttpError(404, `Message ${id} has nothing to say aloud`);
+      return this.audio(`${m.id}-whole`, { voiceId: s.voiceId, model: s.model, speed: s.speed, text: all });
+    }
     const saved = clipsFor(this.clips, m);
     const first = saved && (await fs.readFile(path.join(this.deps.cacheDir, saved[0])).catch(() => null));
     if (first) return first; // made before, perhaps in another voice: a message keeps the clip it was first read with

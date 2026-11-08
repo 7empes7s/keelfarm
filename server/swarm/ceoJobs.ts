@@ -645,9 +645,9 @@ export abstract class SwarmCeo extends SwarmCeoModels {
 
   // ---------- the phone ----------
 
-  /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there. */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch'> & { changes?: TeamChange[] } = {}) {
-    const { changes, ...extra } = opts;
+  /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+    const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);
     const id = this.messageSeq++;
@@ -655,7 +655,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
     const body = parts.text.trim().slice(0, 6000);
     // The agents, floors, issues and files it names become chips (shared/chatRefs.ts).
     const refs = from === 'office' ? [] : parseRefs(body, this.refContext());
-    const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.ask && { ask: parts.ask }), ...(parts.idea && { idea: parts.idea }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }), ...(refs.length && { refs }) };
+    const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.ask && { ask: parts.ask }), ...(from === 'ceo' && this.ceoSpoken(parts, closing)), ...(parts.idea && { idea: parts.idea }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }), ...(refs.length && { refs }) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
@@ -704,7 +704,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
     const text = stripHarness(raw); // harness output it echoed stays backend (#193)
     const extra = { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...this.ceoChat.finishTurn(text) };
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
-    if (turnEnding(text, extra) === 'reply') this.postMessage('ceo', text, undefined, { ...extra, ...(replyTo !== undefined && { replyTo }) }); // else a reaction said it, or nothing needed saying: no blank bubble, no push
+    if (turnEnding(text, extra) === 'reply') this.postMessage('ceo', text, undefined, { ...extra, ...(replyTo !== undefined && { replyTo }), closing: true }); // else a reaction said it, or nothing needed saying: no blank bubble, no push
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */

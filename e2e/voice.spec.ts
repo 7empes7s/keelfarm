@@ -1,9 +1,11 @@
 import { type Page } from '@playwright/test';
-import { CEO_ID } from '../shared/types';
+import { messageSpeech } from '../shared/speech';
+import { CEO_ID, type PhoneMessage } from '../shared/types';
 import { enterOffice, expect, test } from './helpers';
 
 // Messages read aloud (docs/voice.md), with the demo's fake ElevenLabs: a CEO reply is spoken without opening the
-// phone, the voice slider and M (mute) apply, two messages play one after the other, and a reload stays silent.
+// phone, the voice slider and M (mute) apply, two messages play one after the other, and a reload stays silent. A long
+// reply is heard as its short spoken summary, and the ⋯ menu's "Read the whole message" reads all of it (#282).
 
 interface Spoken {
   id: number;
@@ -11,6 +13,8 @@ interface Spoken {
   start: number;
   end: number | null;
   volume: number;
+  words: string;
+  replay?: true;
 }
 
 // One demo office serves every spec file: turn the voice on for these tests only.
@@ -129,4 +133,25 @@ test('with two office tabs open, each message is read in only one of them', asyn
   const count = (await spoken(page)).filter((s) => s.id === id).length + (await spoken(other)).filter((s) => s.id === id).length;
   expect(count).toBe(1);
   await other.close();
+});
+
+test('a long reply plays its short spoken summary, and "Read the whole message" reads all of it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?pocket=1&tab=chat');
+  const before = await ceoIds(page);
+  await textCeo(page, 'How is it going?');
+  const [id] = await newReplies(page, before, 1);
+  const [rec] = await heard(page, [id]);
+  const m = ((await (await page.request.get('/api/state')).json()).messages as PhoneMessage[]).find((x) => x.id === id)!;
+  expect(m.spoken).toBeTruthy(); // the demo CEO's replies carry one
+  expect(rec.words).toBe(m.spoken);
+  expect(rec.words.length).toBeLessThanOrEqual(300);
+  expect(rec.words).not.toMatch(/[#*`]|https?:/);
+
+  await page.locator(`[data-msg="${id}"] .bubble`).click({ button: 'right' }); // the ⋯ actions, as a long press opens them
+  await page.getByRole('dialog', { name: /Message actions/ }).getByRole('button', { name: 'Read the whole message' }).click();
+  await expect.poll(async () => (await spoken(page)).filter((s) => s.id === id && s.replay && s.end !== null).length, { timeout: 30_000 }).toBe(1);
+  const whole = (await spoken(page)).find((s) => s.id === id && s.replay)!;
+  expect(whole.words).toBe(messageSpeech(m, { whole: true }));
+  expect(whole.words).not.toBe(rec.words);
 });

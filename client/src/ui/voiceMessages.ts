@@ -1,6 +1,7 @@
 // Phone messages read aloud the moment they arrive (docs/voice.md): ElevenLabs' clip through sfx.ts's 'voice' group,
 // or the browser's own voice. One at a time and in order, other sounds ducked meanwhile, and one office tab per
 // message (voiceClaim.ts). The phone's ▶ replays a message here too, from its saved clip only (never a new synthesis).
+// What's read is the CEO's short spoken summary (#282); the ⋯ menu's "Read the whole message" reads all of it.
 // The store loads this on the first message to speak, so it isn't in the main bundle. window.__swarmVoice records what was read, for QA and e2e.
 // A CEO message that ends by itself, with nothing else to read, may open the hands-free phone's mic (mic.ts).
 // With captions on, what's said is written out as it's read (captions.ts), in step with the clip or the browser's voice.
@@ -30,9 +31,14 @@ export interface SpokenRecord {
   end: number | null;
   /** How loud it started (master × voice level, 0 while muted). */
   volume: number;
-  /** Replayed from the phone's ▶ (a saved clip, or the browser's voice again). */
+  /** Replayed from the phone's ▶ (a saved clip, or the browser's voice again), or read whole from the ⋯ menu. */
   replay?: true;
+  /** The words read aloud. */
+  words: string;
 }
+
+/** A replay: the ▶'s saved clip or browser voice, or 'whole' (the ⋯ menu's "Read the whole message", a new clip). */
+type Replay = Exclude<ReplayKind, 'gone'> | 'whole';
 
 const spoken: SpokenRecord[] = [];
 (window as unknown as Record<string, unknown>).__swarmVoice = spoken;
@@ -58,12 +64,12 @@ let stopCurrent: (() => void) | null = null;
 let busy = false;
 let pendingLine: { line: VoiceLine; arrived: number } | null = null;
 let activeLine: VoiceLine | null = null;
-let replayNext: { message: PhoneMessage; kind: Exclude<ReplayKind, 'gone'> } | null = null;
+let replayNext: { message: PhoneMessage; kind: Replay } | null = null;
 let replaying = false;
 let cutShort = false; // the message being read was stopped, not finished
 
 /** The phone's ▶: plays `message` again in this tab, stopping whatever is being read now. */
-export function replayMessage(message: PhoneMessage, kind: Exclude<ReplayKind, 'gone'>) {
+export function replayMessage(message: PhoneMessage, kind: Replay) {
   replayNext = { message, kind };
   cutShort = true;
   stopCurrent?.();
@@ -144,20 +150,21 @@ async function pump() {
 let warned = false;
 
 /** Reads a live message with the voice in the settings, or replays one (`replay`) the way the phone's ▶ chose. */
-async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
+async function read(m: PhoneMessage, replay?: Replay) {
   const { settings, voiceKeySet } = useStore.getState();
   const { voiceName, speed } = settings.voice;
   const call = !replay && m.from === 'ceo' && callOn();
   const set = settings.voice.provider === 'off' && call ? 'browser' : settings.voice.provider; // a call always speaks
-  const provider = replay ? (replay === 'clip' ? 'elevenlabs' : 'browser') : set;
+  const provider = replay && replay !== 'whole' ? (replay === 'clip' ? 'elevenlabs' : 'browser') : set;
   if (provider === 'off') return; // turned off while it waited
   const now: { rec: SpokenRecord | null; unduckMusic?: () => void } = { rec: null };
   cutShort = false;
-  const words = messageSpeech(m);
+  const whole = replay === 'whole';
+  const words = messageSpeech(m, { whole });
   /** `clipMs`: a recording's length (null for the browser's voice), and how many clips the message has. */
   const began = (clipMs: number | null, parts = 1) => {
     speechStarted(m.id, words, clipMs, parts);
-    now.rec = { id: m.id, provider, start: performance.now(), end: null, volume: level(), ...(replay ? { replay: true as const } : {}) };
+    now.rec = { id: m.id, provider, start: performance.now(), end: null, volume: level(), words, ...(replay ? { replay: true as const } : {}) };
     spoken.push(now.rec);
     if (spoken.length > 50) spoken.splice(0, spoken.length - 50);
     useStore.setState({ voiceSpeaking: m.id });
@@ -169,13 +176,13 @@ async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
   try {
     if (provider === 'browser' && call) await speakSentences(m.id, words, voiceName, speed, () => began(null), sentence);
     else if (provider === 'browser') await speak(words, voiceName, speed, () => began(null), (i) => speechWord(m.id, i));
-    else if (replay) await playClip(m.id, words, began, sentence, true);
+    else if (replay && !whole) await playClip(m.id, words, began, sentence, 'cached');
     else if (!voiceKeySet) throw new Error('no ElevenLabs key is saved');
-    else await playClip(m.id, words, began, sentence);
+    else await playClip(m.id, words, began, sentence, whole ? 'whole' : 'new');
   } catch (err) {
     // A replay whose clip went meanwhile (pruned or cleared) says so; the phone's ▶ follows the server's list.
     if (replay) {
-      if (!now.rec) useStore.getState().pushToast('info', replay === 'clip' ? 'Audio no longer saved' : "The browser couldn't speak this message");
+      if (!now.rec) useStore.getState().pushToast('info', replay === 'clip' ? 'Audio no longer saved' : whole ? "Couldn't read this message aloud" : "The browser couldn't speak this message");
       return;
     }
     // No key, ElevenLabs being down, no voice in this browser: the message still rings, just without words.
@@ -203,10 +210,11 @@ async function read(m: PhoneMessage, replay?: Exclude<ReplayKind, 'gone'>) {
 
 /**
  * Fetches the message's clip and plays it through the 'voice' group, so the master volume, M and its slider apply.
- * `cached`: the phone's ▶, saved clips only (a 404 when they're gone), every part of a long message in order.
+ * 'cached': the phone's ▶, saved clips only (a 404 when they're gone), every part of a long message in order; 'whole':
+ * the whole message's clip rather than its summary's.
  * A call can pause it where it is and skip to the next sentence, found by its share of the words (`words`).
  */
-async function playClip(id: number, words: string, began: (clipMs: number, parts: number) => void, sentence: (index: number) => void, cached = false) {
+async function playClip(id: number, words: string, began: (clipMs: number, parts: number) => void, sentence: (index: number) => void, clip: 'new' | 'cached' | 'whole') {
   let stopped = false;
   let end: (() => void) | null = null;
   stopCurrent = () => {
@@ -215,7 +223,7 @@ async function playClip(id: number, words: string, began: (clipMs: number, parts
   };
   let doneMs = 0; // the earlier parts' length
   for (let part = 0, parts = 1; part < parts; part++) {
-    const res = await fetch(cached ? `/api/voice/messages/${id}?cached=1&part=${part}` : `/api/voice/messages/${id}`);
+    const res = await fetch(clip === 'cached' ? `/api/voice/messages/${id}?cached=1&part=${part}` : `/api/voice/messages/${id}${clip === 'whole' ? '?whole=1' : ''}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     parts = Math.max(1, Number(res.headers.get('X-Voice-Parts')) || 1);
     const data = await res.arrayBuffer();

@@ -32,20 +32,27 @@ calling ElevenLabs until you enter a new key.
 ## Model and cost
 
 Settings → Voice → **Model** shows each model with its API price per 1,000 characters. A new office starts on
-**`eleven_v4_turbo`**; an office set up before keeps the model it saved (Flash v2.5 was the old default).
+**`eleven_v4`** (#282: messages are short spoken summaries now, so the best model costs little); an office set up
+before keeps the model it saved (Eleven v4 Turbo, and before it Flash v2.5, were the old defaults). The labels say
+quality versus speed in plain words.
 
-| Model | Price / 1,000 chars | Why |
-| --- | --- | --- |
-| `eleven_v4_turbo` (new offices) | $0.04 | Eleven v4's real-time model (~100–150 ms): expressive, inline audio tags such as `[laughs]`, `[sighs]`, `[whispers]` |
-| `eleven_v4` | $0.08 | the richest delivery, up to 10,000 characters a request; slower |
-| `eleven_flash_v2_5` | $0.04 | fastest (~75 ms), plain; plenty for short updates |
-| `eleven_multilingual_v2` | $0.08 | older high-quality model |
+| Model | Label | Price / 1,000 chars | Why |
+| --- | --- | --- | --- |
+| `eleven_v4` (new offices) | Best quality | $0.08 | the richest delivery, up to 10,000 characters a request; a moment slower |
+| `eleven_v4_turbo` | Natural and quick | $0.04 | Eleven v4's real-time model (~100–150 ms): expressive, inline audio tags such as `[laughs]`, `[sighs]`, `[whispers]` |
+| `eleven_multilingual_v2` | Steady | $0.08 | older high-quality model, consistent |
+| `eleven_flash_v2_5` | Fastest | $0.04 | fastest (~75 ms), plain |
+
+Every clip is sent with `voice_settings` ([API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert)):
+stability 0.5, similarity boost 0.8, style 0.15 and speaker boost on, a little livelier than ElevenLabs' defaults; they
+are part of a clip's cache name, so changing them makes new clips.
 
 Eleven v4 and v4 Turbo launched on 28 September 2026 ([blog](https://elevenlabs.io/blog/eleven-v4),
 [models](https://elevenlabs.io/docs/models)); v4 prices from [OpenRouter](https://openrouter.ai/elevenlabs/eleven-v4).
 
-What a message costs: Flash and v4 Turbo cost about **$0.04 per 1,000 characters** (Multilingual v2 and v4: $0.08). A typical CEO update is 300–800 characters of speech once markdown, emoji and links are stripped,
-so about **1–3 cents**; the office never speaks more than about 1,500 characters of one message (about 6 cents). On a
+What a message costs: Flash and v4 Turbo cost about **$0.04 per 1,000 characters** (Multilingual v2 and v4: $0.08). A CEO
+message is heard as its spoken summary, at most 300 characters (usually 100–200), so about **1–2 cents** on Eleven v4
+(under a cent on v4 Turbo); "Read the whole message" speaks up to about 1,500 characters (about 12 cents on v4). On a
 subscription plan the same text uses credits from your monthly allowance instead. Each message is synthesized once and
 cached (`<SWARM_HOME>/voice/`, at most 200 clips, kept 7 days by default), so replaying it is free. The settings' **Test** button
 speaks one short line (about 60 characters) and caches it too.
@@ -97,6 +104,12 @@ They replace Sarah, Eric, Chris, Roger, Alice, Matilda, Bill and George respecti
 or ElevenLabs' Voice Library) before you choose: tone matters more than the description.
 
 ## What gets read
+
+The CEO ends each message with a short ```` ```spoken ```` block (#282): 1–3 sentences, under 300 characters, the useful
+news and what it needs, said the way a colleague would on the phone. That's what both voices read, not the text. A
+message without one (older messages, office notes) is heard as its first paragraph, at most three sentences.
+Bookkeeping ("I've answered message 1865 on your phone"), and a job's closing text after it already answered with the
+reply tool, is never read aloud. The ⋯ menu's **Read the whole message** reads all of it.
 
 Before speaking, a message is tidied for the ear (`shared/speech.ts`, used by both voices): markdown and emoji are
 removed, `#123` becomes "number 123", a URL becomes "a link", and long messages are cut at a sentence end after about
