@@ -1,5 +1,5 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Anthropic API key, an OpenAI
-// key), a Test that never leaves the computer, and sign-ins drawn as the CLIs' own (demo.ts's demoSignIn).
+// key), a Test that never leaves the computer, and sign-ins drawn as the CLIs' own (demoSignIn.ts).
 import type { AccountsBackend } from './backend.ts';
 import type { AccountsDeps } from './accounts.ts';
 import type { ProviderAccount, UsageReading } from '../shared/types.ts';
@@ -29,7 +29,7 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
     signIn: (o, exited) => {
       const id = /accounts[\\/]([^\\/]+)[\\/]/.exec(Object.values(o.env)[0] ?? '')?.[1];
       return signIn(o, (code) => {
-        if (code === 0 && id) signedIn.add(id);
+        if (code === 0 && id && o.mode !== 'setup-token') signedIn.add(id);
         exited(code);
       });
     },

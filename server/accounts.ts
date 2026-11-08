@@ -34,7 +34,8 @@ import {
   type AccountSetup,
 } from '../shared/accounts.ts';
 import { mergeReadings } from '../shared/usage.ts';
-import type { AccountCli, AccountKind, AccountsView, AccountView, ProviderAccount, UsageReading } from '../shared/types.ts';
+import { inputShape, signInEnd } from '../shared/signIn.ts';
+import type { AccountCli, AccountKind, AccountsView, AccountView, ProviderAccount, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
 const secretKey = (id: string) => `account:${id}`;
 const hint = (s: string) => (s ? s.slice(-4) : '');
@@ -48,8 +49,8 @@ export interface AccountsDeps {
   file: string;
   /** Test an account (accountCheck.ts; the demo's is fake). */
   check: (a: ProviderAccount, dir: string, secret: string) => Promise<AccountCheck>;
-  /** A login's CLI signing in in a terminal, with its folder (cliRunner.ts startLocalSignIn; the demo's is fake). */
-  signIn: (o: { cli: AccountCli; env: Record<string, string>; term: AgentTerminal }, exited: (code: number) => void) => BoxSignIn;
+  /** A login's CLI signing in in a terminal, with its folder (localSignIn.ts; the demo's is fake). */
+  signIn: (o: { cli: AccountCli; env: Record<string, string>; term: AgentTerminal; mode: SignInMode }, exited: (code: number) => void) => BoxSignIn;
   /** The cost ledger's sessions, for today's spend per account. */
   spend: () => { at: number; usd: number; account?: string }[];
   /** Agents (and the CEO) with what they're pinned to. */
@@ -87,6 +88,7 @@ export class Accounts {
   private running = new Map<string, number>();
   private terms = new Map<string, AgentTerminal>();
   private signIns = new Map<string, BoxSignIn>();
+  private runs = new Map<string, SignInRun>();
   private timer: NodeJS.Timeout | null = null;
   private registry: ProviderAccount[] = normaliseAccounts([]);
   private writing: Promise<void> = Promise.resolve();
@@ -187,6 +189,7 @@ export class Accounts {
             limitHits7d: recentHits(a.limitHits, now).length,
             agents: agents.filter((x) => pinnedTo(a, x.account)).map((x) => x.id),
             running: this.running.get(a.id) ?? 0,
+            signIn: this.runs.get(a.id) ?? null,
           };
         }),
     };
@@ -334,22 +337,64 @@ export class Accounts {
   terminal(id: string): AgentTerminal | null {
     if (!this.list().some((a) => a.id === id)) return null;
     let t = this.terms.get(id);
-    if (!t) this.terms.set(id, (t = new AgentTerminal()));
+    if (!t) this.terms.set(id, (t = this.signInTerminal(id)));
     return t;
   }
 
-  /** POST /api/accounts/:id/signin: the CLI's own login, in the account's terminal, with the account's folder. */
-  signIn(id: string): void {
+  /**
+   * A sign-in terminal: what's typed at the prompt is logged by its shape only (the value is a sign-in code, dropped at
+   * Enter), and keys typed after the sign-in ended get told so rather than vanish.
+   */
+  private signInTerminal(id: string): AgentTerminal {
+    const t = new AgentTerminal();
+    let line = '';
+    let told = false;
+    t.onInput = (data) => {
+      if (!t.live) {
+        if (!told) t.note('This sign-in has ended: tap Try again for a new one.');
+        told = true;
+        line = '';
+        return;
+      }
+      told = false;
+      for (const ch of data) {
+        if (ch !== '\r') line += ch;
+        else if (line) {
+          console.log(`account ${id}: sign-in code sent (${inputShape(line)})`);
+          line = '';
+        }
+      }
+    };
+    return t;
+  }
+
+  /**
+   * POST /api/accounts/:id/signin: the CLI's own login (or `claude setup-token`), in the account's terminal, with the
+   * account's folder. How it ended goes on the account's card (`signIn`).
+   */
+  signIn(id: string, mode: SignInMode = 'login'): void {
     const a = this.find(id);
     if (a.kind !== 'subscription-login') throw new HttpError(400, a.kind === 'api-key' ? 'An API key account has no sign-in: paste a new key.' : `A setup token comes from ${a.tokenEnv}: run claude setup-token and set it there.`);
+    if (mode === 'setup-token' && a.cli !== 'claude') throw new HttpError(400, 'Setup tokens are for Claude Code only.');
     this.signIns.get(id)?.stop();
     const dir = this.dirOf(a);
     const env: Record<string, string> = a.builtIn ? {} : a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir };
-    const run = this.deps.signIn({ cli: a.cli, env, term: this.terminal(id)! }, () => {
-      if (this.signIns.get(id) === run) this.signIns.delete(id);
-      void this.test(id).catch(() => undefined);
+    const term = this.terminal(id)!;
+    const run = this.deps.signIn({ cli: a.cli, env, term, mode }, (code) => {
+      if (this.signIns.get(id) !== run) return; // replaced by a newer one
+      this.signIns.delete(id);
+      void term.flush().then(() => {
+        if (this.signIns.has(id)) return;
+        const end = signInEnd(mode, code, term.tail(8));
+        this.runs.set(id, { mode, running: false, ...end });
+        if (!end.ok) term.note(end.note);
+        this.emit();
+        void this.test(id).catch(() => undefined);
+      });
     });
     this.signIns.set(id, run);
+    this.runs.set(id, { mode, running: true, ok: false, note: '' });
+    this.emit();
   }
 
   /** DELETE /api/accounts/:id: at once, or once the sessions on it finish (paused meanwhile). */
@@ -368,6 +413,7 @@ export class Accounts {
   private async drop(a: ProviderAccount) {
     this.signIns.get(a.id)?.stop();
     this.signIns.delete(a.id);
+    this.runs.delete(a.id);
     this.terms.delete(a.id);
     this.secrets.delete(a.id);
     this.usage.delete(a.id);

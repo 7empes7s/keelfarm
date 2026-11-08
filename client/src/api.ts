@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { HistoryDetail, HistoryFilter, HistoryPage, HistoryUsage } from '../../shared/history';
@@ -228,7 +228,7 @@ export const api = {
   moveAccount: (id: string, by: -1 | 1) => call('POST', `/api/accounts/${encodeURIComponent(id)}/move`, { by }),
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
   testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
-  signInAccount: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`),
+  signInAccount: (id: string, mode: SignInMode = 'login') => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`, { mode }),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
   pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),

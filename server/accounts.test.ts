@@ -1,7 +1,9 @@
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { WebSocket } from 'ws';
 import { Accounts, type AccountsDeps } from './accounts.ts';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
@@ -69,6 +71,81 @@ describe('Accounts', () => {
     expect(env.CLAUDE_CONFIG_DIR).toBe(dir);
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(accounts.view().accounts.find((a) => a.id === id)).toMatchObject({ agents: ['ada'], running: 1, configDir: dir });
+  });
+
+  it('a failed sign-in ends with its reason, input after it is answered, and Try again starts one that takes input (#302)', async () => {
+    // A fake PTY: Claude Code's real prompt, which fails with a 400 on Enter, the bytes it got kept.
+    const ptys: { got: string[]; fail: () => void }[] = [];
+    const { accounts } = await office({
+      signIn: (o, exited) => {
+        const pty = { got: [] as string[], fail: () => undefined as void };
+        pty.fail = () => {
+          o.term.write('\r\nLogin failed: Request failed with status code 400\r\n');
+          o.term.bind(null);
+          exited(1);
+        };
+        ptys.push(pty);
+        o.term.write('Paste code here if prompted > ');
+        o.term.bind({ write: (d) => pty.got.push(d), resize: () => undefined });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.signIn(id);
+    const term = accounts.terminal(id)!;
+    const viewer = Object.assign(new EventEmitter(), { readyState: 1, OPEN: 1, send: () => undefined, close: () => undefined });
+    term.attach(viewer as unknown as WebSocket);
+    const type = (data: string) => viewer.emit('message', JSON.stringify({ t: 'input', data }));
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: string) => void logs.push(m));
+    type('abc123#state456');
+    type('\r');
+    spy.mockRestore();
+    expect(ptys[0].got.join('')).toBe('abc123#state456\r');
+    expect(logs).toEqual([`account ${id}: sign-in code sent (15 characters, with #state)`]); // its shape, never the code
+    expect(accounts.view().accounts.find((a) => a.id === id)?.signIn).toMatchObject({ running: true });
+    ptys[0].fail();
+    await vi.waitFor(() => expect(accounts.view().accounts.find((a) => a.id === id)?.signIn).toMatchObject({ running: false, ok: false, note: expect.stringMatching(/^Sign-in failed \(400\)/) }));
+    type('x');
+    await term.flush();
+    expect(term.tail(3).join('\n')).toMatch(/This sign-in has ended: tap Try again/);
+    accounts.signIn(id); // Try again: a fresh login in the same terminal
+    expect(accounts.view().accounts.find((a) => a.id === id)?.signIn).toMatchObject({ running: true });
+    type('def#789\r');
+    expect(ptys[1].got.join('')).toBe('def#789\r');
+    term.dispose();
+  });
+
+  it('a sign-in whose CLI ends the moment Enter arrives logs the code by shape and is not told it ended (#302)', async () => {
+    // Like the demo's fake CLI: Enter finishes the login at once, inside the write.
+    const { accounts } = await office({
+      signIn: (o, exited) => {
+        o.term.write('Paste code here if prompted > ');
+        o.term.bind({
+          write: (d) => {
+            if (!d.includes('\r')) return;
+            o.term.write('\r\nLogin successful.\r\n');
+            o.term.bind(null);
+            exited(0);
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.signIn(id);
+    const term = accounts.terminal(id)!;
+    const viewer = Object.assign(new EventEmitter(), { readyState: 1, OPEN: 1, send: () => undefined, close: () => undefined });
+    term.attach(viewer as unknown as WebSocket);
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: string) => void logs.push(m));
+    viewer.emit('message', JSON.stringify({ t: 'input', data: 'abc123#state456\r' }));
+    spy.mockRestore();
+    expect(logs).toEqual([`account ${id}: sign-in code sent (15 characters, with #state)`]);
+    await term.flush();
+    expect(term.tail(5).join('\n')).not.toMatch(/This sign-in has ended/);
+    term.dispose();
   });
 
   it('keeps an API key out of the registry, the views and events; the session gets it through apiKeyHelper only', async () => {

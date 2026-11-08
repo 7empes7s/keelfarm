@@ -9,9 +9,10 @@ import { spawnPty, terminalsAvailable, type Pty } from './ptyClient.ts';
 import { cliEnv } from './unblock.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
+import type { SignInMode } from '../shared/types.ts';
 
-/** `exited` hears its exit code; stop() doesn't call it. */
-export function startLocalSignIn(o: { cli: 'claude' | 'codex'; env: Record<string, string>; term: AgentTerminal }, exited: (code: number) => void): BoxSignIn {
+/** `exited` hears its exit code; stop() doesn't call it. `setup-token` runs `claude setup-token` instead of its login. */
+export function startLocalSignIn(o: { cli: 'claude' | 'codex'; env: Record<string, string>; term: AgentTerminal; mode?: SignInMode }, exited: (code: number) => void): BoxSignIn {
   const { term } = o;
   const cmd = commandFor(o.cli);
   let pty: Pty | null = null;
@@ -23,10 +24,11 @@ export function startLocalSignIn(o: { cli: 'claude' | 'codex'; env: Record<strin
     pty?.kill();
     if (code !== null) exited(code);
   };
-  term.note(`── Signing ${cliLabel(o.cli)} in ──`);
+  const token = o.mode === 'setup-token' && o.cli === 'claude';
+  term.note(token ? `── Making a ${cliLabel(o.cli)} setup token ──` : `── Signing ${cliLabel(o.cli)} in ──`);
   try {
     if (!terminalsAvailable || !cmd) throw new Error(!terminalsAvailable ? 'the terminal module could not be loaded on this machine' : `${cliLabel(o.cli)} isn't installed`);
-    const p = spawnPty(cmd.file, [...cmd.args, ...signInCommand(o.cli).args], { cols: term.cols, rows: term.rows, cwd: os.homedir(), env: cliEnv(process.env, {}, { machine: o.env }) }, {});
+    const p = spawnPty(cmd.file, [...cmd.args, ...(token ? ['setup-token'] : signInCommand(o.cli).args)], { cols: term.cols, rows: term.rows, cwd: os.homedir(), env: cliEnv(process.env, {}, { machine: o.env }) }, {});
     pty = p;
     term.bind({ write: (d) => p.write(d), resize: (c, r) => p.resize(c, r) });
     p.onData((d) => !over && term.write(d));
