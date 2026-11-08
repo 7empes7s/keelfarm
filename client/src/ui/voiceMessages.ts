@@ -9,7 +9,7 @@
 // The CEO's acks and progress lines while it works (#286) are said here too, only into silence, and give way to anything.
 import { messageSpeech } from '../../../shared/speech';
 import type { PhoneMessage, VoiceLine, VoiceProvider } from '../../../shared/types';
-import { sayNow, talkMode } from '../../../shared/voiceTalk';
+import { lineMicOpen, sayNow, talkMode } from '../../../shared/voiceTalk';
 import { useStore } from '../store';
 import { sliderGain } from './audioPrefs';
 import { speechClip, speechEnded, speechStarted, speechWord } from './captions';
@@ -411,8 +411,7 @@ export function speakLine(line: VoiceLine, arrived: number, wait: number) {
       const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
       const v = callVoice(settings.voice);
       const mic = useMic.getState().state;
-      // A call's mic is always open: there the manager talking over a line stops it instead (voiceCallEngine.ts).
-      const quiet = { micOpen: !callOn() && (mic === 'listening' || mic === 'transcribing'), speaking: busy || voiceSpeaking !== null || lineStop !== null };
+      const quiet = { micOpen: lineMicOpen(callOn(), mic, useCall.getState().managerSpeaking), speaking: busy || voiceSpeaking !== null || lineStop !== null };
       if (v.provider === 'off' || (v.provider === 'elevenlabs' && !voiceKeySet) || !sayNow(line, talkMode(v.talk, callOn()), quiet)) return;
       void sayLine(line, v.provider, v.voiceName, v.speed);
     },

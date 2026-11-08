@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LiveStep } from './ceoStream.ts';
 import { stepWords } from './ceoSteps.ts';
-import { ACK_GAP_MS, ACKS, milestoneLine, pickAck, progressCue, sayNow, spokenStep, talkMode, talkStart, TALK_PACE } from './voiceTalk.ts';
+import { ACK_GAP_MS, ACKS, lineMicOpen, milestoneLine, pickAck, progressCue, sayNow, spokenStep, talkMode, talkStart, TALK_PACE } from './voiceTalk.ts';
 
 const T0 = 1_000_000;
 const running = (label: string, icon = '📖'): LiveStep => ({ label, icon, state: 'running', at: T0 });
@@ -119,6 +119,14 @@ describe('sayNow and talkMode: each tab decides', () => {
       expect(sayNow(line, 'regular', { micOpen: true, speaking: false })).toBe(false);
       expect(sayNow(line, 'regular', { micOpen: false, speaking: true })).toBe(false);
     }
+  });
+
+  it('blocks call updates during manager speech and transcription, but allows quiet listening', () => {
+    expect(lineMicOpen(true, 'listening', false)).toBe(false);
+    expect(lineMicOpen(true, 'listening', true)).toBe(true);
+    expect(lineMicOpen(true, 'transcribing', false)).toBe(true);
+    expect(lineMicOpen(false, 'listening', false)).toBe(true);
+    expect(lineMicOpen(false, 'idle', false)).toBe(false);
   });
 
   it('is off by default outside a call, milestones in one', () => {

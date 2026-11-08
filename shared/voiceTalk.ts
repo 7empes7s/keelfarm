@@ -87,6 +87,11 @@ export function talkMode(setting: TalkWhileWorking, inCall: boolean): TalkWhileW
   return setting === 'off' && inCall ? 'milestones' : setting;
 }
 
+/** A call keeps listening between turns; only actual manager speech or transcription blocks its updates. */
+export function lineMicOpen(inCall: boolean, mic: string, managerSpeaking: boolean): boolean {
+  return mic === 'transcribing' || (inCall ? managerSpeaking : mic === 'listening');
+}
+
 /** Whether a tab says a line now: never over the manager's open mic or other speech, progress only as its mode allows. */
 export function sayNow(line: { kind: 'ack' | 'progress'; milestone?: boolean }, mode: TalkWhileWorking, quiet: { micOpen: boolean; speaking: boolean }): boolean {
   if (quiet.micOpen || quiet.speaking) return false;

@@ -9,6 +9,7 @@ export interface CallView {
   call: Call;
   /** What the mic heard of your turn so far, for the captions. */
   heard: string;
+  managerSpeaking: boolean;
   /** The phone's call screen is folded to the pill at the top; the desktop orb is closed to its bubble. */
   minimised: boolean;
   captions: boolean;
@@ -18,7 +19,7 @@ export interface CallView {
   chatTucked: boolean;
 }
 
-export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', minimised: false, captions: true, speaker: true, chatTucked: false }));
+export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', managerSpeaking: false, minimised: false, captions: true, speaker: true, chatTucked: false }));
 
 let onStep: ((step: CallStep, ev: CallEvent) => void) | null = null;
 

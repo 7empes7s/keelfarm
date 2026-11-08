@@ -17,6 +17,7 @@ type Internals = {
   schedule(): void;
   broadcast(ev: ServerEvent): void;
   agentRt: Map<string, { session: unknown }>;
+  notifier: { attention: { receive(tab: { readyState: number; OPEN: number }, raw: string): boolean } };
   state: { ceo: { queue: { kind: string; at: number }[]; job: { kind: string } | null }; messages: { from: string }[] };
 };
 
@@ -63,6 +64,13 @@ describe("the CEO's spoken ack", () => {
     const { swarm, acks } = await busyOffice('off');
     await swarm.messageCeo('Also check the login page');
     expect(acks()).toHaveLength(0);
+  });
+
+  it('acks during a voice call even when read-aloud is off', async () => {
+    const { swarm, i, acks } = await busyOffice('off');
+    i.notifier.attention.receive({ readyState: 1, OPEN: 1 }, JSON.stringify({ type: 'attention', visible: true, call: true }));
+    await swarm.messageCeo('Also check the footer');
+    expect(acks()).toHaveLength(1);
   });
 
   it('never comes when the CEO is free', async () => {
