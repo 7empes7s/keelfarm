@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LogEntry, SessionOptions, SessionResult } from './agentRunner.ts';
 import { demoPrompts } from './demoPrompts.ts';
-import { answerReply, createDemoBackend, demoMoneyAnswer, demoGrow, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
+import { answerReply, createDemoBackend, demoMoneyAnswer, demoServerAnswer, demoGrow, demoShrink, demoTeam, demoUsage, fixPromptPull, type DemoFloor } from './demo.ts';
 import { demoRefsLine, demoRepoFile } from './demoReads.ts';
 import { parseRefs } from '../shared/chatRefs.ts';
 import { demoPastWeek } from './opsSample.ts';
@@ -184,6 +184,16 @@ describe("the demo CEO's office refs", () => {
       hasFile: (repo, path) => demoRepoFile(repo, path) !== null,
     });
     expect(refs.map((r) => (r.kind === 'agent' && r.terminal ? 'terminal' : r.kind === 'preview' && r.number ? 'pr-preview' : r.kind))).toEqual(['floor', 'agent', 'terminal', 'issue', 'file', 'issue', 'qa', 'pr-preview', 'preview']);
+  });
+});
+
+describe('the demo CEO on the server (#271)', () => {
+  it('answers with the live server dashboard and memory by preview', () => {
+    const p = parseCeoMessage(demoServerAnswer());
+    expect(p.visuals?.map((v) => [v.kind, v.source])).toEqual([
+      ['dashboard', 'server'],
+      ['chart', 'server:previews'],
+    ]);
   });
 });
 
