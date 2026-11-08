@@ -1,0 +1,69 @@
+/* Assign to… (#265): an action sheet of the floor's agents, one 44 px row each, free first */
+.assign-sheet .sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: 0 var(--ds-space-4) var(--ds-space-4);
+  overflow-y: auto;
+}
+.assign-issue {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.assign-group {
+  margin: var(--ds-space-2) 0 var(--ds-space-1);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  color: var(--ds-text-muted);
+}
+.assign-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-raised);
+  overflow: hidden;
+}
+.assign-list li + li {
+  border-top: 1px solid var(--ds-line);
+}
+.assign-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.assign-row:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+}
+.assign-row:disabled {
+  cursor: default;
+}
+.assign-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.assign-name {
+  font-weight: var(--ds-weight-strong);
+}
+.assign-meta {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assign-cancel {
+  margin-top: var(--ds-space-2);
+}

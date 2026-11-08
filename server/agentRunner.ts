@@ -322,6 +322,8 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `↩ reply to message ${String(input.message_id ?? '?')}: ${clip(String(input.text ?? ''), 90)}`;
     case 'send_telegram':
       return `✈️ send_telegram: ${clip(String(input.text ?? ''), 90)}`;
+    case 'assign_issue':
+      return `📌 assign_issue #${String(input.number ?? '?')}${floor} · ${String(input.agent ?? 'next free')}`;
     case 'answer_agent':
       return `💬 answer_agent ${String(input.agent_id ?? '')}: ${clip(String(input.text ?? ''), 90)}`;
     case 'ask_manager_choice':
