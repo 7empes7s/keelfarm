@@ -120,6 +120,7 @@ export interface PersistedAgent {
   branch: string | null;
   prNumber: number | null;
   prUrl: string | null;
+  nextIssue?: number | null; // Assign to… while they were busy (#265, shared/assignIssue.ts): starts when they're free
   startedAt: number | null;
   endedAt: number | null;
   costUsd: number;

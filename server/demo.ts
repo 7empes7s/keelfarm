@@ -1671,6 +1671,14 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       await think('Reading your message.');
       const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
       if (quick !== null) return quick;
+      // "put the freed agent on #3" / "assign #3 to Ada": through the real tool (#265).
+      const put = text.match(/\b(?:put|assign)\b(?:.*?\bon #(\d+)|\s+#(\d+)(?:\s+to\s+(\w+))?)/i);
+      const putNumber = put && Number(put[1] ?? put[2]);
+      const putFloor = putNumber && (s.floors.find((f) => f.backlog.some((i) => i.number === putNumber)) ?? s.floors[0]);
+      if (putNumber && putFloor) {
+        const out = await use('assign_issue', { floor: putFloor.floor, number: putNumber, ...(put[3] && { agent: put[3] }) });
+        return out.startsWith('Refused') ? `I couldn't assign #${putNumber}: ${refused(out)}` : `Done: ${out}`;
+      }
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.

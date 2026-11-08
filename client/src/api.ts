@@ -108,6 +108,8 @@ export const api = {
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
   closeIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/close`),
+  /** Assign to… (#265): a free agent starts it now, a busy one gets it as their next task. */
+  assignIssue: (repoId: string, n: number, agentId: string) => call<{ started: boolean; text: string }>('POST', `${r(repoId)}/issues/${n}/assign`, { agentId }),
   trustIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/trust`),
   planFloor: (repoId: string, mission?: string, research = false) => call('POST', `${r(repoId)}/plan`, { mission, research }),
   onboardFloor: (repoId: string) => call('POST', `${r(repoId)}/onboard`),
