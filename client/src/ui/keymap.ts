@@ -17,6 +17,7 @@ export type ActionId =
   | 'phone'
   | 'help'
   | 'mute'
+  | 'captions'
   | 'workers'
   | 'overview'
   | 'rotateLeft'
@@ -60,6 +61,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'phone', label: 'Phone', group: 'Office', scope: 'global', keys: ['KeyP'] },
   { id: 'help', label: 'Help', group: 'Office', scope: 'global', keys: ['KeyH'] },
   { id: 'mute', label: 'Mute', group: 'Office', scope: 'global', keys: ['KeyM'] },
+  { id: 'captions', label: 'Captions on or off', group: 'Office', scope: 'global', keys: ['KeyC'] },
   { id: 'workers', label: "Who's working list", group: 'Office', scope: 'global', keys: ['KeyL'] },
   { id: 'overview', label: 'Overview (twice: the building)', group: 'Overview', scope: 'global', keys: ['Tab'] },
   { id: 'rotateLeft', label: 'Turn the overview left', group: 'Overview', scope: 'overview', keys: ['KeyQ'] },

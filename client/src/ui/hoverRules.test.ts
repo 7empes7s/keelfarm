@@ -93,6 +93,14 @@ describe('createPeek', () => {
     expect(peek.click()).toBe(true);
     expect(peek.mode).toBe(null);
   });
+
+  it('sheet() opens the sheet at once, and leaving does not close it', () => {
+    peek.sheet();
+    expect(seen).toEqual(['sheet']);
+    peek.hoverOut();
+    vi.advanceTimersByTime(1000);
+    expect(peek.mode).toBe('sheet');
+  });
 });
 
 describe('placePeek', () => {
