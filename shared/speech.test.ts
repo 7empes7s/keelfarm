@@ -69,6 +69,7 @@ describe('the spoken summary (#282)', () => {
     const said = spokenLine('**Merged** #278 and `#279` today, see [the PR](https://x.y/z) and https://github.com/a/b/pull/3. C# too.');
     expect(said).toBe('Merged 278 and 279 today, see the PR and. C too.');
     expect(said).not.toMatch(/[#*`[\]]|https?:|a link/);
+    expect(spokenLine('- team:4baf6066-dc66-4d33-8a29-cb2e6c8c84d2: Hire Frances? msg:36 asked at 10:30, see 4baf6066-dc66-4d33-8a29-cb2e6c8c84d2.')).toBe('Hire Frances? asked at 10:30, see.');
     expect(spokenLine('This is long. '.repeat(40)).length).toBeLessThanOrEqual(SPOKEN_MAX_CHARS);
   });
 });

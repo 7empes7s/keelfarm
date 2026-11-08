@@ -53,9 +53,12 @@ export const SPOKEN_MAX_CHARS = 300;
 /** A message without one is heard as its first paragraph, at most this many sentences. */
 const BRIEF_SENTENCES = 3;
 
-/** A spoken summary as it's said: plain words, no "#", links or markdown, at most SPOKEN_MAX_CHARS. */
+/** Ids nobody says aloud: uuids, and tags like team:4baf… or msg:36. */
+const IDS = /\b[a-z]+:[\w-]*\d[\w-]*:?|\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi;
+
+/** A spoken summary as it's said: plain words, no "#", ids, links or markdown, at most SPOKEN_MAX_CHARS. */
 export function spokenLine(raw: string): string {
-  return speechText(raw.replace(/#(\d+)\b/g, '$1').replace(URL, ''), SPOKEN_MAX_CHARS)
+  return speechText(raw.replace(/#(\d+)\b/g, '$1').replace(URL, '').replace(IDS, ''), SPOKEN_MAX_CHARS)
     .replace(/#/g, '')
     .replace(/\ba link\b[,;]?\s*/g, '')
     .replace(/\s+([.,!?;:])/g, '$1')

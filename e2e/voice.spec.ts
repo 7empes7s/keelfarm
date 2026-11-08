@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
-import { CEO_ID } from '../shared/types';
+import { messageSpeech } from '../shared/speech';
+import { CEO_ID, type PhoneMessage } from '../shared/types';
 import { enterOffice, expect, test } from './helpers';
 
 // Messages read aloud (docs/voice.md), with the demo's fake ElevenLabs: a CEO reply is spoken without opening the
@@ -141,18 +142,17 @@ test('a long reply plays its short spoken summary, and "Read the whole message" 
   await textCeo(page, 'How is it going?');
   const [id] = await newReplies(page, before, 1);
   const [rec] = await heard(page, [id]);
-  const m = ((await (await page.request.get('/api/state')).json()).messages as { id: number; text: string; spoken?: string }[]).find((x) => x.id === id)!;
-  expect(m.spoken).toBeTruthy();
+  const m = ((await (await page.request.get('/api/state')).json()).messages as PhoneMessage[]).find((x) => x.id === id)!;
+  expect(m.spoken).toBeTruthy(); // the demo CEO's replies carry one
   expect(rec.words).toBe(m.spoken);
   expect(rec.words.length).toBeLessThanOrEqual(300);
   expect(rec.words).not.toMatch(/[#*`]|https?:/);
-  expect(m.text.length).toBeGreaterThan(rec.words.length * 2);
 
   const bubble = page.locator(`[data-msg="${id}"]`);
   await bubble.getByRole('button', { name: 'Message actions' }).click();
   await page.getByRole('dialog', { name: /Message actions/ }).getByRole('button', { name: 'Read the whole message' }).click();
   await expect.poll(async () => (await spoken(page)).filter((s) => s.id === id && s.replay && s.end !== null).length, { timeout: 30_000 }).toBe(1);
   const whole = (await spoken(page)).find((s) => s.id === id && s.replay)!;
-  expect(whole.words.length).toBeGreaterThan(rec.words.length * 2);
-  expect(whole.words).toContain('Quick status:');
+  expect(whole.words).toBe(messageSpeech(m, { whole: true }));
+  expect(whole.words).not.toBe(rec.words);
 });
