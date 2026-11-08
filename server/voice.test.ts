@@ -304,6 +304,15 @@ describe('Voice', () => {
     expect(speeds).toEqual([0.8, 1.1]);
   });
 
+  it("makes each voice's preview line once, however many asks overlap (the pickers' warm-up and a tap, #279)", async () => {
+    const v = make();
+    await v.setKey('sk_good');
+    const ids = ['voiceAaaa', 'voiceBbbb'];
+    await Promise.all([...ids, ...ids, ...ids].map((id) => v.sampleAudio(id)));
+    await v.sampleAudio('voiceAaaa');
+    expect(calls.synth).toBe(2);
+  });
+
   it('speaks the spoken summary, and the whole text only when asked, without making it the ▶ clip', async () => {
     const v = make();
     await v.setKey('sk_good');

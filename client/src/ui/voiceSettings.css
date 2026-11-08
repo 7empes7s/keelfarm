@@ -89,3 +89,82 @@
   align-items: center;
   gap: 8px;
 }
+/* the previews getting ready (#279): a short equaliser while the first five load, then a dot per row */
+.voice-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-6) var(--ds-space-4);
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-sunken);
+  text-align: center;
+}
+.voice-intro-wave {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  height: 48px;
+}
+.voice-intro-wave span {
+  width: 6px;
+  height: 100%;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-accent);
+  transform: scaleY(0.3);
+  animation: voice-eq 900ms var(--ds-ease) infinite alternate;
+}
+@keyframes voice-eq {
+  to {
+    transform: scaleY(1);
+  }
+}
+.voice-intro-bar {
+  width: min(220px, 100%);
+  height: 6px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-line);
+  overflow: hidden;
+}
+.voice-intro-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ds-accent);
+  transition: width var(--ds-dur) var(--ds-ease);
+}
+/* reduced motion: the progress bar alone */
+@media (prefers-reduced-motion: reduce) {
+  .voice-intro-wave {
+    display: none;
+  }
+}
+html[data-reduce-motion] .voice-intro-wave {
+  display: none;
+}
+.voice-warm {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ds-radius-pill);
+}
+.voice-row[data-warm='loading'] .voice-warm {
+  background: var(--ds-line-strong);
+  animation: voice-warm 1s var(--ds-ease) infinite alternate;
+}
+.voice-row[data-warm='ready'] .voice-warm {
+  background: var(--ds-good-fill);
+}
+.voice-row[data-warm='failed'] .voice-warm {
+  background: var(--ds-warn-fill);
+}
+@keyframes voice-warm {
+  to {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-row[data-warm='loading'] .voice-warm {
+    animation: none;
+  }
+}
