@@ -49,6 +49,13 @@ describe('parseCeoMessage', () => {
     expect(p.artifacts).toEqual([{ title: 'Issues to file', markdown: '# Floor 2\n| # | Title |\n|---|---|\n| 1 | Jukebox |' }]);
   });
 
+  it('lifts the spoken summary out of the text, cleaned for speaking (#282)', () => {
+    const raw = `Filed #278 and #279 for the terminal.\n\n${fence}spoken\nI filed **two** fixes for the terminal, see #278.\n${fence}`;
+    expect(parseCeoMessage(raw)).toEqual({ text: 'Filed #278 and #279 for the terminal.', spoken: 'I filed two fixes for the terminal, see 278.' });
+    const empty = `Hi.\n${fence}spoken\n\n${fence}`;
+    expect(parseCeoMessage(empty)).toEqual({ text: empty });
+  });
+
   it('keeps code blocks inside an artifact', () => {
     const raw = `See the plan.\n${fence}artifact title='Plan'\nStep one:\n${fence}bash\nnpm test\n${fence}\nDone.\n${fence}`;
     const p = parseCeoMessage(raw);

@@ -10,7 +10,7 @@ export const VOICE_QUEUE_MAX = 3;
 /** Whether a message that just arrived is read aloud: the CEO's (or the office's, when asked for), with a voice on. */
 export function speakable(m: PhoneMessage, v: VoiceSettings, now: number): boolean {
   if (v.provider === 'off') return false;
-  if (m.from !== 'ceo' && !(m.from === 'office' && v.speakOffice)) return false;
+  if (m.from === 'ceo' ? m.silent : !(m.from === 'office' && v.speakOffice)) return false;
   return now - m.at <= VOICE_MAX_AGE_MS;
 }
 

@@ -27,7 +27,7 @@ export const handlers = {
       void import('../../ui/voiceMessages').then((v) => v.speakMessage(ev.message, arrived, wait));
     }
     // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
-    if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
+    if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, { whole: true, max: 600 })}`);
     if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
   },
   ceoChat: (ev, { set, get }) => set(applyChat(get(), ev)),
