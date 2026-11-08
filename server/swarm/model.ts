@@ -21,6 +21,7 @@ import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
+import { CHAT_KEEP } from '../../shared/chatPage.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
@@ -106,6 +107,7 @@ export interface PersistedAgent {
   cli: AgentCli | ''; // '' = the office's default CLI
   machine: string | null; // their machine (machines.ts); null for an agent from before machines, until their next task
   host?: MachineHost; // 'box': their machine is an Upstash Box (docs/cloud.md); absent: a folder on this computer
+  burst?: number; // when Hybrid's burst added them (#260): they leave once idle or when this computer has room again
   boxCli?: BoxCliRecord | null; // a cloud agent's live CLI in their Box, to pick up again after a restart
   needsSignIn?: boolean; // a cloud agent whose CLI waits for the manager to sign it in, in their terminal (docs/cloud.md)
   ownLogin?: KeyTrouble; // a cloud agent off the office's API key, which stopped working: their CLI uses its own login (#258)
@@ -120,6 +122,7 @@ export interface PersistedAgent {
   branch: string | null;
   prNumber: number | null;
   prUrl: string | null;
+  nextIssue?: number | null; // Assign to… while they were busy (#265, shared/assignIssue.ts): starts when they're free
   startedAt: number | null;
   endedAt: number | null;
   costUsd: number;
@@ -153,6 +156,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   stuckWhy: string | null; // why it last became needs-human, for the CEO's triage and the manager's alert
   triages: number; // CEO triage jobs it has had (triage.ts caps them)
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
+  recheckAt?: number | null; // the CEO's last triage from a needs-human re-check (#275, stuckRecheck.ts)
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
@@ -200,6 +204,7 @@ export interface Persisted {
   notices: NoticeView[]; // the notification centre (shared/notices.ts)
   prLimits: number; // the PR budgets (PR_LIMITS_VERSION) needs-human records were judged by
   outageReleased: boolean; // PRs a CI outage made needs-human before #191 went back to the merge gate
+  stuckReleased?: boolean; // needs-human PRs only a conflict or CI outage held went back into the flow when #275 landed
   ops: OpsHistory; // mission control's rolling week of merges, QA verdicts, check runs and costs
   held: HeldIssue[];
   progress: LedgerState; // coins, decorations, achievements and careers (ledger.ts)
@@ -272,7 +277,7 @@ export const FILES_DIR = path.join(HOME_DIR, 'files');
 // The other conversations' threads (server/ceoChat.ts).
 export const CONVERSATIONS_DIR = path.join(HOME_DIR, 'conversations');
 export const MAX_ISSUES_PER_JOB = 12;
-export const KEEP_MESSAGES = 200;
+export const KEEP_MESSAGES = CHAT_KEEP; // the chat loads in pages (shared/chatPage.ts)
 export const KEEP_DECIDED_REQUESTS = 40;
 
 export const BUSY: AgentStatus[] = ['preparing', 'working'];

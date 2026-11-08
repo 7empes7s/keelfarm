@@ -44,7 +44,7 @@ describe('the console map', () => {
 
   it("puts a group's sections in the row under the top tabs, and no row for a group of one (#199)", () => {
     expect(sectionRow('work', 'office').map((s) => s.id)).toEqual(['floors', 'issues', 'team']);
-    expect(sectionRow('work', 'pocket').map((s) => s.id)).toEqual(['floors', 'team']);
+    expect(sectionRow('work', 'pocket').map((s) => s.id)).toEqual(['floors', 'issues', 'team']); // Issues and Assign on a phone too (#265)
     expect(sectionRow('history', 'pocket').map((s) => s.id)).toEqual(['history', 'daily-log']); // no time-lapse on a phone
   });
 

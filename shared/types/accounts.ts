@@ -1,6 +1,7 @@
 // Providers & accounts (#247, docs/accounts.md): every login and API key the coding agents on this computer can run
 // on. The registry holds no secret: API keys and setup tokens stay in secrets.json on the server.
 import type { UsageReading } from './office.ts';
+import type { UsageSource } from './usage.ts';
 
 /** The coding agents an account can be for. */
 export type AccountCli = 'claude' | 'codex';
@@ -59,6 +60,7 @@ export interface SignInRun {
 export interface AccountsView {
   accounts: AccountView[];
   rotation?: RotationStats; // absent in old journals
+  sources?: UsageSource[]; // usage for every account and provider (#361), worst first: in the snapshot, then usageSources events
 }
 
 /** Settings → Providers & accounts → Rotation (#248): automatic fallback when an account is limited or signed out. */

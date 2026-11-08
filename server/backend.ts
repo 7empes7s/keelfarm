@@ -14,6 +14,8 @@ import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
+import { realUsageApi } from './usageApi.ts';
+import type { UsageApi } from './usageSources.ts';
 import { readCatalog } from './modelCatalog.ts';
 import { checkAccount } from './accountCheck.ts';
 import { startLocalSignIn } from './localSignIn.ts';
@@ -168,6 +170,8 @@ export interface Backend {
   cloud: CloudBackend;
   /** Providers & accounts (#247, docs/accounts.md): testing them and their logins' sign-in terminals (the demo's are fake). */
   accounts: AccountsBackend;
+  /** Usage for every provider (#361): ElevenLabs' subscription, Admin keys' cost reports (the demo's are fake). */
+  usage: UsageApi;
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
@@ -330,6 +334,7 @@ export const realBackend: Backend = {
   modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
   accounts: { check: checkAccount, signIn: startLocalSignIn },
+  usage: realUsageApi,
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

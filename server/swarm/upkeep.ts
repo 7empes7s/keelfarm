@@ -23,6 +23,8 @@ import { pruneQaShots } from '../qaShots.ts';
 import { previewSettings, upgradePreviewIdle } from '../prTheatre.ts';
 import { desksToTrim, formatBytes, freedMessage, idleSince } from '../deskTrim.ts';
 import { machineName } from '../machines.ts';
+import { burstFloor, burstLeavers, hybridPlace, localRoom } from '../hybrid.ts';
+import { recordBurst } from '../metrics.ts';
 import type { DeskTrim } from '../workspace.ts';
 import {
   addTenure,
@@ -41,7 +43,7 @@ import { followupEvents } from '../../shared/followups.ts';
 import { achievementDef, type ProgressView } from '../../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
 import type { CostRecord, CostSession } from '../../shared/costs.ts';
-import type { DoctorFinding, DoctorFix, PullInfo, SwarmSettings } from '../../shared/types.ts';
+import type { DoctorFinding, DoctorFix, MachineHost, PullInfo, SwarmSettings } from '../../shared/types.ts';
 import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { slugify } from './flavour.ts';
@@ -492,6 +494,74 @@ export abstract class SwarmUpkeep extends SwarmCeo {
       return this.command(addTenure(this.state.progress, Number(body.days), agentId));
     }
     throw new HttpError(400, 'action is "coins" or "tenure"');
+  }
+
+  // ---------- Hybrid (#260, docs/cloud.md) ----------
+
+  /** Why this computer has no room for one more agent (null: it has). */
+  protected localRoomWhy() {
+    const local = this.state.agents.filter((a) => a.role !== 'ceo' && a.host !== 'box').length;
+    return localRoom({ fit: this.health.fit('build'), slotsFull: this.slotsFull(), sessionLimit: this.state.settings.sessionLimit, localAgents: local, localMax: this.state.settings.cloud.hybrid.localMax });
+  }
+
+  /**
+   * Hybrid's place for a new agent (hostFor): this computer while it has room, else a Box (`boxWhy`: why not, null when
+   * it can). With room in neither, `strict` (the manager or CEO hiring) says both reasons; otherwise they work here.
+   */
+  protected hybridHost(boxWhy: string | null, strict: boolean): MachineHost {
+    const place = hybridPlace(this.localRoomWhy(), boxWhy);
+    if (typeof place === 'string') return place;
+    if (strict) throw new HttpError(409, place.refusal);
+    return 'local';
+  }
+
+  /** On the scheduler's beat, in Hybrid: add a cloud agent while ready work waits for memory (burst), and let added ones go once idle. */
+  protected hybridTick(now = Date.now()) {
+    const cloud = this.state.settings.cloud;
+    if (cloud.machineKind !== 'hybrid') return;
+    const busy = (a: PersistedAgent) => !!a.task || BUSY.includes(a.status) || this.consulting(a) || !!this.signIns.get(a.id)?.held;
+    const held = this.health.heldFloors();
+    const demo = this.health.simulated; // the demo's Simulate low memory shows a burst within half a minute
+    const starting = (a: PersistedAgent) => !!a.needsSignIn || ['none', 'creating', 'setting-up'].includes(this.boxMachines.stateOf(a.machine ?? machineName(a.id)));
+    const agents = this.state.agents.map((a) => ({ id: a.id, burst: a.burst, busy: busy(a), starting: starting(a), endedAt: a.endedAt }));
+    const room = !held && !this.localRoomWhy();
+    const leaving = burstLeavers({ now, idleMs: demo ? 120_000 : cloud.hybrid.burstIdleMin * 60_000, localRoom: room, agents });
+    for (const id of leaving) {
+      const a = this.state.agents.find((x) => x.id === id)!;
+      const why = room ? 'this computer has room again' : `idle for ${Math.round((now - Math.max(a.burst!, a.endedAt ?? 0)) / 60_000)} minutes`;
+      try {
+        this.fireAgent(id);
+        this.postMessage('office', `☁️ ${a.name} left the cloud: ${why}. Their Box is deleted.`);
+      } catch (err) {
+        delete a.burst; // the floor's last agent stays, as one of the team
+        console.warn('burst back', err);
+      }
+    }
+    if (!cloud.hybrid.burst || !this.cloud.boxApi()) return;
+    const floors = this.state.repos.map((r) => {
+      const team = this.state.agents.filter((a) => a.repoId === r.id && a.role !== 'ceo');
+      const free = team.filter((a) => this.isFree(a));
+      const queued = this.state.qa.filter((q) => q.repoId === r.id && (q.status === 'queued' || q.status === 'failed')).length;
+      const waiting = held?.floors.has(r.id) && free.some((a) => a.host !== 'box') ? (r.autoAssign ? this.readyIssues(r).length : 0) + queued : 0;
+      return { repoId: r.id, team: team.length, max: this.state.settings.maxAgents, waiting, cloudFree: team.filter((a) => a.host === 'box' && !busy(a)).length };
+    });
+    const pick = burstFloor({ now, waitingSince: held?.since ?? null, afterMs: demo ? 20_000 : cloud.hybrid.burstAfterMin * 60_000, floors, bursting: this.state.agents.filter((a) => a.burst).length, burstMax: cloud.hybrid.burstMax, boxRoom: this.boxRoom() });
+    if (!pick) return;
+    const repo = this.repo(pick.repoId);
+    try {
+      const view = this.hireAgent(repo.id, { host: 'box', strict: true });
+      const a = this.agent(view.id);
+      a.burst = now;
+      recordBurst(this.state.ops, repo.id, now);
+      this.save();
+      this.emitAgent(a);
+      this.emitOps();
+      const tasks = `${pick.waiting} task${pick.waiting === 1 ? '' : 's'} waiting`;
+      this.postMessage('office', `☁️ Added ${a.name} in the cloud on floor ${repo.floor}: this computer is full, ${tasks}. They leave once idle.`);
+      this.followup(followupEvents.burst(a, repo.id, this.floorName(repo), pick.waiting));
+    } catch (err) {
+      console.warn('burst hire', err);
+    }
   }
 
   // ---------- ping-pong ----------

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { impactOf, impactScore, mergeConfirmText, prDecision, prWhy, span, stuckSince, waitLine, whySummary } from './approvals.ts';
+import { impactOf, impactScore, mergeConfirmText, prDecision, prWaitLine, prWhy, span, stuckSince, waitLine, waitSpan, whySummary } from './approvals.ts';
 import type { QaCheck } from './types.ts';
 
 const H = 3_600_000;
@@ -133,5 +133,28 @@ describe('the Merge confirmation', () => {
     const t = mergeConfirmText('ready', qa('passed'), p([]), repo);
     expect(t).toMatchObject({ warn: false, confirm: 'Squash & merge' });
     expect(t.body).toContain("floor 3's main goes live with it.");
+  });
+});
+
+describe('prWaitLine (#275)', () => {
+  const NOW = 1_800_000_000_000;
+  const MIN = 60_000;
+  const qa = { status: 'needs-human' as const, stuckAt: NOW - (3 * 60 + 12) * MIN, stuckWhy: 'it failed QA 6 times', ceoLooking: false, updatedAt: NOW };
+
+  it('says how long a PR has waited for you, and on what', () => {
+    expect(prWaitLine(qa, 'main', NOW)).toBe('waiting 3 h 12 min: failed QA 6 times → needs you');
+    expect(prWaitLine({ ...qa, ceoLooking: true }, 'main', NOW)).toBe('waiting 3 h 12 min: failed QA 6 times → the CEO is looking first');
+  });
+
+  it('says a conflicting PR is with a developer, not you', () => {
+    const back = { ...qa, status: 'fixing' as const, fixReason: 'conflict' as const, updatedAt: NOW - 12 * MIN };
+    expect(prWaitLine(back, 'main', NOW)).toBe('waiting 12 min: conflicts with main → a developer is updating it');
+    expect(prWaitLine({ ...back, status: 'failed' }, 'develop', NOW)).toBe('waiting 12 min: conflicts with develop → the next free developer updates it');
+    expect(prWaitLine({ ...back, fixReason: 'qa' }, 'main', NOW)).toBeNull();
+    expect(prWaitLine({ ...qa, status: 'passed' }, 'main', NOW)).toBeNull();
+  });
+
+  it('spells waits out to the minute', () => {
+    expect([waitSpan(20_000), waitSpan(45 * MIN), waitSpan(120 * MIN), waitSpan(26 * 60 * MIN)]).toEqual(['<1 min', '45 min', '2 h', '1 day 2 h']);
   });
 });

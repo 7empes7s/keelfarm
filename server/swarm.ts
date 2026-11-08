@@ -17,6 +17,7 @@ import { mergeReadings } from '../shared/usage.ts';
 import { clampPacingSessions } from './pacing.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
+import { clampStuckRecheckMin } from './stuckRecheck.ts';
 import { isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
@@ -37,7 +38,7 @@ import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
-import { snapshotMessages } from '../shared/chatParts.ts';
+import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { rotationSettings } from '../shared/accountRotation.ts';
@@ -142,6 +143,7 @@ export class Swarm extends SwarmVoices {
         notices: keepNotices(loaded.notices, Date.now()),
         prLimits: loaded.prLimits ?? 1,
         outageReleased: loaded.outageReleased ?? false,
+        stuckReleased: loaded.stuckReleased ?? false,
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
         questions: Array.isArray(loaded.questions) ? loaded.questions : [],
@@ -158,6 +160,7 @@ export class Swarm extends SwarmVoices {
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
       if (!isCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
       this.state.settings.trimIdleDesksMin = clampTrimIdleMin(this.state.settings.trimIdleDesksMin);
+      this.state.settings.stuckRecheckMin = clampStuckRecheckMin(this.state.settings.stuckRecheckMin);
       this.state.settings.historyDays = clampHistoryDays(this.state.settings.historyDays);
       if (typeof this.state.settings.dailyLogDir !== 'string') this.state.settings.dailyLogDir = '';
       if (!this.state.settings.defaultModel && this.state.settings.defaultCli === 'claude') this.state.settings.defaultModel = DEFAULT_MODEL;
@@ -212,8 +215,8 @@ export class Swarm extends SwarmVoices {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await Promise.all([this.cloud.init(), this.accounts.init()]);
-    if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
+    await Promise.all([this.cloud.init(), this.accounts.init(), this.startUsage()]);
+    if (this.state.settings.cloud.machineKind !== 'local' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
     for (const a of this.state.agents) {
@@ -324,13 +327,14 @@ export class Swarm extends SwarmVoices {
     for (const rec of orphanedQa(this.state.qa, this.state.agents, BUSY)) this.setQa(rec, { status: 'queued', qaAgentId: null });
     if (this.state.prLimits < PR_LIMITS_VERSION) this.catchUpPrs();
     if (!this.state.outageReleased) this.releaseOutageStuck();
+    if (!this.state.stuckReleased) this.releaseStuck();
     this.officeHead = await this.backend.office.head();
     const updated = await this.backend.office.takeLastUpdate().catch(() => null);
     if (updated) await this.reportUpdate(updated);
     const held = seeded ? this.backend.demoHeldUpdate?.() : undefined;
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
-    setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
+    setInterval(() => (this.schedule(), this.hybridTick()), SCHEDULER_INTERVAL_MS);
     setInterval(() => this.sweepPreviews(), 5_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
@@ -604,7 +608,7 @@ export class Swarm extends SwarmVoices {
     this.state.messages = messages;
     Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
-    this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
+    this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();
   }
 
@@ -699,6 +703,7 @@ export class Swarm extends SwarmVoices {
     for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
+    if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
       setTimeout(() => void this.trimIdleDesks(), 1000);
@@ -742,7 +747,7 @@ export class Swarm extends SwarmVoices {
     if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
       const next: CloudSettings = cloudSettings(s.cloud, patch.cloud);
-      if (next.machineKind === 'box' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
+      if (next.machineKind !== 'local' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
       s.cloud = next;
     }
     this.save();

@@ -4,7 +4,7 @@ import { CEO_ID } from '../../../../shared/types';
 import { settleOutbox } from '../../../../shared/chat';
 import { addNotice, markRead, noticeOf } from '../../../../shared/notices';
 import { messageSpeech } from '../../../../shared/speech';
-import { applyChat, EMPTY_CHAT } from '../../ceoChat';
+import { applyChat, applyNewest, EMPTY_CHAT, markMessages } from '../../ceoChat';
 import { clearDesktopNotes, showDesktopNote } from '../../notifications';
 import { announce } from '../../ui/announce';
 import { audioUnlocked, chirp } from '../../ui/sfx';
@@ -15,7 +15,7 @@ import type { ApplyHandlers, SnapshotPart } from './types';
 
 export const handlers = {
   message: (ev, { set, get, live, replay }) => {
-    set({ messages: [...get().messages.slice(-199), ev.message], chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
+    set({ ...applyNewest(get(), ev.message), chatOutbox: settleOutbox(get().chatOutbox, ev.message) });
     if (replay) return; // a replayed message is only shown on the phone
     const o = get().overlay;
     const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
@@ -27,13 +27,13 @@ export const handlers = {
       void import('../../ui/voiceMessages').then((v) => v.speakMessage(ev.message, arrived, wait));
     }
     // Screen readers hear every message from the CEO, in words (no markdown or emoji), wherever focus is.
-    if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, 600)}`);
+    if (live && ev.message.from === 'ceo') announce(`Message from ${get().agents[CEO_ID]?.name ?? 'the CEO'}: ${messageSpeech(ev.message, { whole: true, max: 600 })}`);
     if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
   },
   ceoChat: (ev, { set, get }) => set(applyChat(get(), ev)),
   files: (ev, { set }) => set({ files: ev.files }),
-  delivery: (ev, { set, get }) => set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) }),
-  status: (ev, { set, get }) => set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, status: ev.status } : m)) }),
+  delivery: (ev, { set, get }) => set({ messages: markMessages(get().messages, ev) }),
+  status: (ev, { set, get }) => set({ messages: markMessages(get().messages, ev) }),
   phoneRead: (ev, { set, get }) => set({ phoneReadAt: Math.max(get().phoneReadAt, ev.at) }),
   decisions: (ev, { set }) => set({ decisions: ev.decisions }),
   toast: (ev, { set, get, replay }) => {
@@ -51,6 +51,7 @@ export const handlers = {
 
 export const snapshot: SnapshotPart = (d) => ({
   messages: d.messages,
+  chatOlder: d.messagesOlder ?? false,
   chat: d.chat ?? EMPTY_CHAT,
   files: d.files ?? [],
   phoneReadAt: d.phoneReadAt,

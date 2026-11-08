@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -130,8 +131,8 @@ describe('voiceSettings', () => {
     expect(voiceSettings(DEFAULT_VOICE, old)).toMatchObject({ speed: 1, favourites: [], model: 'eleven_flash_v2_5' });
   });
 
-  it('starts new offices on Eleven v4 Turbo', () => {
-    expect(DEFAULT_VOICE.model).toBe('eleven_v4_turbo');
+  it('starts new offices on Eleven v4, the higher-quality model', () => {
+    expect(DEFAULT_VOICE.model).toBe('eleven_v4');
   });
 
   it('starts off, with the office quiet', () => {
@@ -142,9 +143,15 @@ describe('voiceSettings', () => {
 
 describe('synthesis', () => {
   const req = { voiceId: 'v1', model: 'eleven_v4_turbo', speed: 0.85, text: 'Hello' };
-  it('sends the speed as voice_settings.speed, clamped', () => {
-    expect(synthBody(req)).toEqual({ text: 'Hello', model_id: 'eleven_v4_turbo', voice_settings: { speed: 0.85 } });
+  it('sends the chosen model and voice_settings, the speed clamped', () => {
+    expect(synthBody(req)).toEqual({ text: 'Hello', model_id: 'eleven_v4_turbo', voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true, speed: 0.85 } });
+    expect(synthBody({ ...req, model: 'eleven_v4' }).model_id).toBe('eleven_v4');
     expect(synthBody({ ...req, speed: 3 }).voice_settings.speed).toBe(1.2);
+  });
+
+  it('names a clip by its voice settings too, so new settings make new clips', () => {
+    expect(clipHash(req)).toBe(clipHash(req));
+    expect(clipHash(req)).not.toBe(crypto.createHash('sha256').update(`${req.voiceId}\n${req.model}\n${req.speed}\n${req.text}`).digest('hex').slice(0, 12));
   });
 
   it('caches a clip per speed, as per voice, model and words', () => {
@@ -194,6 +201,7 @@ describe('Voice', () => {
     { id: 1, from: 'ceo', text: 'Floor 2 shipped #12 🎉', at: 0 },
     { id: 2, from: 'manager', text: 'thanks', at: 0 },
     { id: 3, from: 'ceo', text: 'Another one.', at: 0 },
+    { id: 4, from: 'ceo', text: 'I looked at the terminal.\n\n- Paste fails on phones\n- Keys have no names\n\nI filed #278 and #279.', spoken: 'I filed two fixes for the terminal.', at: 0 },
   ];
 
   const api: VoiceApi = {
@@ -294,6 +302,16 @@ describe('Voice', () => {
     settings = { ...settings, speed: 1.1 };
     await v.sampleAudio();
     expect(speeds).toEqual([0.8, 1.1]);
+  });
+
+  it('speaks the spoken summary, and the whole text only when asked, without making it the ▶ clip', async () => {
+    const v = make();
+    await v.setKey('sk_good');
+    expect(String(await v.messageAudio(4))).toBe('mp3:I filed two fixes for the terminal.');
+    expect(String(await v.messageAudio(4, true))).toBe('mp3:I looked at the terminal. Paste fails on phones. Keys have no names. I filed number 278 and number 279.');
+    expect(String((await v.cachedAudio(4)).audio)).toBe('mp3:I filed two fixes for the terminal.');
+    // No spoken line: the fallback (briefSpeech, shared/speech.test.ts).
+    expect(String(await v.messageAudio(1))).toBe('mp3:Floor 2 shipped number 12.');
   });
 
   it("picks a new agent's voice from the favourites, else the v4 voices, never one already on the floor", async () => {

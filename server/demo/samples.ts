@@ -1,11 +1,11 @@
 // The demo office's made-up history (#257): a past week of ops, costs, careers, the lab, notices, the chat, a charter
 // and a QA report, so a fresh demo shows every panel full.
 import { demoCharter } from '../demoCharters.ts';
-import { demoEditedChat, demoThreads } from '../demoChat.ts';
+import { demoThreads } from '../demoChat.ts';
 import { DEMO_QA_ISSUE, demoQaReport } from '../demoQa.ts';
 import { sampleCareers, sampleHistory, samplePastCareers } from '../careerSample.ts';
 import { sampleLog } from '../charterSample.ts';
-import { sampleChat } from '../chatSample.ts';
+import { demoThread } from '../chatSample.ts';
 import { sampleOffice } from '../costSample.ts';
 import { demoSurvival, sampleLab } from '../experimentSample.ts';
 import { sampleNotices } from '../noticeSample.ts';
@@ -24,10 +24,7 @@ registerDemo('samples', ({ scale, noTour }) => ({
   demoNoTour: noTour,
   seedLab: sampleLab,
   seedNotices: sampleNotices,
-  seedChat: (now, cards) => {
-    const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
-    return [...edits, ...sampleChat(now, edits.length + 1, scale ? undefined : cards)]; // the big company measures the office (scale.test.ts), not the cards' example
-  },
+  seedChat: (now, cards) => demoThread(now, scale ? undefined : cards), // the big company measures the office (scale.test.ts), not the cards' example
   seedThreads: demoThreads,
   demoCharter,
   seedQaReport: (fullName) => {

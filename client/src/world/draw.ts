@@ -511,21 +511,28 @@ function drawNote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
       ctx.fillText(meta, w - 12, 24);
       ctx.textAlign = 'left';
     }
-  } else if (card.agent) {
-    ctx.fillStyle = card.agent.color;
-    ctx.beginPath();
-    ctx.arc(22, h - 15, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#2d3142';
-    ctx.font = `600 17px ${SANS}`;
-    ctx.fillText(card.agent.name, 36, h - 14);
-  }
-  if (card.note && !card.ghost) {
-    ctx.font = `500 16px ${SANS}`;
-    ctx.fillStyle = '#5c6078';
-    ctx.textAlign = 'right';
-    ctx.fillText(card.note, w - 12, h - 14);
-    ctx.textAlign = 'left';
+  } else {
+    // the who row (#232): the name, then the note in what's left of the line, never over each other
+    let nameRight = 12;
+    if (card.agent) {
+      ctx.fillStyle = card.agent.color;
+      ctx.beginPath();
+      ctx.arc(22, h - 15, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2d3142';
+      ctx.font = `600 17px ${SANS}`;
+      const name = fitText(ctx, card.agent.name, (w - 48) * (card.note ? 0.5 : 1));
+      ctx.fillText(name, 36, h - 14);
+      nameRight = 36 + ctx.measureText(name).width + 10;
+    }
+    if (card.note) {
+      ctx.font = `500 16px ${SANS}`;
+      ctx.fillStyle = '#5c6078';
+      ctx.textAlign = 'right';
+      const room = w - 12 - nameRight;
+      if (room > 24) ctx.fillText(fitText(ctx, card.note, room), w - 12, h - 14);
+      ctx.textAlign = 'left';
+    }
   }
   if (look.shapes && card.tone && !card.ghost) drawStatusBadge(ctx, w - 18, 20, 13, TONE_KIND[card.tone], look);
   ctx.restore();

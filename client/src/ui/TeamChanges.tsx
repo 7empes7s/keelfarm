@@ -102,7 +102,7 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
         <label className="field" htmlFor={`${id}-host`}>
           <span>Works on</span>
           <select id={`${id}-host`} value={value.host} disabled={disabled} onChange={(e) => set({ host: e.target.value as MachineHost | '' })}>
-            <option value="">{settings.cloud.machineKind === 'box' ? 'Upstash Box' : 'This computer'} (default)</option>
+            <option value="">{{ box: 'Upstash Box', hybrid: 'Hybrid', local: 'This computer' }[settings.cloud.machineKind]} (default)</option>
             <option value="local">This computer</option>
             <option value="box" disabled={cli === 'opencode'}>
               Upstash Box{cli === 'opencode' ? " (OpenCode can't run there)" : ''}

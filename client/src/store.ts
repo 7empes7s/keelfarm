@@ -134,7 +134,8 @@ export interface State {
   previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's pages loaded so far (shared/chatPage.ts)
+  chatOlder: boolean; // the thread has earlier messages than these
   chat: CeoChatView; // the live reply, conversations and pinned notes (#51)
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
@@ -270,6 +271,7 @@ export const useStore = create<State>((set, get) => ({
     tutorialStep: -1,
     pacingSessions: 3,
     trimIdleDesksMin: 120,
+    stuckRecheckMin: 30,
     previewRecentHours: 48,
     mainPreviewIdleMin: 1, prPreviewIdleMin: 1, previewMaxLifeHours: 0,
     dailyLogDir: '',
@@ -302,6 +304,7 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
+  chatOlder: false,
   chat: EMPTY_CHAT,
   files: [],
   chatOutbox: [],

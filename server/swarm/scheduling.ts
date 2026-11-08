@@ -8,7 +8,8 @@ import { ONE_TURN } from '../prompts.ts';
 import { resolveEffort } from '../../shared/costs.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
-import { fixGoesTo, pickTester, prepHeld, runnerFor, runsHere } from '../handOut.ts';
+import { fixGoesTo, pickTester, pipelineQueue, prepHeld, runnerFor, runsHere, WORK_PHASES } from '../handOut.ts';
+import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
@@ -30,6 +31,7 @@ import { opsView, recordAvoided, recordChecks, recordMerges, type OpsFloorState 
 import { mergedPulls } from '../costLedger.ts';
 import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
+import { planAssign } from '../../shared/assignIssue.ts';
 import { questionOf } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import { areaFiles, isPriorityLabel, pickNext, playbookAreas } from '../../shared/conflicts.ts';
@@ -38,9 +40,9 @@ import {
   type PersistedRepo,
   type PersistedAgent,
   type QaRecord,
-  type PrepJob,
   prepKey,
   FREE,
+  BUSY,
   ERROR_COOLDOWN_MS,
   MAX_ISSUE_FAILURES,
   LIMIT_PAUSE_MS,
@@ -62,9 +64,10 @@ export abstract class SwarmScheduling extends SwarmQa {
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
   }
 
-  /** A floor's agents who can take work now, by desk. */
+  /** A floor's agents who can take work now, by desk; in Hybrid this computer's first (#260: no Box CPU cost; runner() still sends work to a Box when memory is short). */
   protected available(repo: PersistedRepo) {
-    return this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && this.isFree(a)).sort((x, y) => x.desk - y.desk);
+    const free = this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo' && this.isFree(a)).sort((x, y) => x.desk - y.desk);
+    return this.state.settings.cloud.machineKind === 'hybrid' ? localFirst(free) : free;
   }
 
   protected scheduleOffset = 0;
@@ -91,6 +94,7 @@ export abstract class SwarmScheduling extends SwarmQa {
           !i.labels.some((l) => /^(swarm:skip|wontfix|question)$/i.test(l)) &&
           !this.issueTaken(repo, i.number) &&
           !this.isHeld(repo.id, i.number) &&
+          !this.state.agents.some((a) => a.repoId === repo.id && a.nextIssue === i.number) && // someone's next task (#265)
           blockers(i.body, open).length === 0 &&
           (this.issueFailures.get(`${repo.id}#${i.number}`) ?? 0) < MAX_ISSUE_FAILURES,
       )
@@ -99,7 +103,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   }
 
   /**
-   * Finish work in flight: test queued PRs (oldest first) and get failed ones fixed. Returns true if work started.
+   * Finish work in flight (handOut.ts pipelineQueue): bring QA-passed PRs up to date, test queued PRs and get failed ones fixed. Returns true if work started.
    * Any free agent but the PR's author tests it (handOut.ts pickTester); its author goes on with other work meanwhile. A failed PR goes back to its author when they're free; while the
    * author is still in a session on it, it waits for them; otherwise any free agent takes it. A PR whose desks keep
    * failing to set up sits out.
@@ -109,20 +113,16 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (!free.length) return false;
     const now = Date.now();
     const floor = this.floorState(this.repoRt.get(repo.id)!);
-    const waiting = (status: QaRecord['status'], task: PrepJob['task']) =>
-      this.state.qa
-        .filter(
-          (q) =>
-            q.repoId === repo.id &&
-            q.status === status &&
-            stillOpen({ kind: 'pr', number: q.prNumber }, floor) &&
-            !this.outsidePull(repo.id, q.prNumber) &&
-            !prepHeld(this.prepStrikes.get(prepKey(repo.id, q.prNumber, task)), now),
-        )
-        .sort((x, y) => x.updatedAt - y.updatedAt);
-    const fixes = waiting('failed', 'fix');
-    const owed = new Set(fixes.map((q) => q.devAgentId).filter((id): id is string => !!id));
-    for (const rec of waiting('queued', 'qa')) {
+    const queue = pipelineQueue(this.state.qa.filter((q) => q.repoId === repo.id && stillOpen({ kind: 'pr', number: q.prNumber }, floor) && !this.outsidePull(repo.id, q.prNumber))).filter(
+      ({ rec, task }) => !prepHeld(this.prepStrikes.get(prepKey(repo.id, rec.prNumber, task)), now),
+    );
+    const owed = new Set(queue.flatMap(({ rec, task }) => (task === 'fix' && rec.devAgentId ? [rec.devAgentId] : [])));
+    for (const { rec, task } of queue) {
+      if (task === 'fix') {
+        const started = this.startFix(repo, rec, free, owed);
+        if (started !== false) return !!started;
+        continue;
+      }
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
       const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
       const pick = (pool: PersistedAgent[]) => pickTester(preferCli(pool, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
@@ -133,18 +133,20 @@ export abstract class SwarmScheduling extends SwarmQa {
       void this.runQa(tester, repo, rec);
       return true;
     }
-    for (const rec of fixes) {
-      const author = this.state.agents.find((a) => a.id === rec.devAgentId && a.repoId === repo.id && a.role !== 'ceo') ?? null;
-      const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
-      const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
-      if (to === 'wait') continue; // the author gets it when their session ends
-      const pick = (pool: PersistedAgent[]) => (to === 'author' && pool.includes(author!) ? author! : (pool.find((a) => !owed.has(a.id)) ?? pool[0] ?? null));
-      const fixer = this.runner('fix', repo, pick(free)!, free, pick);
-      if (!fixer) return false;
-      void this.runFix(fixer, repo, rec);
-      return true;
-    }
     return false;
+  }
+
+  /** Hand a failed PR's fix to its author when free, else to a free agent (handOut.ts fixGoesTo). True: it started; false: it waits for its author; null: for memory. */
+  protected startFix(repo: PersistedRepo, rec: QaRecord, free: PersistedAgent[], owed: ReadonlySet<string>): boolean | null {
+    const author = this.state.agents.find((a) => a.id === rec.devAgentId && a.repoId === repo.id && a.role !== 'ceo') ?? null;
+    const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
+    const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
+    if (to === 'wait') return false; // the author gets it when their session ends
+    const pick = (pool: PersistedAgent[]) => (to === 'author' && pool.includes(author!) ? author! : (pool.find((a) => !owed.has(a.id)) ?? pool[0] ?? null));
+    const fixer = this.runner('fix', repo, pick(free)!, free, pick);
+    if (!fixer) return null;
+    void this.runFix(fixer, repo, rec);
+    return true;
   }
 
   /** Who of the floor's free agents runs work of `kind` that `picked` would get: a free Box agent (`pick`ed from them) when this computer is short of memory for a local one (#263). Null: it waits for memory. */
@@ -171,6 +173,81 @@ export abstract class SwarmScheduling extends SwarmQa {
     void this.assign(agent.id, next.number).catch((err) => console.warn('auto-assign failed', err));
     if (avoided && agent.status === 'preparing') recordAvoided(this.state.ops, repo.id, next.number, Date.now()); // Mission control's conflicts avoided (#256)
     return agent.status === 'preparing';
+  }
+
+  // ---------- Assign to… (#265, shared/assignIssue.ts) ----------
+
+  /** Can an agent start an issue by hand right now? Busy, consulting, asking or waiting for a sign-in: no, it waits as their next task. */
+  protected startable(a: PersistedAgent) {
+    return !BUSY.includes(a.status) && !a.needsSignIn && !questionOf(this.state.questions, a.id) && !this.consulting(a);
+  }
+
+  /**
+   * The manager's Assign to… (Kanban card, issue sheet) and the CEO's assign_issue: a free agent starts the issue now,
+   * a busy one gets it as their next task (startQueuedWork), and no running work stops. The manager's goes to the CEO
+   * as a change (#207). `who`: an agent's id or name, or "next free".
+   */
+  async assignIssue(repoId: string, issueNumber: number, who: string, by: 'manager' | 'ceo' = 'manager') {
+    const repo = this.repo(repoId);
+    const issue = (this.repoRt.get(repo.id)?.issues ?? []).find((i) => i.number === issueNumber);
+    if (!issue) throw new HttpError(404, `Issue #${issueNumber} is not open on ${repo.fullName}.`);
+    if (issue.untrusted) throw new HttpError(403, `#${issueNumber} is from @${issue.author ?? 'ghost'}, who isn't trusted on ${repo.fullName}: only the manager can let it in (Trust this issue on the Kanban).`);
+    const team = this.state.agents.filter((a) => a.repoId === repo.id && a.role !== 'ceo').sort((x, y) => x.desk - y.desk);
+    const holder = team.find((a) => a.task === 'issue' && a.issueNumber === issueNumber && BUSY.includes(a.status));
+    let plan;
+    try {
+      plan = planAssign(team.map((a) => ({ id: a.id, name: a.name, free: this.startable(a), startedAt: a.startedAt, nextIssue: a.nextIssue })), issueNumber, who, holder?.name);
+    } catch (err) {
+      throw new HttpError(409, (err as Error).message);
+    }
+    const a = this.agent(plan.agentId);
+    for (const x of team.filter((t) => t !== a && t.nextIssue === issueNumber)) {
+      x.nextIssue = null; // one agent's next task at a time: it moves to the new pick
+      this.emitAgent(x);
+    }
+    let started = false;
+    if (plan.start) {
+      try {
+        await this.assign(a.id, issueNumber);
+        started = true;
+      } catch (err) {
+        // No session slot or memory for it now: it waits as their next task and starts once there is.
+        if (!(err instanceof HttpError) || (err.status !== 429 && err.status !== 503)) throw err;
+      }
+    }
+    if (!started) {
+      a.nextIssue = issueNumber;
+      this.appendLog(a, [{ kind: 'system', text: `📌 Next: #${issueNumber} ${issue.title}${BUSY.includes(a.status) ? ', after the current task' : ''} (${by === 'ceo' ? `assigned by ${this.ceo().name}` : 'assigned by the manager'})` }]);
+      this.emitAgent(a);
+    }
+    const when = started ? 'starts now' : BUSY.includes(a.status) ? `next, after ${this.agentDoing(a)}` : 'next, when a session can start';
+    if (by === 'manager') this.managerChange(repo, 'assign', { issue: issueNumber }, `assigned #${issueNumber} "${clip(issue.title, 60)}" to ${a.name} (${when})`, []);
+    else this.save();
+    return { agent: this.agentView(a, false), started, replaces: plan.replaces, text: `${a.name} ${started ? `starts #${issueNumber} now` : `takes #${issueNumber} ${when.replace(/^next, /, '')}`}${plan.replaces ? `, instead of #${plan.replaces}` : ''}.` };
+  }
+
+  /** Free agents with a next task (#265) start it before any other work; one no longer open or already taken is dropped. */
+  protected startQueuedWork(repo: PersistedRepo): boolean {
+    for (const a of this.available(repo)) {
+      const n = a.nextIssue;
+      if (n == null) continue;
+      const issue = this.repoRt.get(repo.id)!.issues.find((i) => i.number === n);
+      const holder = this.state.agents.find((x) => x.id !== a.id && x.repoId === repo.id && x.task === 'issue' && x.issueNumber === n && BUSY.includes(x.status));
+      if (!issue || issue.untrusted || holder) {
+        a.nextIssue = null;
+        this.appendLog(a, [{ kind: 'system', text: `📌 #${n} is no longer their next task: ${holder ? `${holder.name} is building it` : 'it closed'}.` }]);
+        this.emitAgent(a);
+        this.save();
+        continue;
+      }
+      if (!this.runner('build', repo, a, [a], (pool) => pool[0] ?? null)) continue; // waits for memory, still queued
+      void this.assign(a.id, n).catch((err) => console.warn('next task failed to start', err));
+      if (a.status !== 'preparing') continue;
+      a.nextIssue = null;
+      this.emitAgent(a);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -331,9 +408,11 @@ export abstract class SwarmScheduling extends SwarmQa {
           return;
         }
         this.recordUsage(res.readings); // clears the failed check
-        // A full 5-hour or weekly window pauses new work, as a session hitting the limit would.
+        // A full 5-hour or weekly window on the built-in login pauses new work, as a session hitting the limit would,
+        // unless rotation has another Claude account to start it on: then only that login is out (its status already
+        // says limited, from these readings). With every account out, the pause lasts until the first one is back.
         const full = res.readings.find((r) => (r.type === 'five_hour' || r.type === 'seven_day') && r.pct >= 100 && r.resetsAt && r.resetsAt > Date.now());
-        if (full) this.pauseForLimit(full.resetsAt);
+        if (full && !this.accounts.hasFree('claude')) this.pauseForLimit(this.accounts.rotation().on ? (this.accounts.firstBack('claude') ?? full.resetsAt) : full.resetsAt);
       })
       .finally(() => (this.usagePolling = false));
   }
@@ -433,8 +512,9 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (repos.length === 0) return;
     this.scheduleOffset = (this.scheduleOffset + 1) % repos.length;
     const order = [...repos.slice(this.scheduleOffset), ...repos.slice(0, this.scheduleOffset)];
-    // Consults come after QA and fixes, before new issues (#28).
-    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startConsultWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
+    // The manager's and the CEO's picks go first (#265), then finished work, consults and new issues.
+    const starts = { queued: (r: PersistedRepo) => this.startQueuedWork(r), pipeline: (r: PersistedRepo) => this.startPipelineWork(r), consult: (r: PersistedRepo) => this.startConsultWork(r), issue: (r: PersistedRepo) => this.startIssueWork(r) };
+    for (const start of WORK_PHASES.map((p) => starts[p])) {
       let progress = true;
       while (progress) {
         progress = false;

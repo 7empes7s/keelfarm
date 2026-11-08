@@ -15,6 +15,7 @@ export abstract class SwarmContract {
   protected abstract learnIssueClosed(...a: Parameters<Swarm['learnIssueClosed']>): ReturnType<Swarm['learnIssueClosed']>;
   protected abstract learnPull(...a: Parameters<Swarm['learnPull']>): ReturnType<Swarm['learnPull']>;
   protected abstract rebaseConflicting(...a: Parameters<Swarm['rebaseConflicting']>): ReturnType<Swarm['rebaseConflicting']>;
+  protected abstract recheckStuck(...a: Parameters<Swarm['recheckStuck']>): ReturnType<Swarm['recheckStuck']>;
   protected abstract refreshPractices(...a: Parameters<Swarm['refreshPractices']>): ReturnType<Swarm['refreshPractices']>;
   protected abstract settleLearned(...a: Parameters<Swarm['settleLearned']>): ReturnType<Swarm['settleLearned']>;
   protected abstract sweepFloor(...a: Parameters<Swarm['sweepFloor']>): ReturnType<Swarm['sweepFloor']>;
@@ -122,6 +123,9 @@ export abstract class SwarmContract {
   protected abstract closeTestLab(...a: Parameters<Swarm['closeTestLab']>): ReturnType<Swarm['closeTestLab']>;
   protected abstract labSessions(...a: Parameters<Swarm['labSessions']>): ReturnType<Swarm['labSessions']>;
   protected abstract labView(...a: Parameters<Swarm['labView']>): ReturnType<Swarm['labView']>;
+
+  // upkeep.ts
+  protected abstract hybridHost(...a: Parameters<Swarm['hybridHost']>): ReturnType<Swarm['hybridHost']>;
 
   // swarm.ts
   protected abstract finishRestart(...a: Parameters<Swarm['finishRestart']>): ReturnType<Swarm['finishRestart']>;

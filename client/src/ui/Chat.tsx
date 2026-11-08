@@ -5,14 +5,17 @@ import { useStore } from '../store';
 import { CEO_ID, type ChatArtifact, type PhoneMessage } from '../../../shared/types';
 import { excerpt, heldBanner, RESEARCH_PREFIX, yesNoFor } from '../../../shared/chat';
 import { suggestionsFor } from '../../../shared/chatParts';
-import { takeChatScroll, useMentions, useRefNav } from './RefChips';
+import { hasChatScroll, takeChatScroll, useMentions, useRefNav } from './RefChips';
 import { linkCeoText, type FloorRef } from './chatLinks';
 import { sendToCeo } from './chatSend';
 import { reduceMotion } from './a11y';
 import { resetViewport, VIEWPORT_EVENT } from '../viewport';
 import { QuestionChips } from './QuestionChips';
 import { ArtifactView } from './ChatArtifacts';
-import { MessageActions, who, type Item } from './ChatActions';
+import { itemOf, MessageActions, who, type Item } from './ChatActions';
+import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
+import { firstPaintFrom, firstUnread as firstUnreadId } from '../../../shared/chatPage';
+import { messageActions } from './chatMessageActions';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
 import { DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
@@ -45,9 +48,12 @@ import { CloseButton, Icon } from './Icon';
 /**
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
  * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
+ * `away`: drawn, hidden, while another tab is open (the phone's Chat tab, #145), so opening it only shows it: nothing
+ * is marked read, and each opening starts afresh at the unread divider or the end.
  */
-export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean }) {
+export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away = false }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean; away?: boolean }) {
   const messages = useStore((s) => s.messages);
+  const chatOlder = useStore((s) => s.chatOlder);
   const outbox = useStore((s) => s.chatOutbox);
   const readAt = useStore((s) => s.phoneReadAt);
   const ceo = useStore((s) => s.agents[CEO_ID]);
@@ -83,15 +89,26 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   // The decision log's "Replied to message N" (#208): that message, once the chat has laid out.
   const jumpTo = useCeoDraft((s) => s.jump ?? null);
   useEffect(() => {
-    if (jumpTo === null) return;
+    if (jumpTo === null || away) return;
     useCeoDraft.setState({ jump: null });
     requestAnimationFrame(() => jump(jumpTo));
-  }, [jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [jumpTo, away]); // eslint-disable-line react-hooks/exhaustive-deps
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
-  // The first message that was unread when the chat opened: the "New messages" divider goes above it.
-  const [firstUnread] = useState(() => messages.find((m) => m.from === 'ceo' && !m.requestId && m.at > readAt)?.id ?? null);
+  // The first message that was unread when the chat opened: the "New messages" divider goes above it. Away, it
+  // follows the unread for the next opening.
+  const [firstUnread, setFirstUnread] = useState(() => firstUnreadId(messages, readAt, chatOlder));
+  const unreadNow = away ? firstUnreadId(messages, readAt, chatOlder) : firstUnread;
+  if (unreadNow !== firstUnread) setFirstUnread(unreadNow);
+  // Opening draws the newest screenful first, the rest of the page two frames later (after a paint); all at once when
+  // it must find a message or a scroll position at once.
+  const [warm, setWarm] = useState(() => away || jumpTo !== null || hasChatScroll());
+  useEffect(() => {
+    let r = requestAnimationFrame(() => (r = requestAnimationFrame(() => setWarm(true))));
+    return () => cancelAnimationFrame(r);
+  }, []);
+  const coldHeight = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const [logWrap, setLogWrap] = useState<HTMLDivElement | null>(null);
   useChatPinch(logWrap, useCallback(() => scroller.current, []));
@@ -100,9 +117,17 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   const lastTop = useRef(0);
   const opened = useRef(false);
 
-  const floors = useMemo<FloorRef[]>(() => repos.map((r) => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })), [repos]);
-  const linked = useMemo(() => (t: string) => linkCeoText(t, floors), [floors]);
+  // By value: a floor's other changes (issues, agents) leave the memoised bubbles alone.
+  const floorsKey = JSON.stringify(repos.map((r): FloorRef => ({ floor: r.floor, fullName: r.fullName, prs: r.pulls.map((p) => p.number) })));
+  const linked = useMemo(() => ((floors: FloorRef[]) => (t: string) => linkCeoText(t, floors))(JSON.parse(floorsKey)), [floorsKey]);
+  // The bubbles' handlers, the same functions every render; `on` has this render's.
+  const on = useRef<{ floor: (n: number) => void; quote: (id: number) => void; reply: (id: number) => void }>(null);
+  const stable = useMemo(() => ({ floor: (n: number) => on.current?.floor(n), quote: (id: number) => on.current?.quote(id), reply: (id: number) => on.current?.reply(id), artifact: (messageId: number, artifactId: string) => setArtifact({ messageId, artifactId }), file: (id: string) => setViewing({ id }) }), []);
+  const pages = useOlderPages(scroller, { first: messages[0]?.id, older: chatOlder && warm, fetch: fetchChatPage, apply: applyChatPage });
+  const removals = useRemovals(away);
+  const listed = useMemo(() => messages.filter((m) => !removals.hidden.some((x) => x.id === m.id)), [messages, removals.hidden]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const start = firstPaintFrom(listed.map((m) => m.id), firstUnread, warm);
   const openFloor = (n: number) => {
     const repo = repos.find((r) => r.floor === n);
     if (!repo) return;
@@ -116,7 +141,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
   // F (Help → Controls) toggles full screen while the chat has focus and nobody is typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
+      const el = e.target instanceof HTMLElement ? e.target : null; // a key sent to the window has none
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
       if (!togglesFull(e, isKey('chatFull', e.code), !!el && !!box.current?.contains(el), typing)) return;
       e.preventDefault();
@@ -128,6 +153,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
 
   // Reading the thread marks it read, on screen only: that also clears its notifications on every device (#210).
   useEffect(() => {
+    if (away) return;
     const read = () => {
       const last = [...messages].reverse().find((m) => m.from === 'ceo');
       if (last && last.at > readAt && document.visibilityState === 'visible') void attempt(() => api.phoneRead(last.at));
@@ -135,12 +161,18 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     read();
     document.addEventListener('visibilitychange', read);
     return () => document.removeEventListener('visibilitychange', read);
-  }, [messages, readAt]);
+  }, [messages, readAt, away]);
+  // Away, it waits at the end to open afresh.
+  useLayoutEffect(() => {
+    if (!away) return;
+    opened.current = false;
+    stick.current = true;
+  }, [away]);
   // Opening the chat shows the unread divider (or the end); after that it follows new messages only from the end.
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    if (!opened.current) {
+    if (!opened.current && !away) {
       opened.current = true;
       // Back from a chip's jump: where the chat was.
       const back = takeChatScroll();
@@ -159,7 +191,17 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
       }
     }
     if (stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length, outbox.length, info.job?.kind, chat.live]);
+  }, [messages.length, outbox.length, info.job?.kind, chat.live, away]);
+  // The rest of the first page going in above keeps the view where it was: the end, or the unread divider.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    if (!warm) coldHeight.current = el.scrollHeight;
+    else if (coldHeight.current) {
+      el.scrollTop = stick.current ? el.scrollHeight : el.scrollTop + el.scrollHeight - coldHeight.current;
+      coldHeight.current = 0;
+    }
+  });
   // At the end, the newest message stays in view while the log resizes (the keyboard), a picture loads, or the page is put back.
   const hasCeo = ceo !== undefined;
   useEffect(() => {
@@ -233,18 +275,24 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     el.focus({ preventScroll: true });
     setFlash(id);
   };
+  on.current = { floor: openFloor, quote: jump, reply };
   const replying = ceo.status === 'working' && info.job?.kind === 'chat';
   const stop = () => void attempt(api.ceoStop);
   const last = (from: PhoneMessage['from']) => [...messages].reverse().find((x) => x.from === from)?.id;
   const actionsFor = (item: Item) => {
     const m = item.m;
-    if (!m || m.from === 'office') return [];
-    return [
-      ...(m.from === 'manager' ? [{ label: m.id === last('manager') ? 'Edit and resend' : 'Edit', icon: 'pencil' as const, run: () => (setEditing(m.id), setReplyTo(null), setText(m.text)) }] : []),
-      ...(hasVersionsSheet(m) ? [{ label: `Versions (${(m.versions?.length ?? 0) + 1})`, icon: 'clock' as const, run: () => setVersions(m) }] : []),
-      ...(m.id === last('ceo') ? [{ label: 'Retry', icon: 'refresh-cw' as const, run: () => void attempt(api.ceoRetry) }] : []),
-      { label: 'Remember this', icon: 'pin' as const, run: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)) },
-    ];
+    if (!m) return [];
+    return messageActions(m, {
+      latest: m.from !== 'office' && m.id === last(m.from),
+      versions: hasVersionsSheet(m) ? (m.versions?.length ?? 0) + 1 : null,
+      edit: () => (setEditing(m.id), setReplyTo(null), setText(m.text)),
+      showVersions: () => setVersions(m),
+      retry: () => void attempt(api.ceoRetry),
+      remember: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)),
+      removal: removals.action(m),
+      // The voice reads the CEO's short summary (#282); this reads all of it.
+      readWhole: useStore.getState().settings.voice.provider !== 'off' ? () => void import('./voiceMessages').then((v) => v.replayMessage(m, 'whole')) : undefined,
+    });
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
   const presence =
@@ -279,17 +327,17 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     return (
       <Bubble
         key={key}
-        item={item}
+        item={itemOf(item)}
         ceoName={ceo.name}
-        quoted={to === undefined ? undefined : (byId.get(to) ?? null)}
+        quoted={to === undefined ? undefined : (byId.get(to) ?? (chatOlder && to < messages[0].id ? 'earlier' : null))}
         highlight={item.m !== undefined && flash === item.m.id}
         linked={linked}
-        onFloor={openFloor}
-        onQuote={jump}
-        onReply={reply}
+        onFloor={stable.floor}
+        onQuote={stable.quote}
+        onReply={stable.reply}
         onActions={setMenu}
-        onArtifact={(messageId, artifactId) => setArtifact({ messageId, artifactId })}
-        onFile={(id) => setViewing({ id })}
+        onArtifact={stable.artifact}
+        onFile={stable.file}
         cont={cont}
       />
     );
@@ -321,6 +369,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
           tabIndex={0}
           onScroll={(e) => {
             const el = e.currentTarget;
+            pages.onScroll(el);
             const end = keepsFollowing(stick.current, el.scrollTop, lastTop.current, el.scrollHeight - el.scrollTop - el.clientHeight < 40);
             lastTop.current = el.scrollTop;
             stick.current = end;
@@ -334,7 +383,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
               Say hi to {ceo.name}. Ask how things are going, hand over a project brief, or ask whether a team should grow. Replies land here, and the phone buzzes when {ceo.name} needs you.
             </p>
           )}
-          {messages.map((m, i, all) => (
+          {listed.map((m, i, all) => i < start ? null : (
             <Fragment key={m.id}>
               <DaySeparator prev={all[i - 1]?.at} at={m.at} />
               {m.id === firstUnread && (
@@ -358,8 +407,9 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={openFloor} onOpenLog={() => setLogOpen(true)} />}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={stable.floor} onOpenLog={() => setLogOpen(true)} />}
         </div>
+        <OlderSpinner loading={pages.loading} />
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label={unseen ? `${unseen} new messages: jump to the latest` : 'Jump to the latest message'}>
             {unseen ? `${unseen} new ↓` : '↓ Latest'}
@@ -395,6 +445,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
           </button>
         )}
       </div>
+      {removals.bar}
       {editing !== null && (
         <div className="chat-reply">
           <b className="grow small">
