@@ -117,8 +117,8 @@ export function openingPath(memory: PrMemory, key: string, first: string | null 
   return { path: first, memory: remember(memory, key, { path: first }, now) };
 }
 
-/** The card is open the first time a PR is viewed, then as it was left. */
-export const cardOpen = (memory: PrMemory, key: string) => !memory[key]?.closed;
+/** The card is open the first time a PR is viewed, then as it was left; a phone's sheet with no pages starts lowered (#294). */
+export const cardOpen = (memory: PrMemory, key: string, emptySheet = false) => !memory[key]?.closed && !emptySheet;
 
 /** Note something about a PR, keeping the newest MEMORY_MAX PRs. */
 export function remember(memory: PrMemory, key: string, patch: { path?: string; closed?: boolean }, now: number): PrMemory {
