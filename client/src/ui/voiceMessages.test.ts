@@ -159,3 +159,13 @@ it('does not start cancelled progress when browser voices finish loading', async
   await vi.advanceTimersByTimeAsync(2000);
   expect(starts).toEqual(['Here is what I found.']);
 });
+
+it('says an ack waiting behind a slow progress line before the reply that cuts it', async () => {
+  leadMs = 2000;
+  player.speakLine({ ...line('progress'), text: 'Reading the tests.' }, Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(500);
+  player.speakLine({ ...line(), id: 101 }, Date.now(), 0);
+  player.speakMessage(message(1, 'Here is what I found.'), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(8000);
+  expect(starts).toEqual(['Heard you, one moment.', 'Here is what I found.']);
+});

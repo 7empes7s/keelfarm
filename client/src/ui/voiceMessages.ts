@@ -48,7 +48,7 @@ export function speakMessage(message: PhoneMessage, arrived: number, wait: numbe
   setTimeout(
     () => {
       if (!wonVoice(message.id)) return;
-      if (activeLine?.kind === 'progress') stopLine();
+      if (activeLine?.kind === 'progress') stopActiveLine(); // an ack waiting behind it still goes first
       queue = enqueue(queue, { message, arrived });
       if (replaying) stopCurrent?.(); // a new message cuts a replay short
       void pump();
@@ -431,11 +431,14 @@ const said: SaidLine[] = [];
 
 let lineStop: (() => void) | null = null;
 
-/** Stops the line being said: barge-in, a message to read, the speaking indicator's stop. */
+/** Stops the line being said and the one waiting: barge-in, the speaking indicator's stop. */
 export const stopLine = () => {
   pendingLine = null;
   lineStop?.();
 };
+
+/** Stops only the line being said (a progress line giving way to a reply or an ack); a waiting ack stays. */
+const stopActiveLine = () => lineStop?.();
 
 /** An ack or progress line claimed at `arrived`: said once the claim wait is over, if this tab won and all is quiet. */
 export function speakLine(line: VoiceLine, arrived: number, wait: number) {
@@ -448,6 +451,7 @@ export function speakLine(line: VoiceLine, arrived: number, wait: number) {
       const quiet = { micOpen: lineMicOpen(callOn(), mic, useCall.getState().managerSpeaking), speaking: line.kind === 'progress' && (busy || voiceSpeaking !== null || lineStop !== null) };
       if (v.provider === 'off' || (v.provider === 'elevenlabs' && !voiceKeySet) || !sayNow(line, talkMode(v.talk, callOn()), quiet)) return;
       pendingLine = { line, arrived };
+      if (line.kind === 'ack' && activeLine?.kind === 'progress') stopActiveLine();
       void pump();
     },
     Math.max(0, arrived + wait - Date.now()),
