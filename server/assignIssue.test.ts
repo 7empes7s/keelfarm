@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CEO_ID, type ManagerChange } from '../shared/types.ts';
+import { parseCeoMessage } from '../shared/chatParts.ts';
 import { createDemoBackend } from './demo.ts';
 import { ceoSession } from './demo/ceo.ts';
 import type { SessionOptions } from './agentRunner.ts';
@@ -112,7 +113,7 @@ describe('Assign to… (#265)', () => {
         finished: (r: { ok: boolean; text: string; errors: string[] }) => (r.ok ? resolve(r.text) : reject(new Error(r.errors.join(' ')))),
       } as unknown as Parameters<typeof ceoSession>[1]),
     );
-    expect(reply).toBe(`Done: ${worker.name} takes #${second} after issue #${first}.`); // not the demo's PDF
+    expect(parseCeoMessage(reply).text).toBe(`Done: ${worker.name} takes #${second} after issue #${first}.`); // not the demo's PDF
     expect(worker.nextIssue).toBe(second);
     fs.rmSync(cwd, { recursive: true, force: true });
   });

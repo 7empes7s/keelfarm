@@ -115,7 +115,7 @@ describe('the CEO chat', () => {
   it("keeps the round's step log on the reply: plain words, timed, a failed step's reason (#150)", { timeout: 60_000 }, async () => {
     const { swarm, replies } = await office();
     await swarm.messageCeo('Look into the joystick on phones');
-    await until(() => replies().some((m) => !m.requestId));
+    await until(() => replies().some((m) => !m.requestId), 45_000); // demo steps now span two spoken progress windows
     const log = replies().find((m) => !m.requestId)!.log!;
     const labels = log.steps.map((st) => st.label);
     expect(labels).toEqual(expect.arrayContaining(['Reading client/src/pocket/touch/joystickThumbZone.tsx', 'Searching the web: mobile joystick UX', "Waiting for Claude's usage to be normal (up to 1 min)"]));
