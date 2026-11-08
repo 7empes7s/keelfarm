@@ -36,7 +36,7 @@ describe('every demo module is loaded', () => {
   const modules = fs.readdirSync(here).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && /\bregister(Demo|CeoReply)\(/.test(read(path.join(here, f))) && f !== 'registry.ts');
 
   it('finds the modules', () => expect(modules.length).toBeGreaterThan(10));
-  it.each(modules)('%s', (file) => expect(index.split('\n')).toContain(`import './${file}';`));
+  it.each(modules)('%s', (file) => expect(index.split(/\r?\n/)).toContain(`import './${file}';`));
 });
 
 /** CEO tools the demo CEO doesn't show yet: this list only shrinks; a new tool gets a demo (registerCeoReply) instead. */
