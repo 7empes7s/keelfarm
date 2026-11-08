@@ -39,6 +39,25 @@
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
+/* a phone's one row (#294): what doesn't fit is in ⋯ (viewerBar.ts), so it never wraps */
+.app-bar-narrow {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.app-bar-narrow > * {
+  flex: none;
+}
+.app-toolbar.app-bar-narrow > .spacer {
+  display: block;
+  flex: 1;
+}
+.app-bar-narrow .seg-btn {
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-1);
+}
 .app-ref {
   width: 260px;
   min-width: 0;
