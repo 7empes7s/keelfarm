@@ -152,7 +152,9 @@ Android, Windows and Linux draw the same glyph in the text's colour, with no ico
 - **No emoji as chrome**: `ui/icons.test.ts` scans every string and JSX text in `client/src` and fails on an emoji or
   icon glyph. Emoji that are content stay emoji: what people type and react with in chat, what is drawn into the 3D
   scene's textures, speech bubbles and decorations, game pieces. Those files are listed, with the reason, in the
-  test's `CONTENT`. Plain-text strings (toasts, tooltips, notifications) use words, not emoji.
+  test's `CONTENT`. Plain-text strings (toasts, tooltips, notifications) use words, not emoji. Carets (▸ ▾), arrows
+  that lead or end a label (↻ Restart, ↓ Latest) and status dots (● live) count as glyphs too (#295); an arrow in prose
+  (Settings → Voice) or a key's name in `<kbd>` does not.
 
 ## Finding things and learning the office (#109)
 

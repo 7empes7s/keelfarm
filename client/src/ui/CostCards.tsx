@@ -22,7 +22,11 @@ const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behav
 /** ↑ 24% / ↓ 10%, red when the cost went up. */
 function Change({ change }: { change: number | null }) {
   if (change === null || Math.round(change * 100) === 0) return <span className="muted">level</span>;
-  return <span className={change > 0 ? 'costs-up' : 'costs-down'}>{`${change > 0 ? '↑' : '↓'} ${pct(Math.abs(change))}`}</span>;
+  return (
+    <span className={change > 0 ? 'costs-up' : 'costs-down'}>
+      <Icon name={change > 0 ? 'arrow-up' : 'arrow-down'} /> {pct(Math.abs(change))}
+    </span>
+  );
 }
 
 /** The cost per merge day by day, oldest first; days without a merge are left out of the line. */
@@ -317,7 +321,7 @@ export function WasteCards({ view, repo, open, setOpen }: { view: CostsView; rep
                 <b className="costs-usd">{fmtUsd(g.usd)}</b>
                 <span className="costs-group-count">{g.count}×</span>
                 <span className="costs-caret" aria-hidden="true">
-                  {on ? '▴' : '▾'}
+                  <Icon name={on ? 'chevron-up' : 'chevron-down'} />
                 </span>
                 <ShareBar label={`${pct(g.share)} of the waste`} parts={[{ key: 'share', share: g.share, tone: 'var(--ds-series-3)' }]} />
               </button>

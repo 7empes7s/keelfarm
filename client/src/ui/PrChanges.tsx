@@ -192,7 +192,15 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
             </span>
           </button>
           <button className={`btn btn-small ${follow ? 'btn-on' : ''}`} aria-pressed={follow} onClick={() => setFollow(!follow)} title="The preview goes where their browser goes, until you pick a page">
-            {follow ? '◉ Following' : '◎ Follow'}
+            {follow ? (
+              <>
+                <Icon name="locate-fixed" /> Following
+              </>
+            ) : (
+              <>
+                <Icon name="locate" /> Follow
+              </>
+            )}
           </button>
         </section>
       )}
@@ -217,7 +225,7 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
           <p className="muted small">No pages recorded yet.</p>
         )}
         <button className="btn btn-small" onClick={onCompare}>
-          ⇆ Before / after on <code>{path}</code>
+          <Icon name="arrow-left-right" /> Before / after on <code>{path}</code>
         </button>
       </section>
 
