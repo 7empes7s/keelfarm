@@ -63,6 +63,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     spend: () => this.spend.ledger.all().filter((r) => r.type === 'session'),
     agents: () => this.state.agents,
     builtInUsage: () => this.state.claudeUsage,
+    sources: (list, now) => this.usageSources(list, now),
     changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
     seed: this.backend.accounts.seed,
     poll: !process.env.VITEST,

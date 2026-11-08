@@ -305,6 +305,14 @@ app.post('/api/cloud/orphans', route(() => swarm.deleteCloudOrphans()));
 app.post('/api/cloud/demo-expire', route(() => swarm.expireSignIns()));
 app.post('/api/cloud/key-again', route((req) => swarm.useKeyAgain(parse(z.object({ kind: z.enum(['anthropic', 'openai']) }), req.body).kind)));
 app.post('/api/cloud/demo-credit', route(() => swarm.simulateOutOfCredit()));
+// Usage (#361): an Admin key for the organisation's cost report; it goes in and never comes back out.
+app.put(
+  '/api/usage/admin-key',
+  route((req) => {
+    const body = parse(z.object({ provider: z.enum(['anthropic', 'openai']), key: z.string().max(400) }), req.body);
+    return swarm.setUsageAdminKey(body.provider, body.key);
+  }),
+);
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));

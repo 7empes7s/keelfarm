@@ -31,6 +31,9 @@ export abstract class SwarmContract {
   protected abstract creditSignIn(...a: Parameters<Swarm['creditSignIn']>): ReturnType<Swarm['creditSignIn']>;
   protected abstract offKey(...a: Parameters<Swarm['offKey']>): ReturnType<Swarm['offKey']>;
 
+  // usage.ts
+  protected abstract usageSources(...a: Parameters<Swarm['usageSources']>): ReturnType<Swarm['usageSources']>;
+
   // sessions.ts
   protected abstract clearPrepStrikes(...a: Parameters<Swarm['clearPrepStrikes']>): ReturnType<Swarm['clearPrepStrikes']>;
   protected abstract runTask(...a: Parameters<Swarm['runTask']>): ReturnType<Swarm['runTask']>;

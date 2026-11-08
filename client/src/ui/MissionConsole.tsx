@@ -14,6 +14,7 @@ import { FloorProgress } from './FloorProgress';
 import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
+import { UsageSources } from './UsageSources';
 import { HealthStrip } from './HealthStrip';
 import { TestLabCard } from './TestLab';
 
@@ -350,6 +351,16 @@ export function OpsTab({ card }: { card?: string }) {
   return (
     <div className="tab-grid">
       <div>
+        <Section
+          id="ops-card-sources"
+          title={
+            <span className="dp-chips">
+              <Icon name="gauge" /> Usage
+            </span>
+          }
+        >
+          <UsageSources />
+        </Section>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
         <TestLabCard />

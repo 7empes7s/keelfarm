@@ -50,7 +50,7 @@ import { demoCharter, demoDraft } from './demoCharters.ts';
 import { DEMO_QA_ISSUE, demoQaReport } from './demoQa.ts';
 import { demoLabRunner, withLab } from './demoTestLab.ts';
 import { withDemoChat } from './demoAgentChat.ts';
-import { demoAccounts } from './demoAccounts.ts';
+import { demoAccounts, demoUsageApi } from './demoAccounts.ts';
 
 // `npm run demo`: a fake GitHub and fake Claude Code sessions, so the office (including the
 // build → QA → fix loop) can be explored without spending any usage or touching real repos.
@@ -1120,6 +1120,7 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     telegram: demoTelegram(),
     cloud: demoCloud(),
     accounts: demoAccounts((o, exited) => demoSignIn({ ...o, boxId: 'accounts' }, new Map(), exited)),
+    usage: demoUsageApi,
     seedOps: (ids, at) => demoPastWeek(ids, at),
     seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
     seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
