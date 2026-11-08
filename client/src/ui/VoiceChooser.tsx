@@ -74,7 +74,7 @@ async function previewVoice(v: VoiceOption, key: string, playing: Playing, setPl
   }
 }
 
-const WARM_TITLE: Record<WarmState, string> = { loading: 'Getting the preview ready', ready: 'Preview ready', failed: "The preview didn't load: ▶ tries again" };
+const WARM_TITLE: Record<WarmState, string> = { loading: 'Getting the preview ready', ready: 'Preview ready', failed: "The preview didn't load: Preview tries again" };
 
 function VoiceRow({ v, group, chosen, fav, playing, warm, onChoose, onFav, onPreview }: { v: VoiceOption; group: string; chosen: boolean; fav: boolean; playing: boolean; warm: WarmState | undefined; onChoose: () => void; onFav: () => void; onPreview: () => void }) {
   const labels = voiceLabels(v);
