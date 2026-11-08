@@ -188,6 +188,7 @@ export interface AgentView {
   branch: string | null;
   prNumber: number | null; // the PR they opened, are testing or are fixing
   prUrl: string | null;
+  nextIssue?: number | null; // an issue the manager or the CEO gave them while busy: it starts when they're free (#265; absent for the CEO)
   currentTool: string | null; // while preparing: the setup step (INSTALL_STEP), null for the worktree
   startedAt: number | null;
   endedAt: number | null;

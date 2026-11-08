@@ -21,6 +21,13 @@ describe('the store apply, one handler per event (#257)', () => {
     expect(useStore.getState().phoneReadAt).toBe(42);
     expect(() => useStore.getState().apply({ type: 'beat' })).not.toThrow();
   });
+
+  it('keeps the usage rows (#361) through accounts events, which no longer carry them', () => {
+    const row = { id: 'codex-login', provider: 'codex' as const, category: 'coding' as const, label: 'Codex', plan: 'Plus', windows: [], status: 'ready' as const, checkedAt: 1 };
+    useStore.getState().apply({ type: 'usageSources', sources: [row] });
+    useStore.getState().apply({ type: 'accounts', accounts: { accounts: [] } });
+    expect(useStore.getState().accounts.sources).toEqual([row]);
+  });
 });
 
 describe('paged chat after the store split (#145)', () => {

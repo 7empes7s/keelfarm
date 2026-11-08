@@ -24,7 +24,7 @@ import { approvalsBadge, ceoChatHint, pipelineOf, POCKET_TABS, railTabs, waiting
 import { Approvals } from './PocketApprovals';
 import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
-import { UsageBars } from '../ui/UsageBars';
+import { UsageSources } from '../ui/UsageSources';
 import type { ConsoleSection } from './PocketConsole';
 import { parseHash, resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
@@ -212,12 +212,17 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       )}
       <TourInvite track={track} />
       <GuideCard />
-      <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
-        <b className="small">
-          <Icon name="bot" /> Claude usage
-        </b>
-        <UsageBars link={false} />
-      </button>
+      <div className="pk-card pk-usage">
+        <button className="pk-usage-head" onClick={() => settings('ops')} title="Open Mission control">
+          <b className="small">
+            <Icon name="gauge" /> Usage
+          </b>
+          <span className="muted small">
+            Mission control <Icon name="chevron-right" />
+          </span>
+        </button>
+        <UsageSources limit={4} />
+      </div>
       <button className="btn pk-wide" onClick={() => settings('map')}>
         <Icon name="map" /> Memory map
       </button>

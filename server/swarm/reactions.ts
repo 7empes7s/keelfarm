@@ -4,6 +4,7 @@
 import { HttpError } from '../httpError.ts';
 import { CEO_REACTIONS, feedbackLine, isOpen, isReaction, nextStatus, react, reactTarget, telegramReaction, type StatusEvent } from '../../shared/reactions.ts';
 import { nextDelivery } from '../../shared/chat.ts';
+import { spokenOf } from '../../shared/speech.ts';
 import { pageBefore, removeMessage, type ChatPage } from '../../shared/chatPage.ts';
 import { snapshotMessages } from '../../shared/chatParts.ts';
 import { conversationPatch, conversationsView, editConversation } from '../../shared/conversations.ts';
@@ -13,6 +14,7 @@ import { SwarmUpdate } from './update.ts';
 
 export abstract class SwarmReactions extends SwarmUpdate {
   protected ceoFeedback: string[] = []; // for the CEO's next job: the manager's 👍 / 👎 on its replies
+  private ceoRepliedAt = 0; // when the CEO last answered with the reply tool (ceoSpoken)
 
   /** Read on one device: the notifications are cancelled or cleared on every other (#210). */
   protected override observe(ev: ServerEvent) {
@@ -94,9 +96,15 @@ export abstract class SwarmReactions extends SwarmUpdate {
     const text = String(x.text ?? '').trim();
     if (!text) throw new Error('Write the answer.');
     this.postMessage('ceo', text, undefined, { replyTo: m.id });
+    this.ceoRepliedAt = Date.now();
     this.markDelivery([m.id], 'replied');
     this.markStatus([m.id], 'replied');
     return `Answered message ${m.id} on the phone. Don't repeat it in your final message; end with no text when every message is answered.`;
+  }
+
+  /** What a new CEO message says aloud (#282): a `closing` text after this job answered with the reply tool only with a useful spoken line. */
+  protected ceoSpoken(parts: { text: string; spoken?: string }, closing: boolean) {
+    return spokenOf(parts, closing && this.ceoRepliedAt >= (this.ceo().startedAt ?? Infinity));
   }
 
   /** POST /api/ceo/conversations/:id/edit (and /pin): a thread renamed, pinned, archived or moved to another project (#132). */

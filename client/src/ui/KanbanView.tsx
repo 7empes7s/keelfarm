@@ -7,6 +7,7 @@ import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Menu } from './Menu';
+import { AssignButton } from './AssignSheet';
 import { Panel } from './Panel';
 import { EmptyState } from './EmptyState';
 import { InfoButton } from './InfoButton';
@@ -23,6 +24,8 @@ import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
 import { HoverCard } from './HoverCard';
+import { useMinute } from './Decisions';
+import { prWaitLine } from '../../../shared/approvals';
 import { AgentPeek, WorkPeek } from './Peeks';
 import { cardActions, cardState, DANGER, whoPhrase, type CardAction } from './cardActions';
 
@@ -121,6 +124,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const allAgents = useStore((s) => s.agents);
   const qaRecords = useStore((s) => s.qa);
   const usageState = useStore((s) => s.usage.state);
+  const now = useMinute(); // the cards' wait lines (#275)
   const openOverlay = useStore((s) => s.openOverlay);
   const agents = useMemo(() => agentsOnRepo(allAgents, repoId), [allAgents, repoId]);
   const cols = useMemo(() => (repo ? kanbanFor(repo, agents, qaRecords, { state: usageState }) : null), [repo, agents, qaRecords, usageState]);
@@ -154,7 +158,6 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     }
   };
   const workers = agents.filter((a) => a.role !== 'ceo');
-  const free = workers.filter((a) => a.status === 'idle' || a.status === 'done' || a.status === 'stopped' || a.status === 'error');
   const merge = async (c: KanbanCard) => {
     const passed = c.qa?.status === 'passed';
     const ok = await confirmDialog(
@@ -416,19 +419,8 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
             ) : (
             <div className="kcard-foot">
               {c.note && <span className="muted small">{c.note}</span>}
-              <select
-                value=""
-                disabled={pending === c.key || free.length === 0}
-                onChange={(e) => e.target.value && act(c.key, () => api.assign(e.target.value, c.number))}
-                aria-label={`Assign issue #${c.number}`}
-              >
-                <option value="">{free.length ? 'Assign to…' : 'Everyone is busy'}</option>
-                {free.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              <span className="spacer" />
+              <AssignButton repoId={repo.id} number={c.number} title={c.title} small />
             </div>
           ),
           'backlog',
@@ -455,14 +447,18 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           </>,
           'kcol-qa',
           cols.qa,
-          (c) => (
-            <>
-              <div className="kcard-who">
-                <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={c.note} />
-              </div>
-              {actionRow(c, 'qa')}
-            </>
-          ),
+          (c) => {
+            const wait = c.qa && !c.untrusted ? prWaitLine(c.qa, repo.defaultBranch, now) : null;
+            return (
+              <>
+                <div className="kcard-who">
+                  <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={c.note} />
+                </div>
+                {wait && <div className="small kcard-wait">{wait}</div>}
+                {actionRow(c, 'qa')}
+              </>
+            );
+          },
           'qa',
         )}
         {column(

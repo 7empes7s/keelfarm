@@ -33,6 +33,8 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   ask?: string; // the CEO's: the question those replies answer, when it named one (a `? …` first line, #183)
+  spoken?: string; // the CEO's: the short summary read aloud instead of the text (a ```spoken block, #282; shared/speech.ts)
+  silent?: true; // the CEO's: nothing worth reading aloud (bookkeeping, or a turn's closing text after its replies, #282)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   visuals?: ChatVisual[]; // the CEO's charts, tables and dashboards (#146, shared/chatVisuals.ts)
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)

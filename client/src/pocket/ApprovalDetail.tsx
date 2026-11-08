@@ -6,7 +6,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import type { PullInfo, QaView, RepoView } from '../../../shared/types';
 import type { Decision } from '../../../shared/decisions';
-import { impactOf, mergeConfirmText, prDecision, waitLine, WHY_LABELS, type ApprovalWhy, type PrAction } from '../../../shared/approvals';
+import { impactOf, mergeConfirmText, prDecision, prWaitLine, waitLine, WHY_LABELS, type ApprovalWhy, type PrAction } from '../../../shared/approvals';
 import { designAnswer, optionLetter } from '../../../shared/designs';
 import { confirmDialog } from '../ui/Confirm';
 import { Menu } from '../ui/Menu';
@@ -59,6 +59,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
   const impact = impactOf(pr.files ?? [], pr.additions, pr.deletions);
   const opened = Date.parse(pr.createdAt);
   const asked = qa.stuckAt ?? qa.updatedAt;
+  const wait = prWaitLine(qa, repo.defaultBranch, now);
   const repoUrl = pr.url.replace(/\/pull\/\d+$/, '');
   const ceo = ceoName();
   const act = async (fn: () => Promise<unknown>) => {
@@ -136,6 +137,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
           {[repo.fullName.split('/')[1], author ? `by ${author.name}` : pr.author ? `by ${pr.author}` : '', `round ${qa.round}`].filter(Boolean).join(' · ')}
         </div>
         <div className="small">{waitLine(asked, Number.isFinite(opened) ? opened : null, now)}</div>
+        {wait && <div className="small">{wait}</div>}
         {pr.closesIssues.length > 0 && (
           <div className="small">
             Closes{' '}

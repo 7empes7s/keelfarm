@@ -489,7 +489,7 @@ export abstract class SwarmCore extends SwarmContract {
       career: a.role === 'ceo' ? null : (this.state.progress.careers[a.id] ?? null),
       log: withLog ? rt.log : [],
       activity: this.activityOf(a),
-      ...(a.role !== 'ceo' ? { tools: a.tools ?? {}, voiceId: a.voiceId ?? '', voiceName: a.voiceName ?? '' } : {}), // always sent: a patch can't drop a field
+      ...(a.role !== 'ceo' ? { tools: a.tools ?? {}, voiceId: a.voiceId ?? '', voiceName: a.voiceName ?? '', nextIssue: a.nextIssue ?? null } : {}), // always sent: a patch can't drop a field
     };
   }
 
@@ -516,7 +516,7 @@ export abstract class SwarmCore extends SwarmContract {
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
       updatedAt: q.updatedAt,
-      shots: q.shots ?? [], ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }),
+      shots: q.shots ?? [], ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }), ...((q.status === 'failed' || q.status === 'fixing') && { fixReason: q.fixReason }),
     };
   }
 

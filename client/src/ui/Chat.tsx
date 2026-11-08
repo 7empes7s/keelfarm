@@ -290,6 +290,8 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
       retry: () => void attempt(api.ceoRetry),
       remember: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)),
       removal: removals.action(m),
+      // The voice reads the CEO's short summary (#282); this reads all of it.
+      readWhole: useStore.getState().settings.voice.provider !== 'off' ? () => void import('./voiceMessages').then((v) => v.replayMessage(m, 'whole')) : undefined,
     });
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');

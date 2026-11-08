@@ -271,6 +271,7 @@ export const useStore = create<State>((set, get) => ({
     tutorialStep: -1,
     pacingSessions: 3,
     trimIdleDesksMin: 120,
+    stuckRecheckMin: 30,
     previewRecentHours: 48,
     mainPreviewIdleMin: 1, prPreviewIdleMin: 1, previewMaxLifeHours: 0,
     dailyLogDir: '',
