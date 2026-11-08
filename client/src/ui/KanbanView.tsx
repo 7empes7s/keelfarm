@@ -24,6 +24,8 @@ import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
 import { HoverCard } from './HoverCard';
+import { useMinute } from './Decisions';
+import { prWaitLine } from '../../../shared/approvals';
 import { AgentPeek, WorkPeek } from './Peeks';
 import { cardActions, cardState, DANGER, whoPhrase, type CardAction } from './cardActions';
 
@@ -122,6 +124,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const allAgents = useStore((s) => s.agents);
   const qaRecords = useStore((s) => s.qa);
   const usageState = useStore((s) => s.usage.state);
+  const now = useMinute(); // the cards' wait lines (#275)
   const openOverlay = useStore((s) => s.openOverlay);
   const agents = useMemo(() => agentsOnRepo(allAgents, repoId), [allAgents, repoId]);
   const cols = useMemo(() => (repo ? kanbanFor(repo, agents, qaRecords, { state: usageState }) : null), [repo, agents, qaRecords, usageState]);
@@ -444,14 +447,18 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           </>,
           'kcol-qa',
           cols.qa,
-          (c) => (
-            <>
-              <div className="kcard-who">
-                <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={c.note} />
-              </div>
-              {actionRow(c, 'qa')}
-            </>
-          ),
+          (c) => {
+            const wait = c.qa && !c.untrusted ? prWaitLine(c.qa, repo.defaultBranch, now) : null;
+            return (
+              <>
+                <div className="kcard-who">
+                  <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={c.note} />
+                </div>
+                {wait && <div className="small kcard-wait">{wait}</div>}
+                {actionRow(c, 'qa')}
+              </>
+            );
+          },
           'qa',
         )}
         {column(
