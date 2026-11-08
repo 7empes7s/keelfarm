@@ -56,8 +56,8 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   });
   const before = (await state(page)).messages.filter((m) => m.from === 'ceo').length;
   await textCeo(page, 'Also check the footer');
-  // Room for the 2 s clip delay above, the claim wait and the player's first load on a busy machine.
-  await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'ack').length, { timeout: 10_000 }).toBe(1);
+  // As long as the player keeps an ack (ACK_MAX_AGE_MS): the 2 s delay above, plus the server's one-at-a-time synthesis.
+  await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'ack').length, { timeout: 20_000 }).toBe(1);
   const [ack] = (await lines(page)).filter((l) => l.kind === 'ack');
   expect(ACKS).toContain(ack.text);
   expect(ack.provider).toBe('elevenlabs');
