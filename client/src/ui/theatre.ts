@@ -2,14 +2,14 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import { api } from '../api';
 import { qaKey, useStore } from '../store';
-import { currentChannel, type Channel } from './channels';
+import { currentChannel, watchSays, type Channel } from './channels';
 
 // The PR theatre in the browser: which channel each floor's screen is on (this tab's choice), switching channels
 // (a PR's preview starts when it isn't up yet), the open viewer's heartbeat that keeps its PR preview from stopping,
 // and window.__swarmPreviews for QA.
 
-/** How often an open viewer tells the office what it has on screen (the office counts a viewer gone after 75 s). */
-const WATCH_EVERY_MS = 30_000;
+/** How often an open, visible viewer tells the office what it has on screen (the office counts a viewer gone after 40 s). */
+const WATCH_EVERY_MS = 15_000;
 
 export const useChannels = create<{ channels: Record<string, Channel> }>(() => ({ channels: {} }));
 
@@ -41,13 +41,23 @@ const VIEWER = (() => {
   }
 })();
 
-/** While the app viewer is open: tell the office which preview is on screen (main too, #204), and that nothing is once it closes. */
+/**
+ * While the app viewer is open: tell the office which preview is on screen (main too, #204), only while the tab is
+ * visible (#252: hidden, it says nothing is), and that nothing is once it closes.
+ */
 export function useWatch(repoId: string, pr: Channel) {
   useEffect(() => {
-    const say = () => void api.watchPreview(VIEWER, repoId, pr).catch(() => undefined);
+    const say = () => {
+      const w = watchSays(document.visibilityState === 'visible', repoId, pr);
+      void api.watchPreview(VIEWER, w.repoId, w.pr).catch(() => undefined);
+    };
     say();
-    const t = setInterval(say, WATCH_EVERY_MS);
-    return () => clearInterval(t);
+    const t = setInterval(() => document.visibilityState === 'visible' && say(), WATCH_EVERY_MS);
+    document.addEventListener('visibilitychange', say);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', say);
+    };
   }, [repoId, pr]);
   useEffect(() => () => void api.watchPreview(VIEWER, null, null).catch(() => undefined), []);
 }

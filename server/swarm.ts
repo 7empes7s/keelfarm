@@ -40,6 +40,7 @@ import { CeoChat } from './ceoChat.ts';
 import { snapshotMessages } from '../shared/chatParts.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
+import { rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
@@ -87,7 +88,7 @@ export class Swarm extends SwarmVoices {
       const raw = await fs.readFile(STATE_FILE, 'utf8');
       const loaded = JSON.parse(raw) as Partial<Persisted>;
       this.state = {
-        settings: { ...this.state.settings, ...loaded.settings },
+        settings: { ...this.state.settings, ...loaded.settings, ...this.previewIdleUpgrade(loaded.settings) },
         repos: (loaded.repos ?? []).map((r) => ({
           ...r,
           autoMerge: r.autoMerge ?? true,
@@ -330,7 +331,7 @@ export class Swarm extends SwarmVoices {
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
     setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
-    setInterval(() => this.sweepPreviews(), 15_000);
+    setInterval(() => this.sweepPreviews(), 5_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
     setInterval(() => {
@@ -688,6 +689,7 @@ export class Swarm extends SwarmVoices {
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
     if (patch.ceoAwake !== undefined) s.ceoAwake = ceoAwakeSettings(s.ceoAwake, patch.ceoAwake);
+    if (patch.rotation !== undefined) s.rotation = rotationSettings(s.rotation, patch.rotation);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
     if (typeof patch.companyName === 'string') s.companyName = patch.companyName.trim().slice(0, 60);
     if (typeof patch.dogName === 'string') s.dogName = patch.dogName.trim().slice(0, 24) || DEFAULT_DOG_NAME;

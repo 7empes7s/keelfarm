@@ -1,7 +1,7 @@
 // Agents' sessions: terminals, desk setup, prompts, starting and finishing a build session.
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
-import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
+import type { LogEntry, SessionResult } from '../agentRunner.ts';
 import { agentPortEnv } from '../portLanes.ts';
 import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
@@ -42,7 +42,7 @@ import {
 } from './model.ts';
 import { slugify } from './flavour.ts';
 import { SCREENS_DIR, screenFile, removeScreens } from './screens.ts';
-import { SwarmCloudCredit } from './cloudCredit.ts';
+import { SwarmRotation } from './rotation.ts';
 import { TestLab, type Requester } from '../testLab.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { createLabTools } from '../testLabTools.ts';
@@ -51,7 +51,7 @@ import { fixCause } from '../../shared/rounds.ts';
 const LAB_VIEWER = 'testlab';
 const LAB_PREVIEW_MS = 5 * 60_000;
 
-export abstract class SwarmSessions extends SwarmCloudCredit {
+export abstract class SwarmSessions extends SwarmRotation {
   // ---------- terminals ----------
 
   protected async loadTerminal(agentId: string): Promise<AgentTerminal | null> {
@@ -407,7 +407,7 @@ export abstract class SwarmSessions extends SwarmCloudCredit {
     this.previews.heldChanged(repoId, pr);
   }
 
-  /** Every 15 s: previews nobody watches stop, and holds whose agent's QA or fix session ended let go (the views say so). */
+  /** Every 5 s: previews nobody uses stop, and holds whose agent's QA or fix session ended let go (the views say so). */
   protected sweepPreviews() {
     this.previews.sweepPrs();
     for (const [key, { repoId, pr }] of this.previewHolds) {
@@ -447,36 +447,6 @@ export abstract class SwarmSessions extends SwarmCloudCredit {
 
   protected override secrets(): string[] {
     return [...super.secrets(), ...this.accounts.secretValues()];
-  }
-
-  /**
-   * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
-   * into its environment, its usage and limit hits to the account, and its line in the cost ledger says which it was.
-   * A cloud agent's runs on the cloud's credentials (docs/cloud.md), OpenCode on its own setup.
-   */
-  protected startOnAccount(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
-    const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
-    const use = a.host === 'box' || cli === 'opencode' ? null : this.accounts.use(a.account, cli);
-    if (!use) return this.backend.startSession(opts, cb);
-    this.spend.account(a.id, use.id);
-    this.accounts.emit();
-    const env = { ...opts.env, ...use.env };
-    return this.backend.startSession(
-      { ...opts, ...(Object.keys(env).length ? { env } : {}), ...(use.keyEnv && cli === 'claude' ? { apiKeyEnv: use.keyEnv } : {}) },
-      {
-        ...cb,
-        usage: (readings) => (use.builtIn ? cb.usage?.(readings) : this.accounts.readings(use.id, readings)),
-        limited: (at) => {
-          this.accounts.limited(use.id, at);
-          // Only the login everyone shared stops the whole office: another account's limit is that account's.
-          if (use.builtIn) cb.limited?.(at);
-        },
-        finished: (result) => {
-          use.release();
-          cb.finished(result);
-        },
-      },
-    );
   }
 
   protected launchSession(

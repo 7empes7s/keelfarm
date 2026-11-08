@@ -1,20 +1,21 @@
 // The app viewer's channel row and the previews' upkeep (#204): main, then only the PRs that are live (an agent on
 // them, a preview up, updated lately), the rest folded under "Older (N)" in a sheet; who is testing in a preview the
-// manager can't stop; and the previews' stats.
+// manager can't stop; how each one stands (in use, kept 📌, when it stops, #252); and the previews' stats.
 import { useEffect, useState } from 'react';
 import { qaKey, useStore } from '../store';
 import { CEO_ID, type PreviewView, type RepoView } from '../../../shared/types';
-import { busyPrs, channelLabel, channelLed, liveChannels, previewingPrs, PR_PREVIEW_SLOTS, qaBadge, stopsLabel, type Channel } from './channels';
+import { api } from '../api';
+import { busyPrs, channelLabel, channelLed, clockLeft, liveChannels, pinLabel, previewingPrs, PR_PREVIEW_SLOTS, qaBadge, stopsLabel, standLabel, type Channel } from './channels';
 import { sendToCeo } from './chatSend';
 import { ProgressBar } from './ProgressBar';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 
-/** Re-render every minute, for "stops in N min". */
-function useMinute(): number {
+/** Re-render every second, for "stops in 0:42". */
+function useNow(): number {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
   return now;
@@ -26,15 +27,17 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
   const qa = useStore((s) => s.qa);
   const agents = useStore((s) => s.agents);
   const recentHours = useStore((s) => s.settings.previewRecentHours);
-  const now = useMinute();
+  const now = useNow();
   const [showOlder, setShowOlder] = useState(false);
   const { live, older } = liveChannels(repo.pulls, { busy: busyPrs(Object.values(agents), repo.id), previewing: previewingPrs(prPreviews, repo.id), current: channel, now, recentHours });
-  const stops = (p: { status: string; stopsAt?: number | null } | undefined) => (p?.status === 'running' ? stopsLabel(p.stopsAt, now) : '');
+  const stops = (p: { status: string; stopsAt?: number | null; pinned?: PreviewView['pinned'] } | undefined) => (p?.status === 'running' && p.pinned == null ? stopsLabel(p.stopsAt, now) : '');
+  const pin = (p: { status: string; pinned?: PreviewView['pinned'] } | undefined) => p?.status === 'running' && p.pinned != null && <Icon name="pin" label={pinLabel(p.pinned)} />;
   const mainStops = stops(repo.preview);
   return (
     <div className="channels" role="tablist" aria-label="Channels">
       <button role="tab" aria-selected={channel == null} className={`channel ${channel == null ? 'channel-on' : ''}`} onClick={() => onPick(null)} title={`The floor's app on ${repo.defaultBranch}`}>
         <span className={`led led-${channelLed(repo.preview.status)}`} aria-hidden /> {repo.defaultBranch}
+        {pin(repo.preview)}
         {mainStops && <span className="channel-stops">· {mainStops}</span>}
       </button>
       {live.map((p) => {
@@ -44,6 +47,7 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
         return (
           <button key={p.number} role="tab" aria-selected={channel === p.number} className={`channel ${channel === p.number ? 'channel-on' : ''}`} onClick={() => onPick(p.number)} title={left ? `${label} · ${left}` : label}>
             <span className={`led led-${channelLed(preview?.status)}`} aria-hidden /> {label}
+            {pin(preview)}
             {left && <span className="channel-stops">· {left}</span>}
           </button>
         );
@@ -81,6 +85,54 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
       )}
     </div>
   );
+}
+
+/**
+ * How a running preview stands (#252): "In use (own tab)", "Stops 1:00 after you leave", "📌 until 15:00" (with Unpin),
+ * and in its max lifetime's last minute "Still using it?" with Keep it running. An agent's hold is HeldNote's.
+ */
+export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoView }) {
+  const settings = useStore((s) => s.settings);
+  const now = useNow();
+  if (preview.status !== 'running' || preview.heldBy) return null;
+  const idleMin = preview.pr == null ? settings.mainPreviewIdleMin : settings.prPreviewIdleMin;
+  const text = standLabel(preview, idleMin, now);
+  const lifeLeft = preview.lifeEndsAt == null ? null : preview.lifeEndsAt - now;
+  return (
+    <>
+      {lifeLeft != null && lifeLeft <= 60_000 && (
+        <div className="held-note small use-life" role="alert">
+          <span>Still using it? It stops in {clockLeft(lifeLeft)}, its max lifetime.</span>
+          <button className="btn btn-small btn-good" onClick={() => void api.keepPreview(repo.id, preview.pr).catch(() => undefined)}>
+            Keep it running
+          </button>
+        </div>
+      )}
+      {text && (
+        <div className="held-note small use-note" role="status">
+          <span>
+            {preview.pinned != null && <Icon name="pin" />} {text}
+          </span>
+          {preview.pinned != null && (
+            <button className="btn btn-small" onClick={() => void api.keepPreview(repo.id, preview.pr, 'off').catch(() => undefined)} title="Let it stop by itself again">
+              Unpin
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The ⋯ menu's 📌 items for a running preview the manager may stop: keep it an hour, until stopped, or let it go again. */
+export function keepItems(repo: RepoView, preview: PreviewView) {
+  if (preview.status !== 'running' || preview.heldBy) return [];
+  const pin = (how: 'hour' | 'forever' | 'off') => void api.keepPreview(repo.id, preview.pr, how).catch(() => undefined);
+  return [
+    { label: 'Keep running 1 h', onSelect: () => pin('hour') },
+    { label: 'Keep running until I stop it', onSelect: () => pin('forever') },
+    preview.pinned != null && { label: 'Let it stop by itself', hint: pinLabel(preview.pinned), onSelect: () => pin('off') },
+  ];
 }
 
 /** A preview an agent is testing in: Stop and Restart are off, and the manager can ask the CEO instead. */
@@ -124,6 +176,8 @@ export function PreviewStats({ repo, onClose }: { repo: RepoView; onClose: () =>
         <dd>{stats.diskBytes == null ? '—' : size(stats.diskBytes)}</dd>
         <dt>Memory (previews)</dt>
         <dd>{stats.memMb == null ? '—' : size(stats.memMb * 1024 ** 2)}</dd>
+        <dt>Freed by stopping unused ones</dt>
+        <dd>{stats.freed?.count ? `${size(stats.freed.mb * 1024 ** 2)} from ${stats.freed.count} preview${stats.freed.count === 1 ? '' : 's'}` : '—'}</dd>
         <dt>Last cleaned</dt>
         <dd>{cleaned}</dd>
       </dl>

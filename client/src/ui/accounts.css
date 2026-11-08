@@ -108,3 +108,29 @@
   margin: var(--ds-space-2) 0 0;
   padding-left: var(--ds-space-5);
 }
+
+/* Rotation (#248, RotationSettings.tsx): the latest switches, and when each account was limited in the last day */
+.acc-switches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.acc-timeline {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: calc(var(--ds-space-3) * 2);
+  padding-top: var(--ds-space-2);
+  border-top: var(--ds-space-2) solid var(--ds-surface-sunken);
+}
+.acc-timeline > span {
+  position: absolute;
+  top: calc(var(--ds-space-2) * -1);
+  height: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-bad-fill);
+}
