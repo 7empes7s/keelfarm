@@ -360,7 +360,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
         files={library.length}
         onChats={() => setSheet('chats')}
         onFiles={() => setSeg('files')}
-        onCharts={() => setSheet('charts')}
+        onCharts={() => (setSeg('chat'), setSheet('charts'))}
         into={tools}
         full={fullButton}
       />
