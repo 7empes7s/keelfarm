@@ -25,6 +25,11 @@ test.afterAll(async ({ request }) => {
 
 const lines = (page: Page) => page.evaluate(() => ((window as unknown as { __swarmVoiceLines?: SaidLine[] }).__swarmVoiceLines ?? []).map((l) => ({ ...l })));
 const state = async (page: Page) => (await page.request.get('/api/state')).json() as Promise<{ agents: { id: string; status: string }[]; messages: { id: number; from: string; text: string }[] }>;
+/** Nothing read aloud for a moment: the startup's messages are done, so an ack doesn't queue behind them. */
+const quiet = (page: Page) => page.evaluate(() => {
+  const read = (window as unknown as { __swarmVoice?: { end: number | null }[] }).__swarmVoice ?? [];
+  return read.every((r) => r.end !== null && performance.now() - r.end > 2500);
+});
 const ceoWorking = async (page: Page) => (await state(page)).agents.find((a) => a.id === CEO_ID)?.status === 'working';
 const textCeo = async (page: Page, text: string) => expect((await page.request.post('/api/ceo/message', { data: { text } })).ok()).toBe(true);
 
@@ -37,6 +42,9 @@ async function busyCeo(page: Page) {
 
 test('a message mid-job is acked out loud and answered before the job ends; progress follows the setting', async ({ page }) => {
   await enterOffice(page);
+  await busyCeo(page);
+  await expect.poll(() => quiet(page), { timeout: 30_000 }).toBe(true);
+  expect(await ceoWorking(page)).toBe(true);
   // Reproduce the race: the demo replies after 1.5 s, before this first clip becomes playable.
   let firstClip = true;
   await page.route('**/api/voice/lines/*', async (route) => {
@@ -46,7 +54,6 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
     if (delay) await new Promise((resolve) => setTimeout(resolve, 2000));
     await route.fulfill({ response });
   });
-  await busyCeo(page);
   const before = (await state(page)).messages.filter((m) => m.from === 'ceo').length;
   await textCeo(page, 'Also check the footer');
   // Room for the 2 s clip delay above, the claim wait and the player's first load on a busy machine.
