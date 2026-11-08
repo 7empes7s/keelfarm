@@ -308,6 +308,9 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       await think('Reading your message.');
       const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
       if (quick !== null) return quick;
+      const kit = { text, s, use, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
+      const early = await ceoReply(kit, true); // "assign #3 to Ada" (#265): a command, even with the seeded chat's attachment
+      if (early !== null) return early;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
@@ -319,7 +322,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // The replies that show features' CEO tools (ceoReplies.ts, and any feature's own module): the first that answers.
-      const registered = await ceoReply({ text, s, use, scale: (f, call) => scale(s, f, call) });
+      const registered = await ceoReply(kit);
       if (registered !== null) return registered;
       const agents = s.floors.reduce((n, f) => n + f.team.size, 0);
       const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);

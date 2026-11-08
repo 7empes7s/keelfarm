@@ -10,7 +10,7 @@ import { allOutText, detectLimit, switchesForCeo, switchText, type LimitHit } fr
 import { ACCOUNT_CLIS } from '../../shared/accounts.ts';
 import type { AccountCli, AccountSwitch, AccountsView } from '../../shared/types.ts';
 import { LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
-import { SwarmCloudCredit } from './cloudCredit.ts';
+import { SwarmUsage } from './usage.ts';
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 /** The demo's "Simulate a limit": that long. */
@@ -18,7 +18,7 @@ const DEMO_LIMIT_MS = 3 * 60_000;
 /** What an agent's fresh session on the next account hears first: its worktree is as the last one left it. */
 const SWITCHED_NOTE = 'Your previous session on this task stopped at an account limit; this is a fresh session on another account. Your worktree and branch are as it left them: check git status and carry on.';
 
-export abstract class SwarmRotation extends SwarmCloudCredit {
+export abstract class SwarmRotation extends SwarmUsage {
   /** Sessions running on each account: what the demo's "Simulate a limit" ends. */
   private onAccount = new Map<string, Set<(hit: LimitHit) => void>>();
 
