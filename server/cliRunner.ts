@@ -912,7 +912,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
       ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),
     };
-    const servers: Record<string, unknown> = {};
+    const servers: Record<string, unknown> = box ? {} : { ...opts.mcpServers }; // a Box gets credentials only as a command's environment
     if (browser) servers.playwright = browser;
     if (opts.office && !box) servers.office = { type: 'http', url: `${officeUrl}/api/mcp/${token}` };
     files = { settings: p.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? p.join(dir, 'mcp.json') : null, system: p.join(dir, 'instructions.md') };

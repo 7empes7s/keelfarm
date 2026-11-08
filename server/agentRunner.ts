@@ -56,6 +56,8 @@ export interface SessionOptions {
   box?: BoxTarget;
   /** The manager's Tools & skills switches (shared/tooling.ts): Claude Code sessions only. */
   tools?: SessionTools;
+  /** MCP servers added on Settings → Providers (#362), for this session's own MCP config: Claude Code on this computer only. */
+  mcpServers?: Record<string, Record<string, unknown>>;
   /** Report the session's text blocks as they are written (callbacks.text): the CEO's chat (#51). */
   stream?: boolean;
   /** A CEO's consult (server/consult.ts): edits, commits, pushes and pull requests are refused before they run. */
@@ -414,7 +416,7 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
   Object.assign(env, nonInteractiveEnv(env), opts.env, toolsEnv(opts.tools));
   env.CLAUDE_AGENT_SDK_CLIENT_APP = `cubefarm/${VERSION}`;
 
-  const mcpServers: Options['mcpServers'] = {};
+  const mcpServers: Options['mcpServers'] = { ...(opts.mcpServers as Options['mcpServers']) };
   if (opts.browserTesting) {
     const browser = playwrightMcp();
     if (browser) mcpServers.playwright = browser;

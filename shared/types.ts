@@ -11,3 +11,4 @@ export * from './types/events.ts';
 export * from './types/presence.ts';
 export * from './types/accounts.ts';
 export * from './types/usage.ts';
+export * from './types/providers.ts';

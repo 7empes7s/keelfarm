@@ -522,6 +522,7 @@ export abstract class SwarmSessions extends SwarmRotation {
         agentId: a.id,
         ...(practice.office ? { office: practice.office } : {}),
         tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
+        mcpServers: this.providers.mcpFor(a.id),
         ...how,
       },
       {

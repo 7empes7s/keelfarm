@@ -68,7 +68,8 @@ export const game = (name: string): View => ({
   },
 });
 
-const starts = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+// Not a longer label it begins (Providers, not Providers & accounts).
+const starts = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?! &)`);
 
 /** Pocket mode's Settings: back to the list if a section is open, then a section (#102); on a desktop, its top tabs (#104). */
 export async function pocketSection(root: Locator, label: string) {
