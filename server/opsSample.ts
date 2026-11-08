@@ -1,6 +1,6 @@
 // The demo's made-up ops history: a past week of merges, QA rounds, check runs and cost for mission control.
 import type { RoundCause } from '../shared/rounds.ts';
-import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type AvoidedEntry, type OpsHistory, type QaEntry } from './metrics.ts';
+import { DAY_MS, emptyHistory, HOUR_MS, prune, startOfDay, type AvoidedEntry, type OpsHistory, type QaEntry, type WaitEntry } from './metrics.ts';
 
 const PAST_CAUSES: RoundCause[] = ['bug', 'nit', 'bug', 'spec-missing', 'nit', 'bug', 'outage']; // why QA failed it (#188)
 
@@ -44,6 +44,8 @@ export function demoPastWeek(repos: string[], now: number, rand: () => number = 
   if (first) h.qa.push([first[0] - 15 * min, first[1], false, first[3], last[2], 1, 'lab-error']);
   // Issues conflict-aware scheduling (on for the first floor) started instead of overlapping ones (#256): one or two a day.
   if (repos[0]) h.avoided = Array.from({ length: 10 }, (_, i): AvoidedEntry => [now - (i * 15 + 2) * HOUR_MS, repos[0], 900 + i]).filter((e) => e[0] > now - 7 * DAY_MS);
+  // Needs-you waits (#275): hours-long ones early in the week, then under the 30-minute target once PRs release by themselves.
+  if (repos[0]) h.waits = [6, 5, 4, 3, 2, 1].map((day, i): WaitEntry => [now - day * DAY_MS, repos[0], [190, 145, 95, 40, 22, 14][i] * min]);
   prune(h, now);
   return h;
 }

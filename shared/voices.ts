@@ -55,13 +55,14 @@ export interface VoiceModel {
 
 /**
  * Prices from ElevenLabs' API pricing (elevenlabs.io/pricing/api; v4 from openrouter.ai/elevenlabs/eleven-v4), checked
- * November 2026. Eleven v4 Turbo is what a new office starts with; a saved model is never changed.
+ * November 2026. Eleven v4 is what a new office starts with (#282); a saved model is never changed. Labels say
+ * quality versus speed in plain words; the note names the model.
  */
 export const VOICE_MODELS: VoiceModel[] = [
-  { id: 'eleven_v4_turbo', label: 'Eleven v4 Turbo', note: 'expressive and fast, audio tags like [laughs]', usdPer1k: 0.04 },
-  { id: 'eleven_v4', label: 'Eleven v4', note: 'the richest, slower', usdPer1k: 0.08 },
-  { id: 'eleven_flash_v2_5', label: 'Flash v2.5', note: 'fastest, plain', usdPer1k: 0.04 },
-  { id: 'eleven_multilingual_v2', label: 'Multilingual v2', note: 'older, high quality', usdPer1k: 0.08 },
+  { id: 'eleven_v4', label: 'Best quality', note: 'Eleven v4: the richest and most natural, a moment slower', usdPer1k: 0.08 },
+  { id: 'eleven_v4_turbo', label: 'Natural and quick', note: 'Eleven v4 Turbo: expressive and real-time, audio tags like [laughs]', usdPer1k: 0.04 },
+  { id: 'eleven_multilingual_v2', label: 'Steady', note: 'Multilingual v2: consistent, older high quality', usdPer1k: 0.08 },
+  { id: 'eleven_flash_v2_5', label: 'Fastest', note: 'Flash v2.5: quickest and cheapest, plainer sound', usdPer1k: 0.04 },
 ];
 
 /** "$0.04 / 1K chars". */

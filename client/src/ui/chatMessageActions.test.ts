@@ -18,4 +18,9 @@ describe("a chat message's actions", () => {
   it('offers Edit and resend on the latest manager message, and Versions when edited', () => {
     expect(labels(messageActions({ from: 'manager' }, { ...opts({ label: 'Delete', run: noop }, true), versions: 2 }))).toEqual(['Edit and resend', 'Versions (2)', 'Remember this', 'Delete']);
   });
+
+  it('offers Read the whole message on the CEO messages while a voice is on (#282)', () => {
+    expect(labels(messageActions({ from: 'ceo' }, { ...opts({ label: 'Hide', run: noop }), readWhole: noop }))).toEqual(['Read the whole message', 'Remember this', 'Hide']);
+    expect(labels(messageActions({ from: 'manager' }, { ...opts({ label: 'Delete', run: noop }), readWhole: noop }))).toEqual(['Edit', 'Remember this', 'Delete']);
+  });
 });
