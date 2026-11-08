@@ -131,10 +131,13 @@ function useWarmPreviews(list: VoiceOption[] | null | 'failed', chosen: string, 
   const first = loaded ? warmFirst(loaded, voice.favourites, chosen).map((v) => keyOf(v, voice)) : [];
   const done = first.filter((k) => previews.state(k) === 'ready' || previews.state(k) === 'failed').length;
   const over = shown || list === 'failed' || (!!loaded && !first.length) || introOver(done, first.length, capped ? WARM_CAP_MS : 0, skipped);
+  // The cap runs from the list's arrival: the five can't start loading before it.
+  const hasList = !!loaded;
   useEffect(() => {
+    if (!hasList) return;
     const t = setTimeout(() => setCapped(true), WARM_CAP_MS);
     return () => clearTimeout(t);
-  }, []);
+  }, [hasList]);
   useEffect(() => {
     if (over && loaded) setShown(true); // once shown, the list stays
   }, [over, loaded]);

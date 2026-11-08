@@ -25,7 +25,8 @@ async function openVoice(page: Page, width: number, speed: number) {
     if (url.pathname === '/api/voice/sample') samples.push(url.searchParams.get('voiceId') ?? '');
   });
   await page.goto('/?pocket=1');
-  await page.getByRole('button', { name: 'Settings and notifications' }).click();
+  // Narrow, the header's button; wide, the rail's Console tab.
+  await page.locator('.pk-tab-console, .pk-icon-btn[aria-label="Settings and notifications"]').first().click();
   const root = page.getByRole('dialog', { name: /Settings/ });
   await pocketSection(root, 'Voice');
   return { root, samples };
