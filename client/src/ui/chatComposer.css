@@ -1,0 +1,33 @@
+/* one row at any width: the +, the box, the mic and Send (or Stop) */
+.chat-input > :not(.msg-box) {
+  flex: none;
+}
+.chat-plus,
+.chat-tool {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--ds-line);
+  border-radius: 50%;
+  background: var(--ds-surface-sunken);
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --ds-icon: var(--ds-icon-md);
+}
+.chat-tool {
+  border-radius: 12px;
+}
+.chat-plus:hover,
+.chat-tool:hover {
+  background: var(--ds-surface-hover);
+}
+.chat-tool .chat-tool-n {
+  top: -7px;
+  right: -7px;
+}

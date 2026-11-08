@@ -1,0 +1,54 @@
+/* ---------- elevator ---------- */
+
+.elevator {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.floor-btn {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 10px;
+  border: 3px solid var(--ds-outline);
+  border-radius: 16px;
+  background: var(--ds-surface-raised);
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+  cursor: pointer;
+}
+.floor-btn:hover {
+  transform: translateY(-1px);
+}
+.floor-btn-here {
+  background: var(--ds-surface-hover);
+  outline: 3px dashed var(--accent);
+  outline-offset: 3px;
+}
+.floor-btn-num {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 3px solid var(--ds-outline);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.5rem;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+.floor-btn-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-btn-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

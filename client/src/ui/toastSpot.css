@@ -1,0 +1,25 @@
+/* two at most and two lines each, full width on a phone; useToastSpot.ts places them clear of headers, tab rows and the
+   composer (#230) */
+.pocket .toasts {
+  top: calc(66px + var(--ds-safe-top));
+  bottom: auto;
+  left: 12px;
+  right: 12px;
+  max-width: none;
+  align-items: stretch;
+}
+.pocket .toast {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pocket .md pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pocket .resume {
+  margin: 0;
+}

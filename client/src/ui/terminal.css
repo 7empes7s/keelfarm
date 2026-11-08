@@ -1,0 +1,250 @@
+/* ---------- terminal overlay ---------- */
+
+.term-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--ds-outline);
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  flex: none;
+}
+.term-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 0.92rem;
+}
+.term-error {
+  background: #ffe3e3;
+  border: 2px solid #ff8787;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  word-break: break-word;
+}
+.term-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.term-split-2 {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+.term {
+  background: #1b1b29;
+  color: #e8e8f2;
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  padding: 12px 14px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 200px;
+}
+.term-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.term-tool {
+  color: #8be9fd;
+}
+.term-result {
+  color: #8d8da8;
+}
+.term-system {
+  color: #bd93f9;
+}
+.term-error.term-line,
+.term-line.term-error {
+  color: #ff6b6b;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: inherit;
+}
+.term-manager {
+  color: #ffb86c;
+  font-weight: 600;
+}
+.term-done {
+  color: #50fa7b;
+  font-weight: 600;
+}
+.term-thinking {
+  color: #f1fa8c;
+  font-style: italic;
+}
+.term-spin {
+  color: #ff9e64;
+  animation: blink 1.4s ease-in-out infinite;
+}
+.live-term {
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  min-width: 0;
+  background: #1b1b29;
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.live-term-screen {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+/* The padding sits on .xterm itself: the fit addon subtracts that element's padding, not its parent's. */
+.live-term-screen .xterm {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 8px 4px 4px 10px;
+}
+.live-term-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 6px;
+  color: #8d8da8;
+  font-size: 0.78rem;
+  border-top: 1px solid #2c2c42;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #55566e;
+  flex: none;
+}
+.live-dot-on {
+  background: #50fa7b;
+  box-shadow: 0 0 6px #50fa7b;
+}
+.live-term-keys-toggle {
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.live-term-keys-toggle[aria-pressed='true'] {
+  color: #ff9e64;
+}
+/* The terminal key bar: always dark like the terminal it belongs to. The row scrolls sideways on its own. */
+.term-keys {
+  position: relative;
+  --term-key-bg: #2c2c42;
+  --term-key-ink: #eeeef6;
+  --term-key-on: #ff9e64;
+  background: #1b1b29;
+  border-top: 1px solid var(--term-key-bg);
+  padding: var(--ds-space-1) max(var(--ds-space-1), var(--ds-safe-right)) var(--ds-space-1) max(var(--ds-space-1), var(--ds-safe-left));
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+/* With the phone keyboard up: docked to its top edge (bottom is set from the visual viewport). */
+.term-keys-docked {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: var(--ds-z-popover);
+}
+.term-keys-row,
+.term-keys-more {
+  display: flex;
+  gap: var(--ds-space-1);
+}
+.term-keys-row {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+/* More opens over the terminal, above the row, so the row stays put under the thumb. */
+.term-keys-more {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-wrap: wrap;
+  padding: var(--ds-space-1);
+  background: inherit;
+  border-top: 1px solid var(--term-key-bg);
+}
+.live-term:has(.term-keys-more) {
+  overflow: visible;
+}
+.term-key {
+  flex: none;
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: none;
+  border-radius: var(--ds-radius-sm);
+  background: var(--term-key-bg);
+  color: var(--term-key-ink);
+  font: 600 var(--ds-text-sm) 'JetBrains Mono', Consolas, monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--ds-dur-fast) var(--ds-ease);
+}
+.term-key:active {
+  background: #44475a;
+}
+.term-key-once {
+  background: var(--term-key-on);
+  color: var(--ds-on-color);
+}
+.term-key-locked {
+  background: var(--term-key-on);
+  color: var(--ds-on-color);
+  box-shadow: inset 0 0 0 2px var(--term-key-ink);
+  text-decoration: underline;
+}
+.term-key-more {
+  margin-left: auto;
+}
+@keyframes blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+.term-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.term-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.term-actions select {
+  width: auto;
+  max-width: 420px;
+}

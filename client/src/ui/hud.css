@@ -1,0 +1,149 @@
+/* ---------- HUD ---------- */
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--ds-z-base);
+}
+.hud > * {
+  pointer-events: auto;
+}
+.hud-floor {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px 8px 8px;
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+  max-width: min(520px, calc(100vw - 32px));
+}
+.floor-num {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--accent);
+  border: 3px solid var(--ds-outline);
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  flex: none;
+}
+.floor-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.hud-status {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 50vw;
+}
+/* a wide window: the row may take what the floor's card (520px at most) leaves, so the pills stay on one line above the workers list */
+@media (min-width: 1136px) {
+  .hud-status {
+    max-width: calc(100vw - 568px);
+  }
+}
+/* a narrow window: the status pills (right) and the chips (left) go under the floor's card, the workers list under them */
+@media (max-width: 600px) {
+  .hud-status,
+  .hud-chips {
+    top: calc(2 * var(--ds-space-10) + var(--ds-space-4));
+    max-width: calc(50vw - var(--ds-space-6));
+  }
+  .hud-chips .usage-chip,
+  .hud-chips .memory-chip {
+    max-width: 100%;
+  }
+  .workers {
+    top: calc(6 * var(--ds-space-10) + var(--ds-space-4));
+  }
+}
+.hud-banner {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffe066;
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  padding: 8px 16px;
+  font-weight: 600;
+  max-width: 90vw;
+}
+/* The office updating itself: under the floor card, out of the way; opens the console. */
+.office-chip {
+  position: absolute;
+  top: 100px;
+  left: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 5px 12px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: #ffe8a3;
+  border: 2px solid var(--ds-outline);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+  cursor: pointer;
+  text-align: left;
+}
+.office-chip:hover {
+  transform: translateY(-1px);
+}
+.office-chip:focus-visible {
+  outline: 3px solid var(--accent, #ff8a5b);
+  outline-offset: 2px;
+}
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--ds-surface-raised);
+  border: 2px solid var(--ds-outline);
+  pointer-events: none;
+  transition: transform 0.15s;
+}
+.crosshair-hot {
+  transform: scale(1.8);
+  background: var(--accent);
+}
+.hud-hint {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 1.05rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
