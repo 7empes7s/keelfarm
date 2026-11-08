@@ -13,7 +13,6 @@ import { LOOK_RADIANS_PER_PX, createLookFilter, filterLookDelta, resetLookFilter
 import { confirmDialog, isConfirmOpen } from '../ui/Confirm';
 import { confirmResume } from '../ui/MissionConsole';
 import { photoActive, photoOwnsLock } from '../photo/gate';
-import { getAudioPrefs, toggleMute } from '../ui/sfx';
 import { getA11y, reduceMotion } from '../ui/a11y';
 import { footstepsFollow } from '../ui/footsteps';
 import { dropHeld, startCharge, throwHeld, walk } from './toys/hands';
@@ -32,7 +31,7 @@ import { decorationAction } from './decor/actions';
 import { eAction } from './toys/sip';
 import { sipCoffee, sipPose, tickSip } from './toys/sipping';
 import { peelAimed, placeSticky, pressBoard, releaseBoard } from './boardHands';
-import { bindings, keyName, useControls } from '../ui/controls';
+import { bindings, useControls } from '../ui/controls';
 import { actionsForKey, anyHeld, isBound, type ActionId, type Scope } from '../ui/keymap';
 import { lookCurve, pad, padName, pollPad, wasPressed, wasReleased, watchPads } from './gamepad';
 import { arriveOnFloor, cameraMode, exitView, homeSpot, lookAllowed, playerAt, rigInput, rigOwnsCamera, rotateView, setHomeLook, stepRig, tapView } from './camera/rig';
@@ -343,10 +342,6 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       }
       const s = useStore.getState();
       const b = bindings();
-      if (isBound(b, 'mute', e.code) && !e.repeat && !isConfirmOpen()) {
-        toggleMute();
-        s.pushToast('info', getAudioPrefs().muted ? `Sound off (${keyName('mute')} to turn it back on)` : 'Sound on');
-      }
       if (s.overlay || !s.started || isConfirmOpen() || photoActive()) return;
       keys.current.add(e.code);
       const mode = cameraMode();

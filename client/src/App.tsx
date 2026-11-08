@@ -4,6 +4,7 @@ import { installSwitchKey } from './pocket/switchOffice';
 import { Captions, LiveRegions } from './ui/CaptionStrip';
 import { ConfirmDialog } from './ui/Confirm';
 import { OfficeBoundary } from './ui/OfficeBoundary';
+import { installQuickKeys } from './ui/QuickToggles';
 import { useCall } from './ui/voiceCallStore';
 
 // Each loads only when it's shown: a phone in pocket mode never fetches three.js.
@@ -19,6 +20,7 @@ export function App() {
   const Office = useMemo(loadOffice, [attempt]);
   const calling = useCall((s) => s.call.phase !== 'idle');
   useEffect(installSwitchKey, []);
+  useEffect(installQuickKeys, []);
   return (
     <>
       <Suspense fallback={<div className="app-loading">Loading the office…</div>}>
