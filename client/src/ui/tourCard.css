@@ -1,0 +1,56 @@
+/* ---------- tour ---------- */
+
+.tour {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: var(--ds-z-tour);
+  width: min(390px, calc(100vw - 32px));
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-left: 10px solid var(--accent);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 var(--ds-shadow-color);
+  padding: 10px 14px 10px;
+  animation: pop 0.25s ease-out;
+}
+/* On a phone: clear of the phone button, and under the panels, which fill the screen there (#83). */
+@media (max-width: 760px) {
+  .tour {
+    z-index: calc(var(--ds-z-base) + 10);
+    bottom: calc(96px + var(--ds-safe-bottom));
+  }
+}
+.tour-cheer {
+  border-left-color: var(--good);
+  background: #eafbee;
+}
+.tour-head {
+  display: flex;
+  align-items: center;
+}
+.tour-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.tour-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin: 2px 0 4px;
+}
+.tour-body {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.tour-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ceo-term {
+  height: 340px;
+  flex: none;
+}

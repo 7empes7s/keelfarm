@@ -1,0 +1,14 @@
+/* ui/AgentSettings.tsx: the ⚙️ Setup section of an agent's panel */
+.setup-toggle {
+  flex: none;
+}
+.setup-toggle-on {
+  background: var(--ink);
+  color: #fff;
+}
+.setup-wrap {
+  flex: none;
+}
+.setup-wrap + .term-split {
+  min-height: 260px;
+}

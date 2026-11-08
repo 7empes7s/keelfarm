@@ -1,0 +1,97 @@
+/* ---------- progression: coins, the catalogue and the decor box (#210) ---------- */
+
+.coin-pill {
+  position: relative;
+  color: var(--ink);
+  background: #ffe8a3;
+  cursor: pointer;
+}
+.coin-gain {
+  position: absolute;
+  right: -4px;
+  top: 100%;
+  margin-top: 2px;
+  font-weight: 700;
+  color: #9a6b00;
+  text-shadow: 0 1px 0 #fff;
+  animation: coin-gain 1.8s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes coin-gain {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1);
+  }
+}
+.catalogue-floors .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.catalogue-floors .floor-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+.catalogue-purse {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.catalogue-coins {
+  font-size: 1.6rem;
+  flex: none;
+}
+.catalogue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.catalogue-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 14px;
+  background: var(--ds-surface-raised);
+}
+.catalogue-item .btn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+.catalogue-off {
+  background: var(--ds-surface-sunken);
+}
+.catalogue-icon {
+  font-size: 1.9rem;
+  line-height: 1.1;
+}
+.small-icon {
+  font-size: 1.3rem;
+}
+.decor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.decor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 2px solid rgba(31, 29, 43, 0.12);
+  border-radius: 12px;
+}

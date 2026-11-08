@@ -22,6 +22,13 @@ function office(messages: PhoneMessage[]) {
 }
 
 describe('the CEO chat in pages', () => {
+  it('seeds a full demo thread through the modular backend', () => {
+    const messages = createDemoBackend().seedChat!(Date.now());
+    expect(messages).toHaveLength(CHAT_KEEP);
+    expect(messages[0].id).toBe(1);
+    expect(messages.at(-1)?.id).toBe(CHAT_KEEP);
+  });
+
   it('sends only the latest page in the snapshot, and the rest a page at a time', () => {
     const { swarm } = office(pastChat(Date.now(), CHAT_KEEP));
     const snap = swarm.snapshot();
