@@ -28,6 +28,8 @@ async function openVoice(page: Page, width: number, speed: number) {
   // Narrow, the header's button; wide, the rail's Console tab.
   await page.locator('.pk-tab-console, .pk-icon-btn[aria-label="Settings and notifications"]').first().click();
   const root = page.getByRole('dialog', { name: /Settings/ });
+  // Wide, the console's tab groups; narrow, the list of sections. pocketSection asks which without waiting.
+  await expect(root.locator('.cn-groups').or(root.getByRole('button', { name: /^Floors & repos/ }))).toBeVisible();
   await pocketSection(root, 'Voice');
   return { root, samples };
 }
