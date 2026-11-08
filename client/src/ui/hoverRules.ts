@@ -32,6 +32,8 @@ export interface PeekController {
   click(): boolean;
   /** Esc: true when it closed an open peek (the key is then the peek's). */
   escape(): boolean;
+  /** Opens it as the sheet straight away (a button whose tap is the sheet, #267). */
+  sheet(): void;
   close(): void;
   readonly mode: PeekMode | null;
   dispose(): void;
@@ -102,6 +104,7 @@ export function createPeek(onChange: (mode: PeekMode | null) => void, timers: Ti
       show(null);
       return true;
     },
+    sheet: () => show('sheet'),
     close: () => show(null),
     get mode() {
       return mode;

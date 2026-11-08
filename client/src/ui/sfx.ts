@@ -161,8 +161,6 @@ export function setAudioPrefs(patch: Partial<AudioPrefs>) {
   for (const fn of listeners) fn();
 }
 
-export const toggleMute = () => setAudioPrefs({ muted: !prefs.muted });
-
 /** Turns every sound but the voice down by about 8 dB (while a message is read aloud), or back up. */
 export function duckOthers(on: boolean) {
   speakingDuck = on;

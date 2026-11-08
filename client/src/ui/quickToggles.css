@@ -1,0 +1,64 @@
+/* ui/QuickToggles.tsx: the top bar's Sound and CC buttons (#267) and their card or sheet */
+.qt-btn {
+  position: relative;
+}
+/* the CC button filled while captions are on (aria-pressed says it too) */
+.qt-btn.qt-on {
+  background: var(--ds-accent);
+  border-color: var(--ds-outline);
+  color: var(--ds-on-color);
+}
+.qt-btn.qt-off {
+  color: var(--ds-text-muted);
+}
+.qt-cc-dot {
+  position: absolute;
+  top: var(--ds-space-1);
+  right: var(--ds-space-1);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+}
+.qt-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+.qt-card + .qt-card {
+  margin-top: var(--ds-space-3);
+  padding-top: var(--ds-space-3);
+  border-top: 1px solid var(--ds-line);
+}
+.qt-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+}
+.qt-row input[type='range'] {
+  flex: 1 1 100px;
+  min-width: 0;
+  min-height: var(--ds-target);
+  margin: 0;
+  accent-color: var(--ds-accent);
+}
+.qt-row .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target);
+}
+.qt-name {
+  color: var(--ds-text-muted);
+}
+.qt-pct {
+  min-width: 3.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.qt-more {
+  align-self: flex-start;
+  min-height: var(--ds-target);
+}
