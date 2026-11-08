@@ -40,6 +40,7 @@ import { CeoChat } from './ceoChat.ts';
 import { snapshotMessages } from '../shared/chatParts.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
+import { rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
@@ -688,6 +689,7 @@ export class Swarm extends SwarmVoices {
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
     if (patch.ceoAwake !== undefined) s.ceoAwake = ceoAwakeSettings(s.ceoAwake, patch.ceoAwake);
+    if (patch.rotation !== undefined) s.rotation = rotationSettings(s.rotation, patch.rotation);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
     if (typeof patch.companyName === 'string') s.companyName = patch.companyName.trim().slice(0, 60);
     if (typeof patch.dogName === 'string') s.dogName = patch.dogName.trim().slice(0, 24) || DEFAULT_DOG_NAME;

@@ -49,6 +49,7 @@ import {
 import { SHIRTS, HAIR, SKIN, NAMES, lookFor, LOOKS, pick } from './flavour.ts';
 import { removeScreens } from './screens.ts';
 import { SwarmMerge } from './merge.ts';
+import { rotationSettings } from '../../shared/accountRotation.ts';
 
 export abstract class SwarmAgents extends SwarmMerge {
   /** Providers & accounts (#247, docs/accounts.md): the logins and keys agents and the CEO run on. */
@@ -65,6 +66,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
     seed: this.backend.accounts.seed,
     poll: !process.env.VITEST,
+    rotation: () => rotationSettings(this.state.settings.rotation, undefined),
   });
 
   // ---------- agents ----------

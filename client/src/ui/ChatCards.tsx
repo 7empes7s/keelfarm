@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api';
 import { useStore } from '../store';
 import type { ChatAction } from '../../../shared/ceoActions';
 import { currentStep } from '../../../shared/ceoStream';
@@ -108,6 +109,25 @@ export function NoticeCard({ text, notice }: { text: string; notice: ChatNotice 
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Every account is out (#248) but a paused API key: the office's line and Use API key, which turns it on and carries on. */
+export function UseKeyCard({ text, account }: { text: string; account: string }) {
+  const [busy, setBusy] = useState(false);
+  const on = useStore((s) => s.accounts.accounts.some((a) => a.id === account && a.enabled));
+  return (
+    <div className="notice-card" role="note">
+      <p className="notice-card-title">{text}</p>
+      <div className="notice-card-links">
+        <button type="button" className="btn" disabled={busy || on} onClick={() => {
+            setBusy(true);
+            void api.useAccountNow(account).finally(() => setBusy(false));
+          }}>
+          <Icon name="key-round" /> {on ? 'API key on' : 'Use API key'}
+        </button>
+      </div>
     </div>
   );
 }

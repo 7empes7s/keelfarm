@@ -33,10 +33,11 @@ import {
   type AccountPatch,
   type AccountSetup,
 } from '../shared/accounts.ts';
+import { addSpan, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
 import { mergeReadings } from '../shared/usage.ts';
 import { inputShape, signInEnd } from '../shared/signIn.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
-import type { AccountCli, AccountKind, AccountsView, AccountView, ProviderAccount, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
+import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
 const secretKey = (id: string) => `account:${id}`;
 const hint = (s: string) => (s ? s.slice(-4) : '');
@@ -63,6 +64,8 @@ export interface AccountsDeps {
   seed?: () => { accounts: ProviderAccount[]; keys: Record<string, string> };
   /** Check the logins now and every POLL_MS (off in tests). */
   poll?: boolean;
+  /** Rotation's settings (#248); absent: off, sessions run on their binding's account as before. */
+  rotation?: () => RotationSettings;
 }
 
 /** One session on an account: what it adds to the session's environment, and release() once it ends. */
@@ -91,6 +94,7 @@ export class Accounts {
   private signIns = new Map<string, BoxSignIn>();
   private runs = new Map<string, SignInRun>();
   private timer: NodeJS.Timeout | null = null;
+  private switches: AccountSwitch[] = []; // today's and yesterday's automatic switches (#248), newest last
   private registry: ProviderAccount[] = normaliseAccounts([]);
   private writing: Promise<void> = Promise.resolve();
 
@@ -168,31 +172,38 @@ export class Accounts {
 
   // ---------- views ----------
 
+  /** Each account with what its status is read from: signed in, usage, today's spend (and sessions). */
+  private candidates(now: number, lines = this.deps.spend()): (Candidate & { sessions: number })[] {
+    return this.list().map((a) => {
+      const usage = a.builtIn && a.cli === 'claude' ? this.deps.builtInUsage() : (this.usage.get(a.id) ?? []);
+      const spend = accountSpend(lines, a, now);
+      const signedIn = a.kind === 'subscription-login' ? (this.signedIn.get(a.id) ?? !!a.builtIn) : !!this.secretOf(a) && this.signedIn.get(a.id) !== false;
+      return { account: a, signedIn, usage, todayUsd: spend.usd, sessions: spend.sessions };
+    });
+  }
+
   view(now = Date.now()): AccountsView {
-    const lines = this.deps.spend();
     const agents = this.deps.agents();
     return {
-      accounts: this.list()
-        .sort((a, b) => a.cli.localeCompare(b.cli) || a.priority - b.priority)
-        .map((a): AccountView => {
-          const usage = a.builtIn && a.cli === 'claude' ? this.deps.builtInUsage() : (this.usage.get(a.id) ?? []);
-          const spend = accountSpend(lines, a, now);
+      accounts: this.candidates(now)
+        .sort((x, y) => x.account.cli.localeCompare(y.account.cli) || x.account.priority - y.account.priority)
+        .map(({ account: a, signedIn, usage, todayUsd, sessions }): AccountView => {
           const secret = this.secretOf(a);
-          const signedIn = a.kind === 'subscription-login' ? (this.signedIn.get(a.id) ?? !!a.builtIn) : !!secret && this.signedIn.get(a.id) !== false;
           return {
             ...a,
-            ...accountStatus({ account: a, signedIn, usage, todayUsd: spend.usd, now }),
-            usage,
+            ...accountStatus({ account: a, signedIn, usage, todayUsd, now }),
+            usage: [...usage],
             keyHint: a.kind === 'api-key' ? hint(secret) : '',
             configDir: a.kind === 'subscription-login' ? this.dirOf(a) : null,
-            todayUsd: spend.usd,
-            todaySessions: spend.sessions,
+            todayUsd,
+            todaySessions: sessions,
             limitHits7d: recentHits(a.limitHits, now).length,
             agents: agents.filter((x) => pinnedTo(a, x.account)).map((x) => x.id),
             running: this.running.get(a.id) ?? 0,
             signIn: this.runs.get(a.id) ?? null,
           };
         }),
+      rotation: rotationStats(this.switches, now),
     };
   }
 
@@ -215,8 +226,31 @@ export class Accounts {
    * environment; null: it runs as before accounts. Its running count goes up until release().
    */
   use(binding: string | undefined, cli: AccountCli): AccountUse | null {
-    const a = resolveAccount(this.list(), binding, cli);
-    if (!a) return null;
+    const now = Date.now();
+    const r = this.rotation();
+    const a = (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast }) : null) ?? resolveAccount(this.list(), binding, cli);
+    return a ? this.take(a) : null;
+  }
+
+  /** Rotation's next account for a session whose account was out (#248), skipping the ones it tried; null: none is left. */
+  next(binding: string | undefined, cli: AccountCli, tried: readonly string[]): AccountUse | null {
+    const now = Date.now();
+    const a = pickAccount(binding, this.candidates(now), now, { cli, apiLast: this.rotation().apiLast, skip: tried });
+    return a ? this.take(a) : null;
+  }
+
+  rotation(): RotationSettings {
+    return this.deps.rotation?.() ?? { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false };
+  }
+
+  /** Whether rotation has anywhere to go for a session of `cli`: another account of it, or of a coding agent it may fall back to. */
+  canRotate(cli: AccountCli, others: readonly AccountCli[]): boolean {
+    if (!this.rotation().on) return false;
+    const live = this.list().filter((a) => !a.removing);
+    return live.filter((a) => a.cli === cli).length > 1 || others.some((c) => c !== cli && live.some((a) => a.cli === c));
+  }
+
+  private take(a: ProviderAccount): AccountUse {
     this.running.set(a.id, (this.running.get(a.id) ?? 0) + 1);
     let done = false;
     return {
@@ -242,7 +276,37 @@ export class Accounts {
   limited(id: string, resetsAt: number | null, now = Date.now()) {
     const a = this.list().find((x) => x.id === id);
     if (!a) return;
-    this.replace({ ...a, limitedUntil: resetsAt ?? now + 60 * 60_000, limitHits: [...recentHits(a.limitHits, now), now] });
+    const until = resetsAt ?? now + 60 * 60_000;
+    this.replace({ ...a, limitedUntil: until, limitHits: [...recentHits(a.limitHits, now), now], limitSpans: addSpan(a.limitSpans, now, until, now) });
+  }
+
+  /** A session on an account found its login expired or its key turned away: out of the rotation until a Test or sign-in says otherwise. */
+  signedOut(id: string) {
+    this.signedIn.set(id, false);
+    this.emit();
+  }
+
+  label(id: string): string {
+    return this.list().find((a) => a.id === id)?.label ?? id;
+  }
+
+  /** When the first account of `cli` that's out is back (null: none says, e.g. all signed out). */
+  firstBack(cli: AccountCli, now = Date.now()): number | null {
+    const backs = this.view(now).accounts.filter((a) => a.cli === cli && a.status === 'limited' && a.until).map((a) => a.until!);
+    return backs.length ? Math.min(...backs) : null;
+  }
+
+  /** A paused API key of `cli` with a key saved: what "Use API key" turns on when every account is out. */
+  pausedKey(cli: AccountCli): ProviderAccount | null {
+    return this.list().find((a) => a.cli === cli && a.kind === 'api-key' && !a.enabled && !a.removing && !!this.secretOf(a)) ?? null;
+  }
+
+  /** An automatic switch, for the numbers; returns it so its session's API cost can be added when it ends. */
+  switched(s: AccountSwitch): AccountSwitch {
+    const dayAgo = s.at - 2 * 24 * 60 * 60_000;
+    this.switches = [...this.switches.filter((x) => x.at > dayAgo), s];
+    this.emit();
+    return s;
   }
 
   /** Accounts removed while sessions ran on them go once those have finished. */
@@ -326,6 +390,10 @@ export class Accounts {
     const r = await this.deps.check(a, this.dirOf(a), this.secretOf(a));
     this.signedIn.set(id, r.signedIn);
     if (r.readings.length) this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], r.readings));
+    // A limit a session hit is over once the poll shows room again (#248).
+    const now = Date.now();
+    const cur = this.list().find((x) => x.id === id);
+    if (cur?.limitedUntil && cur.limitedUntil > now && r.readings.length && r.readings.every((x) => x.pct < NEAR_OUT_PCT)) this.replace({ ...cur, limitedUntil: null });
     this.emit();
     return r.note;
   }

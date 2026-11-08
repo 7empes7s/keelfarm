@@ -24,6 +24,7 @@ export interface ProviderAccount {
   removing?: boolean;
   limitHits?: number[]; // when it hit its usage limit, the last 7 days
   limitedUntil?: number | null; // a session hit its limit: until then
+  limitSpans?: [number, number][]; // when it was limited (from, until), the last 7 days: its timeline bar (#248)
 }
 
 /** Ready / Near limit / Limited until … / Signed out / Paused, for the chip on its card. */
@@ -57,4 +58,36 @@ export interface SignInRun {
 
 export interface AccountsView {
   accounts: AccountView[];
+  rotation?: RotationStats; // absent in old journals
+}
+
+/** Settings → Providers & accounts → Rotation (#248): automatic fallback when an account is limited or signed out. */
+export interface RotationSettings {
+  on: boolean; // a session that hits a limit or a sign-out restarts on the next account
+  apiLast: boolean; // API keys only once every subscription is out
+  ceoClis: AccountCli[]; // other coding agents the CEO may fall back to when every account of its own is out
+  agentsSwitchCli: boolean; // agents fall back to another coding agent when every account of theirs is out
+}
+
+/** One automatic switch: a session moved off an account that was out. Labels only, never a key. */
+export interface AccountSwitch {
+  at: number;
+  agentId: string;
+  agentName: string;
+  fromId: string;
+  from: string;
+  toId: string;
+  to: string;
+  why: 'limited' | 'signed-out';
+  until: number | null; // when the account it left is back, if known
+  api: boolean; // it went to an API key
+  usd: number; // what its session cost on that API key
+}
+
+/** Rotation's numbers for Providers & accounts and Mission control. */
+export interface RotationStats {
+  switchesToday: number;
+  minutesSaved: number; // sessions that would otherwise have waited for the limit to reset
+  apiUsd: number; // spent on API keys because of fallback, today
+  recent: AccountSwitch[]; // the latest few, newest first
 }

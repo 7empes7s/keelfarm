@@ -14,7 +14,7 @@ import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
 import { replyLog } from './chatCardRules';
-import { ActionCards, NoticeCard, NoticePill } from './ChatCards';
+import { ActionCards, NoticeCard, NoticePill, UseKeyCard } from './ChatCards';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
@@ -113,6 +113,7 @@ export function Bubble({ item, ceoName, quoted, highlight, linked, onFloor, onQu
   if (look === 'hidden') return null; // the CLI's own output (#193) stays backend
   if (m?.signIn && look === 'card') return <SignInCard card={m.signIn} />;
   if (m?.notice && look === 'card') return <NoticeCard text={officeText(m.text)} notice={m.notice} />;
+  if (m?.switch?.useKey) return <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />;
   if (m && look === 'pill') return <NoticePill text={officeText(m.text)} />;
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
