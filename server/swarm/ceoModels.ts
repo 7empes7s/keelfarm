@@ -25,8 +25,9 @@ export abstract class SwarmCeoModels extends SwarmReactions {
     return keep.resume;
   }
 
-  /** A job that failed for its model goes back to the queue for the CEO's own model, with one office note. */
+  /** A job that failed for its model goes back to the queue for the CEO's own model, with one office note; one that ran out of accounts, as it is. */
   protected retryOnCeoModel(a: PersistedAgent, job: CeoJob | null, result: SessionResult, preempted: boolean): boolean {
+    if (job && !preempted && a.status !== 'stopped' && result.outOfAccounts) return true; // every account is out (#248): it waits for the first one back
     const ceoModel = a.model || CEO_MODEL;
     if (!job || preempted || a.status === 'stopped' || !ceoModelRetry({ ok: result.ok, errors: result.errors, model: this.ceoRunModel, ceoModel, retried: !!job.onCeoModel })) return false;
     job.onCeoModel = true;

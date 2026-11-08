@@ -208,12 +208,12 @@ export abstract class SwarmScheduling extends SwarmQa {
   }
 
   /** Claude turned a session away for the usage limit: start nothing new until it resets, rather than failing agent after agent. */
-  protected pauseForLimit(resetsAt: number | null) {
+  protected pauseForLimit(resetsAt: number | null, told = false) {
     const until = (resetsAt ?? Date.now() + LIMIT_PAUSE_MS) + 30_000;
     if (until <= this.pausedUntil) return;
     const fresh = Date.now() >= this.pausedUntil;
     this.pausedUntil = until;
-    if (fresh) this.postMessage('office', `⏸ Claude's usage limit was reached. The office starts no new work until ${new Date(until).toLocaleTimeString()}; sessions already running carry on.`);
+    if (fresh && !told) this.postMessage('office', `⏸ Claude's usage limit was reached. The office starts no new work until ${new Date(until).toLocaleTimeString()}; sessions already running carry on.`);
     this.emitUsage();
   }
 
@@ -256,6 +256,21 @@ export abstract class SwarmScheduling extends SwarmQa {
       this.paceForWarning(usage);
     }
     return this.usageNow();
+  }
+
+  /**
+   * POST /api/accounts/:id/use-now, the chat's "Use API key" when every account is out (#248): that paused account is
+   * resumed and the pause lifted, so rotation carries on there (and the CEO's waiting job runs).
+   */
+  useAccountNow(id: string) {
+    const view = this.accounts.update(id, { enabled: true });
+    if (this.limited() && this.accounts.rotation().on) {
+      this.pausedUntil = 0;
+      this.postMessage('office', `▶ ${this.accounts.label(id)} is on: new work starts on it now, billed per token.`);
+      this.emitUsage();
+      setTimeout(() => this.schedule(), 200);
+    }
+    return view;
   }
 
   /** May work of this kind start now, as far as Claude's usage goes? */

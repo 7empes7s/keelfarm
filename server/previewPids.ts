@@ -17,6 +17,7 @@ export interface PreviewPid {
   port: number;
   cwd: string; // the preview worktree it was started in
   startedAt: number;
+  viewedAt?: number; // its last use (#252), so an office restart doesn't count as time unused
 }
 
 interface PidFile {
@@ -88,9 +89,13 @@ export function portBusyText(port: number, owner: ProcInfo | null): string {
   return `Port ${port} is in use by ${owner ? ownerText(owner) : 'another program'}. The office won't stop it: use another port, or free this one and try again.`;
 }
 
+/** How often a preview's last use is written to previews.json at most. */
+const USED_SAVE_MS = 15_000;
+
 /** previews.json: read once, written (temp file, then rename) after every change. */
 export class PreviewPids {
   private data: PidFile = { entries: [], ports: {} };
+  private savedUse = new Map<number, number>(); // pid -> the last use written
 
   constructor(private file: string) {
     try {
@@ -111,7 +116,23 @@ export class PreviewPids {
     this.save();
   }
 
+  /** A preview's last use, written at most every 15 s. */
+  used(pid: number, at: number) {
+    const e = this.data.entries.find((x) => x.pid === pid);
+    if (!e) return;
+    e.viewedAt = at;
+    if (at - (this.savedUse.get(pid) ?? 0) < USED_SAVE_MS) return;
+    this.savedUse.set(pid, at);
+    this.save();
+  }
+
+  /** A preview's last use as recorded (from before a restart too). */
+  viewedAt(key: string): number | null {
+    return this.data.entries.filter((e) => e.key === key && typeof e.viewedAt === 'number').reduce<number | null>((n, e) => Math.max(n ?? 0, e.viewedAt!), null);
+  }
+
   drop(pid: number) {
+    this.savedUse.delete(pid);
     if (!this.data.entries.some((e) => e.pid === pid)) return;
     this.data.entries = this.data.entries.filter((e) => e.pid !== pid);
     this.save();

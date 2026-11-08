@@ -7,7 +7,7 @@ import type { Backend } from '../backend.ts';
 import type { LogEntry } from '../agentRunner.ts';
 import { BoxMachines } from '../boxMachines.ts';
 import { Cloud, officeId } from '../cloud.ts';
-import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION } from '../config.ts';
+import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, PUBLIC_DEMO, PR_PREVIEW_IDLE_MIN, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION } from '../config.ts';
 import { IssueCap } from '../ceo.ts';
 import { DEFAULT_RESEARCH_MIN, ResearchGuard } from '../research.ts';
 import type { PrepStrikes } from '../handOut.ts';
@@ -15,7 +15,7 @@ import { HttpError } from '../httpError.ts';
 import { IssueAges } from '../issueAges.ts';
 import { PR_LIMITS_VERSION } from '../prOwnership.ts';
 import { Previews } from '../previews.ts';
-import { DEFAULT_MAIN_PREVIEW_IDLE_MIN, DEFAULT_PREVIEW_RECENT_HOURS, mainKey, prKey } from '../prTheatre.ts';
+import { addFreed, mainKey, previewSettings, prKey } from '../prTheatre.ts';
 import { DEFAULT_PACING_SESSIONS } from '../pacing.ts';
 import { emptyHistory } from '../metrics.ts';
 import { DEFAULT_TRIM_IDLE_MIN } from '../deskTrim.ts';
@@ -121,8 +121,7 @@ export abstract class SwarmCore extends SwarmContract {
       autoUpdate: true,
       pacingSessions: DEFAULT_PACING_SESSIONS,
       trimIdleDesksMin: DEFAULT_TRIM_IDLE_MIN,
-      previewRecentHours: DEFAULT_PREVIEW_RECENT_HOURS,
-      mainPreviewIdleMin: DEFAULT_MAIN_PREVIEW_IDLE_MIN,
+      ...previewSettings({}, {}, PR_PREVIEW_IDLE_MIN), // the chip window, idle stops and max lifetime (#204, #252)
       dailyLogDir: '',
       historyDays: DEFAULT_HISTORY_DAYS,
       voice: { ...DEFAULT_VOICE },
@@ -340,7 +339,8 @@ export abstract class SwarmCore extends SwarmContract {
       prRemoved: (repoId, pr) => this.broadcast({ type: 'prPreviewRemoved', repoId, pr }),
       note: (text) => this.toast('info', text),
       holder: (repoId, pr) => this.previewHolder(repoId, pr),
-      mainIdleMs: () => this.state.settings.mainPreviewIdleMin * 60_000,
+      rules: (kind) => ({ idleMs: (kind === 'pr' ? this.state.settings.prPreviewIdleMin : this.state.settings.mainPreviewIdleMin) * 60_000, maxLifeMs: this.state.settings.previewMaxLifeHours * 3_600_000 }),
+      stopped: (key) => this.setPreviewStats({ freed: addFreed(this.previewStats.freed, this.health.previewMb(key)) }),
       floors: () => this.state.repos,
     });
   }

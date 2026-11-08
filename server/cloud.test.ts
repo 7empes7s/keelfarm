@@ -170,6 +170,15 @@ describe('Cloud', () => {
     expect(cloud.secretValues()).toEqual(expect.arrayContaining(['sk-ant-oat01-from-env', 'gho_login_token', 'sk-openai-key-1']));
   });
 
+  it('refuses a key pasted into another field and saves nothing (#264)', async () => {
+    const { cloud, dir } = await setup();
+    await expect(cloud.setToken('github', 'sk-ant-api03-claude-key')).rejects.toThrow('This looks like your Anthropic key, not a GitHub token.');
+    await expect(cloud.setToken('openai', 'sk-ant-api03-claude-key')).rejects.toThrow(/Anthropic key, not an OpenAI/);
+    await expect(cloud.setKey('github_pat_11abc')).rejects.toThrow(/GitHub token, not an Upstash/);
+    await expect(fs.readFile(path.join(dir, 'secrets.json'), 'utf8')).rejects.toThrow();
+    expect(cloud.view().github.source).toBe('gh');
+  });
+
   it("refuses a setup-token where an Anthropic API key goes, since it belongs in the environment", async () => {
     const { cloud } = await setup();
     await expect(cloud.setToken('anthropic', 'sk-ant-oat01-subscription')).rejects.toThrow(/environment/);

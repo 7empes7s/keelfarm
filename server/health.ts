@@ -334,6 +334,11 @@ export class OfficeHealth {
     return false;
   }
 
+  /** What a preview's processes used at the last reading, MB (0: not measured). */
+  previewMb(key: string): number {
+    return this.previewRss.get(key) ?? 0;
+  }
+
   /** Before work waits for memory: stop the biggest idle preview, if any. */
   private freePreview() {
     const key = idlePreview((this.host.previews?.() ?? []).map((p) => ({ ...p, rssMb: this.previewRss.get(p.key) ?? 0 })));

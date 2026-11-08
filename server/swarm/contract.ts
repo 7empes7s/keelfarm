@@ -69,6 +69,7 @@ export abstract class SwarmContract {
   protected abstract setAgentVoice(a: PersistedAgent, patch: { voiceId?: unknown; voiceName?: unknown }): void;
 
   // ceoJobs.ts
+  protected abstract ceoTold: string[]; // for the CEO's next job
   protected abstract ceo(...a: Parameters<Swarm['ceo']>): ReturnType<Swarm['ceo']>;
   protected abstract ceoInfo(...a: Parameters<Swarm['ceoInfo']>): ReturnType<Swarm['ceoInfo']>;
   protected abstract chatView(...a: Parameters<Swarm['chatView']>): ReturnType<Swarm['chatView']>;

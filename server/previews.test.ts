@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Backend } from './backend.ts';
-import { PR_PREVIEW_IDLE_MS, PREVIEW_PORT } from './config.ts';
+import { PREVIEW_PORT } from './config.ts';
 import type * as PreviewRunner from './previewRunner.ts';
 import type { PreviewCallbacks, PreviewJob } from './previewRunner.ts';
 import { parsePreviewPatch, Previews, type PreviewFloor } from './previews.ts';
@@ -30,6 +30,9 @@ let pulls: Record<string, PullInfo[]>;
 let holders: Record<string, string>; // `${repoId}#${pr ?? 'main'}` → agent name
 let desks: Record<string, { slug: string; bytes: number }[]>;
 let mainIdleMs: number;
+let prIdleMs: number;
+let maxLifeMs: number;
+const PR_PREVIEW_IDLE_MS = 20 * 60_000;
 
 const backend = {
   mainDir: (fullName: string) => `/work/${fullName}/main`,
@@ -66,6 +69,8 @@ beforeEach(() => {
   holders = {};
   desks = {};
   mainIdleMs = 30 * 60_000;
+  prIdleMs = PR_PREVIEW_IDLE_MS;
+  maxLifeMs = 0;
   previews = new Previews(backend, {
     emit: () => undefined,
     pulls: (id) => pulls[id] ?? [],
@@ -73,7 +78,7 @@ beforeEach(() => {
     prRemoved: (repoId, pr) => void views.delete(`${repoId}#${pr}`),
     note: (text) => void notes.push(text),
     holder: (repoId, pr) => holders[`${repoId}#${pr ?? 'main'}`] ?? null,
-    mainIdleMs: () => mainIdleMs,
+    rules: (kind) => ({ idleMs: kind === 'pr' ? prIdleMs : mainIdleMs, maxLifeMs }),
     floors: () => [floor(1), floor(2)],
   });
 });
@@ -232,7 +237,7 @@ describe('previews in use and the main preview (#204)', () => {
     started[0].cb.status('running');
     previews.watch('viewer-1234', 'acme/app1', null);
     expect(previews.view(floor(1)).stopsAt).toBeNull();
-    previews.sweepPrs(Date.now() + 60_000); // past the idle time, but the viewer's last word is still fresh
+    previews.sweepPrs(Date.now() + 35_000); // past the idle time, but the viewer's last word is still fresh
     expect(previews.view(floor(1)).status).toBe('running');
     expect(previews.running().find((r) => r.key === 'acme/app1#main')).toMatchObject({ idle: false });
   });
@@ -267,5 +272,151 @@ describe('parsePreviewPatch', () => {
     expect(() => parsePreviewPatch(undefined, { '1BAD': 'x' })).toThrow(/not a valid environment variable name/);
     expect(() => parsePreviewPatch(undefined, { ANTHROPIC_API_KEY: 'x' })).toThrow(/never reach/);
     expect(() => parsePreviewPatch(undefined, { A: 1 })).toThrow(/must be a string/);
+  });
+});
+
+describe('stopping a minute after any real use ends (#252)', () => {
+  const T0 = Date.parse('2026-11-07T12:00:00Z');
+  const at = (ms: number) => vi.setSystemTime(T0 + ms);
+  const alive = () => previews.prViews().map((v) => v.pr);
+  let port: number;
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    at(0);
+    prIdleMs = 60_000;
+    await previews.startPr(floor(1), 1, 'x');
+    started[0].cb.status('running');
+    port = started[0].job.port;
+  });
+  afterEach(() => vi.useRealTimers());
+
+  /** Sweep at T0 + ms (the clock there too), letting a stop finish. */
+  const sweep = async (ms: number) => {
+    at(ms);
+    previews.sweepPrs(T0 + ms);
+    await settle();
+  };
+
+  it('stops 60 s after the last use, and says when', async () => {
+    expect(views.get('acme/app1#1')?.stopsAt).toBe(T0 + 60_000);
+    await sweep(59_000);
+    expect(alive()).toEqual([1]);
+    await sweep(60_000);
+    expect(alive()).toEqual([]);
+    expect(started[0].stopped).toBe(true);
+  });
+
+  it("doesn't stop across a reload: the viewer gone for 30 s, then back", async () => {
+    previews.watch('viewer-1234', 'acme/app1', 1);
+    await sweep(30_000); // reloading: no word from the viewer
+    expect(alive()).toEqual([1]);
+    at(30_000);
+    previews.watch('viewer-1234', 'acme/app1', 1); // the reloaded page says it again
+    expect(views.get('acme/app1#1')).toMatchObject({ usedIn: 'app', stopsAt: null });
+    await sweep(85_000);
+    expect(alive()).toEqual([1]);
+  });
+
+  it("a hidden app viewer doesn't count: it stops 60 s after the tab was last visible", async () => {
+    previews.watch('viewer-1234', 'acme/app1', 1);
+    at(10_000);
+    previews.watch('viewer-1234', null, null); // the tab went to the background
+    expect(views.get('acme/app1#1')).toMatchObject({ usedIn: null, stopsAt: T0 + 10_000 + 60_000 });
+    await sweep(69_000);
+    expect(alive()).toEqual([1]);
+    await sweep(70_000);
+    expect(alive()).toEqual([]);
+  });
+
+  it('gateway traffic keeps it alive, counted from the last request', async () => {
+    at(50_000);
+    previews.opened(port)(); // a request through the gateway, answered
+    expect(views.get('acme/app1#1')?.usedIn).toBe('tab');
+    await sweep(109_000);
+    expect(alive()).toEqual([1]);
+    await sweep(110_000);
+    expect(alive()).toEqual([]);
+  });
+
+  it('an open socket keeps it in use for as long as it stays open', async () => {
+    const close = previews.opened(port);
+    await sweep(30 * 60_000);
+    expect(alive()).toEqual([1]);
+    expect(views.get('acme/app1#1')).toMatchObject({ usedIn: 'tab', stopsAt: null });
+    at(30 * 60_000);
+    close();
+    await sweep(31 * 60_000);
+    expect(alive()).toEqual([]);
+  });
+
+  it("the gateway page's heartbeat keeps a static page alive, and only a running preview's", async () => {
+    for (let t = 15_000; t <= 5 * 60_000; t += 15_000) {
+      at(t);
+      expect(previews.beat(port, false)).toEqual({ lifeLeftMs: null });
+      await sweep(t + 5_000);
+    }
+    expect(alive()).toEqual([1]);
+    expect(previews.beat(port + 1000, false)).toBeNull();
+  });
+
+  it('an agent hold and the 📌 keep it running; an hour pin runs out by itself', async () => {
+    holders['acme/app1#1'] = 'Ada';
+    await sweep(10 * 60_000);
+    expect(alive()).toEqual([1]);
+    delete holders['acme/app1#1'];
+
+    at(10 * 60_000);
+    previews.keep('acme/app1', 1, 'hour');
+    expect(views.get('acme/app1#1')).toMatchObject({ pinned: T0 + 70 * 60_000, stopsAt: null });
+    await sweep(69 * 60_000);
+    expect(alive()).toEqual([1]);
+    await sweep(70 * 60_000); // the pin ran out, and its last use was an hour ago
+    expect(alive()).toEqual([]);
+  });
+
+  it('a pin until stopped never runs out, and can be taken off', async () => {
+    previews.keep('acme/app1', 1, 'forever');
+    expect(views.get('acme/app1#1')?.pinned).toBe('forever');
+    await sweep(48 * 3_600_000);
+    expect(alive()).toEqual([1]);
+    previews.keep('acme/app1', 1, 'off');
+    await sweep(48 * 3_600_000 + 60_000);
+    expect(alive()).toEqual([]);
+    await expect(Promise.resolve().then(() => previews.keep('acme/app1', 1, 'hour'))).rejects.toThrow(/isn't running/);
+  });
+
+  it('max lifetime: a minute of "Still using it?", Keep it running starts it again, else it stops', async () => {
+    maxLifeMs = 2 * 3_600_000;
+    const close = previews.opened(port); // in use the whole time
+    at(maxLifeMs - 90_000);
+    expect(previews.beat(port, false)?.lifeLeftMs).toBe(90_000);
+    at(maxLifeMs - 50_000);
+    expect(previews.beat(port, false)?.lifeLeftMs).toBe(50_000);
+    expect(previews.beat(port, true)?.lifeLeftMs).toBe(maxLifeMs); // Keep it running
+    await sweep(maxLifeMs + 1000);
+    expect(alive()).toEqual([1]);
+    await sweep(2 * maxLifeMs);
+    expect(alive()).toEqual([]);
+    expect(notes.join(' ')).toMatch(/PR #1's preview stopped: it ran 2 h, its max lifetime/);
+    close();
+  });
+
+  it('0 = never', async () => {
+    prIdleMs = 0;
+    expect(previews.prViews()[0].stopsAt).toBeNull();
+    await sweep(7 * 24 * 3_600_000);
+    expect(alive()).toEqual([1]);
+  });
+
+  it('a stopped main preview says the office stopped it, so opening the viewer starts it again', async () => {
+    mainIdleMs = 60_000;
+    await previews.start(floor(1), 'app1 app');
+    started[1].cb.status('running');
+    await sweep(61_000);
+    await settle();
+    expect(previews.view(floor(1))).toMatchObject({ status: 'stopped', stoppedIdle: true });
+    await previews.start(floor(1), 'app1 app');
+    expect(previews.view(floor(1)).stoppedIdle).toBe(false);
   });
 });

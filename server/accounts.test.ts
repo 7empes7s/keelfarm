@@ -49,6 +49,34 @@ async function office(over: Partial<AccountsDeps> = {}) {
 }
 
 describe('Accounts', () => {
+  it('rotation (#248): skips a limited login for the next one, API keys last, and takes the login back once its poll shows room', async () => {
+    let reading = { type: 'five_hour', pct: 100, resetsAt: Date.now() + 3600_000, at: Date.now() };
+    const { accounts } = await office({
+      rotation: () => ({ on: true, apiLast: true, ceoClis: [], agentsSwitchCli: false }),
+      check: async (a, _dir, secret) => ({ signedIn: a.kind !== 'api-key' || secret.startsWith('sk-ant-'), readings: a.kind === 'subscription-login' && !a.builtIn ? [reading] : [], note: 'checked' }),
+    });
+    const key = await accounts.add({ cli: 'claude', kind: 'api-key', key: KEY });
+    const max = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Max 2' });
+    await accounts.test(max.id); // signed in, at 100% of its 5-hour limit (priorities: the login, the key, Max 2)
+    expect(accounts.canRotate('claude', [])).toBe(true);
+    expect(accounts.use(undefined, 'claude')?.id).toBe('claude-login');
+    accounts.limited('claude-login', Date.now() + 3600_000);
+    expect(accounts.use(undefined, 'claude')?.id).toBe(key.id); // Max 2 is full: the key, as a last resort
+    expect(accounts.next(undefined, 'claude', ['claude-login', key.id])).toBeNull();
+    reading = { ...reading, pct: 40 };
+    await accounts.test(max.id);
+    expect(accounts.use(undefined, 'claude')?.id).toBe(max.id); // a subscription with room comes before the key
+    expect(accounts.firstBack('claude')).toBeGreaterThan(Date.now());
+    expect(accounts.view().accounts.find((a) => a.id === 'claude-login')?.limitSpans).toHaveLength(1);
+  });
+
+  it('rotation off, or one account per coding agent: nothing to rotate to', async () => {
+    const { accounts } = await office();
+    expect(accounts.canRotate('claude', [])).toBe(false);
+    accounts.limited('claude-login', Date.now() + 3600_000);
+    expect(accounts.use(undefined, 'claude')?.id).toBe('claude-login'); // as before: the binding's account
+  });
+
   it('runs every session on the login on this computer until another account is added', async () => {
     const { accounts } = await office();
     const use = accounts.use(undefined, 'claude')!;

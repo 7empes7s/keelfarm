@@ -81,4 +81,16 @@ describe('previews.json', () => {
     fs.writeFileSync(file, 'not json');
     expect(new PreviewPids(file).entries).toEqual([]);
   });
+
+  it("keeps a preview's last use across an office restart (#252)", () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pids-')), 'previews.json');
+    const a = new PreviewPids(file);
+    a.record(entry({ viewedAt: 1_000_000 }));
+    a.used(entry().pid, 2_000_000);
+    a.used(entry().pid, 2_005_000); // within 15 s of the last write: not written yet
+    expect(new PreviewPids(file).viewedAt(entry().key)).toBe(2_000_000);
+    a.used(entry().pid, 2_020_000);
+    expect(new PreviewPids(file).viewedAt(entry().key)).toBe(2_020_000);
+    expect(new PreviewPids(file).viewedAt('someone/else#main')).toBeNull();
+  });
 });

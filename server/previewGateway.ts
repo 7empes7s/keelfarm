@@ -9,12 +9,26 @@ import { passHeaders, syncedHeaders, tunnel, upstream } from './syncProxy.ts';
 // /preview/, sends a framed preview's requests back under its /preview/<port>/, and a full page load that escapes
 // (a link to /about) is sent back by the office. What can't follow: WebSockets opened at root paths (a dev server's
 // hot reload), and client-side routers, which see /preview/<port>/ in the address.
+// Every request and socket through here is a use of its preview (#252), and its pages get a heartbeat that says so
+// while they're visible, so a preview open in its own tab doesn't stop under the manager.
 
 /** Where a preview's paths start on the office's address. */
 export const GATEWAY = '/preview/';
 export const GATEWAY_WORKER = `${GATEWAY}sw.js`;
 
 const MOUNT = /^\/preview\/(\d{1,5})(.*)$/;
+/** The office's own path under a preview's mount, for its pages' heartbeat and "Keep it running". */
+const BEAT_PATH = /^\/\.cubefarm\/(beat|keep)$/;
+/** How often a visible gateway page says it's in use. */
+const PAGE_BEAT_MS = 15_000;
+
+/** What the gateway tells the previews about their use. */
+export interface GatewayUse {
+  /** A request or socket to a preview port opened: in use until the returned close. */
+  opened(port: number): () => void;
+  /** A visible page's heartbeat (keep: its "Keep it running"): the lifetime it has left, for its banner; null: no preview there. */
+  beat(port: number, keep: boolean): { lifeLeftMs: number | null } | null;
+}
 
 /** A gateway path's preview port and the app's own path; `slash` when the mount needs its trailing "/" first. */
 export function parseMount(url: string): { port: number; path: string; slash: boolean } | null {
@@ -48,14 +62,28 @@ w.register('${GATEWAY_WORKER}',{scope:'${GATEWAY}'}).then(function(r){var i=r.in
 i.addEventListener('statechange',function(){if(i.state==='activated'||i.state==='redundant')go()})},go);
 })();</script>`;
 
-/** The page with the boot script at the very top of its head (or of the page, when it has none). */
+/**
+ * A gateway page's heartbeat (#252): while the page is visible it tells the office every 15 s, without credentials,
+ * that its preview is in use, and in the last minute of the preview's max lifetime it shows "Still using it?".
+ */
+export const BEAT_SCRIPT = `<script data-cubefarm-beat>(function(){
+var m=location.pathname.match(/^\\/preview\\/\\d{1,5}(?=\\/)/),b,d=document;if(!m||!window.fetch)return;var u=m[0]+'/.cubefarm/';
+function send(k){if(!k&&d.visibilityState!=='visible')return;fetch(u+(k?'keep':'beat'),{method:'POST',credentials:'omit',cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(show,function(){})}
+function show(x){var l=x&&x.lifeLeftMs;if(l==null||l>60000){if(b){b.remove();b=null}return}if(b||!d.body)return;
+b=d.createElement('div');b.setAttribute('role','alert');b.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:12px;background:#1f2430;color:#fff;font:15px/1.3 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35)';
+b.textContent='Still using it? This preview stops in a minute.';var k=d.createElement('button');k.textContent='Keep it running';k.style.cssText='min-height:44px;padding:0 14px;border:0;border-radius:10px;background:#4f8cff;color:#fff;font:inherit;cursor:pointer';k.onclick=function(){send(1)};b.appendChild(k);d.body.appendChild(b)}
+send();setInterval(send,${PAGE_BEAT_MS});d.addEventListener('visibilitychange',function(){send()});
+})();</script>`;
+
+/** The page with the boot script at the very top of its head (or of the page, when it has none), and the heartbeat after it. */
 export function injectBoot(html: string): string {
   if (html.includes('data-cubefarm-preview')) return html;
+  const scripts = BOOT_SCRIPT + BEAT_SCRIPT;
   const head = html.match(/<head(\s[^>]*)?>/i);
-  if (head?.index !== undefined) return html.slice(0, head.index + head[0].length) + BOOT_SCRIPT + html.slice(head.index + head[0].length);
+  if (head?.index !== undefined) return html.slice(0, head.index + head[0].length) + scripts + html.slice(head.index + head[0].length);
   const doctype = html.match(/^\s*<!doctype[^>]*>/i);
-  if (doctype) return doctype[0] + BOOT_SCRIPT + html.slice(doctype[0].length);
-  return BOOT_SCRIPT + html;
+  if (doctype) return doctype[0] + scripts + html.slice(doctype[0].length);
+  return scripts + html;
 }
 
 /**
@@ -122,7 +150,7 @@ export function escapedTo(req: { method?: string; url?: string; headers: http.In
  * A request on the office's address: a gateway path goes on to its preview, a page load that escaped one goes back
  * under it. False when it's neither (the office handles it).
  */
-export function handleGateway(req: http.IncomingMessage, res: http.ServerResponse, proxied: (port: number) => boolean): boolean {
+export function handleGateway(req: http.IncomingMessage, res: http.ServerResponse, proxied: (port: number) => boolean, use?: GatewayUse): boolean {
   const url = req.url ?? '/';
   if (url === GATEWAY_WORKER || url.startsWith(`${GATEWAY_WORKER}?`)) {
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' }).end(WORKER_SOURCE);
@@ -143,6 +171,16 @@ export function handleGateway(req: http.IncomingMessage, res: http.ServerRespons
     res.writeHead(301, { location: `${GATEWAY}${at.port}${at.path}` }).end();
     return true;
   }
+  const beat = at.path.match(BEAT_PATH);
+  if (beat) {
+    const said = req.method === 'POST' ? (use?.beat(at.port, beat[1] === 'keep') ?? null) : null;
+    res.writeHead(said ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(said ?? { error: 'not a running preview' }));
+    req.resume();
+    return true;
+  }
+  // In use while the request is open (a long poll, server-sent events) and from when it ends.
+  const done = use?.opened(at.port);
+  if (done) res.once('close', done);
   // The body is buffered first: a request retried on IPv6 has to be sent again.
   const body: Buffer[] = [];
   req.on('data', (c: Buffer) => body.push(c));
@@ -180,10 +218,15 @@ export function handleGateway(req: http.IncomingMessage, res: http.ServerRespons
 }
 
 /** A WebSocket on a gateway path goes on to its preview; false when the path isn't one. */
-export function upgradeGateway(req: http.IncomingMessage, socket: net.Socket, head: Buffer, proxied: (port: number) => boolean): boolean {
+export function upgradeGateway(req: http.IncomingMessage, socket: net.Socket, head: Buffer, proxied: (port: number) => boolean, use?: GatewayUse): boolean {
   const at = parseMount(req.url ?? '/');
   if (!at) return false;
-  if (!proxied(at.port) || at.slash) socket.destroy();
-  else tunnel(at.port, req, socket, head, at.path);
+  if (!proxied(at.port) || at.slash) {
+    socket.destroy();
+    return true;
+  }
+  const done = use?.opened(at.port); // an open socket keeps its preview in use
+  if (done) socket.once('close', done);
+  tunnel(at.port, req, socket, head, at.path);
   return true;
 }
