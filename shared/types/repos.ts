@@ -218,6 +218,7 @@ export interface QaView {
   stuckAt?: number | null; // when it became needs-human: "asked 2 h ago" (#209, shared/approvals.ts stuckSince)
   stuckWhy?: string | null; // why it last became needs-human, for the Approvals' decision card (#209)
   ceoNote?: string | null; // the CEO's diagnosis when it handed a needs-human PR to the manager (escalate, #209)
+  fixReason?: 'qa' | 'checks' | 'conflict' | null; // why it's back with a developer (failed or fixing only): the cards' wait line (#275)
 }
 
 /** A screenshot from QA's latest round on a PR, served at /api/repos/:repo/pulls/:n/qa-shots/:index. */

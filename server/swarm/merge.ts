@@ -22,6 +22,8 @@ import { CHECKS_ALERT_MS, failedRunIds, MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeSt
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { rebaseHandOffs } from '../../shared/practices.ts';
+import { clampStuckRecheckMin, stuckRecheck } from '../stuckRecheck.ts';
+import { recordWait } from '../metrics.ts';
 import { mergeOrder } from '../../shared/conflicts.ts';
 import { spared } from '../../shared/managerChanges.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
@@ -132,7 +134,7 @@ export abstract class SwarmMerge extends SwarmRepos {
       this.setQa(rec, { rerunSha: pr.headSha, rerunAt: Date.now(), pendingSince: null, alerted: false, mergeNote: 're-running a failed check' });
       return false;
     }
-    if (step.do === 'send-back') return this.sendBack(repo, rec, step.reason, step.instructions, step.needsHuman);
+    if (step.do === 'send-back') return this.sendBack(repo, rec, step.reason, step.instructions, step.needsHuman, step.counts);
     if (step.do === 'wait') {
       if (step.alert) {
         this.postMessage('office', `⏳ PR #${pr.number} on ${repo.fullName} passed QA, but its checks (${pr.pendingChecks.join(', ')}) have been running for over ${CHECKS_ALERT_MS / 60_000} minutes. It merges as soon as they finish.`);
@@ -147,7 +149,7 @@ export abstract class SwarmMerge extends SwarmRepos {
         await this.backend.updateBranch(repo.fullName, pr.number);
       } catch (err) {
         if (!upToDate) throw err;
-        return this.sendBack(repo, rec, 'conflict', `It conflicts with ${repo.defaultBranch}: GitHub couldn't merge ${repo.defaultBranch} into it (${oneLine(err)}).`, rec.mergeFixes >= MAX_MERGE_FIXES);
+        return this.sendBack(repo, rec, 'conflict', `It conflicts with ${repo.defaultBranch}: GitHub couldn't merge ${repo.defaultBranch} into it (${oneLine(err)}).`, false);
       }
       const details = await this.backend.prDetails(repo.fullName, pr.number);
       this.setQa(rec, { passedSha: details.headSha, ...(upToDate ? { updatedSha: details.headSha, mergeNote: `brought up to date with ${repo.defaultBranch}: waiting for CI on the result` } : {}) });
@@ -279,13 +281,16 @@ export abstract class SwarmMerge extends SwarmRepos {
     return false;
   }
 
-  /** QA passed, but the PR can't merge as it is: a developer fixes it, and QA re-tests if the code changed. */
-  protected sendBack(repo: PersistedRepo, rec: QaRecord, reason: 'checks' | 'conflict', fixInstructions: string, needsHuman: boolean) {
+  /**
+   * QA passed, but the PR can't merge as it is: a developer fixes it, and QA re-tests if the code changed. counts: it
+   * uses one of MAX_MERGE_FIXES (bringing finished work up to date with the base doesn't, #275).
+   */
+  protected sendBack(repo: PersistedRepo, rec: QaRecord, reason: 'checks' | 'conflict', fixInstructions: string, needsHuman: boolean, counts = reason === 'checks') {
     if (needsHuman) {
-      this.stuck(rec, { mergeNote: null }, `it still ${reason === 'conflict' ? `conflicts with ${repo.defaultBranch}` : 'fails its checks'} after ${MAX_MERGE_FIXES} fixes`);
+      this.stuck(rec, { mergeNote: null }, `it still fails its checks${reason === 'conflict' ? ` with ${repo.defaultBranch} merged in` : ''} after ${MAX_MERGE_FIXES} fixes`);
       return false;
     }
-    this.setQa(rec, { status: 'failed', fixReason: reason, fixInstructions, mergeFixes: rec.mergeFixes + 1, mergeNote: null, pendingSince: null });
+    this.setQa(rec, { status: 'failed', fixReason: reason, fixInstructions, mergeFixes: rec.mergeFixes + (counts ? 1 : 0), mergeNote: null, pendingSince: null });
     setTimeout(() => this.schedule(), 200);
     return false;
   }
@@ -308,14 +313,63 @@ export abstract class SwarmMerge extends SwarmRepos {
       const pr = rt.pulls.find((p) => p.number === n)!;
       const why = `${repo.defaultBranch} moved and PR #${n} conflicts with it now: bring it up to date (git fetch origin && git merge origin/${repo.defaultBranch}), resolve the conflicts so both changes keep working, and push.`;
       this.toast('info', `🔁 PR #${n} conflicts with ${repo.defaultBranch}: a developer brings it up to date${rec.status === 'queued' ? ' before QA' : ''}`);
-      if (rec.status === 'passed' || rec.mergeFixes >= MAX_MERGE_FIXES) {
-        this.sendBack(repo, rec, 'conflict', why, rec.mergeFixes >= MAX_MERGE_FIXES);
+      if (rec.status === 'passed') {
+        this.sendBack(repo, rec, 'conflict', why, false);
         continue;
       }
       // Waiting for QA: as when a tester finds the conflict (qaGate), QA's last findings stay for the test that follows.
-      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeFixes: rec.mergeFixes + 1, mergeNote: null });
+      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeNote: null });
       setTimeout(() => this.schedule(), 200);
     }
+  }
+
+  // ---------- needs-human re-checks (#275) ----------
+
+  /**
+   * After a sync: a PR in needs-human longer than Settings' re-check time (minAge) goes back into the flow if only a
+   * conflict or a CI outage holds it, else the CEO triages it again (at most every RETRIAGE_MS). Returns the PRs released.
+   */
+  protected recheckStuck(repo: PersistedRepo, minAge = clampStuckRecheckMin(this.state.settings.stuckRecheckMin) * 60_000, retriage = true): number[] {
+    const rt = this.repoRt.get(repo.id);
+    if (!rt?.lastSync) return [];
+    const now = Date.now();
+    const released: number[] = [];
+    for (const rec of this.state.qa.filter((q) => q.repoId === repo.id && q.status === 'needs-human')) {
+      const step = stuckRecheck(rec, rt.pulls.find((p) => p.number === rec.prNumber), now, minAge);
+      if (step === 'conflict') {
+        const why = `It conflicts with ${repo.defaultBranch}: bring it up to date (git fetch origin && git merge origin/${repo.defaultBranch}), resolve the conflicts so both changes keep working, and push.`;
+        this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', fixInstructions: why, sessionFailures: 0, stuckWhy: null, mergeNote: null, pendingSince: null });
+        released.push(rec.prNumber);
+      } else if (step === 'merge-gate') {
+        this.setQa(rec, { status: 'passed', rerunSha: null, rerunAt: null, stuckWhy: null, mergeNote: null, pendingSince: null, mergeRetryAt: null, alerted: false });
+        released.push(rec.prNumber);
+      } else if (step === 'retriage' && retriage && !this.triageJob(rec)) {
+        // Escalated before: the manager hears again only if the CEO escalates it again.
+        Object.assign(rec, { recheckAt: now, escalated: false });
+        this.enqueueCeo({ kind: 'triage', repoId: rec.repoId, prNumber: rec.prNumber, at: now });
+        this.setQa(rec, {}); // the card shows the CEO looking
+      }
+    }
+    if (released.length) {
+      this.toast('info', `↩️ ${released.map((n) => `#${n}`).join(', ')} on ${repo.fullName} only waited on a conflict or CI: back into the flow`);
+      setTimeout(() => this.schedule(), 200);
+    }
+    return released;
+  }
+
+  /** A PR leaving needs-human: how long it waited goes into mission control's trend (#275). */
+  protected override setQa(rec: QaRecord, patch: Partial<QaRecord>) {
+    const from = rec.status === 'needs-human' ? rec.stuckAt : null;
+    super.setQa(rec, patch);
+    if (from && rec.status !== 'needs-human' && this.state.qa.includes(rec)) recordWait(this.state.ops, rec.repoId, Date.now() - from, Date.now());
+  }
+
+  /** One-off (#275): every needs-human PR only a conflict or a CI outage holds goes back into the flow, whatever its age. */
+  protected releaseStuck() {
+    const back = this.state.repos.flatMap((r) => this.recheckStuck(r, 0, false).map((n) => `#${n} on ${r.fullName}`));
+    this.state.stuckReleased = true;
+    this.save();
+    if (back.length) this.postMessage('office', `↩️ ${back.join(', ')} only waited on a conflict or CI, not on you: they're back with a developer or the merge gate, no need to look at them.`);
   }
 
   /** What leases read (#24): the files open swarm PRs change and the floor's hot files, when anything on the floor uses them. */

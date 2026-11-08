@@ -22,6 +22,28 @@ export function fixGoesTo(author: FixAuthor | null, authorFree: boolean, prNumbe
   return live && (author.prNumber === prNumber || (!!headRef && author.branch === headRef)) ? 'wait' : 'anyone';
 }
 
+// ---------- what goes first (#275) ----------
+
+/** The scheduler's phases: explicit task picks (#265), work in flight (pipelineQueue), consults, then new issues. */
+export const WORK_PHASES = ['queued', 'pipeline', 'consult', 'issue'] as const;
+
+/** A QA-passed PR back with a developer: finished work that only needs bringing up to date or green checks. */
+const finishedWork = (q: { status: string; passedSha: string | null }) => q.status === 'failed' && !!q.passedSha;
+
+/**
+ * Work in flight in the order it's handed out: finished work first (finishedWork), then QA runs, then the other fixes,
+ * each oldest first. Records of other statuses are left out.
+ */
+export function pipelineQueue<T extends { status: string; passedSha: string | null; updatedAt: number }>(recs: T[]): { rec: T; task: 'qa' | 'fix' }[] {
+  const oldest = (xs: T[]) => [...xs].sort((x, y) => x.updatedAt - y.updatedAt);
+  const fixes = oldest(recs.filter((q) => q.status === 'failed'));
+  return [
+    ...fixes.filter(finishedWork).map((rec) => ({ rec, task: 'fix' as const })),
+    ...oldest(recs.filter((q) => q.status === 'queued')).map((rec) => ({ rec, task: 'qa' as const })),
+    ...fixes.filter((q) => !finishedWork(q)).map((rec) => ({ rec, task: 'fix' as const })),
+  ];
+}
+
 /** How long a PR waits for an agent other than its author to come free before the author tests it themselves. */
 export const SELF_QA_WAIT_MS = 15 * 60_000;
 
