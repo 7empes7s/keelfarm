@@ -360,7 +360,6 @@ export class Swarm extends SwarmServerLoad {
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
-    this.startServerLoad();
     void this.backend
       .detectClis()
       .then((clis) => {

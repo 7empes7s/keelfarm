@@ -23,9 +23,11 @@ export abstract class SwarmServerLoad extends SwarmVoices {
     return { ...super.snapshot(), serverLoad: this.serverLoad.view() };
   }
 
-  protected startServerLoad() {
+  /** Started with the usage readings, once from init. */
+  protected override async startUsage() {
     void this.serverLoad.tick();
     setInterval(() => void this.serverLoad.tick(), SAMPLE_MS).unref();
+    await super.startUsage();
   }
 
   protected loadContext(): LoadContext {
