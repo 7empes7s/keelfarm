@@ -12,6 +12,8 @@ export const EMPTY_NUMBERS: OpsNumbers = {
   toMerge: 0,
   needsYou: 0,
   triage: 0,
+  longestWaitMs: null,
+  waitTrend: Array.from({ length: 7 }, () => null),
   mergedToday: 0,
   mergedHour: 0,
   spark: new Array<number>(24).fill(0),
@@ -47,6 +49,24 @@ export function fmtDuration(ms: number | null): string {
 
 /** 0.917 → "92%"; "—" without data. */
 export const fmtPct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`);
+
+/** The longest a PR should wait in needs-you (#275). */
+export const WAIT_TARGET_MS = 30 * 60_000;
+
+/**
+ * Mission control's needs-you wait tile (#275): the longest wait now, its tone against the target (good within it, bad
+ * past four times it), and the 7-day trend as bar heights 0-1 (null: nobody waited that day) with the target's height.
+ */
+export function waitTile(n: Pick<OpsNumbers, 'longestWaitMs' | 'waitTrend'>): { value: string; tone: 'good' | 'warn' | 'bad'; bars: (number | null)[]; target: number } {
+  const ms = n.longestWaitMs;
+  const top = Math.max(WAIT_TARGET_MS, ...n.waitTrend.map((x) => x ?? 0));
+  return {
+    value: ms === null ? 'Nothing waiting' : fmtDuration(ms),
+    tone: ms === null || ms <= WAIT_TARGET_MS ? 'good' : ms <= 4 * WAIT_TARGET_MS ? 'warn' : 'bad',
+    bars: n.waitTrend.map((x) => (x === null ? null : x / top)),
+    target: WAIT_TARGET_MS / top,
+  };
+}
 
 /** Dollars: "$4.20", "$0.35"; whole dollars from $100. */
 export const fmtUsd = (n: number) => (n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`);
