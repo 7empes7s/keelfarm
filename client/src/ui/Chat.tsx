@@ -364,6 +364,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
         into={tools}
         full={fullButton}
       />
+      {sheet === 'charts' && <ChartPrompts ceoName={ceo.name} suggested={offer?.suggestions ?? []} onSend={(q) => send(q, null)} onClose={() => setSheet(null)} />}
       <ThreadBar thread={thread} seg={seg} onSeg={setSeg} files={library.length} onFloor={openFloor} />
       {seg === 'files' && <ChatLibrary messages={messages} thread={thread} onArtifact={(i) => setArtifact({ messageId: i.messageId!, artifactId: i.artifact!.id, from: i.conversationId, ...(i.conversationId !== chat.current && { doc: i.artifact }) })} onFile={(i) => setViewing({ id: i.file!.id, messageId: i.messageId, from: i.conversationId })} />}
       <div className="chat-log-wrap" ref={setLogWrap}>
@@ -425,7 +426,6 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
         {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
         {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => setSheet('memory')} />}
         {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
-        {sheet === 'charts' && <ChartPrompts ceoName={ceo.name} suggested={offer?.suggestions ?? []} onSend={(q) => send(q, null)} onClose={() => setSheet(null)} />}
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={artifact.doc ? undefined : replyAbout} onOpenInThread={seg === 'files' ? inThread(artifact.from, artifact.messageId) : undefined} onClose={() => setArtifact(null)} />
         )}

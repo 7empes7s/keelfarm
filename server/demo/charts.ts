@@ -7,7 +7,7 @@ const block = (kind: 'chart' | 'dashboard', json: object) => ['```' + kind, JSON
 
 /** The answer to a chart prompt, or null for anything else. */
 export function demoChartAnswer(text: string): string | null {
-  if (/\bwaste\b/i.test(text)) return demoMoneyAnswer();
+  if (/\b(money|costs?|waste)\b/i.test(text)) return demoMoneyAnswer();
   if (/\bbacklog\b/i.test(text)) return `Here's the backlog, stage by stage, across the floors.\n\n${block('chart', { type: 'stacked-bar', title: 'Backlog by stage', source: 'backlog:office' })}`;
   if (/\b(merges?|qa rounds?)\b/i.test(text))
     return `Merges and QA, live.\n\n${block('dashboard', { title: 'Merges and QA', tiles: [{ label: 'Merged today', source: 'throughput:office:mergedToday' }, { label: 'First-round QA pass', source: 'throughput:office:qaFirstPass' }, { label: 'QA rounds', source: 'throughput:office:qaRounds' }], charts: [{ type: 'bar', title: 'Merged today by floor', source: 'throughput:byFloor' }] })}`;
@@ -17,4 +17,5 @@ export function demoChartAnswer(text: string): string | null {
   return null;
 }
 
-registerCeoReply('charts', ({ text }) => demoChartAnswer(text));
+// early: the seeded chat's attachment would otherwise turn a chart prompt into the demo's PDF report
+registerCeoReply('charts', ({ text }) => demoChartAnswer(text), { early: true });
