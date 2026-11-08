@@ -17,6 +17,7 @@ import { browserVoices, type BrowserVoice } from './voicePicker';
 import { playClip, speakLine, stopVoice } from './voicePlayback';
 import { hintMuted, useVoiceList, VoicePicker, type Playing } from './VoiceChooser';
 import { clampSpeed, modelPrice, SPEED_MAX, SPEED_MIN, SPEED_STEP, speedLabel, VOICE_MODELS } from '../../../shared/voices';
+import { SecretInput } from './SecretInput';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/voice.md';
 
@@ -97,6 +98,7 @@ function ElevenLabsKey() {
     );
   return (
     <form
+      autoComplete="off"
       onSubmit={(e) => {
         e.preventDefault();
         if (key.trim()) void save(key.trim());
@@ -104,12 +106,10 @@ function ElevenLabsKey() {
     >
       <label className="field">
         <span>ElevenLabs API key</span>
-        <input
-          type="password"
+        <SecretInput
+          name="elevenlabs-key"
           value={key}
           onChange={(e) => setKey(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
           placeholder={keySet ? 'Paste the new key' : 'Paste your key'}
           aria-invalid={!!error}
           aria-describedby={error ? errorId : undefined}

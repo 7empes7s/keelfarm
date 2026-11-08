@@ -4,6 +4,7 @@
 import { withVisualsText } from '../shared/chatVisuals.ts';
 import { fileLinks } from '../shared/files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
+import { secretMismatch } from '../shared/secretFormats.ts';
 import { HttpError } from './httpError.ts';
 import { noteText, type Note } from './notify.ts';
 
@@ -26,6 +27,8 @@ export interface TelegramSecrets {
 export function parseToken(raw: unknown): string {
   const s = typeof raw === 'string' ? raw.trim() : '';
   if (!s) throw new HttpError(400, 'Paste the token BotFather gave you.');
+  const wrong = secretMismatch('telegram', s);
+  if (wrong) throw new HttpError(400, wrong);
   if (!/^\d{4,15}:[\w-]{30,60}$/.test(s)) throw new HttpError(400, "That doesn't look like a bot token: BotFather's look like 123456789:AAE…, a number, a colon and about 35 letters.");
   return s;
 }
