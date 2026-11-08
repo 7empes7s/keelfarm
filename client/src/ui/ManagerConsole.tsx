@@ -7,6 +7,8 @@ import { keyStats } from '../../../shared/careers';
 import { api } from '../api';
 import { PreviewPill, PreviewSettings } from './AppViewer';
 import { agentsOnRepo, pendingRequests, useStore } from '../store';
+import { TeamCapacity } from './TeamCapacity';
+import { HostBadge } from './HostBadge';
 import { CEO_ID, PLAYBOOK_MAX, type OfficeUpdateView, type RepoView } from '../../../shared/types';
 import { ModelMissing } from './ModelPicker';
 import { AddAgentForm } from './AddAgentForm';
@@ -504,6 +506,7 @@ export function TeamTab({ focusRepo }: { focusRepo?: string }) {
   if (repos.length === 0) return <EmptyState kind="projects" />;
   return (
     <div>
+      <TeamCapacity />
       {[...repos].sort((a, b) => a.floor - b.floor).map((repo) => {
         const team = agentsOnRepo(agents, repo.id).filter((a) => a.role !== 'ceo');
         return (
@@ -527,11 +530,7 @@ export function TeamTab({ focusRepo }: { focusRepo?: string }) {
                       <td className="ds-cell-head">
                         <AgentRing agent={a} size="sm" />
                         <NameInput agent={a} />
-                        {a.host === 'box' && (
-                          <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
-                            <Icon name="cloud" />
-                          </span>
-                        )}
+                        <HostBadge agent={a} short />
                         <StatusPill status={badgeStatus(a)} phrase={agentPhrase(a, { autoAssign: repo.autoAssign })} />
                       </td>
                       <td className="small ds-cell-full roster-doing">

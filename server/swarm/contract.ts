@@ -123,6 +123,9 @@ export abstract class SwarmContract {
   protected abstract labSessions(...a: Parameters<Swarm['labSessions']>): ReturnType<Swarm['labSessions']>;
   protected abstract labView(...a: Parameters<Swarm['labView']>): ReturnType<Swarm['labView']>;
 
+  // upkeep.ts
+  protected abstract hybridHost(...a: Parameters<Swarm['hybridHost']>): ReturnType<Swarm['hybridHost']>;
+
   // swarm.ts
   protected abstract finishRestart(...a: Parameters<Swarm['finishRestart']>): ReturnType<Swarm['finishRestart']>;
   protected abstract message(...a: Parameters<Swarm['message']>): ReturnType<Swarm['message']>;

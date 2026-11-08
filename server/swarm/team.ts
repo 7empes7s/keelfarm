@@ -129,7 +129,7 @@ export abstract class SwarmTeam extends SwarmUpkeep {
     };
   }
 
-  protected newHire(repo: PersistedRepo, reason: string, setup: Pick<HireRequestView, 'cli' | 'model' | 'effort'>): HireRequestView {
+  protected newHire(repo: PersistedRepo, reason: string, setup: Pick<HireRequestView, 'cli' | 'model' | 'effort' | 'host'>): HireRequestView {
     const name = this.freeName();
     const req: HireRequestView = {
       id: crypto.randomUUID(),
@@ -183,12 +183,15 @@ export abstract class SwarmTeam extends SwarmUpkeep {
    * let-gos are envelopes on desks until the manager decides; on auto, they go through at once, bar busy agents, who
    * leave when their task is over (leaveIfDue).
    */
-  protected scaleTeam(x: { floor: number; size: number; reason: string; cli?: string; model?: string; effort?: string }) {
+  protected scaleTeam(x: { floor: number; size: number; reason: string; cli?: string; model?: string; effort?: string; where?: string }) {
     const repo = this.floorRepo(x.floor);
     const reason = String(x.reason ?? '').trim().slice(0, 600);
     if (!reason) throw new Error('Say why: the manager reads the reason.');
     const cli: AgentCli | '' = isCli(x.cli) ? x.cli : '';
     if (cli && !this.cliReady(cli)) throw new Error(`${cliLabel(cli)} isn't installed here. Installed: ${this.clis.filter((c) => c.installed).map((c) => c.id).join(', ') || 'none'}.`);
+    const host = x.where === 'cloud' ? 'box' : x.where === 'local' ? 'local' : '';
+    if (x.where !== undefined && !['local', 'cloud', 'auto'].includes(x.where)) throw new Error('where is "local", "cloud" or "auto".');
+    if (host === 'box' && !this.cloud.boxApi()) throw new Error('Cloud agents need the Upstash Box API key, which the manager saves in Settings → Cloud agents. Leave where out, or use "local".');
     const bad = modelProblem(x.model, this.state.settings.runtime === 'terminal' ? cli || this.state.settings.defaultCli : 'claude', this.models);
     if (bad) throw new Error(bad);
     const max = this.state.settings.maxAgents;
@@ -201,7 +204,7 @@ export abstract class SwarmTeam extends SwarmUpkeep {
       const req = this.state.requests.find((r) => r.id === id);
       if (req) this.decide(req, { status: 'rejected', note: `${this.ceo().name} changed the plan.`, decidedBy: 'auto' });
     }
-    const setup = { cli, model: String(x.model ?? '').trim(), effort: EFFORTS.includes(x.effort as EffortLevel) ? (x.effort as EffortLevel) : ('' as const) };
+    const setup = { cli, model: String(x.model ?? '').trim(), effort: EFFORTS.includes(x.effort as EffortLevel) ? (x.effort as EffortLevel) : ('' as const), host: host as HireRequestView['host'] };
     const made = [...Array.from({ length: plan.hire }, () => this.newHire(repo, reason, setup)), ...plan.letGo.map((id) => this.newLetGo(this.agent(id), reason))];
     const capped = Number(x.size) > max ? ` (you asked for ${x.size}; its most is ${max})` : '';
     const names = (reqs: HireRequestView[]) => nameList(reqs.map((r) => r.name));
