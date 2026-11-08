@@ -1,6 +1,11 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CEO_ID, type ManagerChange } from '../shared/types.ts';
 import { createDemoBackend } from './demo.ts';
+import { ceoSession } from './demo/ceo.ts';
+import type { SessionOptions } from './agentRunner.ts';
 import { Swarm } from './swarm.ts';
 
 // Assign to… (#265): a free agent starts the issue now; a busy one gets it as their next task, and keeps working.
@@ -92,5 +97,23 @@ describe('Assign to… (#265)', () => {
     expect(await tools.call('assign_issue', { floor: repo.floor, number: 99999 })).toBe('Refused: Issue #99999 is not open on demo-co/pixel-todo.');
     expect(await tools.call('assign_issue', { floor: 42, number: second })).toMatch(/^Refused: There is no floor 42\./);
     expect(await tools.call('assign_issue', { floor: repo.floor, number: -1 })).toMatch(/^Refused|error|Invalid/i);
+  });
+
+  it("the demo CEO's chat puts an agent on an issue through assign_issue, even with the seeded chat's attachment", { timeout: 30_000 }, async () => {
+    const { i, worker, first, second } = await office();
+    busy(worker, first);
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-ceo-assign-')); // where a wrong turn's PDF would land
+    const tools = i.officeTools() as SessionOptions['office'];
+    const prompt = `The manager says:\nput the freed agent on #${second}\n\nAttached:\n- /store/abc (brief.pdf, application/pdf, 2 KB)`;
+    const reply = await new Promise<string>((resolve, reject) =>
+      ceoSession({ cwd, prompt, systemAppend: '', model: 'demo', effort: 'low', browserTesting: false, additionalDirectories: [], role: 'ceo', office: tools }, {
+        log: () => undefined,
+        tool: () => undefined,
+        finished: (r: { ok: boolean; text: string; errors: string[] }) => (r.ok ? resolve(r.text) : reject(new Error(r.errors.join(' ')))),
+      } as unknown as Parameters<typeof ceoSession>[1]),
+    );
+    expect(reply).toBe(`Done: ${worker.name} takes #${second} after issue #${first}.`); // not the demo's PDF
+    expect(worker.nextIssue).toBe(second);
+    fs.rmSync(cwd, { recursive: true, force: true });
   });
 });

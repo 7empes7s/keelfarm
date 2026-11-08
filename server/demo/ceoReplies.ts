@@ -39,15 +39,16 @@ registerCeoReply('close_issue', async ({ text, s, use }) => {
   return out.startsWith('Refused') ? `I couldn't close #${close[1]}: ${refused(out)}` : `Done: ${out} I left "${short(reason, 80)}" on it as a comment.`;
 });
 
-// "put the freed agent on #3" / "assign #3 to Ada": through the real tool (#265).
+// "put the freed agent on #3" / "assign #3 to Ada": through the real tool (#265), before the demo's files.
 registerCeoReply('assign_issue', async ({ text, s, use }) => {
   const put = text.match(/\b(?:put|assign)\b(?:.*?\bon #(\d+)|\s+#(\d+)(?:\s+to\s+(\w+))?)/i);
   const putNumber = put && Number(put[1] ?? put[2]);
-  const putFloor = putNumber && (s.floors.find((f) => f.backlog.some((i) => i.number === putNumber)) ?? s.floors[0]);
+  const named = put?.[3] && s.floors.find((f) => f.agents?.some((a) => a.name.toLowerCase() === put[3].toLowerCase())); // "to Bjarne": Bjarne's floor
+  const putFloor = putNumber && (named || s.floors.find((f) => f.backlog.some((i) => i.number === putNumber)) || s.floors[0]);
   if (!put || !putNumber || !putFloor) return null;
   const out = await use('assign_issue', { floor: putFloor.floor, number: putNumber, ...(put[3] && { agent: put[3] }) });
   return out.startsWith('Refused') ? `I couldn't assign #${putNumber}: ${refused(out)}` : `Done: ${out}`;
-});
+}, { early: true });
 
 // "Tighten floor 2's charter": a change for the manager to approve, through the real tool.
 registerCeoReply('propose_charter', async ({ text, s, use }) => {
