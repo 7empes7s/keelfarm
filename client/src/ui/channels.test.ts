@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrPreviewView, PullInfo } from '../../../shared/types';
-import { atPath, busyPrs, channelLabel, channelLed, channelPulls, liveChannels, previewingPrs, stopsLabel, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
+import { atPath, busyPrs, channelLabel, channelLed, channelPulls, liveChannels, pinLabel, previewingPrs, standLabel, stopsLabel, watchSays, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
 
 const pull = (number: number, state: PullInfo['state'] = 'OPEN', title = `Change ${number}`) => ({ number, state, title }) as PullInfo;
 
@@ -29,7 +29,7 @@ describe('PR theatre channels', () => {
   it('shows a PR preview like the main one, stopped until it exists', () => {
     expect(prAsPreview(undefined, 12)).toMatchObject({ status: 'stopped', url: null, ref: 'PR #12', pr: 12, logTail: [] });
     const p = { repoId: 'o/r', pr: 12, status: 'running', port: 6401, url: 'http://localhost:6401/', commit: 'abc1234', startedAt: 5, viewedAt: 6, watched: true, error: null, logTail: ['ok'] } as PrPreviewView;
-    expect(prAsPreview(p, 12)).toEqual({ status: 'running', port: 6401, url: 'http://localhost:6401/', ref: 'PR #12', pr: 12, commit: 'abc1234', startedAt: 5, error: null, logTail: ['ok'], stopsAt: null, heldBy: null });
+    expect(prAsPreview(p, 12)).toEqual({ status: 'running', port: 6401, url: 'http://localhost:6401/', ref: 'PR #12', pr: 12, commit: 'abc1234', startedAt: 5, error: null, logTail: ['ok'], stopsAt: null, heldBy: null, usedIn: null, pinned: null, lifeEndsAt: null });
   });
 
   it('lights a chip by the preview status', () => {
@@ -150,7 +150,25 @@ describe('live channels (#204)', () => {
 
   it('says when an unwatched preview stops', () => {
     expect(stopsLabel(now + 12 * 60_000 - 5000, now)).toBe('stops in 12 min');
-    expect(stopsLabel(now - 1, now)).toBe('stops in 1 min');
+    expect(stopsLabel(now + 42_000, now)).toBe('stops in 0:42');
+    expect(stopsLabel(now - 1, now)).toBe('stops in 0:00');
     expect(stopsLabel(null, now)).toBe('');
+  });
+
+  it("says nothing is on screen while the viewer's tab is hidden (#252)", () => {
+    expect(watchSays(true, 'o/r', 4)).toEqual({ repoId: 'o/r', pr: 4 });
+    expect(watchSays(false, 'o/r', 4)).toEqual({ repoId: null, pr: null });
+  });
+
+  it('says how a running preview stands: kept, in use, or when it stops (#252)', () => {
+    const p = { status: 'running', heldBy: null, pinned: null, usedIn: null, stopsAt: now + 30_000 } as const;
+    expect(standLabel(p, 1, now)).toBe('Stops in 0:30');
+    expect(standLabel({ ...p, usedIn: 'tab' }, 1, now)).toBe('In use (own tab)');
+    expect(standLabel({ ...p, usedIn: 'app' }, 1, now)).toBe('Stops 1:00 after you leave');
+    expect(standLabel({ ...p, usedIn: 'app' }, 0, now)).toBe('Never stops by itself');
+    expect(standLabel({ ...p, heldBy: 'Alan' }, 1, now)).toBe("Kept by @Alan's QA");
+    expect(standLabel({ ...p, pinned: 'forever' }, 1, now)).toBe('Kept until you stop it');
+    expect(pinLabel(new Date(2026, 10, 7, 15, 0).getTime())).toBe('Kept until 15:00');
+    expect(standLabel({ ...p, status: 'stopped' }, 1, now)).toBe('');
   });
 });

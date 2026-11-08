@@ -2,6 +2,7 @@
 import type { Backend } from '../backend.ts';
 import { issueOpen, nameList, pullNow } from '../closeCleanup.ts';
 import { HttpError } from '../httpError.ts';
+import { PR_PREVIEW_IDLE_MIN } from '../config.ts';
 import { restartMessage, workState, type WorkState } from '../reconcile.ts';
 import {
   diagnose,
@@ -19,7 +20,7 @@ import {
 } from '../watchdog.ts';
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { pruneQaShots } from '../qaShots.ts';
-import { previewSettings } from '../prTheatre.ts';
+import { previewSettings, upgradePreviewIdle } from '../prTheatre.ts';
 import { desksToTrim, formatBytes, freedMessage, idleSince } from '../deskTrim.ts';
 import { machineName } from '../machines.ts';
 import type { DeskTrim } from '../workspace.ts';
@@ -40,7 +41,7 @@ import { followupEvents } from '../../shared/followups.ts';
 import { achievementDef, type ProgressView } from '../../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
 import type { CostRecord, CostSession } from '../../shared/costs.ts';
-import type { DoctorFinding, DoctorFix, PullInfo } from '../../shared/types.ts';
+import type { DoctorFinding, DoctorFix, PullInfo, SwarmSettings } from '../../shared/types.ts';
 import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { slugify } from './flavour.ts';
@@ -113,9 +114,16 @@ export abstract class SwarmUpkeep extends SwarmCeo {
       this.trimming = false;
     }
   }
-  /** Settings → the previews' chip window and main idle stop, clamped (#204). */
-  protected previewSettings(patch: Partial<Record<'previewRecentHours' | 'mainPreviewIdleMin', unknown>>) {
-    Object.assign(this.state.settings, previewSettings(this.state.settings, patch));
+  /** A state file still on the old 30-minute main preview idle stop moves to the new 1-minute default (#252). */
+  protected previewIdleUpgrade(saved: Partial<SwarmSettings> | undefined): Partial<SwarmSettings> {
+    const min = upgradePreviewIdle(saved);
+    return min === null ? {} : { mainPreviewIdleMin: min };
+  }
+
+  /** Settings → the previews' chip window, idle stops and max lifetime, clamped (#204, #252). */
+  protected previewSettings(patch: Partial<Record<'previewRecentHours' | 'mainPreviewIdleMin' | 'prPreviewIdleMin' | 'previewMaxLifeHours', unknown>>) {
+    Object.assign(this.state.settings, previewSettings(this.state.settings, patch, PR_PREVIEW_IDLE_MIN));
+    if (patch.mainPreviewIdleMin !== undefined || patch.prPreviewIdleMin !== undefined || patch.previewMaxLifeHours !== undefined) this.previews.refresh(); // the countdowns follow the new stops
   }
 
   /**

@@ -74,7 +74,8 @@ if (scrub) {
 // Previews through the office's own address, for browsers on other devices (server/previewGateway.ts). First: their
 // request bodies pass on untouched.
 const proxied = (port: number) => swarm.previewProxied(port);
-app.use((req, res, next) => void (handleGateway(req, res, proxied) || next()));
+const previewUse = swarm.previewUse;
+app.use((req, res, next) => void (handleGateway(req, res, proxied, previewUse) || next()));
 // Agent CLIs calling back: hooks (a tool result can be a large screenshot, hence the limit) and the CEO's office tools.
 // The token in the path is the session's; unknown tokens get an empty answer.
 app.post('/api/hooks/:token', express.json({ limit: '64mb' }), (req, res) => void res.json(handleHook(String(req.params.token), req.body)));
@@ -197,6 +198,16 @@ app.post(
     const repo = req.body?.repoId == null ? null : str(req.body.repoId);
     const pr = req.body?.pr == null ? null : num(req.body.pr);
     return swarm.watchPreview(viewer, repo || null, repo ? pr : null);
+  }),
+);
+// Keep a preview running (📌 an hour, until stopped, or off), or start its max lifetime again ("Keep it running", #252)
+app.post(
+  '/api/repos/:repo/preview/keep',
+  route((req) => {
+    const pr = req.body?.pr == null ? null : num(req.body.pr);
+    const pin = req.body?.pin ?? undefined;
+    if (pin !== undefined && pin !== 'hour' && pin !== 'forever' && pin !== 'off') throw new HttpError(400, "pin must be 'hour', 'forever' or 'off'");
+    return swarm.keepPreview(repoId(req), pr, pin);
   }),
 );
 app.post('/api/repos/:repo/preview/sync', route((req) => swarm.previewSyncUrl(repoId(req), req.body?.pr == null ? null : num(req.body.pr))));
@@ -495,7 +506,7 @@ terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
   const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : null;
-  if (!target && upgradeGateway(req, socket as Socket, head, proxied)) return;
+  if (!target && upgradeGateway(req, socket as Socket, head, proxied, previewUse)) return;
   if (!target) return void socket.destroy();
   if (PUBLIC_DEMO && !wsLimit.take(ipOf(req))) return void socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));

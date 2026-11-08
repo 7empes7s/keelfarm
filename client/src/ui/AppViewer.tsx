@@ -9,7 +9,7 @@ import { atPath, comparePath, newPathSync, onOfficeComputer, prAsPreview, qaShot
 import { sendToCeo } from './chatSend';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
-import { ChannelBar, HeldNote, PreviewStats } from './PreviewChannels';
+import { ChannelBar, HeldNote, keepItems, PreviewStats, UseNote } from './PreviewChannels';
 import { closeOverlay, Panel } from './Panel';
 import { PrChangesCard, usePrChanges } from './PrChanges';
 import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
@@ -513,6 +513,13 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
     toolbar.current?.querySelector<HTMLElement>('button')?.focus();
   }, []);
 
+  // Re-opened on main after the office stopped it for no use (#252): it starts again ("Starting…", never a blank page).
+  const stoppedIdle = !!repo?.preview.stoppedIdle && channel == null;
+  useEffect(() => {
+    if (stoppedIdle && !useStore.getState().replaying) void api.startPreview(repoId).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
+  }, []);
+
   // Away from the office's computer the apps come through the office: its preview worker goes in before they load.
   useEffect(() => {
     if (!onOfficeComputer(location)) navigator.serviceWorker?.register('/preview/sw.js', { scope: '/preview/' }).catch(() => undefined);
@@ -585,6 +592,8 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
         { label: 'Open in browser', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
         { label: 'Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
         active && { label: 'Restart', disabled: held, onSelect: () => void (channel == null ? startMain() : startPr(true)) },
+        ...keepItems(repo, current),
+        active && { label: 'Stop now', disabled: held, onSelect: () => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel))) },
         view.forced ? { label: 'Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: 'Full screen', onSelect: view.enterFull },
         ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' (current)' : ''}`, onSelect: () => pickWidth(w) }))),
         prView && { label: comparing ? `Stop comparing` : `Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
@@ -633,6 +642,7 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
       <div ref={toolbar}>
         <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />
         {active && <HeldNote preview={current} label={label} repo={repo} />}
+        <UseNote preview={current} repo={repo} />
         {mergedHere && (
           <p className="app-merged" role="note">
             <Icon name="git-merge" /> PR #{mergedHere.pr} is merged into {repo.defaultBranch}
@@ -714,7 +724,8 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
         <p className="muted small app-foot">
           Blank, or “refused to connect”? The app may block being framed: use <b>Open in new tab</b>. Keys typed in the app stay in the app, so <kbd>Esc</kbd> only closes this panel
           when focus is outside it; the close button always does.
-          {prView && ' A PR preview stops after a while with nobody watching it, and when its PR merges or closes.'}
+          {' It stops after a while unused, here or in its own tab (Settings → Previews); More → Keep running keeps it.'}
+          {prView && ' A PR preview also stops when its PR merges or closes.'}
         </p>
       )}
     </Panel>
