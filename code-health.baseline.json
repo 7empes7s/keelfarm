@@ -474,7 +474,6 @@
     "exports:server/notifier.ts:loadWebhooks",
     "exports:server/notifier.ts:sendError",
     "exports:server/outbox.ts:patchOf",
-    "exports:server/prTheatre.ts:WATCH_EVERY_MS",
     "exports:server/presence.ts:PING_GAP_MS",
     "exports:server/presence.ts:due",
     "exports:server/previewGateway.ts:GATEWAY",
