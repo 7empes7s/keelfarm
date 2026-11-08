@@ -36,6 +36,7 @@ describe('spokenStep', () => {
       ['Waiting for PR #138 to merge on floor 3 (up to 10 min)', 'waiting for a pull request to merge'],
       ['Reading client/src/pocket/touch/joystickThumbZone.tsx', 'reading a file'],
       ['Reading package.json', 'reading a file'],
+      ['Writing Weekly report.md', 'writing a file'],
       ['Filing an issue on floor 1: “A bigger thumb zone”', 'filing an issue'],
       ['Searching the web: mobile joystick UX', 'searching the web'],
       ['Running npm run build -- --port 5644', 'running a command'],

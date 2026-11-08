@@ -119,9 +119,11 @@ chirp instead. `window.__swarmVoice` lists the messages read aloud (`id`, `provi
 ## While the CEO works
 
 When you send a message (typed or spoken) while the CEO is in the middle of a job, the office says a short ack in the
-CEO's voice within about a second: "Got it, I'll fold that in.", "Heard you, one moment." and so on, from a fixed list,
+CEO's voice within about a second when the speaker is free: "Got it, I'll fold that in.", "Heard you, one moment." and so on, from a fixed list,
 so it costs no model call, and never two within 20 s. The CEO is asked to answer you right away with a sentence or two
-and carry on, so you hear it mid-job rather than at the end.
+and carry on, so you hear it mid-job rather than at the end. If another message is being read, the ack waits briefly
+for it to finish, ahead of the next reply; a reply arriving while the ack loads or plays waits for the ack to finish.
+Acks waiting longer than twenty seconds are dropped, and barge-in clears both playing and waiting lines.
 
 **Talk while working** (Settings → Voice) adds short spoken progress from the CEO's step log: **Milestones** (an issue
 filed, waiting on QA or a merge, a PR sent back) or **Regular** (also a line about once a minute, e.g. "Still reading a

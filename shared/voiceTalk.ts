@@ -34,6 +34,7 @@ const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
  */
 export function spokenStep(label: string): string {
   if (label.startsWith('Running ')) return 'running a command';
+  if (/^(Reading|Writing|Editing) .+\.[a-z]{1,5}$/i.test(label)) return `${lowerFirst(label.split(' ')[0])} a file`;
   const s = label
     .replace(/\s*\([^)]*\)/g, '') // "(up to 10 min)"
     .replace(/:\s.*$/, '') // "Searching the web: …", "Filing an issue: “…”"

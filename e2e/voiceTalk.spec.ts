@@ -37,6 +37,15 @@ async function busyCeo(page: Page) {
 
 test('a message mid-job is acked out loud and answered before the job ends; progress follows the setting', async ({ page }) => {
   await enterOffice(page);
+  // Reproduce the race: the demo replies after 1.5 s, before this first clip becomes playable.
+  let firstClip = true;
+  await page.route('**/api/voice/lines/*', async (route) => {
+    const delay = firstClip;
+    firstClip = false;
+    const response = await route.fetch();
+    if (delay) await new Promise((resolve) => setTimeout(resolve, 2000));
+    await route.fulfill({ response });
+  });
   await busyCeo(page);
   const before = (await state(page)).messages.filter((m) => m.from === 'ceo').length;
   await textCeo(page, 'Also check the footer');
@@ -44,12 +53,20 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   const [ack] = (await lines(page)).filter((l) => l.kind === 'ack');
   expect(ACKS).toContain(ack.text);
   expect(ack.provider).toBe('elevenlabs');
+  // Inspect the synthesis fake's WAV comment via the real line endpoint, rather than trusting client probes alone.
+  const clip = await page.request.get(`/api/voice/lines/${ack.id}`);
+  expect(clip.ok()).toBe(true);
+  const wav = await clip.body();
+  const dataEnd = 44 + wav.readUInt32LE(40);
+  const metadata = dataEnd + dataEnd % 2;
+  expect(wav.toString('ascii', metadata + 8, metadata + 16)).toBe('INFOICMT');
+  expect(wav.subarray(metadata + 20, metadata + 20 + wav.readUInt32LE(metadata + 16) - 1).toString('utf8')).toBe(ack.text);
   // The demo CEO answers mid-job, while it's still working.
   await expect.poll(async () => (await state(page)).messages.filter((m) => m.from === 'ceo').length, { timeout: 15_000 }).toBeGreaterThan(before);
   expect((await state(page)).messages.filter((m) => m.from === 'ceo').at(-1)?.text).toMatch(/^Noted/);
   expect(await ceoWorking(page)).toBe(true);
   // Regular progress: spoken lines while the round goes on, none of them a chat message, none with numbers or paths.
-  await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'progress').length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
+  await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'progress').length, { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
   for (const l of await lines(page)) expect(l.text).toMatch(/^[^\d#/\\`*_[\]]+$/);
   expect((await state(page)).messages.some((m) => (m.from === 'ceo' || m.from === 'office') && ACKS.includes(m.text))).toBe(false);
 

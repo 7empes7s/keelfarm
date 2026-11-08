@@ -8,13 +8,16 @@ import { registerDemo } from './registry.ts';
  * voice call can be paused, skipped and talked over mid-reply), and pitched by the voice, so a replayed clip is
  * audibly the one made in the voice of its day, and shorter when faster.
  */
-function demoChime(chars: number, voiceId = '', speed = 1): Buffer {
+function demoChime(text: string, voiceId = '', speed = 1): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 40, 6) / speed;
+  const seconds = Math.min(0.4 + text.length / 40, 6) / speed;
   const n = Math.round(rate * seconds);
-  const wav = Buffer.alloc(44 + n);
+  // A standard WAV INFO comment exposes exactly what the synthesis fake received, even through the clip cache.
+  const comment = Buffer.from(`${text}\0`, 'utf8');
+  const metadata = 44 + n + n % 2;
+  const wav = Buffer.alloc(metadata + 20 + comment.length + comment.length % 2);
   wav.write('RIFF', 0);
-  wav.writeUInt32LE(36 + n, 4);
+  wav.writeUInt32LE(wav.length - 8, 4);
   wav.write('WAVEfmt ', 8);
   wav.writeUInt32LE(16, 16);
   wav.writeUInt16LE(1, 20); // PCM
@@ -25,6 +28,11 @@ function demoChime(chars: number, voiceId = '', speed = 1): Buffer {
   wav.writeUInt16LE(8, 34);
   wav.write('data', 36);
   wav.writeUInt32LE(n, 40);
+  wav.write('LIST', metadata);
+  wav.writeUInt32LE(wav.length - metadata - 8, metadata + 4);
+  wav.write('INFOICMT', metadata + 8);
+  wav.writeUInt32LE(comment.length, metadata + 16);
+  comment.copy(wav, metadata + 20);
   const pitch = 2 ** ([...voiceId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 7, 0) / 12);
   for (let i = 0; i < n; i++) {
     const t = i / rate;
@@ -46,7 +54,7 @@ const demoVoice: VoiceApi = {
   listVoices: async () => DEMO_VOICES,
   synthesize: async (_key, { text, voiceId, speed }) => {
     await new Promise((r) => setTimeout(r, 300));
-    return demoChime(text.length, voiceId, speed);
+    return demoChime(text, voiceId, speed);
   },
   transcribe: async () => {
     await new Promise((r) => setTimeout(r, 400));
