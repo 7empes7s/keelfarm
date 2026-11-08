@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseCeoMessage } from '../shared/chatParts.ts';
 import { CEO_ID, type ManagerChange } from '../shared/types.ts';
 import { parseCeoMessage } from '../shared/chatParts.ts';
 import { createDemoBackend } from './demo.ts';
