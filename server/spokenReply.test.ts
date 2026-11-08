@@ -7,7 +7,7 @@ import { Swarm } from './swarm.ts';
 import { DEFAULT_VOICE } from './voice.ts';
 
 // The CEO's spoken summary (#282): asked for in its prompt, lifted out of its final message and kept on the message.
-type Internals = { ensureCeo(interrupted: unknown[]): void; postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts?: { replyTo?: number }): PhoneMessage; postCeoReply(raw: string): void; state: { messages: PhoneMessage[] } };
+type Internals = { ensureCeo(interrupted: unknown[]): void; postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts?: { replyTo?: number }): PhoneMessage; postCeoReply(raw: string): void; ceoReply(x: { message_id: number; text: string }): string; ceo(): { startedAt: number | null }; state: { messages: PhoneMessage[] } };
 
 describe('the spoken summary', () => {
   it('the CEO prompt asks for a short ```spoken block without numbers, links or filler', () => {
@@ -30,8 +30,12 @@ describe('the spoken summary', () => {
     swarm.updateSettings({ voice: { ...DEFAULT_VOICE, provider: 'browser' } });
     const internals = swarm as unknown as Internals;
     internals.ensureCeo([]);
+    internals.ceo().startedAt = Date.now() - 1000; // a job is running
     const asked = internals.postMessage('manager', 'How is the terminal?');
-    const answer = internals.postMessage('ceo', 'Paste works now.\n```spoken\nPaste works on your phone now.\n```', undefined, { replyTo: asked.id });
+    internals.postCeoReply('Floor 1 is busy.'); // a closing text before any reply is read as usual
+    expect(internals.state.messages.at(-1)).toMatchObject({ text: 'Floor 1 is busy.', voice: 'browser' });
+    internals.ceoReply({ message_id: asked.id, text: 'Paste works now.\n```spoken\nPaste works on your phone now.\n```' });
+    const answer = internals.state.messages.at(-1)!;
     expect(answer).toMatchObject({ spoken: 'Paste works on your phone now.', voice: 'browser' });
     internals.postCeoReply('Both messages are answered on your phone.');
     const close = internals.state.messages.at(-1)!;
