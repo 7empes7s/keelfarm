@@ -421,7 +421,7 @@ export default function Pocket() {
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);
   const connected = useStore((s) => s.connected);
-  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's buttons, in the docked chat's header (#81)
+  const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's header row, in the docked chat's header (#81, #270)
   const switchKey = useKeyName('switchOffice');
   const layout = useLayout();
   const wide = layout !== 'compact';
@@ -760,12 +760,9 @@ export default function Pocket() {
         {wide && dock && (
           <aside className={`pk-dock ${layout === 'expanded' ? 'pk-dock-threads' : ''}`} aria-label={`Chat with ${ceoName}`} style={{ ['--pk-dock-w' as string]: `${dockW}px` }}>
             {layout === 'expanded' && !full && <DockGrip width={dockW} onWidth={setDockW} />}
+            {/* one row (#270): the chat draws who and its tools here, its own header row hidden */}
             <div className="pk-dock-head">
-              <b className="pk-ellipsis">
-                <Icon name="message-circle" /> {ceoName}
-              </b>
-              <span className="spacer" />
-              <div className="pk-head-tools" ref={setChatTools} />
+              <div className="pk-head-tools pk-dock-chat" ref={setChatTools} />
               <button className="pk-icon-btn pk-dock-x xbtn" onClick={() => setDock(false)} aria-label="Hide the chat" title={layout === 'medium' ? 'Hide the chat (Esc)' : 'Hide the chat'}>
                 <Icon name="x" />
                 <XLabel text="Hide the chat" keys={layout === 'medium' ? 'Esc' : undefined} />

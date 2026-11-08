@@ -84,3 +84,15 @@ html:has(.pocket:not(.pk-chat-full) .pk-dock-threads) .artifact-back {
 .pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
   display: none;
 }
+/* the chat's one header row (#270): who, then its tools; the name truncates, never the buttons */
+.pk-dock-chat {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+.pk-dock-chat > .chat-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

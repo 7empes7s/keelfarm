@@ -32,6 +32,7 @@ import { useDraft } from '../drafts';
 import type { FileRef } from '../../../shared/files';
 import { MicButton } from './MicButton';
 import { ChatActionsSheet, ChatTools } from './ChatActionsSheet';
+import { ChartPrompts } from './ChartPrompts';
 import { useCeoDraft } from './goTo';
 import { hasVersionsSheet } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
@@ -46,7 +47,7 @@ import { CloseButton, Icon } from './Icon';
 
 /**
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
- * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
+ * floor chip opens (default: the elevator there). `tools`: where its header row goes (pocket mode's docked header, #270).
  * `away`: drawn, hidden, while another tab is open (the phone's Chat tab, #145), so opening it only shows it: nothing
  * is marked read, and each opening starts afresh at the unread divider or the end.
  */
@@ -66,7 +67,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [versions, setVersions] = useState<PhoneMessage | null>(null);
   const endEdit = () => (setEditing(null), setText(''));
-  const [sheet, setSheet] = useState<'chats' | 'memory' | null>(null);
+  const [sheet, setSheet] = useState<'chats' | 'memory' | 'charts' | null>(null);
   const [menu, setMenu] = useState<Item | null>(null);
   // an artifact or file to read; `doc`, `from`: one from another thread, with where it was sent (#132)
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string; doc?: ChatArtifact; from?: string | null } | null>(null);
@@ -344,15 +345,26 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
 
   return refNav.wrap(
     <div ref={box} className={`phone-chat ${full ? 'chat-full' : ''} ${drop.dragging ? 'chat-dropping' : ''} ${seg === 'files' ? 'chat-on-files' : ''}`} {...drop.props}>
-      <div className="chat-head">
-        <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
-          <Avatar name={ceo.name} color={ceo.color} size={28} />
-        </span>
-        <div className="grow">
-          <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
-        </div>
-        <ChatTools ceoName={ceo.name} files={library.length} onChats={() => setSheet('chats')} onFiles={() => setSeg('files')} into={tools} full={fullButton} />
-      </div>
+      <ChatTools
+        ceoName={ceo.name}
+        who={
+          <>
+            <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
+              <Avatar name={ceo.name} color={ceo.color} size={28} />
+            </span>
+            <div className="grow chat-who">
+              <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
+            </div>
+          </>
+        }
+        files={library.length}
+        onChats={() => setSheet('chats')}
+        onFiles={() => setSeg('files')}
+        onCharts={() => (setSeg('chat'), setSheet('charts'))}
+        into={tools}
+        full={fullButton}
+      />
+      {sheet === 'charts' && <ChartPrompts ceoName={ceo.name} suggested={offer?.suggestions ?? []} onSend={(q) => send(q, null)} onClose={() => setSheet(null)} />}
       <ThreadBar thread={thread} seg={seg} onSeg={setSeg} files={library.length} onFloor={openFloor} />
       {seg === 'files' && <ChatLibrary messages={messages} thread={thread} onArtifact={(i) => setArtifact({ messageId: i.messageId!, artifactId: i.artifact!.id, from: i.conversationId, ...(i.conversationId !== chat.current && { doc: i.artifact }) })} onFile={(i) => setViewing({ id: i.file!.id, messageId: i.messageId, from: i.conversationId })} />}
       <div className="chat-log-wrap" ref={setLogWrap}>
