@@ -49,6 +49,13 @@
   background: var(--ds-surface-raised);
   border-bottom: var(--ds-border-strong) solid var(--ds-outline);
 }
+.pk-dock-chat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .pk-dock .phone-chat {
   width: 100%;
   min-width: 0;

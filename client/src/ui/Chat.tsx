@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -294,17 +295,21 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true }: { 
     );
   };
 
+  const head = (
+    <>
+      <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
+        <Avatar name={ceo.name} color={ceo.color} size={28} />
+      </span>
+      <div className="grow chat-who">
+        <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
+      </div>
+      <ChatTools ceoName={ceo.name} files={library.length} onChats={() => setSheet('chats')} onFiles={() => setSeg('files')} onPrompt={(t) => send(t, null)} full={fullButton} />
+    </>
+  );
   return refNav.wrap(
     <div ref={box} className={`phone-chat ${full ? 'chat-full' : ''} ${drop.dragging ? 'chat-dropping' : ''} ${seg === 'files' ? 'chat-on-files' : ''}`} {...drop.props}>
-      <div className="chat-head">
-        <span className={ceo.status === 'working' ? 'ceo-thinking' : undefined}>
-          <Avatar name={ceo.name} color={ceo.color} size={28} />
-        </span>
-        <div className="grow">
-          <b>{ceo.name}</b> <span className={`small ${ceo.status === 'working' ? 'presence-busy' : 'muted'}`}>{presence}</span>
-        </div>
-        <ChatTools ceoName={ceo.name} files={library.length} onChats={() => setSheet('chats')} onFiles={() => setSeg('files')} into={tools} full={fullButton} />
-      </div>
+      {/* docked, the name and buttons sit in the dock's own header: one row (#270) */}
+      {tools === undefined ? <div className="chat-head">{head}</div> : tools && createPortal(head, tools)}
       <ThreadBar thread={thread} seg={seg} onSeg={setSeg} files={library.length} onFloor={openFloor} />
       {seg === 'files' && <ChatLibrary messages={messages} thread={thread} onArtifact={(i) => setArtifact({ messageId: i.messageId!, artifactId: i.artifact!.id, from: i.conversationId, ...(i.conversationId !== chat.current && { doc: i.artifact }) })} onFile={(i) => setViewing({ id: i.file!.id, messageId: i.messageId, from: i.conversationId })} />}
       <div className="chat-log-wrap" ref={setLogWrap}>

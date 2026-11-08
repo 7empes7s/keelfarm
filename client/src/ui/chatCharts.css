@@ -1,0 +1,74 @@
+/* ui/ChatCharts.tsx: the 📊 sheet, a bottom sheet over the chat, a popover under the header on a wide screen */
+.chart-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.chart-sheet-note {
+  margin: 0;
+}
+.chart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.chart-row {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.chart-prompt {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ds-target);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: 0 12px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 12px;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
+}
+.chart-prompt-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-pin {
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--ds-line);
+  border-radius: 12px;
+  background: var(--ds-surface-sunken);
+  color: var(--muted);
+  cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
+}
+.chart-pin-on {
+  color: var(--ds-warn-text);
+}
+:is(.chart-prompt, .chart-pin):hover {
+  background: var(--ds-surface-hover);
+}
+@media (min-width: 720px) {
+  .pocket .chart-sheet-back {
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 58px 10px 10px; /* under the header's 📊 */
+  }
+}

@@ -1,5 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
@@ -8,15 +7,17 @@ import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 import { openTextPill } from './ChatZoom';
 import { canGoFullscreen, goFullscreen, useChatFull } from './chatFull';
-import { Menu } from './Menu';
+import { Menu, type MenuItem } from './Menu';
 import { keyLabel } from './keymap';
 import { useControls } from './controls';
 import { XLabel } from './HoverCard';
 import { startCall } from './voiceCallEngine';
+import { ChartsButton } from './ChatCharts';
+import { foldTools, foldedBadge, type ChatToolId } from './chatToolFold';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; text size; hands-free; full
-// screen and its ⋯).
+// prompts), and the chat's top-bar buttons (threads, search and memory; 📊 charts; files & artifacts; text size; call;
+// hands-free; full screen; and ⋯ for what doesn't fit, #270).
 
 interface PlusProps {
   text: string;
@@ -102,46 +103,96 @@ interface ToolsProps {
   files: number; // the thread's artifacts and files (#132)
   onChats: () => void;
   onFiles: () => void;
-  /** Where to draw them: pocket mode's header (null until it's there); undefined draws them in place. */
-  into?: HTMLElement | null;
-  /** ⛶ and ⋯ here: off where the screen draws ⛶ itself (pocket mode on a phone, in its top bar). */
+  /** A 📊 prompt picked (#270): sent to the CEO. */
+  onPrompt: (text: string) => void;
+  /** ⛶ here: off where the screen draws ⛶ itself (pocket mode on a phone, in its top bar). */
   full?: boolean;
 }
 
-/** Icon buttons with their counts as badges: threads and search, files & artifacts, text size, hands-free, full screen. */
-export function ChatTools({ ceoName, files, onChats, onFiles, into, full = true }: ToolsProps) {
-  const tools = (
-    <>
+/**
+ * The header's icon buttons (#270): search, 📊 and ⛶ always, files, call, text size and hands-free as the header's
+ * width allows (chatToolFold.ts), and the rest in ⋯, which carries a folded tool's badge.
+ */
+export function ChatTools({ ceoName, files, onChats, onFiles, onPrompt, full = true }: ToolsProps) {
+  const [el, setEl] = useState<HTMLSpanElement | null>(null);
+  const width = useHeadWidth(el);
+  const hands = useHandsFree(ceoName);
+  const screen = useChatFull();
+  const present: ChatToolId[] = ['search', 'charts', 'call', 'text'];
+  if (full) present.push('full');
+  if (files > 0) present.push('files');
+  if (hands) present.push('handsFree');
+  const { shown, folded } = foldTools(width, present);
+  const badge = foldedBadge(folded, { files });
+  const buttons: Record<ChatToolId, () => ReactNode> = {
+    search: () => (
       <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Threads and search" title="Threads: a new one, an earlier one, search them all, and what the CEO remembers">
         <Icon name="search" />
         <XLabel text="Threads" />
       </button>
-      {files > 0 && (
-        <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
-          <Icon name="paperclip" />
-          <XLabel text="Files" />
-          <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
-        </button>
-      )}
+    ),
+    charts: () => <ChartsButton ceoName={ceoName} onPrompt={onPrompt} />,
+    files: () => (
+      <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
+        <Icon name="paperclip" />
+        <XLabel text="Files" />
+        <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
+      </button>
+    ),
+    text: () => (
       <button type="button" className="chat-tool xbtn" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
         Aa
         <XLabel text="Text size" />
       </button>
+    ),
+    call: () => (
       <button type="button" className="chat-tool xbtn" aria-label={`Call ${ceoName}`} title={`A voice call with ${ceoName}: just talk, talk over to interrupt. It goes on whatever you open.`} onClick={startCall}>
         <Icon name="phone" />
         <XLabel text="Call" />
       </button>
-      <HandsFreeToggle ceoName={ceoName} />
-      {full && (
-        <>
-          <FullButton />
-          <FullMenu />
-        </>
-      )}
-    </>
+    ),
+    handsFree: () => hands && <HandsFreeToggle ceoName={ceoName} {...hands} />,
+    full: () => <FullButton />,
+  };
+  const items: (MenuItem | false | null)[] = [
+    folded.includes('files') && { label: `Files & artifacts (${files})`, hint: 'Every artifact and file in this thread', onSelect: onFiles },
+    folded.includes('text') && { label: 'Text size', hint: 'A− and A+, or pinch the chat', onSelect: openTextPill },
+    folded.includes('call') && { label: `Call ${ceoName}`, hint: 'A voice call: just talk', onSelect: startCall },
+    folded.includes('handsFree') && hands && { label: hands.on ? 'Hands-free off' : 'Hands-free', hint: hands.why || `Talk with ${ceoName} without touching anything`, onSelect: () => void setHandsFree(!hands.on, ceoName) },
+    { label: 'Conversations', hint: `Threads, search and what ${ceoName} remembers`, onSelect: onChats },
+    full && { label: screen.on ? 'Leave full screen' : 'Full screen', onSelect: () => screen.set(!screen.on) },
+    full && canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen },
+  ];
+  return (
+    <span ref={setEl} className="chat-tools">
+      {shown.map((t) => (
+        <Fragment key={t}>{buttons[t]()}</Fragment>
+      ))}
+      <span className="chat-more">
+        <Menu label={badge ? `More for the chat (${badge} files)` : 'More for the chat'} title="More for the chat" items={items} />
+        {badge > 0 && (
+          <span className="badge badge-dot chat-tool-n" aria-hidden>
+            {badge}
+          </span>
+        )}
+      </span>
+    </span>
   );
-  if (into === undefined) return tools;
-  return into ? createPortal(tools, into) : null;
+}
+
+/** The width of the header the tools sit in: the docked chat's, else the chat's own. */
+function useHeadWidth(el: HTMLElement | null): number {
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const head = el?.closest<HTMLElement>('.pk-dock-head, .chat-head') ?? el?.parentElement;
+    if (!head) return;
+    const measure = () => setWidth(head.clientWidth);
+    measure();
+    const seen = new ResizeObserver(measure);
+    seen.observe(head);
+    return () => seen.disconnect();
+  }, [el]);
+  return width;
 }
 
 // Lucide's maximize-2 and minimize-2 (ISC, lucide.dev).
@@ -163,24 +214,15 @@ export function FullButton() {
   );
 }
 
-/** The chat's ⋯: full screen, and where the browser allows it the real one. */
-function FullMenu() {
-  const { on, set } = useChatFull();
-  return (
-    <Menu
-      label="More for the chat"
-      className="chat-more"
-      items={[{ label: on ? 'Leave full screen' : 'Full screen', onSelect: () => set(!on) }, canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen }]}
-    />
-  );
-}
-
-function HandsFreeToggle({ ceoName }: { ceoName: string }) {
+/** Hands-free while listening is set up: whether it's on, and what stops it, if anything. */
+function useHandsFree(ceoName: string): { on: boolean; why: string } | null {
   const listen = useStore((s) => s.settings.listen);
   useStore((s) => `${s.voiceKeySet}:${s.settings.voice.provider}`); // handsFreeProblem() follows the key and the voice
   if (!listen || listen.provider === 'off') return null;
-  const on = listen.handsFree;
-  const why = handsFreeProblem(ceoName);
+  return { on: listen.handsFree, why: handsFreeProblem(ceoName) || '' };
+}
+
+function HandsFreeToggle({ ceoName, on, why }: { ceoName: string; on: boolean; why: string }) {
   return (
     <button
       type="button"

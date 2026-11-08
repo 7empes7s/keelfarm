@@ -454,7 +454,7 @@
 }
 
 /* the chat's header holds one line: the CEO's name and what they're doing truncate, never wrap into the buttons */
-.chat-head > .grow {
+.chat-who {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -533,13 +533,13 @@
 .chat-full .chat-log > .bubble-row:has(> .bubble-them :is(pre, table, .md-code, .viz-svg)) {
   margin-inline: calc(-1 * min(170px, max(0px, (100cqi - 780px) / 2)));
 }
-/* the chat's ⋯ only where its header has room for it; ⛶ is always there */
-.phone-chat,
-.pk-dock {
-  container: chatbox / inline-size;
+/* the header's buttons (#270): one row; ⋯ carries a folded tool's badge */
+.chat-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-@container chatbox (max-width: 519px) {
-  .chat-more {
-    display: none;
-  }
+.chat-more {
+  position: relative;
 }
