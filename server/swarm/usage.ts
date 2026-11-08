@@ -1,10 +1,11 @@
-// Usage for every account and provider (#361): the usage card's sources in the accounts view, read every minute in the
-// background (server/usageSources.ts), a notification when one crosses 90% or is limited, and the Admin keys that
-// let the office read Anthropic's and OpenAI's organisation cost reports (secrets.json, never shown again).
+// Usage for every account and provider (#361): the usage card's sources, read every minute in the background
+// (server/usageSources.ts) and sent to the tabs only when they changed (a usageSources event: the accounts event goes
+// out several times a second in a busy office), a notification when one crosses 90% or is limited, and the Admin
+// keys that let the office read Anthropic's and OpenAI's organisation cost reports (secrets.json, never shown again).
 import path from 'node:path';
 import { HttpError } from '../httpError.ts';
 import { mergeSecrets, readSecrets } from '../secrets.ts';
-import { UsageBoard, type UsageKeys } from '../usageSources.ts';
+import { sourcesSignature, UsageBoard, type UsageKeys } from '../usageSources.ts';
 import { HOME_DIR } from '../config.ts';
 import type { AccountView, UsageSource } from '../../shared/types.ts';
 import { SwarmCloudCredit } from './cloudCredit.ts';
@@ -15,6 +16,7 @@ const ADMIN_SECRET = { anthropic: 'anthropicAdminKey', openai: 'openaiAdminKey' 
 export abstract class SwarmUsage extends SwarmCloudCredit {
   private adminKeys: Pick<UsageKeys, 'anthropic' | 'openai'> = { anthropic: '', openai: '' };
   private usageTimer: NodeJS.Timeout | null = null;
+  private sentSources = ''; // what the tabs were last sent, without read times
   private readonly secretsFile = path.join(HOME_DIR, this.backend.demo ? 'demo-secrets.json' : 'secrets.json');
 
   protected readonly usageBoard = new UsageBoard({
@@ -28,12 +30,23 @@ export abstract class SwarmUsage extends SwarmCloudCredit {
     },
     spend: () => this.spend.ledger.all().filter((r) => r.type === 'session'),
     alertsFile: path.join(HOME_DIR, this.backend.demo ? 'demo-usage-alerts.json' : 'usage-alerts.json'),
-    changed: () => this.accounts.emit(),
+    changed: () => void this.pushSources(),
   });
 
-  /** The usage card's rows, from the accounts' view and what the board has read (the accounts view's `sources`). */
-  protected usageSources(accounts: readonly AccountView[], now: number): UsageSource[] {
-    return this.usageBoard.sources(accounts, now);
+  /** The usage card's rows, from the accounts' view and what the board has read (the snapshot's accounts.sources). */
+  protected usageSources(accounts: readonly AccountView[] = this.accounts.view().accounts): UsageSource[] {
+    return this.usageBoard.sources(accounts);
+  }
+
+  /** Send the rows when something in them changed (a read time alone isn't a change); returns them. */
+  private pushSources(): UsageSource[] {
+    const sources = this.usageSources();
+    const sig = sourcesSignature(sources);
+    if (sig !== this.sentSources) {
+      this.sentSources = sig;
+      this.broadcast({ type: 'usageSources', sources });
+    }
+    return sources;
   }
 
   /** Start reading every minute (not in tests: no network there). */
@@ -44,7 +57,7 @@ export abstract class SwarmUsage extends SwarmCloudCredit {
     const tick = () => {
       this.usageBoard.tick();
       void this.usageBoard
-        .check(this.accounts.view().sources ?? [])
+        .check(this.pushSources())
         .then((alerts) => {
           for (const a of alerts) this.notice({ kind: 'usage', title: a.title, text: a.text }, { event: 'usage' });
         })
@@ -64,7 +77,7 @@ export abstract class SwarmUsage extends SwarmCloudCredit {
     this.adminKeys[provider] = key;
     this.usageBoard.reset(provider === 'anthropic' ? 'anthropic-org' : 'openai-org');
     this.usageBoard.tick();
-    this.accounts.emit();
+    this.pushSources();
     return { set: !!key };
   }
 

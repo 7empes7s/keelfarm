@@ -202,14 +202,15 @@ describe('Accounts', () => {
     const { accounts } = await office({
       poll: true,
       check: async (a) => ({ signedIn: a.kind === 'api-key', readings: a.builtIn && a.cli === 'codex' ? [reading] : [], note: 'checked' }),
-      sources: (list, now) => new UsageBoard({ api: { elevenLabs: async () => ({}), costs: async () => ({}) }, keys: () => ({ elevenlabs: '', anthropic: '', openai: '' }), boxes: () => null, spend: () => [], alertsFile: '', changed: () => undefined }).sources(list, now),
     });
+    const board = new UsageBoard({ api: { elevenLabs: async () => ({}), costs: async () => ({}) }, keys: () => ({ elevenlabs: '', anthropic: '', openai: '' }), boxes: () => null, spend: () => [], alertsFile: '', changed: () => undefined });
+    const sources = () => board.sources(accounts.view().accounts);
     await accounts.add({ cli: 'claude', kind: 'api-key', key: KEY });
-    await vi.waitFor(() => expect(accounts.view().sources?.find((s) => s.id === 'codex-login')?.windows).toEqual([{ name: '5-hour', usedPct: 40, resetsAt: reading.resetsAt }]));
+    await vi.waitFor(() => expect(sources().find((s) => s.id === 'codex-login')?.windows).toEqual([{ name: '5-hour', usedPct: 40, resetsAt: reading.resetsAt }]));
     const view = accounts.view();
     expect(view.accounts.find((a) => a.id === 'codex-login')?.status).toBe('ready'); // the poll's "no login file" doesn't sign it out
-    expect(view.sources?.find((s) => s.provider === 'claude' && s.plan === 'API')?.windows[0]).toMatchObject({ name: 'Today', unit: '$' });
-    expect(JSON.stringify(view.sources)).not.toContain(KEY);
+    expect(sources().find((s) => s.provider === 'claude' && s.plan === 'API')?.windows[0]).toMatchObject({ name: 'Today', unit: '$' });
+    expect(JSON.stringify(sources())).not.toContain(KEY);
   });
 
   it('waits for running sessions before removing an account, and keeps the built-in login', async () => {

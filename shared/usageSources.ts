@@ -155,6 +155,7 @@ export function accountSource(a: AccountView, spendUsd7d: number, now: number): 
     status,
     checkedAt: api ? now : newest,
     ...(note ? { note } : {}),
+    accountId: a.id,
     agents: a.agents,
   };
 }

@@ -60,7 +60,7 @@ export interface SignInRun {
 export interface AccountsView {
   accounts: AccountView[];
   rotation?: RotationStats; // absent in old journals
-  sources?: UsageSource[]; // usage for every account and provider (#361), worst first; absent in old journals
+  sources?: UsageSource[]; // usage for every account and provider (#361), worst first: in the snapshot, then usageSources events
 }
 
 /** Settings → Providers & accounts → Rotation (#248): automatic fallback when an account is limited or signed out. */

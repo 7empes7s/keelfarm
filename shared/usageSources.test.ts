@@ -86,7 +86,7 @@ describe('adapters', () => {
   it("turns an API-key account's spend into a window against its daily cap", () => {
     const s = accountSource(account({ id: 'claude-apikey', kind: 'api-key', label: 'Anthropic API', todayUsd: 18.5, dailyCostCap: 20, status: 'near' }), 41.2, NOW);
     expect(s.windows[0]).toMatchObject({ name: 'Today', usedPct: 93, used: 18.5, limit: 20, unit: '$' });
-    expect(s).toMatchObject({ spendUsd7d: 41.2, status: 'near', plan: 'API' });
+    expect(s).toMatchObject({ spendUsd7d: 41.2, status: 'near', plan: 'API', accountId: 'claude-apikey' });
   });
 
   it('counts Boxes against the plan limit', () => {

@@ -26,6 +26,7 @@ export interface UsageSource {
   status: UsageSourceStatus;
   checkedAt: number | null; // when its numbers were read (null: never)
   note?: string; // one plain line: why it's in error, where the numbers come from
+  accountId?: string; // a Claude or Codex account's row: its id in Providers & accounts, whose readings it shows
   agents?: string[]; // ids of the agents (and the CEO) pinned to it
   history?: [number, number][]; // [at, worst window %], the last day, for its detail
 }

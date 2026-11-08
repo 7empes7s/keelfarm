@@ -141,6 +141,9 @@ export class UsageBoard {
   }
 }
 
+/** The rows as the tabs see them, without their read times: equal signatures need no new event. */
+export const sourcesSignature = (list: readonly UsageSource[]) => JSON.stringify(list, (k, v: unknown) => (k === 'checkedAt' ? undefined : v));
+
 const keyFor = (id: Fetched, k: Partial<UsageKeys>) => (id === 'elevenlabs' ? k.elevenlabs : id === 'anthropic-org' ? k.anthropic : k.openai) ?? '';
 
 const LABELS: Record<Fetched, Pick<UsageSource, 'provider' | 'category' | 'label' | 'plan'>> = {

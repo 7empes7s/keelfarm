@@ -443,7 +443,8 @@ export abstract class SwarmSessions extends SwarmRotation {
   // ---------- accounts (#247) ----------
 
   override snapshot(): WorldSnapshot {
-    return { ...super.snapshot(), accounts: this.accounts.view() };
+    const accounts = this.accounts.view();
+    return { ...super.snapshot(), accounts: { ...accounts, sources: this.usageSources(accounts.accounts) } };
   }
 
   protected override secrets(): string[] {

@@ -37,7 +37,7 @@ import { addSpan, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } fro
 import { mergeReadings } from '../shared/usage.ts';
 import { inputShape, signInEnd } from '../shared/signIn.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
-import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading, UsageSource } from '../shared/types.ts';
+import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
 const secretKey = (id: string) => `account:${id}`;
 const hint = (s: string) => (s ? s.slice(-4) : '');
@@ -59,8 +59,6 @@ export interface AccountsDeps {
   agents: () => { id: string; account?: string }[];
   /** The built-in Claude login's readings: the office already keeps them (claudeUsage). */
   builtInUsage: () => UsageReading[];
-  /** The usage card's rows (#361) for these accounts and the office's other providers. */
-  sources?: (accounts: AccountView[], now: number) => UsageSource[];
   changed: (view: AccountsView) => void;
   /** The demo's made-up accounts, for a registry with only the built-in ones. */
   seed?: () => { accounts: ProviderAccount[]; keys: Record<string, string> };
@@ -186,7 +184,7 @@ export class Accounts {
 
   view(now = Date.now()): AccountsView {
     const agents = this.deps.agents();
-    const view: AccountsView = {
+    return {
       accounts: this.candidates(now)
         .sort((x, y) => x.account.cli.localeCompare(y.account.cli) || x.account.priority - y.account.priority)
         .map(({ account: a, signedIn, usage, todayUsd, sessions }): AccountView => {
@@ -207,8 +205,6 @@ export class Accounts {
         }),
       rotation: rotationStats(this.switches, now),
     };
-    if (this.deps.sources) view.sources = this.deps.sources(view.accounts, now);
-    return view;
   }
 
   /** Tell the tabs (an agent's binding changed, a session started or ended). */

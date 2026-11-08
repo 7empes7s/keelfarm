@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { nextRead, POLL_EVERY, UsageBoard, UsageFetchError, type UsageApi, type UsageKeys } from './usageSources.ts';
+import { nextRead, POLL_EVERY, sourcesSignature, UsageBoard, UsageFetchError, type UsageApi, type UsageKeys } from './usageSources.ts';
 import { rateLimitsAnswer } from './codexLimits.ts';
 import type { UsageSource } from '../shared/types.ts';
 
@@ -72,6 +72,14 @@ describe('UsageBoard', () => {
     const restarted = new UsageBoard({ api, keys: () => ({ elevenlabs: '', anthropic: '', openai: '' }), boxes: () => null, spend: () => [], alertsFile: path.join(dir, 'usage-alerts.json'), changed: () => undefined });
     expect(await restarted.check([hot])).toEqual([]);
     expect(await fs.readFile(path.join(dir, 'usage-alerts.json'), 'utf8')).not.toContain('sk-');
+  });
+});
+
+describe('sending the rows', () => {
+  it('only when something but a read time changed', () => {
+    const row: UsageSource = { id: 'elevenlabs', provider: 'elevenlabs', category: 'audio', label: 'ElevenLabs', plan: '', windows: [{ name: 'Characters', usedPct: 61, resetsAt: null }], status: 'ready', checkedAt: 1 };
+    expect(sourcesSignature([{ ...row, checkedAt: 2 }])).toBe(sourcesSignature([row]));
+    expect(sourcesSignature([{ ...row, windows: [{ name: 'Characters', usedPct: 62, resetsAt: null }] }])).not.toBe(sourcesSignature([row]));
   });
 });
 
