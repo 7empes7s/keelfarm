@@ -71,6 +71,14 @@
   pointer-events: none;
   transition: opacity var(--ds-dur-fast);
 }
+/* a log shorter than the stack (placeTools): one row over the bubble, still one stack's width in the row */
+.bubble-tools.bubble-tools-row {
+  flex-direction: row;
+  width: var(--ds-target);
+}
+.bubble-tools-row .xbtn-label {
+  display: none; /* it would slide over the next button */
+}
 .bubble-row:hover .bubble-tools,
 .bubble-row:focus-within .bubble-tools {
   opacity: 1;

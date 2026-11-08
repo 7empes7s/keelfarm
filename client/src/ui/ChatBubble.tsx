@@ -25,7 +25,7 @@ import { isPinching, lastPinchAt } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
 import { Icon } from './Icon';
 import { SignInCard } from './SignInCard';
-import { toolsOffset } from './bubbleTools';
+import { toolsInRow, toolsOffset } from './bubbleTools';
 import { XLabel } from './HoverCard';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
@@ -108,14 +108,23 @@ function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined;
   );
 }
 
-/** Keep the active stack inside the log, including when a tall bubble is partly scrolled away. */
+/** Keep the active stack inside the log, including when a tall bubble is partly scrolled away or the log is short. */
 export function placeTools(row: HTMLElement) {
   const buttons = row.querySelectorAll<HTMLElement>('.bubble-tool');
   const log = row.closest('.chat-log');
   const tools = row.querySelector<HTMLElement>('.bubble-tools');
   if (!buttons.length || !log || !tools) return;
-  const stack = buttons[buttons.length - 1].getBoundingClientRect().bottom - buttons[0].getBoundingClientRect().top;
-  tools.style.top = `${toolsOffset(row.getBoundingClientRect().top, stack, log.getBoundingClientRect())}px`;
+  const first = buttons[0], last = buttons[buttons.length - 1];
+  const box = log.getBoundingClientRect();
+  tools.classList.remove('bubble-tools-row');
+  tools.style.left = '';
+  const flat = toolsInRow(last.getBoundingClientRect().bottom - first.getBoundingClientRect().top, box.height);
+  tools.classList.toggle('bubble-tools-row', flat);
+  const a = first.getBoundingClientRect(), b = last.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  tools.style.top = `${toolsOffset(r.top, b.bottom - a.top, box, r.bottom)}px`;
+  // a row runs inward over the bubble; it never leaves the log's sides (its scrollbar excluded)
+  if (flat) tools.style.left = `${toolsOffset(a.left, b.right - a.left, { top: box.left, bottom: box.left + log.clientWidth })}px`;
 }
 
 // Memoised (#145): a keystroke or another message's event leaves the bubble as it is.
@@ -204,7 +213,11 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
     );
 
   return (
-    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1} onPointerEnter={(e) => placeTools(e.currentTarget)} onFocus={(e) => placeTools(e.currentTarget)}>
+    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1} onPointerEnter={(e) => placeTools(e.currentTarget)} onFocus={(e) => {
+      placeTools(e.currentTarget);
+      // focus didn't scroll to a tool on a row out of view: it was the 1px touch stand-in until now
+      if (e.target.classList.contains('bubble-tool')) e.target.scrollIntoView({ block: 'nearest' });
+    }}>
       {mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
       <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (

@@ -24,6 +24,8 @@ async function chat(page: Page, width: number, full: boolean) {
 
 const ceoRow = (log: Locator) => log.locator('.bubble-row[data-msg]:not(.bubble-row-me)');
 const myRow = (log: Locator) => log.locator('.bubble-row-me[data-msg]');
+/** `row` by its message: the demo CEO keeps writing, so `nth(-2)` would move to another row mid-test. */
+const pin = async (log: Locator, row: Locator) => log.locator(`.bubble-row[data-msg="${await row.getAttribute('data-msg')}"]`);
 
 /** What's wrong with `row`'s stack while the pointer is on its bubble. */
 async function stackProblems(row: Locator): Promise<string[]> {
@@ -62,7 +64,8 @@ for (const width of [390, 1280])
       const problems: string[] = [];
       // Both log edges, on both alignments.
       for (const [who, rows] of [['CEO', ceoRow(log)], ['mine', myRow(log)]] as const) {
-        for (const [which, row] of [['newest', rows.last()], ['older', rows.nth(-3)]] as const) {
+        for (const [which, at] of [['newest', rows.last()], ['older', rows.nth(-3)]] as const) {
+          const row = await pin(log, at);
           problems.push(...(await stackProblems(row)).map((p) => `${who}, ${which}: ${p}`));
           await testInfo.attach(`${who}-${which}`, { body: await page.screenshot(), contentType: 'image/png' });
           if (width === 390) {
@@ -85,7 +88,7 @@ for (const input of ['mouse', 'keyboard', 'touch'] as const) {
       const log = await chat(page, input === 'touch' ? 390 : 1280, false);
       const menu = page.locator('.chat-menu');
       for (const rows of [ceoRow(log), myRow(log)]) {
-        const row = rows.nth(-2);
+        const row = await pin(log, rows.nth(-2));
         const names = await row.locator('.bubble-tool').evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label')!));
         for (const name of names) {
           const trigger = row.getByRole('button', { name, exact: true });
@@ -142,5 +145,47 @@ test.describe('touch gestures', () => {
     await row.locator('.bubble').dispatchEvent('pointerup', point);
     await page.keyboard.press('Escape');
     await expect(page.locator('.chat-menu')).toBeHidden();
+  });
+});
+
+// A short log (#289): Waiting on you open and a reply in progress leave a strip of log on a 390px phone, with ↓ Latest
+// showing. Whatever row is focused, near either edge, every button's centre must reach the button, Latest never on top.
+test.describe('short log', () => {
+  test.use({ isMobile: true, hasTouch: true });
+  test('nothing covers a bubble stack in a short phone log', async ({ page }, testInfo) => {
+    const log = await chat(page, 390, false);
+    await expect(page.getByRole('region', { name: 'Waiting on you' })).toBeVisible();
+    await (await pin(log, myRow(log).last())).getByRole('button', { name: 'Reply to this message', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.chat-reply')).toBeVisible();
+    for (const [who, rows] of [['CEO', ceoRow(log)], ['mine', myRow(log)]] as const)
+      for (const block of ['end', 'start'] as const) {
+        const row = await pin(log, rows.nth(-3));
+        await row.evaluate((el, block) => el.scrollIntoView({ block }), block);
+        await expect(page.locator('.chat-jump')).toBeVisible();
+        const names = await row.locator('.bubble-tool').evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label')!));
+        for (const name of names) {
+          const trigger = row.getByRole('button', { name, exact: true });
+          await trigger.focus();
+          await trigger.scrollIntoViewIfNeeded(); // the demo CEO keeps writing, and a log at its end follows
+          await expect(row.locator('.bubble-tools')).toHaveCSS('opacity', '1');
+          await expect.poll(() => row.evaluate((el) => {
+            const out: string[] = [];
+            const log = el.closest('.chat-log')!.getBoundingClientRect();
+            for (const b of el.querySelectorAll<HTMLElement>('.bubble-tool')) {
+              const r = b.getBoundingClientRect();
+              const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              if (!at || !b.contains(at)) out.push(`${b.getAttribute('aria-label')}'s centre hits ${at ? `.${[...at.classList].join('.') || at.tagName}` : 'nothing'} (${Math.round(r.top)}-${Math.round(r.bottom)} in log ${Math.round(log.top)}-${Math.round(log.bottom)})`);
+            }
+            return out;
+          }), { message: `${who}, ${block}, ${name} focused`, timeout: 5000 }).toEqual([]);
+        }
+        await testInfo.attach(`${who}-${block}`, { body: await page.screenshot(), contentType: 'image/png' });
+      }
+    // and a real tap there opens the actions, not Latest or the reply bar's neighbour
+    const more = (await pin(log, ceoRow(log).nth(-3))).getByRole('button', { name: 'Message actions', exact: true });
+    await more.focus();
+    await more.tap();
+    await expect(page.locator('.chat-menu')).toBeVisible();
   });
 });
