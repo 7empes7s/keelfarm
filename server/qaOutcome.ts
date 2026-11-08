@@ -53,14 +53,14 @@ export interface PreQa {
 /**
  * What happens before a queued PR goes to a tester, so QA never spends a session on a stale branch. test: go ahead.
  * update-branch: the repo only merges up-to-date branches, so GitHub merges the base in first, as the merge gate does.
- * send-back: it conflicts, so its developer merges the base first (needsHuman: the merge-fix budget ran out).
+ * send-back: it conflicts, so its developer merges the base first (never the manager, and no merge fix spent: #275).
  * People's own PRs are theirs: QA tests them as they are.
  */
-export type QaGate = { do: 'test' } | { do: 'update-branch' } | { do: 'send-back'; needsHuman: boolean };
+export type QaGate = { do: 'test' } | { do: 'update-branch' } | { do: 'send-back' };
 
-export function qaGate(pr: QaPull & { headRefName: string }, rec: Pick<QaRoundRecord, 'mergeFixes'>, autoMerge: boolean): QaGate {
+export function qaGate(pr: QaPull & { headRefName: string }, autoMerge: boolean): QaGate {
   if (!pr.headRefName.startsWith('swarm/')) return { do: 'test' };
-  if (pr.mergeable === 'CONFLICTING' || pr.mergeState === 'DIRTY') return { do: 'send-back', needsHuman: rec.mergeFixes >= MAX_MERGE_FIXES };
+  if (pr.mergeable === 'CONFLICTING' || pr.mergeState === 'DIRTY') return { do: 'send-back' };
   if (autoMerge && pr.mergeState === 'BEHIND') return { do: 'update-branch' };
   return { do: 'test' };
 }

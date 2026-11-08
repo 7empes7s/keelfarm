@@ -101,6 +101,7 @@ describe('mergeStep', () => {
           reason: 'conflict',
           instructions: 'It conflicts with develop.',
           needsHuman: false,
+          counts: false,
           set: {},
         });
       });
@@ -148,6 +149,7 @@ describe('mergeStep', () => {
         reason: 'checks',
         instructions,
         needsHuman: false,
+        counts: true,
         set: {},
       });
     });
@@ -178,7 +180,19 @@ describe('mergeStep', () => {
     it(`needs a human after ${MAX_MERGE_FIXES} fixes`, () => {
       expect(mergeStep(pull({ checks: 'failing' }), record({ mergeFixes: MAX_MERGE_FIXES - 1 }), NOW, base)).toMatchObject({ needsHuman: false });
       expect(mergeStep(pull({ checks: 'failing' }), record({ mergeFixes: MAX_MERGE_FIXES }), NOW, base)).toMatchObject({ do: 'send-back', needsHuman: true });
-      expect(mergeStep(pull({ mergeable: 'CONFLICTING' }), record({ mergeFixes: MAX_MERGE_FIXES + 1 }), NOW, base)).toMatchObject({ reason: 'conflict', needsHuman: true });
+    });
+
+    it('never sends a conflict-only stop to a human, and its rounds are free (#275)', () => {
+      for (const mergeFixes of [0, MAX_MERGE_FIXES, MAX_MERGE_FIXES + 3]) {
+        expect(mergeStep(pull({ mergeable: 'CONFLICTING' }), record({ mergeFixes }), NOW, base)).toMatchObject({ do: 'send-back', reason: 'conflict', needsHuman: false, counts: false });
+      }
+    });
+
+    it('still counts, and stops at the limit, when checks fail with the base merged in: a real failure', () => {
+      const red = pull({ checks: 'failing', failedChecks: [{ name: 'test', url: null }] });
+      const updated = { base: 'main', upToDate: true };
+      expect(mergeStep(red, record({ updatedSha: 'abc123', mergeFixes: 0 }), NOW, updated)).toMatchObject({ do: 'send-back', reason: 'conflict', needsHuman: false, counts: true });
+      expect(mergeStep(red, record({ updatedSha: 'abc123', mergeFixes: MAX_MERGE_FIXES }), NOW, updated)).toMatchObject({ do: 'send-back', needsHuman: true });
     });
   });
 

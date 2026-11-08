@@ -36,6 +36,8 @@ export interface OpsNumbers {
   toMerge: number; // open PRs that passed QA
   needsYou: number; // open PRs waiting on the manager (needsManager)
   triage: number; // stuck PRs the CEO is looking at before they reach the manager
+  longestWaitMs: number | null; // the longest a PR in needs-human (triage included) has waited so far; target under 30 min (#275)
+  waitTrend: (number | null)[]; // the longest needs-human wait per day over 7 days, oldest first (null: none that day)
   // throughput
   mergedToday: number; // since midnight
   mergedHour: number; // in the last 60 minutes

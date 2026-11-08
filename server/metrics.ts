@@ -28,6 +28,8 @@ export type CheckEntry = [at: number, repo: string, sha: string, pass: boolean, 
 export type CostEntry = [at: number, repo: string, usd: number];
 /** Conflict-aware scheduling (#256) started an issue instead of one that overlapped busy files: when, the repo, the issue. */
 export type AvoidedEntry = [at: number, repo: string, issue: number];
+/** A PR left needs-human (#275): when, the repo, how long it had waited there. */
+export type WaitEntry = [at: number, repo: string, ms: number];
 
 export interface OpsHistory {
   merges: MergeEntry[];
@@ -35,6 +37,7 @@ export interface OpsHistory {
   checks: CheckEntry[];
   cost: CostEntry[];
   avoided?: AvoidedEntry[];
+  waits?: WaitEntry[];
 }
 
 export const emptyHistory = (): OpsHistory => ({ merges: [], qa: [], checks: [], cost: [] });
@@ -52,6 +55,7 @@ export function prune(h: OpsHistory, now: number) {
   h.checks = fresh(h.checks, now);
   h.cost = fresh(h.cost, now);
   if (h.avoided) h.avoided = fresh(h.avoided, now);
+  if (h.waits) h.waits = fresh(h.waits, now);
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -70,6 +74,7 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
     checks: list(r.checks).filter((e) => typeof e[2] === 'string' && typeof e[3] === 'boolean' && isNum(e[4])) as CheckEntry[],
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
     ...(Array.isArray(r.avoided) ? { avoided: list(r.avoided).filter((e) => isNum(e[2])) as AvoidedEntry[] } : {}),
+    ...(Array.isArray(r.waits) ? { waits: list(r.waits).filter((e) => isNum(e[2])) as WaitEntry[] } : {}),
   };
   prune(h, now);
   return h;
@@ -122,6 +127,12 @@ export function recordQa(h: OpsHistory, repo: string, pass: boolean, waitMs: num
 /** An issue conflict-aware scheduling started instead of an overlapping one (#256). */
 export function recordAvoided(h: OpsHistory, repo: string, issue: number, now: number) {
   (h.avoided ??= []).push([now, repo, issue]);
+  prune(h, now);
+}
+
+/** A PR that waited `ms` in needs-human left it (#275). */
+export function recordWait(h: OpsHistory, repo: string, ms: number, now: number) {
+  (h.waits ??= []).push([now, repo, Math.max(0, Math.round(ms))]);
   prune(h, now);
 }
 
@@ -179,7 +190,7 @@ export function qaRoundsPerMerge(merges: MergeEntry[], qa: QaEntry[]): number | 
   return counts.length ? counts.reduce((s, n) => s + n, 0) / counts.length : null;
 }
 
-type Flow = Omit<OpsNumbers, 'ready' | 'building' | 'inQa' | 'fixing' | 'toMerge' | 'needsYou' | 'triage' | 'busy' | 'idle' | 'errors'>;
+type Flow = Omit<OpsNumbers, 'ready' | 'building' | 'inQa' | 'fixing' | 'toMerge' | 'needsYou' | 'triage' | 'busy' | 'idle' | 'errors' | 'longestWaitMs' | 'waitTrend'>;
 
 /** Throughput, flow, CI and cost for the repos `mine` accepts. */
 function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow {
@@ -212,10 +223,35 @@ export interface OpsFloorState {
   floor: number;
   ready: number; // backlog issues that can start now
   agents: { id: string; name: string; role: AgentRole; task: string | null; status: AgentStatus; endedAt: number | null; lastError: string | null }[];
-  prs: { number: number; qa: Pick<QaView, 'status' | 'ceoLooking' | 'updatedAt'> | null; why: string | null }[]; // open PRs
+  prs: { number: number; qa: Pick<QaView, 'status' | 'ceoLooking' | 'updatedAt' | 'stuckAt'> | null; why: string | null }[]; // open PRs
 }
 
 const BUSY: AgentStatus[] = ['preparing', 'working'];
+
+/** How long each needs-human PR (the CEO looking or not) has waited so far, in whole minutes so the view changes once a minute. */
+const openWaits = (floors: OpsFloorState[], now: number) =>
+  floors.flatMap((f) => f.prs.flatMap((p) => (p.qa?.status === 'needs-human' ? [Math.floor((now - (p.qa.stuckAt ?? p.qa.updatedAt)) / 60_000) * 60_000] : [])));
+
+/**
+ * The longest wait in needs-you per day over the last 7 days, oldest first (today last): the PRs that left it each
+ * day, and today the ones still waiting too. null: nobody waited that day.
+ */
+export function waitTrend(waits: WaitEntry[], open: number[], now: number): (number | null)[] {
+  const today = startOfDay(now);
+  const out: (number | null)[] = Array.from({ length: 7 }, () => null);
+  const put = (i: number, ms: number) => {
+    if (i >= 0 && i < 7) out[i] = Math.max(out[i] ?? 0, ms);
+  };
+  for (const w of waits) put(6 - Math.round((today - startOfDay(w[0])) / DAY_MS), w[2]);
+  for (const ms of open) put(6, ms);
+  return out;
+}
+
+/** Mission control's needs-you wait tile: the longest wait right now and its 7-day trend. */
+function waitNumbers(floors: OpsFloorState[], h: OpsHistory, mine: (repo: string) => boolean, now: number) {
+  const open = openWaits(floors, now);
+  return { longestWaitMs: open.length ? Math.max(...open) : null, waitTrend: waitTrend((h.waits ?? []).filter((w) => mine(w[1])), open, now) };
+}
 
 /** The pipeline and the team as they are now. */
 function rightNow(f: OpsFloorState) {
@@ -256,7 +292,7 @@ export function floorAlarms(f: OpsFloorState, now: number): OpsAlarm[] {
 /** Mission control: every floor's numbers, the total (connected floors and the CEO) and the alarms, oldest first. */
 export function opsView(floors: OpsFloorState[], h: OpsHistory, now: number): OpsView {
   const sorted = [...floors].sort((a, b) => a.floor - b.floor);
-  const rows: OpsFloor[] = sorted.map((f) => ({ repoId: f.repoId, floor: f.floor, ...rightNow(f), ...flow(h, (r) => r === f.repoId, now), alarms: floorAlarms(f, now).length }));
+  const rows: OpsFloor[] = sorted.map((f) => ({ repoId: f.repoId, floor: f.floor, ...rightNow(f), ...flow(h, (r) => r === f.repoId, now), ...waitNumbers([f], h, (r) => r === f.repoId, now), alarms: floorAlarms(f, now).length }));
   const connected = new Set(sorted.map((f) => f.repoId));
   const sum = (k: keyof ReturnType<typeof rightNow>) => rows.reduce((s, r) => s + r[k], 0);
   const total: OpsNumbers = {
@@ -271,6 +307,7 @@ export function opsView(floors: OpsFloorState[], h: OpsHistory, now: number): Op
     idle: sum('idle'),
     errors: sum('errors'),
     ...flow(h, (r) => connected.has(r) || r === '', now),
+    ...waitNumbers(sorted, h, (r) => connected.has(r), now),
   };
   return {
     floors: rows,

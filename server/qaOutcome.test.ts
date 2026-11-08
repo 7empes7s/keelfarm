@@ -57,29 +57,25 @@ describe('qaGate: conflicts before QA', () => {
   const pull = (p: Partial<QaPull> = {}, headRefName = 'swarm/issue-7-ada') => ({ ...MERGEABLE, headRefName, ...p });
 
   it('sends a conflicting PR to its developer before a tester spends a session on it', () => {
-    expect(qaGate(pull(CONFLICTING), record(), true)).toEqual({ do: 'send-back', needsHuman: false });
-    expect(qaGate(pull({ mergeable: 'UNKNOWN', mergeState: 'DIRTY' }), record(), false)).toEqual({ do: 'send-back', needsHuman: false });
-    expect(qaGate(pull({ mergeable: 'CONFLICTING', mergeState: 'UNKNOWN' }), record({ mergeFixes: MAX_MERGE_FIXES - 1 }), true)).toEqual({ do: 'send-back', needsHuman: false });
-  });
-
-  it('sends it to the manager once the merge-fix budget is used up', () => {
-    expect(qaGate(pull(CONFLICTING), record({ mergeFixes: MAX_MERGE_FIXES }), true)).toEqual({ do: 'send-back', needsHuman: true });
+    expect(qaGate(pull(CONFLICTING), true)).toEqual({ do: 'send-back' });
+    expect(qaGate(pull({ mergeable: 'UNKNOWN', mergeState: 'DIRTY' }), false)).toEqual({ do: 'send-back' });
+    expect(qaGate(pull({ mergeable: 'CONFLICTING', mergeState: 'UNKNOWN' }), true)).toEqual({ do: 'send-back' });
   });
 
   it('updates a branch that is only behind, as the merge gate does (auto-merge floors)', () => {
-    expect(qaGate(pull({ mergeState: 'BEHIND' }), record(), true)).toEqual({ do: 'update-branch' });
-    expect(qaGate(pull({ mergeState: 'BEHIND' }), record(), false)).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeState: 'BEHIND' }), true)).toEqual({ do: 'update-branch' });
+    expect(qaGate(pull({ mergeState: 'BEHIND' }), false)).toEqual({ do: 'test' });
   });
 
   it('tests a mergeable PR, or one GitHub is still working out', () => {
-    expect(qaGate(pull(), record(), true)).toEqual({ do: 'test' });
-    expect(qaGate(pull({ mergeable: 'UNKNOWN', mergeState: 'UNKNOWN' }), record(), true)).toEqual({ do: 'test' });
-    expect(qaGate(pull({ mergeState: 'BLOCKED' }), record(), true)).toEqual({ do: 'test' });
+    expect(qaGate(pull(), true)).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeable: 'UNKNOWN', mergeState: 'UNKNOWN' }), true)).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeState: 'BLOCKED' }), true)).toEqual({ do: 'test' });
   });
 
   it("leaves people's own PRs alone", () => {
-    expect(qaGate(pull(CONFLICTING, 'feature/login'), record(), true)).toEqual({ do: 'test' });
-    expect(qaGate(pull({ mergeState: 'BEHIND' }, 'feature/login'), record(), true)).toEqual({ do: 'test' });
+    expect(qaGate(pull(CONFLICTING, 'feature/login'), true)).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeState: 'BEHIND' }, 'feature/login'), true)).toEqual({ do: 'test' });
   });
 });
 

@@ -22,6 +22,8 @@ import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
 import { HoverCard } from './HoverCard';
+import { useMinute } from './Decisions';
+import { prWaitLine } from '../../../shared/approvals';
 import { AgentPeek, QaPeek, WorkPeek } from './Peeks';
 
 /** Who has the card; "QA" while they're testing it. */
@@ -129,6 +131,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const allAgents = useStore((s) => s.agents);
   const qaRecords = useStore((s) => s.qa);
   const usageState = useStore((s) => s.usage.state);
+  const now = useMinute(); // the cards' wait lines (#275)
   const openOverlay = useStore((s) => s.openOverlay);
   const agents = useMemo(() => agentsOnRepo(allAgents, repoId), [allAgents, repoId]);
   const cols = useMemo(() => (repo ? kanbanFor(repo, agents, qaRecords, { state: usageState }) : null), [repo, agents, qaRecords, usageState]);
@@ -439,7 +442,10 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 </div>
               );
             }
+            const wait = c.qa ? prWaitLine(c.qa, repo.defaultBranch, now) : null;
             return (
+              <>
+              {wait && <div className="small kcard-wait">{wait}</div>}
               <div className="kcard-foot">
                 <AgentChip agent={c.agent} card={c} />
                 <span className="muted small">{c.note}</span>
@@ -465,6 +471,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 )}
                 {closeButton(c)}
               </div>
+              </>
             );
           },
           'qa',

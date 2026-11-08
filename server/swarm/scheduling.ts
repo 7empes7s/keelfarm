@@ -8,7 +8,7 @@ import { ONE_TURN } from '../prompts.ts';
 import { resolveEffort } from '../../shared/costs.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
-import { fixGoesTo, pickTester, prepHeld, runnerFor, runsHere } from '../handOut.ts';
+import { fixGoesTo, pickTester, pipelineQueue, prepHeld, runnerFor, runsHere, WORK_PHASES } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
@@ -38,7 +38,6 @@ import {
   type PersistedRepo,
   type PersistedAgent,
   type QaRecord,
-  type PrepJob,
   prepKey,
   FREE,
   ERROR_COOLDOWN_MS,
@@ -99,7 +98,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   }
 
   /**
-   * Finish work in flight: test queued PRs (oldest first) and get failed ones fixed. Returns true if work started.
+   * Finish work in flight (handOut.ts pipelineQueue): bring QA-passed PRs up to date, test queued PRs and get failed ones fixed. Returns true if work started.
    * Any free agent but the PR's author tests it (handOut.ts pickTester); its author goes on with other work meanwhile. A failed PR goes back to its author when they're free; while the
    * author is still in a session on it, it waits for them; otherwise any free agent takes it. A PR whose desks keep
    * failing to set up sits out.
@@ -109,20 +108,16 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (!free.length) return false;
     const now = Date.now();
     const floor = this.floorState(this.repoRt.get(repo.id)!);
-    const waiting = (status: QaRecord['status'], task: PrepJob['task']) =>
-      this.state.qa
-        .filter(
-          (q) =>
-            q.repoId === repo.id &&
-            q.status === status &&
-            stillOpen({ kind: 'pr', number: q.prNumber }, floor) &&
-            !this.outsidePull(repo.id, q.prNumber) &&
-            !prepHeld(this.prepStrikes.get(prepKey(repo.id, q.prNumber, task)), now),
-        )
-        .sort((x, y) => x.updatedAt - y.updatedAt);
-    const fixes = waiting('failed', 'fix');
-    const owed = new Set(fixes.map((q) => q.devAgentId).filter((id): id is string => !!id));
-    for (const rec of waiting('queued', 'qa')) {
+    const queue = pipelineQueue(this.state.qa.filter((q) => q.repoId === repo.id && stillOpen({ kind: 'pr', number: q.prNumber }, floor) && !this.outsidePull(repo.id, q.prNumber))).filter(
+      ({ rec, task }) => !prepHeld(this.prepStrikes.get(prepKey(repo.id, rec.prNumber, task)), now),
+    );
+    const owed = new Set(queue.flatMap(({ rec, task }) => (task === 'fix' && rec.devAgentId ? [rec.devAgentId] : [])));
+    for (const { rec, task } of queue) {
+      if (task === 'fix') {
+        const started = this.startFix(repo, rec, free, owed);
+        if (started !== false) return !!started;
+        continue;
+      }
       const othersCan = this.state.agents.some((a) => a.repoId === repo.id && a.role !== 'ceo' && a.id !== rec.devAgentId && a.status !== 'stopped');
       const qaCli = this.lab.practice(repo.id, rec.issueNumber, rec.prNumber, 'qa').qaCli; // cross-model QA (#23)
       const pick = (pool: PersistedAgent[]) => pickTester(preferCli(pool, qaCli, rec.devAgentId, (a) => a.cli || this.state.settings.defaultCli), rec.devAgentId, owed, othersCan, now - rec.updatedAt);
@@ -133,18 +128,20 @@ export abstract class SwarmScheduling extends SwarmQa {
       void this.runQa(tester, repo, rec);
       return true;
     }
-    for (const rec of fixes) {
-      const author = this.state.agents.find((a) => a.id === rec.devAgentId && a.repoId === repo.id && a.role !== 'ceo') ?? null;
-      const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
-      const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
-      if (to === 'wait') continue; // the author gets it when their session ends
-      const pick = (pool: PersistedAgent[]) => (to === 'author' && pool.includes(author!) ? author! : (pool.find((a) => !owed.has(a.id)) ?? pool[0] ?? null));
-      const fixer = this.runner('fix', repo, pick(free)!, free, pick);
-      if (!fixer) return false;
-      void this.runFix(fixer, repo, rec);
-      return true;
-    }
     return false;
+  }
+
+  /** Hand a failed PR's fix to its author when free, else to a free agent (handOut.ts fixGoesTo). True: it started; false: it waits for its author; null: for memory. */
+  protected startFix(repo: PersistedRepo, rec: QaRecord, free: PersistedAgent[], owed: ReadonlySet<string>): boolean | null {
+    const author = this.state.agents.find((a) => a.id === rec.devAgentId && a.repoId === repo.id && a.role !== 'ceo') ?? null;
+    const headRef = this.repoRt.get(repo.id)!.pulls.find((p) => p.number === rec.prNumber)?.headRefName ?? null;
+    const to = fixGoesTo(author, !!author && free.includes(author), rec.prNumber, headRef);
+    if (to === 'wait') return false; // the author gets it when their session ends
+    const pick = (pool: PersistedAgent[]) => (to === 'author' && pool.includes(author!) ? author! : (pool.find((a) => !owed.has(a.id)) ?? pool[0] ?? null));
+    const fixer = this.runner('fix', repo, pick(free)!, free, pick);
+    if (!fixer) return null;
+    void this.runFix(fixer, repo, rec);
+    return true;
   }
 
   /** Who of the floor's free agents runs work of `kind` that `picked` would get: a free Box agent (`pick`ed from them) when this computer is short of memory for a local one (#263). Null: it waits for memory. */
@@ -434,7 +431,8 @@ export abstract class SwarmScheduling extends SwarmQa {
     this.scheduleOffset = (this.scheduleOffset + 1) % repos.length;
     const order = [...repos.slice(this.scheduleOffset), ...repos.slice(0, this.scheduleOffset)];
     // Consults come after QA and fixes, before new issues (#28).
-    for (const start of [(r: PersistedRepo) => this.startPipelineWork(r), (r: PersistedRepo) => this.startConsultWork(r), (r: PersistedRepo) => this.startIssueWork(r)]) {
+    const starts = { pipeline: (r: PersistedRepo) => this.startPipelineWork(r), consult: (r: PersistedRepo) => this.startConsultWork(r), issue: (r: PersistedRepo) => this.startIssueWork(r) };
+    for (const start of WORK_PHASES.map((p) => starts[p])) {
       let progress = true;
       while (progress) {
         progress = false;

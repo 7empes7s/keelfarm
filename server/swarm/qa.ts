@@ -235,16 +235,12 @@ export abstract class SwarmQa extends SwarmSessions {
       return;
     }
     // QA never spends a session on a stale branch: a conflict goes to the developer first, a branch behind is updated.
-    const gate = qaGate(pr, rec, repo.autoMerge);
+    const gate = qaGate(pr, repo.autoMerge);
     if (gate.do === 'send-back') {
       this.appendLog(a, [{ kind: 'system', text: `PR #${pr.number} conflicts with ${repo.defaultBranch}; it goes back to its developer before QA.` }]);
       this.clearTask(a);
-      if (gate.needsHuman) {
-        this.sendBack(repo, rec, 'conflict', rec.fixInstructions ?? '', true);
-        return;
-      }
-      // QA's last findings stay on the record for the test QA was queued for, which follows the merge.
-      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeFixes: rec.mergeFixes + 1, mergeNote: null });
+      // QA's last findings stay on the record for the test QA was queued for, which follows the merge. Bringing it up to date isn't a merge fix (#275).
+      this.setQa(rec, { status: 'failed', qaAgentId: null, fixReason: 'conflict', preQa: { sha: pr.headSha, fixReason: rec.fixReason }, mergeNote: null });
       setTimeout(() => this.schedule(), 200);
       return;
     }
