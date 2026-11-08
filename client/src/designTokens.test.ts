@@ -7,8 +7,11 @@ import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CEILING: Record<string, number> = {
-  'styles.css': 291,
+  'styles.css': 286,
   'pocket/pocket.css': 0,
+  'pocket/desktop.css': 0,
+  'pocket/dockedChat.css': 0,
+  'pocket/pages.css': 0,
   'ui/games/games.css': 10,
   'ui/timelapse.css': 13,
   'ui/costs.css': 2,
@@ -17,6 +20,10 @@ const CEILING: Record<string, number> = {
   'ui/finder.css': 0,
   'ui/details.css': 0,
 };
+
+/** styles.css counts with the feature sheets split out of it (#257), which sheets.css imports. */
+const sheet = (file: string) => fs.readFileSync(path.join(here, file), 'utf8');
+const splitFrom = (file: string) => (file === 'styles.css' ? [...sheet('sheets.css').matchAll(/@import '\.\/(.+?)';/g)].map((m) => sheet(m[1])) : []);
 
 /** Hex colours and rgb()/rgba() calls, comments left out. */
 const colourLiterals = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '').match(/#[0-9a-f]{3,8}\b|rgba?\(/gi)?.length ?? 0;
@@ -27,7 +34,7 @@ describe('stylesheets use design tokens', () => {
   });
   for (const [file, max] of Object.entries(CEILING)) {
     it(`${file} has no new colour literals`, () => {
-      expect(colourLiterals(fs.readFileSync(path.join(here, file), 'utf8'))).toBeLessThanOrEqual(max);
+      expect(colourLiterals([sheet(file), ...splitFrom(file)].join('\n'))).toBeLessThanOrEqual(max);
     });
   }
 });

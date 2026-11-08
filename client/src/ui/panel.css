@@ -1,0 +1,64 @@
+/* ---------- panels ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-z-panel);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(21, 21, 31, 0.35);
+  animation: fadein 0.15s ease-out;
+}
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+}
+.panel {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ds-text);
+  border: 4px solid var(--ds-outline);
+  border-radius: 24px;
+  box-shadow: 0 8px 0 var(--ds-shadow-color);
+  overflow: hidden;
+  animation: pop 0.2s ease-out;
+}
+.panel-wide {
+  width: min(1320px, 100%);
+  height: calc(100vh - 32px);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--accent);
+  color: var(--ds-on-color);
+  border-bottom: 4px solid var(--ds-outline);
+}
+.panel-title {
+  margin: 0;
+  flex: 1;
+  font-weight: 700;
+  font-size: 1.25rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-title a {
+  color: var(--ds-on-color);
+}
+.panel-body {
+  padding: 16px;
+  overflow: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}

@@ -1,0 +1,46 @@
+/* ---------- project picker ---------- */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.picker-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.picker-tab {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ds-target);
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 0.88rem;
+  padding: 8px 10px;
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 12px;
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  cursor: pointer;
+  text-align: center;
+}
+.picker-tab-on {
+  background: var(--accent);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+}
+.picker-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.picker-mode .row {
+  margin: 0;
+}
+.folder-list {
+  max-height: 240px;
+}
+.chip-warn {
+  background: #fff3bf;
+}

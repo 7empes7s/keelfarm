@@ -269,7 +269,7 @@ that has to stay green.
    Why: it works today but reads like a bug, and the type checker can't help there.
    Risk: very low. Guard: `server/workspace.test.ts` (the sizes the desk sweep reports).
 
-4. **Split `client/src/store.ts`'s `apply` (complexity 128, 279 lines).**
+4. **Split `client/src/store.ts`'s `apply` (complexity 128, 279 lines).** Done in #257: `client/src/store/apply/`.
    What: one handler per `ServerEvent` type in a `Record<ServerEvent['type'], (s, ev) => Partial<State>>` (in a new
    `storeEvents.ts`), `apply` becomes a lookup.
    Why: the most complex function in the repo, and every new event adds a case to it.
@@ -293,7 +293,7 @@ that has to stay green.
    untested.
    Risk: medium. Guard: `server/cliRunner.test.ts`, `server/ptyHost.test.ts`, a demo-office run in the terminal runtime.
 
-7. **Split `server/demo.ts` (1,699 lines) by what it fakes.**
+7. **Split `server/demo.ts` (1,699 lines) by what it fakes.** Done in #257: `server/demo/`.
    What: `demo/github.ts` (fake issues/PRs), `demo/sessions.ts` (fake agent sessions and their terminal output),
    `demo/machines.ts`; `createDemoBackend` composes them.
    Why: every new `Backend` method lands here (demo parity), so it only grows; it's the second-largest file.
@@ -338,7 +338,7 @@ that has to stay green.
     Risk: low (tests only); keep each test's isolation where it writes. Guard: the tests themselves, plus their
     budgets in `server/scale.test.ts`.
 
-13. **Split `client/src/styles.css` (5,463 lines).**
+13. **Split `client/src/styles.css` (5,463 lines).** Done in #257: its blocks are files `client/src/sheets.css` imports in order.
     What: one CSS file per panel next to its component (`Kanban.css`, `Phone.css`, …), imported by it; tokens and
     resets stay in `styles.css`.
     Why: the second-largest file, edited by most UI PRs.

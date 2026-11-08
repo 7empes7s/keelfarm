@@ -219,7 +219,7 @@ const ANSI: Record<LogEntry['kind'], (text: string) => string> = {
  * With a terminal (the terminal runtime), the fake session's lines are drawn there the way Claude Code draws them,
  * and what the manager types into it is taken as a message.
  */
-export function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: SessionCallbacks) => SessionHandle): SessionHandle {
+function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: SessionCallbacks) => SessionHandle): SessionHandle {
   const term = opts.terminal;
   if (!term) return start(cb);
   const name = CLIS.find((c) => c.id === (opts.cli ?? 'claude'))?.label ?? 'Claude Code';
