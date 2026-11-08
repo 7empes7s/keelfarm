@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CEO_ID, type ServerEvent, type VoiceLine } from '../shared/types.ts';
 import type { CeoLive } from '../shared/ceoStream.ts';
 import { ACKS, TALK_PACE } from '../shared/voiceTalk.ts';
 import { managerHeader } from './ceo.ts';
 import { CeoTalk } from './ceoTalk.ts';
+import { CeoChat } from './ceoChat.ts';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
 import { DEFAULT_VOICE } from './voice.ts';
@@ -103,6 +104,30 @@ describe('CeoTalk progress', () => {
     talk.steps(live('Reading a file', 5), 20 * TALK_PACE.regularMs);
     expect(said).toHaveLength(2);
   });
+});
+
+it('keeps offering progress during a quiet long-running step and stops with the job', () => {
+  vi.useFakeTimers();
+  try {
+    const said: VoiceLine[] = [];
+    const talk = new CeoTalk(() => true, (line) => said.push(line));
+    const chat = new CeoChat('', '', () => undefined, undefined, undefined, undefined, talk);
+    chat.startJob();
+    chat.log([{ kind: 'tool', tool: 'Read', text: '⏺ Read server/ceo.ts' }]);
+    vi.advanceTimersByTime(TALK_PACE.regularMs - 1);
+    expect(said).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatchObject({ kind: 'progress', milestone: false });
+    vi.advanceTimersByTime(TALK_PACE.regularMs);
+    expect(said).toHaveLength(2);
+    chat.endJob();
+    vi.advanceTimersByTime(TALK_PACE.regularMs * 2);
+    expect(said).toHaveLength(2);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 describe('a message typed into the running session', () => {

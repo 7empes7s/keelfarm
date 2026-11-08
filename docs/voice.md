@@ -129,7 +129,8 @@ pull request's changes."). It's Off by default; during a call Off means Mileston
 paths or markdown, never start while your mic is open or something else is being said, and stop when a message
 arrives or you talk over them. Acks and progress show as a small chip under the CEO's live reply, never as chat
 messages. With ElevenLabs each is a short clip: an ack is about 25 characters and made once ever (cached by its
-words), a progress line about 40, so an hour of Regular is roughly 60 × 40 = 2,400 characters, a few cents.
+words), a progress line about 40, so an hour of Regular at fifty-second intervals is roughly 72 × 40 = 2,880
+characters, plus milestones. Actual cost depends on the ElevenLabs plan and cache hits.
 `window.__swarmVoiceLines` lists the lines a tab said (`id`, `kind`, `text`, `provider`). The demo office talks after
 seconds rather than a minute, so its short jobs can be heard.
 
