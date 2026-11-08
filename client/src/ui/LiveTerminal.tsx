@@ -7,6 +7,7 @@ import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../sh
 import { activeMods, clipboardPaste, consumeMods, keySequence, NO_MODS, pasteText, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
 import { PasteSheet } from './PasteSheet';
+import { signInCode } from '../../../shared/signIn';
 import { VIEWPORT_EVENT } from '../viewport';
 import { socketUrl } from '../socketUrl';
 import { liveStatus, TERM_FONT } from './termLayout';
@@ -219,7 +220,7 @@ export function LiveTerminal({
       return;
     }
     if ('paste' in k) {
-      void clipboardPaste(navigator.clipboard).then((r) => ('text' in r ? termRef.current?.paste(r.text) : setPasting(true)));
+      void clipboardPaste(navigator.clipboard).then((r) => ('text' in r ? paste(r.text) : setPasting(true)));
       return;
     }
     const armed = activeMods(modsRef.current);
@@ -228,11 +229,15 @@ export function LiveTerminal({
     setMods(consumeMods(modsRef.current));
   };
 
-  // Through xterm's paste, so a CLI in bracketed paste mode gets it as one paste; never logged or kept.
+  // Through xterm's paste, so a CLI in bracketed paste mode gets it as one paste; never logged or kept. A sign-in
+  // terminal sends exactly the code (#302): its prompt takes a line, and stray spaces or escapes make the login fail.
+  const paste = (raw: string) => {
+    const text = signIn ? signInCode(raw) : pasteText(raw);
+    if (text) termRef.current?.paste(text);
+  };
   const pasteIn = (raw: string, enter: boolean) => {
     setPasting(false);
-    const text = pasteText(raw);
-    if (text) termRef.current?.paste(text);
+    paste(raw);
     if (enter) sendRef.current('\r');
     termRef.current?.focus();
   };
@@ -241,7 +246,7 @@ export function LiveTerminal({
     <div className={`live-term ${className ?? ''}`}>
       <div className="live-term-screen" ref={host} />
       {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} dock={!compact} signIn={signIn} />}
-      {pasting && <PasteSheet onSend={pasteIn} onClose={() => setPasting(false)} />}
+      {pasting && <PasteSheet onSend={pasteIn} onClose={() => setPasting(false)} signIn={signIn} />}
       {!compact && (
         <div className="live-term-foot">
           <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />

@@ -3,12 +3,14 @@
 // can be a sign-in code or a key.
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBackLayer } from './Panel';
+import { backdropClose, useBackLayer } from './Panel';
 import { CloseButton } from './Icon';
 import { isTopDialog, useDialogFocus } from './dialogFocus';
 import './paste.css';
 
-export function PasteSheet({ onSend, onClose }: { onSend: (text: string, enter: boolean) => void; onClose: () => void }) {
+/** `signIn`: a sign-in terminal's, asking for the code (#302). It stays open until Send or ×: only a tap that starts and
+ * ends on the backdrop closes it, never the tap that opened it. */
+export function PasteSheet({ onSend, onClose, signIn }: { onSend: (text: string, enter: boolean) => void; onClose: () => void; signIn?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   useDialogFocus(box);
@@ -25,14 +27,16 @@ export function PasteSheet({ onSend, onClose }: { onSend: (text: string, enter: 
   }, [onClose]);
   const ready = !!text.trim();
   return createPortal(
-    <div className="paste-sheet-scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={box} className="paste-sheet ds-screen" role="dialog" aria-modal="true" aria-label="Paste into the terminal" tabIndex={-1}>
+    <div className="paste-sheet-scrim" {...backdropClose(onClose)}>
+      <div ref={box} className="paste-sheet ds-screen" role="dialog" aria-modal="true" aria-label={signIn ? 'Paste the sign-in code' : 'Paste into the terminal'} tabIndex={-1}>
         <div className="paste-sheet-head">
-          <b className="grow">Paste into the terminal</b>
+          <b className="grow">{signIn ? 'Paste the sign-in code' : 'Paste into the terminal'}</b>
           <CloseButton onClick={onClose} />
         </div>
-        <p className="small muted">The clipboard couldn’t be read here. Long-press the box and choose Paste, or type it.</p>
-        <textarea className="paste-sheet-field" aria-label="Text to paste" value={text} onChange={(e) => setText(e.target.value)} autoFocus rows={3} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
+        <p className="small muted">
+          The clipboard couldn’t be read here. Long-press the box and choose Paste, or type it.{signIn ? ' The code is everything the browser page shows, # and all.' : ''}
+        </p>
+        <textarea className="paste-sheet-field" aria-label={signIn ? 'Sign-in code' : 'Text to paste'} value={text} onChange={(e) => setText(e.target.value)} autoFocus rows={3} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
         <div className="paste-sheet-actions">
           <button type="button" className="btn" disabled={!ready} onClick={() => onSend(text, false)}>
             Send

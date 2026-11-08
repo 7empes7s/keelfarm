@@ -41,6 +41,18 @@ export interface AccountView extends ProviderAccount {
   limitHits7d: number;
   agents: string[]; // ids of the agents (and the CEO) pinned to it, or to one of its tags
   running: number; // sessions on it right now
+  signIn: SignInRun | null; // its last sign-in in its terminal since the office started (#302)
+}
+
+/** A login's sign-in: `claude auth login` / `codex login`, or `claude setup-token` in its folder. */
+export type SignInMode = 'login' | 'setup-token';
+
+/** A sign-in in a login's terminal: running, or how it ended. */
+export interface SignInRun {
+  mode: SignInMode;
+  running: boolean;
+  ok: boolean;
+  note: string; // when it's over: "Sign-in failed (400). Try again…", never anything typed
 }
 
 export interface AccountsView {

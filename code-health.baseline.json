@@ -220,12 +220,14 @@
       "typescript(no-misused-promises)": 1
     },
     "server/demo/cloud.ts": {
-      "eslint(no-control-regex)": 1,
       "unicorn(no-useless-spread)": 1
     },
     "server/demo/sessions.ts": {
       "eslint(no-control-regex)": 1,
       "unicorn(prefer-string-starts-ends-with)": 1
+    },
+    "server/demoSignIn.ts": {
+      "eslint(no-control-regex)": 1
     },
     "server/index.ts": {
       "typescript(no-redundant-type-constituents)": 1
