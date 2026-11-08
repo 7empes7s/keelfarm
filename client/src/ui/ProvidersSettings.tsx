@@ -15,6 +15,7 @@ import { confirmDialog } from './Confirm';
 import { workerCli } from './floorRows';
 import './accounts.css';
 import { Icon } from './Icon';
+import { SecretInput } from './SecretInput';
 import { LimitTimeline, RotationCard } from './RotationSettings';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
@@ -196,7 +197,7 @@ function EditSheet({ a, close }: { a: AccountView; close: () => void }) {
   };
   return (
     <Sheet title={`Edit ${a.label}`} onClose={close}>
-      <form className="acc-form" onSubmit={(e) => void submit(e)}>
+      <form className="acc-form" autoComplete="off" onSubmit={(e) => void submit(e)}>
         <label className="field">
           <span>Name</span>
           <input value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} />
@@ -217,7 +218,7 @@ function EditSheet({ a, close }: { a: AccountView; close: () => void }) {
             </label>
             <label className="field">
               <span>New key (tested before it's saved)</span>
-              <input type="password" autoComplete="off" value={key} placeholder={`••••${a.keyHint}`} onChange={(e) => setKey(e.target.value)} />
+              <SecretInput name={`account-${a.id}-key`} value={key} placeholder={`••••${a.keyHint}`} onChange={(e) => setKey(e.target.value)} />
             </label>
           </>
         )}
@@ -263,7 +264,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
   };
   return (
     <Sheet title={`Add a ${cli === 'claude' ? 'Claude Code' : 'Codex'} account`} onClose={close}>
-      <form className="acc-form" onSubmit={(e) => void submit(e)}>
+      <form className="acc-form" autoComplete="off" onSubmit={(e) => void submit(e)}>
         <div role="radiogroup" aria-label="Kind of account" className="acc-kinds">
           {kinds.map((k) => (
             <label key={k} className={`acc-kind ${kind === k ? 'on' : ''}`}>
@@ -286,7 +287,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
         {kind === 'api-key' && (
           <label className="field">
             <span>{cli === 'claude' ? 'Anthropic' : 'OpenAI'} API key</span>
-            <input type="password" autoComplete="off" required value={key} placeholder={demo ? (cli === 'claude' ? 'sk-ant-anything works in the demo' : 'sk-anything works in the demo') : cli === 'claude' ? 'sk-ant-…' : 'sk-…'} onChange={(e) => setKey(e.target.value)} />
+            <SecretInput name="new-account-key" required value={key} placeholder={demo ? (cli === 'claude' ? 'sk-ant-anything works in the demo' : 'sk-anything works in the demo') : cli === 'claude' ? 'sk-ant-…' : 'sk-…'} onChange={(e) => setKey(e.target.value)} />
           </label>
         )}
         {kind === 'setup-token' && (
