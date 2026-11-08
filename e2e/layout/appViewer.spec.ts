@@ -32,8 +32,7 @@ const SCREENS: Screen[] = [
       const root = await pocket(page, 'kanban');
       await root.getByTitle("Open this floor's running app").click();
       const viewer = page.getByRole('dialog');
-      await viewer.getByRole('button', { name: 'More for the app' }).click();
-      await page.getByRole('menuitem', { name: /Desktop width/ }).click();
+      await viewer.getByRole('toolbar').getByRole('button', { name: 'Desktop' }).click();
       await expect(viewer.getByText('Turn your phone sideways for the desktop view')).toBeVisible();
       return viewer;
     },
@@ -58,10 +57,7 @@ for (const mode of MODES) {
       const root = await pocket(page, 'kanban');
       await root.getByTitle("Open this floor's running app").click();
       const viewer = page.getByRole('dialog');
-      const pickDesktop = async () => {
-        await viewer.getByRole('button', { name: 'More for the app' }).click();
-        await page.getByRole('menuitem', { name: /Desktop width/ }).click();
-      };
+      const pickDesktop = () => viewer.getByRole('toolbar').getByRole('button', { name: 'Desktop' }).click();
       await pickDesktop();
       const hint = viewer.getByText('Turn your phone sideways for the desktop view');
       await expect(hint).toBeVisible();
@@ -102,3 +98,39 @@ for (const mode of MODES) {
     });
   });
 }
+
+// ---------- the phone's toolbar: one row, Mobile | Desktop in it, the rest in ⋯ (#294) ----------
+
+test('on a phone the toolbar is one row with Start/Stop, Mobile | Desktop and ⋯; at 1280 it is unchanged', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await pocket(page, 'kanban');
+  await root.getByTitle("Open this floor's running app").click();
+  const viewer = page.getByRole('dialog');
+  const bar = viewer.getByRole('toolbar', { name: 'App controls' });
+  expect((await bar.boundingBox())!.height).toBeLessThan(80); // one row of 44 px buttons
+  await expect(bar.getByRole('button', { name: /^(Start|Stop)$/ })).toBeVisible();
+  await expect(bar.getByRole('button', { name: 'More for the app' })).toBeVisible();
+  const mobile = bar.getByRole('button', { name: 'Mobile' });
+  const desktop = bar.getByRole('button', { name: 'Desktop' });
+  await mobile.click();
+  const stage = viewer.locator('.app-stage');
+  await expect(stage).toHaveClass(/app-stage-phone/);
+  await desktop.click();
+  await expect(stage).not.toHaveClass(/app-stage-phone/);
+  await expect(desktop).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('menu')).toHaveCount(0); // no ⋯ on the way
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const chips = await viewer.locator('.channels').evaluate((c) => [...c.querySelectorAll('.channel')].map((x) => x.getBoundingClientRect().width <= c.clientWidth));
+  expect(chips.every(Boolean)).toBe(true); // a chip never wider than its row
+
+  // What left the bar is in ⋯.
+  await bar.getByRole('button', { name: 'More for the app' }).click();
+  for (const item of ['Open in browser', 'Reload', /Full screen/, /Tablet width/, 'Preview stats']) await expect(page.getByRole('menuitem', { name: item })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const width = bar.getByRole('group', { name: 'Viewport width' });
+  for (const name of ['Phone', 'Tablet', 'Desktop']) await expect(width.getByRole('button', { name })).toBeVisible();
+  await expect(bar.getByRole('button', { name: /Reload/ })).toBeVisible();
+  await expect(bar.getByRole('link', { name: /Open in new tab/ })).toBeVisible();
+});

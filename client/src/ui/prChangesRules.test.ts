@@ -91,6 +91,10 @@ describe('cardOpen and remember', () => {
     expect(cardOpen({}, 'o/r#5')).toBe(true);
     expect(cardOpen(remember({}, 'o/r#5', { closed: true }, 1), 'o/r#5')).toBe(false);
   });
+  it("starts a phone's sheet lowered when the PR has no pages to look at (#294)", () => {
+    expect(cardOpen({}, 'o/r#5', true)).toBe(false);
+    expect(cardOpen({}, 'o/r#5', false)).toBe(true);
+  });
   it('keeps the newest 60 PRs', () => {
     let m: PrMemory = {};
     for (let i = 0; i < 65; i++) m = remember(m, `o/r#${i}`, { path: '/' }, i);
