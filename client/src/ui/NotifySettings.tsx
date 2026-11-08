@@ -13,6 +13,7 @@ import { ChannelHealth, NotifyGuide, NtfyQuick } from './NotifyGuide';
 import { suggestOfficeUrl } from './notifySteps';
 import { TelegramSettings } from './TelegramSettings';
 import { Icon } from './Icon';
+import { SecretInput } from './SecretInput';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/pocket.md';
 
@@ -127,6 +128,7 @@ function WebhookRow({ hook, notify, save }: { hook: (typeof WEBHOOKS)[number]; n
       ) : (
         <form
           className="notify-form"
+          autoComplete="off"
           onSubmit={(e) => {
             e.preventDefault();
             void store(values);
@@ -136,16 +138,27 @@ function WebhookRow({ hook, notify, save }: { hook: (typeof WEBHOOKS)[number]; n
           {hook.fields.map((f) => (
             <label key={f.key} className="field">
               <span>{f.label}</span>
-              <input
-                type={f.secret ? 'password' : 'text'}
-                value={values[f.key] ?? ''}
-                onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
-                placeholder={f.placeholder}
-                autoComplete="off"
-                spellCheck={false}
-                aria-invalid={!!error}
-                aria-describedby={error ? errorId : undefined}
-              />
+              {f.secret ? (
+                <SecretInput
+                  name={`notify-${hook.id}-${f.key}`}
+                  value={values[f.key] ?? ''}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? errorId : undefined}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={values[f.key] ?? ''}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? errorId : undefined}
+                />
+              )}
             </label>
           ))}
           {error && (
