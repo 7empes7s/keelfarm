@@ -15,6 +15,7 @@ import { confirmDialog } from './Confirm';
 import { workerCli } from './floorRows';
 import './accounts.css';
 import { Icon } from './Icon';
+import { LimitTimeline, RotationCard } from './RotationSettings';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
@@ -80,6 +81,7 @@ function Stats({ list }: { list: AccountView[] }) {
 
 function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: boolean; last: boolean; edit: () => void; signIn: () => void }) {
   const agents = useStore((s) => s.agents);
+  const demo = useStore((s) => s.demo);
   const now = useNow(30_000);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,6 +131,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
             !first && { label: 'Move up', onSelect: () => void api.moveAccount(a.id, -1).catch(() => undefined) },
             !last && { label: 'Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
             { label: a.kind === 'api-key' ? 'Rename, tags, daily cap' : 'Rename and tags', onSelect: edit },
+            demo && !a.removing && { label: 'Simulate a limit', hint: 'Demo: its sessions switch to the next account', onSelect: () => void api.simulateAccountLimit(a.id).catch(() => undefined) },
             !!billing && { label: 'Open billing and usage', onSelect: () => void window.open(billing, '_blank', 'noopener') },
             !a.builtIn && !a.removing && { label: 'Remove', danger: true, hint: 'Running sessions finish first', onSelect: () => void remove() },
           ]}
@@ -149,6 +152,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
       {a.dailyCostCap ? (
         <ProgressBar label="Today" value={`${usd(a.todayUsd)} of ${usd(a.dailyCostCap)}`} pct={Math.min(1, a.todayUsd / a.dailyCostCap)} tone={a.todayUsd >= a.dailyCostCap ? 'bad' : a.todayUsd >= a.dailyCostCap * 0.75 ? 'warn' : 'good'} aria={`${a.label}: ${usd(a.todayUsd)} of a ${usd(a.dailyCostCap)} daily cap`} />
       ) : null}
+      <LimitTimeline a={a} now={now} />
       <div className="ds-row-meta">
         {a.todaySessions} session{a.todaySessions === 1 ? '' : 's'} today · {usd(a.todayUsd)}
         {a.running ? ` · ${a.running} running` : ''}
@@ -373,9 +377,10 @@ export function ProvidersSettings() {
       </h3>
       <p className="muted small">
         Every login and API key the coding agents on this computer run on. Agents and the CEO use the rotation (the first ready account, top first) unless you pin them to an account or a tag in their
-        setup. {onRotation} on the rotation now.
+        setup; when one is out, they move to the next. {onRotation} on the rotation now.
       </p>
       <Stats list={list} />
+      <RotationCard />
       {CLI_INFO.map((c) => {
         const mine = list.filter((a) => a.cli === c.id);
         const users = agents.filter((x) => x.host !== 'box' && workerCli(x, settings) === c.id).length;
