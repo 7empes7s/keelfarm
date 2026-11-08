@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { fixOutcome, type FixRecord } from './fixOutcome.ts';
 import { MAX_MERGE_FIXES, mergeStep } from './mergeGate.ts';
-import { conflictFixInstructions, labErrorNext, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, qaRoundResult, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
 
 const CONFLICTING: QaPull = { mergeable: 'CONFLICTING', mergeState: 'DIRTY' };
 const MERGEABLE: QaPull = { mergeable: 'MERGEABLE', mergeState: 'CLEAN' };
@@ -41,6 +42,36 @@ describe('qaOutcome', () => {
     const rec = { passedSha: 'a'.repeat(40), mergeFixes: 0, pendingSince: null, mergeRetryAt: null, alerted: false, rerunSha: null, rerunAt: null };
     const pr = { ...CONFLICTING, isDraft: false, headSha: rec.passedSha, checks: 'passing' as const, failedChecks: [], pendingChecks: [] };
     expect(mergeStep(pr, rec, 0, { base: 'main' })).toMatchObject({ do: 'send-back', reason: 'conflict', needsHuman: false });
+  });
+});
+
+describe('failed QA with conflicts (#275)', () => {
+  it('exhausts the budget through repeated QA failures and pushed fixes', () => {
+    const rec = { ...record(), prNumber: 7, sessionFailures: 0, testedSha: 'head-1', passedSha: null, fixReason: 'qa', preQa: null, qaChecks: null } satisfies QaRoundRecord & FixRecord;
+    const outcomes = [];
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const result = qaRoundResult(false, rec, CONFLICTING);
+      outcomes.push(result.next);
+      Object.assign(rec, { mergeFixes: result.mergeFixes, fixReason: result.next === 'conflict' ? 'conflict' : 'qa' });
+      if (result.next === 'needs-human') break;
+      const head = `head-${rec.round + 1}`;
+      const fix = fixOutcome(rec, head, 1);
+      expect(fix.pushed).toBe(true);
+      expect(fix.set.status).toBe('queued');
+      Object.assign(rec, fix.set, { testedSha: head });
+    }
+    expect(outcomes).toEqual([
+      ...Array(MAX_QA_ROUNDS - 1).fill('failed'),
+      ...Array(MAX_MERGE_FIXES).fill('conflict'),
+      'needs-human',
+    ]);
+    expect(rec).toMatchObject({ round: MAX_QA_ROUNDS + MAX_MERGE_FIXES, retests: 0, mergeFixes: MAX_MERGE_FIXES });
+  });
+
+  it('does not spend another merge fix on a pass or an ordinary QA failure', () => {
+    expect(qaRoundResult(true, last(), CONFLICTING)).toEqual({ next: 'passed', mergeFixes: 0 });
+    expect(qaRoundResult(false, record(), CONFLICTING)).toEqual({ next: 'failed', mergeFixes: 0 });
+    expect(qaRoundResult(false, last(), MERGEABLE)).toEqual({ next: 'needs-human', mergeFixes: 0 });
   });
 });
 

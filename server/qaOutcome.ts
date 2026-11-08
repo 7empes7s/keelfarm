@@ -36,6 +36,12 @@ export function qaOutcome(pass: boolean, rec: QaRoundRecord, pr: QaPull | null):
   return conflicting && rec.mergeFixes < MAX_MERGE_FIXES ? 'conflict' : 'needs-human';
 }
 
+/** A finished QA round's decision and budget: a failed test that also conflicts spends a merge fix, unlike maintenance before QA. */
+export function qaRoundResult(pass: boolean, rec: QaRoundRecord, pr: QaPull | null): { next: QaNext; mergeFixes: number } {
+  const next = qaOutcome(pass, rec, pr);
+  return { next, mergeFixes: rec.mergeFixes + (next === 'conflict' ? 1 : 0) };
+}
+
 /**
  * After a lab-error report (#189): the lab failed, not the code, so the PR goes back to QA by itself once in a round
  * (retry) and to triage on a second one (stuck). Never a failed round, never to a developer.
