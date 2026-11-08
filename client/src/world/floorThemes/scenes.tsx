@@ -357,6 +357,11 @@ function MarketWall({ repo }: { repo: RepoView }) {
 // ---------- the trading floor's hanging ticker ----------
 
 const TICKER = { x: 0, y: 3.02, z: 5.6, w: 10, h: 0.42 };
+const TICKER_PX_H = 64;
+
+let measurer: CanvasRenderingContext2D | null = null;
+/** A context for measuring the ticker's text before its texture is made. */
+const measureCtx = () => (measurer ??= document.createElement('canvas').getContext('2d')!);
 
 function Ticker({ repo }: { repo: RepoView }) {
   const n = useStore((s) => s.ops.floors.find((f) => f.repoId === repo.id) ?? EMPTY_NUMBERS);
@@ -369,14 +374,17 @@ function Ticker({ repo }: { repo: RepoView }) {
   }, [n, open]);
   const label = `FLOOR ${repo.floor} · ${(repo.fullName.split('/')[1] ?? repo.fullName).toUpperCase()}`;
   const key = quotes.map((q) => `${q.symbol}${q.text}${q.dir}${q.good}`).join('|');
-  const tex = useCanvasTexture(2048, 64, (ctx) => D.drawTickerStrip(ctx, 2048, 64, quotes, label), [key, label]);
+  // as wide as one pass of every quote (measured), shown at the housing's proportions and repeated as it scrolls
+  // (rounded up, so a number ticking over doesn't remake the texture)
+  const W = useMemo(() => Math.ceil(D.tickerStripWidth(measureCtx(), quotes, label, TICKER_PX_H) / 256) * 256, [quotes, label]);
+  const tex = useCanvasTexture(W, TICKER_PX_H, (ctx) => D.drawTickerStrip(ctx, W, TICKER_PX_H, quotes, label), [key, label, W]);
   useEffect(() => {
     tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.x = 0.5;
+    tex.repeat.x = ((TICKER.w / TICKER.h) * TICKER_PX_H) / W;
     tex.needsUpdate = true;
-  }, [tex]);
+  }, [tex, W]);
   useFrame((_, dt) => {
-    tex.offset.x = (tex.offset.x + dt * 0.035) % 1;
+    tex.offset.x = (tex.offset.x + (dt * 0.6 * TICKER_PX_H) / W) % 1; // the same speed however long the strip is
   });
   return (
     <group position={[TICKER.x, TICKER.y, TICKER.z]}>

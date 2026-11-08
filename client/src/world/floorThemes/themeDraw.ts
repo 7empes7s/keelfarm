@@ -394,31 +394,39 @@ export function drawNews(ctx: CanvasRenderingContext2D, w: number, h: number, se
   ctx.fillText('CFRM +2.1%   QA +0.8%   CI −0.2%   SHIP +4.0%', w * 0.03, h * 0.93);
 }
 
-/** The ticker's strip: every quote, then again, so it scrolls round seamlessly. */
+const tickerFont = (h: number) => `700 ${h * 0.56}px ${MONO}`;
+const arrowOf = (q: Quote) => (q.dir === 'up' ? '▲' : q.dir === 'down' ? '▼' : '■');
+
+/** Where each piece of the ticker goes on one pass: the label, then every quote; `width` is the pass, with its gap after. */
+function tickerLayout(ctx: CanvasRenderingContext2D, quotes: readonly Quote[], label: string, h: number) {
+  ctx.font = tickerFont(h);
+  const out: { text: string; x: number; color: string }[] = [];
+  let x = h * 0.4;
+  const put = (text: string, color: string, gap: number) => {
+    out.push({ text, x, color });
+    x += ctx.measureText(text).width + gap;
+  };
+  put(label, '#ffd166', h);
+  for (const q of quotes) {
+    put(q.symbol, '#e0e6ef', h * 0.3);
+    put(`${q.text} ${arrowOf(q)}`, q.dir === 'flat' ? '#9aa5b1' : q.good ? '#19c37d' : '#ff5c5c', h * 0.9);
+  }
+  return { pieces: out, width: Math.ceil(x + h * 0.6) };
+}
+
+/** How wide the ticker's texture is (h tall): one pass of the label and every quote, measured. */
+export const tickerStripWidth = (ctx: CanvasRenderingContext2D, quotes: readonly Quote[], label: string, h: number) => tickerLayout(ctx, quotes, label, h).width;
+
+/** The ticker's strip: the label and every quote once; the texture repeats, so it scrolls round seamlessly. */
 export function drawTickerStrip(ctx: CanvasRenderingContext2D, w: number, h: number, quotes: readonly Quote[], label: string) {
   ctx.fillStyle = '#05070d';
   ctx.fillRect(0, 0, w, h);
+  const { pieces } = tickerLayout(ctx, quotes, label, h);
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.font = `700 ${h * 0.56}px ${MONO}`;
-  let x = h * 0.4;
-  const half = w / 2;
-  for (let pass = 0; pass < 2; pass++) {
-    x = pass * half + h * 0.4;
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText(label, x, h / 2);
-    x += ctx.measureText(label).width + h;
-    for (const q of quotes) {
-      ctx.fillStyle = '#e0e6ef';
-      ctx.fillText(q.symbol, x, h / 2);
-      x += ctx.measureText(q.symbol).width + h * 0.3;
-      const arrow = q.dir === 'up' ? '▲' : q.dir === 'down' ? '▼' : '■';
-      ctx.fillStyle = q.dir === 'flat' ? '#9aa5b1' : q.good ? '#19c37d' : '#ff5c5c';
-      const t = `${q.text} ${arrow}`;
-      ctx.fillText(t, x, h / 2);
-      x += ctx.measureText(t).width + h * 0.9;
-      if (x > (pass + 1) * half - h * 2) break;
-    }
+  for (const p of pieces) {
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, p.x, h / 2);
   }
 }
 
