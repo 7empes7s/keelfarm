@@ -103,14 +103,14 @@ function panes(kind: FloorKind) {
 }
 
 /** The real windows in the side walls, with the walls round them and the side doors' frames. */
-function SideWalls({ kind }: { kind: FloorKind }) {
+function SideWalls({ kind, wall }: { kind: FloorKind; wall: string }) {
   const walls = useMemo(() => sideWalls(kind), [kind]);
   const frame = useMemo(() => frames(kind), [kind]);
   const glass = useMemo(() => panes(kind), [kind]);
   useEffect(() => () => [walls, frame, glass].forEach((g) => g.dispose()), [walls, frame, glass]);
   return (
     <group>
-      <mesh geometry={walls} material={toon(WALL)} receiveShadow />
+      <mesh geometry={walls} material={toon(wall)} receiveShadow />
       <mesh geometry={frame} material={toon('#ffffff')}>
         <Outlines thickness={0.018} color={INK} />
       </mesh>
@@ -131,8 +131,9 @@ function CeilingLight({ position }: { position: [number, number, number] }) {
   );
 }
 
-export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: string; floorColor: string }) {
-  const wall = toon(WALL);
+/** `wallColor`: a floor theme's walls (#370); the office's cream otherwise. */
+export function Shell({ kind, accent, floorColor, wallColor = WALL }: { kind: FloorKind; accent: string; floorColor: string; wallColor?: string }) {
+  const wall = toon(wallColor);
   const t = 0.3;
   const { doorHalf, doorHeight } = ELEVATOR;
   const lights = useMemo(() => {
@@ -198,7 +199,7 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
       <mesh position={[0, WALL_H / 2, -HALF_D - t / 2]} material={wall} receiveShadow>
         <boxGeometry args={[HALF_W * 2 + t * 2, WALL_H, t]} />
       </mesh>
-      <SideWalls kind={kind} />
+      <SideWalls kind={kind} wall={wallColor} />
       {[-1, 1].map((s) => (
         <mesh key={s} position={[s * (doorHalf + southSeg / 2), WALL_H / 2, HALF_D + t / 2]} material={wall} receiveShadow>
           <boxGeometry args={[southSeg, WALL_H, t]} />

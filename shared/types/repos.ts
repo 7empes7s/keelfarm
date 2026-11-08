@@ -1,5 +1,6 @@
 // Floors: their repos, issues and pull requests, previews, QA, the ticker and the ping-pong board. Imported through shared/types.ts.
 import type { CharterView } from '../charter.ts';
+import type { FloorTheme } from '../floorThemes.ts';
 import type { FloorPracticeView } from '../practices.ts';
 
 export interface IssueInfo {
@@ -61,6 +62,7 @@ export interface RepoView extends FloorPracticeView {
   defaultBranch: string;
   floor: number; // 1-based floor number in the building
   color: string; // accent color for the floor
+  theme?: FloorTheme; // how the floor is dressed in the 3D office (#370); the server always sends it, an old journal may not (the office)
   autoAssign: boolean;
   autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
   folderSync: string | null; // how the floor's main checkout stands against GitHub: "in sync", "updated to abc1234", "2 behind: local changes" …

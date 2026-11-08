@@ -22,7 +22,7 @@ const REPEATED: DecorItem[] = ['plant', 'fig', 'beanbag'];
 const shortName = (repo: RepoView) => repo.fullName.split('/')[1] ?? repo.fullName;
 
 /** One model, once per pose: a single draw call however many there are. */
-function InstancedModel({ geometry, at, shadow = true }: { geometry: THREE.BufferGeometry; at: Pose[]; shadow?: boolean }) {
+export function InstancedModel({ geometry, at, shadow = true }: { geometry: THREE.BufferGeometry; at: Pose[]; shadow?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
     const m = ref.current;

@@ -1,0 +1,78 @@
+/* A floor's 3D theme cards (FloorThemePicker.tsx, #370). */
+.floor-theme-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+
+.floor-theme-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  cursor: pointer;
+}
+
+/* the radio itself stays focusable and announced; the card shows its state */
+.floor-theme-card input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.floor-theme-card:hover {
+  background: var(--ds-surface-hover);
+}
+
+.floor-theme-card.on {
+  border-color: var(--ds-outline);
+  box-shadow: var(--ds-shadow-1);
+}
+
+.floor-theme-card:has(input:focus-visible) {
+  outline: var(--ds-border-strong) solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.floor-theme-preview {
+  position: relative;
+  display: block;
+  height: 48px;
+  border-radius: var(--ds-radius-sm);
+  border: var(--ds-border) solid var(--ds-line);
+  overflow: hidden;
+}
+
+.floor-theme-screen {
+  position: absolute;
+  top: 18%;
+  left: 36%;
+  width: 28%;
+  height: 26%;
+  border-radius: 2px;
+  opacity: 0.9;
+}
+
+.floor-theme-name {
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-sm);
+}
+
+.floor-theme-card.on .floor-theme-name::after {
+  content: ' ✓';
+}
+
+.floor-theme-blurb {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  line-height: var(--ds-leading-tight);
+}

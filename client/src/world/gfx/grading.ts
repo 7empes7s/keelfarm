@@ -84,3 +84,41 @@ export function bloomAt(t: number, out = {} as BloomLook): BloomLook {
 
 /** Things that only glow after dark (the moon, the city's windows, the lamps) join the bloom past this much night. */
 export const NIGHT_BLOOM_FROM = 0.5;
+
+// ---------- a floor theme's grade (#370) ----------
+
+/** A floor theme's grade: tints and multipliers laid over the time of day's. */
+export interface FloorGrade {
+  shadows: Tint;
+  highlights: Tint;
+  saturation: number;
+  contrast: number;
+}
+
+const hexTint = (hex: string, amount: number): Tint => {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  const top = Math.max(r, g, b, 1);
+  return tint({ r: 1, g: 1, b: 1 }, r / top, g / top, b / top, amount);
+};
+
+/** A theme pack's grade (hex colours, how much of them) as luminance-neutral tints. */
+export function floorGrade(g: { shadows: string; highlights: string; amount: number; saturation: number; contrast: number }): FloorGrade {
+  return { shadows: hexTint(g.shadows, g.amount), highlights: hexTint(g.highlights, g.amount), saturation: g.saturation, contrast: g.contrast };
+}
+
+/** `g` with a floor's grade on top (in place); unchanged without one, so a plain office looks as it always did. */
+export function withFloorGrade(g: Grade, f: FloorGrade | null): Grade {
+  if (!f) return g;
+  g.shadows.r *= f.shadows.r;
+  g.shadows.g *= f.shadows.g;
+  g.shadows.b *= f.shadows.b;
+  g.highlights.r *= f.highlights.r;
+  g.highlights.g *= f.highlights.g;
+  g.highlights.b *= f.highlights.b;
+  g.saturation *= f.saturation;
+  g.contrast *= f.contrast;
+  return g;
+}

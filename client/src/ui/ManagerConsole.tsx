@@ -26,6 +26,7 @@ import { workerCli } from './floorRows';
 import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
+import { FloorThemePicker } from './FloorThemePicker';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
 import { flashInto } from './jumpFlash';
@@ -193,6 +194,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           <input type="checkbox" checked={repo.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> <Icon name="globe" /> Browser testing (Playwright MCP)
         </label>
       </div>
+      <FloorThemePicker repo={repo} onPick={(theme) => patch({ theme })} />
       {others.length > 0 && (
         <div className="ds-switches links">
           <span className="ds-row-meta">

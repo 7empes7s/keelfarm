@@ -30,6 +30,16 @@ const wasteGroup = (where: Where, rounds = false): View =>
   tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
 const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
 
+/** Floors & repos with the first floor's 3D look open: a card per floor theme (#370). */
+const floorThemes: View = {
+  name: 'Floors & repos: 3D look cards',
+  go: async (root) => {
+    await pocketSection(root, 'Floors & repos');
+    await root.locator('.floor-theme summary').first().click();
+    await expect(root.locator('.floor-theme-card').first()).toBeVisible();
+  },
+};
+
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
   name: 'Charter editor',
@@ -54,7 +64,7 @@ const SCREENS: Screen[] = [
       await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
       return pocketSettings(page);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, floorThemes, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

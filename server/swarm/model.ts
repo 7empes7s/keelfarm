@@ -18,6 +18,7 @@ import type { AgentTerminal } from '../terminal.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
+import type { FloorTheme } from '../../shared/floorThemes.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
@@ -75,6 +76,7 @@ export interface PersistedRepo {
   labCommands?: string[]; // lab_run's allowlist on this floor beyond the default (#56), from the CEO's set_floor_profile
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
+  theme?: FloorTheme; // how the floor is dressed in the 3D office (#370); missing: the plain office
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;

@@ -38,9 +38,13 @@ const grooveGeo = new THREE.TorusGeometry(r * 0.55, 0.014, 6, 40);
 const bossGeo = new THREE.SphereGeometry(r * 0.24, 20, 12);
 const glowGeo = new THREE.CircleGeometry(r * 0.9, 40);
 const ringGeo = new THREE.RingGeometry(0.88, 1, 48);
+const bellGeo = new THREE.CylinderGeometry(r * 0.42, r * 0.8, r * 1.1, 32);
+const bellTopGeo = new THREE.SphereGeometry(r * 0.42, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+const bellLipGeo = new THREE.CylinderGeometry(r * 0.86, r * 0.86, 0.06, 32);
+const clapperGeo = new THREE.SphereGeometry(0.07, 12, 8);
 
-/** The disc, its ropes and the flash, on a pivot under the crossbar. */
-function Disc() {
+/** The disc (or the trading floor's brass bell, #370), its ropes and the flash, on a pivot under the crossbar. */
+function Disc({ bell }: { bell: boolean }) {
   const pivot = useRef<THREE.Group>(null);
   const glow = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Mesh>(null);
@@ -73,17 +77,31 @@ function Disc() {
       {[-1, 1].map((s) => (
         <Cyl key={s} r={0.018} h={DROP - r * 0.92} position={[s * r * 0.3, -(DROP - r * 0.92) / 2, 0]} color="#e9d8a6" shadow={false} />
       ))}
-      <group position={[0, -DROP, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <mesh geometry={discGeo} material={toon(BRONZE_DARK)} castShadow>
-          <Outlines thickness={0.02} color={INK} />
-        </mesh>
-        <mesh geometry={faceGeo} material={toon(BRONZE)} />
-      </group>
-      <group position={[0, -DROP, 0.046]}>
-        <mesh geometry={grooveGeo} material={toon(BRONZE_DARK)} />
-        <mesh geometry={bossGeo} material={toon(BRONZE_LIGHT)} scale={[1, 1, 0.35]}>
-          <Outlines thickness={0.012} color={INK} />
-        </mesh>
+      {bell ? (
+        // plain meshes, not batched parts: they swing with the pivot
+        <group position={[0, -DROP + r * 0.3, 0]}>
+          <mesh geometry={bellGeo} material={toon(BRONZE)} castShadow>
+            <Outlines thickness={0.02} color={INK} />
+          </mesh>
+          <mesh geometry={bellTopGeo} material={toon(BRONZE)} position={[0, r * 0.55, 0]} scale={[1, 0.6, 1]} />
+          <mesh geometry={bellLipGeo} material={toon(BRONZE_DARK)} position={[0, -r * 0.55, 0]} />
+          <mesh geometry={clapperGeo} material={toon(BRONZE_DARK)} position={[0, -r * 0.7, 0]} />
+        </group>
+      ) : (
+        <group position={[0, -DROP, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <mesh geometry={discGeo} material={toon(BRONZE_DARK)} castShadow>
+            <Outlines thickness={0.02} color={INK} />
+          </mesh>
+          <mesh geometry={faceGeo} material={toon(BRONZE)} />
+        </group>
+      )}
+      <group position={[0, -DROP, bell ? r * 0.82 : 0.046]}>
+        {!bell && <mesh geometry={grooveGeo} material={toon(BRONZE_DARK)} />}
+        {!bell && (
+          <mesh geometry={bossGeo} material={toon(BRONZE_LIGHT)} scale={[1, 1, 0.35]}>
+            <Outlines thickness={0.012} color={INK} />
+          </mesh>
+        )}
         <mesh ref={glow} geometry={glowGeo} material={glowMat} position={[0, 0, 0.04]} visible={false} />
         <mesh ref={ring} geometry={ringGeo} material={ringMat} position={[0, 0, 0.05]} visible={false} />
       </group>
@@ -91,18 +109,19 @@ function Disc() {
   );
 }
 
-export function Gong({ repoId }: { repoId: string }) {
-  const ref = useInteractable<THREE.Group>({ id: 'gong', label: 'Bang the gong', action: { kind: 'poke', toyId: 'gong' } }, 3.4);
+/** `bell`: the trading floor's merge bell in the same frame (#370): same strikes and runs, its own ring. */
+export function Gong({ repoId, bell = false }: { repoId: string; bell?: boolean }) {
+  const ref = useInteractable<THREE.Group>({ id: 'gong', label: bell ? 'Ring the bell' : 'Bang the gong', action: { kind: 'poke', toyId: 'gong' } }, 3.4);
   const mallet = useRef<THREE.Group>(null);
   useEffect(() => {
-    setGongHere(repoId);
+    setGongHere(repoId, bell ? 'bell' : 'gong');
     const off = onPoke('gong', () => void hitGong());
     return () => {
       off();
       resetGongRuns();
       if (gongState.here === repoId) setGongHere(null);
     };
-  }, [repoId]);
+  }, [repoId, bell]);
   // Moves anyone running to the gong along; the mallet leaves its hook while a runner has it.
   useFrame(() => {
     pumpGongRuns(performance.now());
@@ -124,7 +143,7 @@ export function Gong({ repoId }: { repoId: string }) {
         <Box key={s} size={[0.1, 0.21, 0.24]} position={[s * (w / 2 + 0.1), h - 0.085, 0]} color="#d62828" outline shadow={false} />
       ))}
       <Box size={[w - POST * 2, 0.08, 0.1]} position={[0, 0.42, 0]} color={WOOD_DARK} shadow={false} />
-      <Disc />
+      <Disc bell={bell} />
       {/* the padded mallet, hanging on a hook on the right-hand post */}
       <group ref={mallet} position={[POST_X, 1.45, POST / 2 + 0.05]}>
         <Box size={[0.05, 0.05, 0.1]} position={[0, 0, -0.03]} color="#495057" shadow={false} />

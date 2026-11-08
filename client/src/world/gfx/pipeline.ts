@@ -13,7 +13,8 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { nightFactor } from '../sky/time';
 import { dayTime } from '../sky/useDayTime';
 import { bloomOf } from './bloomMarks';
-import { bloomAt, gradeAt, NIGHT_BLOOM_FROM, type BloomLook, type Grade } from './grading';
+import { bloomAt, gradeAt, NIGHT_BLOOM_FROM, withFloorGrade, type BloomLook, type Grade } from './grading';
+import { floorLook } from '../floorThemes/floorLook';
 import type { Tier } from './quality';
 
 /** Meshes drawn with a material marked in bloomMarks.ts sit on these layers as well as layer 0. */
@@ -280,7 +281,7 @@ export function createPipeline(gl: THREE.WebGLRenderer, scene: THREE.Scene, came
   composer.addPass(finish);
   gl.info.autoReset = false;
 
-  const looks = { t: -1, bloom: {} as BloomLook, grade: gradeAt(0.5) };
+  const looks = { t: -1, floor: -1, bloom: {} as BloomLook, grade: gradeAt(0.5) };
   let synced = 0;
   let glowing = { always: 0, night: 0 };
   let frames = 0;
@@ -298,11 +299,12 @@ export function createPipeline(gl: THREE.WebGLRenderer, scene: THREE.Scene, came
         synced = now;
         glowing = syncGlowLayers(scene);
       }
-      if (dayTime.t !== looks.t) {
+      if (dayTime.t !== looks.t || floorLook.version !== looks.floor) {
         looks.t = dayTime.t;
+        looks.floor = floorLook.version;
         bloom.look(bloomAt(looks.t, looks.bloom));
         bloom.night = nightFactor(looks.t) > NIGHT_BLOOM_FROM;
-        grade?.look(gradeAt(looks.t, looks.grade));
+        grade?.look(withFloorGrade(gradeAt(looks.t, looks.grade), floorLook.grade)); // a themed floor's grade on top (#370)
       }
       composer.render(delta);
       frames++;
