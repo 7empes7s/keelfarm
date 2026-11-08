@@ -29,10 +29,14 @@
   padding: 0 var(--ds-space-4);
 }
 .decision-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: var(--ds-target);
   font-size: var(--ds-text-lg);
   line-height: 1;
   background: var(--ds-surface-raised);
+  --ds-icon: var(--ds-icon-md);
 }
 /* a row that scrolls sideways inside itself, one whole card per page (never half off it, #183): the page never does */
 .decision-row {

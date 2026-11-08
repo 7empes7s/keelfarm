@@ -240,11 +240,13 @@ export function HUD() {
               <Icon name="play" /> replay
             </>
           ) : connected ? (
-            '● live'
-          ) : restarting ? (
-            '○ restarting'
+            <>
+              <Icon name="circle-dot" /> live
+            </>
           ) : (
-            '○ reconnecting'
+            <>
+              <Icon name="circle" /> {restarting ? 'restarting' : 'reconnecting'}
+            </>
           )}
         </span>
         <span className="pill">

@@ -1,10 +1,12 @@
 // The hover cards' bodies (#213): an agent, an issue or PR, a QA verdict and its checks. Read from the store as it is.
+import type { ReactNode } from 'react';
 import { firstRoundRate, mergesThisWeek, rank, weeklySeries } from '../../../shared/careers';
 import type { QaView, RepoView } from '../../../shared/types';
 import { qaKey, useStore, type Agent } from '../store';
 import { fmtUsd } from '../ops';
 import { agentPhrase } from './statusPhrase';
 import { PeekCard } from './HoverCard';
+import { Icon } from './Icon';
 import { QA_BADGE } from './channels';
 import { bodyLines, checkWord, firstFailing, mergesToday, whoIsOn } from './peekFacts';
 
@@ -51,10 +53,10 @@ export function WorkPeek({ repo, n }: { repo: RepoView; n: number }) {
       sub={pull ? `${pull.isDraft ? 'draft' : pull.state.toLowerCase()} · +${pull.additions} −${pull.deletions}` : issue ? 'open issue' : 'not on the board'}
       stats={[
         ["Who's on it", who.length ? who.join(', ') : 'nobody yet'],
-        ...(pull ? ([['Checks', pull.failedChecks.length ? `✗ ${pull.failedChecks.map((c) => c.name).slice(0, 3).join(', ')}` : pull.checks]] as [string, string][]) : []),
+        ...(pull ? ([['Checks', pull.failedChecks.length ? <><Icon name="x" /> {pull.failedChecks.map((c) => c.name).slice(0, 3).join(', ')}</> : pull.checks]] as [string, ReactNode][]) : []),
         ...(qa ? ([['QA', `${QA_BADGE[qa.status].text} · round ${qa.round}`]] as [string, string][]) : []),
       ]}
-      note={fail ? `✗ ${fail.name}: ${fail.line}` : qa?.summary || (issue ? bodyLines(issue.body).join(' ') : null)}
+      note={fail ? <><Icon name="x" /> {fail.name}: {fail.line}</> : qa?.summary || (issue ? bodyLines(issue.body).join(' ') : null)}
     >
       {issue && issue.labels.length > 0 && (
         <div className="peek-chips">

@@ -216,7 +216,7 @@ export default function PhotoPanel() {
               </>
             )}
             <button className="btn btn-ghost btn-small" onClick={() => focusCenter()}>
-              ◎ Focus on the middle <kbd>T</kbd>
+              <Icon name="focus" /> Focus on the middle <kbd>T</kbd>
             </button>
           </section>
 

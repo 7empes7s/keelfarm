@@ -36,6 +36,9 @@
   font-weight: var(--ds-weight-strong);
 }
 .viz-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
   width: var(--ds-target);
   height: var(--ds-target);
@@ -47,6 +50,7 @@
   font: inherit;
   font-size: var(--ds-text-lg);
   cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
 }
 .viz-expand:hover {
   background: var(--ds-surface-hover);

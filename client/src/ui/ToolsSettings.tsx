@@ -103,7 +103,13 @@ function ToolsList({ scope }: { scope: string }) {
       <div className="row wrap">
         <input id={`${id}-q`} className="grow" type="search" placeholder="Search tools, plugins, skills…" aria-label="Search tools, plugins and skills" value={query} onChange={(e) => setQuery(e.target.value)} />
         <button className="btn btn-small" disabled={tooling.scanning} onClick={() => void attempt(() => api.refreshTools())}>
-          {tooling.scanning ? 'Scanning…' : '↻ Scan again'}
+          {tooling.scanning ? (
+            'Scanning…'
+          ) : (
+            <>
+              <Icon name="refresh-cw" /> Scan again
+            </>
+          )}
         </button>
       </div>
       <p className="muted small">

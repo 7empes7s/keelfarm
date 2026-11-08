@@ -175,6 +175,9 @@
   gap: var(--ds-space-1);
 }
 .mm-zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: var(--ds-target);
   height: var(--ds-target);
   border: var(--ds-border) solid var(--ds-outline);
@@ -185,6 +188,7 @@
   font: inherit;
   font-size: var(--ds-text-lg);
   cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
 }
 .mm-stats {
   position: absolute;

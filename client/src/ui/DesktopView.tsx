@@ -139,7 +139,7 @@ export function RotateHint({ onDismiss, onFull }: { onDismiss: () => void; onFul
       <p>Turn your phone sideways for the desktop view</p>
       <div className="row">
         <button className="btn btn-small" onClick={onFull}>
-          ⛶ Full screen
+          <Icon name="maximize-2" /> Full screen
         </button>
         <button className="btn btn-small btn-good" onClick={onDismiss}>
           Got it

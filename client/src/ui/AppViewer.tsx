@@ -432,7 +432,7 @@ function CompareView({
       <b>{side === 'main' ? repo.defaultBranch : p.ref}</b>
       {p.commit && <code>{p.commit}</code>}
       {where[side] && <span className="muted">{where[side]}</span>}
-      {sync && where[side] !== null && <span className="compare-synced">⇅ synced</span>}
+      {sync && where[side] !== null && <span className="compare-synced"><Icon name="arrow-up-down" /> synced</span>}
     </div>
   );
   return (
@@ -698,13 +698,13 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
         {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
           {active && (
             <button className="btn btn-small" disabled={busy || held} onClick={() => void (channel == null ? startMain() : startPr(true))} title={heldWhy ?? `Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
-              ↻ Restart
+              <Icon name="rotate-cw" /> Restart
             </button>
           )}
           {startStop}
           {prView && (
             <button className={`btn btn-small ${comparing ? 'btn-on' : ''}`} aria-pressed={comparing} onClick={toggleCompare} title={`${repo.defaultBranch} on the left, PR #${channel} on the right`}>
-              ⇆ Compare with {repo.defaultBranch}
+              <Icon name="arrow-left-right" /> Compare with {repo.defaultBranch}
             </button>
           )}
           <button className="btn btn-small" disabled={current.status !== 'running' && !(comparing && main.status === 'running')} onClick={() => setReloads((n) => n + 1)} title="Reload the app">

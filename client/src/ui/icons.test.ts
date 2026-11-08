@@ -18,6 +18,7 @@ const CONTENT: Record<string, string> = {
   'ui/captionRules.ts': "captions' direction arrows, part of the caption text",
   'ui/ChatReactions.tsx': 'the reactions people and the CEO pick',
   'ui/chatterLines.ts': "agents' chatter lines",
+  'ui/chatCardRules.ts': 'reads the ✗ that marks a failed step in saved messages',
   'ui/keymap.ts': "the arrow keys' names, as their key caps show them",
   'ui/statusLook.ts': 'status shapes drawn into canvas textures (KIND_ICON_NAME has the icons)',
   'ui/games/PetGame.tsx': "the desk pet's treats, toys and moods",
@@ -59,11 +60,12 @@ const CONTENT: Record<string, string> = {
   'world/MapTable.tsx': "drawn into the 3D scene's canvas textures",
 };
 
-// Emoji, plus the text glyphs the UI used as icons. × stays: it is the multiplication sign in "4×" and "600× speed".
-const ICON_CHAR = /\p{Extended_Pictographic}|[✕✖↗↩↪↺⟲⟳▲▼▶◀■✓✔⋯✻✳♪ⓘ‹›✦]/u;
-// A text arrow is a glyph when it leads or ends a short label ("Next →"); in prose ("Settings → Voice") and as a
-// separator (' → ') it is a word.
-const ARROW_LABEL = /^[←→]\s*\S+(\s+\S+)?$|^(\S+\s+)?\S+\s*[←→]$|^[←→]$/u;
+// Emoji, plus the text glyphs the UI used as icons (#295 added the arrows, carets, dots and marks #134 missed). × stays:
+// it is the multiplication sign in "4×" and "600× speed".
+const ICON_CHAR = /\p{Extended_Pictographic}|[✕✖✗↗↩↪↺↻⟲⟳⇆⇅⤢⤓↳⛶▲▼▶◀▸▾▴⌄■●○◉◎◌✓✔⋯✻✳♪ⓘ‹›✦]/u;
+// A text arrow is a glyph when it leads or ends a short label ("Next →", "↓ Latest"); in prose ("Settings → Voice"), as
+// a separator (' → ') and as a key's name in <kbd> it is a word.
+const ARROW_LABEL = /^[←→↑↓]\s*\S+(\s+\S+)?$|^(\S+\s+)?\S+\s*[←→↑↓]$|^[←→↑↓]$/u;
 const NOT_ICONS = /[©®™‼⁉]/gu;
 
 function files(dir: string): string[] {
@@ -81,7 +83,8 @@ function iconTexts(file: string, source: string): string[] {
   const visit = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) return node.forEach(visit);
-    const n = node as { type?: string; value?: unknown; start?: number };
+    const n = node as { type?: string; value?: unknown; start?: number; openingElement?: { name?: { name?: unknown } } };
+    if (n.type === 'JSXElement' && n.openingElement?.name?.name === 'kbd') return;
     let text: string | undefined;
     if ((n.type === 'Literal' || n.type === 'JSXText') && typeof n.value === 'string') text = n.value;
     if (n.type === 'TemplateElement') text = (n.value as { cooked?: string; raw: string }).cooked ?? (n.value as { raw: string }).raw;
@@ -95,8 +98,8 @@ function iconTexts(file: string, source: string): string[] {
 
 describe('one icon pack (#134)', () => {
   it('finds emoji and icon glyphs in strings and JSX, not in comments', () => {
-    const src = "// ⚙️ settings\nconst a = '⚙️ Settings';\nconst b = <b>✕</b>;\nconst c = `${n}× ok`;\nconst d = 'Café ©';\nconst e = <b>Next →</b>;\nconst f = 'Settings → Voice';\nconst g = list.join(' → ');\nconst h = <b>‹ Back</b>;";
-    expect(iconTexts('x.tsx', src)).toEqual(['2: ⚙️ Settings', '3: ✕', '6: Next →', '9: ‹ Back']);
+    const src = "// ⚙️ settings\nconst a = '⚙️ Settings';\nconst b = <b>✕</b>;\nconst c = `${n}× ok`;\nconst d = 'Café ©';\nconst e = <b>Next →</b>;\nconst f = 'Settings → Voice';\nconst g = list.join(' → ');\nconst h = <b>‹ Back</b>;\nconst i = <b>↻ Restart</b>;\nconst j = <i>{open ? '▾' : '▸'}</i>;\nconst k = <kbd>↑</kbd>;\nconst l = '↓ Latest';";
+    expect(iconTexts('x.tsx', src)).toEqual(['2: ⚙️ Settings', '3: ✕', '6: Next →', '9: ‹ Back', '10: ↻ Restart', '11: ▾', '11: ▸', '13: ↓ Latest']);
   });
 
   it('draws glyphs that still arrive as data with their icon', () => {

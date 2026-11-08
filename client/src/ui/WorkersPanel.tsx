@@ -5,6 +5,7 @@ import { VisitorsList } from './VisitorsList';
 import { dialogOpen } from './dialogFocus';
 import { isKey, useKeyName } from './controls';
 import { Key } from './Key';
+import { Icon } from './Icon';
 
 // Who is busy with what, across the whole company: everyone working right now with their project and their latest
 // thought, reply or tool call. Idle workers are left out; the floor you're on comes first. Click someone to watch
@@ -159,7 +160,7 @@ export function WorkersPanel() {
           Working <b>{total}</b>
         </span>
         <span className="wk-chevron">
-          <Key action="workers" /> {open ? '▾' : '▸'}
+          <Key action="workers" /> <Icon name={open ? 'chevron-down' : 'chevron-right'} />
         </span>
       </button>
       {open && (
@@ -171,7 +172,7 @@ export function WorkersPanel() {
             return (
               <div key={g.key} className="wk-group">
                 <button className="wk-group-head" onClick={() => toggleGroup(g.key)} title={`${g.title} · click to ${shut ? 'expand' : 'collapse'}`}>
-                  <span className="wk-group-arrow">{shut ? '▸' : '▾'}</span>
+                  <span className="wk-group-arrow"><Icon name={shut ? 'chevron-right' : 'chevron-down'} /></span>
                   <span className="wk-swatch" style={{ background: g.color }} />
                   <span className="wk-group-name">{g.label}</span>
                   <span className="wk-group-count">{g.list.length}</span>

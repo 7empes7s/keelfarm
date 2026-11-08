@@ -540,7 +540,7 @@ function VisualCard({ visual }: { visual: ChatVisual }) {
     <figure className="viz-card" aria-labelledby={titleId}>
       {head(
         <button type="button" className="viz-expand" aria-label={`Open ${title} full screen`} title="Full screen" onClick={() => setFull(true)}>
-          ⤢
+          <Icon name="maximize-2" />
         </button>,
       )}
       <Body v={v} />
