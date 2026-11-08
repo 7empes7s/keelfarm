@@ -148,8 +148,7 @@ test('a long reply plays its short spoken summary, and "Read the whole message" 
   expect(rec.words.length).toBeLessThanOrEqual(300);
   expect(rec.words).not.toMatch(/[#*`]|https?:/);
 
-  const bubble = page.locator(`[data-msg="${id}"]`);
-  await bubble.getByRole('button', { name: 'Message actions' }).click();
+  await page.locator(`[data-msg="${id}"] .bubble`).click({ button: 'right' }); // the ⋯ actions, as a long press opens them
   await page.getByRole('dialog', { name: /Message actions/ }).getByRole('button', { name: 'Read the whole message' }).click();
   await expect.poll(async () => (await spoken(page)).filter((s) => s.id === id && s.replay && s.end !== null).length, { timeout: 30_000 }).toBe(1);
   const whole = (await spoken(page)).find((s) => s.id === id && s.replay)!;
