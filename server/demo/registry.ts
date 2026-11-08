@@ -52,16 +52,19 @@ export interface CeoKit {
 
 type CeoReply = (k: CeoKit) => Promise<string | null> | string | null;
 
-const replies: { name: string; reply: CeoReply }[] = [];
+const replies: { name: string; reply: CeoReply; early: boolean }[] = [];
 
-/** A chat reply that shows a feature's CEO tools; the first registered one that answers (not null) wins. */
-export function registerCeoReply(name: string, reply: CeoReply) {
-  replies.push({ name, reply });
+/**
+ * A chat reply that shows a feature's CEO tools; the first registered one that answers (not null) wins. `early`: tried
+ * before the demo's files and reports, for a command the seeded chat's attachment would otherwise turn into a PDF.
+ */
+export function registerCeoReply(name: string, reply: CeoReply, { early = false } = {}) {
+  replies.push({ name, reply, early });
 }
 
-/** The first registered reply to the manager's message, or null for the demo CEO's status report. */
-export async function ceoReply(k: CeoKit): Promise<string | null> {
-  for (const { reply } of replies) {
+/** The first registered reply to the manager's message (only the `early` ones when asked), or null for the demo CEO's status report. */
+export async function ceoReply(k: CeoKit, early = false): Promise<string | null> {
+  for (const { reply } of replies.filter((r) => r.early === early)) {
     const out = await reply(k);
     if (out !== null) return out;
   }

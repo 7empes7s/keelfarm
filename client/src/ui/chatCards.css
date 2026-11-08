@@ -404,6 +404,43 @@ html[data-typing] .working-next {
   overflow-wrap: anywhere;
 }
 
+/* the chat in pages (#145): the list keeps its own place when a page goes in above (ChatPaging.tsx), the spinner over
+   it while one loads, an office note's row (hold it for Delete), and the Undo bar */
+.chat-log {
+  overflow-anchor: none;
+}
+.chat-older {
+  position: absolute; /* over the list, so it never moves what's in it */
+  top: var(--ds-space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  padding: var(--ds-space-1);
+  border-radius: 50%;
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.chat-older-spin {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ds-line-strong);
+  border-top-color: var(--ds-link);
+  border-radius: 50%;
+  animation: chat-older-spin 0.8s linear infinite;
+}
+@keyframes chat-older-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.bubble-row-office {
+  display: flex;
+  flex-direction: column;
+  -webkit-touch-callout: none;
+}
+.chat-undo {
+  padding-bottom: 6px;
+}
 /* The composer stack under the log (#152): when the keyboard takes the room, the log gives it up first (down to a few
    lines, so the newest message and "↓ Latest" stay in view), then the message box; nothing else is squeezed. */
 .phone-chat > :not(.chat-log-wrap, .chat-input) {

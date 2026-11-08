@@ -24,8 +24,8 @@ export function fixGoesTo(author: FixAuthor | null, authorFree: boolean, prNumbe
 
 // ---------- what goes first (#275) ----------
 
-/** The scheduler's phases, in order: work in flight (pipelineQueue), the CEO's consults (#28), then new issues. */
-export const WORK_PHASES = ['pipeline', 'consult', 'issue'] as const;
+/** The scheduler's phases: explicit task picks (#265), work in flight (pipelineQueue), consults, then new issues. */
+export const WORK_PHASES = ['queued', 'pipeline', 'consult', 'issue'] as const;
 
 /** A QA-passed PR back with a developer: finished work that only needs bringing up to date or green checks. */
 const finishedWork = (q: { status: string; passedSha: string | null }) => q.status === 'failed' && !!q.passedSha;

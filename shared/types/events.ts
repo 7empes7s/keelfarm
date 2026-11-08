@@ -35,7 +35,8 @@ export interface WorldSnapshot {
   previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's latest page (shared/chatPage.ts); older ones: GET /api/ceo/messages?before=
+  messagesOlder?: boolean; // the thread has earlier messages than these
   phoneReadAt: number; // CEO messages newer than this are unread
   notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
   decisions?: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts); absent in a replay
@@ -109,8 +110,8 @@ export type ServerEvent =
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
   | { type: 'decisions'; decisions: Decision[] }
-  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
-  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
+  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited; removed: messages the manager deleted or hid, #145). */
+  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; messagesOlder?: boolean; message?: PhoneMessage; removed?: number[] } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }

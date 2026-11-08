@@ -49,6 +49,7 @@ import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
 import { parseRefs } from '../../shared/chatRefs.ts';
 import { telegramChat } from '../telegram.ts';
+import { NEXT_FREE } from '../../shared/assignIssue.ts';
 
 export abstract class SwarmCeoTools extends SwarmTeam {
   /**
@@ -84,6 +85,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       restartAgent: acts((a) => this.restartAgent(a)),
       stopAgent: acts((a) => this.ceoStopAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
+      assignIssue: acts(async (a) => (await this.assignIssue(this.floorRepo(a.floor).id, Number(a.number), a.agent ?? NEXT_FREE, 'ceo')).text),
       answerAgent: acts((a) => this.answerAgent(a)),
       askManagerChoice: acts((a) => this.askManagerChoice(a)),
       qaReport: (a) => this.qaReport(a),

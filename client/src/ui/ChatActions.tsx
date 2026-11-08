@@ -14,6 +14,14 @@ import { ReactionBar } from './ChatReactions';
 /** A message the chat can act on: from the office (`m`), or still in this tab's outbox (`out`). */
 export type Item = { m: PhoneMessage; out?: undefined } | { m?: undefined; out: OutgoingMessage };
 
+// One Item per message or outgoing message (#145), so a memoised bubble gets the same props while its message is unchanged.
+const items = new WeakMap<object, Item>();
+export const itemOf = (x: Item) => {
+  const key = x.m ?? x.out;
+  if (!items.has(key)) items.set(key, x);
+  return items.get(key)!;
+};
+
 export const who = (m: Pick<PhoneMessage, 'from'>, ceoName: string) => (m.from === 'ceo' ? ceoName : m.from === 'manager' ? 'you' : 'the office');
 
 /** The actions on one message (long-press, right-click or ⋯): Reply, Copy text, Retry for a failed send, and `more` (edit, retry, remember). */

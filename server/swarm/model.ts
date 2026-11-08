@@ -21,6 +21,7 @@ import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
+import { CHAT_KEEP } from '../../shared/chatPage.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
@@ -121,6 +122,7 @@ export interface PersistedAgent {
   branch: string | null;
   prNumber: number | null;
   prUrl: string | null;
+  nextIssue?: number | null; // Assign to… while they were busy (#265, shared/assignIssue.ts): starts when they're free
   startedAt: number | null;
   endedAt: number | null;
   costUsd: number;
@@ -275,7 +277,7 @@ export const FILES_DIR = path.join(HOME_DIR, 'files');
 // The other conversations' threads (server/ceoChat.ts).
 export const CONVERSATIONS_DIR = path.join(HOME_DIR, 'conversations');
 export const MAX_ISSUES_PER_JOB = 12;
-export const KEEP_MESSAGES = 200;
+export const KEEP_MESSAGES = CHAT_KEEP; // the chat loads in pages (shared/chatPage.ts)
 export const KEEP_DECIDED_REQUESTS = 40;
 
 export const BUSY: AgentStatus[] = ['preparing', 'working'];

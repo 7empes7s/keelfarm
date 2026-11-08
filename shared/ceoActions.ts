@@ -37,6 +37,7 @@ const ACTS: Record<string, string> = {
   configure_agent: '⚙️',
   message_agent: '💬',
   answer_agent: '💬',
+  assign_issue: '📌',
   restart_agent: '🔄',
   stop_agent: '⏹️',
   ask_manager_choice: '🙋',

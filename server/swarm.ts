@@ -38,7 +38,7 @@ import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
-import { snapshotMessages } from '../shared/chatParts.ts';
+import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { rotationSettings } from '../shared/accountRotation.ts';
@@ -608,7 +608,7 @@ export class Swarm extends SwarmVoices {
     this.state.messages = messages;
     Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
-    this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
+    this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();
   }
 
