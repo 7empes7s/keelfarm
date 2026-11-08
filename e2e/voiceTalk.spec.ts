@@ -25,26 +25,28 @@ test.afterAll(async ({ request }) => {
 
 const lines = (page: Page) => page.evaluate(() => ((window as unknown as { __swarmVoiceLines?: SaidLine[] }).__swarmVoiceLines ?? []).map((l) => ({ ...l })));
 const state = async (page: Page) => (await page.request.get('/api/state')).json() as Promise<{ agents: { id: string; status: string }[]; messages: { id: number; from: string; text: string }[] }>;
-/** Nothing read aloud for a moment: the startup's messages are done, so an ack doesn't queue behind them. */
-const quiet = (page: Page) => page.evaluate(() => {
-  const read = (window as unknown as { __swarmVoice?: { end: number | null }[] }).__swarmVoice ?? [];
-  return read.every((r) => r.end !== null && performance.now() - r.end > 2500);
+/** Nothing read aloud for 3 s (no message playing or starting), so a line isn't queued behind one. */
+const quiet = (page: Page) => page.evaluate(async () => {
+  const read = () => (window as unknown as { __swarmVoice?: { end: number | null }[] }).__swarmVoice ?? [];
+  const n = read().length;
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  return read().length === n && read().every((r) => r.end !== null);
 });
 const ceoWorking = async (page: Page) => (await state(page)).agents.find((a) => a.id === CEO_ID)?.status === 'working';
 const textCeo = async (page: Page, text: string) => expect((await page.request.post('/api/ceo/message', { data: { text } })).ok()).toBe(true);
 
-/** Starts the demo CEO's long round (the step log's look-into job) and waits until it's under way. */
+/** Starts the demo CEO's long round (the step log's look-into job) once all is quiet, and waits until it's under way. */
 async function busyCeo(page: Page) {
-  await expect.poll(() => ceoWorking(page), { timeout: 30_000 }).toBe(false);
+  await expect.poll(() => ceoWorking(page), { timeout: 60_000 }).toBe(false);
+  await expect.poll(() => quiet(page), { timeout: 30_000 }).toBe(true);
   await textCeo(page, 'Please look into the mobile joystick');
   await expect.poll(() => ceoWorking(page), { timeout: 15_000 }).toBe(true);
 }
 
 test('a message mid-job is acked out loud and answered before the job ends; progress follows the setting', async ({ page }) => {
+  test.setTimeout(240_000); // three of the demo CEO's rounds, each waiting for quiet first
   await enterOffice(page);
   await busyCeo(page);
-  await expect.poll(() => quiet(page), { timeout: 30_000 }).toBe(true);
-  expect(await ceoWorking(page)).toBe(true);
   // Reproduce the race: the demo replies after 1.5 s, before this first clip becomes playable.
   let firstClip = true;
   await page.route('**/api/voice/lines/*', async (route) => {
@@ -73,7 +75,9 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   await expect.poll(async () => (await state(page)).messages.filter((m) => m.from === 'ceo').length, { timeout: 15_000 }).toBeGreaterThan(before);
   expect((await state(page)).messages.filter((m) => m.from === 'ceo').at(-1)?.text).toMatch(/^Noted/);
   expect(await ceoWorking(page)).toBe(true);
-  // Regular progress: spoken lines while the round goes on, none of them a chat message, none with numbers or paths.
+  // Regular progress, on a round of its own (a line isn't said over the reply being read): spoken lines while the
+  // round goes on, none of them a chat message, none with numbers or paths.
+  await busyCeo(page);
   await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'progress').length, { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
   for (const l of await lines(page)) expect(l.text).toMatch(/^[^\d#/\\`*_[\]]+$/);
   expect((await state(page)).messages.some((m) => (m.from === 'ceo' || m.from === 'office') && ACKS.includes(m.text))).toBe(false);
