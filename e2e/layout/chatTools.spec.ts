@@ -70,7 +70,7 @@ for (const width of [390, 1280])
             // Compare with the previous horizontal 26px controls: the new targets must not steal text width.
             const old = await page.addStyleTag({ content: '.bubble-tools { flex-direction: row; gap: 2px; } .bubble-tool { width: 26px; min-width: 26px; height: 26px; min-height: 26px; }' });
             const before = (await row.locator('.bubble').boundingBox())!.width;
-            await old.evaluate((el) => el.remove());
+            await old.evaluate((el) => (el as HTMLStyleElement).remove());
             expect(actual, `${who}, ${which}: bubble width`).toBeGreaterThanOrEqual(before);
           }
         }
