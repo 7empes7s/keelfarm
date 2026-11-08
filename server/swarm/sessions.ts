@@ -20,7 +20,8 @@ import { sessionKind } from '../health.ts';
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from '../prompts.ts';
 import { leaseTools } from '../leaseTool.ts';
 import { normPath, overlap, practiceLines, qaPracticeLines } from '../../shared/practices.ts';
-import { recordCost } from '../metrics.ts';
+import { recordBox, recordCost } from '../metrics.ts';
+import { BOX_SIZE_INFO } from '../../shared/cloud.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
@@ -614,6 +615,7 @@ export abstract class SwarmSessions extends SwarmRotation {
     a.costUsd += result.costUsd;
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, result.costUsd, a.endedAt);
+    if (a.host === 'box' && a.startedAt) recordBox(this.state.ops, repo.id, a.endedAt - a.startedAt, BOX_SIZE_INFO[this.state.settings.cloud.boxSize].usdPerCpuHour, a.endedAt); // Mission control's cloud today (#260)
     this.ledger({ kind: 'session', agentId: a.id, key: `${a.id}:${a.startedAt}:${a.endedAt}`, costUsd: result.costUsd, turns: result.turns }, false); // emitted below
     // Dev servers (or a demo office) the agent forgot to stop would otherwise keep its ports and lock its desk folder.
     void this.releaseDesk(a, repo)

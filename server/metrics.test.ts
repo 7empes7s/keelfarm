@@ -11,6 +11,8 @@ import {
   median,
   opsView,
   qaRoundsPerMerge,
+  recordBox,
+  recordBurst,
   recordChecks,
   recordCost,
   recordMerges,
@@ -251,6 +253,18 @@ describe('alarms', () => {
 });
 
 describe('the needs-you wait (#275)', () => {
+  it('preserves wait and cloud histories together when loading and building the view', () => {
+    const h = emptyHistory();
+    recordWait(h, 'o/a', 40 * MIN, NOW);
+    recordBurst(h, 'o/a', NOW);
+    recordBox(h, 'o/a', 90 * MIN, 0.1, NOW);
+    const loaded = loadHistory(JSON.parse(JSON.stringify(h)), NOW);
+    expect(loaded).toEqual(h);
+    const view = opsView([floor()], loaded, NOW);
+    expect(view.total.waitTrend).toEqual([null, null, null, null, null, null, 40 * MIN]);
+    expect(view.cloud).toEqual({ bursts: 1, boxHours: 1.5, boxUsd: 0.15 });
+  });
+
   it('shows the longest wait right now, the CEO looking or not, in whole minutes', () => {
     const stuck = (number: number, mins: number, ceoLooking = false) => ({ number, qa: { status: 'needs-human' as const, ceoLooking, updatedAt: NOW, stuckAt: NOW - mins * MIN - 20_000 }, why: null });
     const view = opsView([floor({ prs: [stuck(7, 12), stuck(8, 95, true), pr(9, 'queued')] })], emptyHistory(), NOW);
@@ -266,5 +280,18 @@ describe('the needs-you wait (#275)', () => {
     recordWait(h, 'o/a', 5 * MIN, NOW - 8 * DAY_MS); // older than a week: out of the trend, and dropped on load
     expect(waitTrend(h.waits!, [10 * MIN], NOW)).toEqual([null, null, null, null, 3 * HOUR_MS, null, 10 * MIN]);
     expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW).waits).toEqual(h.waits!.filter((w) => w[2] !== 5 * MIN));
+  });
+});
+
+describe('cloud today (#260)', () => {
+  it("counts today's bursts and Box hours with about what they cost, and is absent with none", () => {
+    const h = emptyHistory();
+    expect(opsView([], h, NOW).cloud).toBeUndefined();
+    recordBurst(h, 'r1', NOW - DAY_MS); // yesterday
+    recordBurst(h, 'r1', NOW - 10 * MIN);
+    recordBox(h, 'r1', 90 * MIN, 0.1, NOW - 5 * MIN);
+    recordBox(h, 'r1', 0, 0.1, NOW); // nothing ran
+    expect(opsView([], h, NOW).cloud).toEqual({ bursts: 1, boxHours: 1.5, boxUsd: 0.15 });
+    expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW)).toEqual(h);
   });
 });

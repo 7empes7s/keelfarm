@@ -84,5 +84,6 @@ export interface OpsView {
   total: OpsNumbers;
   ceoCostToday: number;
   alarms: OpsAlarm[];
+  cloud?: { bursts: number; boxHours: number; boxUsd: number }; // today (#260): cloud agents Hybrid added, their Boxes' session hours and about what they cost
   avoided?: Record<string, number>; // per floor: issues conflict-aware scheduling started instead of overlapping ones, 7 days (#256)
 }

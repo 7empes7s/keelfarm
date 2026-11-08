@@ -30,6 +30,10 @@ export type CostEntry = [at: number, repo: string, usd: number];
 export type AvoidedEntry = [at: number, repo: string, issue: number];
 /** A PR left needs-human (#275): when, the repo, how long it had waited there. */
 export type WaitEntry = [at: number, repo: string, ms: number];
+/** Hybrid's burst (#260) added a cloud agent: when, the repo. */
+type BurstEntry = [at: number, repo: string];
+/** A cloud agent's session ended: when, the repo, how long it ran, about what its Box cost (session time × the size's price). */
+type BoxEntry = [at: number, repo: string, ms: number, usd: number];
 
 export interface OpsHistory {
   merges: MergeEntry[];
@@ -38,6 +42,8 @@ export interface OpsHistory {
   cost: CostEntry[];
   avoided?: AvoidedEntry[];
   waits?: WaitEntry[];
+  bursts?: BurstEntry[];
+  box?: BoxEntry[];
 }
 
 export const emptyHistory = (): OpsHistory => ({ merges: [], qa: [], checks: [], cost: [] });
@@ -56,6 +62,8 @@ export function prune(h: OpsHistory, now: number) {
   h.cost = fresh(h.cost, now);
   if (h.avoided) h.avoided = fresh(h.avoided, now);
   if (h.waits) h.waits = fresh(h.waits, now);
+  if (h.bursts) h.bursts = fresh(h.bursts, now);
+  if (h.box) h.box = fresh(h.box, now);
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -75,6 +83,8 @@ export function loadHistory(raw: unknown, now: number): OpsHistory {
     cost: list(r.cost).filter((e) => isNum(e[2])) as CostEntry[],
     ...(Array.isArray(r.avoided) ? { avoided: list(r.avoided).filter((e) => isNum(e[2])) as AvoidedEntry[] } : {}),
     ...(Array.isArray(r.waits) ? { waits: list(r.waits).filter((e) => isNum(e[2])) as WaitEntry[] } : {}),
+    ...(Array.isArray(r.bursts) ? { bursts: list(r.bursts) as BurstEntry[] } : {}),
+    ...(Array.isArray(r.box) ? { box: list(r.box).filter((e) => isNum(e[2]) && isNum(e[3])) as BoxEntry[] } : {}),
   };
   prune(h, now);
   return h;
@@ -134,6 +144,29 @@ export function recordAvoided(h: OpsHistory, repo: string, issue: number, now: n
 export function recordWait(h: OpsHistory, repo: string, ms: number, now: number) {
   (h.waits ??= []).push([now, repo, Math.max(0, Math.round(ms))]);
   prune(h, now);
+}
+
+/** Hybrid's burst added a cloud agent on `repo` (#260). */
+export function recordBurst(h: OpsHistory, repo: string, now: number) {
+  (h.bursts ??= []).push([now, repo]);
+  prune(h, now);
+}
+
+/** A cloud agent's session that ran `ms` on a Box costing `usdPerHour` per active CPU hour: an estimate, as if busy throughout. */
+export function recordBox(h: OpsHistory, repo: string, ms: number, usdPerHour: number, now: number) {
+  if (!(ms > 0)) return;
+  (h.box ??= []).push([now, repo, ms, Math.round((ms / HOUR_MS) * usdPerHour * 10_000) / 10_000]);
+  prune(h, now);
+}
+
+/** Mission control's cloud line for today (#260): bursts, Box hours and about what they cost; null with nothing today. */
+function cloudToday(h: OpsHistory, now: number): { bursts: number; boxHours: number; boxUsd: number } | null {
+  const today = startOfDay(now);
+  const bursts = (h.bursts ?? []).filter((e) => e[0] >= today).length;
+  const box = (h.box ?? []).filter((e) => e[0] >= today);
+  if (!bursts && !box.length) return null;
+  const sum = (i: 2 | 3) => box.reduce((n, e) => n + e[i], 0);
+  return { bursts, boxHours: Math.round((sum(2) / HOUR_MS) * 10) / 10, boxUsd: Math.round(sum(3) * 100) / 100 };
 }
 
 /** A session's reported cost (zero costs, from CLIs that don't report one, are left out). */
@@ -309,11 +342,13 @@ export function opsView(floors: OpsFloorState[], h: OpsHistory, now: number): Op
     ...flow(h, (r) => connected.has(r) || r === '', now),
     ...waitNumbers(sorted, h, (r) => connected.has(r), now),
   };
+  const cloud = cloudToday(h, now);
   return {
     floors: rows,
     total,
     ceoCostToday: flow(h, (r) => r === '', now).costToday,
     alarms: sorted.flatMap((f) => floorAlarms(f, now)).sort((a, b) => a.since - b.since),
+    ...(cloud ? { cloud } : {}),
     ...(h.avoided?.length ? { avoided: Object.fromEntries(sorted.map((f) => [f.repoId, h.avoided!.filter((e) => e[1] === f.repoId && now - e[0] <= KEEP_MS).length])) } : {}),
   };
 }

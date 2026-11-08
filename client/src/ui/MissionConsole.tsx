@@ -15,6 +15,7 @@ import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { HealthStrip } from './HealthStrip';
+import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
 import { WaitTile } from './WaitTile';
 
@@ -354,6 +355,7 @@ export function OpsTab({ card }: { card?: string }) {
       <div>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <CloudToday />
         <TestLabCard />
         <WaitTile />
         <h3 className="section">
