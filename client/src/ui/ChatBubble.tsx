@@ -14,7 +14,7 @@ import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
 import { replyLog } from './chatCardRules';
-import { ActionCards, NoticeCard, NoticePill } from './ChatCards';
+import { ActionCards, NoticeCard, NoticePill, UseKeyCard } from './ChatCards';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
@@ -162,10 +162,13 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
 
   // An office note: hold or right-click it for its actions (Delete).
-  if (m && (look === 'pill' || ((m.notice || m.signIn) && look === 'card')))
+  if (m && (look === 'pill' || m.switch?.useKey || ((m.notice || m.signIn) && look === 'card')))
     return (
       <div className="bubble-row-office" data-msg={id} {...gestures}>
-        {look === 'pill' ? <NoticePill text={officeText(m.text)} /> : m.signIn ? <SignInCard card={m.signIn} /> : <NoticeCard text={officeText(m.text)} notice={m.notice!} />}
+        {m.signIn && look === 'card' ? <SignInCard card={m.signIn} />
+          : m.notice && look === 'card' ? <NoticeCard text={officeText(m.text)} notice={m.notice} />
+          : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
+          : <NoticePill text={officeText(m.text)} />}
       </div>
     );
   const quote =

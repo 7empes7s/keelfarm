@@ -172,6 +172,13 @@
   gap: var(--ds-space-2);
   margin-bottom: var(--ds-space-2);
 }
+.use-life {
+  justify-content: space-between;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-warn-fill);
+  color: var(--ds-warn-text);
+}
 .app-merged {
   margin: 0 0 var(--ds-space-2);
   font-size: var(--ds-text-sm);

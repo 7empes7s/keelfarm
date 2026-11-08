@@ -116,3 +116,27 @@ for (const width of [360, 390, 430]) {
     expect(gaps).toEqual({ top: 0, left: 0, right: 0 });
   });
 }
+
+// Settings → Cloud agents' keys (#264): each its own field, in its own form, that password managers leave alone, and a
+// key pasted into the wrong field is refused, never saved.
+test('pocket Cloud agents: every key field is separate from password managers, and the wrong key is refused', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const panel = await pocketSettings(page);
+  await pocketSection(panel, 'Cloud agents');
+  const fields = await panel.locator('input[type="password"]').evaluateAll((els) =>
+    els.map((el) => ({
+      id: el.id,
+      name: el.getAttribute('name'),
+      autocomplete: el.getAttribute('autocomplete'),
+      ignored: ['data-bwignore', 'data-1p-ignore', 'data-lpignore'].every((a) => el.getAttribute(a) === 'true') && el.getAttribute('data-form-type') === 'other',
+      alone: el.closest('form')?.querySelectorAll('input[type="password"]').length === 1 && el.closest('form')?.getAttribute('autocomplete') === 'off',
+    })),
+  );
+  expect(fields.length).toBeGreaterThanOrEqual(3); // GitHub, Anthropic, OpenAI (and Upstash until it's saved)
+  expect(new Set(fields.map((f) => f.id)).size).toBe(fields.length);
+  for (const f of fields) expect(f).toEqual({ id: expect.stringMatching(/^cubefarm-cloud-/), name: f.id, autocomplete: 'new-password', ignored: true, alone: true });
+  const github = panel.locator('#cubefarm-cloud-github-key');
+  await github.fill('sk-ant-api03-a-claude-key');
+  await github.locator('xpath=ancestor::form').getByRole('button', { name: 'Save' }).click();
+  await expect(panel.getByRole('alert')).toHaveText('This looks like your Anthropic key, not a GitHub token.');
+});

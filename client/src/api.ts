@@ -99,6 +99,8 @@ export const api = {
   stopPreview: (repoId: string) => call<PreviewView>('DELETE', `${r(repoId)}/preview`),
   startPrPreview: (repoId: string, pr: number, restart = false) => call<PrPreviewView>('POST', `${r(repoId)}/pr-previews/${pr}`, { restart }),
   stopPrPreview: (repoId: string, pr: number) => call('DELETE', `${r(repoId)}/pr-previews/${pr}`),
+  /** 📌 keep a preview running ('hour' | 'forever'), let it stop by itself again ('off'), or (no pin) start its max lifetime again. */
+  keepPreview: (repoId: string, pr: number | null, pin?: 'hour' | 'forever' | 'off') => call('POST', `${r(repoId)}/preview/keep`, { pr, pin }),
   /** The app viewer's heartbeat: which PR preview it has on screen (repoId null: none). Quiet on errors. */
   watchPreview: (viewer: string, repoId: string | null, pr: number | null) => call('POST', '/api/previews/watch', { viewer, repoId, pr }, false),
   previewSync: (repoId: string, pr: number | null) => call<{ url: string }>('POST', `${r(repoId)}/preview/sync`, { pr }),
@@ -232,6 +234,8 @@ export const api = {
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
   testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
   signInAccount: (id: string, mode: SignInMode = 'login') => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`, { mode }),
+  useAccountNow: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/use-now`),
+  simulateAccountLimit: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-limit`),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
   pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),
