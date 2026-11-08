@@ -107,6 +107,10 @@ const OFFICE: Record<string, [string, Words]> = {
   restart_agent: ['🔄', (t, n) => `Restarting ${who(t.agent, n)}`],
   stop_agent: ['⏹️', (t, n) => `Stopping ${who(t.agent, n)}`],
   message_agent: ['💬', (t, n) => `Messaging ${who(t.agent, n)}`],
+  assign_issue: ['📌', (t, n) => {
+    const name = t.rest.split(' · ')[1]?.trim();
+    return `Putting ${!name || name === 'next free' ? 'the next free agent' : who(name, n)} on ${issue(t)}${onFloor(t)}`;
+  }],
   answer_agent: ['💬', (t, n) => `Answering ${who(t.agent ?? t.rest.split(/[\s:]/)[0], n)}`],
   ask_manager_choice: ['❓', (t, n) => `Asking you to decide for ${who(t.agent ?? t.rest.split(/[\s:]/)[0], n)}`],
   qa_report: ['🧪', (t) => `Reading ${pr(t)}'s QA report${onFloor(t)}`],

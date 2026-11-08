@@ -48,6 +48,18 @@ An API key can run out of credit, hit its organisation's spend limit or be revok
 
 In the demo office, Settings → Cloud agents → *Simulate out of credit (demo)* shows the whole flow (it saves a made-up key first if there's none).
 
+## Hybrid: this computer first, the cloud when it's full
+
+Under *Where new agents work*, **Hybrid** (offered once the Upstash key is saved) keeps agents on your computer while it has room and uses the cloud only for the overflow.
+
+- **Hiring.** A new agent (the lobby, the Team page's **+ Agent**, the CEO's `scale_team`) works on this computer when there's memory for one more build session plus the headroom (Settings → Memory), a free slot under the session limit if you set one, and fewer agents here than *Most agents on this computer* (0: no limit). Otherwise they get a Box, within your plan's Box limit. With room in neither, the hire is refused with both reasons, e.g. "No room on this computer (2.6 GB free, 3.1 GB needed). Your Upstash plan's Box limit (10) is reached." The CEO's `scale_team` takes `where: local | cloud | auto` (auto, the default, follows this setting).
+- **Work goes to this computer's agents first.** When a local and a cloud agent on a floor are both free, the local one gets the next task (no Box CPU to pay for), unless memory is short, when a free cloud agent takes it.
+- **Burst to the cloud** (on by default). When ready work has waited for memory for *After waiting* minutes (5) and the floor is under its most agents, the office adds one cloud agent to that floor by itself, at most *Most added at once* (2) and within the Box limit. The chat says so ("☁️ Added Ruth in the cloud on floor 2: this computer is full, 3 tasks waiting") and the CEO hears it as a follow-up.
+- **Burst back.** An agent added that way finishes their task first, then leaves once they've been idle for *Leave after idle* minutes (10), or as soon as this computer has room again and they have no task. Their Box is deleted, as for anyone leaving.
+- **What you see.** Cards and the team list show a cloud or a computer badge on each agent ("for load" on burst ones); the Team page's header counts agents on this computer and in the cloud and shows how full this computer's memory is. Mission control's *Cloud today* counts today's bursts and Box hours, with about what they cost (session time at your Box size's price per CPU hour: an estimate).
+- **Switching** between this computer, the cloud and Hybrid only changes where new agents go: nobody already working is moved or stopped.
+- In the demo office, Settings → Cloud agents → Hybrid → *Simulate full computer (demo)* runs memory low: a hire goes to the cloud, and a burst follows within half a minute when work is waiting. *Free this computer* brings the added agent back out.
+
 ## How it works
 
 - **A Box per agent.** A cloud agent's Box is created and set up in the background when they're hired or moved (it takes about a minute). It's named `cubefarm-<office>-<agent>` and labelled `cubefarm`, so it stands apart from Boxes your other apps use, and the office only ever touches its own. The office installs its own copies of the coding agents at the versions it supports (not the Box image's), Playwright for browser testing, tmux and git in it. The Box keeps the agent's own clone and worktree of the floor's repo between tasks, like a machine on your computer would.

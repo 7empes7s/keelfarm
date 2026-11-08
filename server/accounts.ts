@@ -239,6 +239,15 @@ export class Accounts {
     return a ? this.take(a) : null;
   }
 
+  /**
+   * Whether rotation would start a new session of `cli` on some account right now: rotation is on and one is ready
+   * (or near its limit). A full window on one login then only rests that login, not the office.
+   */
+  hasFree(cli: AccountCli, now = Date.now()): boolean {
+    const r = this.rotation();
+    return r.on && !!pickAccount(undefined, this.candidates(now), now, { cli, apiLast: r.apiLast });
+  }
+
   rotation(): RotationSettings {
     return this.deps.rotation?.() ?? { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false };
   }
@@ -400,6 +409,11 @@ export class Accounts {
 
   private async pollAll() {
     for (const a of this.list()) if (!a.builtIn && a.kind !== 'api-key' && a.enabled) await this.test(a.id).catch(() => undefined);
+    // The built-in Codex login's rate limits (#361): nothing else reads them. Only its readings: whether it counts as
+    // signed in stays as it was (Codex may run on OPENAI_API_KEY with no login file).
+    const codex = this.list().find((a) => a.builtIn && a.cli === 'codex' && a.enabled);
+    const r = codex && (await this.deps.check(codex, this.dirOf(codex), '').catch(() => null));
+    if (codex && r?.readings.length) this.readings(codex.id, r.readings);
   }
 
   /** The terminal a login signs in in (/ws/term?agent=account:<id>), made when it's first asked for. */

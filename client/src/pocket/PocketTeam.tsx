@@ -27,6 +27,8 @@ import { Sheet } from '../ui/Sheet';
 import { pushLayer } from '../ui/backStack';
 import { AddAgentForm } from '../ui/AddAgentForm';
 import { teamStats } from '../ui/addAgent';
+import { HostBadge } from '../ui/HostBadge';
+import { TeamCapacity } from '../ui/TeamCapacity';
 
 
 /** Runs one REST call at a time per card; api() already toasts errors. */
@@ -78,7 +80,8 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
         </HoverCard>
         <span className="grow">
           <span>
-            <b>{agent.name}</b> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
+            <b>{agent.name}</b>
+            <HostBadge agent={agent} short /> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
           </span>
           <span className="small pk-ellipsis">
             {doing(agent)}
@@ -259,6 +262,7 @@ export function Team({ focusRepo, flash = 0, top }: { focusRepo: string | null; 
   return (
     <div className="pk-page">
       {top}
+      <TeamCapacity />
       <CeoCard />
       {repos.length === 0 && <EmptyState kind="projects" />}
       {repos.map((repo) => {

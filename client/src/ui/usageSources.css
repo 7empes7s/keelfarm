@@ -1,0 +1,110 @@
+/* Usage for every account and provider (#361, UsageSources.tsx). Tokens only. */
+
+.us-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.us-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.us-row:hover {
+  background: var(--ds-surface-hover);
+}
+.us-row:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.us-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.us-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.us-name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.us-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.us-history {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  block-size: 48px;
+  margin-block-start: var(--ds-space-1);
+  padding: var(--ds-space-1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.us-tick {
+  flex: 1;
+  min-inline-size: 2px;
+  border-radius: 2px;
+}
+.us-good {
+  background: var(--ds-good-fill);
+}
+.us-warn {
+  background: var(--ds-warn-fill);
+}
+.us-bad {
+  background: var(--ds-bad-fill);
+}
+.us-admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.us-admin-row {
+  display: flex;
+  gap: var(--ds-space-2);
+}
+.us-admin-row input {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: var(--ds-target);
+}
+/* The Company page's card (pocket mode): its title opens Mission control. */
+.pk-usage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  min-block-size: var(--ds-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  cursor: pointer;
+}

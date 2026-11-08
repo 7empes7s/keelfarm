@@ -224,6 +224,70 @@ function Boxes({ cloud }: { cloud: CloudView }) {
   );
 }
 
+/** A whole number field that saves on change. */
+function NumberField({ label, value, min, max, onSave }: { label: string; value: number; min: number; max: number; onSave: (n: number) => void }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => {
+          const n = Math.round(Number(e.target.value));
+          if (n >= min && n <= max) onSave(n);
+        }}
+      />
+    </label>
+  );
+}
+
+/** The demo's Simulate full computer: its memory runs low, so Hybrid hires in the cloud and a burst follows within half a minute; again to free it, and the added agent leaves. */
+function SimulateFull() {
+  const demo = useStore((s) => s.demo);
+  const memory = useStore((s) => s.health?.memory ?? null);
+  const headroom = useStore((s) => s.settings.memory.headroomMb);
+  if (!demo || !memory) return null;
+  const full = memory.availableMb < headroom * 2;
+  return (
+    <div className="row wrap hybrid-sim">
+      <span className="grow muted small">{full ? 'This computer is full (demo): waiting work gets a cloud agent soon.' : 'Try a burst: fill this computer up and watch a cloud agent join, then leave once it has room again.'}</span>
+      <button className="btn btn-small btn-ghost" onClick={() => void api.simulateMemory(!full)}>
+        <Icon name="monitor" /> {full ? 'Free this computer (demo)' : 'Simulate full computer (demo)'}
+      </button>
+    </div>
+  );
+}
+
+/** Hybrid's settings (#260): the most agents here, and the burst to the cloud when this computer is full. */
+function HybridOptions({ settings, save }: { settings: Cloud; save: (patch: Partial<Cloud>) => void }) {
+  const h = settings.hybrid;
+  const set = (patch: Partial<Cloud['hybrid']>) => save({ hybrid: { ...h, ...patch } });
+  return (
+    <div className="notify-hook">
+      <p className="muted small">
+        A new agent works on this computer when there's memory for one more session (and a free slot under the session limit); otherwise in a Box, within your Box limit. When work is ready, both the same, this
+        computer's agents get it first.
+      </p>
+      <NumberField label="Most agents on this computer (0: no limit)" value={h.localMax} min={0} max={64} onSave={(n) => set({ localMax: n })} />
+      <label className="toggle block">
+        <input type="checkbox" checked={h.burst} onChange={(e) => set({ burst: e.target.checked })} />
+        <span>Add a cloud agent by itself when work waits for memory</span>
+      </label>
+      {h.burst && (
+        <div className="row wrap">
+          <NumberField label="After waiting (minutes)" value={h.burstAfterMin} min={1} max={240} onSave={(n) => set({ burstAfterMin: n })} />
+          <NumberField label="Most added at once" value={h.burstMax} min={1} max={50} onSave={(n) => set({ burstMax: n })} />
+          <NumberField label="Leave after idle (minutes)" value={h.burstIdleMin} min={1} max={240} onSave={(n) => set({ burstIdleMin: n })} />
+        </div>
+      )}
+      <SimulateFull />
+      {h.burst && <p className="muted small">An added agent finishes their task first, then leaves once idle or when this computer has room again, and their Box is deleted. The chat and the CEO hear about each one.</p>}
+    </div>
+  );
+}
+
 export function CloudSettings() {
   const settings = useStore((s) => s.settings.cloud);
   const cloud = useStore((s) => s.cloud);
@@ -271,7 +335,16 @@ export function CloudSettings() {
             <Icon name="cloud" /> An Upstash Box each{!cloud.keySet && ' (save your API key first)'}
           </span>
         </label>
-        <p className="muted small">New hires work here; the lobby lets you pick for each one. Move an agent from their settings when they have no task.</p>
+        {(cloud.keySet || settings.machineKind === 'hybrid') && (
+          <label className="toggle block">
+            <input type="radio" name="cloud-kind" checked={settings.machineKind === 'hybrid'} onChange={() => save({ machineKind: 'hybrid' })} />
+            <span>
+              <Icon name="shuffle" /> Hybrid: this computer while it has room, then the cloud
+            </span>
+          </label>
+        )}
+        <p className="muted small">New hires work here; the lobby lets you pick for each one. Move an agent from their settings when they have no task. Changing this never moves anyone already working.</p>
+        {settings.machineKind === 'hybrid' && <HybridOptions settings={settings} save={save} />}
         <div className="row wrap">
           <label className="field grow">
             <span>Box size</span>

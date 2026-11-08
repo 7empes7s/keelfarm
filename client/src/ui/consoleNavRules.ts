@@ -60,7 +60,7 @@ export const GROUPS: Group[] = [
 
 export const SECTIONS: Section[] = [
   { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices'] },
-  { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', only: 'office', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
+  { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
   { id: 'team', group: 'work', icon: 'laptop', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
   { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Test lab'] },
   { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },

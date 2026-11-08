@@ -81,6 +81,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
   | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
   | `cloudCredit.ts` | cloud agents off an API key out of credit (#258): own login, the sign-in card per burst, back on the key |
+  | `usage.ts` | usage for every account and provider (#361): the usage card's sources (`usageSources.ts`, `codexLimits.ts`), 90% notifications, Admin keys |
   | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
   | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |
   | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |
@@ -202,6 +203,7 @@ Shared (`shared/`, imported by both sides):
   add a type to its area's file and import it from `shared/types`.
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
+- `chatPage.ts`: the CEO chat in pages (#145): the snapshot's latest page, older ones on scroll up (`client/src/ui/ChatPaging.tsx`), deleting and hiding messages.
 - `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
 - `memoryMap.ts`: the memory map (#136): the office as a graph (nodes, edges, weights, caps), its filters, local graph, search, insights and live changes; built in the tab from the snapshot (`client/src/ui/MemoryMap.tsx`, canvas and physics in `MapCanvas.tsx` / `mapForce.ts`); the 3D office's map room (#137, a lazy `mapRoom` overlay from the CEO's map table) swaps the stage for `Constellation.tsx`, its 3D layout, LOD and effects pure in `skyLayout.ts`).

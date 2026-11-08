@@ -19,6 +19,7 @@ import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
 import type { AccountsView } from './accounts.ts';
+import type { UsageSource } from './usage.ts';
 import type { VoiceCacheView } from './voice.ts';
 
 export interface WorldSnapshot {
@@ -35,7 +36,8 @@ export interface WorldSnapshot {
   previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's latest page (shared/chatPage.ts); older ones: GET /api/ceo/messages?before=
+  messagesOlder?: boolean; // the thread has earlier messages than these
   phoneReadAt: number; // CEO messages newer than this are unread
   notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
   decisions?: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts); absent in a replay
@@ -109,8 +111,8 @@ export type ServerEvent =
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
   | { type: 'decisions'; decisions: Decision[] }
-  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
-  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
+  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited; removed: messages the manager deleted or hid, #145). */
+  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; messagesOlder?: boolean; message?: PhoneMessage; removed?: number[] } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }
@@ -126,7 +128,8 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
-  | { type: 'accounts'; accounts: AccountsView }
+  | { type: 'accounts'; accounts: AccountsView } // without `sources`: they come in usageSources
+  | { type: 'usageSources'; sources: UsageSource[] } // the usage card's rows (#361), only when they changed
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
   | { type: 'managerChanges'; changes: ManagerChange[] }

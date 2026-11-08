@@ -24,7 +24,7 @@ import { approvalsBadge, ceoChatHint, pipelineOf, POCKET_TABS, railTabs, waiting
 import { Approvals } from './PocketApprovals';
 import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
-import { UsageBars } from '../ui/UsageBars';
+import { UsageSources } from '../ui/UsageSources';
 import type { ConsoleSection } from './PocketConsole';
 import { parseHash, resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
@@ -213,12 +213,17 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       )}
       <TourInvite track={track} />
       <GuideCard />
-      <button className="pk-card pk-usage" onClick={() => settings('ops')} title="Open Mission control">
-        <b className="small">
-          <Icon name="bot" /> Claude usage
-        </b>
-        <UsageBars link={false} />
-      </button>
+      <div className="pk-card pk-usage">
+        <button className="pk-usage-head" onClick={() => settings('ops')} title="Open Mission control">
+          <b className="small">
+            <Icon name="gauge" /> Usage
+          </b>
+          <span className="muted small">
+            Mission control <Icon name="chevron-right" />
+          </span>
+        </button>
+        <UsageSources limit={4} />
+      </div>
       <button className="btn pk-wide" onClick={() => settings('map')}>
         <Icon name="map" /> Memory map
       </button>
@@ -571,29 +576,32 @@ export default function Pocket() {
     useStore.setState({ chatDocked: wide && dock });
     return () => useStore.setState({ chatDocked: false });
   }, [wide, dock]);
-  // The keyboard (#104): 1-5 the tabs, / the chat's box, Esc the chat drawer; never while typing in a field.
+  // The keyboard (#104): 1-5 the tabs, / the chat's box, Esc the chat drawer; never while typing in a field. One
+  // listener for the page's life (#145: not one per render, while typing), reading this render's state.
+  const keys = useRef<(e: KeyboardEvent) => void>(null);
+  keys.current = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && full && !e.defaultPrevented && !isConfirmOpen()) {
+      e.preventDefault();
+      return useChatFull.getState().set(false);
+    }
+    if (e.ctrlKey || e.metaKey || e.repeat || e.defaultPrevented || typingIn(e.target) || isConfirmOpen()) return;
+    const n = TAB_KEYS.indexOf(e.code);
+    if (n >= 0) {
+      e.preventDefault();
+      if (TABS[n] === 'chat') openChat();
+      else show(TABS[n]);
+    } else if (e.key === '/' && !e.altKey) {
+      e.preventDefault();
+      openChat();
+    } else if (e.key === 'Escape' && layout === 'medium' && dock && !settings && !useStore.getState().overlay) {
+      setDock(false);
+    }
+  };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && full && !e.defaultPrevented && !isConfirmOpen()) {
-        e.preventDefault();
-        return useChatFull.getState().set(false);
-      }
-      if (e.ctrlKey || e.metaKey || e.repeat || e.defaultPrevented || typingIn(e.target) || isConfirmOpen()) return;
-      const n = TAB_KEYS.indexOf(e.code);
-      if (n >= 0) {
-        e.preventDefault();
-        if (TABS[n] === 'chat') openChat();
-        else show(TABS[n]);
-      } else if (e.key === '/' && !e.altKey) {
-        e.preventDefault();
-        openChat();
-      } else if (e.key === 'Escape' && layout === 'medium' && dock && !settings && !useStore.getState().overlay) {
-        setDock(false);
-      }
-    };
+    const onKey = (e: KeyboardEvent) => keys.current?.(e);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, []);
   // pocket.css's icons and look apply to the whole page while pocket mode is on (dialogs and toasts included).
   useEffect(() => {
     document.documentElement.classList.add('pocket-mode');
@@ -613,7 +621,7 @@ export default function Pocket() {
   };
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
   const chatMode = useChatMode();
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} />;
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} away={!wide && tab !== 'chat'} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''} ${full ? 'pk-chat-full' : ''}`}>
       <header className="pk-head">
@@ -709,7 +717,12 @@ export default function Pocket() {
             ) : (
               <>
                 {tab === 'company' && <Company go={go} settings={setSettings} track={track} />}
-                {tab === 'chat' && !wide && chat}
+                {/* drawn and laid out while away (#145), as iOS keeps a tab: opening it only shows it */}
+                {!wide && (
+                  <div className={tab === 'chat' ? 'pk-chat-tab' : 'pk-chat-tab pk-chat-away'} inert={tab !== 'chat'}>
+                    {chat}
+                  </div>
+                )}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
                 {tab === 'team' && (
                   <Team
