@@ -9,6 +9,7 @@ import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { AgentCli, CloudCredentialView, CloudView, KeyTrouble } from '../shared/types.ts';
+import { secretMismatch } from '../shared/secretFormats.ts';
 
 /** The environment variable the manager keeps their `claude setup-token` token in. */
 export const CLAUDE_TOKEN_ENV = 'CUBEFARM_CLAUDE_TOKEN';
@@ -265,6 +266,8 @@ export class Cloud {
     const key = raw.trim();
     if (key) {
       if (key.length > 400 || /\s/.test(key)) throw new HttpError(400, "That doesn't look like an Upstash Box API key.");
+      const wrong = secretMismatch('upstash', key);
+      if (wrong) throw new HttpError(400, wrong);
       const api = this.deps.boxes(key);
       try {
         await api.list();
@@ -288,7 +291,8 @@ export class Cloud {
     if (kind === 'anthropic' && value.startsWith('sk-ant-oat')) {
       throw new HttpError(400, `That's a claude setup-token token: it goes in your environment as ${CLAUDE_TOKEN_ENV} (see the steps above), not in the office.`);
     }
-    if (kind === 'anthropic' && value && !value.startsWith('sk-ant-')) throw new HttpError(400, 'Anthropic API keys start with sk-ant-.');
+    const wrong = secretMismatch(kind, value);
+    if (wrong) throw new HttpError(400, wrong);
     const field = TOKEN_FIELD[kind];
     this.secrets[field] = value || undefined;
     await mergeSecrets(this.deps.secretsFile, { [field]: value || undefined });

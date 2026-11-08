@@ -10,6 +10,7 @@ import { clampKeepDays, KEEP_DAYS_DEFAULT } from '../shared/voiceClips.ts';
 import { clipProblem, clipType } from '../shared/clipLimits.ts';
 import { clampSpeed, cleanFavourites, pickVoice, SPEED_DEFAULT, VOICE_ID, voicePool } from '../shared/voices.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
+import { secretMismatch } from '../shared/secretFormats.ts';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 
@@ -271,6 +272,8 @@ export class Voice {
     const key = raw.trim();
     if (key) {
       if (key.length > 200 || /\s/.test(key)) throw new HttpError(400, "That doesn't look like an ElevenLabs API key.");
+      const wrong = secretMismatch('elevenlabs', key);
+      if (wrong) throw new HttpError(400, wrong);
       try {
         await this.deps.api.checkKey(key);
       } catch (err) {

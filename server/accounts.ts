@@ -35,6 +35,7 @@ import {
 } from '../shared/accounts.ts';
 import { mergeReadings } from '../shared/usage.ts';
 import { inputShape, signInEnd } from '../shared/signIn.ts';
+import { secretMismatch } from '../shared/secretFormats.ts';
 import type { AccountCli, AccountKind, AccountsView, AccountView, ProviderAccount, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
 const secretKey = (id: string) => `account:${id}`;
@@ -430,9 +431,8 @@ export class Accounts {
 function checkKey(cli: AccountCli, raw: unknown): string {
   const key = String(raw ?? '').trim();
   if (!key || key.length > 400 || /\s/.test(key)) throw new HttpError(400, "That doesn't look like an API key.");
-  if (cli === 'claude') {
-    if (key.startsWith('sk-ant-oat')) throw new HttpError(400, "That's a claude setup-token token: add it as a setup token account (it's read from your environment, never saved).");
-    if (!key.startsWith('sk-ant-')) throw new HttpError(400, 'Anthropic API keys start with sk-ant-.');
-  } else if (!key.startsWith('sk-')) throw new HttpError(400, 'OpenAI API keys start with sk-.');
+  if (cli === 'claude' && key.startsWith('sk-ant-oat')) throw new HttpError(400, "That's a claude setup-token token: add it as a setup token account (it's read from your environment, never saved).");
+  const wrong = secretMismatch(cli === 'claude' ? 'anthropic' : 'openai', key);
+  if (wrong) throw new HttpError(400, wrong);
   return key;
 }

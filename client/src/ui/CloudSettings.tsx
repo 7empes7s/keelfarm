@@ -6,10 +6,12 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { BOX_SIZE_INFO, BOX_SIZES, MAX_BOX_LIMIT } from '../../../shared/cloud';
 import { billingUrl } from '../../../shared/keyTrouble';
+import { secretMismatch, type SecretKind } from '../../../shared/secretFormats';
 import type { CloudCredentialView, CloudSettings as Cloud, CloudView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
+import { SecretInput } from './SecretInput';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/cloud.md';
 
@@ -35,14 +37,16 @@ function Command({ text }: { text: string }) {
   );
 }
 
-/** A write-only key or token: its hint once saved (Replace, Remove), else a field to paste one. */
-function SecretField({ label, saved, hint, placeholder, help, save }: { label: string; saved: boolean; hint: string; placeholder: string; help?: string; save: (value: string) => Promise<unknown> }) {
+/** A write-only key or token: its hint once saved (Replace, Remove), else a field in a form of its own to paste one. */
+function SecretField({ kind, label, saved, hint, placeholder, help, save }: { kind: SecretKind; label: string; saved: boolean; hint: string; placeholder: string; help?: string; save: (value: string) => Promise<unknown> }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const errorId = useId();
   const store = async (v: string) => {
+    const wrong = secretMismatch(kind, v); // a password manager's fill, or the wrong paste: never saved here
+    if (wrong) return setError(wrong);
     setBusy(true);
     setError('');
     try {
@@ -85,6 +89,7 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
   return (
     <form
       className="notify-form"
+      autoComplete="off"
       onSubmit={(e) => {
         e.preventDefault();
         void store(value);
@@ -93,13 +98,11 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
       {help && <p className="muted small">{help}</p>}
       <label className="field">
         <span>{label}</span>
-        <input
-          type="password"
+        <SecretInput
+          name={`cloud-${kind}-key`}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
           aria-invalid={!!error}
           aria-describedby={error ? errorId : undefined}
         />
@@ -243,6 +246,7 @@ export function CloudSettings() {
       <h4 className="notify-h">Upstash account</h4>
       <div className="notify-hook">
         <SecretField
+          kind="upstash"
           label="Upstash Box API key"
           saved={cloud.keySet}
           hint={cloud.keyHint}
@@ -313,7 +317,7 @@ export function CloudSettings() {
           <Status view={cloud.github} what={{ gh: 'Your gh login', token: 'A token you saved' }} />
         </div>
         <p className="muted small">Your gh login is used unless you save a fine-grained token for your floors' repos (Contents, Pull requests and Issues: read and write), which is safer.</p>
-        <SecretField label="GitHub token" saved={cloud.github.source === 'token'} hint={cloud.github.hint} placeholder="github_pat_…" save={(v) => api.setCloudToken('github', v)} />
+        <SecretField kind="github" label="GitHub token" saved={cloud.github.source === 'token'} hint={cloud.github.hint} placeholder="github_pat_…" save={(v) => api.setCloudToken('github', v)} />
       </div>
       <div className="notify-hook">
         <div className="row wrap">
@@ -330,7 +334,7 @@ export function CloudSettings() {
         {cloud.claude.source !== 'subscription' && (
           <>
             <p className="muted small">Or pay per token with an API key, which every cloud agent then uses instead:</p>
-            <SecretField label="Anthropic API key" saved={cloud.claude.source === 'apiKey'} hint={cloud.claude.hint} placeholder="sk-ant-…" save={(v) => api.setCloudToken('anthropic', v)} />
+            <SecretField kind="anthropic" label="Anthropic API key" saved={cloud.claude.source === 'apiKey'} hint={cloud.claude.hint} placeholder="sk-ant-…" save={(v) => api.setCloudToken('anthropic', v)} />
             <KeyTroubleNote view={cloud.claude} kind="anthropic" />
             <details className="small">
               <summary>Or one subscription token for every cloud agent</summary>
@@ -357,7 +361,7 @@ export function CloudSettings() {
         <p className="muted small">
           With your ChatGPT plan, each cloud agent signs in once in their own terminal: open the link it shows and enter its one-time code. Or an OpenAI API key works in every Box:
         </p>
-        <SecretField label="OpenAI API key" saved={cloud.codex.source === 'apiKey'} hint={cloud.codex.hint} placeholder="sk-…" save={(v) => api.setCloudToken('openai', v)} />
+        <SecretField kind="openai" label="OpenAI API key" saved={cloud.codex.source === 'apiKey'} hint={cloud.codex.hint} placeholder="sk-…" save={(v) => api.setCloudToken('openai', v)} />
         <KeyTroubleNote view={cloud.codex} kind="openai" />
       </div>
       {demo && cloud.keySet && (
