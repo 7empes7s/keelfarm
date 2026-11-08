@@ -547,13 +547,11 @@
 .chat-full .chat-log > .bubble-row:has(> .bubble-them :is(pre, table, .md-code, .viz-svg)) {
   margin-inline: calc(-1 * min(170px, max(0px, (100cqi - 780px) / 2)));
 }
-/* the chat's ⋯ only where its header has room for it; ⛶ is always there */
-.phone-chat,
-.pk-dock {
-  container: chatbox / inline-size;
+/* the chat's ⋯ (#270): what its header row has no room for, with a folded tool's badge */
+.chat-more > .ds-btn {
+  position: relative;
 }
-@container chatbox (max-width: 519px) {
-  .chat-more {
-    display: none;
-  }
+.chat-more .ds-menu-badge {
+  top: -7px;
+  right: -7px;
 }

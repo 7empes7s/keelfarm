@@ -3,7 +3,8 @@ import type { CostDayRow, CostSplit, CostsView } from '../../../shared/costs';
 import type { OpsNumbers, OpsView } from '../../../shared/ops';
 import { roundsView } from '../../../shared/rounds';
 import { parseVisual, type ChatVisual, type VisualChart, type VisualDashboard, type VisualTable } from '../../../shared/chatVisuals';
-import { costDays, resolveVisual, type SourceData } from './chatVisualSources';
+import type { ServerNow, ServerPoint } from '../../../shared/serverLoad';
+import { costDays, needsServerTrend, resolveVisual, type SourceData } from './chatVisualSources';
 
 const split = (usd: number, o: Partial<CostSplit> = {}): CostSplit => ({ usd, sessions: 1, merges: 0, perMerge: null, wasteUsd: 0, wasteSessions: 0, byKind: {}, ...o });
 const day = (d: string, usd: number, o: Partial<CostSplit> = {}): CostDayRow => ({ day: d, ...split(usd, o) });
@@ -149,5 +150,87 @@ describe('costDays', () => {
   it("lists the days of costs a visual's sources need", () => {
     expect(costDays(v('dashboard', { source: 'costs:7d', tiles: [{ label: 'x', source: 'costs:30d:total' }], charts: [{ source: 'backlog:office' }] }))).toEqual([7, 30]);
     expect(costDays(v('chart', { labels: ['a'], series: [{ values: [1] }] }))).toEqual([]);
+  });
+});
+
+describe("the server's sources (#271)", () => {
+  const server: ServerNow = {
+    at: new Date(2026, 10, 7, 14, 30).getTime(),
+    cpus: 4,
+    load: 6,
+    cpuPct: 80,
+    totalMb: 8000,
+    availableMb: 2000,
+    swapTotalMb: 8000,
+    swapFreeMb: 6000,
+    disks: [{ label: 'System disk', totalMb: 100_000, freeMb: 40_000 }],
+    programs: [
+      { kind: 'agent', name: 'Claude Code · Ada', agentId: 'ada-1', ref: '@Ada', rssMb: 300, cpuPct: 20, procs: 2 },
+      { kind: 'browser', name: 'Test browser · Ada', agentId: 'ada-1', ref: '@Ada', rssMb: 500, cpuPct: 30, procs: 5 },
+      { kind: 'agent', name: 'Claude Code · Bo', agentId: 'bo-2', ref: '@Bo', rssMb: 250, cpuPct: 5, procs: 2 },
+      { kind: 'preview', name: 'Preview · floor 2 PR #13', previewKey: 'acme/api#13', ref: 'preview: floor 2 #13', rssMb: 150, cpuPct: 1, procs: 2 },
+      { kind: 'office', name: 'This office', rssMb: 250, cpuPct: 3, procs: 2 },
+    ],
+    orphans: [],
+    measured: true,
+  };
+  const start = server.at - 3 * 3_600_000;
+  const trend: ServerPoint[] = Array.from({ length: 180 }, (_, i) => ({ at: start + i * 60_000, memPct: 50 + (i % 10), swapPct: 20, loadPct: 100 }));
+  const d = (o: Partial<SourceData> = {}) => data({ server, serverTrend: trend, held: 2, ...o });
+
+  it('draws now as bars of CPU load (capped at 100%), memory, swap and disk', () => {
+    const c = resolveVisual(v('chart', { title: 'Now', source: 'server:now' }), d()) as VisualChart;
+    expect(c.type).toBe('progress');
+    expect(c.labels).toEqual(['CPU load', 'Memory', 'Swap', 'Disk']);
+    expect(c.series[0].values).toEqual([100, 75, 25, 60]);
+  });
+
+  it('expands a bare server dashboard into tiles, memory by program and by agent, and the day', () => {
+    const dash = resolveVisual(v('dashboard', { title: 'Server', source: 'server' }), d()) as VisualDashboard;
+    expect(dash.tiles.map((t) => [t.label, t.value])).toEqual([
+      ['CPU load / cores', '6.0 / 4'],
+      ['Memory used', 6000],
+      ['Available', 2000],
+      ['Swap', 2000],
+      ['Disk', 60],
+      ['Waiting for memory', 2],
+    ]);
+    expect(dash.tiles[1]).toMatchObject({ unit: 'mb', progress: 75 });
+    expect(dash.tiles[1].spark?.length).toBeGreaterThan(1);
+    expect(dash.charts.map((c) => [c.type, c.title])).toEqual([
+      ['donut', 'Memory by program'],
+      ['bar', 'Memory by agent'],
+      ['line', 'The last 24 hours'],
+    ]);
+  });
+
+  it('draws memory by program, by agent (each tappable) and by preview', () => {
+    const kinds = resolveVisual(v('chart', { type: 'donut', source: 'server:byProgram' }), d()) as VisualChart;
+    expect(kinds.labels).toEqual(['Agent sessions', 'Test browsers', 'This office', 'Previews']);
+    expect(kinds.series[0].values).toEqual([550, 500, 250, 150]);
+    const agents = resolveVisual(v('chart', { source: 'server:byAgent' }), d()) as VisualChart;
+    expect([agents.labels, agents.series[0].values, agents.refs, agents.unit]).toEqual([['Ada', 'Bo'], [800, 250], ['@Ada', '@Bo'], 'mb']);
+    const previews = resolveVisual(v('chart', { source: 'server:previews' }), d()) as VisualChart;
+    expect([previews.labels, previews.refs]).toEqual([['PR #13'], ['preview: floor 2 #13']]);
+  });
+
+  it('draws the day in 10-minute points ending with the latest reading', () => {
+    const c = resolveVisual(v('chart', { type: 'line', source: 'server:24h' }), d()) as VisualChart;
+    expect(c.series.map((s) => s.name)).toEqual(['Memory', 'Swap', 'CPU load']);
+    expect(c.labels.length).toBeLessThanOrEqual(20);
+    expect(c.labels[c.labels.length - 1]).toBe('14:30');
+    expect(c.series[0].values[c.series[0].values.length - 1]).toBe(75);
+    expect((resolveVisual(v('chart', { source: 'server:24h' }), d({ serverTrend: undefined })) as VisualChart & { missing?: string }).missing).toBe('Loading…');
+  });
+
+  it('says why when there is no reading, or programs cannot be told apart', () => {
+    expect((resolveVisual(v('chart', { source: 'server:byAgent' }), d({ server: null })) as { missing?: string }).missing).toBe('No reading of the server yet');
+    expect((resolveVisual(v('chart', { source: 'server:byAgent' }), d({ server: { ...server, measured: false } })) as { missing?: string }).missing).toMatch(/Linux/);
+  });
+
+  it('asks for the trend only for what draws it', () => {
+    expect(needsServerTrend(v('dashboard', { source: 'server' }))).toBe(true);
+    expect(needsServerTrend(v('chart', { source: 'server:byAgent' }))).toBe(false);
+    expect(needsServerTrend(v('dashboard', { tiles: [{ label: 'Mem', source: 'server:memory' }] }))).toBe(true);
   });
 });

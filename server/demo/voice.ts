@@ -1,4 +1,5 @@
 // The demo's voice (#257, docs/voice.md): no ElevenLabs, a chime for every message.
+import { SAMPLE_LINE } from '../../shared/speech.ts';
 import { DEMO_VOICES } from '../demoVoices.ts';
 import { VoiceApiError, type VoiceApi } from '../voice.ts';
 import { registerDemo } from './registry.ts';
@@ -43,6 +44,10 @@ function demoChime(text: string, voiceId = '', speed = 1): Buffer {
   return wav;
 }
 
+/** Slow like the real thing (#279), so Settings → Voice shows its intro while the first previews' test lines are made. */
+const DEMO_LIST_MS = 600;
+const DEMO_SAMPLE_MS = 900;
+
 /** What the demo's Speech to Text hears in any recording (docs/voice.md). */
 const DEMO_TRANSCRIPT = "What's everyone working on?";
 
@@ -51,9 +56,12 @@ const demoVoice: VoiceApi = {
   checkKey: async (key) => {
     if (/bad/i.test(key)) throw new VoiceApiError(401, '401: invalid_api_key (demo)');
   },
-  listVoices: async () => DEMO_VOICES,
+  listVoices: async () => {
+    await new Promise((r) => setTimeout(r, DEMO_LIST_MS));
+    return DEMO_VOICES;
+  },
   synthesize: async (_key, { text, voiceId, speed }) => {
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, text === SAMPLE_LINE ? DEMO_SAMPLE_MS : 300));
     return demoChime(text, voiceId, speed);
   },
   transcribe: async () => {

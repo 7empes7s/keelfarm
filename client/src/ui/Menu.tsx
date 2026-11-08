@@ -17,6 +17,7 @@ export function Menu({
   text,
   items: list,
   className,
+  badge = 0,
   initialOpen = false,
 }: {
   /** The ⋯ button's accessible name, e.g. "More for Ada". */
@@ -27,6 +28,8 @@ export function Menu({
   text?: string;
   items: (MenuItem | false | null | undefined)[];
   className?: string;
+  /** A count on the ⋯ for what's inside it (#270: a folded tool's badge), none at 0. */
+  badge?: number;
   initialOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
@@ -127,7 +130,7 @@ export function Menu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
-        aria-label={label}
+        aria-label={badge > 0 ? `${label} (${badge})` : label}
         title={label}
         onClick={() => {
           first.current = 0;
@@ -140,6 +143,11 @@ export function Menu({
         <span aria-hidden className="ds-menu-dots">
           <Icon name="ellipsis" />
         </span>
+        {badge > 0 && (
+          <span className="badge badge-dot ds-menu-badge" aria-hidden>
+            {badge}
+          </span>
+        )}
       </button>
       {open && (
         <>
