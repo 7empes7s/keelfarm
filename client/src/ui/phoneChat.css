@@ -208,6 +208,8 @@
 .chat-menu {
   width: 100%;
   max-width: 340px;
+  max-height: 100%;
+  overflow-y: auto;
   padding: 10px 12px;
   border: 2px solid var(--ds-outline);
   border-radius: 14px;

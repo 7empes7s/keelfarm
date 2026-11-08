@@ -104,6 +104,13 @@ for (const input of ['mouse', 'keyboard', 'touch'] as const) {
             await page.getByRole('button', { name: 'Cancel the reply', exact: true }).click();
           } else {
             await expect(menu).toBeVisible();
+            // Waiting-on-you can leave a short log on phones: the menu must fit its own area,
+            // with every action reachable by scrolling inside it rather than behind the header.
+            expect(await menu.evaluate((el) => {
+              const box = el.getBoundingClientRect();
+              const area = el.parentElement!.getBoundingClientRect();
+              return box.top >= area.top && box.bottom <= area.bottom;
+            })).toBe(true);
             if (name === 'React to this message') {
               const id = await row.getAttribute('data-msg');
               const sent = page.waitForResponse((r) => r.url().endsWith(`/api/ceo/messages/${id}/react`) && r.request().method() === 'POST');
