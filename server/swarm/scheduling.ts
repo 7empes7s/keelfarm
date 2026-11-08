@@ -333,9 +333,11 @@ export abstract class SwarmScheduling extends SwarmQa {
           return;
         }
         this.recordUsage(res.readings); // clears the failed check
-        // A full 5-hour or weekly window pauses new work, as a session hitting the limit would.
+        // A full 5-hour or weekly window on the built-in login pauses new work, as a session hitting the limit would,
+        // unless rotation has another Claude account to start it on: then only that login is out (its status already
+        // says limited, from these readings). With every account out, the pause lasts until the first one is back.
         const full = res.readings.find((r) => (r.type === 'five_hour' || r.type === 'seven_day') && r.pct >= 100 && r.resetsAt && r.resetsAt > Date.now());
-        if (full) this.pauseForLimit(full.resetsAt);
+        if (full && !this.accounts.hasFree('claude')) this.pauseForLimit(this.accounts.rotation().on ? (this.accounts.firstBack('claude') ?? full.resetsAt) : full.resetsAt);
       })
       .finally(() => (this.usagePolling = false));
   }
