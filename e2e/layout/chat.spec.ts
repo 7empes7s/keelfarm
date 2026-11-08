@@ -29,9 +29,12 @@ const SCREENS: Screen[] = [
       await expect(root.locator('.action-card').first()).toBeVisible();
       return root;
     },
-    tabs: [80, 100, 200].map((v) => ({
-      name: `text ${v}%`, go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
-    })),
+    tabs: [
+      ...[80, 100, 200].map((v) => ({
+        name: `text ${v}%`, go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
+      })),
+      { name: 'steps', go: (root: Locator) => root.locator('.steps-row').last().click() }, // the reply's step log (#150)
+    ],
   },
   {
     // the questions waiting on the manager, in the tray above the message box, open and collapsed (#114)

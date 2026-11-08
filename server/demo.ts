@@ -26,8 +26,7 @@ import type { NotifyTransport } from './notifier.ts';
 import { demoTelegram } from './demoTelegram.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
-import type { BoxSignIn } from './cliRunner.ts';
-import type { AgentTerminal } from './terminal.ts';
+import { demoSignIn } from './demoSignIn.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { sampleNotices } from './noticeSample.ts';
 import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
@@ -40,7 +39,7 @@ import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts'
 import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoKill, demoPortOwner, demoProc, holdDemoPort } from './demoLeftover.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
-import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoAwake, demoRound, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
@@ -1675,7 +1674,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      if (awake) return awake;
+      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0])); // "look into …": the step log (#150)
+      if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
@@ -2064,68 +2064,6 @@ function demoCloud(): CloudBackend {
       const ours = new Set(logins.keys());
       if (!credit) logins.clear(); // out of credit: their own logins stay, only the key stopped working
       for (const s of [...signOuts.values()]) if (credit || ours.has(s.boxId)) s.end(credit);
-    },
-  };
-}
-
-/** Where the demo's sign-ins send the manager: nowhere real. */
-const DEMO_SIGN_IN = { claude: 'https://example.com/cubefarm-demo/claude-sign-in', codex: 'https://example.com/cubefarm-demo/codex-device' };
-
-/**
- * The demo's sign-in in a cloud agent's terminal, drawn as each CLI's own one looks, with a made-up link: Enter (after
- * pasting anything, for Claude Code) finishes it, and the fake account remembers the Box as signed in.
- */
-function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal }, logins: Map<string, Set<string>>, exited: (code: number) => void): BoxSignIn {
-  const { term } = o;
-  const claude = o.cli === 'claude';
-  term.note(`── Signing ${claude ? 'Claude Code' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
-  term.write(
-    (claude
-      ? ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter.\x1b[0m', 'Paste code here if prompted > ']
-      : [
-          'Welcome to Codex (demo)',
-          '',
-          'Follow these steps to sign in with ChatGPT using device code authorization:',
-          '',
-          '1. Open this link in your browser and sign in to your account',
-          `   ${DEMO_SIGN_IN.codex}`,
-          '',
-          '2. Enter this one-time code (expires in 15 minutes)',
-          '   DEMO-0000',
-          '',
-          '\x1b[2m(demo) Press Enter here once you have.\x1b[0m',
-        ]
-    ).join('\r\n'),
-  );
-  let line = '';
-  let over = false;
-  const close = () => {
-    over = true;
-    term.bind(null);
-  };
-  term.bind({
-    write: (data) => {
-      for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
-        if (over) return;
-        if (ch === '\r') {
-          if (claude && !line.trim()) continue;
-          term.write(`\r\n\x1b[32m${claude ? 'Login successful.' : 'Successfully logged in'}\x1b[0m\r\n`);
-          const set = logins.get(o.boxId) ?? new Set<string>();
-          set.add(o.cli);
-          logins.set(o.boxId, set);
-          close();
-          exited(0);
-        } else if (ch === '\x7f' || ch === '\b') line = line.slice(0, -1);
-        else if (ch >= ' ') line += ch; // never echoed, as the real prompt doesn't
-      }
-    },
-    resize: () => undefined,
-  });
-  return {
-    stop: () => {
-      if (over) return;
-      close();
-      term.note('── sign-in closed ──');
     },
   };
 }

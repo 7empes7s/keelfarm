@@ -72,6 +72,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
   const [artifact, setArtifact] = useState<{ messageId: number; artifactId: string; doc?: ChatArtifact; from?: string | null } | null>(null);
   const [viewing, setViewing] = useState<{ id: string; messageId?: number | null; from?: string | null } | null>(null);
   const [seg, setSeg] = useState<ChatSegment>('chat');
+  const [logOpen, setLogOpen] = useState(false); // the working strip's live step log (#150)
   const att = useAttachments(draftKey);
   const library = useThreadLibrary(messages);
   const drop = useDropZone(att.add);
@@ -399,7 +400,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
             </Fragment>
           ))}
           {outbox.map((o) => bubble({ out: o }, `out-${o.key}`))}
-          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={stable.floor} />}
+          {(replying || chat.live) && <LiveBubble live={chat.live} ceoName={ceo.name} linked={linked} onFloor={stable.floor} onOpenLog={() => setLogOpen(true)} />}
         </div>
         <OlderSpinner loading={pages.loading} />
         {!atEnd && (
@@ -460,7 +461,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
           <Icon name="pause" /> {heldBanner(info.held)}
         </div>
       )}
-      <WorkingStrip onStop={stop} />
+      <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
       <AttachTray pending={att.pending} onRemove={att.remove} onRetry={att.retry} />
       {mention.picks}
       {slash.picks}

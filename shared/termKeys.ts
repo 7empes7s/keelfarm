@@ -121,7 +121,7 @@ const PASTE: BarKey = { label: 'Paste', title: 'Paste from the clipboard', paste
 export function barKeys(cli: AgentCli, { signIn = false } = {}): BarKey[] {
   return [
     k('Esc', cli === 'claude' ? 'Esc: interrupt, or close a dialog' : 'Esc: interrupt', 'esc'),
-    signIn ? { ...PASTE, title: 'Paste the sign-in code from the clipboard', primary: true } : PASTE,
+    signIn ? { ...PASTE, label: 'Paste code', title: 'Paste the sign-in code from the clipboard', primary: true } : PASTE,
     k('Tab', 'Tab', 'tab'),
     ...ARROW_KEYS,
     k('⏎', 'Enter', 'enter'),

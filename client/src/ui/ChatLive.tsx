@@ -1,15 +1,51 @@
-import { useState, type ReactNode } from 'react';
-import { currentStep, liveText, type CeoLive } from '../../../shared/ceoStream';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { currentStep, liveText, type CeoLive, type LiveStep, type StepLog } from '../../../shared/ceoStream';
+import { usedLine, type UsedView } from '../../../shared/used';
+import { stepsSummary, stepTime } from './chatCardRules';
 import { Icon } from './Icon';
+import { iconFor } from './icons';
 import { Markdown } from './Markdown';
 import { isLong } from './longText';
 import './chat.css';
 
-// The CEO chat closer to Claude's (#51): the reply streaming in with its live step line and a Stop, the "Steps" a
-// finished reply keeps, and long messages folded behind "Show more".
+// The CEO chat closer to Claude's (#51): the reply streaming in with its live step line, each reply's step log (#150)
+// as one compact row that opens the round's steps, and long messages folded behind "Show more".
 
-/** The CEO's reply as it is written: its text so far (dots before any) and the step it's on. Stop is the composer's. */
-export function LiveBubble({ live, ceoName, linked, onFloor }: { live: CeoLive | null; ceoName: string; linked: (t: string) => string; onFloor: (n: number) => void }) {
+type Linked = { linked: (t: string) => string; onFloor: (n: number) => void };
+
+/** A round's steps, oldest first: icon, sentence (its floor and #N linked), time and result. `live`: follows the newest. */
+export function StepLogList({ steps, now, live, linked, onFloor }: { steps: readonly LiveStep[]; now: number; live?: boolean } & Linked) {
+  const list = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (live && list.current) list.current.scrollTop = list.current.scrollHeight;
+  }, [live, steps.length]);
+  return (
+    <ol ref={list} className="step-log">
+      {steps.map((s, i) => (
+        <li key={i} className={`step-row step-row-${s.state}`}>
+          <span className="step-icon" aria-hidden>
+            <Icon name={iconFor(s.icon, 'circle-dot')} />
+          </span>
+          <span className="step-body">
+            <Markdown className="step-text" text={linked(s.label)} onFloor={onFloor} />
+            {s.note && s.state === 'failed' && <span className="step-note">
+                <Icon name="triangle-alert" /> {s.note}
+              </span>}
+          </span>
+          <span className="step-meta">
+            {stepTime(s, now)}
+            <span className="step-mark" aria-label={s.state === 'running' ? 'running' : s.state === 'failed' ? 'failed' : 'done'}>
+              {s.state === 'running' ? <span className="step-spin" /> : <Icon name={s.state === 'failed' ? 'triangle-alert' : 'check'} />}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The CEO's reply as it is written: its text so far (dots before any) and the step it's on; a tap opens the round's log. */
+export function LiveBubble({ live, ceoName, linked, onFloor, onOpenLog }: { live: CeoLive | null; ceoName: string; onOpenLog: () => void } & Linked) {
   const text = live ? liveText(live) : '';
   const step = live && currentStep(live);
   const count = live?.stepCount ?? 0;
@@ -27,32 +63,39 @@ export function LiveBubble({ live, ceoName, linked, onFloor }: { live: CeoLive |
           </div>
         )}
         {step && (
-          <div className="live-foot">
-            <span className={`live-step live-step-${step.state}`} title={`${count} step${count === 1 ? '' : 's'} so far`}>
-              <Icon name={step.state === 'running' ? 'circle-dot' : step.state === 'failed' ? 'x' : 'check'} /> {step.label}
-              {step.state === 'running' && '…'}
-              {count > 1 && <span className="muted"> · {count} steps</span>}
+          <button type="button" className={`live-foot live-step-${step.state}`} onClick={onOpenLog}>
+            <span className={`live-icon ${step.state === 'running' ? 'live-icon-busy' : ''}`} aria-hidden>
+              <Icon name={iconFor(step.icon, 'circle-dot')} />
             </span>
-          </div>
+            <span className="live-step">{step.label}</span>
+            {count > 1 && <span className="muted live-count">step {count}</span>}
+          </button>
         )}
       </div>
     </div>
   );
 }
 
-/** A finished reply's steps, folded. */
-export function StepsList({ steps }: { steps: readonly string[] }) {
+/** A finished reply's steps as one row ("⚙ 6 steps · 1 action · 42 s ▸") that opens the round's log; its action cards stay above it. */
+export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog | null; actions: number; used: UsedView | undefined } & Linked) {
+  const [open, setOpen] = useState(false);
   return (
-    <details className="chat-steps">
-      <summary>Steps ({steps.length})</summary>
-      <ol>
-        {steps.map((s, i) => (
-          <li key={i} className={s.startsWith('✗') ? 'chat-step-failed' : undefined}>
-            {s}
-          </li>
-        ))}
-      </ol>
-    </details>
+    <div className="steps-row-wrap">
+      <button type="button" className="steps-row" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name="settings" />
+        <span className="grow">{stepsSummary(log, actions)}</span>
+        <span className="steps-row-chev" aria-hidden>
+          ▸
+        </span>
+      </button>
+      {open && (
+        <div className="steps-row-log">
+          {log && <StepLogList steps={log.steps} now={0} linked={linked} onFloor={onFloor} />}
+          {log && log.count > log.steps.length && <p className="steps-row-foot muted">{log.steps.length ? `and ${log.count - log.steps.length} earlier steps` : 'Only the newest replies keep each step after a reload'}</p>}
+          {used && <p className="steps-row-foot muted">{usedLine(used)}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
