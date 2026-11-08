@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { sessionTools } from '../shared/tooling.ts';
-import { boxVersions, CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, localUrl, oneAtATime, signedOutScreen, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
+import { boxVersions, CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, localUrl, lostLogin, oneAtATime, signedOutScreen, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 import { LOCAL_PROVIDERS } from '../shared/models.ts';
 import { describeOfficeTool, describeTool, newScreenshots, screenshotFile, summariseResult } from './agentRunner.ts';
 
@@ -89,6 +89,21 @@ describe('signedOutScreen', () => {
   it('leaves ordinary failures alone', () => {
     expect(signedOutScreen('● The tests fail: expected 401 from /api/login, got 200\n❯ ')).toBe(false);
     expect(signedOutScreen('Claude Code exited with code 1 before finishing.')).toBe(false);
+  });
+});
+
+describe('lostLogin', () => {
+  it("tells a key out of credit or turned away (#258) from a login that's gone, the key first", () => {
+    expect(lostLogin('⎿  API Error: 400 · Your credit balance is too low to access the Anthropic API\n❯ ', [], 'Claude Code')).toEqual({ keyTrouble: 'out-of-credit', errors: ["Claude Code's API key ran out of credit."] });
+    expect(lostLogin('Invalid API key · Please run /login', [], 'Claude Code')).toMatchObject({ keyTrouble: 'invalid' });
+    expect(lostLogin('', ['stream error: insufficient_quota'], 'Codex')).toMatchObject({ keyTrouble: 'out-of-credit' });
+    expect(lostLogin('API Error: 401 · Login expired · Please run /login', [], 'Claude Code')).toMatchObject({ signedOut: true });
+    expect(lostLogin('● All done.', ['exited with code 1'], 'Claude Code')).toBeNull();
+  });
+
+  it("reads the key's trouble only in the screen's last lines, not what the agent printed while working", () => {
+    const work = ['● Adding the "credit balance is too low" detection', ...Array.from({ length: 12 }, (_, i) => `  line ${i}`)].join('\n');
+    expect(lostLogin(work, [], 'Claude Code')).toBeNull();
   });
 });
 

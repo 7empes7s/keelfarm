@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentCli, AgentRole, AgentTask, EffortLevel, LogKind, UsageReading } from '../shared/types.ts';
+import type { AgentCli, AgentRole, AgentTask, EffortLevel, KeyTrouble, LogKind, UsageReading } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
 import { usageTokens } from '../shared/startup.ts';
 import { memoryChars } from './tooling.ts';
@@ -79,6 +79,8 @@ export interface SessionResult {
   interrupted?: boolean;
   /** A cloud agent's CLI isn't signed in, or its login expired: the task waits for the manager to sign it in again. */
   signedOut?: boolean;
+  /** A cloud agent's API key ran out of credit or was turned away (shared/keyTrouble.ts): they switch to their own login. */
+  keyTrouble?: KeyTrouble;
 }
 
 export interface SessionCallbacks {
@@ -322,6 +324,17 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `💬 answer_agent ${String(input.agent_id ?? '')}: ${clip(String(input.text ?? ''), 90)}`;
     case 'ask_manager_choice':
       return `❓ ask_manager_choice ${String(input.agent_id ?? '')}: ${clip(String(input.question ?? ''), 90)}`;
+    case 'wait_for': {
+      // "pr_merged floor 3 PR #138 or agent_idle <id> · up to 10 min" (shared/ceoSteps.ts reads it back)
+      const conds = (Array.isArray(input.conditions) ? (input.conditions as Record<string, unknown>[]) : []).map((c) =>
+        [c.kind, c.agent_id, c.usage, c.floor != null && `floor ${c.floor}`, c.pr != null && `PR #${c.pr}`, c.issue != null && `#${c.issue}`].filter((x) => x != null && x !== false && x !== '').join(' '),
+      );
+      return `⏳ wait_for ${clip(conds.join(' or '), 160)}${input.timeout_min != null ? ` · up to ${input.timeout_min} min` : ''}`;
+    }
+    case 'ask_manager':
+      return `❓ ask_manager: ${clip(String(input.question ?? ''), 90)}`;
+    case 'consult':
+      return `🧑‍💻 consult floor ${String(input.floor ?? '?')}${input.agent_id ? ` ${String(input.agent_id)}` : ''}: ${clip(String(input.question ?? ''), 90)}`;
   }
   return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }

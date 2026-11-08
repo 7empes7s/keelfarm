@@ -50,7 +50,7 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
     case 'issues':
       return <IssuesTab initialRepo={focus.repoId} />;
     case 'team':
-      return <TeamTab />;
+      return <TeamTab focusRepo={focus.repoId} />;
     case 'ops':
       return <OpsTab card={focus.card} />;
     case 'charter':
@@ -62,7 +62,7 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
         </Suspense>
       );
     case 'ceo':
-      return <CeoTab />;
+      return <CeoTab focusRepo={focus.repoId} />;
     case 'ceo-settings':
       return one(<CeoSettings />);
     case 'tools':

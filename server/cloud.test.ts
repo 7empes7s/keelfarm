@@ -47,6 +47,20 @@ describe('resolveCredentials', () => {
     expect(resolveCredentials('claude', { ...none, claudeToken: 'sk-ant-oat01-sub' }).ownLogin).toBe(false);
     expect(resolveCredentials('codex', { ...none, secrets: { openaiApiKey: 'sk-openai' } }).ownLogin).toBe(false);
   });
+
+  it("gives an agent off the key (it ran out of credit, #258) no key at all: their CLI's own login", () => {
+    const keys = { ...none, secrets: { anthropicApiKey: 'sk-ant-api-key', openaiApiKey: 'sk-openai' }, ghToken: 'g' };
+    expect(resolveCredentials('claude', keys)).toMatchObject({ ownLogin: false, onKey: true });
+    const claude = resolveCredentials('claude', keys, true);
+    expect(claude).toMatchObject({ ownLogin: true, onKey: false, apiKeyHelper: null });
+    expect(Object.values(claude.env)).not.toContain('sk-ant-api-key');
+    expect(claude.env[ANTHROPIC_KEY_ENV]).toBe('');
+    const codex = resolveCredentials('codex', keys, true);
+    expect(codex).toMatchObject({ ownLogin: true, onKey: false });
+    expect(codex.env).toEqual({ GH_TOKEN: 'g' });
+    // A subscription token isn't a key that runs out of credit.
+    expect(resolveCredentials('claude', { ...keys, claudeToken: 'sk-ant-oat01-sub' }).onKey).toBe(false);
+  });
 });
 
 describe('credentialViews', () => {
@@ -56,6 +70,12 @@ describe('credentialViews', () => {
     expect(view.claude).toEqual({ ready: true, source: 'subscription', hint: '' });
     expect(view.codex).toEqual({ ready: true, source: 'apiKey', hint: '9876' });
     expect(JSON.stringify(view)).not.toMatch(/secret-token|abcdef|openai-xyz/);
+  });
+
+  it("marks a key that ran out of credit, still never showing it (#258)", () => {
+    const view = credentialViews({ ...none, secrets: { anthropicApiKey: 'sk-ant-api03-secret-9999' }, trouble: { anthropic: { kind: 'out-of-credit', at: 5 } } });
+    expect(view.claude).toEqual({ ready: true, source: 'apiKey', hint: '9999', trouble: { kind: 'out-of-credit', at: 5 } });
+    expect(JSON.stringify(view)).not.toContain('secret');
   });
 
   it("shows a gh login as the GitHub source, and a coding agent with no key as signing in in each agent's terminal", () => {

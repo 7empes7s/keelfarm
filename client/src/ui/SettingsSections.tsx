@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
 import { CLAUDE_MODELS, modelLabel } from '../../../shared/models';
+import { conflictFixSettings } from '../../../shared/conflicts';
 import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
 import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
@@ -70,6 +71,7 @@ export function AgentsSettings() {
         </select>
       </label>
       <EffortByKind />
+      <ConflictFixFields />
       <p className="muted small">
         {terminal
           ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
@@ -112,6 +114,38 @@ export function AgentsSettings() {
         />
       </label>
       <p className="muted small">At most {FLOOR_SEATS}, one per desk. Adding agents past it is refused, by hand or by the CEO.</p>
+    </div>
+  );
+}
+
+/** Settings → Agents → Conflict-only fixes (#256): a cheaper model for fix rounds whose only cause is a merge conflict. */
+function ConflictFixFields() {
+  const every = useStore((s) => s.settings.everyProject);
+  const fix = conflictFixSettings(every.conflictFix, {});
+  const change = (patch: Partial<typeof fix>) => set({ everyProject: { ...every, conflictFix: { ...fix, ...patch } } });
+  return (
+    <div>
+      <div className="small">
+        <b>Conflict-only fixes</b>
+      </div>
+      <label className="field" htmlFor="conflict-fix-model">
+        <span>Model</span>
+        <ModelPicker id="conflict-fix-model" cli="claude" value={fix.model} resolvedDefault="" defaultLabel="The agent's own model (off)" label="Conflict-only fixes: model" onChange={(model) => change({ model })} />
+      </label>
+      <label className="field">
+        <span>Effort</span>
+        <select value={fix.effort} onChange={(e) => change({ effort: e.target.value as EffortLevel | '' })}>
+          <option value="">The agent's own</option>
+          {EFFORTS.map((x) => (
+            <option key={x} value={x}>
+              {x}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">
+        A fix round that only has to merge the base branch in (no QA findings, no red checks) runs on this model. A PR touching office logic ({fix.strongFiles.join(', ') || 'none listed'}) keeps the agent's own model, and so does the round after a cheap one.
+      </p>
     </div>
   );
 }

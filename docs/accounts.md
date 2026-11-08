@@ -23,7 +23,9 @@ OpenCode runs on its own setup (`opencode auth login`); the office doesn't manag
 ## Adding one
 
 - **Subscription login**: Add account → Subscription login. Its sign-in opens in a terminal on the page: open the link,
-  approve, paste the code back (Codex: enter the one-time code). Sign in again from its ⋯ menu when it expires.
+  approve, paste the code back with **Paste code** (Codex: enter the one-time code). Sign in again from its ⋯ menu when
+  it expires. A failed sign-in says why (a code works once, for a few minutes) and offers **Try again**; Claude Code's
+  can run `claude setup-token` there instead.
   A new login's folder starts empty: your skills, plugins and settings in `~/.claude` aren't in it. Copy
   `settings.json` and `plugins/` in if you want them there too.
 - **API key**: paste it; the office makes one free request (the provider's model list) to check it before saving it.

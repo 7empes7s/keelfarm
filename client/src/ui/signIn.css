@@ -1,0 +1,61 @@
+/* Cloud agents to sign in after the API key stopped working (#258): the chat card and the terminal's steps sheet. */
+
+.sign-in-steps {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-2) 0;
+  padding: 0;
+  list-style: none;
+}
+.sign-in-steps > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.sign-in-step-n {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-icon-md);
+  height: var(--ds-icon-md);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+
+.sign-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.sign-in-actions > .btn {
+  min-height: var(--ds-target);
+}
+
+.sign-in-rows {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0 0 var(--ds-space-1);
+  padding: 0;
+  list-style: none;
+}
+.sign-in-row {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+
+/* in the terminal: the steps stacked like a sheet above it */
+.sign-in-note.sign-in-sheet {
+  display: grid;
+  gap: var(--ds-space-1);
+  align-items: stretch;
+}

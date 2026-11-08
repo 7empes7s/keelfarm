@@ -20,13 +20,13 @@ import { HOME_DIR, type DemoScale } from './config.ts';
 import { takeLastUpdate, underLauncher, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import type { UsageWarning } from './pacing.ts';
 import { VoiceApiError, type VoiceApi } from './voice.ts';
+import { DEMO_VOICES } from './demoVoices.ts';
 import type { WeatherApi } from './weather.ts';
 import type { NotifyTransport } from './notifier.ts';
 import { demoTelegram } from './demoTelegram.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { CloudBackend } from './backend.ts';
-import type { BoxSignIn } from './cliRunner.ts';
-import type { AgentTerminal } from './terminal.ts';
+import { demoSignIn } from './demoSignIn.ts';
 import { demoSurvival, sampleLab } from './experimentSample.ts';
 import { sampleNotices } from './noticeSample.ts';
 import { BLOCKED_DEMO, demoAsked, demoAsks, demoCeoAnswer, demoPrompts } from './demoPrompts.ts';
@@ -39,11 +39,11 @@ import { demoPrFiles, demoPrSummary, demoQaPage, pastPulls } from './demoMap.ts'
 import { demoPreviewDesks, stalePulls } from './demoPreviewDesks.ts';
 import { demoKill, demoPortOwner, demoProc, holdDemoPort } from './demoLeftover.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRefsLine, demoRepoFile } from './demoReads.ts';
-import { demoAwake, demoConsultSession } from './demoAwake.ts';
+import { demoAwake, demoRound, demoConsultSession } from './demoAwake.ts';
 import { demoDesign } from './demoDesign.ts';
 import { demoResolve } from './demoDecisions.ts';
 import { researchBrief } from './demoResearch.ts';
-import { demoEditedChat, logStreamed, writeReply } from './demoChat.ts';
+import { demoEditedChat, demoThreads, logStreamed, writeReply } from './demoChat.ts';
 import { demoReactions } from './demoReactions.ts';
 import { sampleChat } from './chatSample.ts';
 import { demoCharter, demoDraft } from './demoCharters.ts';
@@ -75,7 +75,7 @@ const bareRepos = new Set<string>();
 const mergedSinceSync = new Map<string, number>(); // merges the fake project folder hasn't pulled yet
 const closedIssues = new Set<string>(); // `${fullName}#${n}`: issues closed by a merge
 const stalls = new Map<string, () => void>(); // agent id -> silences their running fake session (the office doctor's demo)
-const signOuts = new Map<string, { boxId: string; end: () => void }>(); // agent id -> ends their cloud session as an expired sign-in would
+const signOuts = new Map<string, { boxId: string; end: (credit?: boolean) => void }>(); // agent id -> ends their cloud session as an expired sign-in (or a key out of credit) would
 
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
 
@@ -213,7 +213,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Todos should support due dates', 'Add an optional due date and highlight overdue items in src/App.tsx.\n\nObjective: O2'],
   ['Drag and drop to reorder', 'Let users reorder todos by dragging.\n\nObjective: O2'],
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
-  ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.\n\nObjective: O1'],
+  ['Keyboard shortcuts', 'N for new todo, / to search, ? for help. The help overlay touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
 ], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
 strangers('demo-co/pixel-todo');
@@ -513,7 +513,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
     });
   }
   // A cloud agent's session ends the way an expired login ends a real one when the fake account expires sign-ins.
-  const signOut = opts.box && opts.agentId ? { boxId: opts.box.boxId, end: () => expired() } : null;
+  const signOut = opts.box && opts.agentId ? { boxId: opts.box.boxId, end: (credit?: boolean) => expired(credit) } : null;
   if (signOut) signOuts.set(opts.agentId!, signOut);
   const forgetSignOut = () => {
     if (signOut && signOuts.get(opts.agentId!) === signOut) signOuts.delete(opts.agentId!);
@@ -543,15 +543,15 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
   const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
   const script = [header, ...(question ? [...body.slice(0, 7), () => ((stopped = true), demoAsked(cb, question))] : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
 
-  const expired = () => {
+  const expired = (credit = false) => { // credit: as an Anthropic key out of credit ends it instead (#258)
     if (stopped) return;
     stopped = true;
     forgetSignOut();
     timers.forEach(clearTimeout);
     cb.tool(null);
-    cb.log([{ kind: 'error', text: 'API Error: 401 · Login expired · Please run /login (demo)' }]);
+    cb.log([{ kind: 'error', text: credit ? 'API Error: 400 · Your credit balance is too low to access the Anthropic API. (demo)' : 'API Error: 401 · Login expired · Please run /login (demo)' }]);
     const name = CLIS.find((c) => c.id === (opts.cli ?? 'claude'))?.label ?? 'Claude Code';
-    cb.finished({ ok: false, text: '', costUsd: 0.1, turns: i, errors: [`${name} stopped: authentication failed`], signedOut: true });
+    cb.finished({ ok: false, text: '', costUsd: 0.1, turns: i, ...(credit ? { errors: ['Claude Code stopped: credit balance is too low'], keyTrouble: 'out-of-credit' } : { errors: [`${name} stopped: authentication failed`], signedOut: true }) });
   };
 
   const finish = () => {
@@ -1128,10 +1128,11 @@ export function createDemoBackend(scale: DemoScale | null = null, noTour = false
     demoNoTour: noTour,
     seedLab: sampleLab,
     seedNotices: sampleNotices,
-    seedChat: (now) => {
+    seedChat: (now, cards) => {
       const edits = demoEditedChat(now).map((m, i) => ({ ...m, id: i + 1 }));
-      return [...edits, ...sampleChat(now, edits.length + 1)];
+      return [...edits, ...sampleChat(now, edits.length + 1, scale ? undefined : cards)]; // the big company measures the office (scale.test.ts), not the cards' example
     },
+    seedThreads: demoThreads,
     demoCharter,
     seedQaReport: (fullName) => {
       if (scale) return null; // the big company measures the office (scale.test.ts), not this example
@@ -1388,7 +1389,7 @@ const PROFILES: Record<string, Profile> = {
     summary: 'Todo web app · React + Vite + TypeScript',
     qa: '- Add, complete, edit and delete todos; they survive a reload\n- Keyboard only: every action reachable, focus always visible\n- Phone width (375px): nothing overflows or gets cut off\n- No errors in the browser console',
     playbook:
-      '## Map\n- src/components/: React views, no storage calls\n- src/store/: todo state and localStorage; components use its hooks only\n## Conventions\n- One component per file, tests next to it (*.test.tsx)\n## Skills\n- frontend-design for UI, test-driven-development for store changes\n## Traps\n- localStorage throws in private windows: wrap reads and writes',
+      '## Map\n- src/components/: React views, no storage calls\n- src/store/: todo state and localStorage; components use its hooks only\n- area theme: src/App.tsx, src/styles.css\n## Conventions\n- One component per file, tests next to it (*.test.tsx)\n## Skills\n- frontend-design for UI, test-driven-development for store changes\n## Traps\n- localStorage throws in private windows: wrap reads and writes',
   },
   'weather-api': {
     summary: 'REST API · Node + Express',
@@ -1676,7 +1677,8 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      if (awake) return awake;
+      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0])); // "look into …": the step log (#150)
+      if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
@@ -1864,11 +1866,11 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
 /**
  * A two-note chime as 8 kHz mono WAV: something to hear without ElevenLabs, longer for longer text (up to 6 s, so a
  * voice call can be paused, skipped and talked over mid-reply), and pitched by the voice, so a replayed clip is
- * audibly the one made in the voice of its day.
+ * audibly the one made in the voice of its day, and shorter when faster.
  */
-export function demoChime(chars: number, voiceId = ''): Buffer {
+export function demoChime(chars: number, voiceId = '', speed = 1): Buffer {
   const rate = 8000;
-  const seconds = Math.min(0.4 + chars / 40, 6);
+  const seconds = Math.min(0.4 + chars / 40, 6) / speed;
   const n = Math.round(rate * seconds);
   const wav = Buffer.alloc(44 + n);
   wav.write('RIFF', 0);
@@ -1893,24 +1895,18 @@ export function demoChime(chars: number, voiceId = ''): Buffer {
   return wav;
 }
 
-const demoVoices = [
-  { id: 'demoVoiceAvery00001', name: 'Avery', category: 'premade', labels: { accent: 'american', gender: 'female', age: 'middle aged', description: 'calm', use_case: 'conversational' }, previewUrl: null },
-  { id: 'demoVoiceBasil00002', name: 'Basil', category: 'premade', labels: { accent: 'british', gender: 'male', age: 'middle aged', description: 'warm', use_case: 'narration' }, previewUrl: null },
-  { id: 'demoVoiceCleo000003', name: 'Cleo', category: 'premade', labels: { accent: 'australian', gender: 'female', age: 'young', description: 'friendly', use_case: 'conversational' }, previewUrl: null },
-];
-
 /** What the demo's Speech to Text hears in any recording (docs/voice.md). */
 export const DEMO_TRANSCRIPT = "What's everyone working on?";
 
-/** No network: any key works except one containing "bad", three voices, a chime for every message, and one fixed transcript. */
+/** No network: any key works except one containing "bad", nine voices (six of them v4), a chime for every message, and one fixed transcript. */
 const demoVoice: VoiceApi = {
   checkKey: async (key) => {
     if (/bad/i.test(key)) throw new VoiceApiError(401, '401: invalid_api_key (demo)');
   },
-  listVoices: async () => demoVoices,
-  synthesize: async (_key, { text, voiceId }) => {
+  listVoices: async () => DEMO_VOICES,
+  synthesize: async (_key, { text, voiceId, speed }) => {
     await new Promise((r) => setTimeout(r, 300));
-    return demoChime(text.length, voiceId);
+    return demoChime(text.length, voiceId, speed);
   },
   transcribe: async () => {
     await new Promise((r) => setTimeout(r, 400));
@@ -2067,72 +2063,10 @@ function demoCloud(): CloudBackend {
     reconnect: async () => [], // fake sessions end with the office
     detach: () => undefined,
     signIn: (o, exited) => demoSignIn(o, logins, exited),
-    expireSignIns: () => {
+    expireSignIns: (credit) => {
       const ours = new Set(logins.keys());
-      logins.clear();
-      for (const s of [...signOuts.values()]) if (ours.has(s.boxId)) s.end();
-    },
-  };
-}
-
-/** Where the demo's sign-ins send the manager: nowhere real. */
-const DEMO_SIGN_IN = { claude: 'https://example.com/cubefarm-demo/claude-sign-in', codex: 'https://example.com/cubefarm-demo/codex-device' };
-
-/**
- * The demo's sign-in in a cloud agent's terminal, drawn as each CLI's own one looks, with a made-up link: Enter (after
- * pasting anything, for Claude Code) finishes it, and the fake account remembers the Box as signed in.
- */
-function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal }, logins: Map<string, Set<string>>, exited: (code: number) => void): BoxSignIn {
-  const { term } = o;
-  const claude = o.cli === 'claude';
-  term.note(`── Signing ${claude ? 'Claude Code' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
-  term.write(
-    (claude
-      ? ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter.\x1b[0m', 'Paste code here if prompted > ']
-      : [
-          'Welcome to Codex (demo)',
-          '',
-          'Follow these steps to sign in with ChatGPT using device code authorization:',
-          '',
-          '1. Open this link in your browser and sign in to your account',
-          `   ${DEMO_SIGN_IN.codex}`,
-          '',
-          '2. Enter this one-time code (expires in 15 minutes)',
-          '   DEMO-0000',
-          '',
-          '\x1b[2m(demo) Press Enter here once you have.\x1b[0m',
-        ]
-    ).join('\r\n'),
-  );
-  let line = '';
-  let over = false;
-  const close = () => {
-    over = true;
-    term.bind(null);
-  };
-  term.bind({
-    write: (data) => {
-      for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
-        if (over) return;
-        if (ch === '\r') {
-          if (claude && !line.trim()) continue;
-          term.write(`\r\n\x1b[32m${claude ? 'Login successful.' : 'Successfully logged in'}\x1b[0m\r\n`);
-          const set = logins.get(o.boxId) ?? new Set<string>();
-          set.add(o.cli);
-          logins.set(o.boxId, set);
-          close();
-          exited(0);
-        } else if (ch === '\x7f' || ch === '\b') line = line.slice(0, -1);
-        else if (ch >= ' ') line += ch; // never echoed, as the real prompt doesn't
-      }
-    },
-    resize: () => undefined,
-  });
-  return {
-    stop: () => {
-      if (over) return;
-      close();
-      term.note('── sign-in closed ──');
+      if (!credit) logins.clear(); // out of credit: their own logins stay, only the key stopped working
+      for (const s of [...signOuts.values()]) if (credit || ours.has(s.boxId)) s.end(credit);
     },
   };
 }

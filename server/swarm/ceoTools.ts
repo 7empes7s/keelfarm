@@ -27,7 +27,7 @@ import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, 
 import { readingsLabel } from '../../shared/usage.ts';
 import { checkBinding } from '../../shared/accounts.ts';
 import { usageLabel } from '../pacing.ts';
-import { floorRoundsByCause, floorSpend } from '../costLedger.ts';
+import { ceoSpend, floorRoundsByCause, floorSpend } from '../costLedger.ts';
 import { checkRestart, sessionKind } from '../health.ts';
 import { labPattern } from '../testLab.ts';
 import { resumesAfterRestart } from '../restartRecovery.ts';
@@ -246,6 +246,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       {
         company: {
           ceo: this.ceo().name,
+          ceoSpend: ceoSpend(this.spend.ledger.all(), Date.now()), // the CEO's own jobs, kept out of each floor's spend (#254)
           scaling: s.scaling === 'auto' ? 'team changes apply straight away' : 'the manager approves every team change',
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',

@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { BOX_SIZE_INFO, BOX_SIZES, MAX_BOX_LIMIT } from '../../../shared/cloud';
+import { billingUrl } from '../../../shared/keyTrouble';
 import type { CloudCredentialView, CloudSettings as Cloud, CloudView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
@@ -140,6 +141,29 @@ function Status({ view, what }: { view: CloudCredentialView; what: Partial<Recor
     <span className="small term-error">
       <Icon name="triangle-alert" /> Not set up yet
     </span>
+  );
+}
+
+/** A key that ran out of credit or was turned away (#258): when, what cloud agents do meanwhile, and the way back. */
+function KeyTroubleNote({ view, kind }: { view: CloudCredentialView; kind: 'anthropic' | 'openai' }) {
+  const t = view.trouble;
+  if (!t) return null;
+  const when = new Date(t.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <div className="term-error small" role="status">
+      <p>
+        <Icon name="triangle-alert" /> {t.kind === 'out-of-credit' ? `Out of credit since ${when}` : `Turned away since ${when}`}: cloud agents use their own sign-in meanwhile, and wait for you to sign each in.
+        Topped it up? They go back on it at their next task.
+      </p>
+      <div className="row wrap">
+        <button className="btn btn-small" onClick={() => void api.useKeyAgain(kind)}>
+          <Icon name="rotate-ccw" /> Use the key again
+        </button>
+        <a className="btn btn-small btn-ghost" href={billingUrl(kind === 'openai' ? 'codex' : 'claude')} target="_blank" rel="noreferrer">
+          <Icon name="credit-card" /> Add credit
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -307,6 +331,7 @@ export function CloudSettings() {
           <>
             <p className="muted small">Or pay per token with an API key, which every cloud agent then uses instead:</p>
             <SecretField label="Anthropic API key" saved={cloud.claude.source === 'apiKey'} hint={cloud.claude.hint} placeholder="sk-ant-…" save={(v) => api.setCloudToken('anthropic', v)} />
+            <KeyTroubleNote view={cloud.claude} kind="anthropic" />
             <details className="small">
               <summary>Or one subscription token for every cloud agent</summary>
               <ol className="cloud-steps">
@@ -333,12 +358,21 @@ export function CloudSettings() {
           With your ChatGPT plan, each cloud agent signs in once in their own terminal: open the link it shows and enter its one-time code. Or an OpenAI API key works in every Box:
         </p>
         <SecretField label="OpenAI API key" saved={cloud.codex.source === 'apiKey'} hint={cloud.codex.hint} placeholder="sk-…" save={(v) => api.setCloudToken('openai', v)} />
+        <KeyTroubleNote view={cloud.codex} kind="openai" />
       </div>
       {demo && cloud.keySet && (
         <div className="row wrap">
           <span className="grow muted small">Try what happens when a cloud agent's sign-in runs out: every Box is signed out, and its agent asks to be signed in again.</span>
           <button className="btn btn-small btn-ghost" onClick={() => void api.expireSignIns()}>
             <Icon name="key-round" /> Expire sign-ins (demo)
+          </button>
+        </div>
+      )}
+      {demo && cloud.keySet && (
+        <div className="row wrap">
+          <span className="grow muted small">Try what happens when the Anthropic API key runs out of credit: cloud agents switch to their own sign-in and you get the steps to sign them in.</span>
+          <button className="btn btn-small btn-ghost" onClick={() => void api.simulateOutOfCredit()}>
+            <Icon name="credit-card" /> Simulate out of credit (demo)
           </button>
         </div>
       )}

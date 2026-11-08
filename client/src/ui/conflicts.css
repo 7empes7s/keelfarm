@@ -1,0 +1,39 @@
+/* Mission control → Conflicts (ui/ConflictsCard.tsx), on costs.css's stat cards and rounds.css's sub-heading. */
+
+.conflicts-hot {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.conflicts-hot li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(64px, 40%) auto;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-space-6);
+}
+.conflicts-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-text-sm);
+}
+.conflicts-track {
+  height: var(--ds-space-3);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+}
+.conflicts-track span {
+  display: block;
+  height: 100%;
+  border-radius: var(--ds-radius-pill);
+  background: var(--accent, var(--ds-series-3));
+}
+.conflicts-n {
+  min-width: 2ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

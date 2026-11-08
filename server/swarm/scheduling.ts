@@ -26,12 +26,13 @@ import {
   type Waiver,
   type WorkKind,
 } from '../pacing.ts';
-import { opsView, recordChecks, recordMerges, type OpsFloorState } from '../metrics.ts';
+import { opsView, recordAvoided, recordChecks, recordMerges, type OpsFloorState } from '../metrics.ts';
 import { mergedPulls } from '../costLedger.ts';
 import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
 import { questionOf } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
+import { areaFiles, isPriorityLabel, pickNext, playbookAreas } from '../../shared/conflicts.ts';
 import type { OpsView, PullInfo, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
 import {
   type PersistedRepo,
@@ -162,29 +163,42 @@ export abstract class SwarmScheduling extends SwarmQa {
       return false;
     }
     const free = this.available(repo);
-    const next = this.nextIssue(repo, free.length > 0);
+    const { issue: next, avoided } = this.nextIssue(repo, free.length > 0);
     if (!free[0] || !next) return false;
     const agent = this.runner('build', repo, free[0], free, (pool) => pool[0] ?? null);
     if (!agent) return false;
     // assign() flips the agent to 'preparing' synchronously, so the next pass sees it as busy.
     void this.assign(agent.id, next.number).catch((err) => console.warn('auto-assign failed', err));
+    if (avoided && agent.status === 'preparing') recordAvoided(this.state.ops, repo.id, next.number, Date.now()); // Mission control's conflicts avoided (#256)
     return agent.status === 'preparing';
   }
 
   /**
-   * The ready issue to start next: the first in readyIssues() order, unless file leases (#24) are on for the floor or
-   * an experiment's variant, when one whose predicted files overlap work in flight waits (chooseIssue). The holds are
-   * worked out on every pass, so the floor shows them even while nobody is free.
+   * The ready issue to start next: the first in readyIssues() order, unless file leases (#24) or conflict-aware
+   * scheduling (#256) are on for the floor or an experiment's variant. With leases, one whose predicted files overlap
+   * work in flight waits (chooseIssue); with conflict-aware scheduling, one overlapping busy files heavily waits for a
+   * non-overlapping one, never leaving an agent idle, and a priority pick never waits (pickNext). The holds are worked
+   * out on every pass, so the floor shows them even while nobody is free. `avoided`: an overlapping issue was skipped.
    */
   protected nextIssue(repo: PersistedRepo, someoneFree: boolean) {
-    if (!this.leasesWanted(repo)) return someoneFree ? this.readyIssues(repo)[0]?.issue : undefined;
+    if (!this.leasesWanted(repo)) return { issue: someoneFree ? this.readyIssues(repo)[0]?.issue : undefined, avoided: false };
     const ready = this.readyIssues(repo).map((r) => r.issue);
     const fp = this.floorPractice(repo.id);
     const known = fp.known();
-    const items = ready.map((i) => ({ number: i.number, files: predictFiles(`${i.title}\n${i.body}`, known), on: this.practicesOf(repo, i.number, null, i).leases }));
-    const { pick, held } = chooseIssue(items, this.leasesOf(repo), { now: Date.now(), heldSince: fp.since() });
+    const busy = this.busyWanted(repo);
+    const areas = busy ? playbookAreas(repo.playbook) : [];
+    const items = ready.map((i) => {
+      const p = this.practicesOf(repo, i.number, null, i);
+      const text = `${i.title}\n${i.body}`;
+      const files = predictFiles(text, known);
+      // Conflict-aware scheduling also reads the floor's areas and the files the issue's earlier PRs changed.
+      const more = busy ? [...areaFiles(text, areas, known), ...(fp.issueFiles.get(i.number) ?? [])] : [];
+      return { number: i.number, files: [...new Set([...files, ...more])], on: busy ? p.busyFiles : p.leases, priority: i.labels.some(isPriorityLabel) };
+    });
+    const o = { now: Date.now(), heldSince: fp.since() };
+    const { pick, held, avoided } = busy ? pickNext(items, this.leasesOf(repo), o) : { ...chooseIssue(items, this.leasesOf(repo), o), avoided: false };
     if (fp.setHolds(held)) this.emitRepo(repo);
-    return someoneFree ? ready.find((i) => i.number === pick) : undefined;
+    return { issue: someoneFree ? ready.find((i) => i.number === pick) : undefined, avoided };
   }
 
   protected limited() {

@@ -217,10 +217,13 @@
       "typescript(no-floating-promises)": 1
     },
     "server/demo.ts": {
-      "eslint(no-control-regex)": 2,
+      "eslint(no-control-regex)": 1,
       "typescript(no-misused-promises)": 1,
       "unicorn(no-useless-spread)": 1,
       "unicorn(prefer-string-starts-ends-with)": 1
+    },
+    "server/demoSignIn.ts": {
+      "eslint(no-control-regex)": 1
     },
     "server/index.ts": {
       "typescript(no-redundant-type-constituents)": 1
@@ -590,6 +593,7 @@
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
+    "e2e/layout.spec.ts": 824,
     "server/ceo.ts": 802,
     "server/cliRunner.ts": 989,
     "server/demo.ts": 2038,
