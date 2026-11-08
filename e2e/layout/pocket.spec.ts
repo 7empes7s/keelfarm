@@ -211,7 +211,7 @@ for (const width of [820, 1280]) {
 
 for (const width of [390, 768, 1280]) {
   for (const chat of [false, true]) {
-    test(`at ${width}px with the chat ${chat ? 'open' : 'closed'} the top bar has sound and captions, and a tap toggles them`, async ({ page }) => {
+    test(`at ${width}px with the chat ${chat ? 'open' : 'closed'} the top bar has sound and captions, and a tap toggles them (#267)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
       const wide = width > 760;
       const root = await pocket(page, chat && !wide ? 'chat' : 'company'); // a phone's chat is a tab
@@ -244,8 +244,8 @@ for (const width of [390, 768, 1280]) {
         await inView(both);
         await both.click();
         const sheet = dialog(page, /Sound & captions/);
-        await sheet.getByRole('checkbox', { name: 'Captions' }).check();
-        await sheet.getByRole('checkbox', { name: 'Sound' }).uncheck();
+        await sheet.getByRole('checkbox', { name: 'Captions', exact: true }).check();
+        await sheet.getByRole('checkbox', { name: 'Sound', exact: true }).uncheck();
         await sheet.getByRole('button', { name: 'Close' }).click();
         await expect(head.getByRole('button', { name: /^Sound & captions: sound off, captions on/ })).toBeVisible();
       }

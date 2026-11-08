@@ -180,11 +180,11 @@
   top: 0;
   min-width: 0;
 }
-/* a phone's header needs its row for the name and the buttons (search, notifications, ⓘ, settings): no logo, and the
-   usage chip only on wider screens (the Company tab's banner says it in words) */
+/* a phone's header needs its row for the name and the buttons (search, notifications, sound, ⓘ, settings): no logo,
+   tight gaps, and the usage chip only on wider screens (the Company tab's banner says it in words) */
 .pk-layout-compact .pk-head {
-  gap: 6px;
-  padding-inline: 10px;
+  gap: 4px;
+  padding-inline: 8px;
 }
 .pk-layout-compact .pk-title {
   font-size: var(--ds-text-md);
