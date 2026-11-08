@@ -12,6 +12,8 @@ import { demoReactions } from '../demoReactions.ts';
 import { demoRefsLine } from '../demoReads.ts';
 import { researchBrief } from '../demoResearch.ts';
 import { parseForwarded } from '../../shared/chat.ts';
+import { parseCeoMessage } from '../../shared/chatParts.ts';
+import { briefSpeech, spokenLine } from '../../shared/speech.ts';
 import { ceoReply } from './registry.ts';
 
 interface Profile {
@@ -40,6 +42,13 @@ const GENERIC: Profile = {
   qa: '- The app builds and starts\n- The changed feature works end to end in the browser\n- Phone width: nothing overflows\n- No console errors',
   playbook: '## Conventions\n- Small modules, tests next to the code\n## Skills\n- frontend-design for UI work',
 };
+
+/** Real CEOs end with a ```spoken summary (#282); a demo reply without its own says its first sentence or two. */
+export function withSpoken(reply: string): string {
+  if (/^```spoken\s*$/m.test(reply)) return reply;
+  const said = spokenLine(briefSpeech(parseCeoMessage(reply).text, 2));
+  return said ? `${reply}\n\n\`\`\`spoken\n${said}\n\`\`\`` : reply;
+}
 
 /** The demo CEO's answer to a reply: the quote it answers, then a word on the answer. */
 export function answerReply({ quote, reply }: { quote: string; reply: string }): string {
@@ -314,6 +323,9 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       await think('Reading your message.');
       const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
       if (quick !== null) return quick;
+      const kit = { text, s, use, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
+      const early = await ceoReply(kit, true); // "assign #3 to Ada" (#265): a command, even with the seeded chat's attachment
+      if (early !== null) return early;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
@@ -325,7 +337,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // The replies that show features' CEO tools (ceoReplies.ts, and any feature's own module): the first that answers.
-      const registered = await ceoReply({ text, s, use, scale: (f, call) => scale(s, f, call) });
+      const registered = await ceoReply(kit);
       if (registered !== null) return registered;
       const agents = s.floors.reduce((n, f) => n + f.team.size, 0);
       const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
@@ -366,6 +378,9 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
         ...(next
           ? ['', `Next up on floor ${next.floor}: #${next.issue.number} ${next.issue.title}. Shall I keep the team on it?`, '```suggestions', 'Yes, keep them on it', 'Not now', 'Show me the plan', '```']
           : []),
+        '```spoken',
+        `Quick status: ${agents} agents are on ${issues} open issues${pending ? `, and ${pending} team change${pending === 1 ? ' waits' : 's wait'} for you` : ''}. The full report is in the card.${next ? ` Shall I keep the team on what's next?` : ''}`,
+        '```',
         ...(nextFloor ? ['```idea research', `Research how other teams test phone layouts before floor ${nextFloor.floor} builds more`, `Research: how other teams test phone layouts, for floor ${nextFloor.floor}`, '```'] : []),
       ].join('\n');
     },
@@ -404,7 +419,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     setTimeout(async () => {
       try {
         cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · CEO` }]);
-        const reply = await run();
+        const reply = withSpoken(await run());
         await writeReply(reply, opts, cb, () => stopped);
         finish(true, reply);
       } catch (err) {
@@ -421,7 +436,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
           const said = text.split('\n').slice(1).join(' ').replace(/^\(message \d+\) /, '').trim() || text;
           const reply = parseForwarded(said);
           cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
-          cb.turn?.(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`);
+          cb.turn?.(withSpoken(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`));
         }, 1500),
       );
     },

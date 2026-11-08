@@ -1,4 +1,8 @@
 /* ui/CloudSettings.tsx */
+/* The demo's full-computer row (#260): the text keeps a readable width; the button wraps below it on a phone. */
+.hybrid-sim > .grow {
+  flex-basis: 15rem;
+}
 .cloud-steps {
   margin: 2px 0 8px;
   padding-left: 20px;
@@ -26,6 +30,10 @@
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
+}
+.cloud-badge.host-local {
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
 }
 /* A cloud agent waiting for the manager to sign their coding agent in: a sticky-note yellow, like the note on their monitor. */
 .sign-in-note {

@@ -157,7 +157,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
-  scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string }): string;
+  scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string; where?: 'local' | 'cloud' | 'auto' }): string;
   configureAgent(a: { agent_id: string; account?: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
@@ -178,6 +178,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   restartAgent(a: { agent_id: string }): string;
   stopAgent(a: { agent_id: string; reason: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
+  assignIssue(a: { floor: number; number: number; agent?: string }): Promise<string>;
   answerAgent(a: { agent_id: string; text: string }): Promise<string>;
   askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
   qaReport(a: { floor: number; pr: number }): string;
@@ -298,6 +299,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
         cli: CLI.optional().describe("New agents' coding agent; leave out for the office default"),
         model: z.string().optional().describe("New agents' model id (one of their coding agent's); leave out for the default"),
         effort: EFFORT.optional().describe("New agents' reasoning effort; leave out for the default"),
+        where: z.enum(['local', 'cloud', 'auto']).optional().describe("Where new agents work: this computer, the cloud, or auto (the office's setting, the default)"),
       },
       (a) => run(() => h.scaleTeam(a)),
     ),
@@ -452,6 +454,12 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000) },
       (a) => run(() => h.messageAgent(a)),
     ),
+    tool(
+      'assign_issue',
+      'Put an agent on an open issue: a free one starts it now, a busy one takes it as their next task (running work never stops). Leave agent out for the next free agent.',
+      { floor: z.number().int(), number: z.number().int().positive().describe('The issue number'), agent: z.string().max(80).optional().describe('An id or name from company_status, or "next free"') },
+      (a) => run(() => h.assignIssue(a)),
+    ),
     tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') }, (a) => run(() => h.answerAgent(a))),
     tool('ask_manager_choice', "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.", { agent_id: z.string(), question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'), options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'), recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence') }, (a) => run(() => h.askManagerChoice(a))),
     tool(
@@ -592,7 +600,7 @@ export function ceoSystemPrompt(o: {
     "- The manager's board actions never stop agents: you stop_agent, redirect or let finish the work they touched.",
     '- An agent stuck, in an error or looping: read agent_log, then restart_agent, guide them with message_agent, or close or send back their work. Tell the manager only when it needs their decision.',
     "- When company.usage in company_status says pacing or paused, Claude's usage is running low and the office is finishing open work first: file only what is needed next, not a whole milestone.",
-    '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables.',
+    '- Your final message goes straight to the manager\'s phone. Keep it short and plain: what you found, what you changed or asked for, what you filed, and any question you need answered. No headings, no tables. End it, and each reply, with a ```spoken block: 1-3 sentences (under 300 characters) said aloud on their phone like a colleague: the useful news and what you need. No issue numbers, links, markdown or filler ("I answered your message").',
     '- Nothing to say, or a system notice? React or end silently. Answer each one.',
     '- When you make a file for the manager, attach it with attach_file. Files they send come as paths: read them with Read. For an agent to use one, write "Attached: <file id>" in the issue.',
     '- A question with clear choices: end with a ```suggestions block, one reply per line (at most 4, 60 characters each; optional first line `? <question>`), which the manager taps to answer. Anything longer than a few lines that they may want to read or keep (a plan, issues to file, a floor report, a table): put it in a ```artifact title="…" block of markdown (at most 3, 20 KB each), shown as a card, and keep the message itself short.',

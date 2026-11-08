@@ -37,7 +37,7 @@ import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
-import { snapshotMessages } from '../shared/chatParts.ts';
+import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { rotationSettings } from '../shared/accountRotation.ts';
@@ -212,8 +212,8 @@ export class Swarm extends SwarmServerLoad {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await Promise.all([this.cloud.init(), this.accounts.init()]);
-    if (this.state.settings.cloud.machineKind === 'box' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
+    await Promise.all([this.cloud.init(), this.accounts.init(), this.startUsage()]);
+    if (this.state.settings.cloud.machineKind !== 'local' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
     for (const a of this.state.agents) {
@@ -330,7 +330,7 @@ export class Swarm extends SwarmServerLoad {
     const held = seeded ? this.backend.demoHeldUpdate?.() : undefined;
     if (held) this.postUpdateNotice(held, null);
     setInterval(() => this.state.repos.forEach((r, i) => setTimeout(() => void this.syncRepo(r.id), i * 1500)), SYNC_INTERVAL_MS);
-    setInterval(() => this.schedule(), SCHEDULER_INTERVAL_MS);
+    setInterval(() => (this.schedule(), this.hybridTick()), SCHEDULER_INTERVAL_MS);
     setInterval(() => this.sweepPreviews(), 5_000);
     setInterval(() => void this.saveTerminals(), TERMINAL_SAVE_MS);
     // Every minute in the demo, so a short idle time shows its phone message soon.
@@ -605,7 +605,7 @@ export class Swarm extends SwarmServerLoad {
     this.state.messages = messages;
     Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
-    this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
+    this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();
   }
 
@@ -743,7 +743,7 @@ export class Swarm extends SwarmServerLoad {
     if (patch.officePlaybook !== undefined) this.setOfficePlaybook(patch.officePlaybook);
     if (patch.cloud !== undefined) {
       const next: CloudSettings = cloudSettings(s.cloud, patch.cloud);
-      if (next.machineKind === 'box' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
+      if (next.machineKind !== 'local' && !this.cloud.boxApi()) throw new HttpError(400, 'Save your Upstash Box API key first: cloud agents run in your Upstash account.');
       s.cloud = next;
     }
     this.save();

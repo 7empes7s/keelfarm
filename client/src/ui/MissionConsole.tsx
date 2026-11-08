@@ -14,8 +14,10 @@ import { FloorProgress } from './FloorProgress';
 import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
+import { UsageSources } from './UsageSources';
 import { HealthStrip } from './HealthStrip';
 import { ServerCard } from './ServerCard';
+import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", the server and what uses it, what needs you (the alarms the
@@ -351,9 +353,20 @@ export function OpsTab({ card }: { card?: string }) {
   return (
     <div className="tab-grid">
       <div>
+        <Section
+          id="ops-card-sources"
+          title={
+            <span className="dp-chips">
+              <Icon name="gauge" /> Usage
+            </span>
+          }
+        >
+          <UsageSources />
+        </Section>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
         <ServerCard />
+        <CloudToday />
         <TestLabCard />
         <h3 className="section">
           <Icon name="siren" /> Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}

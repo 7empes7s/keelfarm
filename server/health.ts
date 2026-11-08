@@ -313,6 +313,24 @@ export class OfficeHealth {
     return admission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate), browserMb: this.browserMb });
   }
 
+  /** What's free for a new session of `kind` and what one needs (null: memory not read yet): Hybrid's room (#260). */
+  fit(kind: SessionKind, now = Date.now()): { freeMb: number; needMb: number } | null {
+    if (!this.memory) return null;
+    const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: now - s.startedAt }));
+    return memoryFit({ memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate) });
+  }
+
+  /** New work waiting for memory: since when, and the floors it waits on (null: none). */
+  heldFloors(): { since: number; floors: Set<string> } | null {
+    if (!this.wait || !this.held.size) return null;
+    return { since: this.wait.since, floors: new Set([...this.held.keys()].flatMap((k) => (k.includes(':') ? [k.slice(k.indexOf(':') + 1)] : []))) };
+  }
+
+  /** The demo's Simulate low memory is on: its waits are short, so a burst shows soon. */
+  get simulated() {
+    return this.demoDelayMs !== null;
+  }
+
   /** May the scheduler start a session of `kind` (for `floor`)? When not, the work waits and the health strip says why. */
   admit(kind: SessionKind, floor?: string): boolean {
     const why = this.refusal(kind);

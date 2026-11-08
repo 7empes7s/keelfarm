@@ -24,7 +24,7 @@ import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
 import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
-import { readingsLabel } from '../../shared/usage.ts';
+import { usageLine } from '../../shared/usageSources.ts';
 import { checkBinding } from '../../shared/accounts.ts';
 import { usageLabel } from '../pacing.ts';
 import { ceoSpend, floorRoundsByCause, floorSpend } from '../costLedger.ts';
@@ -49,6 +49,7 @@ import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
 import { parseRefs } from '../../shared/chatRefs.ts';
 import { telegramChat } from '../telegram.ts';
+import { NEXT_FREE } from '../../shared/assignIssue.ts';
 
 export abstract class SwarmCeoTools extends SwarmTeam {
   /**
@@ -84,6 +85,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       restartAgent: acts((a) => this.restartAgent(a)),
       stopAgent: acts((a) => this.ceoStopAgent(a)),
       messageAgent: acts((a) => this.messageAgent(a)),
+      assignIssue: acts(async (a) => (await this.assignIssue(this.floorRepo(a.floor).id, Number(a.number), a.agent ?? NEXT_FREE, 'ceo')).text),
       answerAgent: acts((a) => this.answerAgent(a)),
       askManagerChoice: acts((a) => this.askManagerChoice(a)),
       qaReport: (a) => this.qaReport(a),
@@ -251,7 +253,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: `${usageLabel(this.usageNow(), Date.now())} · ${readingsLabel(this.state.claudeUsage, Date.now(), this.usageCheck)}`,
+          usage: `${usageLabel(this.usageNow(), Date.now())} · ${usageLine(this.usageSources())}`, // every account and provider (#361); pacing follows the agents' Claude login
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
