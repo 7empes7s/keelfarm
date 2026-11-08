@@ -81,6 +81,8 @@ export interface SessionResult {
   signedOut?: boolean;
   /** A cloud agent's API key ran out of credit or was turned away (shared/keyTrouble.ts): they switch to their own login. */
   keyTrouble?: KeyTrouble;
+  /** Every account it could run on is out (#248): the office pauses until the first is back; nothing counts against the task. */
+  outOfAccounts?: boolean;
 }
 
 export interface SessionCallbacks {
