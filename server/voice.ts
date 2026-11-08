@@ -26,6 +26,8 @@ const DAY_MS = 24 * 60 * 60_000;
 export const CACHE_MAX_AGE_MS = KEEP_DAYS_DEFAULT * DAY_MS;
 /** The clips of this many of the newest CEO messages stay whatever their age. */
 export const KEEP_NEWEST_MESSAGES = 20;
+/** The CEO's latest spoken lines kept for their clips (#286). */
+const LINES_KEPT = 20;
 const MANIFEST = 'clips.json';
 export const KEY_REJECTED_NOTE = "🔇 ElevenLabs rejected the key, so messages aren't read aloud until you set a new one in the voice settings.";
 
@@ -63,6 +65,7 @@ export const DEFAULT_VOICE: VoiceSettings = {
   keepDays: KEEP_DAYS_DEFAULT,
   speed: SPEED_DEFAULT,
   favourites: [],
+  talk: 'off',
 };
 
 const MODEL_ID = /^[a-z0-9_.-]{1,64}$/;
@@ -77,6 +80,7 @@ export function voiceSettings(base: VoiceSettings, patch: unknown): VoiceSetting
   if (typeof p.voiceName === 'string') out.voiceName = p.voiceName.trim().slice(0, 80);
   if (typeof p.model === 'string' && MODEL_ID.test(p.model.trim())) out.model = p.model.trim();
   if (typeof p.speakOffice === 'boolean') out.speakOffice = p.speakOffice;
+  if (p.talk === 'off' || p.talk === 'milestones' || p.talk === 'regular') out.talk = p.talk;
   out.keepDays = clampKeepDays(p.keepDays ?? out.keepDays);
   out.speed = clampSpeed(p.speed ?? out.speed);
   out.favourites = cleanFavourites(p.favourites ?? out.favourites);
@@ -237,6 +241,7 @@ export class Voice {
   private clips: ClipManifest = {};
   private cacheView: VoiceCacheView = { clips: 0, bytes: 0, saved: [] };
   private cacheWork: Promise<unknown> = Promise.resolve(); // manifest changes, prunes and clears, one after another
+  private lines = new Map<number, string>(); // the latest lines the CEO said while working (#286), for their clips
 
   constructor(private deps: VoiceDeps) {}
 
@@ -414,6 +419,21 @@ export class Voice {
     const s = this.deps.settings();
     if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
     return this.audio('standup', { voiceId: s.voiceId, model: s.model, speed: s.speed, text: standupLine(count, part) });
+  }
+
+  /** A line the CEO says while it works (#286, shared/voiceTalk.ts): kept for GET /api/voice/lines/:id. */
+  rememberLine(id: number, text: string) {
+    this.lines.set(id, text);
+    if (this.lines.size > LINES_KEPT) this.lines.delete(this.lines.keys().next().value!);
+  }
+
+  /** GET /api/voice/lines/:id: an ack or progress line as mp3, cached by its words (so each fixed ack is made once). */
+  async lineAudio(id: number): Promise<Buffer> {
+    const s = this.deps.settings();
+    if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
+    const text = this.lines.get(id);
+    if (!text) throw new HttpError(404, `No spoken line ${id}`);
+    return this.audio('line', { voiceId: s.voiceId, model: s.model, speed: s.speed, text });
   }
 
   private async audio(name: string, req: SynthRequest, m?: PhoneMessage): Promise<Buffer> {

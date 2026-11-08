@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { SessionResult } from '../agentRunner.ts';
-import { askedFor, ceoJobPrompt, ceoSystemPrompt, IssueCap, jobLabel, nextCeoJob, queueCeoJob, type CeoJob } from '../ceo.ts';
+import { askedFor, ceoJobPrompt, ceoSystemPrompt, IssueCap, jobLabel, managerHeader, nextCeoJob, queueCeoJob, type CeoJob } from '../ceo.ts';
 import { ceoHeld, ceoStep, messageGoesIn, type CeoLaneInput } from '../ceoLane.ts';
 import { HttpError } from '../httpError.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
@@ -407,7 +407,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
-      rt.session.send(`Message from the manager (they read your reply on their phone, so keep it short):\n(message ${m.id}) ${forward}${this.openDecisionsLine()}`);
+      rt.session.send(`${managerHeader(!!this.state.ceo.job)}\n(message ${m.id}) ${forward}${this.openDecisionsLine()}`);
       this.markDelivery([m.id], 'read');
       return { id: m.id };
     }

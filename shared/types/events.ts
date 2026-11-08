@@ -19,7 +19,7 @@ import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
 import type { AccountsView } from './accounts.ts';
-import type { VoiceCacheView } from './voice.ts';
+import type { VoiceCacheView, VoiceLine } from './voice.ts';
 
 export interface WorldSnapshot {
   user: string | null; // gh login
@@ -122,6 +122,8 @@ export type ServerEvent =
   | { type: 'models'; models: ModelCatalogView }
   | { type: 'voiceKey'; voiceKeySet: boolean; voiceKeyHint: string }
   | { type: 'voiceCache'; voiceCache: VoiceCacheView }
+  /** The CEO says something while it works (#286): never saved, nor in the snapshot. */
+  | { type: 'voiceLine'; line: VoiceLine }
   | { type: 'weather'; weather: WeatherView }
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }

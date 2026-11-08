@@ -676,6 +676,10 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
   }
 }
 
+/** The first line of a manager's message typed into the CEO's running session; mid-job it asks for a spoken answer now (#286). */
+export const managerHeader = (midJob: boolean) =>
+  midJob ? "Message from the manager while you work (they may be listening: answer now with reply in one or two sentences, then carry on; a new request: say you'll do it next, in this job if you can):" : 'Message from the manager (they read your reply on their phone, so keep it short):';
+
 export function jobLabel(job: CeoJob, floor: { floor: number; fullName: string } | null) {
   const where = floor ? `floor ${floor.floor} · ${floor.fullName.split('/')[1] ?? floor.fullName}` : 'a removed floor';
   switch (job.kind) {

@@ -6,7 +6,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { SAMPLE_LINE } from '../../../shared/speech';
 import { cacheLabel, clampKeepDays, KEEP_DAYS_MAX, KEEP_DAYS_MIN } from '../../../shared/voiceClips';
-import { CEO_ID, type ListenProvider, type ListenSettings, type VoiceProvider, type VoiceSettings as Voice } from '../../../shared/types';
+import { CEO_ID, type ListenProvider, type ListenSettings, type TalkWhileWorking, type VoiceProvider, type VoiceSettings as Voice } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
@@ -338,6 +338,15 @@ export function VoiceSettings() {
           <Speed voice={voice} save={save} />
           <label className="toggle">
             <input type="checkbox" checked={voice.speakOffice} onChange={(e) => save({ speakOffice: e.target.checked })} /> Also speak office alerts
+          </label>
+          <label className="field">
+            <span>Talk while working</span>
+            <select value={voice.talk} onChange={(e) => save({ talk: e.target.value as TalkWhileWorking })}>
+              <option value="off">Off</option>
+              <option value="milestones">Milestones</option>
+              <option value="regular">Regular</option>
+            </select>
+            <span className="muted small">Short spoken updates while the CEO works: milestones (an issue filed, waiting on QA), or a line about every minute too. During a call, Off means milestones.</span>
           </label>
           <div className="row">
             <button className="btn btn-small" disabled={!canTest} onClick={() => void test()} title={canTest ? undefined : 'Save a key and pick a voice first'}>

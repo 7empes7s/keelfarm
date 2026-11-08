@@ -2,6 +2,8 @@
 // does everyone still without one once a key is saved or ElevenLabs turned on. The CEO's voice is settings.voice.
 import { agentVoice } from '../../shared/voices.ts';
 import type { VoiceSettings } from '../../shared/types.ts';
+import { DEMO_TALK_PACE, TALK_PACE } from '../../shared/voiceTalk.ts';
+import { CeoTalk } from '../ceoTalk.ts';
 import { HttpError } from '../httpError.ts';
 import type { VoiceKeyView } from '../voice.ts';
 import { SwarmCeoTools } from './ceoTools.ts';
@@ -9,6 +11,23 @@ import type { PersistedAgent } from './model.ts';
 
 export abstract class SwarmVoices extends SwarmCeoTools {
   private voicing: Promise<void> = Promise.resolve(); // one round at a time, so each pick sees the ones before
+  /** The CEO talking while it works (#286): acks and progress lines, while it has a voice. */
+  protected ceoTalk = new CeoTalk(
+    () => this.state.settings.voice.provider !== 'off',
+    (line) => {
+      this.voice.rememberLine(line.id, line.text);
+      this.broadcast({ type: 'voiceLine', line });
+    },
+    this.backend.demo ? DEMO_TALK_PACE : TALK_PACE,
+  );
+
+  /** The manager's message (ceoJobs.ts); one that finds the CEO mid-job gets a spoken ack at once (#286). */
+  override async messageCeo(...args: Parameters<SwarmCeoTools['messageCeo']>) {
+    const busy = this.state.ceo.job !== null;
+    const sent = await super.messageCeo(...args);
+    if (busy) this.ceoTalk.ack(Date.now());
+    return sent;
+  }
 
   protected voiceKeyChanged(view: VoiceKeyView) {
     this.broadcast({ type: 'voiceKey', ...view });

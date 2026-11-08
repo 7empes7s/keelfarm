@@ -42,6 +42,20 @@
 .live-count {
   flex: none;
 }
+/* the CEO's spoken ack or progress line (#286) */
+.said-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  max-width: 100%;
+  margin: var(--ds-space-1) 0 0;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  overflow-wrap: anywhere;
+}
 /* the step running bobs gently (stilled by reduced motion) */
 .live-icon-busy,
 .working-strip .working-icon {

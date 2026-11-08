@@ -31,6 +31,15 @@ export const handlers = {
     if (ev.message.from === 'ceo' && !reading && !speak && !callOn()) chirp(); // its toast is the office's notice (#107)
   },
   ceoChat: (ev, { set, get }) => set(applyChat(get(), ev)),
+  // The CEO talking while it works (#286): a chip, and said by one tab when its voice may (voiceMessages.ts speakLine).
+  voiceLine: (ev, { set, get, cues }) => {
+    if (!cues) return;
+    set({ voiceLine: ev.line });
+    if (!audioUnlocked() || callVoice(get().settings.voice).provider === 'off') return;
+    const arrived = Date.now();
+    const wait = claimVoice(-ev.line.id); // negative: never a message's id
+    void import('../../ui/voiceMessages').then((v) => v.speakLine(ev.line, arrived, wait));
+  },
   files: (ev, { set }) => set({ files: ev.files }),
   delivery: (ev, { set, get }) => set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, delivery: ev.delivery } : m)) }),
   status: (ev, { set, get }) => set({ messages: get().messages.map((m) => (ev.ids.includes(m.id) ? { ...m, status: ev.status } : m)) }),

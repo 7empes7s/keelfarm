@@ -16,6 +16,7 @@ import { HttpError } from './httpError.ts';
 import type { LogEntry } from './agentRunner.ts';
 import type { FileStore } from './files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
+import type { CeoTalk } from './ceoTalk.ts';
 
 const EMIT_MS = 250;
 const ID = /^c[a-z0-9]{1,24}$/;
@@ -37,7 +38,7 @@ export class CeoChat {
   private lastReply = '';
   private timer: NodeJS.Timeout | undefined;
 
-  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id; `agentOf`: an agent's id from an id or name; `nameOf`: an agent's name. */
+  /** `dir`: where the other conversations' threads are saved; `notesFile`: the CEO's NOTES.md; `repoOf`: a floor's repo id; `agentOf`: an agent's id from an id or name; `nameOf`: an agent's name; `talk`: its spoken progress (#286). */
   constructor(
     private readonly dir: string,
     private readonly notesFile: string,
@@ -45,6 +46,7 @@ export class CeoChat {
     private readonly repoOf: (floor: number) => string | null = () => null,
     private readonly agentOf: (ref: string) => string | null = () => null,
     private readonly nameOf: NameOf = () => null,
+    private readonly talk: CeoTalk | null = null,
   ) {}
 
   // ---------- the reply being written ----------
@@ -55,6 +57,7 @@ export class CeoChat {
     this.turnFrom = 0;
     this.lastReply = '';
     this.set(null);
+    this.talk?.started(Date.now());
   }
 
   /** A text block of the reply (the transcript can repeat the one just posted, after its turn ended). */
@@ -67,7 +70,9 @@ export class CeoChat {
   log(entries: readonly LogEntry[]) {
     let live = this.live;
     for (const entry of entries) if (entry.kind === 'tool' || entry.kind === 'result' || entry.kind === 'error') live = foldStream(live, { kind: 'log', entry }, Date.now(), this.nameOf);
-    if (live !== this.live) this.set(live, true);
+    if (live === this.live) return;
+    this.set(live, true);
+    this.talk?.steps(live, Date.now());
   }
 
   /** A turn's reply went to the phone: the step log and action cards it keeps (for its message); nothing is live until the next one. */
@@ -87,6 +92,7 @@ export class CeoChat {
 
   /** The job ended (or was stopped) with nothing more to say. */
   endJob() {
+    this.talk?.ended();
     if (this.live) this.set(null);
   }
 

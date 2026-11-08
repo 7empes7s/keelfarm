@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { currentStep, liveText, type CeoLive, type LiveStep, type StepLog } from '../../../shared/ceoStream';
 import { usedLine, type UsedView } from '../../../shared/used';
+import { sayNow, talkMode } from '../../../shared/voiceTalk';
+import { useStore } from '../store';
+import { inCall as inCallPhase } from './voiceCall';
+import { useCall } from './voiceCallStore';
 import { stepsSummary, stepTime } from './chatCardRules';
 import { Icon } from './Icon';
 import { iconFor } from './icons';
@@ -71,8 +75,31 @@ export function LiveBubble({ live, ceoName, linked, onFloor, onOpenLog }: { live
             {count > 1 && <span className="muted live-count">step {count}</span>}
           </button>
         )}
+        <SaidChip />
       </div>
     </div>
+  );
+}
+
+const CHIP_MS = 8000;
+
+/** The CEO's latest ack or progress line (#286) for a few seconds after it arrives: a status chip, never a message. */
+function SaidChip() {
+  const line = useStore((s) => s.voiceLine);
+  const talk = useStore((s) => s.settings.voice.talk);
+  const inCall = useCall((s) => inCallPhase(s.call));
+  const [shown, setShown] = useState<number | null>(null);
+  useEffect(() => {
+    if (!line) return;
+    setShown(line.id);
+    const t = setTimeout(() => setShown(null), CHIP_MS);
+    return () => clearTimeout(t);
+  }, [line]);
+  if (!line || shown !== line.id || !sayNow(line, talkMode(talk, inCall), { micOpen: false, speaking: false })) return null;
+  return (
+    <p className="said-chip" role="status">
+      <Icon name="volume-2" /> {line.text}
+    </p>
   );
 }
 
