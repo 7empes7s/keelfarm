@@ -142,6 +142,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Set your name and colour.', 'Choose whether others see you.', 'Wave at visitors with the emote key.'],
     docs: `${HOW}#shared-presence`,
   },
+  providers: {
+    title: 'Providers',
+    shows: 'Every provider the office runs on, by category: coding agents, text, audio, video, cloud and MCP servers, with status, usage and what uses each one.',
+    actions: ['Add a provider with its key, or sign in.', 'Test a key or an MCP server with one cheap call.', 'Pick which agents get an MCP server.'],
+    docs: `${DOCS}accounts.md`,
+  },
   accounts: {
     title: 'Providers & accounts',
     shows: 'Every login and API key the coding agents on this computer run on, with usage, status and cost.',

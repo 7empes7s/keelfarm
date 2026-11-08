@@ -314,6 +314,29 @@ app.put(
     return swarm.setUsageAdminKey(body.provider, body.key);
   }),
 );
+// Settings → Providers (#362): keys and MCP servers' secrets come in here and never go back out.
+app.post(
+  '/api/providers',
+  route((req) => {
+    const body = parse(z.object({ provider: z.string().max(40), key: z.string().max(400), label: z.string().max(60).optional() }), req.body);
+    return swarm.providers.add(body.provider, body.key, body.label);
+  }),
+);
+app.post('/api/providers/:id/test', route((req) => swarm.providers.test(String(req.params.id))));
+app.delete('/api/providers/:id', route(async (req) => ({ removed: await swarm.providers.remove(String(req.params.id)).then(() => true) })));
+app.post(
+  '/api/providers/mcp',
+  route((req) => {
+    const body = parse(
+      z.object({ name: z.string().max(40), command: z.string().max(500).optional(), url: z.string().max(500).optional(), secrets: z.record(z.string().max(64), z.string().max(2000)).optional(), agents: z.array(z.string().max(80)).max(200).optional() }),
+      req.body,
+    );
+    return swarm.addMcpServer(body);
+  }),
+);
+app.patch('/api/providers/mcp/:id', route((req) => swarm.providers.setMcp(String(req.params.id), parse(z.object({ on: z.boolean().optional(), agents: z.array(z.string().max(80)).max(200).optional() }), req.body))));
+app.post('/api/providers/mcp/:id/test', route((req) => swarm.providers.testMcp(String(req.params.id))));
+app.delete('/api/providers/mcp/:id', route(async (req) => ({ removed: await swarm.providers.removeMcp(String(req.params.id)).then(() => true) })));
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));

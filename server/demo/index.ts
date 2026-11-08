@@ -12,5 +12,6 @@ import './voice.ts';
 import './notify.ts';
 import './weather.ts';
 import './cloud.ts';
+import './providers.ts';
 import './samples.ts';
 import './doctor.ts';

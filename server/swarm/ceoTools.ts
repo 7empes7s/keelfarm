@@ -255,6 +255,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionsRunning: this.running(),
           usage: `${usageLabel(this.usageNow(), Date.now())} · ${usageLine(this.usageSources())}`, // every account and provider (#361); pacing follows the agents' Claude login
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          providers: this.providersLine(), // every connection on Settings → Providers (#362)
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
         },

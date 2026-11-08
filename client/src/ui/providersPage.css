@@ -1,0 +1,100 @@
+/* Settings → Providers (#362, ProvidersPage.tsx). Tokens only; the cards reuse accounts.css's form. */
+
+.pv-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+.pv-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.pv-top h3 {
+  margin: 0;
+}
+.pv-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.pv-stats span {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.pv-stats b {
+  color: var(--ds-text);
+}
+.pv-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.pv-group h4,
+.pv-cat h4 {
+  margin: 0;
+}
+.pv-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.pv-card .ds-row-meta {
+  overflow-wrap: anywhere;
+}
+.pv-card .ds-row-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+}
+.pv-cat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin-bottom: var(--ds-space-3);
+}
+.pv-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pv-pick:hover {
+  background: var(--ds-surface-hover);
+}
+.pv-secret {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--ds-space-2);
+}
+.pv-secret input {
+  min-width: 0;
+  min-height: var(--ds-target);
+}
+.pv-check {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+}

@@ -40,6 +40,16 @@ const usageDetail = (where: Where): View => ({
   },
 });
 
+/** Settings → Providers' "Add provider" sheet with the catalogue (#362). */
+const addProvider: View = {
+  name: 'Providers: Add provider',
+  go: async (root) => {
+    await pocketSection(root, 'Providers');
+    await root.getByRole('button', { name: 'Add provider' }).click();
+    await expect(root.page().locator('.pv-sheet')).toBeVisible();
+  },
+};
+
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
   name: 'Charter editor',
@@ -87,6 +97,7 @@ const SCREENS: Screen[] = [
     tabs: [{ name: 'Voice', go: (root) => pocketSection(root, 'Voice') }],
   },
   { name: 'pocket usage detail', widths: [390, 1280], open: pocketSettings, tabs: [usageDetail('pocket')] }, // a screen of its own: the sheet stays open
+  { name: 'pocket add provider', widths: [390, 1280], open: pocketSettings, tabs: [addProvider] }, // a screen of its own: the sheet stays open
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];
 
