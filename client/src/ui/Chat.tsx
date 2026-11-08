@@ -47,9 +47,10 @@ import { CloseButton, Icon } from './Icon';
 /**
  * The thread with the CEO; pocket mode shows it as its Chat tab, where the keyboard waits for a tap. `onFloor`: what a
  * floor chip opens (default: the elevator there). `tools`: where its top-bar buttons go (pocket mode's header).
+ * `away`: drawn, hidden, while another tab is open (the phone's Chat tab, #145), so opening it only shows it: nothing
+ * is marked read, and each opening starts afresh at the unread divider or the end.
  */
-/** `ahead`: drawn hidden before it's opened (the phone's Chat tab): the whole page at once, as nobody waits on it. */
-export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahead = false }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean; ahead?: boolean }) {
+export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away = false }: { autoFocus?: boolean; onFloor?: (repoId: string) => void; tools?: HTMLElement | null; fullButton?: boolean; away?: boolean }) {
   const messages = useStore((s) => s.messages);
   const chatOlder = useStore((s) => s.chatOlder);
   const outbox = useStore((s) => s.chatOutbox);
@@ -86,22 +87,21 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahea
   // The decision log's "Replied to message N" (#208): that message, once the chat has laid out.
   const jumpTo = useCeoDraft((s) => s.jump ?? null);
   useEffect(() => {
-    if (jumpTo === null) return;
+    if (jumpTo === null || away) return;
     useCeoDraft.setState({ jump: null });
     requestAnimationFrame(() => jump(jumpTo));
-  }, [jumpTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [jumpTo, away]); // eslint-disable-line react-hooks/exhaustive-deps
   const [flash, setFlash] = useState<number | null>(null);
   const [atEnd, setAtEnd] = useState(true);
   const [seenTo, setSeenTo] = useState(() => messages[messages.length - 1]?.id ?? -1); // the last message seen at the end: newer ones count as new
-  // The first message that was unread when the chat opened: the "New messages" divider goes above it. Away (the
-  // phone's Chat tab stays drawn, hidden), it follows the unread for the next opening.
-  const [away, setAway] = useState(true);
+  // The first message that was unread when the chat opened: the "New messages" divider goes above it. Away, it
+  // follows the unread for the next opening.
   const [firstUnread, setFirstUnread] = useState(() => firstUnreadId(messages, readAt, chatOlder));
   const unreadNow = away ? firstUnreadId(messages, readAt, chatOlder) : firstUnread;
   if (unreadNow !== firstUnread) setFirstUnread(unreadNow);
   // Opening draws the newest screenful first, the rest of the page two frames later (after a paint); all at once when
   // it must find a message or a scroll position at once.
-  const [warm, setWarm] = useState(() => ahead || jumpTo !== null || hasChatScroll());
+  const [warm, setWarm] = useState(() => away || jumpTo !== null || hasChatScroll());
   useEffect(() => {
     let r = requestAnimationFrame(() => (r = requestAnimationFrame(() => setWarm(true))));
     return () => cancelAnimationFrame(r);
@@ -122,7 +122,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahea
   const on = useRef<{ floor: (n: number) => void; quote: (id: number) => void; reply: (id: number) => void }>(null);
   const stable = useMemo(() => ({ floor: (n: number) => on.current?.floor(n), quote: (id: number) => on.current?.quote(id), reply: (id: number) => on.current?.reply(id), artifact: (messageId: number, artifactId: string) => setArtifact({ messageId, artifactId }), file: (id: string) => setViewing({ id }) }), []);
   const pages = useOlderPages(scroller, { first: messages[0]?.id, older: chatOlder && warm, fetch: fetchChatPage, apply: applyChatPage });
-  const removals = useRemovals();
+  const removals = useRemovals(away);
   const listed = useMemo(() => messages.filter((m) => !removals.hidden.some((x) => x.id === m.id)), [messages, removals.hidden]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const start = firstPaintFrom(listed.map((m) => m.id), firstUnread, warm);
@@ -139,7 +139,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahea
   // F (Help → Controls) toggles full screen while the chat has focus and nobody is typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
+      const el = e.target instanceof HTMLElement ? e.target : null; // a key sent to the window has none
       const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
       if (!togglesFull(e, isKey('chatFull', e.code), !!el && !!box.current?.contains(el), typing)) return;
       e.preventDefault();
@@ -151,6 +151,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahea
 
   // Reading the thread marks it read, on screen only: that also clears its notifications on every device (#210).
   useEffect(() => {
+    if (away) return;
     const read = () => {
       const last = [...messages].reverse().find((m) => m.from === 'ceo');
       if (last && last.at > readAt && document.visibilityState === 'visible') void attempt(() => api.phoneRead(last.at));
@@ -158,21 +159,18 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahea
     read();
     document.addEventListener('visibilitychange', read);
     return () => document.removeEventListener('visibilitychange', read);
-  }, [messages, readAt]);
-  // Shown again after being away: it opens afresh.
+  }, [messages, readAt, away]);
+  // Away, it waits at the end to open afresh.
   useLayoutEffect(() => {
-    setAway(false);
-    return () => {
-      setAway(true);
-      opened.current = false;
-      stick.current = true;
-    };
-  }, []);
+    if (!away) return;
+    opened.current = false;
+    stick.current = true;
+  }, [away]);
   // Opening the chat shows the unread divider (or the end); after that it follows new messages only from the end.
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    if (!opened.current) {
+    if (!opened.current && !away) {
       opened.current = true;
       // Back from a chip's jump: where the chat was.
       const back = takeChatScroll();
@@ -191,7 +189,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, ahea
       }
     }
     if (stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length, outbox.length, info.job?.kind, chat.live]);
+  }, [messages.length, outbox.length, info.job?.kind, chat.live, away]);
   // The rest of the first page going in above keeps the view where it was: the end, or the unread divider.
   useLayoutEffect(() => {
     const el = scroller.current;

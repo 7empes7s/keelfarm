@@ -2,7 +2,7 @@
 // and REST as the 3D office. Five tabs: Company (each floor's pipeline), Chat (the CEO), Kanban, Team and Approvals,
 // and ⚙️ for the manager's console (PocketConsole.tsx). Nothing 3D loads here until "Open the 3D office". On a desktop
 // (#104, mode.ts pickLayout) the tabs are a rail on the left, the chat a pane on the right, and the pages use the width.
-import { Activity, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { agentsOnRepo, kanbanFor, unreadMessages, useStore, type Overlay } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip, restartExpected } from '../officeUpdate';
@@ -612,7 +612,7 @@ export default function Pocket() {
   };
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
   const chatMode = useChatMode();
-  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} ahead={!wide && tab !== 'chat'} />;
+  const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} away={!wide && tab !== 'chat'} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''} ${full ? 'pk-chat-full' : ''}`}>
       <header className="pk-head">
@@ -707,8 +707,12 @@ export default function Pocket() {
             ) : (
               <>
                 {tab === 'company' && <Company go={go} settings={setSettings} track={track} />}
-                {/* drawn while away (#145), as iOS keeps a tab: opening it only shows it */}
-                {!wide && <Activity mode={tab === 'chat' ? 'visible' : 'hidden'}>{chat}</Activity>}
+                {/* drawn and laid out while away (#145), as iOS keeps a tab: opening it only shows it */}
+                {!wide && (
+                  <div className={tab === 'chat' ? 'pk-chat-tab' : 'pk-chat-tab pk-chat-away'} inert={tab !== 'chat'}>
+                    {chat}
+                  </div>
+                )}
                 {tab === 'kanban' && <Board repoId={repoId} pick={setRepoId} />}
                 {tab === 'team' && (
                   <Team

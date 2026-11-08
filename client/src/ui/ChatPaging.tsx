@@ -65,7 +65,7 @@ export function OlderSpinner({ loading }: { loading: boolean }) {
  * Removing messages: gone from the list at once, sent to the office after UNDO_MS unless undone (or at once when the
  * chat closes). `hidden`: the ones to leave out; `action`: a message's menu entry; `bar`: the Undo bar.
  */
-export function useRemovals() {
+export function useRemovals(away = false) {
   const [pending, setPending] = useState<{ id: number; kind: 'delete' | 'hide' }[]>([]);
   const timers = useRef(new Map<number, number>());
   const commit = useCallback((id: number) => {
@@ -74,12 +74,13 @@ export function useRemovals() {
     setPending((p) => p.filter((x) => x.id !== id));
     void api.removeMessage(id).catch(() => undefined);
   }, []);
+  // Leaving the chat (closed, or away on another tab) commits what's waiting.
   useEffect(() => {
     const t = timers.current;
     return () => {
       for (const id of t.keys()) commit(id);
     };
-  }, [commit]);
+  }, [commit, away]);
   const remove = (m: Pick<PhoneMessage, 'id' | 'from'>) => {
     setPending((p) => [...p, { id: m.id, kind: removal(m) }]);
     timers.current.set(
