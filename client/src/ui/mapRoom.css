@@ -1,4 +1,5 @@
-/* The map room (ui/MapRoom.tsx, Constellation.tsx): the memory map's layout filling the panel, over a night sky. */
+/* The map room (ui/MapRoom.tsx, Constellation.tsx): the memory map's layout filling the panel, over a night sky.
+   .mm-3d: the console's and pocket mode's map switched to 3D (#314). */
 
 .map-room .panel-body {
   padding: var(--ds-space-2);
@@ -11,11 +12,17 @@
   flex: 1;
   height: auto;
   min-height: 260px;
+}
+.map-room .mm-stage,
+.mm-3d .mm-stage {
   background: #0b0d1a;
 }
 .map-room .mm-stats,
 .map-room .mm-local,
-.map-room .mm-peek {
+.map-room .mm-peek,
+.mm-3d .mm-stats,
+.mm-3d .mm-local,
+.mm-3d .mm-peek {
   z-index: 3;
 }
 .mr-canvas canvas {
