@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { api } from '../api';
 import { fmtDuration, fmtPct, fmtUsd, usageMeter } from '../ops';
+import { usageChoice, USAGE_WARNING_CHOICES } from '../../../shared/usage';
 import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
@@ -56,13 +57,19 @@ export async function confirmResume() {
   if (ok) await attempt(() => api.resumeFullSpeed());
 }
 
+/** "Always keep full speed" (#323): saves Settings → Agents' choice, which also ends pacing now. */
+const keepFullSpeed = () => attempt(() => api.updateSettings({ usageWarnings: 'full' }));
+
 function UsageCard({ hot }: { hot: boolean }) {
   const usage = useStore((s) => s.usage);
   const sessions = useStore((s) => s.settings.pacingSessions);
+  const choice = useStore((s) => usageChoice(s.settings.usageWarnings));
+  const openOverlay = useStore((s) => s.openOverlay);
   const demo = useStore((s) => s.demo);
   const m = usageMeter(usage, Date.now());
-  const why =
-    usage.state === 'pacing'
+  const why = usage.byChoice
+    ? 'Usage high: full speed by your choice. New work starts as usual; if Claude turns a session away at the limit, the office still pauses until it resets.'
+    : usage.state === 'pacing'
       ? `Until ${m.resets}, new issues only start while fewer than ${sessions} session${sessions === 1 ? '' : 's'} run; QA, fixes and the CEO carry on. Topped up, or was your usage reset? Resume full speed.`
       : usage.state === 'paused'
         ? `Claude turned a session away at the limit, so nothing new starts until ${m.resets}. That can't be cleared early; sessions already running carry on.`
@@ -85,6 +92,14 @@ function UsageCard({ hot }: { hot: boolean }) {
         </div>
       )}
       <div className="dp-meta">{why}</div>
+      <div className="row wrap small">
+        <span>
+          When Claude warns: <b>{USAGE_WARNING_CHOICES.find((c) => c.value === choice)?.label}</b>
+        </span>
+        <button type="button" className="btn btn-small btn-ghost" title="Settings → Agents: When Claude warns that usage is high" onClick={() => openOverlay({ kind: 'manager', tab: 'agents' })}>
+          Change
+        </button>
+      </div>
       <Actions>
         <button
           className="ds-btn"
@@ -94,6 +109,11 @@ function UsageCard({ hot }: { hot: boolean }) {
         >
           <Icon name="fast-forward" /> Resume full speed
         </button>
+        {choice !== 'full' && (
+          <button className="ds-btn" title="Remember this choice: Claude's usage warnings never pace new work (Settings → Agents)" onClick={() => void keepFullSpeed()}>
+            Always keep full speed
+          </button>
+        )}
       </Actions>
       {demo && (
         <div className="row wrap">

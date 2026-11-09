@@ -3,7 +3,8 @@
 // own in the side menu (consoleNavRules.ts); the other sections are their own components.
 import { api } from '../api';
 import { useStore } from '../store';
-import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel } from '../../../shared/types';
+import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLevel, type UsageWarningChoice } from '../../../shared/types';
+import { usageChoice, USAGE_WARNING_CHOICES } from '../../../shared/usage';
 import { CLAUDE_MODELS, modelLabel } from '../../../shared/models';
 import { conflictFixSettings } from '../../../shared/conflicts';
 import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
@@ -99,6 +100,20 @@ export function AgentsSettings() {
         />
       </label>
       <p className="muted small">When Claude warns that usage is getting high, new issues only start while fewer sessions than this are running. QA, fixes and the CEO carry on.</p>
+      <label className="field">
+        <span>When Claude warns that usage is high</span>
+        <select value={usageChoice(settings.usageWarnings)} onChange={(e) => set({ usageWarnings: e.target.value as UsageWarningChoice })}>
+          {USAGE_WARNING_CHOICES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">
+        Pace new work: your Resume full speed holds for that usage window, restarts included. Keep full speed: warnings show but never pace. Ask me each time: pace, and ask again after a restart. Reaching
+        the limit still pauses new work.
+      </p>
       <label className="field">
         <span>Most agents per floor</span>
         <input
