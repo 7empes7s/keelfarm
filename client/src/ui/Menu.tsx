@@ -65,13 +65,21 @@ export function Menu({
       if (t && (menu.current?.contains(t) || button.current?.contains(t))) return;
       close(false);
     };
+    const anchor = button.current?.getBoundingClientRect();
+    const scrolled = (e: Event) => {
+      if (menu.current?.contains(e.target as Node)) return;
+      const now = button.current?.getBoundingClientRect();
+      // A scroll queued while bringing the trigger into view can arrive after opening.
+      // Background panes can scroll too: only dismiss when this menu's anchor moves.
+      if (!anchor || !now || now.top !== anchor.top || now.left !== anchor.left) close(false);
+    };
     const moved = () => close(false);
     document.addEventListener('pointerdown', outside, true);
-    document.addEventListener('scroll', outside, true); // the page or a panel scrolled away under it
+    document.addEventListener('scroll', scrolled, true);
     window.addEventListener('resize', moved);
     return () => {
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('scroll', outside, true);
+      document.removeEventListener('scroll', scrolled, true);
       window.removeEventListener('resize', moved);
     };
   }, [open]);

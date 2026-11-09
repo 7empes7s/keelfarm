@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { impactOf, impactScore, mergeConfirmText, prDecision, prWaitLine, prWhy, span, stuckSince, waitLine, waitSpan, whySummary } from './approvals.ts';
+import { impactOf, impactScore, mergeConfirmText, prActions, prDecision, prWaitLine, prWhy, span, stuckSince, waitLine, waitSpan, whySummary } from './approvals.ts';
 import type { QaCheck } from './types.ts';
 
 const H = 3_600_000;
@@ -156,5 +156,25 @@ describe('prWaitLine (#275)', () => {
 
   it('spells waits out to the minute', () => {
     expect([waitSpan(20_000), waitSpan(45 * MIN), waitSpan(120 * MIN), waitSpan(26 * 60 * MIN)]).toEqual(['<1 min', '45 min', '2 h', '1 day 2 h']);
+  });
+});
+
+
+describe('shared PR actions (#327)', () => {
+  it.each(['needs-human', 'failed'] as const)('%s offers the manual overrides on either detail page', (status) => {
+    for (const autoMerge of [true, false]) expect(prActions(status, autoMerge)).toEqual(['retry', 'sendBack', 'merge', 'close']);
+  });
+  it('only offers approval for passed QA on a floor without auto-merge', () => {
+    expect(prActions('passed', false)).toEqual(['merge']);
+    expect(prActions('passed', true)).toEqual([]);
+  });
+  it.each(['testing', 'fixing', 'queued'] as const)('%s has no manual override', (status) => {
+    for (const autoMerge of [true, false]) expect(prActions(status, autoMerge)).toEqual([]);
+  });
+  it('recommends retry after CI recovers from an outage, including with auto-merge', () => {
+    for (const autoMerge of [true, false]) expect(prDecision('outage', 6, autoMerge, 'passing')).toEqual({ text: 'CI runs again: retry QA so it can merge.', recommend: 'retry' });
+  });
+  it.each(['pending', 'none', 'failing'] as const)('keeps the auto-merge wait while CI is %s', (checks) => {
+    expect(prDecision('outage', 6, true, checks)).toMatchObject({ text: expect.stringContaining('It merges by itself once CI runs again'), recommend: null });
   });
 });
