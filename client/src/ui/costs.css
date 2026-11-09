@@ -133,6 +133,40 @@
 .costs-stat-wide {
   grid-column: 1 / -1;
 }
+/* A stat with a trend chart (#325): the card is a box, its label and value the button that taps through. */
+div.costs-stat-trend {
+  cursor: default;
+}
+div.costs-stat-trend:hover {
+  background: var(--ds-surface-raised);
+}
+div.costs-stat-trend:active {
+  transform: none;
+  box-shadow: var(--ds-shadow-2);
+}
+.costs-stat-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: stretch;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.costs-stat-head:hover .costs-stat-label {
+  color: var(--ds-text);
+}
+.costs-stat-head:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
 @container (min-width: 600px) {
   .costs-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));

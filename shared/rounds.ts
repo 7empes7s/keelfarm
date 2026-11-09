@@ -103,8 +103,8 @@ export interface RoundsView {
   week: RoundsWindow;
   month: RoundsWindow;
   floors: RoundsFloor[];
-  /** The trailing week's rounds per merge and first-round pass rate, a point a day over 30 days, oldest first. */
-  trend: { perMerge: (number | null)[]; firstPass: (number | null)[] };
+  /** The trailing week's rounds per merge, first-round pass rate and merges, a point a day over 30 days, oldest first. */
+  trend: { perMerge: (number | null)[]; firstPass: (number | null)[]; merges: number[] };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -164,7 +164,7 @@ export function roundsView(records: CostRecord[], today: number, now: number): R
     const end = today - (29 - i) * DAY;
     return roundStats(records, end - 6 * DAY, Math.min(now, end + DAY - 1));
   });
-  return { week: window(week), month: window(month), floors, trend: { perMerge: points.map((p) => p.perMerge), firstPass: points.map((p) => p.firstPass) } };
+  return { week: window(week), month: window(month), floors, trend: { perMerge: points.map((p) => p.perMerge), firstPass: points.map((p) => p.firstPass), merges: points.map((p) => p.merges) } };
 }
 
 /** company_status's failed rounds by cause over 7 days, e.g. { bug: 3, nit: 1 }: small. */

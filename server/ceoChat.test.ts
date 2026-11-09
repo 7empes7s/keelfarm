@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CeoChat } from './ceoChat.ts';
 import { createDemoBackend } from './demo.ts';
+import { HttpError } from './httpError.ts';
 import { Swarm } from './swarm.ts';
 import { loadChats } from '../shared/conversations.ts';
 import type { SessionOptions } from './agentRunner.ts';
@@ -195,6 +196,20 @@ describe('threads (#132)', () => {
     expect(seeded).toMatchObject({ pinned: true, files: 2, count: 1 });
     expect(await chat.loadThread(seeded.id)).toMatchObject([{ id: 10, attachments: [{ id: 'f1', name: 'a.png' }], artifacts: [{ id: '10-0', title: 'Plan' }] }]);
     expect(added).toEqual(['a.png']);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("still seeds the demo's threads when the disk is too full for their photos", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'threads-'));
+    const chat = new CeoChat(dir, path.join(dir, 'NOTES.md'), () => undefined);
+    const s = loadChats({ current: 'cnow', list: [{ id: 'cnow', title: 'Now' }] }, [], 1);
+    const store = { addStream: () => Promise.reject(new HttpError(507, "The office's disk is nearly full")) };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const next = await chat.seed(s, [], [{ repoId: 'r1', messages: [{ from: 'ceo', text: 'Shot', at: 2, image: { name: 'a.png', png: Buffer.from('png') } }] }], store as never, 10);
+    warn.mockRestore();
+    expect(next).toBe(11);
+    const seeded = s.list.find((c) => c.repoId === 'r1')!;
+    expect(await chat.loadThread(seeded.id)).toEqual([{ id: 10, from: 'ceo', text: 'Shot', at: 2 }]);
     await fs.rm(dir, { recursive: true, force: true });
   });
 });

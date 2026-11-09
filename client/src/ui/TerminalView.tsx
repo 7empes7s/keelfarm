@@ -9,6 +9,7 @@ import { BrowserCard } from './BrowserCard';
 import { AgentDetails, type DetailsTab } from './AgentDetails';
 import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMode';
 import { AgentRing } from './AgentRing';
+import { speakAgent, useLineVoice } from './agentSpeech';
 import { TaskRing } from './TaskProgress';
 import { canPickWork, sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
 import { clearDesk, letGo, stopAgent } from './dangerActions';
@@ -115,6 +116,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
   const allAgents = useStore((s) => s.agents);
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
+  const speaks = useLineVoice();
   const office = useMode((s) => s.mode) === 'office';
   const [text, setText] = useDraft(`agent:${agentId}`); // kept through a reload (#216)
   const [busy, setBusy] = useState(false);
@@ -365,7 +367,13 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
 
   const title = (
     <div className="aw-head">
-      <AgentRing agent={agent} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
+      {speaks ? (
+        <button type="button" className="aw-hear" aria-label={`Hear ${agent.name}`} title={`Hear what ${agent.name} is up to`} onClick={() => void speakAgent(agent.id)}>
+          <AgentRing agent={agent} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
+        </button>
+      ) : (
+        <AgentRing agent={agent} phrase={agentPhrase(agent, { autoAssign: repo?.autoAssign })} />
+      )}
       <TaskRing agent={agent} link />
       <button type="button" className="aw-who" aria-expanded={details} aria-controls="aw-details" title={details ? 'Hide the details' : 'Task, profile and setup (or swipe up)'} {...swipe}>
         <span className="aw-name">
