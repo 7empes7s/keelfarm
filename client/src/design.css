@@ -62,6 +62,7 @@
   --ds-danger-text: #b3123a;
   --ds-warn-text: #a63c06;
   --ds-scrim: rgba(21, 21, 31, 0.35);
+  --ds-segment-track: rgba(255, 255, 255, 0.45); /* a segmented control's track on a coloured header: lifts any floor colour */
   /* a share bar's or chart's series, in order (stat card, ranked card, share bar) */
   --ds-series-1: var(--ds-warn-fill);
   --ds-series-2: var(--ds-good-fill);

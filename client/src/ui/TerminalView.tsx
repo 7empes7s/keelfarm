@@ -392,7 +392,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
         </button>
       )}
       {!noChat && !phone && (
-        <div className="aw-panes" role="group" aria-label="Show">
+        <div className="aw-seg aw-panes" role="group" aria-label="Show">
           {(['chat', 'terminal'] as const).map((p) => (
             <button key={p} type="button" aria-pressed={pane === p} aria-label={p === 'chat' ? 'Chat' : 'Terminal'} title={p === 'chat' ? 'Their work as a conversation' : 'Their terminal'} onClick={() => choose(p)}>
               <Icon name={p === 'chat' ? 'message-circle' : 'keyboard'} />
