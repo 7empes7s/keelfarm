@@ -26,10 +26,13 @@ export function wireCli<T extends WiredCli>(l: T, ctx: {
   const { lives, routes, office, idleHook, endLive, quietly } = ctx;
   const p = l.proc!;
   lives.set(l.term, l);
-  routes.set(l.token, { hook: (b) => {
-    l.lastHook = Date.now();
-    return l.session ? l.session.hook(b) : idleHook(l, b);
-  }, office });
+  routes.set(l.token, {
+    hook: (b) => {
+      l.lastHook = Date.now();
+      return l.session ? l.session.hook(b) : idleHook(l, b);
+    },
+    office,
+  });
   l.term.bind({ write: (d) => quietly(() => p.write(d)), resize: (c, r) => quietly(() => p.resize(c, r)) });
   let stream: ReturnType<typeof parseProgramStatus>['state'] | undefined;
   p.onData((data) => {
@@ -47,4 +50,3 @@ export function wireCli<T extends WiredCli>(l: T, ctx: {
     else void endLive(l); // quit while waiting at its prompt
   });
 }
-
