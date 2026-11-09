@@ -12,12 +12,13 @@ describe('status phrases', () => {
     expect(agentPhrase({ ...agent, status: 'working', task: 'issue', issueNumber: 12 })).toBe('Building #12 · opens a PR, then QA tests it');
     expect(agentPhrase({ ...agent, status: 'working', task: 'qa', prNumber: 3 })).toBe('Testing PR #3 · the verdict goes on the PR');
     expect(agentPhrase({ ...agent, status: 'working', task: 'fix', prNumber: 3 })).toBe('Fixing PR #3 · goes back to QA after');
-    expect(agentPhrase({ ...agent, status: 'done', task: 'issue', prNumber: 5 })).toBe('Opened PR #5 · QA tests it next');
+    expect(agentPhrase({ ...agent, status: 'done', task: 'issue', prNumber: 5 })).toBe('Free · opened PR #5, QA tests it next');
+    expect(agentPhrase({ ...agent, status: 'done' })).toBe('Free · finished, ready for the next task');
     expect(agentPhrase({ ...agent, status: 'error' })).toContain('Needs help');
-    expect(agentPhrase({ ...agent, status: 'working', blocked: 'a prompt' })).toContain('Stuck on a prompt');
+    expect(agentPhrase({ ...agent, name: 'Ada', status: 'working', blocked: 'a prompt' })).toBe("Needs you: answer the prompt in Ada's terminal · the office tells you if it lasts 5 minutes");
     expect(agentPhrase({ ...agent, status: 'working', reviewedBy: 'Mimoun' })).toBe('Mimoun is reviewing your change · they decide if this work goes on'); // #207
     expect(agentPhrase({ ...agent, status: 'done', reviewedBy: 'Mimoun' })).not.toContain('reviewing');
-    expect(agentPhrase({ ...agent, status: 'done', waiting: 'manager' })).toContain('answer in the chat');
+    expect(agentPhrase({ ...agent, name: 'Ada', status: 'done', waiting: 'manager' })).toBe("Needs you: answer Ada's question · in the chat, then they carry on");
   });
 
   it('say where a card stands and what happens next', () => {

@@ -8,6 +8,7 @@ import { useCanvasTexture } from '../interact';
 import { CEO_DESK, deskPosition } from '../layout';
 import { CHIP_COLORS, chipFor, type ChipKind } from './overviewInfo';
 import { pickables } from './picking';
+import { KIND_ICON } from '../../ui/statusLook';
 
 // The overview's status chips: a small label over every desk with its person's name and what they're doing, the same
 // size on screen at any zoom (sizeAttenuation off) and drawn over everything. A click on one opens their panel.
@@ -15,7 +16,7 @@ import { pickables } from './picking';
 const CHIP = { w: 320, h: 72, px: 28, y: 2.45 };
 /** The chips' scale for the current lens and view size, so a new chip starts the right size. */
 const scale = { x: 0.1, y: 0.025 };
-const LABEL: Record<ChipKind, string> = { working: 'working', testing: 'testing', fixing: 'fixing', error: 'needs help', idle: 'idle' };
+const LABEL: Record<ChipKind, string> = { 'needs-you': 'needs you', working: 'working', testing: 'testing', fixing: 'fixing', error: 'needs help', idle: 'free' };
 
 function drawChip(ctx: CanvasRenderingContext2D, name: string, kind: ChipKind) {
   const { w, h } = CHIP;
@@ -42,6 +43,14 @@ function drawChip(ctx: CanvasRenderingContext2D, name: string, kind: ChipKind) {
   ctx.stroke();
   ctx.fillStyle = '#1f1d2b';
   ctx.textBaseline = 'middle';
+  if (kind === 'needs-you') {
+    // the attention shape in the dot (statusLook.ts KIND_ICON), so colour isn't the only cue
+    ctx.font = `800 18px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(KIND_ICON.attention, x0 + 28, h / 2 + 1);
+    ctx.textAlign = 'start';
+    ctx.font = `700 30px ${SANS}`;
+  }
   ctx.fillText(line, x0 + 48, h / 2 + 1);
 }
 
