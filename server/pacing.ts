@@ -1,4 +1,4 @@
-import type { UsageView, UsageWarningView } from '../shared/types.ts';
+import type { UsageView, UsageWarningChoice, UsageWarningView } from '../shared/types.ts';
 import { clock, limitName, usedPercent } from '../shared/usage.ts';
 
 export { clock };
@@ -8,7 +8,7 @@ export { clock };
 // QA, QA fixes and CEO jobs start as normal; new issues only while fewer than settings.pacingSessions sessions run.
 
 /** How long pacing lasts when Claude doesn't say when the window resets. */
-export const PACING_MS = 60 * 60_000;
+const PACING_MS = 60 * 60_000;
 export const DEFAULT_PACING_SESSIONS = 3;
 
 /** What a session is started for. Only new issues are held back while pacing. */
@@ -28,15 +28,16 @@ export function mayStart(kind: WorkKind, c: UsageClock & { running: number; paci
 }
 
 /** The usage state for the snapshot, with the last warning's details for the usage meter. */
-export function usageView(c: UsageClock, warning: UsageWarningView | null = null): UsageView {
+export function usageView(c: UsageClock, warning: UsageWarningView | null = null, byChoice = false): UsageView {
   if (c.now < c.pausedUntil) return { state: 'paused', until: c.pausedUntil, warning };
   if (c.now < c.pacingUntil) return { state: 'pacing', until: c.pacingUntil, warning };
-  return { state: 'normal', until: null, warning };
+  return { state: 'normal', until: null, warning, ...(byChoice && { byChoice: true as const }) };
 }
 
-/** company.usage for the CEO: "normal", "pacing until 14:30" or "paused until 14:30". */
-export function usageLabel(u: Pick<UsageView, 'state' | 'until'>, now: number): string {
-  return u.state === 'normal' || u.until === null ? 'normal' : `${u.state} until ${clock(u.until, now)}`;
+/** company.usage for the CEO: "normal", "normal (full speed by choice)", "pacing until 14:30" or "paused until 14:30". */
+export function usageLabel(u: Pick<UsageView, 'state' | 'until' | 'byChoice'>, now: number): string {
+  if (u.state === 'normal' || u.until === null) return u.byChoice ? 'normal (full speed by choice)' : 'normal';
+  return `${u.state} until ${clock(u.until, now)}`;
 }
 
 /** Clamp the pacing cap from the settings (1-32, default 3). */
@@ -90,4 +91,23 @@ export function waived(w: UsageWarning, waiver: Waiver | null, now: number): boo
   if (!waiver || now >= waiver.until) return false;
   if (waiver.limit && w.rateLimitType && waiver.limit !== w.rateLimitType) return false;
   return w.resetsAt === null || w.resetsAt <= waiver.until + SAME_WINDOW_MS;
+}
+
+// ---------- remembered choices (#323) ----------
+
+/**
+ * What a usage warning does: pace new issues until `until` (`fresh`: pacing starts now, so say so), or null for nothing.
+ * "Keep full speed" never paces; nor does a warning about a window already paced or waived.
+ */
+export function warningOutcome(w: UsageWarning, c: { now: number; pacingUntil: number; waiver: Waiver | null; choice: UsageWarningChoice }): { until: number; fresh: boolean } | null {
+  if (c.choice === 'full') return null;
+  const until = w.resetsAt && w.resetsAt > c.now ? w.resetsAt : c.now + PACING_MS;
+  if (until <= c.pacingUntil || waived(w, c.waiver, c.now)) return null;
+  return { until, fresh: c.now >= c.pacingUntil };
+}
+
+/** Full speed by the manager's choice right now: a window they waived, or "Keep full speed" while Claude's last warning holds. */
+export function fullSpeedByChoice(choice: UsageWarningChoice, waiver: Waiver | null, warning: UsageWarningView | null, now: number): boolean {
+  if (waiver && now < waiver.until) return true;
+  return choice === 'full' && !!warning && now < (warning.resetsAt ?? warning.at + PACING_MS);
 }

@@ -71,8 +71,9 @@ export function waitTile(n: Pick<OpsNumbers, 'longestWaitMs' | 'waitTrend'>): { 
 /** Dollars: "$4.20", "$0.35"; whole dollars from $100. */
 export const fmtUsd = (n: number) => (n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`);
 
-/** The HUD's chip while new work is held back (null at full speed), e.g. "Paced until Tue 00:00: new issues start when fewer than 3 sessions run". */
+/** The HUD's chip while new work is held back, or runs at full speed through a warning by the manager's choice (#323) (null at plain full speed), e.g. "Paced until Tue 00:00: new issues start when fewer than 3 sessions run". */
 export function usageChip(u: UsageView, pacingSessions: number, now: number): string | null {
+  if (u.byChoice) return 'Usage high: full speed by your choice';
   if (u.state === 'normal' || u.until === null) return null;
   const until = clock(u.until, now);
   if (u.state === 'paused') return `Paused until ${until}: at Claude's usage limit, nothing new starts`;
@@ -84,8 +85,8 @@ export function usageMeter(u: UsageView, now: number): { state: string; tone: 'g
   const w = u.warning;
   const resetsAt = u.state === 'normal' ? (w?.resetsAt && w.resetsAt > now ? w.resetsAt : null) : u.until;
   return {
-    state: u.state === 'paused' ? 'Paused' : u.state === 'pacing' ? 'Pacing' : 'Normal',
-    tone: u.state === 'paused' ? 'bad' : u.state === 'pacing' ? 'warn' : 'good',
+    state: u.state === 'paused' ? 'Paused' : u.state === 'pacing' ? 'Pacing' : u.byChoice ? 'Full speed' : 'Normal',
+    tone: u.state === 'paused' ? 'bad' : u.state === 'pacing' || u.byChoice ? 'warn' : 'good',
     limit: w ? `${w.limit ?? "Claude's usage"}${w.pct === null ? '' : ` · ${w.pct}%`}` : 'No usage warnings',
     pct: w?.pct ?? null,
     resets: resetsAt ? clock(resetsAt, now) : null,

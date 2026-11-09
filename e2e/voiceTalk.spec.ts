@@ -61,7 +61,12 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   });
   const before = (await state(page)).messages.filter((m) => m.from === 'ceo').length;
   await textCeo(page, 'Also check the footer');
-  // The player keeps an ack until its turn for ACK_MAX_AGE_MS (20 s), then it plays once its clip, fetched meanwhile, decodes.
+  // The demo CEO answers mid-job, while it's still working (checked first: a slow page's ack can outlast the job).
+  await expect.poll(async () => (await state(page)).messages.filter((m) => m.from === 'ceo').length, { timeout: 15_000 }).toBeGreaterThan(before);
+  expect((await state(page)).messages.filter((m) => m.from === 'ceo').at(-1)?.text).toMatch(/^Noted/);
+  expect(await ceoWorking(page)).toBe(true);
+  // The player starts an ack up to ACK_MAX_AGE_MS (20 s) after it arrives; the lab's busy page runs timers seconds late,
+  // then the 2 s delay above and the clip's decoding, so allow a little past that.
   await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'ack').length, { timeout: 30_000 }).toBe(1);
   const [ack] = (await lines(page)).filter((l) => l.kind === 'ack');
   expect(ACKS).toContain(ack.text);
@@ -74,10 +79,6 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   const metadata = dataEnd + dataEnd % 2;
   expect(wav.toString('ascii', metadata + 8, metadata + 16)).toBe('INFOICMT');
   expect(wav.subarray(metadata + 20, metadata + 20 + wav.readUInt32LE(metadata + 16) - 1).toString('utf8')).toBe(ack.text);
-  // The demo CEO answers mid-job, while it's still working.
-  await expect.poll(async () => (await state(page)).messages.filter((m) => m.from === 'ceo').length, { timeout: 15_000 }).toBeGreaterThan(before);
-  expect((await state(page)).messages.filter((m) => m.from === 'ceo').at(-1)?.text).toMatch(/^Noted/);
-  expect(await ceoWorking(page)).toBe(true);
   // Regular progress, on a round of its own (a line isn't said over the reply being read): spoken lines while the
   // round goes on, none of them a chat message, none with numbers or paths.
   await busyCeo(page);

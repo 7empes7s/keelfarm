@@ -444,7 +444,7 @@ const stopActiveLine = () => lineStop?.();
 export function speakLine(line: VoiceLine, arrived: number, wait: number) {
   setTimeout(
     () => {
-      if (!wonVoice(-line.id) || Date.now() - arrived > maxAge(line)) return;
+      if (!wonVoice(-line.id) || Date.now() - arrived > maxAge(line)) return; // a busy page can run this timer seconds late
       const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
       const v = callVoice(settings.voice);
       const mic = useMic.getState().state;

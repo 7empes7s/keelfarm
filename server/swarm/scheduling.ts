@@ -12,19 +12,19 @@ import { fixGoesTo, pickTester, pipelineQueue, prepHeld, runnerFor, runsHere, WO
 import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
-import { mergeReadings, readingsChanged } from '../../shared/usage.ts';
+import { mergeReadings, readingsChanged, usageChoice } from '../../shared/usage.ts';
 import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
+  clampPacingSessions,
+  fullSpeedByChoice,
   mayStart,
-  PACING_MS,
   pacingMessage,
   resumeRefusal,
   usageLabel,
   usageView,
-  waived,
+  warningOutcome,
   warningView,
   type UsageWarning,
-  type Waiver,
   type WorkKind,
 } from '../pacing.ts';
 import { opsView, recordAvoided, recordChecks, recordMerges, type OpsFloorState } from '../metrics.ts';
@@ -35,7 +35,7 @@ import { planAssign } from '../../shared/assignIssue.ts';
 import { questionOf } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import { areaFiles, isPriorityLabel, pickNext, playbookAreas } from '../../shared/conflicts.ts';
-import type { OpsView, PullInfo, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
+import type { OpsView, PullInfo, SwarmSettings, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -75,7 +75,6 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected pacingUntil = 0; // Claude warned about usage: new issues are paced until this
   protected pacingLimit: string | null = null; // which of Claude's limits the pacing is for
   protected lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
-  protected waiver: Waiver | null = null; // pacing the manager cleared with "Resume full speed"
   protected lastUsage = '';
   protected shownReadings: UsageReading[] = []; // the readings the office was last sent
   protected readingsTimer: NodeJS.Timeout | null = null;
@@ -296,14 +295,37 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected paceForWarning(info: UsageWarning) {
     const now = Date.now();
     this.lastWarning = warningView(info, now);
-    const until = info.resetsAt && info.resetsAt > now ? info.resetsAt : now + PACING_MS;
-    // The manager already resumed full speed for this window: they topped up, or their usage was reset.
-    if (until <= this.pacingUntil || waived(info, this.waiver, now)) return this.emitUsage();
-    const fresh = now >= this.pacingUntil;
-    this.pacingUntil = until;
+    // Nothing paces under "Keep full speed", or when the manager already resumed full speed for this window (they topped up, or their usage was reset).
+    const pace = warningOutcome(info, { now, pacingUntil: this.pacingUntil, waiver: this.state.usageWaiver ?? null, choice: this.usageChoice() });
+    if (!pace) return this.emitUsage();
+    this.pacingUntil = pace.until;
     this.pacingLimit = info.rateLimitType;
-    if (fresh) this.postMessage('office', pacingMessage(info, until, this.state.settings.pacingSessions, now));
+    if (pace.fresh) this.postMessage('office', pacingMessage(info, pace.until, this.state.settings.pacingSessions, now), undefined, { pacing: true });
     this.emitUsage();
+  }
+
+  protected usageChoice() {
+    return usageChoice(this.state.settings.usageWarnings);
+  }
+
+  /** Settings → Agents' pacing fields. Choosing "Keep full speed" while pacing ends it now, as Resume full speed would. */
+  protected pacingSettings(patch: Partial<Pick<SwarmSettings, 'pacingSessions' | 'usageWarnings'>>) {
+    const s = this.state.settings;
+    if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
+    if (patch.usageWarnings === undefined) return;
+    s.usageWarnings = usageChoice(patch.usageWarnings);
+    if (s.usageWarnings !== 'full' || this.usageNow().state !== 'pacing') return this.emitUsage();
+    this.endPacing('⏩ Full speed from now on, by your choice: Claude\'s usage warnings no longer pace new work (Settings → Agents to change it). If Claude turns a session away at the limit, the office still pauses until it resets.');
+  }
+
+  /** Pacing ends now by the manager's choice, remembered for its usage window (across restarts too). */
+  protected endPacing(text: string) {
+    this.state.usageWaiver = { until: this.pacingUntil, limit: this.pacingLimit };
+    this.pacingUntil = 0;
+    this.save();
+    this.postMessage('office', text);
+    this.emitUsage();
+    setTimeout(() => this.schedule(), 200);
   }
 
   /** The manager's "Resume full speed" (they topped up, or their usage was reset): pacing ends now. A hard pause never does. */
@@ -311,11 +333,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const now = Date.now();
     const refused = resumeRefusal({ now, pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil });
     if (refused) throw new HttpError(409, refused);
-    this.waiver = { until: this.pacingUntil, limit: this.pacingLimit };
-    this.pacingUntil = 0;
-    this.postMessage('office', '⏩ You resumed full speed: new issues start as usual again. If Claude turns a session away at the limit, the office still pauses until it resets.');
-    this.emitUsage();
-    setTimeout(() => this.schedule(), 200);
+    this.endPacing('⏩ You resumed full speed: new issues start as usual again. If Claude turns a session away at the limit, the office still pauses until it resets.');
     return this.usageNow();
   }
 
@@ -327,7 +345,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const usage = fake(kind, Date.now());
     if ('limitResetsAt' in usage) this.pauseForLimit(usage.limitResetsAt);
     else {
-      this.waiver = null; // a simulated warning always paces, even after Resume full speed
+      if (this.usageChoice() !== 'full') this.state.usageWaiver = null; // a simulated warning paces even after Resume full speed; "Keep full speed" is respected
       this.paceForWarning(usage);
     }
     return this.usageNow();
@@ -354,7 +372,8 @@ export abstract class SwarmScheduling extends SwarmQa {
   }
 
   protected usageNow() {
-    return usageView({ now: Date.now(), pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil }, this.lastWarning);
+    const now = Date.now();
+    return usageView({ now, pausedUntil: this.pausedUntil, pacingUntil: this.pacingUntil }, this.lastWarning, fullSpeedByChoice(this.usageChoice(), this.state.usageWaiver ?? null, this.lastWarning, now));
   }
 
   protected emitUsage() {
@@ -419,6 +438,10 @@ export abstract class SwarmScheduling extends SwarmQa {
 
   /** Pacing and pauses run out on their own: say so when pacing ends. */
   protected tickUsage() {
+    if (this.state.usageWaiver && Date.now() >= this.state.usageWaiver.until) {
+      this.state.usageWaiver = null; // its window ended: the next warning paces again
+      this.save();
+    }
     if (this.pacingUntil && Date.now() >= this.pacingUntil) {
       this.pacingUntil = 0;
       this.postMessage('office', "✅ Claude's usage is back to normal. The office starts new work at full speed again.");
