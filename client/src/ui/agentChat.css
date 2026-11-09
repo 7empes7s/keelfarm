@@ -243,38 +243,8 @@
 .ac-chips .btn {
   min-height: var(--ds-target);
 }
-.aw-panes {
-  display: inline-flex;
-  flex: none;
-  border: var(--ds-border) solid var(--ds-outline);
-  border-radius: var(--ds-radius-pill);
-  overflow: hidden;
-}
-.aw-panes button {
-  min-width: var(--ds-target);
-  min-height: var(--ds-target);
-  padding: 0 var(--ds-space-3);
-  border: none;
-  background: var(--ds-surface);
-  font: inherit;
-  font-size: var(--ds-text-sm);
-  font-weight: var(--ds-weight-strong);
-  cursor: pointer;
-}
-@media (max-width: 760px) {
-  .aw-pane-label {
-    display: none;
-  }
-  .aw-panes button {
-    padding: 0;
-  }
-}
 .aw-more {
   flex: none; /* ⋯ keeps its 44px; the name gives way */
-}
-.aw-panes button[aria-pressed='true'] {
-  background: var(--ds-text);
-  color: var(--ds-surface-raised);
 }
 .ac-note {
   flex: none;

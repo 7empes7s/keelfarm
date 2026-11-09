@@ -14,7 +14,7 @@ import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
 import { replyLog } from './chatCardRules';
-import { ActionCards, NoticeCard, NoticePill, UseKeyCard } from './ChatCards';
+import { ActionCards, NoticeCard, NoticePill, PacingCard, UseKeyCard } from './ChatCards';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
@@ -25,6 +25,8 @@ import { isPinching, lastPinchAt } from './ChatZoom';
 import { pinchCancels } from './chatPinch';
 import { Icon } from './Icon';
 import { SignInCard } from './SignInCard';
+import { toolsInRow, toolsOffset } from './bubbleTools';
+import { XLabel } from './HoverCard';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -82,25 +84,47 @@ function DeliveryTick({ d }: { d: Delivery }) {
   );
 }
 
-/** The hover (and keyboard) buttons by a bubble: Reply, and the actions menu. */
+/** The hover (and keyboard) buttons by a bubble, stacked on its outer side (#289): Reply, React, and the actions menu. */
 function BubbleTools({ id, item, onReply, onActions }: { id: number | undefined; item: Item; onReply: (id: number) => void; onActions: (item: Item) => void }) {
   return (
     <div className="bubble-tools">
       {id !== undefined && (
-        <button type="button" className="bubble-tool" aria-label="Reply to this message" title="Reply" onClick={() => onReply(id)}>
+        <button type="button" className="ds-btn ds-btn-icon xbtn bubble-tool" aria-label="Reply to this message" onClick={() => onReply(id)}>
           <Icon name="reply" />
+          <XLabel text="Reply" />
         </button>
       )}
       {item.m?.from === 'ceo' && (
-        <button type="button" className="bubble-tool" aria-label="React to this message" aria-haspopup="dialog" title="React" onClick={() => onActions(item)}>
+        <button type="button" className="ds-btn ds-btn-icon xbtn bubble-tool" aria-label="React to this message" aria-haspopup="dialog" onClick={() => onActions(item)}>
           <Icon name="smile-plus" />
+          <XLabel text="React" />
         </button>
       )}
-      <button type="button" className="bubble-tool" aria-label="Message actions" aria-haspopup="dialog" title="More" onClick={() => onActions(item)}>
+      <button type="button" className="ds-btn ds-btn-icon xbtn bubble-tool" aria-label="Message actions" aria-haspopup="dialog" onClick={() => onActions(item)}>
         <Icon name="ellipsis" />
+        <XLabel text="More" />
       </button>
     </div>
   );
+}
+
+/** Keep the active stack inside the log, including when a tall bubble is partly scrolled away or the log is short. */
+export function placeTools(row: HTMLElement) {
+  const buttons = row.querySelectorAll<HTMLElement>('.bubble-tool');
+  const log = row.closest('.chat-log');
+  const tools = row.querySelector<HTMLElement>('.bubble-tools');
+  if (!buttons.length || !log || !tools) return;
+  const first = buttons[0], last = buttons[buttons.length - 1];
+  const box = log.getBoundingClientRect();
+  tools.classList.remove('bubble-tools-row');
+  tools.style.left = '';
+  const flat = toolsInRow(last.getBoundingClientRect().bottom - first.getBoundingClientRect().top, box.height);
+  tools.classList.toggle('bubble-tools-row', flat);
+  const a = first.getBoundingClientRect(), b = last.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  tools.style.top = `${toolsOffset(r.top, b.bottom - a.top, box, r.bottom)}px`;
+  // a row runs inward over the bubble; it never leaves the log's sides (its scrollbar excluded)
+  if (flat) tools.style.left = `${toolsOffset(a.left, b.right - a.left, { top: box.left, bottom: box.left + log.clientWidth })}px`;
 }
 
 // Memoised (#145): a keystroke or another message's event leaves the bubble as it is.
@@ -162,12 +186,13 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
 
   // An office note: hold or right-click it for its actions (Delete).
-  if (m && (look === 'pill' || m.switch?.useKey || ((m.notice || m.signIn) && look === 'card')))
+  if (m && (look === 'pill' || m.switch?.useKey || m.pacing || ((m.notice || m.signIn) && look === 'card')))
     return (
       <div className="bubble-row-office" data-msg={id} {...gestures}>
         {m.signIn && look === 'card' ? <SignInCard card={m.signIn} />
           : m.notice && look === 'card' ? <NoticeCard text={officeText(m.text)} notice={m.notice} />
           : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
+          : m.pacing ? <PacingCard text={officeText(m.text)} />
           : <NoticePill text={officeText(m.text)} />}
       </div>
     );
@@ -189,7 +214,11 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
     );
 
   return (
-    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1}>
+    <div className={`bubble-row ${mine ? 'bubble-row-me' : ''} ${highlight ? 'bubble-row-flash' : ''} ${cont ? 'bubble-row-cont' : ''}`} data-msg={id} tabIndex={-1} onPointerEnter={(e) => placeTools(e.currentTarget)} onFocus={(e) => {
+      placeTools(e.currentTarget);
+      // focus didn't scroll to a tool on a row out of view: it was the 1px touch stand-in until now
+      if (e.target.classList.contains('bubble-tool')) e.target.scrollIntoView({ block: 'nearest' });
+    }}>
       {mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
       <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (

@@ -14,7 +14,7 @@ import { useCanvasTexture, useInteractable } from './interact';
 import { Jukebox } from './Jukebox';
 import { MapTable } from './MapTable';
 import { MissionControl } from './MissionControl';
-import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, LOBBY_SCREENS, MANAGER_DESK, MANAGER_ROOM, RECEPTION } from './layout';
+import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, LOBBY_SCREENS, MANAGER_DESK, MANAGER_ROOM, MANAGER_WORKSTATION, RECEPTION } from './layout';
 import { glow, shade } from './materials';
 import { WallSign } from './OfficeFloor';
 import { Bookshelf, CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, WallClock } from './Props';
@@ -27,6 +27,7 @@ import { Toys } from './toys';
 
 const ACCENT = '#ff8a5b';
 const CEO_ACCENT = '#9b5de5';
+const W = MANAGER_WORKSTATION;
 const CEO_DESK_AT: [number, number, number] = [CEO_DESK.x, 0, CEO_DESK.z]; // one array, so the memoised desk skips re-renders
 
 function useOfficeStats() {
@@ -108,19 +109,21 @@ function ManagerComputer() {
       <Box size={[MANAGER_DESK.w - 0.1, 0.72, 0.06]} position={[0, 0.37, -MANAGER_DESK.d / 2 + 0.05]} color="#6f4530" />
       <Box size={[0.08, 0.72, MANAGER_DESK.d - 0.1]} position={[-MANAGER_DESK.w / 2 + 0.08, 0.37, 0]} color="#6f4530" />
       <Box size={[0.08, 0.72, MANAGER_DESK.d - 0.1]} position={[MANAGER_DESK.w / 2 - 0.08, 0.37, 0]} color="#6f4530" />
-      {/* big monitor facing the door */}
-      <Box size={[0.1, 0.34, 0.1]} position={[0, 0.97, -0.15]} color="#adb5bd" />
-      <Box size={[0.4, 0.03, 0.26]} position={[0, 0.815, -0.15]} color="#adb5bd" outline />
-      <Box size={[1.42, 0.92, 0.06]} position={[0, 1.55, -0.18]} color="#343a40" outline />
-      <mesh position={[0, 1.55, -0.145]}>
-        <planeGeometry args={[1.34, 0.84]} />
-        <meshBasicMaterial map={tex} toneMapped={false} />
-      </mesh>
-      <Box size={[0.5, 0.025, 0.16]} position={[0, 0.815, 0.25]} color="#f4f4f8" outline />
-      <Cyl r={0.05} h={0.11} position={[0.9, 0.855, 0.1]} color="#ffd166" outline />
-      <Box size={[0.3, 0.2, 0.03]} position={[-0.95, 0.9, -0.1]} rotation={[-0.3, 0.3, 0]} color="#e9c46a" outline />
+      {/* big monitor facing the chair, the same stats on its back for visitors from the door */}
+      <Box size={[0.1, 0.34, 0.1]} position={[0, 0.97, W.screenZ]} color="#adb5bd" />
+      <Box size={[0.4, 0.03, 0.26]} position={[0, 0.815, W.screenZ]} color="#adb5bd" outline />
+      <Box size={[1.42, 0.92, 0.06]} position={[0, 1.55, W.screenZ]} color="#343a40" outline />
+      {[W.facing, -W.facing].map((f) => (
+        <mesh key={f} position={[0, 1.55, W.screenZ + f * 0.035]} rotation={[0, f < 0 ? Math.PI : 0, 0]}>
+          <planeGeometry args={[1.34, 0.84]} />
+          <meshBasicMaterial map={tex} toneMapped={false} />
+        </mesh>
+      ))}
+      <Box size={[0.5, 0.025, 0.16]} position={[0, 0.815, W.keyboardZ]} color="#f4f4f8" outline />
+      <Cyl r={0.05} h={0.11} position={[0.9, 0.855, W.mugZ]} color="#ffd166" outline />
+      <Box size={[0.3, 0.2, 0.03]} position={[-0.95, 0.9, 0.1]} rotation={[0.3, Math.PI - 0.3, 0]} color="#e9c46a" outline />
       {/* manager chair (yours) */}
-      <group position={[0, 0, -1.1]}>
+      <group position={[0, 0, W.chairZ]}>
         <Box size={[0.64, 0.12, 0.6]} position={[0, 0.48, 0]} color="#2b2d42" outline />
         <Box size={[0.62, 0.8, 0.12]} position={[0, 0.95, -0.3]} color="#2b2d42" outline />
         <Cyl r={0.04} h={0.4} position={[0, 0.22, 0]} color="#6c757d" />
