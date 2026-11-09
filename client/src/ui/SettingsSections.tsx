@@ -10,6 +10,7 @@ import { conflictFixSettings } from '../../../shared/conflicts';
 import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
 import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
+import { DiskFields } from './DiskCard';
 import { MemoryFields } from './HealthStrip';
 import { TestLabFields } from './TestLab';
 import { EffortByKind } from './CostsSection';
@@ -87,6 +88,7 @@ export function AgentsSettings() {
         you hit either.
       </p>
       <MemoryFields memory={settings.memory} set={set} />
+      <DiskFields disk={settings.disk} />
       <TestLabFields testLab={settings.testLab} set={set} />
       <label className="field">
         <span>Sessions while pacing</span>

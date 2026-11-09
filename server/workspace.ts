@@ -950,5 +950,5 @@ export async function removeMachine(machine: string): Promise<{ removed: boolean
 
 /** The machines on disk. */
 export async function listMachines(): Promise<string[]> {
-  return (await fs.readdir(MACHINES_DIR, { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory()).map((e) => e.name);
+  return (await fs.readdir(MACHINES_DIR, { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory() || e.isSymbolicLink()).map((e) => e.name); // links: machines on the working-copies disk (#340)
 }

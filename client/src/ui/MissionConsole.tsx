@@ -16,6 +16,7 @@ import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { UsageSources } from './UsageSources';
+import { DiskCard } from './DiskCard';
 import { HealthStrip } from './HealthStrip';
 import { ServerCard } from './ServerCard';
 import { CloudToday } from './CloudToday';
@@ -387,6 +388,7 @@ export function OpsTab({ card }: { card?: string }) {
         </Section>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <DiskCard />
         <ServerCard />
         <CloudToday />
         <TestLabCard />
