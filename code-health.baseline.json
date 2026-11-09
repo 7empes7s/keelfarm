@@ -17,7 +17,7 @@
       "typescript(no-misused-promises)": 1
     },
     "client/src/ui/KanbanView.tsx": {
-      "typescript(no-misused-promises)": 7
+      "typescript(no-misused-promises)": 2
     },
     "client/src/ui/NotifySettings.tsx": {
       "typescript(no-meaningless-void-operator)": 1
@@ -210,7 +210,7 @@
     },
     "server/cliRunner.ts": {
       "eslint(no-control-regex)": 1,
-      "typescript(no-floating-promises)": 3,
+      "typescript(no-floating-promises)": 2,
       "typescript(no-misused-promises)": 1
     },
     "server/cloudSignIn.test.ts": {
@@ -336,7 +336,6 @@
     "exports:client/src/ui/peopleSounds.ts:murmur",
     "exports:client/src/ui/peopleSounds.ts:sigh",
     "exports:client/src/ui/peopleSounds.ts:yawn",
-    "exports:client/src/ui/sfx.ts:setGroupLevel",
     "exports:client/src/ui/sfxMix.ts:VOICE_CAP",
     "exports:client/src/ui/theatre.ts:useChannels",
     "exports:client/src/ui/voiceClaim.ts:CLAIM_MS",
@@ -459,8 +458,6 @@
     "exports:server/boxHelpers.ts:BOX_STATUSLINE_SOURCE",
     "exports:server/boxScripts.ts:BOX_CF",
     "exports:server/boxScripts.ts:BOX_SESSIONS",
-    "exports:server/clis.ts:BOX_CODEX_VERSION",
-    "exports:server/clis.ts:resolveCommand",
     "exports:server/cloud.ts:CLAUDE_TOKEN_ENV",
     "exports:server/config.ts:DEMO_MAX",
     "exports:server/demoVisitors.ts:PING_SPOTS",
