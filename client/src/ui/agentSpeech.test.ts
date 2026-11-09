@@ -84,7 +84,7 @@ describe('speakAgent', () => {
     const decoded = deferred<{ duration: number }>();
     decode.mockReturnValueOnce(decoded.promise);
     fetchMock.mockResolvedValueOnce(lineResponse(true)).mockResolvedValueOnce(clipResponse());
-    const said = speakAgent('a3', () => [0, 1, 0]);
+    const said = speakAgent('a3', () => ({ x: 0, y: 1, z: 0 }));
     await tick();
     expect(decode).toHaveBeenCalled();
     state.replaying = true;
@@ -102,7 +102,7 @@ describe('speakAgent', () => {
     state.settings.voice.provider = 'elevenlabs';
     decode.mockResolvedValueOnce({ duration: 1 });
     fetchMock.mockResolvedValueOnce(lineResponse(true)).mockResolvedValueOnce(clipResponse());
-    expect(await speakAgent('a5', () => [0, 1, 0])).toBe(true);
+    expect(await speakAgent('a5', () => ({ x: 0, y: 1, z: 0 }))).toBe(true);
     expect(sample).toHaveBeenCalledOnce();
   });
 });
