@@ -129,29 +129,6 @@ export function WallClock({ position, rotationY = 0 }: { position: P; rotationY?
   );
 }
 
-export function Bookshelf({ position, rotationY = 0 }: { position: P; rotationY?: number }) {
-  const colors = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261', '#9b5de5', '#ffbe0b', '#06d6a0'];
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <Box size={[4.8, 2.2, 0.6]} position={[0, 1.1, 0]} color="#b08968" outline />
-      {[0.35, 0.95, 1.55].map((y, row) => (
-        <group key={y}>
-          <Box size={[4.6, 0.04, 0.55]} position={[0, y - 0.25, 0.04]} color="#9c6644" shadow={false} />
-          {Array.from({ length: 14 }, (_, i) => (
-            <Box
-              key={i}
-              size={[0.14 + ((i * row) % 3) * 0.03, 0.34 + ((i + row) % 4) * 0.04, 0.4]}
-              position={[-2.1 + i * 0.3, y - 0.05, 0.08]}
-              color={colors[(i + row * 3) % colors.length]}
-              shadow={false}
-            />
-          ))}
-        </group>
-      ))}
-    </group>
-  );
-}
-
 export function GlassWall({ from, to, height = 2.8 }: { from: [number, number]; to: [number, number]; height?: number }) {
   const dx = to[0] - from[0];
   const dz = to[1] - from[1];
