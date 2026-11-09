@@ -328,8 +328,11 @@ html[data-ui-scale] :is(.panel, .start-card) {
 html[data-ui-scale] .panel-wide {
   height: calc(100vh / var(--ui-scale) - 32px);
 }
-html[data-ui-scale] .phone {
-  height: min(760px, calc(100vh / var(--ui-scale) - 32px));
+/* the floating phone only: on a phone screen and in full screen it fills its overlay (#297) */
+@media (min-width: 761px) {
+  html[data-ui-scale] .phone:not(.phone-full) {
+    height: min(760px, calc(100vh / var(--ui-scale) - 32px));
+  }
 }
 
 /* dyslexia-friendly: a plain sans serif with wider letter, word and line spacing (British Dyslexia Association style guide) */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appViewport, blocksPinch, insetsCovered, typing } from './viewport';
+import { appViewport, blocksPinch, chatDock, insetsCovered, typing } from './viewport';
 
 describe('appViewport', () => {
   it('is the visible part of the page: the keyboard and the browser bars taken off', () => {
@@ -14,6 +14,30 @@ describe('appViewport', () => {
   it('ignores a pinch zoom and a missing visualViewport', () => {
     expect(appViewport(844, { height: 300, offsetTop: 200, scale: 2.5 })).toEqual({ height: 844, top: 0 });
     expect(appViewport(700, null)).toEqual({ height: 700, top: 0 });
+  });
+});
+
+describe('chatDock', () => {
+  const vv = (height: number, offsetTop = 0, scale = 1) => ({ height, offsetTop, scale });
+  it('docks under the band, the whole screen tall, with no keyboard', () => {
+    expect(chatDock(844, vv(844), 1, false)).toEqual({ top: 0, height: 844, band: true });
+    expect(chatDock(844, vv(800), 1, false)).toEqual({ top: 0, height: 800, band: true }); // browser bars, not a keyboard
+  });
+  it('ends on the keyboard and drops the band while it is up', () => {
+    expect(chatDock(844, vv(508), 1, false)).toEqual({ top: 0, height: 508, band: false });
+    // iOS scrolled the visual viewport down to the field: the box follows it
+    expect(chatDock(844, vv(460, 40), 1, false)).toEqual({ top: 40, height: 460, band: false });
+  });
+  it('fills the visible screen in full screen', () => {
+    expect(chatDock(844, vv(844), 1, true)).toEqual({ top: 0, height: 844, band: false });
+    expect(chatDock(844, vv(508), 1, true)).toEqual({ top: 0, height: 508, band: false });
+  });
+  it('divides by the UI scale, which zooms the page', () => {
+    expect(chatDock(844, vv(508, 20), 1.25, false)).toEqual({ top: 16, height: 406.4, band: false });
+  });
+  it('keeps the page size under pinch zoom and without a visual viewport', () => {
+    expect(chatDock(844, vv(400, 100, 2), 1, false)).toEqual({ top: 0, height: 844, band: true });
+    expect(chatDock(844, null, 1, false)).toEqual({ top: 0, height: 844, band: true });
   });
 });
 
