@@ -82,6 +82,15 @@ it('finishes an ack even when a reply arrives before synthesis starts', async ()
   expect(starts).toEqual(['Heard you, one moment.', 'I will check the footer.']);
 });
 
+it("says an ack whose claim wait ran late on a busy page, within the ack's longer life", async () => {
+  player.speakLine(line(), Date.now() - 9000, 0); // the timer fired 9 s after the ack arrived (seen in the lab)
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(starts).toEqual(['Heard you, one moment.']);
+  player.speakLine({ ...line('progress'), id: 101 }, Date.now() - 9000, 0); // a progress line that old is stale
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(starts).toEqual(['Heard you, one moment.']);
+});
+
 it('keeps an ack during existing speech and says it before a queued reply', async () => {
   durationMs = 3000;
   player.speakMessage(message(1, 'I am checking the tests.'), Date.now(), 0);

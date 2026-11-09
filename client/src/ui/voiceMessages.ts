@@ -118,8 +118,7 @@ async function pump() {
         const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
         const v = callVoice(settings.voice);
         const quiet = { micOpen: lineMicOpen(callOn(), useMic.getState().state, useCall.getState().managerSpeaking), speaking: voiceSpeaking !== null };
-        const maxAge = line.kind === 'ack' ? ACK_MAX_AGE_MS : LINE_MAX_AGE_MS;
-        if (Date.now() - arrived <= maxAge && v.provider !== 'off' && (v.provider !== 'elevenlabs' || voiceKeySet) && sayNow(line, talkMode(v.talk, callOn()), quiet)) {
+        if (Date.now() - arrived <= maxAge(line) && v.provider !== 'off' && (v.provider !== 'elevenlabs' || voiceKeySet) && sayNow(line, talkMode(v.talk, callOn()), quiet)) {
           activeLine = line;
           try {
             await sayLine(line, v.provider, v.voiceName, v.speed);
@@ -418,6 +417,7 @@ async function speakSentences(id: number, text: string, voiceName: string, rate:
 const LINE_MAX_AGE_MS = 5000;
 /** Keep an ack briefly behind existing speech, ahead of the next reply. */
 const ACK_MAX_AGE_MS = 20_000;
+const maxAge = (line: VoiceLine) => (line.kind === 'ack' ? ACK_MAX_AGE_MS : LINE_MAX_AGE_MS);
 
 /** The acks and progress lines said in this tab, for QA and e2e (window.__swarmVoiceLines): what went to the voice. */
 export interface SaidLine {
@@ -444,7 +444,7 @@ const stopActiveLine = () => lineStop?.();
 export function speakLine(line: VoiceLine, arrived: number, wait: number) {
   setTimeout(
     () => {
-      if (!wonVoice(-line.id) || Date.now() - arrived > LINE_MAX_AGE_MS) return;
+      if (!wonVoice(-line.id) || Date.now() - arrived > maxAge(line)) return; // a busy page can run this timer seconds late
       const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
       const v = callVoice(settings.voice);
       const mic = useMic.getState().state;
