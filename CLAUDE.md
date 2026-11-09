@@ -95,6 +95,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
+  | `disk.ts` | the disk (#340): free space on the health strip and its hold, the hourly cleanup and "Free up space", the working copies' disk |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
@@ -170,6 +171,8 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   and CPU) and grouped into programs (agents' CLI sessions, their test browsers and demo offices, previews, the office,
   Postgres/Docker), orphans, and a 24 h trend in memory; pure parsing and grouping first. `shared/serverLoad.ts` has the
   types and trend rules; the chat's `server:*` sources and Mission control's `ServerCard.tsx` draw it; `demoServerLoad.ts` is the demo's.
+- `diskCare.ts`: the disk on this computer (#340, rules pure in `shared/disk.ts`): free space, what agents' machines hold, removing only inside them,
+  and machines on a second disk (linked from `<HOME_DIR>/machines/<machine>`, moved when idle); `demo/disk.ts` is the demo's.
 - `presence.ts`: shared presence: relays tabs' poses, emotes and pings on `/ws` to their floor (pure interest and rate
   rules), never saved; `demoVisitors.ts` walks the demo's fake visitors. Names and limits in `shared/presence.ts`.
 - `voice.ts`: phone messages read aloud (docs/voice.md): the ElevenLabs key in `secrets.json`, voices, cached clips;

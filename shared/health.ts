@@ -1,6 +1,7 @@
 // The office's health (#55): memory, swap and load, sessions running and waiting, and the memory settings, for the
 // health strip in the manager's console and pocket mode. The server's side (readings, admission, stops and retries) is
 // server/health.ts.
+import type { DiskView } from './disk.ts';
 
 /** What a session is for: each kind has its own memory estimate. The test lab's (#56): a browser job, a heavy command. */
 export type SessionKind = 'build' | 'fix' | 'qa' | 'preview' | 'ceo' | 'consult' | 'labBrowser' | 'labRun';
@@ -50,6 +51,7 @@ export interface HealthView {
   held: string | null; // why new work waits now, e.g. "Waiting for memory: …"
   heldWork: HeldWork | null; // the same wait, counted, for the in-app note (#115)
   lastStop: { agent: string; why: string; at: number } | null; // the latest session the office lost to memory
+  disk?: DiskView | null; // free space on the disks the office writes to (#340); absent before the first reading
 }
 
 /** Work waiting for memory: how many tasks, what's free and what the smallest of them needs (its estimate + headroom). */

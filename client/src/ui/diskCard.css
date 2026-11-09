@@ -1,0 +1,50 @@
+/* Mission control's disk card and "Free up space"'s preview (ui/DiskCard.tsx, #340). */
+.disk-card {
+  min-width: 0;
+}
+.disk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+}
+.disk-chip-warn {
+  color: var(--ds-warn-text);
+}
+.disk-chip-hold {
+  color: var(--ds-danger-text);
+}
+.disk-path {
+  overflow-wrap: anywhere;
+}
+.disk-actions {
+  margin-top: var(--ds-space-2);
+  gap: var(--ds-space-2);
+}
+.disk-plan {
+  text-align: start;
+  max-height: 55vh;
+  overflow-y: auto;
+  min-width: 0;
+}
+.disk-plan-group + .disk-plan-group {
+  margin-top: var(--ds-space-3);
+}
+.disk-plan-h {
+  margin: 0 0 var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+}
+.disk-plan-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-1) 0;
+  border-top: var(--ds-border) solid var(--ds-line);
+  overflow-wrap: anywhere;
+}
+.disk-plan-size {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}

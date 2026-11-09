@@ -15,6 +15,7 @@ import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
 import type { LibraryFilter, LibraryPage } from '../../shared/library';
+import type { CleanPlan, CleanResult, DiskSettings } from '../../shared/disk';
 import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
 
@@ -161,6 +162,11 @@ export const api = {
   simulateUsage: (kind: 'warning' | 'limit') => call<UsageView>('POST', '/api/usage/simulate', { kind }),
   /** The demo only: memory too low for another session, or back. */
   simulateMemory: (low: boolean) => call<HealthView>('POST', '/api/health/simulate', { low }),
+  /** The disk (#340): "Free up space"'s preview and run, the disk settings, the demo's low disk. */
+  diskPlan: () => call<CleanPlan>('GET', '/api/disk/plan'),
+  cleanDisk: () => call<CleanResult>('POST', '/api/disk/clean'),
+  diskSettings: (patch: Partial<DiskSettings>) => call<DiskSettings>('PATCH', '/api/disk/settings', patch),
+  simulateDisk: (low: boolean) => call<HealthView>('POST', '/api/disk/simulate', { low }),
   /** The office doctor: a finding's one-click fix, or Ignore. */
   doctorFix: (id: string, fix: DoctorFix) => call<DoctorFinding[]>('POST', '/api/doctor/fix', { id, fix }),
   doctorIgnore: (id: string) => call<DoctorFinding[]>('POST', '/api/doctor/ignore', { id }),

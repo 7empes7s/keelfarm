@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEMORY, heldNote, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
+import { DEFAULT_DISK } from '../shared/disk.ts';
 import { createDemoBackend } from './demo.ts';
 import { admission, checkRestart, heldMessage, heldPing, idlePreview, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryRelief, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
 import { Swarm } from './swarm.ts';
@@ -190,6 +191,31 @@ describe('OfficeHealth', () => {
     sessions.pop();
     expect(health.ended(ada, 'build', ['Claude Code exited with code 0 before finishing.'], true, true)).toMatch(/^The office stopped their session/);
     expect(settings.estimates.build).toBe(2268); // halfway from 1.5 GB to its 2.9 GB peak
+  });
+
+  it('holds new builds, QA and previews below the disk threshold (not the CEO), warns once, and lets them go once there is room (#340)', async () => {
+    const { health, out } = rig();
+    const free = { gb: 40 };
+    health.useDisk({ read: async () => [{ label: 'Office data', path: '/srv', totalMb: 150 * 1024, freeMb: free.gb * 1024 }], settings: () => DEFAULT_DISK, alert: (title) => out.alerts.push(title), lastClean: () => null });
+    await health.tick();
+    expect(health.admit('build')).toBe(true);
+    expect(health.view().disk?.level).toBe('ok');
+    free.gb = 12;
+    await health.tick();
+    expect(health.view().disk?.level).toBe('warn');
+    expect(out.alerts).toEqual(['Disk getting full: 12.0 GB left']);
+    free.gb = 4;
+    await health.tick();
+    for (const kind of ['build', 'fix', 'qa', 'preview'] as const) expect(health.refusal(kind)).toMatch(/^Waiting for disk space: 4\.0 GB free on office data/);
+    expect(health.refusal('ceo')).toBeNull();
+    expect(health.admit('build', 'o/a')).toBe(false);
+    expect(health.view().held).toMatch(/^Waiting for disk space/);
+    expect(health.view().heldWork).toBeNull(); // not "waiting for memory"
+    expect(out.alerts).toHaveLength(1); // once per low stretch
+    free.gb = 40;
+    await health.tick();
+    expect(health.view().held).toBeNull();
+    expect(health.admit('build')).toBe(true);
   });
 
   it('holds new work while memory is short with a note, rings once after 15 minutes and not again within the hour', async () => {
