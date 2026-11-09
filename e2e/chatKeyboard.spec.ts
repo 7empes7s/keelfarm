@@ -13,7 +13,7 @@ const KEYBOARD = 336;
  *  the conversation at its end before, so it should stay there. */
 async function keyboard(page: Page, px: number, top = 0) {
   await page.evaluate(() => document.querySelectorAll('.chat-log').forEach((el) => el.scrollTo(0, el.scrollHeight)));
-  await page.waitForTimeout(100);
+  await frames(page); // its scroll event (a frame later: software WebGL draws slowly) before the keyboard
   await page.evaluate(
     ([px, top]) => {
       Object.defineProperty(visualViewport!, 'height', { configurable: true, get: () => innerHeight - px - top });
@@ -25,6 +25,9 @@ async function keyboard(page: Page, px: number, top = 0) {
   await page.waitForTimeout(400); // the viewport's next frame, and the log following it
 }
 
+/** Two frames: the scroll events and resize observations due by then have run. */
+const frames = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+
 const visible = (page: Page) => page.evaluate(() => ({ top: visualViewport!.offsetTop, bottom: visualViewport!.offsetTop + visualViewport!.height }));
 
 /** The message box is fully on screen, above the keyboard, the newest message in view, and nothing scrolls sideways. */
@@ -33,8 +36,9 @@ async function aboveKeyboard(page: Page, chat: Locator) {
   const v = await visible(page);
   expect(box.y, 'the message box starts on screen').toBeGreaterThanOrEqual(v.top - 0.5);
   expect(box.y + box.height, 'the message box ends above the keyboard').toBeLessThanOrEqual(v.bottom + 0.5);
-  const [log, newest] = await Promise.all([chat.locator('.chat-log').boundingBox(), chat.locator('.chat-log > :last-child').boundingBox()]);
-  expect(newest!.y + newest!.height, 'the newest message in view').toBeLessThanOrEqual(log!.y + log!.height + 1);
+  // the newest message in view (the demo's CEO may post one meanwhile: the log follows it)
+  const below = () => chat.locator('.chat-log').evaluate((log) => log.lastElementChild!.getBoundingClientRect().bottom - log.getBoundingClientRect().bottom);
+  await expect.poll(below, { message: 'the newest message in view' }).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll').toBe(true);
 }
 
