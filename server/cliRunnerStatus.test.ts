@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTerminal } from './terminal.ts';
 import type { SessionHandle } from './agentRunner.ts';
+import type * as Clis from './clis.ts';
+import type * as PtyClient from './ptyClient.ts';
 
-const fake = vi.hoisted(() => ({ data: (_: string) => {}, token: '' }));
-vi.mock('./clis.ts', async (original) => ({ ...await original<typeof import('./clis.ts')>(), commandFor: () => ({ file: process.execPath, args: [] }) }));
+const fake = vi.hoisted(() => ({ data: (() => {}) as (data: string) => void, token: '' }));
+vi.mock('./clis.ts', async (original) => ({ ...await original<typeof Clis>(), commandFor: () => ({ file: process.execPath, args: [] }) }));
 vi.mock('./ptyClient.ts', async (original) => ({
-  ...await original<typeof import('./ptyClient.ts')>(),
+  ...await original<typeof PtyClient>(),
   terminalsAvailable: true,
   spawnPty: (_file: string, _args: string[], _opts: unknown, meta: { token: string }) => {
     fake.token = meta.token;

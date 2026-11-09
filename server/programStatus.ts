@@ -77,7 +77,11 @@ export function parseProgramStatus(previous: StatusStream | undefined, chunk: st
 
 /** Decoded terminal text is untrusted: strip controls, scrub secrets, then bound the status line. */
 export function statusReason(status: ProgramStatus, secrets: readonly string[] = []): string {
-  const msg = redact(stripVTControlCharacters(status.msg ?? '').replace(/[\x00-\x1f\x7f-\x9f]/g, ' '), secrets).replace(/\s+/g, ' ').trim();
+  const plain = [...stripVTControlCharacters(status.msg ?? '')].map((ch) => {
+    const code = ch.codePointAt(0)!;
+    return code < 32 || (code >= 127 && code <= 159) ? ' ' : ch;
+  }).join('');
+  const msg = redact(plain, secrets).replace(/\s+/g, ' ').trim();
   return msg.slice(0, 200) || 'the coding agent is waiting for input';
 }
 
@@ -85,4 +89,23 @@ export function statusReason(status: ProgramStatus, secrets: readonly string[] =
 export function programStatusStep(status: (ProgramStatus & { at: number }) | undefined, lastHook: number, now: number, secrets: readonly string[] = []): WatchdogStep {
   if (!status || status.at <= lastHook || now - lastHook < HOOK_QUIET_MS || (status.state !== 'waiting' && status.state !== 'blocked')) return { do: 'wait' };
   return { do: 'blocked', reason: statusReason(status, secrets) };
+}
+
+/** Reports a backup block once; clearing it must preserve a primary watchdog block. */
+export class ProgramStatusReporter {
+  blocked = false;
+  constructor(private report: (reason: string | null) => void) {}
+
+  clear(primaryBlocked: boolean) {
+    if (!this.blocked) return;
+    this.blocked = false;
+    if (!primaryBlocked) this.report(null);
+  }
+
+  check(step: WatchdogStep, primaryBlocked: boolean) {
+    if (step.do !== 'blocked') return this.clear(primaryBlocked);
+    if (this.blocked || primaryBlocked) return;
+    this.blocked = true;
+    this.report(step.reason);
+  }
 }
