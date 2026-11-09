@@ -120,12 +120,14 @@ input.inline:focus {
   background: var(--st-idle, #e9ecef);
 }
 .status-preparing,
-.status-waiting-ceo,
-.status-waiting-you {
+.status-waiting-ceo {
   background: var(--st-preparing, #ffe066);
 }
 .status-working {
   background: var(--st-working, #74c0fc);
+}
+.status-needs-you {
+  background: var(--ds-warn-fill);
 }
 .status-done {
   background: var(--st-done, #8ce99a);
