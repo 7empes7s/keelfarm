@@ -1,0 +1,143 @@
+/* The board adapts to its own window, including beside the CEO chat. */
+.kanban-frame {
+  container: kanban-header / inline-size;
+}
+.kanban-heading,
+.kanban-repo,
+.kanban-actions,
+.kanban-settings,
+.kanban-setting,
+.kanban-setting-label {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.kanban-heading {
+  flex-wrap: wrap;
+}
+.kanban-repo {
+  flex: 1;
+  min-width: 0;
+  max-width: max-content;
+}
+.kanban-repo-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kanban-github {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target);
+  min-width: var(--ds-target);
+  flex: none;
+}
+.kanban-frame .kanban-toolbar {
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+}
+.kanban-actions {
+  flex: none;
+}
+.kanban-settings {
+  gap: 0;
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+.kanban-setting {
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-3);
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+.kanban-setting + .kanban-setting {
+  border-left: 1px solid var(--ds-line);
+}
+.kanban-setting-label {
+  white-space: nowrap;
+}
+.kanban-settings .kanban-setting input[type='checkbox'] {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-space-6);
+  margin: 0;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-line-strong);
+  cursor: pointer;
+}
+.kanban-settings .kanban-setting input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: var(--ds-border);
+  left: var(--ds-border);
+  width: var(--ds-space-4);
+  height: var(--ds-space-4);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  box-sizing: border-box;
+  transition: transform var(--ds-dur) var(--ds-ease);
+}
+.kanban-settings .kanban-setting input[type='checkbox']:checked {
+  background: var(--ds-good-fill);
+}
+.kanban-settings .kanban-setting input[type='checkbox']:checked::after {
+  transform: translateX(var(--ds-space-5));
+}
+.kanban-sync {
+  flex: none;
+  white-space: nowrap;
+}
+.kanban-sync-error {
+  color: var(--ds-danger-text);
+}
+.kanban-sync-spin {
+  animation: kanban-sync-spin 1s linear infinite;
+}
+@keyframes kanban-sync-spin {
+  to { transform: rotate(360deg); }
+}
+@container kanban-header (min-width: 500px) and (max-width: 700px) {
+  .kanban-setting {
+    gap: var(--ds-space-1);
+    padding: 0 var(--ds-space-1);
+    font-size: var(--ds-text-xs);
+  }
+  .kanban-setting-label {
+    gap: var(--ds-space-1);
+  }
+  .kanban-settings .kanban-setting input[type='checkbox'] {
+    width: var(--ds-space-8);
+  }
+  .kanban-settings .kanban-setting input[type='checkbox']:checked::after {
+    transform: translateX(var(--ds-space-2));
+  }
+}
+@container kanban-header (max-width: 700px) {
+  .kanban-github > span {
+    display: none;
+  }
+}
+@container kanban-header (max-width: 499px) {
+  .panel-head .kanban-repo {
+    flex-basis: 100%;
+  }
+  .kanban-settings {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .kanban-setting {
+    justify-content: space-between;
+  }
+  .kanban-setting + .kanban-setting {
+    border-left: 0;
+    border-top: 1px solid var(--ds-line);
+  }
+}

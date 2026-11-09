@@ -20,6 +20,7 @@ import { useLayout } from '../pocket/mode';
 import { reduceMotion } from './a11y';
 import './kanbanFold.css';
 import './kanbanCard.css';
+import './kanbanHeader.css';
 import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
@@ -93,7 +94,7 @@ export function IssueForm({ repoId, agents, onDone }: { repoId: string; agents: 
 function Frame({ embedded, ...props }: Parameters<typeof Panel>[0] & { embedded?: boolean }) {
   if (!embedded) return <Panel {...props} />;
   return (
-    <section className="kanban-embedded" style={{ ['--accent' as string]: props.accent }}>
+    <section className="kanban-embedded kanban-frame" style={{ ['--accent' as string]: props.accent }}>
       <h2 className="kanban-embedded-title">{props.title}</h2>
       {props.children}
     </section>
@@ -349,38 +350,52 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   return (
     <Frame
       embedded={embedded}
+      className="kanban-frame"
       wide
       accent={repo.color}
       title={
-        <span>
-          <Icon name="clipboard-list" /> {repo.fullName}{' '}
-          <a className="small" href={repo.url} target="_blank" rel="noreferrer">
-            GitHub <Icon name="external-link" />
-          </a>
+        <span className="kanban-heading">
+          <span className="kanban-repo">
+            <Icon name="clipboard-list" />
+            <span className="kanban-repo-name" title={repo.fullName}>{repo.fullName}</span>
+            <a className="kanban-github small" href={repo.url} target="_blank" rel="noreferrer" aria-label="View repository on GitHub">
+              <span>GitHub</span> <Icon name="external-link" />
+            </a>
+          </span>
+          <button
+            className={`btn btn-small kanban-sync ${repo.syncError ? 'kanban-sync-error' : ''}`}
+            disabled={pending === 'sync'}
+            aria-label="Sync repository"
+            aria-busy={pending === 'sync'}
+            title={repo.syncError || 'Sync issues and pull requests from GitHub'}
+            onClick={() => void act('sync', () => api.syncRepo(repo.id))}
+          >
+            <Icon name="refresh-cw" className={pending === 'sync' ? 'kanban-sync-spin' : undefined} />
+            <span aria-live="polite">{pending === 'sync' ? 'Syncing…' : repo.syncError ? 'Sync failed' : repo.lastSync ? `Synced ${new Date(repo.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}` : 'Sync now'}</span>
+          </button>
           {!embedded && <InfoButton screen="kanban" />}
         </span>
       }
     >
       <div className="kanban-toolbar">
-        <button className="btn btn-good" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : '+ New issue'}
-        </button>
-        <label className="toggle">
-          <input type="checkbox" checked={repo.autoAssign} onChange={(e) => void api.updateRepo(repo.id, { autoAssign: e.target.checked }).catch(() => undefined)} />
-          <Icon name="zap" /> Auto-assign work to free agents
-        </label>
-        <label className="toggle" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
-          <input type="checkbox" checked={repo.autoMerge} onChange={(e) => void api.updateRepo(repo.id, { autoMerge: e.target.checked }).catch(() => undefined)} />
-          <Icon name="git-merge" /> Auto-merge when QA and checks pass
-        </label>
-        <span className="spacer" />
-        <button className="btn" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">
-          <Icon name="monitor" /> View app
-        </button>
-        <span className="muted small">{repo.lastSync ? `Synced ${new Date(repo.lastSync).toLocaleTimeString()}` : 'Syncing…'}</span>
-        <button className="btn" disabled={pending === 'sync'} onClick={() => act('sync', () => api.syncRepo(repo.id))}>
-          <Icon name="refresh-cw" /> Sync
-        </button>
+        <div className="kanban-actions">
+          <button className="btn btn-small btn-good" aria-expanded={showForm} onClick={() => setShowForm((v) => !v)}>
+            {showForm ? 'Cancel' : '+ New issue'}
+          </button>
+          <button className="btn btn-small" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">
+            <Icon name="monitor" /> View app
+          </button>
+        </div>
+        <div className="kanban-settings" role="group" aria-label="Floor settings">
+          <label className="kanban-setting" title="Auto-assign work to free agents">
+            <span className="kanban-setting-label"><Icon name="zap" /><span>Auto-assign</span></span>
+            <input type="checkbox" role="switch" checked={repo.autoAssign} onChange={(e) => void api.updateRepo(repo.id, { autoAssign: e.target.checked }).catch(() => undefined)} />
+          </label>
+          <label className="kanban-setting" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
+            <span className="kanban-setting-label"><Icon name="git-merge" /><span>Auto-merge</span></span>
+            <input type="checkbox" role="switch" checked={repo.autoMerge} onChange={(e) => void api.updateRepo(repo.id, { autoMerge: e.target.checked }).catch(() => undefined)} />
+          </label>
+        </div>
       </div>
       {repo.syncError && (
         <div className="term-error">

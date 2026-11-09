@@ -17,7 +17,7 @@
       "typescript(no-misused-promises)": 1
     },
     "client/src/ui/KanbanView.tsx": {
-      "typescript(no-misused-promises)": 2
+      "typescript(no-misused-promises)": 1
     },
     "client/src/ui/NotifySettings.tsx": {
       "typescript(no-meaningless-void-operator)": 1
