@@ -179,7 +179,7 @@ export function DecisionTray({ hide, typing, onPick, onJump }: { hide?: number; 
           </span>
         )}
         <button type="button" className="decision-collapse" aria-expanded aria-label={`Hide the ${label}`} onClick={() => setOpen(false)}>
-          ⌄
+          <Icon name="chevron-down" />
         </button>
       </div>
       <div className="decision-row" ref={row} onScroll={onScroll}>

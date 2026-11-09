@@ -215,7 +215,7 @@ export class Swarm extends SwarmServerLoad {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await Promise.all([this.cloud.init(), this.accounts.init(), this.startUsage()]);
+    await Promise.all([this.cloud.init(), this.accounts.init(), this.initProviders(), this.startUsage()]);
     if (this.state.settings.cloud.machineKind !== 'local' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];

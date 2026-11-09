@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -165,6 +165,7 @@ export interface State {
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
   accounts: AccountsView; // Settings → Providers & accounts (#247): logins and keys (never a key)
+  providers: ProvidersView; // Settings → Providers (#362): keys added there and MCP servers (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
   managerChanges: ManagerChange[]; // the manager's board actions and what the CEO did about them (#207)
@@ -339,6 +340,7 @@ export const useStore = create<State>((set, get) => ({
   },
   cloud: EMPTY_CLOUD,
   accounts: { accounts: [] },
+  providers: { connections: [], mcp: [] },
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
   managerChanges: [],

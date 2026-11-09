@@ -9,8 +9,10 @@ describe('the agent window (#117)', () => {
     expect(ringStatus({ ...agent, task: 'qa' }).ring).toBe('qa');
     expect(ringStatus({ ...agent, task: 'fix' }).ring).toBe('fixing');
     expect(ringStatus({ ...agent, status: 'error' })).toMatchObject({ ring: 'error', label: 'Needs help' });
-    expect(ringStatus({ ...agent, blocked: 'a prompt' })).toMatchObject({ ring: 'error', label: 'Blocked' });
-    expect(ringStatus({ ...agent, status: 'done', waiting: 'manager' })).toMatchObject({ ring: 'waiting', label: 'Waiting for you' });
+    expect(ringStatus({ ...agent, blocked: 'a prompt' })).toMatchObject({ ring: 'waiting', icon: 'hand', label: 'Needs you' });
+    expect(ringStatus({ ...agent, status: 'done', waiting: 'manager' })).toMatchObject({ ring: 'waiting', icon: 'hand', label: 'Needs you' });
+    expect(ringStatus({ ...agent, status: 'done', waiting: 'ceo' })).toMatchObject({ ring: 'waiting', label: 'Waiting for the CEO' });
+    expect(ringStatus({ ...agent, status: 'done' })).toMatchObject({ ring: 'idle', label: 'Free' }); // finished: free, not done (#307)
     expect(ringStatus({ ...agent, status: 'idle', task: null })).toMatchObject({ ring: 'idle', label: 'Free' });
   });
 

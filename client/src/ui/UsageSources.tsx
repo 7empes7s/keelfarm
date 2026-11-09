@@ -18,7 +18,7 @@ import { Sheet } from './Sheet';
 import { floorShares } from './peekFacts';
 import './usageSources.css';
 
-const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet' };
+const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server' };
 const STATUS: Record<UsageSourceStatus, [string, ChipTone]> = { ready: ['Ready', 'good'], near: ['Near limit', 'warn'], limited: ['Limited', 'bad'], 'signed-out': ['Signed out', 'bad'], error: ['Error', 'warn'] };
 const tone = (w: UsageWindow) => (w.usedPct === null ? 'neutral' : w.usedPct >= 90 ? 'bad' : w.usedPct >= 75 ? 'warn' : 'good');
 
@@ -31,7 +31,7 @@ function useNow(ms: number) {
   return now;
 }
 
-function WindowBar({ w, now }: { w: UsageWindow; now: number }) {
+export function WindowBar({ w, now }: { w: UsageWindow; now: number }) {
   const when = resetsIn(w.resetsAt, now);
   const value = w.usedPct === null ? windowWords(w) : `${w.usedPct}%${when ? ` · resets ${when}` : ''}`;
   return <ProgressBar compact label={<b>{w.name}</b>} value={value} pct={w.usedPct === null ? 0 : w.usedPct / 100} tone={tone(w)} aria={`${w.name}: ${value}`} />;

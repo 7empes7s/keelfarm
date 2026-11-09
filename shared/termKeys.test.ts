@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeMods, barKeys, clipboardPaste, consumeMods, DOUBLE_TAP_MS, keyboardInset, keyName, keySequence, MORE_KEYS, NO_MODS, pasteText, tapMod, textSequence, type BarKey, type Mod } from './termKeys';
+import { activeMods, barKeys, clipboardPaste, consumeMods, DOUBLE_TAP_MS, keyboardInset, keyClickSends, keyName, keySequence, MORE_KEYS, NO_MODS, pasteText, tapMod, textSequence, type BarKey, type Mod } from './termKeys';
 
 const mods = (...m: Mod[]) => new Set(m);
 
@@ -118,13 +118,28 @@ describe('the bar', () => {
   const labels = (keys: BarKey[]) => keys.map((key) => key.label);
 
   it('shows Esc, Tab, the arrows, Enter and Ctrl for every coding agent', () => {
-    for (const cli of ['claude', 'codex', 'opencode'] as const) expect(labels(barKeys(cli))).toEqual(expect.arrayContaining(['Esc', 'Tab', '↑', '↓', '←', '→', '⏎', 'Ctrl', '/', '@', '!', '^C']));
+    for (const cli of ['claude', 'codex', 'opencode'] as const) expect(labels(barKeys(cli))).toEqual(expect.arrayContaining(['Esc', 'Tab', '↑', '↓', '←', '→', 'Enter', 'Ctrl', '/', '@', '!', 'Stop']));
   });
 
   it("shows Claude Code's own shortcuts only for Claude Code", () => {
-    expect(labels(barKeys('claude'))).toEqual(expect.arrayContaining(['⇧Tab', 'Esc Esc', '^R', '^O', '^T']));
-    expect(labels(barKeys('codex'))).not.toContain('⇧Tab');
-    expect(labels(barKeys('codex'))).toContain('Esc Esc');
+    expect(labels(barKeys('claude'))).toEqual(expect.arrayContaining(['Mode', 'Rewind', 'History', 'Transcript', 'Tasks', 'Background']));
+    expect(labels(barKeys('codex'))).not.toContain('Mode');
+    expect(labels(barKeys('codex'))).toContain('Edit last');
+  });
+
+  it('names actions without changing their bytes, and keeps shortcuts in tooltips', () => {
+    const expected = {
+      claude: [['Mode', '\x1b[Z', 'Shift+Tab'], ['Rewind', '\x1b\x1b', 'Esc Esc'], ['Stop', '\x03', 'Ctrl+C'], ['History', '\x12', 'Ctrl+R'], ['Transcript', '\x0f', 'Ctrl+O'], ['Tasks', '\x14', 'Ctrl+T'], ['Background', '\x02', 'Ctrl+B'], ['Enter', '\r', 'Enter']],
+      codex: [['Edit last', '\x1b\x1b', 'Esc Esc'], ['Stop', '\x03', 'Ctrl+C'], ['Transcript', '\x14', 'Ctrl+T'], ['New line', '\n', 'Ctrl+J']],
+    } as const;
+    for (const cli of ['claude', 'codex'] as const) {
+      for (const [label, bytes, shortcut] of expected[cli]) {
+        const key = barKeys(cli).find((k) => k.label === label);
+        expect(key, `${cli}: ${label}`).toBeDefined();
+        expect(key!.title).toContain(shortcut);
+        expect(key && ('text' in key ? key.text : 'key' in key ? keySequence(key.key, new Set(key.mods)) : null)).toBe(bytes);
+      }
+    }
   });
 
   it('every key sends something', () => {
@@ -195,4 +210,12 @@ describe('keyboardInset', () => {
     expect(keyboardInset(844, { height: 800, offsetTop: 0 })).toBe(0);
     expect(keyboardInset(844, null)).toBe(0);
   });
+});
+
+it('sends keyboard and assistive clicks, but never sends a touch key twice', () => {
+  expect(keyClickSends(false, { detail: 0 })).toBe(true);
+  expect(keyClickSends(false, { detail: 0, pointerType: '' })).toBe(true);
+  expect(keyClickSends(false, { detail: 0, pointerType: 'touch' })).toBe(false);
+  expect(keyClickSends(false, { detail: 1, pointerType: 'mouse' })).toBe(false);
+  expect(keyClickSends(true, { detail: 1, pointerType: 'touch' })).toBe(true);
 });

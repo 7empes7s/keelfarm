@@ -43,7 +43,7 @@ export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label =
       {pocket ? (
         <button type="button" id={id} className="ds-btn model-pick" aria-label={id ? undefined : label} aria-haspopup="dialog" disabled={disabled} onClick={() => setSheet(true)}>
           <span className="model-pick-text">{shown}</span>
-          <span aria-hidden="true">▾</span>
+          <Icon name="chevron-down" />
         </button>
       ) : (
         <select id={id} value={selected} disabled={disabled} aria-label={id ? undefined : label} onChange={(e) => pick(e.target.value)}>

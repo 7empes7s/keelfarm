@@ -7,13 +7,15 @@ import { HttpError } from '../httpError.ts';
 import { mergeSecrets, readSecrets } from '../secrets.ts';
 import { sourcesSignature, UsageBoard, type UsageKeys } from '../usageSources.ts';
 import { HOME_DIR } from '../config.ts';
-import type { AccountView, UsageSource } from '../../shared/types.ts';
-import { SwarmCloudCredit } from './cloudCredit.ts';
+import type { AccountView, ProvidersView, UsageSource } from '../../shared/types.ts';
+import { connectionSource } from '../../shared/providers.ts';
+import { worstFirst } from '../../shared/usageSources.ts';
+import { SwarmProviders } from './providers.ts';
 
 const TICK_MS = 60_000;
 const ADMIN_SECRET = { anthropic: 'anthropicAdminKey', openai: 'openaiAdminKey' } as const;
 
-export abstract class SwarmUsage extends SwarmCloudCredit {
+export abstract class SwarmUsage extends SwarmProviders {
   private adminKeys: Pick<UsageKeys, 'anthropic' | 'openai'> = { anthropic: '', openai: '' };
   private usageTimer: NodeJS.Timeout | null = null;
   private sentSources = ''; // what the tabs were last sent, without read times
@@ -35,7 +37,7 @@ export abstract class SwarmUsage extends SwarmCloudCredit {
 
   /** The usage card's rows, from the accounts' view and what the board has read (the snapshot's accounts.sources). */
   protected usageSources(accounts: readonly AccountView[] = this.accounts.view().accounts): UsageSource[] {
-    return this.usageBoard.sources(accounts);
+    return worstFirst([...this.usageBoard.sources(accounts), ...this.providers.view().connections.flatMap((c) => connectionSource(c) ?? [])]);
   }
 
   /** Send the rows when something in them changed (a read time alone isn't a change); returns them. */
@@ -79,6 +81,12 @@ export abstract class SwarmUsage extends SwarmCloudCredit {
     this.usageBoard.tick();
     this.pushSources();
     return { set: !!key };
+  }
+
+  /** A key added, tested or removed on Settings → Providers: its row on the usage card too. */
+  protected override providersChanged(view: ProvidersView) {
+    super.providersChanged(view);
+    this.pushSources();
   }
 
   protected override secrets(): string[] {

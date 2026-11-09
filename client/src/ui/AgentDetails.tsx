@@ -91,7 +91,9 @@ function NowTab({ agent, repo, qa, cli, model, effort, elapsed, choices, busy, r
                     <Icon name="check" />{' '}
                   </>
                 ) : s.state === 'now' ? (
-                  '● '
+                  <>
+                    <Icon name="circle-dot" />{' '}
+                  </>
                 ) : (
                   ''
                 )}

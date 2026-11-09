@@ -23,6 +23,7 @@ export type SectionId =
   | 'runtime'
   | 'office'
   | 'profile'
+  | 'providers'
   | 'accounts'
   | 'cloud-agents'
   | 'voice'
@@ -76,6 +77,7 @@ export const SECTIONS: Section[] = [
   { id: 'runtime', group: 'settings', icon: 'keyboard', label: 'How agents run', find: ['Real terminals', 'Agent SDK', 'Chat mode'] },
   { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Previews', 'Stop a PR preview after no use', 'Max lifetime', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
+  { id: 'providers', group: 'settings', icon: 'plug', label: 'Providers', find: ['Add provider', 'MCP servers', 'What uses it', 'OpenAI API', 'Anthropic API', 'Gemini', 'OpenRouter', 'Hetzner', 'ElevenLabs', 'Upstash', 'Test'] },
   { id: 'accounts', group: 'settings', icon: 'key-round', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'API keys only as a last resort', 'Simulate a limit', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
   { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text', 'Speed', 'Favourite voices', 'Model'] },

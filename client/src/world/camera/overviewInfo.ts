@@ -1,12 +1,14 @@
 // What the overview and the building view say about people and floors: the status chip over each desk and each floor's
 // live summary. Pure, so the tests can check it; OverviewChips.tsx and BuildingView.tsx draw it.
 
+import { needsYou } from '../../../../shared/needsYou';
 import type { HireRequestView, QaView, RepoView } from '../../../../shared/types';
 import { floorPrCounts, type Agent } from '../../store';
 
-export type ChipKind = 'working' | 'testing' | 'fixing' | 'error' | 'idle';
+export type ChipKind = 'needs-you' | 'working' | 'testing' | 'fixing' | 'error' | 'idle';
 
 export const CHIP_COLORS: Record<ChipKind, string> = {
+  'needs-you': '#ffd166', // --ds-warn-fill, as the 2D pill and ring (#307)
   working: '#2dc653',
   testing: '#4cc9f0',
   fixing: '#ff9f1c',
@@ -14,9 +16,10 @@ export const CHIP_COLORS: Record<ChipKind, string> = {
   idle: '#adb5bd',
 };
 
-/** The chip for someone: in trouble, testing a PR, fixing one, on an issue, or not busy. */
-export function chipFor(a: Pick<Agent, 'status' | 'task'>): ChipKind {
+/** The chip for someone: in trouble, waiting on the manager (shared/needsYou.ts), testing a PR, fixing one, on an issue, or not busy. */
+export function chipFor(a: Pick<Agent, 'status' | 'task' | 'waiting' | 'blocked' | 'needsSignIn'>): ChipKind {
   if (a.status === 'error') return 'error';
+  if (needsYou(a)) return 'needs-you';
   if (a.status !== 'working' && a.status !== 'preparing') return 'idle';
   if (a.task === 'qa') return 'testing';
   return a.task === 'fix' ? 'fixing' : 'working';
@@ -27,7 +30,7 @@ export interface FloorSummary {
   busy: number;
   inQa: number;
   ready: number;
-  /** PRs waiting on the manager. */
+  /** PRs and people waiting on the manager. */
   needsYou: number;
   /** People stuck on an error. */
   errors: number;
@@ -44,10 +47,10 @@ export function floorSummary(repo: RepoView, agents: Agent[], qa: Record<string,
   const prs = floorPrCounts(repo, qa);
   return {
     team: people.length,
-    busy: chips.filter((c) => c !== 'idle' && c !== 'error').length,
+    busy: chips.filter((c) => c !== 'idle' && c !== 'error' && c !== 'needs-you').length,
     inQa: prs.inQa,
     ready: prs.ready,
-    needsYou: prs.needsYou,
+    needsYou: prs.needsYou + chips.filter((c) => c === 'needs-you').length,
     errors: chips.filter((c) => c === 'error').length,
     chips,
   };

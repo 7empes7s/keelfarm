@@ -22,6 +22,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { flashInto } from '../ui/jumpFlash';
 import { takeTeamLanding } from './pocketJump';
 import { Icon } from '../ui/Icon';
+import { needsYou } from '../../../shared/needsYou';
 import { useDraft } from '../drafts';
 import { Sheet } from '../ui/Sheet';
 import { pushLayer } from '../ui/backStack';
@@ -73,7 +74,7 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
     }
   };
   return (
-    <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : ''} ${fresh ? 'pk-agent-new' : ''}`} data-agent={agent.id}>
+    <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : needsYou(agent) ? 'pk-agent-needs' : ''} ${fresh ? 'pk-agent-new' : ''}`} data-agent={agent.id}>
       <button type="button" className="pk-agent-head pk-agent-open" title={`Open ${agent.name}'s window`} onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
         <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
           <AgentRing agent={agent} />

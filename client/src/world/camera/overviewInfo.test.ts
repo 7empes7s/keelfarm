@@ -20,6 +20,13 @@ describe('chipFor', () => {
     expect(chipFor(agent({ status: 'done', task: 'issue' }))).toBe('idle');
     expect(chipFor(agent({ status: 'stopped', task: 'fix' }))).toBe('idle');
   });
+
+  it('shows who needs the manager, as the Team card does (#307)', () => {
+    expect(chipFor(agent({ status: 'done', task: 'issue', waiting: 'manager' }))).toBe('needs-you');
+    expect(chipFor(agent({ status: 'working', task: 'issue', blocked: 'a permission prompt' }))).toBe('needs-you');
+    expect(chipFor(agent({ status: 'done', task: 'issue', waiting: 'ceo' }))).toBe('idle');
+    expect(chipFor(agent({ status: 'working', task: 'issue', waiting: 'manager' }))).toBe('working'); // answered: back at work
+  });
 });
 
 describe('floorSummary', () => {
@@ -44,6 +51,12 @@ describe('floorSummary', () => {
     );
     expect(s).toEqual({ team: 3, busy: 2, inQa: 2, ready: 1, needsYou: 1, errors: 1, chips: ['working', 'error', 'testing'] });
     expect(summaryLine(s)).toBe('2/3 busy · 2 in QA · 1 ready · 1 needs you · 1 stuck');
+  });
+
+  it('counts people waiting on the manager with the PRs that need them, not as busy', () => {
+    const s = floorSummary(repo, [agent({ id: 'a', desk: 0, status: 'working', task: 'issue', blocked: 'a prompt' }), agent({ id: 'b', desk: 1, status: 'done', task: 'issue', waiting: 'manager' })], qa);
+    expect(s).toMatchObject({ busy: 0, needsYou: 3, chips: ['needs-you', 'needs-you'] });
+    expect(summaryLine(s)).toBe('0/2 busy · 2 in QA · 1 ready · 3 need you');
   });
 
   it('reads plainly for a quiet floor', () => {

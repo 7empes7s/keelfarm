@@ -95,7 +95,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
           <details className={`ac-steps ${r.failed ? 'ac-steps-bad' : ''}`}>
             <summary>
               <span className="ac-step-icon" aria-hidden>
-                {r.failed ? <Icon name="x" /> : r.running ? '◌' : <Icon name="check" />}
+                {r.failed ? <Icon name="x" /> : r.running ? <Icon name="loader-circle" /> : <Icon name="check" />}
               </span>
               <span className="ac-step-label">{r.label}</span>
             </summary>

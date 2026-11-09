@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { api } from '../api';
 import { qaKey, useStore } from '../store';
 import { PREVIEW_ENV_MAX_CHARS, previewEnvChars, previewEnvTooBig } from '../../../shared/previewEnv';
@@ -8,6 +8,7 @@ import type { PreviewStatus, PreviewView, RepoView } from '../../../shared/types
 import { atPath, comparePath, newPathSync, onOfficeComputer, prAsPreview, qaShotUrl, reachable, relayPath, type Side } from './channels';
 import { sendToCeo } from './chatSend';
 import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { Menu } from './Menu';
 import { ChannelBar, HeldNote, keepItems, PreviewStats, UseNote } from './PreviewChannels';
 import { closeOverlay, Panel } from './Panel';
@@ -15,6 +16,7 @@ import { PrChangesCard, usePrChanges } from './PrChanges';
 import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
 import type { Width } from './desktopRules';
 import { tuneChannel, useChannel, useWatch } from './theatre';
+import { barFit, type BarAction } from './viewerBar';
 import './appViewer.css';
 
 const STATUS_LABEL: Record<PreviewStatus, string> = {
@@ -39,6 +41,12 @@ const WIDTHS: [Width, string][] = [
   ['phone', 'Phone'],
   ['tablet', 'Tablet'],
   ['desktop', 'Desktop'],
+];
+
+// A phone's toolbar toggle (#294): Tablet stays in ⋯.
+const NARROW_WIDTHS: [Width, IconName, string][] = [
+  ['phone', 'smartphone', 'Mobile'],
+  ['desktop', 'monitor', 'Desktop'],
 ];
 
 // The last width picked, so reopening the viewer keeps it.
@@ -424,7 +432,7 @@ function CompareView({
       <b>{side === 'main' ? repo.defaultBranch : p.ref}</b>
       {p.commit && <code>{p.commit}</code>}
       {where[side] && <span className="muted">{where[side]}</span>}
-      {sync && where[side] !== null && <span className="compare-synced">⇅ synced</span>}
+      {sync && where[side] !== null && <span className="compare-synced"><Icon name="arrow-up-down" /> synced</span>}
     </div>
   );
   return (
@@ -494,13 +502,14 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
   const [reloads, setReloads] = useState(0);
   const [stats, setStats] = useState(false);
   const toolbar = useRef<HTMLDivElement>(null);
+  const [barWidth, setBarWidth] = useState(0);
 
   // Opened on a channel (a chip on the big screen, a Kanban PR card, a merged PR's card): tune to it, again on every open.
   useEffect(() => {
     if (pr !== undefined) tuneChannel(repoId, pr);
   }, [repoId, pr, merged]);
   useWatch(repoId, channel);
-  const changes = usePrChanges(repo, channel, qa);
+  const changes = usePrChanges(repo, channel, qa, narrow);
   // An agent's browser address (#230): a PR opens at that page; main does below (`at`).
   const { openPage } = changes;
   useEffect(() => {
@@ -519,6 +528,17 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
     if (stoppedIdle && !useStore.getState().replaying) void api.startPreview(repoId).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
   }, []);
+
+  // The phone's toolbar fits what its row has room for (#294).
+  const hasRepo = !!repo;
+  useLayoutEffect(() => {
+    const el = toolbar.current;
+    if (!el) return;
+    setBarWidth(el.clientWidth);
+    const ro = new ResizeObserver(([e]) => setBarWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasRepo]);
 
   // Away from the office's computer the apps come through the office: its preview worker goes in before they load.
   useEffect(() => {
@@ -573,6 +593,9 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
   };
   const toggleQa = () => changes.setOpen(!changes.open);
   const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : path && pr == null ? atPath(url, path) : url); // a PR (or a merged one, on main) opens at the page to look at
+  // On a phone, in the viewer: what joins Start/Stop and ⋯ in the one row; the rest stays in ⋯ (immersive's ⋯ has it all).
+  const wanted: BarAction[] = [...(view.forced ? [] : ['widths' as const]), ...(comparing ? ['side' as const] : []), 'reload'];
+  const bar = barFit(narrow && !view.immersive ? barWidth : 0, wanted);
   const held = !!current.heldBy;
   const heldWhy = held ? `@${current.heldBy} is testing in this` : undefined;
   const startStop = active ? (
@@ -590,31 +613,48 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
       title={`${name} · ${label}`}
       items={[
         { label: 'Open in browser', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
-        { label: 'Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
+        bar.reload === 'menu' && { label: 'Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
         active && { label: 'Restart', disabled: held, onSelect: () => void (channel == null ? startMain() : startPr(true)) },
         ...keepItems(repo, current),
         active && { label: 'Stop now', disabled: held, onSelect: () => void run(() => (channel == null ? api.stopPreview(repo.id) : api.stopPrPreview(repo.id, channel))) },
         view.forced ? { label: 'Leave full screen', onSelect: view.leaveFull } : !view.immersive && { label: 'Full screen', onSelect: view.enterFull },
-        ...(view.forced ? [] : WIDTHS.map(([w, text]) => ({ label: `${text} width${width === w ? ' (current)' : ''}`, onSelect: () => pickWidth(w) }))),
+        ...(view.forced ? [] : WIDTHS.filter(([w]) => w === 'tablet' || bar.widths === 'menu').map(([w, text]) => ({ label: `${text} width${width === w ? ' (current)' : ''}`, onSelect: () => pickWidth(w) }))),
         prView && { label: comparing ? `Stop comparing` : `Compare with ${repo.defaultBranch}`, onSelect: toggleCompare },
-        prView && pull && !narrow && { label: changes.open ? 'Hide what this PR changes' : 'What this PR changes', onSelect: toggleQa },
+        narrow && comparing && bar.side === 'menu' && { label: side === 'pr' ? `Show ${repo.defaultBranch}` : `Show ${label}`, onSelect: () => setSide(side === 'pr' ? 'main' : 'pr') },
+        prView && pull && { label: changes.open ? 'Hide what this PR changes' : 'What this PR changes', onSelect: toggleQa },
         { label: 'Preview stats', onSelect: () => setStats(true) },
       ]}
     />
   );
-  // On a phone: one button, compare's side, and the rest in ⋯.
+  // On a phone: one row of Start/Stop, Mobile | Desktop, compare's side and Reload as they fit (viewerBar.ts), and ⋯.
   const narrowBar = (
-    <div className="app-toolbar" role="toolbar" aria-label="App controls">
+    <div className="app-toolbar app-bar-narrow" role="toolbar" aria-label="App controls">
       {startStop}
-      {comparing && (
+      {bar.widths !== 'menu' && (
+        <div className="seg" role="group" aria-label="Viewport width">
+          {NARROW_WIDTHS.map(([w, icon, text]) => (
+            <button key={w} className={`seg-btn ${width === w ? 'seg-on' : ''}`} aria-pressed={width === w} aria-label={text} onClick={() => pickWidth(w)}>
+              <Icon name={icon} />
+              {bar.widths === 'full' && ` ${text}`}
+            </button>
+          ))}
+        </div>
+      )}
+      {comparing && bar.side !== 'menu' && (
         <div className="seg" role="group" aria-label="Side on screen">
           <button className={`seg-btn ${side === 'main' ? 'seg-on' : ''}`} aria-pressed={side === 'main'} onClick={() => setSide('main')}>
             {repo.defaultBranch}
           </button>
-          <button className={`seg-btn ${side === 'pr' ? 'seg-on' : ''}`} aria-pressed={side === 'pr'} onClick={() => setSide('pr')}>
-            {label}
+          <button className={`seg-btn ${side === 'pr' ? 'seg-on' : ''}`} aria-pressed={side === 'pr'} aria-label={label} onClick={() => setSide('pr')}>
+            {bar.side === 'full' ? label : `#${channel}`}
           </button>
         </div>
+      )}
+      {bar.reload !== 'menu' && (
+        <button className="btn btn-small" disabled={current.status !== 'running'} onClick={() => setReloads((n) => n + 1)} aria-label="Reload" title="Reload the app">
+          <Icon name="refresh-cw" />
+          {bar.reload === 'full' && ' Reload'}
+        </button>
       )}
       <span className="spacer" />
       {!view.immersive && more}
@@ -658,13 +698,13 @@ export function AppViewer({ repoId, pr, qa, merged, path }: { repoId: string; pr
         {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
           {active && (
             <button className="btn btn-small" disabled={busy || held} onClick={() => void (channel == null ? startMain() : startPr(true))} title={heldWhy ?? `Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
-              ↻ Restart
+              <Icon name="rotate-cw" /> Restart
             </button>
           )}
           {startStop}
           {prView && (
             <button className={`btn btn-small ${comparing ? 'btn-on' : ''}`} aria-pressed={comparing} onClick={toggleCompare} title={`${repo.defaultBranch} on the left, PR #${channel} on the right`}>
-              ⇆ Compare with {repo.defaultBranch}
+              <Icon name="arrow-left-right" /> Compare with {repo.defaultBranch}
             </button>
           )}
           <button className="btn btn-small" disabled={current.status !== 'running' && !(comparing && main.status === 'running')} onClick={() => setReloads((n) => n + 1)} title="Reload the app">

@@ -7,6 +7,7 @@ import { Constellation } from './Constellation';
 import { Panel } from './Panel';
 import './mapRoom.css';
 import { Icon } from './Icon';
+import { saveMapView } from './mapView';
 
 export function MapRoom() {
   const openOverlay = useStore((s) => s.openOverlay);
@@ -21,7 +22,7 @@ export function MapRoom() {
       <MemoryMap
         Stage={Constellation}
         action={
-          <button type="button" className="btn mm-filter-btn" onClick={() => openOverlay({ kind: 'manager', tab: 'map' })} aria-label="Open as 2D map">
+          <button type="button" className="btn mm-filter-btn" onClick={() => (saveMapView('2d'), openOverlay({ kind: 'manager', tab: 'map' }))} aria-label="Open as 2D map">
             <Icon name="map" /> 2D map
           </button>
         }
