@@ -82,6 +82,43 @@ By default (manager's console → Settings → **How agents run: Real terminals*
 - **Agents keep working while the office restarts** (an update, a code change during development, a crash). The CLIs run in the office's *terminal keeper* (`server/ptyHost.ts`), a small process of its own that the office starts and talks to over a local socket (a named pipe on Windows, `<SWARM_HOME>/pty.sock` elsewhere, with a secret in `<SWARM_HOME>/pty.secret`). Their hooks go to the keeper too, which holds each one while the office is away, so none fails and nothing is lost. When the office is back it takes each CLI into its agent's terminal again (what it printed meanwhile, then a redraw) and follows the busy ones' sessions. The CEO's session is resumed instead, since its office tools live in the office. When the office quits for good (Ctrl+C) the CLIs stop with it, and a keeper that no office comes back to for 10 minutes stops them itself. If the keeper can't start, terminals run inside the office and stop when it restarts, as before.
 - **Agent SDK** runs Claude Code through the SDK instead, shown as a log of its steps: the office's original runtime.
 
+### Terminal status backup (OSC 7501, #308)
+
+Version check on 2026-11-09: the office's installed Agent SDK 0.3.283 bundles **Claude Code 2.1.283**
+(`commandFor('claude') --version` confirmed it). Local Claude terminals prefer that bundled executable; Boxes install
+its `claudeCodeVersion` too (`server/clis.ts`, `boxVersions`). Anthropic's
+[changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21295) adds OSC 7501 in **2.1.295**, so the
+bundled version does not emit it. A newer `claude` on PATH (2.1.319 on the test machine) does not change that selection.
+
+The office pins Box **Codex 0.163.0**, and uses the manager's installed Codex locally (0.166.0 on the test machine).
+Codex's [0.163.0 source](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/tui/src/terminal_program_status.rs)
+confirms `osc_7501: stdout_is_terminal` and emits `ESC ] 7501 ; state=blocked:app=codex ESC \` (also `idle`, `working`
+and `clear`). This was added by [Codex PR #52725](https://github.com/openai/codex/pull/52725). Thus the version check
+passes through Codex; no CLI upgrade is part of this change. These findings come from the exact tagged source and
+Claude's changelog, without running a paid agent session.
+
+Local CLI output is decoded in `cliRunner.ts` after the terminal keeper (or its in-process fallback), before the
+terminal mirror, viewers and saved terminal history. A pure streaming parser consumes OSC 7501, including split
+sequences, drops records over 4096 UTF-8 bytes including framing, ignores unknown fields and child-agent records,
+and decodes base64 `msg`. Fields use `key=value` separated by colons, as the Codex emitter does. Unknown states and capability
+queries cannot trigger a blocked signal; malformed base64 messages are ignored. No capability reply is sent: the bundled
+Claude predates the protocol and Codex does not require negotiation. Supporting a future Claude upgrade also needs
+its capability handshake checked.
+
+Hooks stay primary: only a `waiting` or `blocked` record received after the latest hook can report a block, once
+hooks have been quiet for 10 seconds. The existing 2-second watchdog timer performs the check; there is no new
+polling. A hook clears that backup immediately and permanently invalidates older records. A subsequent nonblocking
+OSC state clears an OSC block, without ending a turn or clearing a hook/watchdog block. The decoded message is
+stripped of terminal controls, scrubbed with the office's secret scrubber, and limited to 200 characters. It travels
+through the existing `blocked` agent event and appears in the terminal's status banner and the agent's feed. The
+demo's fake CLI emits and decodes a sample blocked/working pair when its scripted prompt blocks and clears.
+
+**Box limitation:** Box terminals attach through tmux (`boxCli.ts`, `boxScripts.ts`), which consumes unsupported OSC
+sequences rather than forwarding raw pane output. Sharing `wire` alone does not provide those records to the office.
+Box hooks continue to report status; this backup applies when raw OSC reaches the office (local keeper and fallback
+terminals). Forwarding or capturing OSC inside the Box is separate work; no tmux passthrough or extra remote polling
+is enabled here.
+
 ## Safety model
 
 Agents behave like the coding agents you run in your own terminal: they load your setup (user and project settings, `CLAUDE.md`, skills, plugins, MCP servers and claude.ai connectors; Codex and OpenCode their own config), and nothing runs in a sandbox. On top of that the office adds its hooks, its Playwright server when a floor tests in a browser, the office tools for the CEO, and its instructions.
