@@ -373,7 +373,7 @@ export function OpsTab({ card }: { card?: string }) {
     if (card) document.getElementById(`ops-card-${card}`)?.scrollIntoView({ block: 'center' });
   }, [card]);
   return (
-    <div className="tab-grid">
+    <div className="tab-grid ops-grid">
       <div>
         <Section
           id="ops-card-sources"
