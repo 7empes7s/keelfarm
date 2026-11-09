@@ -18,6 +18,7 @@
 .kanban-repo {
   flex: 1;
   min-width: 0;
+  max-width: max-content;
 }
 .kanban-repo-name {
   min-width: 0;
