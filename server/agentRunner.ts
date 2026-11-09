@@ -274,7 +274,9 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
   const floor = input.floor != null ? ` → floor ${input.floor}` : '';
   switch (action) {
     case 'company_status':
-      return '🏢 company_status';
+      return `🏢 company_status${input.full ? ' (full)' : ''}`;
+    case 'floor_detail':
+      return `📋 floor_detail${floor}`;
     case 'agent_detail':
       return `🔎 agent_detail ${String(input.agent_id ?? '')}`;
     case 'set_floor_profile':

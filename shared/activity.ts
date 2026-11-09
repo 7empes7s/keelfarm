@@ -221,6 +221,7 @@ const hostOf = (url: string) => url.trim().match(/^(?:[a-z][a-z0-9+.-]*:\/\/)?(?
 
 const OFFICE_KINDS: Record<string, ActivityKind> = {
   company_status: 'read',
+  floor_detail: 'read',
   agent_detail: 'read',
   set_floor_profile: 'edit',
   scale_team: 'talk',

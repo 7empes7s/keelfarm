@@ -3,7 +3,7 @@
 // adds its own module instead of editing one shared file.
 import type { Backend } from '../backend.ts';
 import type { DemoScale } from '../config.ts';
-import type { DemoFloor, DemoStatus } from './ceo.ts';
+import type { DemoDetail, DemoFloor, DemoStatus } from './ceo.ts';
 
 /** What one demo office's parts share: its scale and the desks its fake sessions run in. */
 export interface DemoCtx {
@@ -46,6 +46,8 @@ export interface CeoKit {
   s: DemoStatus;
   /** Calls an office tool, drawn as a step in the CEO's terminal; returns its output. */
   use: (name: string, args: Record<string, unknown>) => Promise<string>;
+  /** floor_detail for one floor: its charter and the office playbook. */
+  detail: (floor: number) => Promise<DemoDetail>;
   /** scale_team with the call made, and a sentence on how it went. */
   scale: (f: DemoFloor, call: { size: number; reason: string }) => Promise<string>;
 }

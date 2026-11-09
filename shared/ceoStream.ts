@@ -86,7 +86,7 @@ export interface OfficeCall {
 }
 
 // The office tools that only read: a stopped job's reply leaves them out of what it did.
-const READS = new Set(['company_status', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history']);
+const READS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history']);
 
 /**
  * What a stopped job's reply says (#51). Tools the CEO called stay done (the office finishes a call it started, so
