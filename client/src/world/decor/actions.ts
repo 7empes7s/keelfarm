@@ -99,14 +99,9 @@ export function decorationAction(a: DecorationAction) {
   if (a.op === 'place' && a.slot && held) void putDown(a.slot);
 }
 
-/** E on a trophy: what it was for, and when. */
+/** E on a trophy: its card, with what it was for, when, and the PR (#311). Another trophy's replaces it. */
 export function showTrophy(id: string) {
-  const s = useStore.getState();
-  const def = achievementDef(id);
-  const got = s.progress.achievements.find((a) => a.id === id);
-  if (!def || !got) return;
-  const when = new Date(got.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  s.pushToast('success', `${def.icon} ${def.name}: ${def.blurb}. Won ${when}${got.detail ? ` · ${got.detail}` : ''}`);
+  if (achievementDef(id)) useStore.getState().openOverlay({ kind: 'trophy-card', id });
 }
 
 // ---------- coffees ----------
