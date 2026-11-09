@@ -31,7 +31,7 @@ interface SliceInfo {
 function sliceInfo(f: number, s: ReturnType<typeof useStore.getState>): string {
   if (f === 0) {
     const l = lobbySummary(s.agents[CEO_ID], s.requests);
-    const parts = [l.ceo ? `CEO ${l.ceo === 'idle' ? 'free' : l.ceo}` : 'no CEO yet', `${l.waiting} candidate${l.waiting === 1 ? '' : 's'} waiting`];
+    const parts = [l.ceo ? `CEO ${l.ceo === 'idle' ? 'free' : l.ceo.replace('-', ' ')}` : 'no CEO yet', `${l.waiting} candidate${l.waiting === 1 ? '' : 's'} waiting`];
     if (l.needsYou) parts.push(`${l.needsYou} need${l.needsYou === 1 ? 's' : ''} you`);
     const info: SliceInfo = { label: 'G', name: s.settings.companyName || 'Lobby', sub: 'Lobby', color: '#ff8a5b', line: parts.join(' · '), chips: l.ceo ? [l.ceo] : [], alert: l.needsYou > 0 };
     return JSON.stringify(info);
