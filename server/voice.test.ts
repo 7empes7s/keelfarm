@@ -7,15 +7,21 @@ import { CLIP_MAX_BYTES, CLIP_MAX_MS } from '../shared/clipLimits.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceSettings } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import {
+  addChars,
   cacheToPrune,
+  charsOn,
   clipHash,
+  clipName,
   clipsFor,
   DEFAULT_LISTEN,
   DEFAULT_VOICE,
   KEY_REJECTED_NOTE,
+  lineRequest,
   listenSettings,
+  localDay,
   newestClips,
   parseManifest,
+  parseUsage,
   RECOMMENDED_VOICES,
   savedMessages,
   speaks,
@@ -31,6 +37,30 @@ import {
 
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
+
+describe('line clips (#321)', () => {
+  const s = { voiceId: 'office', model: 'eleven_v4', speed: 1 };
+  it('are cached by voice, model, speed and words', () => {
+    const base = clipName('line', lineRequest(s, 'ada', 'Free!'));
+    expect(clipName('line', lineRequest(s, 'ada', 'Free!'))).toBe(base);
+    expect(base).toMatch(/^line-[0-9a-f]{12}\.mp3$/);
+    for (const other of [lineRequest(s, 'bob', 'Free!'), lineRequest({ ...s, model: 'eleven_v4_turbo' }, 'ada', 'Free!'), lineRequest({ ...s, speed: 1.1 }, 'ada', 'Free!'), lineRequest(s, 'ada', 'Free?')])
+      expect(clipName('line', other)).not.toBe(base);
+  });
+  it("use the office voice for an agent without one, and keep tags for v4 only", () => {
+    expect(lineRequest(s, '', '[yawns] Late.')).toEqual({ voiceId: 'office', model: 'eleven_v4', speed: 1, text: '[yawns] Late.' });
+    expect(lineRequest({ ...s, model: 'eleven_multilingual_v2' }, 'ada', '[yawns] Late.').text).toBe('Late.');
+  });
+  it("count the day's characters, from zero on a new day", () => {
+    const day = localDay(Date.UTC(2026, 10, 9, 12));
+    const u = addChars(addChars({ day: '', chars: 0 }, day, 10), day, 5);
+    expect(charsOn(u, day)).toBe(15);
+    expect(charsOn(u, 'tomorrow')).toBe(0);
+    expect(addChars(u, 'tomorrow', 3)).toEqual({ day: 'tomorrow', chars: 3 });
+    expect(parseUsage({ day: 'x', chars: -1 })).toEqual({ day: '', chars: 0 });
+    expect(parseUsage(u)).toEqual(u);
+  });
+});
 
 describe('cacheToPrune', () => {
   const now = 100 * DAY;
@@ -260,6 +290,26 @@ describe('Voice', () => {
 
   const status = (p: Promise<unknown>) => p.then(() => 200, (e: unknown) => (e instanceof HttpError ? e.status : 500));
 
+  it("says a clicked agent's line in their voice, cached, and counts today's characters (#321)", async () => {
+    const v = make();
+    await v.init();
+    expect(await status(v.lineAudio('own1', 'Free! Got anything for me?'))).toBe(404); // no key
+    await v.setKey('sk_good');
+    expect(v.speaksLines()).toBe(true);
+    expect((await v.lineAudio('own1', '[laughs] PR #9 merged!')).toString()).toBe('mp3:[laughs] PR #9 merged!');
+    await v.lineAudio('own1', '[laughs] PR #9 merged!');
+    expect(calls.synth).toBe(1); // the same line again: the cached clip
+    expect(views.at(-1)?.charsToday).toBe('[laughs] PR #9 merged!'.length);
+    settings = { ...settings, model: 'eleven_flash_v2_5' };
+    expect((await v.lineAudio('', '[laughs] PR #9 merged!')).toString()).toBe('mp3:PR #9 merged!');
+    settings = { ...settings, agentsSpeak: false };
+    expect(v.speaksLines()).toBe(false);
+    expect(await status(v.lineAudio('own1', 'hi'))).toBe(404);
+    const again = make();
+    await again.init();
+    expect(again.cacheInfo().charsToday).toBe('[laughs] PR #9 merged!'.length + 'PR #9 merged!'.length);
+  });
+
   it('keeps the key in its own file and shows only the last 4 characters', async () => {
     const v = make();
     expect(await v.setKey('  sk_live_abcdef1234  ')).toEqual({ voiceKeySet: true, voiceKeyHint: '1234' });
@@ -428,7 +478,7 @@ describe('Voice', () => {
     expect(after.cacheInfo()).toMatchObject({ clips: 1, saved: [1] });
 
     // Cleared: nothing to replay, and still no call.
-    expect(await after.clearCache()).toEqual({ clips: 0, bytes: 0, saved: [] });
+    expect(await after.clearCache()).toMatchObject({ clips: 0, bytes: 0, saved: [] });
     expect(await status(after.cachedAudio(1))).toBe(404);
     expect(calls.synth).toBe(1);
   });
