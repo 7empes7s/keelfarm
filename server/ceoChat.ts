@@ -216,7 +216,10 @@ export class CeoChat {
       const c = s.list.find((x) => x.id === s.current)!;
       const messages: PhoneMessage[] = [];
       for (const m of t.messages) {
-        const attachments = m.image ? [await store.addStream(Readable.from([m.image.png]), { name: m.image.name, type: 'image/png', from: 'ceo' })] : undefined;
+        // A nearly full disk (the files' guard) leaves the sample photo out rather than stopping the demo booting.
+        const img = m.image;
+        const file = img ? await store.addStream(Readable.from([img.png]), { name: img.name, type: 'image/png', from: 'ceo' }).catch((e: unknown) => (console.warn(`demo chat: left out ${img.name}: ${(e as Error).message}`), null)) : null;
+        const attachments = file ? [file] : undefined;
         const { image: _, ...rest } = m;
         const id = seq++;
         const msg: PhoneMessage = { ...rest, id, ...(attachments && { attachments }), ...(rest.artifacts && { artifacts: rest.artifacts.map((a, i) => ({ ...a, id: `${id}-${i}` })) }) };

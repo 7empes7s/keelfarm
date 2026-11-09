@@ -12,6 +12,7 @@ export interface VoiceSettings {
   keepDays: number; // saved clips older than this are deleted (1–90; the newest 20 CEO messages' clips always stay)
   speed: number; // speech speed, 0.7–1.2 (ElevenLabs' voice_settings.speed, the browser voice's rate); shared/voices.ts
   favourites: string[]; // ElevenLabs voice ids starred in any voice picker, shown first (ids only)
+  agentsSpeak: boolean; // agents say a short line in their voice when clicked (#321, shared/agentLines.ts)
   talk: TalkWhileWorking; // the CEO's spoken progress while it works (#286); during a call 'off' means milestones
 }
 
@@ -20,7 +21,7 @@ export type TalkWhileWorking = 'off' | 'milestones' | 'regular';
 
 /**
  * A line the CEO says while it works (#286, shared/voiceTalk.ts): an instant ack of the manager's message, or progress.
- * Spoken and shown as a chip, never a chat message. Its clip is GET /api/voice/lines/:id.
+ * Spoken and shown as a chip, never a chat message. Its clip is GET /api/voice/talk/:id.
  */
 export interface VoiceLine {
   id: number;
@@ -45,6 +46,7 @@ export interface VoiceCacheView {
   clips: number;
   bytes: number;
   saved: number[]; // message ids with every clip still on disk
+  charsToday: number; // characters sent to ElevenLabs today (the server's day), shown by the model's price
 }
 
 /** GET /api/voice/voices: a voice the manager can pick. recommended: on docs/voice.md's shortlist. */

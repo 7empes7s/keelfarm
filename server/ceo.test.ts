@@ -130,6 +130,7 @@ describe('office tools', () => {
     const configured: unknown[] = [];
     const office = createOfficeTools({
       companyStatus: () => '{}',
+      floorDetail: () => '{}',
       agentDetail: () => '{}',
       setFloorProfile: (a) => (floors.push(a), 'saved'),
       proposeCharter: () => 'proposed',
@@ -196,6 +197,7 @@ describe('office tools', () => {
       'edit_message',
       'escalate',
       'file_issue',
+      'floor_detail',
       'keep_file',
       'message_agent',
       'pr_diff',
@@ -685,7 +687,7 @@ describe('follow-ups (#27)', () => {
     const office = createOfficeTools(
       researchReadOnly(
         {
-          companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',

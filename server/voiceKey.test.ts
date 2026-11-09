@@ -23,7 +23,7 @@ describe('the voice key', () => {
 
     const key = 'sk_demo_secret_key_9876';
     expect(await swarm.voice.setKey(key)).toEqual({ voiceKeySet: true, voiceKeyHint: '9876' });
-    swarm.updateSettings({ voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery', model: 'eleven_flash_v2_5', speakOffice: true, keepDays: 7, speed: 1, favourites: [], talk: 'off' } });
+    swarm.updateSettings({ voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery', model: 'eleven_flash_v2_5', speakOffice: true, keepDays: 7, speed: 1, favourites: [], talk: 'off', agentsSpeak: true } });
 
     const snap = swarm.snapshot();
     expect(snap).toMatchObject({ voiceKeySet: true, voiceKeyHint: '9876' });

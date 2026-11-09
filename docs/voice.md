@@ -129,6 +129,20 @@ it's speaking; click it to stop. If the clip can't be fetched (no key, ElevenLab
 chirp instead. `window.__swarmVoice` lists the messages read aloud (`id`, `provider`, `start`, `end`, `volume`, and
 `replay: true` for a replay).
 
+### Agents speak when clicked
+
+With ElevenLabs on and a key set, clicking or pressing **E** on an agent in 3D, or tapping them in the team list or
+their window's avatar, has them say one short line in their own voice: what they're on ("I'm on #301, lighter QA
+browser. Going well!"), testing, fixing, stuck and needing you, waiting for memory, free, a fresh merge, or sleepy late
+at night. The CEO gives a one-line company status. In 3D the line comes from their head with their speech bubble; a
+busy agent's window still opens, and the line plays as it does. Lines are templates filled with real facts
+(`shared/agentLines.ts`), never a model call; Eleven v4's audio tags (`[laughs]`, `[sighs]`, `[yawns]`, `[whispers]`)
+reach ElevenLabs only with a v4 model. Clips are cached by voice, model, speed and words, so repeated lines are free;
+an agent gets at most one new line every 20 s (a click sooner says the last one again). Settings → Voice → **Agents
+speak when clicked** turns it off; muted, during a time-lapse or without a key they babble as before. Captions show
+the line. Settings → Voice shows the characters sent to ElevenLabs today next to the model's price. The demo, without
+a key, uses the browser's voice. `window.__swarmLines` says who would speak (`voice`) and `speak(id)` tries one.
+
 ## While the CEO works
 
 When you send a message (typed or spoken) while the CEO is in the middle of a job, the office says a short ack in the
@@ -297,13 +311,15 @@ for after the call so nothing talks over the CEO.
 | `DELETE /api/voice/cache` | deletes every saved clip |
 | `GET /api/voice/sample?voiceId=…` | the Test line in that voice (default: the chosen one) |
 | `POST /api/voice/transcribe` | the 🎙️ with ElevenLabs: the recorded clip as the body (`Content-Type` its audio type, `X-Clip-Ms` its length) → `{ text }`. 409 when ElevenLabs isn't the provider or there's no key, 413 over 60 s or 5 MB, 415 for anything but WebM, Ogg, MP4, MP3 or WAV, 502 when ElevenLabs fails |
-| `GET /api/voice/lines/:id` | an ack or progress line the office just sent in a `voiceLine` event (the latest 20), made once per wording and cached; 404 when the voice isn't ElevenLabs or the line is gone |
+| `GET /api/voice/talk/:id` | an ack or progress line the office just sent in a `voiceLine` event (the latest 20), made once per wording and cached; 404 when the voice isn't ElevenLabs or the line is gone |
+| `POST /api/voice/lines/:agent` `{ hour }` | a clicked agent's line (`hour`: the manager's local hour) → `{ text, clip }`; `clip` says ElevenLabs will say it. The same line within 20 s |
+| `GET /api/voice/lines/:agent` | that line as `audio/mpeg` in their voice (the CEO's: the office voice), cached; 404 when agents aren't voiced by ElevenLabs or nothing was said yet |
 | `GET /api/voice/standup?n=3&part=morning` | the CEO's line at a stand-up in the 3D office ("Morning team, three new features today!"; `part` is `morning`, `afternoon` or `evening`), made once per wording and cached; 404 when the voice isn't ElevenLabs |
 
 Settings travel in `settings.voice` (`PATCH /api/settings`): `{ provider: 'off' | 'browser' | 'elevenlabs', voiceId,
-voiceName, model, speakOffice, keepDays, speed, favourites, talk: 'off' | 'milestones' | 'regular' }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
+voiceName, model, speakOffice, keepDays, speed, favourites, agentsSpeak, talk: 'off' | 'milestones' | 'regular' }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
 'elevenlabs', autoSend, handsFree }`. The snapshot has `voiceKeySet`, `voiceKeyHint` and `voiceCache`
-(`{ clips, bytes, saved }`, `saved` being the message ids the ▶ can replay); a `voiceKey` event follows every key change
+(`{ clips, bytes, saved, charsToday }`, `saved` being the message ids the ▶ can replay, `charsToday` the characters sent to ElevenLabs today); a `voiceKey` event follows every key change
 and a `voiceCache` event every change to the cache. A phone message's `voice` says who read it when it arrived. One clip is made at a time (20 s timeout); requests for a clip that's being made share that call.
 
 The demo office (`--demo`) fakes all of it with no network: any key except one containing "bad" is accepted, there are

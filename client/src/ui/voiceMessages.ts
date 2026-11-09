@@ -493,9 +493,9 @@ async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>,
   }
 }
 
-/** The line's ElevenLabs clip (GET /api/voice/lines/:id), started when the line is queued; a failure is reported when it's played. */
+/** The line's ElevenLabs clip (GET /api/voice/talk/:id), started when the line is queued; a failure is reported when it's played. */
 function lineFetch(id: number) {
-  const res = fetch(`/api/voice/lines/${id}`);
+  const res = fetch(`/api/voice/talk/${id}`);
   res.catch(() => undefined);
   return res;
 }

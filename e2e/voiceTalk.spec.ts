@@ -52,7 +52,7 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   await busyCeo(page);
   // Reproduce the race: the demo replies after 1.5 s, before this first clip becomes playable.
   let firstClip = true;
-  await page.route('**/api/voice/lines/*', async (route) => {
+  await page.route('**/api/voice/talk/*', async (route) => {
     const delay = firstClip;
     firstClip = false;
     const response = await route.fetch();
@@ -72,7 +72,7 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   expect(ACKS).toContain(ack.text);
   expect(ack.provider).toBe('elevenlabs');
   // Inspect the synthesis fake's WAV comment via the real line endpoint, rather than trusting client probes alone.
-  const clip = await page.request.get(`/api/voice/lines/${ack.id}`);
+  const clip = await page.request.get(`/api/voice/talk/${ack.id}`);
   expect(clip.ok()).toBe(true);
   const wav = await clip.body();
   const dataEnd = 44 + wav.readUInt32LE(40);

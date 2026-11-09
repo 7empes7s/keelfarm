@@ -377,8 +377,8 @@ app.get(
   route(async (req, res) => sendAudio(res, await swarm.voice.sampleAudio(parse(z.object({ voiceId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'not a voice id').optional() }), req.query).voiceId))),
 );
 app.get(
-  '/api/voice/lines/:id',
-  route(async (req, res) => sendAudio(res, await swarm.voice.lineAudio(parse(z.object({ id: z.coerce.number().int().min(1) }), req.params).id))),
+  '/api/voice/talk/:id',
+  route(async (req, res) => sendAudio(res, await swarm.voice.talkAudio(parse(z.object({ id: z.coerce.number().int().min(1) }), req.params).id))),
 );
 app.get(
   '/api/voice/standup',
@@ -387,6 +387,9 @@ app.get(
     sendAudio(res, await swarm.voice.standupAudio(q.n, q.part));
   }),
 );
+// A clicked agent's line (#321): the words (POST, `hour` the manager's local hour), then its clip in their voice (GET).
+app.post('/api/voice/lines/:id', route((req) => swarm.agentSays(String(req.params.id), parse(z.object({ hour: z.number().int().min(0).max(23) }), req.body ?? {}).hour)));
+app.get('/api/voice/lines/:id', route(async (req, res) => sendAudio(res, await swarm.agentLineAudio(String(req.params.id)), 'no-store')));
 // Notifications (docs/pocket.md). Webhook URLs, tokens and push subscriptions go in; only hints come back out.
 app.put('/api/notify/webhooks/:channel', route((req) => swarm.notifier.setWebhook(String(req.params.channel), req.body ?? {})));
 app.post('/api/notify/test', route((req) => swarm.notifier.test(str(req.body?.channel))));

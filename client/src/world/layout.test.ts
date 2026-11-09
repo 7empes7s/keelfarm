@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FLOOR_SEATS } from '../../../shared/types';
 import { BALCONY, BALCONY_LIGHTS, BALCONY_OUT, BALCONY_TOP, BENCH, FLOOR_HEIGHT, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFloor, balconyFurniture, balconyRailing, floorElevation, inBuilding, outsideAt, outsideColliders, sideDoorway, sideSign, toyOnlyAt } from './layout.ts';
-import { APP_SCREEN, BOARD, CEO_DESK, CEO_ROOM, COFFEE_CORNER, coffeeCorner, collide, DESK_RUGS, ELEVATOR, GONG, GONG_SPOT, gongRect, HALF_D, LOBBY_RUG, lobbyColliders, MANAGER_DESK, MANAGER_ROOM, MANAGER_WORKSTATION, MISSION, missionColumn, missionRects, officeColliders, PLAYER_RADIUS, RECEPTION, rect, shellColliders, SPAWN, surfaceAt, WAITING, WAITING_TABLE, type Rect } from './layout.ts';
+import { APP_SCREEN, BOARD, CEO_DESK, CEO_ROOM, COFFEE_CORNER, coffeeCorner, collide, DESK_RUGS, ELEVATOR, GONG, GONG_SPOT, gongRect, HALF_D, LOBBY_RUG, lobbyColliders, MANAGER_DESK, MANAGER_ROOM, MANAGER_SCREEN, MANAGER_WORKSTATION, MISSION, missionColumn, missionRects, officeColliders, PLAYER_RADIUS, RECEPTION, rect, shellColliders, SPAWN, surfaceAt, WAITING, WAITING_TABLE, type Rect } from './layout.ts';
 import { DESK, DESK_ROWS, EAST_DESKS, EAST_ROTATION, MAX_DESKS, SEATS, deskPosition, deskRotation, isEastDesk } from './layout.ts';
 
 const R = 0.3;
@@ -214,6 +214,22 @@ describe("the manager's desk", () => {
     // all on the desk, and the chair's collider where it's drawn
     for (const z of [w.screenZ, w.keyboardZ, w.mugZ]) expect(Math.abs(z)).toBeLessThan(MANAGER_DESK.d / 2);
     expect(lobbyColliders()).toContainEqual(rect(MANAGER_DESK.x, MANAGER_DESK.z + w.chairZ, 0.8, 0.8, expect.any(Number)));
+  });
+});
+
+describe("the manager's \"Waiting on you\" screen", () => {
+  it('hangs on the west wall inside the office, at eye height, with nothing standing in front of it', () => {
+    const { at: [x, y, z], w, h } = MANAGER_SCREEN;
+    const m = MANAGER_ROOM;
+    expect(x).toBeLessThan(m.minX + 0.1);
+    expect(z - w / 2).toBeGreaterThan(m.minZ + 0.5);
+    expect(z + w / 2).toBeLessThan(m.maxZ - 1.2); // clear of the corner plant by the glass
+    expect(y - h / 2).toBeGreaterThan(0.8);
+    expect(y + h / 2).toBeLessThan(2.8);
+    // two metres in front of its face are free of furniture (the bookshelf stood there)
+    const front = { minX: x, maxX: x + 2, minZ: z - w / 2, maxZ: z + w / 2 };
+    const blocking = lobbyColliders().filter((r) => r.minX < front.maxX && r.maxX > front.minX && r.minZ < front.maxZ && r.maxZ > front.minZ && r.minX > m.minX - 0.01);
+    expect(blocking).toEqual([]);
   });
 });
 

@@ -188,7 +188,7 @@ it("downloads a waiting ack's clip while the reply ahead of it is still being re
   mocks.state.settings.voice.provider = 'elevenlabs';
   player.speakLine(line(), Date.now(), 0);
   await vi.advanceTimersByTimeAsync(100);
-  expect(fetch).toHaveBeenCalledWith('/api/voice/lines/100');
+  expect(fetch).toHaveBeenCalledWith('/api/voice/talk/100');
   await vi.advanceTimersByTimeAsync(4000);
   expect(fetch).toHaveBeenCalledTimes(1); // its turn uses the same download
 });

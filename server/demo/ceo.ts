@@ -86,21 +86,27 @@ export function demoServerAnswer(): string {
   return ["Here's the server now: memory, swap, load and disk, what uses the memory and the last 24 hours. Tap an agent to open them.", '', '```dashboard', JSON.stringify({ title: 'The server', source: 'server' }), '```', '', '```chart', JSON.stringify(previews), '```'].join('\n');
 }
 
-/** A floor in company_status, as far as the demo CEO reads it. */
+/** A floor in company_status (compact, #329), as far as the demo CEO reads it. */
 export interface DemoFloor {
   floor: number;
   repo: string;
   description: string;
-  charter: string | null; // the compact rendering (shared/charter.ts)
   team: { size: number; max: number; free: number; pendingHires: number; pendingLetGos: number };
   capacity: { issuesReadyToStart: number; prsAwaitingQa: number };
-  backlog: { number: number; title: string; inProgress: boolean }[];
+  backlogCounts: { open: number };
+  backlog: { number: number; title: string }[]; // in progress, waiting, then the first ready ones
   pullRequests: { number: number }[];
   agents?: { name: string }[];
 }
 
+/** floor_detail, as far as the demo CEO reads it: the charter's compact rendering (shared/charter.ts) and the office playbook. */
+export interface DemoDetail {
+  charter: string | null;
+  officePlaybook: string | null;
+}
+
 export interface DemoStatus {
-  company: { scaling: string; officePlaybook: string | null }; // how team changes go, in words ("team changes apply straight away"); the office playbook
+  company: { scaling: string }; // how team changes go, in words ("team changes apply straight away")
   floors: DemoFloor[];
   pendingChanges: unknown[];
   openDecisions?: { id: string; question: string }[];
@@ -162,7 +168,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     const s = JSON.parse(await office.call('company_status', {})) as DemoStatus;
     const agents = s.floors.reduce((n, f) => n + f.team.size, 0);
     const free = s.floors.reduce((n, f) => n + f.team.free, 0);
-    const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+    const issues = s.floors.reduce((n, f) => n + f.backlogCounts.open, 0);
     cb.log([{ kind: 'result', text: `  ⎿ ${s.floors.length} floors · ${agents} agents · ${free} free · ${issues} open issues · ${s.pendingChanges.length} team changes pending` }]);
     return s;
   };
@@ -171,6 +177,11 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     const out = await office.call(name, args);
     cb.log([{ kind: out.startsWith('Refused') ? 'error' : 'result', text: `  ⎿ ${out.split('\n')[0].slice(0, 170)}` }]);
     return out;
+  };
+  /** floor_detail: what the compact company_status leaves out, read before charters, playbooks and planned issues. */
+  const detail = async (floor: number): Promise<DemoDetail> => {
+    const out = await use('floor_detail', { floor });
+    return out.startsWith('Refused') ? { charter: null, officePlaybook: null } : (JSON.parse(out) as DemoDetail);
   };
   const read = (file: string, lines: number) => step([{ kind: 'tool', tool: 'Read', text: `⏺ Read ${file}` }, { kind: 'result', text: `  ⎿ Read ${lines} lines` }]);
   const think = (text: string) => step([{ kind: 'thinking', text: '✻ Thinking…' }, { kind: 'text', text: `● ${text}` }], 1800);
@@ -224,9 +235,9 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const ready = f.capacity.issuesReadyToStart;
       const grow = demoGrow(f, ready);
       const team = grow ? await scale(s, f, grow) : `Its ${plural(f.team.size, 'agent')} can keep up with the ${plural(ready, 'issue')} ready to start.`;
-      const drafted = f.charter ? '' : await use('propose_charter', { floor, ...demoDraft(f.description || p.summary, p.qa) });
+      const drafted = (await detail(floor)).charter ? '' : await use('propose_charter', { floor, ...demoDraft(f.description || p.summary, p.qa) });
       const charter = drafted && !drafted.startsWith('Refused') ? 'I drafted a charter for it: approve or edit it in the Charter tab.' : '';
-      const next = f.backlog.length === 0 ? ' The backlog is empty: tell me what you would like built and I will plan it.' : '';
+      const next = f.backlogCounts.open === 0 ? ' The backlog is empty: tell me what you would like built and I will plan it.' : '';
       return [`Floor ${floor}: ${p.summary}. I wrote a QA brief and a playbook for it.`, team, charter, next].filter(Boolean).join(' ');
     },
     async plan(floor: number, mission: string) {
@@ -235,7 +246,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       if (!f) return 'That floor has gone, so there was nothing to plan.';
       await read(`${f.repo}/README.md`, 12);
       await think("Foundation first, so the parallel work doesn't collide.");
-      const n = await planIssues(floor, mission, objectiveIds(f.charter));
+      const n = await planIssues(floor, mission, objectiveIds((await detail(floor)).charter));
       const grow = demoGrow(f, f.capacity.issuesReadyToStart + (n ? 1 : 0));
       const team = grow ? ` ${await scale(s, f, grow)}` : '';
       return `I turned the brief into three issues on floor ${floor}. #${n} sets up the skeleton; the other two say "Depends on #${n}", so nobody starts them early.${team}`;
@@ -257,7 +268,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
         const call = demoShrink(f) ?? demoGrow(f, f.capacity.issuesReadyToStart);
         if (call) return scale(s, f, call);
       }
-      const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+      const issues = s.floors.reduce((n, f) => n + f.backlogCounts.open, 0);
       const prs = s.floors.reduce((n, f) => n + f.pullRequests.length, 0);
       return `All ${s.floors.length} floors look healthy: ${issues} open issues and ${prs} pull requests in flight. No changes needed.`;
     },
@@ -323,7 +334,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       await think('Reading your message.');
       const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
       if (quick !== null) return quick;
-      const kit = { text, s, use, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
+      const kit = { text, s, use, detail, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
       const early = await ceoReply(kit, true); // "assign #3 to Ada" (#265): a command, even with the seeded chat's attachment
       if (early !== null) return early;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
@@ -332,7 +343,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], 3500), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), objectiveIds(s.floors[0]?.charter)[0])); // Long enough to hear two progress windows while showing the step log (#150).
+      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], 3500), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0])); // "look into …": the step log, long enough to hear two progress windows (#150, #286)
       if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
@@ -340,13 +351,13 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const registered = await ceoReply(kit);
       if (registered !== null) return registered;
       const agents = s.floors.reduce((n, f) => n + f.team.size, 0);
-      const issues = s.floors.reduce((n, f) => n + f.backlog.length, 0);
+      const issues = s.floors.reduce((n, f) => n + f.backlogCounts.open, 0);
       const nextFloor = s.floors.find((f) => f.backlog.length);
       const next = nextFloor && { floor: nextFloor.floor, issue: nextFloor.backlog[0] };
       const pending = s.pendingChanges.length;
       // Real CEOs answer in Markdown, so the demo one does too: every element the phone renders, the longer part as an
       // artifact card and the question with suggestion boxes (shared/chatParts.ts).
-      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlog.length} | ${f.pullRequests.length} | ${f.capacity.issuesReadyToStart} | ${f.capacity.prsAwaitingQa} | ${f.team.free} |`);
+      const rows = s.floors.map((f) => `| ${f.floor} | \`${f.repo.split('/').pop()}\` | ${f.team.size} | ${f.backlogCounts.open} | ${f.pullRequests.length} | ${f.capacity.issuesReadyToStart} | ${f.capacity.prsAwaitingQa} | ${f.team.free} |`);
       return [
         `**Quick status:** ${s.floors.length} floor${s.floors.length === 1 ? '' : 's'}, ${agents} agents and ${issues} open issues. The floor-by-floor report is attached.`,
         '',

@@ -51,6 +51,7 @@ import { excerpt } from '../../shared/chat.ts';
 import { parseRefs } from '../../shared/chatRefs.ts';
 import { telegramChat } from '../telegram.ts';
 import { NEXT_FREE } from '../../shared/assignIssue.ts';
+import { compactStatus, floorDetail, type FullStatus } from '../statusViews.ts';
 
 /** An agent's status in company_status (#307): "needs you" is the manager (waitsForManager says what for); finished agents are free, not "done". */
 const SHOWN_WORD: Record<ShownState, string> = { 'needs-you': 'needs you', 'waiting-ceo': 'waiting for your answer', free: 'free', preparing: 'preparing', working: 'working', error: 'error', stopped: 'stopped' };
@@ -64,7 +65,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const acts = this.spend.acts;
     // Every call is noted for a Stop's reply (ceoChat.ts).
     return createOfficeTools(this.ceoChat.track(researchReadOnly({
-      companyStatus: () => this.companyStatus(),
+      companyStatus: (a) => this.companyStatus(a),
+      floorDetail: (a) => JSON.stringify(floorDetail(this.fullStatus(), a.floor), null, 1),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
       setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
@@ -172,7 +174,15 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     };
   }
 
-  protected companyStatus() {
+  /** company_status (#329): compact unless full; the full one is today's output for a release, and floor_detail's source. */
+  protected companyStatus(a: { full?: boolean } = {}) {
+    const full = this.fullStatus();
+    const s = this.state.settings;
+    const view = a.full ? full : compactStatus(full, { focus: (n) => this.state.repos.find((r) => r.floor === n)?.charter.focus ?? '', defaultEffort: s.defaultEffort });
+    return JSON.stringify(view, null, 1);
+  }
+
+  private fullStatus(): FullStatus {
     const s = this.state.settings;
     const ops = this.opsNow();
     const pending = this.state.requests.filter((r) => r.status === 'pending');
@@ -251,8 +261,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       status: r.status,
       managerNote: r.note || null,
     });
-    return JSON.stringify(
-      {
+    return {
         company: {
           ceo: this.ceo().name,
           ceoSpend: ceoSpend(this.spend.ledger.all(), Date.now()), // the CEO's own jobs, kept out of each floor's spend (#254)
@@ -270,10 +279,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
         pendingChanges: pending.map(req),
         recentDecisions: this.state.requests.filter((r) => r.status !== 'pending').slice(-10).map(req),
         openDecisions: decisionsForCeo(this.state.decisions.list, Date.now(), (id) => this.state.repos.find((r) => r.id === id)?.floor ?? null),
-      },
-      null,
-      1,
-    );
+    };
   }
 
   protected agentDetail(x: { agent_id: string }) {

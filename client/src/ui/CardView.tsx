@@ -4,6 +4,8 @@ import { objectiveTag } from '../../../shared/charter';
 import type { HistoryEntry } from '../../../shared/history';
 import type { PullInfo, RepoView } from '../../../shared/types';
 import { api } from '../api';
+import { prDecision, prWhy } from '../../../shared/approvals';
+import { PrActions } from './PrActions';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { elapsedLabel } from '../qaCard';
 import { cardLabel, canPeel, locateCard } from '../world/whiteboard';
@@ -336,6 +338,12 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
   const opened = age(pull?.createdAt);
   return (
     <>
+      {q && pull?.state === 'OPEN' && (
+        <Section title="The decision">
+          <p>{q.status === 'testing' ? 'QA is running.' : q.status === 'fixing' ? 'An agent is fixing it.' : q.status === 'queued' ? 'Waiting for a free agent to test it.' : q.status === 'passed' && repo.autoMerge ? (q.mergeNote ?? 'QA passed. Waiting for automatic merge.') : prDecision(prWhy(q, pull), q.round, repo.autoMerge, pull.checks).text}</p>
+          <PrActions repo={repo} qa={q} pr={pull} />
+        </Section>
+      )}
       <StatStrip>
         <ChecksStat checks={q?.checks ?? []} to={id('checks')} />
         <Tile title="QA round" value={q ? q.round : '–'} note={q ? 'rounds so far' : 'not sent yet'} to={id('qa')} />

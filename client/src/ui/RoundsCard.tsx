@@ -5,6 +5,8 @@ import { excludedCause, O2_FIRST_PASS, O2_ROUNDS_PER_MERGE, ROUND_CAUSE_LABELS, 
 import type { RepoView } from '../../../shared/types';
 import './rounds.css';
 import { Icon } from './Icon';
+import { TrendChart } from './TrendChart';
+import { firstPassBubble, lastDays, roundsBubble } from './trendPoints';
 
 // Mission control → Rounds (#188): QA rounds per merge and the first-round pass rate against O2's targets, the failed
 // rounds by cause (a cause opens to its PRs), each floor over 7 and 30 days, and cost per merge by build, QA and fix.
@@ -62,6 +64,9 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
   const w = days === 7 ? r.week : r.month;
   const failed = w.byCause.reduce((n, c) => n + c.rounds, 0);
   const kinds = kindShares(view.total.byKind).filter((k) => k.group !== 'ceo');
+  // The trend over the switch's days: each point is the week up to that day.
+  const trend = { perMerge: r.trend.perMerge.slice(-days), firstPass: r.trend.firstPass.slice(-days), merges: r.trend.merges.slice(-days) };
+  const trendDays = lastDays(days, Date.now());
   return (
     <section id="ops-card-rounds" className="rounds" aria-labelledby="rounds-title">
       <h3 id="rounds-title" className="section">
@@ -78,7 +83,13 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
         <div className="costs-stat">
           <span className="costs-stat-label">Rounds per merge</span>
           <b className={`costs-stat-value ${onTarget(w.perMerge === null ? null : w.perMerge <= O2_ROUNDS_PER_MERGE)}`}>{fmtRounds(w.perMerge)}</b>
-          <TrendLine points={r.trend.perMerge} target={O2_ROUNDS_PER_MERGE} label={`Rounds per merge over 30 days, target ${O2_ROUNDS_PER_MERGE}`} />
+          <TrendChart
+            key={days}
+            values={trend.perMerge}
+            target={{ value: O2_ROUNDS_PER_MERGE, better: 'lower', label: `target ≤ ${O2_ROUNDS_PER_MERGE}` }}
+            label={`Rounds per merge, each day's last 7 days, over ${days} days, target ${O2_ROUNDS_PER_MERGE}`}
+            bubble={(i) => roundsBubble(trendDays[i], trend.perMerge[i]!, trend.merges[i])}
+          />
           <span className="costs-stat-note">
             target ≤ {O2_ROUNDS_PER_MERGE} · {w.merges} merge{w.merges === 1 ? '' : 's'}
           </span>
@@ -86,7 +97,13 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
         <div className="costs-stat">
           <span className="costs-stat-label">First-round pass</span>
           <b className={`costs-stat-value ${onTarget(w.firstPass === null ? null : w.firstPass >= O2_FIRST_PASS)}`}>{fmtPct(w.firstPass)}</b>
-          <TrendLine points={r.trend.firstPass} target={O2_FIRST_PASS} label={`First-round pass rate over 30 days, target ${fmtPct(O2_FIRST_PASS)}`} />
+          <TrendChart
+            key={days}
+            values={trend.firstPass}
+            target={{ value: O2_FIRST_PASS, better: 'higher', label: `target ≥ ${fmtPct(O2_FIRST_PASS)}` }}
+            label={`First-round pass rate, each day's last 7 days, over ${days} days, target ${fmtPct(O2_FIRST_PASS)}`}
+            bubble={(i) => firstPassBubble(trendDays[i], trend.firstPass[i]!, trend.merges[i])}
+          />
           <span className="costs-stat-note">target ≥ {fmtPct(O2_FIRST_PASS)}</span>
         </div>
         <div className="costs-stat">
