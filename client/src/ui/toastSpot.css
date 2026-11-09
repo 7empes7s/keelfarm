@@ -11,10 +11,6 @@
 .pocket .toast {
   padding: 8px 12px;
   font-size: 0.85rem;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .pocket .md pre {
   white-space: pre-wrap;

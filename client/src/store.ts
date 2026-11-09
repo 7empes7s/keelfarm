@@ -47,6 +47,7 @@ export type Overlay =
   | { kind: 'help'; tab?: HelpTab }
   | { kind: 'catalogue'; repoId?: string } // the lobby kiosk (#210)
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
+  | { kind: 'trophy-card'; id: string } // a trophy's story, from the lobby shelf (#311)
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
   | { kind: 'floorList' }
   | { kind: 'notices' } // the notification centre (ui/Notices.tsx)
