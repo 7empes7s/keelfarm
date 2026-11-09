@@ -17,11 +17,12 @@ import { MissionControl } from './MissionControl';
 import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, LOBBY_SCREENS, MANAGER_DESK, MANAGER_ROOM, MANAGER_WORKSTATION, RECEPTION } from './layout';
 import { glow, shade } from './materials';
 import { WallSign } from './OfficeFloor';
-import { Bookshelf, CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, WallClock } from './Props';
+import { CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, WallClock } from './Props';
 import { LobbyRituals } from './Rituals';
 import { Shell } from './Shell';
 import { TimeLapseScreen } from './TimeLapseScreen';
 import { TestLabScreen } from './TestLabScreen';
+import { WaitingScreen } from './WaitingScreen';
 import { Ball, Box, Cyl } from './Toon';
 import { Toys } from './toys';
 
@@ -325,7 +326,7 @@ export function Lobby() {
         deps={[boss]}
       />
       <ManagerComputer />
-      <Bookshelf position={[-HALF_W + 0.4, 0, -8]} rotationY={Math.PI / 2} />
+      <WaitingScreen />
       <Plant position={[m.maxX - 0.6, 0, m.minZ + 0.6]} scale={1.1} pot="#3a86ff" />
       <Plant position={[m.minX + 0.6, 0, m.maxZ - 0.6]} scale={0.9} />
       <WallSign

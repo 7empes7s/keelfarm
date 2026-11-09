@@ -27,7 +27,7 @@ export const handlers = {
 export const snapshot: SnapshotPart = (d, { get }) => ({
   voiceKeySet: d.voiceKeySet ?? false,
   voiceKeyHint: d.voiceKeyHint ?? '',
-  voiceCache: d.voiceCache ?? { clips: 0, bytes: 0, saved: [] },
+  voiceCache: d.voiceCache ?? { clips: 0, bytes: 0, saved: [], charsToday: 0 },
   weather: d.weather ?? EMPTY_WEATHER_VIEW,
   ticker: d.ticker ?? [],
   notifyChannels: d.notifyChannels ?? get().notifyChannels,

@@ -4,7 +4,7 @@ import { claimWinner, enqueue, nextUp, replayKind, speakable, VOICE_MAX_AGE_MS, 
 
 const NOW = 1_000_000_000;
 const msg = (id: number, from: PhoneMessage['from'] = 'ceo', at = NOW): PhoneMessage => ({ id, from, text: `message ${id}`, at });
-const voice = (patch: Partial<VoiceSettings> = {}): VoiceSettings => ({ provider: 'elevenlabs', voiceId: 'v', voiceName: 'V', model: 'm', speakOffice: false, keepDays: 7, speed: 1, favourites: [], ...patch });
+const voice = (patch: Partial<VoiceSettings> = {}): VoiceSettings => ({ provider: 'elevenlabs', voiceId: 'v', voiceName: 'V', model: 'm', speakOffice: false, keepDays: 7, speed: 1, favourites: [], agentsSpeak: true, ...patch });
 const q = (id: number, arrived = NOW, at = arrived): Queued => ({ message: msg(id, 'ceo', at), arrived });
 
 describe('speakable', () => {
