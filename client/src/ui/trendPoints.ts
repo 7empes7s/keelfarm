@@ -49,6 +49,28 @@ export function stepPoint(values: Values, from: number | null, key: string): num
   return null;
 }
 
+/** Whether a picked day's bubble goes away, giving the card's label and value back: when a finger or pen lifts (as
+ * iOS Stocks does), and when a mouse leaves a chart it didn't click into. (Losing focus always clears it.) */
+export function clearsPick(on: 'lift' | 'leave', pointer: string, focused: boolean): boolean {
+  if (on === 'lift') return pointer !== 'mouse';
+  return pointer === 'mouse' && !focused;
+}
+
+const LABEL_CHAR_PX = 6.5; // a character of the label at --ds-text-xs, about
+
+/** Where the target's label sits at the line's right end: under its line or over it, whichever side the days under the
+ * label leave clear (else the one with fewer of them), as long as it fits in the chart. `points` are the days' x, y. */
+export function targetLabelY(ty: number, label: string, w: number, points: [number, number][]): number {
+  const from = w - TREND_PAD.x - label.length * LABEL_CHAR_PX - 6;
+  const under = points.filter(([px]) => px >= from);
+  const hits = (lo: number, hi: number) => under.filter(([, py]) => py >= lo && py <= hi).length;
+  const below = { y: ty + 12, fits: ty + 12 <= TREND_H, hits: hits(ty, ty + 16) };
+  const above = { y: ty - 4, fits: ty - 4 - 10 >= 0, hits: hits(ty - 16, ty) };
+  if (!above.fits) return below.y;
+  if (!below.fits) return above.y;
+  return below.hits < above.hits ? below.y : above.y;
+}
+
 /** A value against its target: good on the right side of it (or on it), bad on the wrong one. */
 export const pointTone = (v: number, target: { value: number; better: 'lower' | 'higher' }): 'good' | 'bad' => ((target.better === 'lower' ? v <= target.value : v >= target.value) ? 'good' : 'bad');
 

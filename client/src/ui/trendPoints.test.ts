@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costBubble, costDays, dayLabel, firstPassBubble, lastDays, pickPoint, pointTone, roundsBubble, stepPoint, TREND_H, TREND_PAD, trendX, trendY } from './trendPoints';
+import { clearsPick, costBubble, costDays, dayLabel, firstPassBubble, lastDays, pickPoint, pointTone, roundsBubble, stepPoint, targetLabelY, TREND_H, TREND_PAD, trendX, trendY } from './trendPoints';
 import type { CostDayRow } from '../../../shared/costs';
 
 const WED = new Date(2026, 10, 4, 15, 30); // Wed 4 Nov 2026, local time
@@ -70,5 +70,28 @@ describe('colours and the cost days', () => {
       ['Tue 3 Nov', null, 0],
       ['Wed 4 Nov', 3.1, 2],
     ]);
+  });
+});
+
+describe('clearing a picked day', () => {
+  it('clears when a finger or pen lifts, so the card shows its value again', () => {
+    expect([clearsPick('lift', 'touch', true), clearsPick('lift', 'pen', true), clearsPick('lift', 'mouse', true)]).toEqual([true, true, false]);
+  });
+  it('keeps a clicked (focused) chart picked when the mouse leaves, a hovered one not', () => {
+    expect([clearsPick('leave', 'mouse', true), clearsPick('leave', 'mouse', false), clearsPick('leave', 'touch', false)]).toEqual([false, true, false]);
+  });
+});
+
+describe("the target's label", () => {
+  const w = 160; // "target ≤ 1.5" covers x from about 68 to 152
+  it('goes to the side of its line the days under it leave clear', () => {
+    expect(targetLabelY(30, 'target ≤ 1.5', w, [[100, 20], [150, 22]])).toBe(42); // days above the line: under it
+    expect(targetLabelY(30, 'target ≤ 1.5', w, [[100, 40], [150, 44]])).toBe(26); // days under the line: over it
+    expect(targetLabelY(30, 'target ≤ 1.5', w, [[10, 40], [100, 22], [150, 40]])).toBe(26); // a peak over the line, the rest under: fewer over
+  });
+  it('ignores days left of the label, and stays inside the chart', () => {
+    expect(targetLabelY(30, 'target ≤ 1.5', w, [[10, 40], [20, 42]])).toBe(26);
+    expect(targetLabelY(TREND_PAD.t, 'target', w, [[150, 20]])).toBe(TREND_PAD.t + 12);
+    expect(targetLabelY(TREND_H - 4, 'target', w, [[150, 50]])).toBe(TREND_H - 8);
   });
 });

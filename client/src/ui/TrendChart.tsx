@@ -1,6 +1,6 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useWidth } from './useWidth';
-import { pickPoint, pointTone, stepPoint, TREND_H, TREND_PAD, trendX, trendY } from './trendPoints';
+import { clearsPick, pickPoint, pointTone, stepPoint, targetLabelY, TREND_H, TREND_PAD, trendX, trendY } from './trendPoints';
 import './trendChart.css';
 
 // A stat card's trend (#325), on the chat charts' pattern (ChatVisuals.tsx): our own SVG at its real width, no chart
@@ -33,6 +33,10 @@ export function TrendChart({ values, label, bubble, target }: { values: (number 
     e.preventDefault();
     setSel(next);
   };
+  const lift = (e: PointerEvent<HTMLDivElement>) => {
+    dragging.current = false;
+    if (clearsPick('lift', e.pointerType, true)) setSel(null);
+  };
   // A gap (a day without a number) breaks the line.
   const runs: [number, number][][] = [[]];
   values.forEach((v, i) => (v === null ? runs.push([]) : runs[runs.length - 1].push([x(i), y(v)])));
@@ -55,16 +59,17 @@ export function TrendChart({ values, label, bubble, target }: { values: (number 
         pick(e);
       }}
       onPointerMove={(e) => (dragging.current || e.pointerType === 'mouse') && pick(e)}
-      onPointerUp={() => (dragging.current = false)}
-      onPointerCancel={() => (dragging.current = false)}
-      onPointerLeave={(e) => e.pointerType === 'mouse' && !dragging.current && document.activeElement !== e.currentTarget && setSel(null)}
+      onPointerUp={lift}
+      onPointerCancel={lift}
+      onPointerLeave={(e) => !dragging.current && clearsPick('leave', e.pointerType, document.activeElement === e.currentTarget) && setSel(null)}
+      onBlur={() => setSel(null)}
       onKeyDown={onKey}
     >
       <svg viewBox={`0 0 ${w} ${TREND_H}`} height={TREND_H} aria-hidden="true">
         {ty !== undefined && (
           <g className="trend-target">
             <line x1={TREND_PAD.x} x2={w - TREND_PAD.x} y1={ty} y2={ty} />
-            <text x={w - TREND_PAD.x} y={ty < TREND_H / 2 ? ty + 12 : ty - 4} textAnchor="end">
+            <text x={w - TREND_PAD.x} y={targetLabelY(ty, target!.label, w, runs.flat())} textAnchor="end">
               {target!.label}
             </text>
           </g>

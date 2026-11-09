@@ -84,6 +84,7 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
           <span className="costs-stat-label">Rounds per merge</span>
           <b className={`costs-stat-value ${onTarget(w.perMerge === null ? null : w.perMerge <= O2_ROUNDS_PER_MERGE)}`}>{fmtRounds(w.perMerge)}</b>
           <TrendChart
+            key={days}
             values={trend.perMerge}
             target={{ value: O2_ROUNDS_PER_MERGE, better: 'lower', label: `target ≤ ${O2_ROUNDS_PER_MERGE}` }}
             label={`Rounds per merge, each day's last 7 days, over ${days} days, target ${O2_ROUNDS_PER_MERGE}`}
@@ -97,6 +98,7 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
           <span className="costs-stat-label">First-round pass</span>
           <b className={`costs-stat-value ${onTarget(w.firstPass === null ? null : w.firstPass >= O2_FIRST_PASS)}`}>{fmtPct(w.firstPass)}</b>
           <TrendChart
+            key={days}
             values={trend.firstPass}
             target={{ value: O2_FIRST_PASS, better: 'higher', label: `target ≥ ${fmtPct(O2_FIRST_PASS)}` }}
             label={`First-round pass rate, each day's last 7 days, over ${days} days, target ${fmtPct(O2_FIRST_PASS)}`}

@@ -85,7 +85,7 @@ export function InsightStrip({ view, floorName, onCause }: { view: CostsView; fl
           'All sessions’ cost (builds, QA, fixes, the CEO) over the merges in the window',
           week.flatMap((d) => (d.perMerge === null ? [] : [d.perMerge])),
         )}
-        <TrendChart values={perDay.map((d) => d.perMerge)} label={`Cost per merge a day, over ${view.days} days`} bubble={(n) => costBubble(perDay[n].day, perDay[n].perMerge!, perDay[n].merges)} />
+        <TrendChart key={view.days} values={perDay.map((d) => d.perMerge)} label={`Cost per merge a day, over ${view.days} days`} bubble={(n) => costBubble(perDay[n].day, perDay[n].perMerge!, perDay[n].merges)} />
         {i.perMerge.change !== null && (
           <span className="costs-stat-note">
             <Change change={i.perMerge.change} /> over the days
