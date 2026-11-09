@@ -486,7 +486,7 @@ export class TestLab {
     for (const j of next) {
       const why = this.host.refusal(laneOf(j.kind) === 'browser' ? 'labBrowser' : 'labRun');
       if (why) {
-        held = `The lab waits for memory: ${why}`;
+        held = why; // already reads "Waiting for memory: …" (#313)
         continue;
       }
       this.queue = this.queue.filter((q) => q !== j);

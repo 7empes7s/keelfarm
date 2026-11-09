@@ -485,7 +485,6 @@
     "exports:server/voice.ts:TRANSCRIBE_TIMEOUT_MS",
     "exports:server/voice.ts:VOICES_TTL_MS",
     "exports:server/workspace.ts:TRIM_DIRS",
-    "exports:server/workspace.ts:machineDir",
     "exports:server/workspace.ts:pathForms",
     "exports:shared/activity.ts:outsideDesk",
     "exports:shared/careers.ts:PHOTO_DAYS",

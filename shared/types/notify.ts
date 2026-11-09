@@ -2,7 +2,7 @@
 import type { ChatRef } from './chat.ts';
 
 /** What the office tells the manager about when they're away (docs/pocket.md). */
-export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'merge' | 'decisions';
+export type NotifyEvent = 'needsHuman' | 'question' | 'ceoMessage' | 'hire' | 'agentError' | 'usage' | 'memory' | 'disk' | 'merge' | 'decisions';
 
 /** Where it tells them: this browser, Web Push to their devices, a chat app's webhook, or their own Telegram bot. */
 export type NotifyChannel = 'desktop' | 'push' | 'ntfy' | 'telegram';

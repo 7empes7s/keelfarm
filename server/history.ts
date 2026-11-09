@@ -30,6 +30,7 @@ import {
   type HistoryPage,
   type HistoryUsage,
 } from '../shared/history.ts';
+import { redact } from '../shared/journal.ts';
 
 /** The CEO's session_history (server/ceo.ts): what it does, and its filters. */
 export const SESSION_HISTORY_TOOL = "Past sessions from the office's history, newest first, 20 a page: who worked on what, when (UTC), the outcome and why, time and cost. Every filter narrows. Read-only.";
@@ -232,7 +233,16 @@ export class SessionHistory {
   }
 
   private daily(e: HistoryEntry) {
-    const day = utcDay(e.at);
+    return this.dailyText(utcDay(e.at), () => formatEntry(e, { transcriptFile: e.transcript ? this.file(e.transcript) : null, secrets: this.o.secrets() }));
+  }
+
+  /** A note of the office's own in today's daily log, e.g. what a disk cleanup removed (#340). Never throws. */
+  note(text: string) {
+    const at = this.now();
+    return this.dailyText(utcDay(at), () => `### ${new Date(at).toISOString().slice(11, 16)} UTC · the office\n- ${redact(text, this.o.secrets())}\n\n`).catch(() => undefined);
+  }
+
+  private dailyText(day: string, text: () => string) {
     const file = path.join(this.o.dailyDir(), `${day}.md`);
     return this.writes.append(file, async () => {
       let head = '';
@@ -241,7 +251,7 @@ export class SessionHistory {
         if (!had.includes(dayHeading(day).trim())) head = `${had && !had.endsWith('\n\n') ? '\n' : ''}${dayHeading(day)}`;
         this.headed.add(file);
       }
-      return head + formatEntry(e, { transcriptFile: e.transcript ? this.file(e.transcript) : null, secrets: this.o.secrets() });
+      return head + text();
     });
   }
 

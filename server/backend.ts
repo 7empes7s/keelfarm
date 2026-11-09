@@ -21,6 +21,7 @@ import { checkAccount } from './accountCheck.ts';
 import { startLocalSignIn } from './localSignIn.ts';
 import type { AccountsDeps } from './accounts.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
+import { realDisk, type DiskBackend } from './diskCare.ts';
 import { previewDesks, realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
 import { elevenLabs } from './elevenlabs.ts';
@@ -156,6 +157,8 @@ export interface Backend {
   previews: PreviewBackend;
   /** Memory, swap and load, and what agents' processes use (server/health.ts). */
   resources: ResourceProbe;
+  /** Free space, the cleanup of the office's leftovers and the working copies' disk (#340, server/diskCare.ts). */
+  disk: DiskBackend;
   /** The test lab's shared browser and heavy commands (#56). */
   testLab: LabRunner;
   /** The running office's own folder and its launcher, for the office's self-update. */
@@ -276,6 +279,7 @@ export interface DemoDoctor {
 export const realBackend: Backend = {
   demo: false,
   resources: realResources,
+  disk: realDisk,
   testLab: createLabRunner(),
   user: github.currentUser,
   listMyRepos: github.listMyRepos,

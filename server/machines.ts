@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
+import { ensureMachineHome, machineRoots, moved, removeMachineAnywhere } from './diskCare.ts';
 import { sweepOrphans } from './procSweep.ts';
 import * as workspace from './workspace.ts';
 import type { DeskBase, DeskTrim, OfficeProcesses } from './workspace.ts';
@@ -41,17 +42,22 @@ export const machineName = (agentId: string) => agentId.replace(/[^a-z0-9]/gi, '
 export function localMachines(keep: () => OfficeProcesses): MachineProvider {
   return {
     deskDir: (machine, fullName) => workspace.machineDesk(machine, fullName),
-    prepareDesk: (machine, fullName, base, branch, note) => workspace.prepareMachineDesk(machine, fullName, base, branch, note),
+    prepareDesk: async (machine, fullName, base, branch, note) => {
+      await moved(machine); // a machine moving to (or from) the working-copies disk finishes first
+      ensureMachineHome(machine);
+      return workspace.prepareMachineDesk(machine, fullName, base, branch, note);
+    },
     env: (machine) => {
+      ensureMachineHome(machine);
       const tmp = workspace.machineTmp(machine);
       fs.mkdirSync(tmp, { recursive: true });
       return { TMP: tmp, TEMP: tmp, TMPDIR: tmp };
     },
     release: (machine, fullName, port) => workspace.releaseMachine(machine, fullName, port, keep()),
-    orphans: (live, idle) => sweepOrphans(workspace.MACHINES_DIR, live, idle, keep().pids),
+    orphans: async (live, idle) => (await Promise.all(machineRoots().map((root, i) => sweepOrphans(root, live, i ? [] : idle, keep().pids)))).flat(),
     trimDesk: (machine, fullName, stillIdle) => workspace.trimMachineDesk(machine, fullName, stillIdle),
     sweep: (machine, fullName, keepBranches) => workspace.sweepMachine(machine, fullName, keepBranches),
-    remove: (machine) => workspace.removeMachine(machine),
+    remove: (machine) => removeMachineAnywhere(machine),
     list: () => workspace.listMachines(),
     exists: async (machine, fullName) => fs.existsSync(workspace.machineDesk(machine, fullName)),
     installDeps: (machine, fullName, cb) => installDesk(workspace.machineDesk(machine, fullName), cb),

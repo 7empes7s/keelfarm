@@ -410,6 +410,11 @@ app.post('/api/usage/resume', route(() => swarm.resumeFullSpeed()));
 app.post('/api/usage/simulate', route((req) => swarm.simulateUsage(req.body?.kind)));
 // The health strip (#55): in the demo, low memory on demand
 app.post('/api/health/simulate', route((req) => swarm.health.simulate(req.body?.low === true)));
+// The disk (#340): "Free up space"'s preview and run, the disk settings (a new working-copies disk is checked), the demo's low disk
+app.get('/api/disk/plan', route(() => swarm.diskPlan()));
+app.post('/api/disk/clean', route(() => swarm.cleanDisk()));
+app.patch('/api/disk/settings', route((req) => swarm.setDiskSettings(req.body)));
+app.post('/api/disk/simulate', route((req) => swarm.simulateDisk(req.body?.low === true)));
 // The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
 app.get('/api/server/trend', route(() => swarm.serverTrend()));
 app.post('/api/server/orphans/:pid/stop', route((req) => swarm.stopOrphan(Number(req.params.pid))));

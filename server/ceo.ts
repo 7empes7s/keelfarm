@@ -153,7 +153,8 @@ export function qaReportText(
 }
 
 export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
-  companyStatus(): string;
+  companyStatus(a: { full?: boolean }): string;
+  floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
@@ -240,9 +241,15 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const defs = [
     tool(
       'company_status',
-      'Everything about the company right now: settings, every floor (repo, clone path, charter, profile, QA brief, playbook), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first.',
-      {},
-      () => run(() => h.companyStatus()),
+      "The company right now: settings, usage, every floor (repo, clone path, profile, charter focus), its team and throughput, backlog, pull requests and QA, team changes waiting for the manager and their recent decisions. Call this first. A floor's charter, QA brief, playbook and preview are in floor_detail.",
+      { full: z.boolean().optional().describe('Every floor in full, with its long texts and whole backlog; rarely needed') },
+      (a) => run(() => h.companyStatus(a)),
+    ),
+    tool(
+      'floor_detail',
+      "One floor in full: its charter, profile, QA brief, playbook, preview command and env, the whole backlog with what each issue waits for, every PR, and the office playbook. Call before writing a floor's QA brief, charter proposal or issues that must follow its playbook.",
+      { floor: z.number().int().describe('Floor number') },
+      (a) => run(() => h.floorDetail(a)),
     ),
     tool(
       'agent_detail',
@@ -565,6 +572,8 @@ export function ceoSystemPrompt(o: {
   sessionLimit: number;
   maxAgents: number;
   scaling: 'approve' | 'auto';
+  /** The office-wide playbook, here rather than in company_status (#329). */
+  officePlaybook?: string;
 }) {
   const manager = o.manager ? `the manager, ${o.manager}` : 'the human manager';
   return [
@@ -580,7 +589,7 @@ export function ceoSystemPrompt(o: {
     "- Write each floor's QA brief: what every QA pass must check for this kind of project (for a 3D game: the canvas renders, controls respond, frame rate is smooth; for a website: links, phone layout, accessibility; for an API: status codes, validation, error cases).",
     '',
     'How you work:',
-    '- Call mcp__office__company_status first. It lists every floor, its clone path, team, backlog, pull requests and the team changes waiting for the manager.',
+    "- Call mcp__office__company_status first (floors, clone paths, teams, backlogs, PRs), and floor_detail before planning a floor's issues, QA brief or charter.",
     '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
@@ -609,6 +618,7 @@ export function ceoSystemPrompt(o: {
     '- "[manager edited message #N: …]": they changed a message you already took. Redo or adjust only what changed, and say so in a line.',
     "- When it would help, end with one ```idea <kind> block (kind: objective, focus, mandate, experiment, research, charter, team or plan) suggesting a change to how the office works: a title line, then the message the manager sends by tapping Accept. At most one per reply.",
     '- Name office things as the manager can tap them: @Name, @Name/terminal, floor N, floor N #12, file: floor N src/app.ts:42, qa: floor N #12, preview: floor N (or preview: floor N #12).',
+    ...(o.officePlaybook ? ['', 'The office playbook (every build, fix and QA prompt starts with it; set_office_playbook replaces it whole):', o.officePlaybook] : []),
   ].join('\n');
 }
 

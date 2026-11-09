@@ -2,6 +2,7 @@
 import type { CeoAwakeSettings } from '../ceoAwake.ts';
 import type { TaskKind } from '../costs.ts';
 import type { CeoMandate, FollowupSettings } from '../followups.ts';
+import type { DiskSettings } from '../disk.ts';
 import type { MemorySettings } from '../health.ts';
 import type { WeatherSettings, WorldEventSettings } from '../outside.ts';
 import type { EveryProject } from '../practices.ts';
@@ -41,6 +42,7 @@ export interface SwarmSettings {
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
   usageWarnings?: UsageWarningChoice; // when Claude warns that usage is high (#323); absent: 'pace'
   stuckRecheckMin?: number; // a PR in needs-human this long is re-checked: released if only a conflict or CI outage holds it, else the CEO looks again (#275)
+  disk?: DiskSettings; // Settings → Agents → Disk (#340): warning and hold thresholds, cleanup, the working copies' disk; absent: the defaults
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
   previewRecentHours: number; // an open PR updated this recently gets its own channel chip; older ones fold under "Older"
   mainPreviewIdleMin: number; // a floor's main preview stops this many minutes after its last use; 0 = never

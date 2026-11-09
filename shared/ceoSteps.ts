@@ -83,6 +83,7 @@ type Words = (t: Target, nameOf?: NameOf) => string;
 // Every office tool and CEO tool (server/ceo.ts; a test checks the list), its icon and sentence.
 const OFFICE: Record<string, [string, Words]> = {
   company_status: ['🏢', () => 'Checking the floors'],
+  floor_detail: ['📋', (t) => `Reading ${t.floor ? `floor ${t.floor}'s` : "a floor's"} charter and playbook`],
   agent_detail: ['🔎', (t, n) => `Checking on ${who(t.agent ?? t.rest.split(' ')[0], n)}`],
   agent_log: ['📜', (t, n) => `Reading ${whose(who(t.agent ?? t.rest.split(' ')[0], n))} log`],
   set_floor_profile: ['🗂️', (t) => `Updating ${t.floor ? `floor ${t.floor}'s` : "a floor's"} profile`],

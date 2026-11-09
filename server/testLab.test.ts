@@ -200,7 +200,7 @@ describe('TestLab', () => {
     const { lab: l } = lab(fakeRunner(log), (k) => (kinds.push(k), low ? 'Waiting for memory: 0.5 GB free' : null));
     const ask = l.submit(who('a'), { kind: 'run', command: 'npm test' });
     expect(l.view().running).toHaveLength(0);
-    expect(l.view().held).toMatch(/^The lab waits for memory: Waiting for memory/);
+    expect(l.view().held).toBe('Waiting for memory: 0.5 GB free'); // said once (#313)
     expect(l.status('a')).toMatch(/Yours: npm test, position 1 in the heavy queue/);
     low = false;
     await vi.advanceTimersByTimeAsync(5_000);

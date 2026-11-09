@@ -12,6 +12,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { browserNote, DEFAULT_ESTIMATES, gb, type HealthView, type HeldWork, type MemoryReading, type MemorySettings, type SessionKind } from '../shared/health.ts';
+import { diskAlert, diskHold, diskLevel, DISK_HELD_KINDS, diskWarning, uniqueDisks, worstLevel, type CleanResult, type DiskReading, type DiskSettings, type DiskView } from '../shared/disk.ts';
 import type { ServerNow, ServerPoint } from '../shared/serverLoad.ts';
 import { HttpError } from './httpError.ts';
 import { realLoad, type LoadContext } from './serverLoad.ts';
@@ -285,7 +286,18 @@ export interface HealthHost {
   previewMem?(mb: number | null): void;
 }
 
+/** The disks the office writes to (#340), plugged in by the office's disk layer (server/swarm/disk.ts). */
+export interface DiskHost {
+  read(): Promise<DiskReading[]>;
+  settings(): DiskSettings;
+  alert(title: string, body: string): void;
+  lastClean(): CleanResult | null;
+}
+
 export class OfficeHealth {
+  private disk: DiskHost | null = null;
+  private disks: DiskReading[] = [];
+  private diskTold = false;
   private memory: MemoryReading | null = null;
   private rss = new Map<string, number>(); // agent id → what their processes use now, MB
   private peaks = new Map<string, number>(); // agent id → the most their current session used, MB
@@ -307,8 +319,20 @@ export class OfficeHealth {
 
   private estimate = (k: SessionKind) => this.host.settings().estimates[k] ?? DEFAULT_ESTIMATES[k];
 
+  /** The disks to watch: their free space shows on the health strip and holds new builds, QA and previews when low. */
+  useDisk(host: DiskHost) {
+    this.disk = host;
+  }
+
+  /** Why new work that writes to disk waits now (null: it doesn't). */
+  private diskHeld(kind: SessionKind): string | null {
+    return this.disk && DISK_HELD_KINDS.includes(kind) ? diskHold(this.disks, this.disk.settings()) : null;
+  }
+
   /** Why a session of `kind` can't start now, or null. */
   refusal(kind: SessionKind, now = Date.now()): string | null {
+    const disk = this.diskHeld(kind);
+    if (disk) return disk;
     const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: now - s.startedAt }));
     return admission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate), browserMb: this.browserMb });
   }
@@ -410,6 +434,7 @@ export class OfficeHealth {
     try {
       const memory = await this.host.probe().memory();
       this.memory = memory;
+      if (this.disk) await this.readDisks(this.disk);
       const sessions = this.host.sessions();
       const previews = this.host.previews?.() ?? [];
       const usage = await this.host.probe().usage([...sessions.flatMap((s) => (s.dir ? [s.dir] : [])), ...previews.map((p) => p.dir)]);
@@ -451,6 +476,15 @@ export class OfficeHealth {
     }
   }
 
+  private async readDisks(disk: DiskHost) {
+    this.disks = uniqueDisks(await disk.read().catch(() => this.disks));
+    const s = disk.settings();
+    const alert = diskAlert(worstLevel(this.disks, s), this.diskTold);
+    this.diskTold = alert.told;
+    const m = alert.send && diskWarning(this.disks, s);
+    if (m) disk.alert(m.title, m.body);
+  }
+
   /** The memory pings: a long wait (heldPing) and the hourly digest of stopped sessions. In the office only the note shows. */
   private alerts(now: number) {
     const delayMs = this.demoDelayMs ?? this.host.settings().alertAfterMin * 60_000;
@@ -471,6 +505,7 @@ export class OfficeHealth {
 
   /** Work waiting for memory, counted: new work held back and stopped sessions waiting to resume. */
   private heldWork(): HeldWork | null {
+    if (this.diskHeld('build')) return null; // the wait is for disk space: the strip says so, not "waiting for memory"
     const kinds = [...this.held.values(), ...[...this.waiting.values()].filter((w) => !w.requeue).map((w) => w.kind)];
     if (!kinds.length || !this.memory) return null;
     const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: Date.now() - s.startedAt }));
@@ -498,14 +533,26 @@ export class OfficeHealth {
   }
 
   view(): HealthView {
-    return { memory: this.memory, running: this.host.sessions().length, waiting: [...this.waiting.values()].filter((w) => !w.requeue).length, held: this.wait?.why ?? null, heldWork: this.heldWork(), lastStop: this.lastStop };
+    return { memory: this.memory, running: this.host.sessions().length, waiting: [...this.waiting.values()].filter((w) => !w.requeue).length, held: this.wait?.why ?? null, heldWork: this.heldWork(), lastStop: this.lastStop, disk: this.diskView() };
+  }
+
+  private diskView(): DiskView | null {
+    if (!this.disk || !this.disks.length) return null;
+    const s = this.disk.settings();
+    return { disks: this.disks.map((d) => ({ ...d, level: diskLevel(d, s) })), level: worstLevel(this.disks, s), lastClean: this.disk.lastClean() };
+  }
+
+  /** Out to the tabs now: a cleanup finished or the disk settings changed. */
+  async refresh() {
+    if (this.disk) await this.readDisks(this.disk);
+    this.emit();
   }
 
   /** Out to the tabs when something they'd see changed: memory in 64 MB steps, not every reading. */
   private emit() {
     const v = this.view();
     const m = v.memory;
-    const key = JSON.stringify({ ...v, memory: m && [m.availableMb >> 6, m.swapFreeMb >> 6, Math.round((m.load ?? 0) * 10)], heldWork: v.heldWork && [v.heldWork.tasks, v.heldWork.freeMb >> 6, v.heldWork.needMb] });
+    const key = JSON.stringify({ ...v, memory: m && [m.availableMb >> 6, m.swapFreeMb >> 6, Math.round((m.load ?? 0) * 10)], heldWork: v.heldWork && [v.heldWork.tasks, v.heldWork.freeMb >> 6, v.heldWork.needMb], disk: v.disk && { ...v.disk, disks: v.disk.disks.map((d) => [d.level, d.freeMb >> 8]) } });
     if (key === this.lastKey) return;
     this.lastKey = key;
     this.host.emit(v);
