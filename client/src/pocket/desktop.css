@@ -5,6 +5,7 @@
 .pk-work,
 .pk-pane,
 .pk-console-host,
+.pk-page-host,
 .pk-company,
 .pk-company-side,
 .pk-company-floors {
@@ -155,6 +156,16 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   container: pkpanel / inline-size;
   background: var(--paper);
 }
+/* the Previews page covers the pages and the console it may have been opened from (it and the pane never show together) */
+.pocket:not(.pk-railed) .pk-page-host > .overlay {
+  z-index: calc(var(--ds-z-panel) + 3);
+}
+.pk-railed .pk-page-host:not(:empty) {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+}
 .pk-railed .pk-pane:not(:empty) {
   position: relative;
   flex: 1.5 1 0;
@@ -192,7 +203,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
     grid-template-rows: 1fr 1fr;
   }
 }
-.pk-railed :is(.pk-pane, .pk-console-host) > .overlay {
+.pk-railed :is(.pk-pane, .pk-console-host, .pk-page-host) > .overlay {
   position: absolute;
   inset: 0;
   z-index: auto;
@@ -201,7 +212,7 @@ html[data-typing] .pocket:not(.pk-railed) :is(.pk-tabs, .decision-tray) {
   background: none;
   animation: none;
 }
-:root .pk-railed :is(.pk-pane, .pk-console-host) > .overlay > .panel {
+:root .pk-railed :is(.pk-pane, .pk-console-host, .pk-page-host) > .overlay > .panel {
   width: 100%;
   height: 100%;
   max-height: none;
