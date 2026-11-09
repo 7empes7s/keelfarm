@@ -154,6 +154,7 @@ export interface ModelCatalogView {
 /** Messages on an agent's terminal socket (/ws/term?agent=<id>), server to browser. */
 export type TermServerMessage =
   | { t: 'snapshot'; data: string; cols: number; rows: number; live: boolean } // the screen and scrollback so far
+  | { t: 'dropped' } // input had no running CLI to receive it
   | { t: 'data'; data: string }
   | { t: 'size'; cols: number; rows: number } // another viewer resized the terminal
   | { t: 'live'; live: boolean }; // a CLI is (or is no longer) running in it

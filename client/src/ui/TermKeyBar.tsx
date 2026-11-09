@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { barKeys, keyboardInset, MORE_KEYS, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
+import { barKeys, keyboardInset, keyClickSends, MORE_KEYS, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import type { AgentCli } from '../../../shared/types';
 import { Icon } from './Icon';
 
@@ -87,7 +87,7 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
       onPointerLeave={stop}
       onPointerCancel={stop}
       onContextMenu={(e) => e.preventDefault()}
-      onClick={(e) => (paste || e.detail === 0) && onPress(k)} // Enter or Space on a focused key; every Paste
+      onClick={(e) => keyClickSends(paste, e.nativeEvent) && onPress(k)} // Enter or Space on a focused key; every Paste
     >
       {paste && k.primary && <Icon name="clipboard-paste" />}
       {k.label}
