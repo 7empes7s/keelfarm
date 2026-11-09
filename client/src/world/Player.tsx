@@ -37,7 +37,7 @@ import { lookCurve, pad, padName, pollPad, wasPressed, wasReleased, watchPads } 
 import { arriveOnFloor, cameraMode, exitView, homeSpot, lookAllowed, playerAt, rigInput, rigOwnsCamera, rotateView, setHomeLook, stepRig, tapView } from './camera/rig';
 import { leavePerch, perch, takePerchTurn, type Perch } from './perch';
 import { roofAction } from './roof/roofState';
-import { greet } from './Chatter';
+import { sayHi, speakOwnLine } from './Chatter';
 import { findPath, walkways } from './walkways';
 import { recordHitch } from '../hitches';
 import { newStuck, STUCK_MS, stuckStep } from '../hitchLog';
@@ -141,7 +141,7 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
     return;
   }
   if (focus.action.kind === 'greet') {
-    greet(focus.action.agentId);
+    sayHi(focus.action.agentId);
     return;
   }
   if (focus.action.kind === 'hire') {
@@ -170,6 +170,8 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
     return;
   }
   s.openOverlay(focus.action);
+  // Their window opens and they say what they're on, in their voice (#321); without one, nothing changes.
+  if (focus.action.kind === 'terminal') void speakOwnLine(focus.action.agentId);
 }
 
 /** E (or the pad's A): act on the crosshair's target, even with your hands full (a panel opening drops the ball).

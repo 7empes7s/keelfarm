@@ -144,6 +144,7 @@ function ElevenLabsKey() {
 
 function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; save: Save; playing: Playing; setPlaying: (p: Playing) => void }) {
   const list = useVoiceList();
+  const chars = useStore((s) => s.voiceCache.charsToday);
   const model = VOICE_MODELS.find((m) => m.id === voice.model);
   return (
     <>
@@ -164,6 +165,9 @@ function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; 
           ))}
         </select>
         {model && <span className="muted small">{model.note}</span>}
+        <span className="muted small">
+          {chars.toLocaleString()} characters used today{model && ` · about $${((chars / 1000) * model.usdPer1k).toFixed(2)}`}
+        </span>
       </label>
     </>
   );
@@ -355,6 +359,10 @@ export function VoiceSettings() {
           </div>
         </>
       )}
+      <label className="toggle">
+        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} /> Agents speak when clicked
+        <span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+      </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
       <Listening keyShown={eleven} />
     </div>

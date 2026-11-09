@@ -174,7 +174,7 @@ describe('journalEvent: what is kept', () => {
       { type: 'voiceKey', voiceKeySet: true, voiceKeyHint: 'cdef' },
       { type: 'phoneRead', at: 1 },
       { type: 'clis', clis: [] },
-      { type: 'voiceCache', voiceCache: { clips: 0, bytes: 0, saved: [] } },
+      { type: 'voiceCache', voiceCache: { clips: 0, bytes: 0, saved: [], charsToday: 0 } },
       { type: 'snapshot', data: {} as WorldSnapshot },
     ];
     for (const ev of dropped) expect(journalEvent(ev)).toBeNull();
