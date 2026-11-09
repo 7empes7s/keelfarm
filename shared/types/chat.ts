@@ -2,12 +2,13 @@
 import type { ChatAction } from '../ceoActions.ts';
 import type { CeoSessionView } from '../ceoAwake.ts';
 import type { MemoryNote } from '../ceoMemory.ts';
-import type { CeoLive } from '../ceoStream.ts';
+import type { CeoLive, StepLog } from '../ceoStream.ts';
 import type { ChatVisual } from '../chatVisuals.ts';
 import type { Conversation } from '../conversations.ts';
 import type { FileRef } from '../files.ts';
 import type { AgentQuestion } from '../questions.ts';
 import type { UsedView } from '../used.ts';
+import type { KeyTrouble } from './agents.ts';
 import type { VoiceProvider } from './voice.ts';
 
 /**
@@ -32,6 +33,8 @@ export interface PhoneMessage {
   delivery?: ServerDelivery; // the manager's messages only (absent on messages saved before delivery was tracked)
   suggestions?: string[]; // the CEO's tappable replies (shared/chatParts.ts)
   ask?: string; // the CEO's: the question those replies answer, when it named one (a `? …` first line, #183)
+  spoken?: string; // the CEO's: the short summary read aloud instead of the text (a ```spoken block, #282; shared/speech.ts)
+  silent?: true; // the CEO's: nothing worth reading aloud (bookkeeping, or a turn's closing text after its replies, #282)
   artifacts?: ChatArtifact[]; // the CEO's longer content, shown as cards that open full-screen
   visuals?: ChatVisual[]; // the CEO's charts, tables and dashboards (#146, shared/chatVisuals.ts)
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
@@ -39,7 +42,8 @@ export interface PhoneMessage {
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
-  steps?: string[]; // the CEO's: the steps it took for this reply (shared/ceoStream.ts)
+  steps?: string[]; // the CEO's, before #150: the steps it took for this reply, as labels
+  log?: StepLog; // the CEO's: the steps it took for this reply, timed (shared/ceoStream.ts)
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
   edited?: number; // when its sender last edited it (#125: anyone's, shared/messageEdits.ts)
@@ -48,6 +52,25 @@ export interface PhoneMessage {
   reactions?: MessageReaction[]; // the manager's and the CEO's, oldest first
   tg?: number; // its Telegram message id, for one the manager sent from there
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
+  hidden?: true; // the CEO's, hidden by the manager (#145): kept for the CEO, never sent to a phone (shared/chatPage.ts)
+  signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
+  switch?: ChatSwitch; // the office's: the CEO moved to another account (#248), shown as a pill
+  pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
+}
+
+/** The CEO moved off an account that was limited or signed out (to: null, every account is out). Labels only. */
+interface ChatSwitch {
+  from: string;
+  to: string | null;
+  until: number | null; // when the first account is back
+  useKey?: string; // every account is out but this paused API key: "Use API key" resumes it
+}
+
+/** Cloud agents whose API key ran out of credit or was turned away, and now wait for their own sign-in: one card per burst. */
+export interface ChatSignIn {
+  why: KeyTrouble;
+  cli: 'claude' | 'codex';
+  agents: { id: string; name: string }[];
 }
 
 /** The office's own reaction under a manager's message (#118): 🕓 queued, 👀 seen, ⏳ working, ✅ done, ⚠️ failed or stopped. */

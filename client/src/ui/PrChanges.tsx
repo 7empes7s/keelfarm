@@ -35,9 +35,9 @@ function note(key: string, patch: { path?: string; closed?: boolean }) {
 
 /**
  * The card's state for the channel on screen: its pages, the path the preview shows (the first page the first time,
- * then where it was left), the live agent and Follow, and whether the card is open.
+ * then where it was left), the live agent and Follow, and whether the card is open. `sheet`: shown as a phone's sheet.
  */
-export function usePrChanges(repo: RepoView | undefined, channel: Channel, forceOpen?: boolean) {
+export function usePrChanges(repo: RepoView | undefined, channel: Channel, forceOpen?: boolean, sheet = false) {
   const pull = repo && channel != null ? repo.pulls.find((p) => p.number === channel) : undefined;
   const key = repo && pull ? qaKey(repo.id, pull.number) : null;
   const qa = useStore((s) => (key ? s.qa[key] : undefined));
@@ -60,8 +60,8 @@ export function usePrChanges(repo: RepoView | undefined, channel: Channel, force
     if (r.memory !== memory) note(key, { path: r.path });
     setAt({ key, path: r.path });
     setFollow(false);
-    setOpenState(!!forceOpen || cardOpen(memory, key));
-  }, [key, first, forceOpen]);
+    setOpenState(!!forceOpen || cardOpen(memory, key, sheet && !first));
+  }, [key, first, forceOpen, sheet]);
 
   // Follow: the preview goes where the agent's browser goes, while they're on it.
   const livePage = pagePath(agent?.browserUrl);
@@ -115,7 +115,7 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
 
   if (sheet && !open) {
     return (
-      <button className="prc prc-sheet prc-peek" onClick={() => setOpen(true)} aria-expanded={false}>
+      <button className={`prc prc-sheet prc-peek ${pages.length ? '' : 'prc-peek-slim'}`} onClick={() => setOpen(true)} aria-expanded={false}>
         <span className="prc-grip" aria-hidden />
         <b>{title}</b>
         <span className="muted small">
@@ -192,7 +192,15 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
             </span>
           </button>
           <button className={`btn btn-small ${follow ? 'btn-on' : ''}`} aria-pressed={follow} onClick={() => setFollow(!follow)} title="The preview goes where their browser goes, until you pick a page">
-            {follow ? '◉ Following' : '◎ Follow'}
+            {follow ? (
+              <>
+                <Icon name="locate-fixed" /> Following
+              </>
+            ) : (
+              <>
+                <Icon name="locate" /> Follow
+              </>
+            )}
           </button>
         </section>
       )}
@@ -217,7 +225,7 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
           <p className="muted small">No pages recorded yet.</p>
         )}
         <button className="btn btn-small" onClick={onCompare}>
-          ⇆ Before / after on <code>{path}</code>
+          <Icon name="arrow-left-right" /> Before / after on <code>{path}</code>
         </button>
       </section>
 

@@ -1,7 +1,7 @@
 // Agents' sessions: terminals, desk setup, prompts, starting and finishing a build session.
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
-import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
+import type { LogEntry, SessionResult } from '../agentRunner.ts';
 import { agentPortEnv } from '../portLanes.ts';
 import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
@@ -20,7 +20,8 @@ import { sessionKind } from '../health.ts';
 import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from '../prompts.ts';
 import { leaseTools } from '../leaseTool.ts';
 import { normPath, overlap, practiceLines, qaPracticeLines } from '../../shared/practices.ts';
-import { recordCost } from '../metrics.ts';
+import { recordBox, recordCost } from '../metrics.ts';
+import { BOX_SIZE_INFO } from '../../shared/cloud.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
@@ -42,7 +43,7 @@ import {
 } from './model.ts';
 import { slugify } from './flavour.ts';
 import { SCREENS_DIR, screenFile, removeScreens } from './screens.ts';
-import { SwarmAgents } from './agents.ts';
+import { SwarmRotation } from './rotation.ts';
 import { TestLab, type Requester } from '../testLab.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { createLabTools } from '../testLabTools.ts';
@@ -51,7 +52,7 @@ import { fixCause } from '../../shared/rounds.ts';
 const LAB_VIEWER = 'testlab';
 const LAB_PREVIEW_MS = 5 * 60_000;
 
-export abstract class SwarmSessions extends SwarmAgents {
+export abstract class SwarmSessions extends SwarmRotation {
   // ---------- terminals ----------
 
   protected async loadTerminal(agentId: string): Promise<AgentTerminal | null> {
@@ -407,7 +408,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     this.previews.heldChanged(repoId, pr);
   }
 
-  /** Every 15 s: previews nobody watches stop, and holds whose agent's QA or fix session ended let go (the views say so). */
+  /** Every 5 s: previews nobody uses stop, and holds whose agent's QA or fix session ended let go (the views say so). */
   protected sweepPreviews() {
     this.previews.sweepPrs();
     for (const [key, { repoId, pr }] of this.previewHolds) {
@@ -442,41 +443,12 @@ export abstract class SwarmSessions extends SwarmAgents {
   // ---------- accounts (#247) ----------
 
   override snapshot(): WorldSnapshot {
-    return { ...super.snapshot(), accounts: this.accounts.view() };
+    const accounts = this.accounts.view();
+    return { ...super.snapshot(), accounts: { ...accounts, sources: this.usageSources(accounts.accounts) } };
   }
 
   protected override secrets(): string[] {
     return [...super.secrets(), ...this.accounts.secretValues()];
-  }
-
-  /**
-   * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
-   * into its environment, its usage and limit hits to the account, and its line in the cost ledger says which it was.
-   * A cloud agent's runs on the cloud's credentials (docs/cloud.md), OpenCode on its own setup.
-   */
-  protected startOnAccount(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
-    const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
-    const use = a.host === 'box' || cli === 'opencode' ? null : this.accounts.use(a.account, cli);
-    if (!use) return this.backend.startSession(opts, cb);
-    this.spend.account(a.id, use.id);
-    this.accounts.emit();
-    const env = { ...opts.env, ...use.env };
-    return this.backend.startSession(
-      { ...opts, ...(Object.keys(env).length ? { env } : {}), ...(use.keyEnv && cli === 'claude' ? { apiKeyEnv: use.keyEnv } : {}) },
-      {
-        ...cb,
-        usage: (readings) => (use.builtIn ? cb.usage?.(readings) : this.accounts.readings(use.id, readings)),
-        limited: (at) => {
-          this.accounts.limited(use.id, at);
-          // Only the login everyone shared stops the whole office: another account's limit is that account's.
-          if (use.builtIn) cb.limited?.(at);
-        },
-        finished: (result) => {
-          use.release();
-          cb.finished(result);
-        },
-      },
-    );
   }
 
   protected launchSession(
@@ -550,6 +522,7 @@ export abstract class SwarmSessions extends SwarmAgents {
         agentId: a.id,
         ...(practice.office ? { office: practice.office } : {}),
         tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
+        mcpServers: this.providers.mcpFor(a.id),
         ...how,
       },
       {
@@ -582,19 +555,24 @@ export abstract class SwarmSessions extends SwarmAgents {
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
-          if (a.host === 'box' && result.signedOut) void this.signedOutMidTask(a, repo, result, how.cli ?? 'claude', again);
+          if (a.host === 'box' && (result.signedOut || result.keyTrouble)) void this.signedOutMidTask(a, repo, result, how.cli ?? 'claude', again);
           else void this.onFinished(a, repo, result);
         },
       },
     );
   }
 
-  /** A cloud agent's session that ended because their CLI's login is gone (cliRunner's signedOut). */
+  /**
+   * A cloud agent's session that ended because their CLI's login is gone (cliRunner's signedOut), or the office's API
+   * key it ran on ran out of credit or was turned away (keyTrouble, #258): either way the task waits for a sign-in,
+   * with no round counted.
+   */
   protected async signedOutMidTask(a: PersistedAgent, repo: PersistedRepo, result: SessionResult, cli: AgentCli, again: () => void) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return;
-    const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli).catch(() => null);
-    if (cli === 'opencode' || !creds?.ownLogin || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
+    const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli, !!a.ownLogin).catch(() => null);
+    const keyStopped = !!creds?.onKey;
+    if (cli === 'opencode' || !(creds?.ownLogin || keyStopped) || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
       // A key from Settings that was turned away has nothing to sign in here: the session failed like any other.
       const errors = creds && !creds.ownLogin ? [`${cliLabel(cli)} turned the key it was given away: check it in Settings → Cloud agents.`] : result.errors;
       return this.onFinished(a, repo, { ...result, errors });
@@ -607,6 +585,12 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, turn.costUsd, Date.now());
     void this.spend.record(a, repo.id, this.spend.take(a.id), this.taskKind(a), { ...turn, ok: false }, { stopped: false });
+    if (keyStopped) {
+      // Off the key onto their own login: straight back to work if their Box is signed in already, else the guided steps.
+      this.keyStopped(a, cli, result.keyTrouble ?? 'invalid');
+      if ((await this.boxMachines.signedIn(this.machineOf(a), cli).catch(() => null)) === true) return again();
+      return this.holdForSignIn(a, cli, again);
+    }
     // The login its servers turned away is forgotten, so the Box reads as signed out until the manager signs it in again.
     await this.boxMachines.signOut(this.machineOf(a), cli).catch(() => undefined);
     this.holdForSignIn(a, cli, again, true);
@@ -633,6 +617,7 @@ export abstract class SwarmSessions extends SwarmAgents {
     a.costUsd += result.costUsd;
     a.turns += result.turns;
     recordCost(this.state.ops, repo.id, result.costUsd, a.endedAt);
+    if (a.host === 'box' && a.startedAt) recordBox(this.state.ops, repo.id, a.endedAt - a.startedAt, BOX_SIZE_INFO[this.state.settings.cloud.boxSize].usdPerCpuHour, a.endedAt); // Mission control's cloud today (#260)
     this.ledger({ kind: 'session', agentId: a.id, key: `${a.id}:${a.startedAt}:${a.endedAt}`, costUsd: result.costUsd, turns: result.turns }, false); // emitted below
     // Dev servers (or a demo office) the agent forgot to stop would otherwise keep its ports and lock its desk folder.
     void this.releaseDesk(a, repo)

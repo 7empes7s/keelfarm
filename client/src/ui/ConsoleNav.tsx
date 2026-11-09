@@ -5,7 +5,7 @@ import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef,
 import { pendingRequests, useStore, type ManagerTab } from '../store';
 import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionRow, sectionsIn, stepTab, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
-import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, RuntimeSettings } from './SettingsSections';
+import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
 import { CharterTab } from './CharterTab';
 import { ToolsTab } from './ToolsSettings';
@@ -14,6 +14,7 @@ import { EveryProjectCard } from './PracticesSettings';
 import { ProfileSettings } from './ProfileSettings';
 import { CloudSettings } from './CloudSettings';
 import { ProvidersSettings } from './ProvidersSettings';
+import { ProvidersPage } from './ProvidersPage';
 import { VoiceSettings } from './VoiceSettings';
 import { OutsideSettings } from './OutsideSettings';
 import { NotifySettings } from './NotifySettings';
@@ -84,9 +85,16 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
     case 'runtime':
       return one(<RuntimeSettings />);
     case 'office':
-      return one(<CompanySettings />);
+      return one(
+        <>
+          <CompanySettings />
+          <PreviewsSettings />
+        </>,
+      );
     case 'profile':
       return one(<ProfileSettings />);
+    case 'providers':
+      return one(<ProvidersPage />);
     case 'accounts':
       return one(<ProvidersSettings />);
     case 'cloud-agents':

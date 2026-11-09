@@ -17,7 +17,7 @@
       "typescript(no-misused-promises)": 1
     },
     "client/src/ui/KanbanView.tsx": {
-      "typescript(no-misused-promises)": 7
+      "typescript(no-misused-promises)": 1
     },
     "client/src/ui/NotifySettings.tsx": {
       "typescript(no-meaningless-void-operator)": 1
@@ -210,17 +210,24 @@
     },
     "server/cliRunner.ts": {
       "eslint(no-control-regex)": 1,
-      "typescript(no-floating-promises)": 3,
+      "typescript(no-floating-promises)": 2,
       "typescript(no-misused-promises)": 1
     },
     "server/cloudSignIn.test.ts": {
       "typescript(no-floating-promises)": 1
     },
-    "server/demo.ts": {
-      "eslint(no-control-regex)": 2,
-      "typescript(no-misused-promises)": 1,
-      "unicorn(no-useless-spread)": 1,
+    "server/demo/ceo.ts": {
+      "typescript(no-misused-promises)": 1
+    },
+    "server/demo/cloud.ts": {
+      "unicorn(no-useless-spread)": 1
+    },
+    "server/demo/sessions.ts": {
+      "eslint(no-control-regex)": 1,
       "unicorn(prefer-string-starts-ends-with)": 1
+    },
+    "server/demoSignIn.ts": {
+      "eslint(no-control-regex)": 1
     },
     "server/index.ts": {
       "typescript(no-redundant-type-constituents)": 1
@@ -290,7 +297,6 @@
     "exports:client/src/photo/overlay.ts:frameInsets",
     "exports:client/src/replay.ts:marksBetween",
     "exports:client/src/replayClock.ts:PREFETCH_REAL_MS",
-    "exports:client/src/screenshot.ts:screenshotUrl",
     "exports:client/src/ui/AgentSettings.tsx:CLOUD_STATE",
     "exports:client/src/ui/AgentSettings.tsx:HostSelect",
     "exports:client/src/ui/CareerCard.tsx:fixed1",
@@ -299,7 +305,6 @@
     "exports:client/src/ui/Overlays.tsx:SoundControls",
     "exports:client/src/ui/Overlays.tsx:closeOverlay",
     "exports:client/src/ui/PongHud.tsx:pongStatus",
-    "exports:client/src/ui/TeamChanges.tsx:setupLine",
     "exports:client/src/ui/a11yPrefs.ts:REDUCE_MOTION",
     "exports:client/src/ui/babble.ts:BABBLE_PEAK",
     "exports:client/src/ui/babbleRules.ts:FORMANTS",
@@ -331,7 +336,6 @@
     "exports:client/src/ui/peopleSounds.ts:murmur",
     "exports:client/src/ui/peopleSounds.ts:sigh",
     "exports:client/src/ui/peopleSounds.ts:yawn",
-    "exports:client/src/ui/sfx.ts:setGroupLevel",
     "exports:client/src/ui/sfxMix.ts:VOICE_CAP",
     "exports:client/src/ui/theatre.ts:useChannels",
     "exports:client/src/ui/voiceClaim.ts:CLAIM_MS",
@@ -443,7 +447,6 @@
     "exports:client/src/world/weather/weatherState.ts:stepWeather",
     "exports:client/src/world/weather/weatherState.ts:strike",
     "exports:e2e/helpers.ts:VIEW_KEY",
-    "exports:server/backend.ts:realCloud",
     "exports:server/box.ts:cloudError",
     "exports:server/boxCli.ts:TURN_ENDS",
     "exports:server/boxHelpers.ts:BOX_CODEX_HOOK_SOURCE",
@@ -455,13 +458,8 @@
     "exports:server/boxHelpers.ts:BOX_STATUSLINE_SOURCE",
     "exports:server/boxScripts.ts:BOX_CF",
     "exports:server/boxScripts.ts:BOX_SESSIONS",
-    "exports:server/clis.ts:BOX_CODEX_VERSION",
-    "exports:server/clis.ts:resolveCommand",
     "exports:server/cloud.ts:CLAUDE_TOKEN_ENV",
     "exports:server/config.ts:DEMO_MAX",
-    "exports:server/demo.ts:DEMO_TRANSCRIPT",
-    "exports:server/demo.ts:demoChime",
-    "exports:server/demo.ts:demoReadings",
     "exports:server/demoVisitors.ts:PING_SPOTS",
     "exports:server/deps.ts:INSTALL_MARKER",
     "exports:server/deps.ts:npmCi",
@@ -473,15 +471,10 @@
     "exports:server/notifier.ts:loadWebhooks",
     "exports:server/notifier.ts:sendError",
     "exports:server/outbox.ts:patchOf",
-    "exports:server/prTheatre.ts:WATCH_EVERY_MS",
     "exports:server/presence.ts:PING_GAP_MS",
     "exports:server/presence.ts:due",
     "exports:server/previewGateway.ts:GATEWAY",
     "exports:server/previewGateway.ts:GATEWAY_WORKER",
-    "exports:server/previewRunner.ts:PREVIEW_TMP",
-    "exports:server/previewRunner.ts:defaultCommand",
-    "exports:server/previewRunner.ts:fillPlaceholders",
-    "exports:server/previewRunner.ts:previewEnv",
     "exports:server/terminal.ts:TERM_COLS",
     "exports:server/terminal.ts:TERM_ROWS",
     "exports:server/voice.ts:CACHE_MAX_AGE_MS",
@@ -492,10 +485,8 @@
     "exports:server/voice.ts:TRANSCRIBE_TIMEOUT_MS",
     "exports:server/voice.ts:VOICES_TTL_MS",
     "exports:server/workspace.ts:TRIM_DIRS",
-    "exports:server/workspace.ts:dirSize",
     "exports:server/workspace.ts:machineDir",
     "exports:server/workspace.ts:pathForms",
-    "exports:server/workspace.ts:repoDir",
     "exports:shared/activity.ts:outsideDesk",
     "exports:shared/careers.ts:PHOTO_DAYS",
     "exports:shared/careers.ts:STAR_PASSES",
@@ -534,7 +525,6 @@
     "types:client/src/ui/mic.ts:MicRecord",
     "types:client/src/ui/mic.ts:MicState",
     "types:client/src/ui/notifySteps.ts:StepId",
-    "types:client/src/ui/voiceMessages.ts:SpokenRecord",
     "types:client/src/world/CoffeeMachine.tsx:CoffeeSnapshot",
     "types:client/src/world/Jukebox.tsx:JukeboxSnapshot",
     "types:client/src/world/batch.ts:Shading",
@@ -582,18 +572,14 @@
     "types:shared/types/notify.ts:PushDeviceView"
   ],
   "sizes": {
-    "client/src/store.ts": 855,
-    "client/src/styles.css": 6341,
     "client/src/ui/sfx.ts": 838,
     "client/src/world/ErrandDirector.tsx": 851,
     "client/src/world/draw.ts": 911,
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
-    "e2e/layout.spec.ts": 824,
     "server/ceo.ts": 802,
     "server/cliRunner.ts": 989,
-    "server/demo.ts": 2038,
     "server/swarm/core.ts": 844,
     "server/workspace.ts": 909
   }

@@ -31,7 +31,7 @@ test('the sign-in terminal leads with Paste and pastes the code from the clipboa
   const term = await signInTerminal(page);
   const row = term.locator('.term-keys-row .term-key');
   await expect(row.nth(0)).toHaveText('Esc');
-  await expect(row.nth(1)).toHaveText('Paste');
+  await expect(row.nth(1)).toHaveText('Paste code');
   await expect(row.nth(1)).toHaveClass(/term-key-primary/);
   await clipboard(context, page, '  demo-code-123\n');
   await paste(term).tap();
@@ -44,9 +44,9 @@ test('with the clipboard refused, the paste sheet sends the code', async ({ page
   const term = await signInTerminal(page);
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { readText: () => Promise.reject(new DOMException('denied', 'NotAllowedError')) } }));
   await paste(term).tap();
-  const sheet = dialog(page, /Paste into the terminal/);
+  const sheet = dialog(page, /Paste the sign-in code/);
   await expect(sheet).toBeVisible();
-  await sheet.getByRole('textbox', { name: 'Text to paste' }).fill('demo-code-456');
+  await sheet.getByRole('textbox', { name: 'Sign-in code' }).fill('demo-code-456');
   await page.screenshot({ path: test.info().outputPath('paste-sheet.png') });
   await sheet.getByRole('button', { name: 'Send + Enter' }).tap();
   await expect(sheet).toBeHidden();

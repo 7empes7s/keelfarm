@@ -23,7 +23,9 @@ OpenCode runs on its own setup (`opencode auth login`); the office doesn't manag
 ## Adding one
 
 - **Subscription login**: Add account → Subscription login. Its sign-in opens in a terminal on the page: open the link,
-  approve, paste the code back (Codex: enter the one-time code). Sign in again from its ⋯ menu when it expires.
+  approve, paste the code back with **Paste code** (Codex: enter the one-time code). Sign in again from its ⋯ menu when
+  it expires. A failed sign-in says why (a code works once, for a few minutes) and offers **Try again**; Claude Code's
+  can run `claude setup-token` there instead.
   A new login's folder starts empty: your skills, plugins and settings in `~/.claude` aren't in it. Copy
   `settings.json` and `plugins/` in if you want them there too.
 - **API key**: paste it; the office makes one free request (the provider's model list) to check it before saving it.
@@ -34,10 +36,35 @@ OpenCode runs on its own setup (`opencode auth login`); the office doesn't manag
 Agents and the CEO run on the **rotation** by default: the first account of their coding agent that isn't paused, top
 first (⋯ → Move up / down). Pin one to an account or a **tag** ("max", "api", "backup") in their setup (Team, or the
 CEO's card), or ask the CEO (`configure_agent` with `account`). A pinned account runs them even while it's paused.
-Automatic fallback when an account is limited comes with the next issue; for now a limit on an account you added
-marks that account Limited and doesn't pause the office (the built-in login's limit still does, as before).
 A session that resumes on a different account than it started on can't find its conversation: keep an agent on one
 account while a task is open.
+
+## Automatic fallback
+
+With **Switch accounts automatically** on (Providers & accounts → Rotation, the default), each session starts on the
+first usable account: the pinned account (even paused), then the pinned tag's, then the rest by priority. Accounts that
+are paused, Limited, Signed out, over their daily cap or at 95% of a 5-hour or weekly limit are skipped (95% ones only
+while another is free). **API keys only as a last resort** (on by default) puts API keys after every subscription.
+
+A session that ends on a usage limit ("5-hour limit reached ∙ resets 4pm", Codex's "You've hit your usage limit"), a
+429 or overloaded API, an expired login or an API key out of credit marks that account Limited until its reset (or
+Signed out) and starts again at once on the next account: a fresh session (another account can't resume the
+conversation) in the same worktree and branch, with no QA or fix round counted and nothing for you to do. When every
+account of its coding agent is out, an agent can fall back to another coding agent the office already uses (one an
+agent runs, or with an account added: **Agents fall back to another coding agent when out**); the CEO only to Codex,
+and only if you allow it. The CEO's switches show in the chat as a pill
+("Switched to Backup Max: Main Max is limited until 16:00"); agents' go into the CEO's next job.
+
+When every account is out, the office posts one message with when the first one is back and pauses new work until
+then; the CEO's job waits in its queue. If an API key is paused, the message has **Use API key**, which turns it on and
+carries on there, billed per token. A limited account comes back by itself at its reset time, or as soon as its usage
+check shows room. A pinned agent goes back to its pinned account at its next task. With only the login on this
+computer (and agents on one coding agent), nothing changes: its limit pauses the office as before.
+
+The Rotation card shows switches today, minutes saved (how long those sessions would have waited for the reset, up to
+5 hours each) and what fallback spent on API keys; each account card shows a bar of when it was limited in the last
+24 hours, and Mission control → Where the plan goes repeats the day's numbers. In the demo office, ⋯ → **Simulate a
+limit** on an account limits it for 3 minutes and switches the sessions running on it.
 
 ## Usage, status and actions
 

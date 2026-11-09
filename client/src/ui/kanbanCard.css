@@ -1,0 +1,64 @@
+/* One anatomy for every Kanban card (#232): the title in at most 3 lines, the status sentence in 2, the who row on one
+   line, the action row on one line with ⋯ at its right end. On a narrow card the buttons are their icons. */
+.kcard {
+  container: kcard / inline-size;
+  min-width: 0;
+}
+.kcard-title,
+.kcard .kcard-phrase {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kcard-title {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.kcard .kcard-phrase {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.kcard-who {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-top: var(--ds-space-1);
+}
+.kcard-who .agent-chip {
+  min-width: 0;
+  max-width: 100%;
+}
+.kcard-who .agent-chip > :is(.dot, .chip) {
+  flex: none;
+}
+.kcard-who-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kcard-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin-top: var(--ds-space-1);
+}
+.kcard-actions > .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.kcard-actions > .btn > .ds-icon {
+  display: none;
+}
+.kcard-actions > .ds-menu-wrap {
+  margin-left: auto;
+}
+@container kcard (max-width: 260px) {
+  .kcard-actions > .btn > .ds-icon {
+    display: inline-block;
+  }
+  .kcard-actions > .btn > .kcard-act-label {
+    display: none;
+  }
+}

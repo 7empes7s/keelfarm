@@ -1,6 +1,7 @@
 // One plain-language phrase per agent and card status, plus what happens next (#109): "In QA with Margaret · merges
 // by itself when green". Every place that shows a status (pills, the Team tab, Kanban cards) words it from here, so
 // the office says the same thing everywhere. Pure.
+import { needsYou, needsYouLine, type NeedsWhy } from '../../../shared/needsYou';
 import type { AgentStatus, PullInfo, QaView } from '../../../shared/types';
 
 /** The pill's short word for each status (StatusPill.tsx, pocket's Team tab). */
@@ -8,14 +9,15 @@ export const STATUS_WORD: Record<string, string> = {
   idle: 'free',
   preparing: 'setting up',
   working: 'working',
-  done: 'done',
+  done: 'free',
   error: 'needs help',
   stopped: 'stopped',
   'waiting-ceo': 'waiting for CEO',
-  'waiting-you': 'waiting for you',
+  'needs-you': 'needs you',
 };
 
 export interface AgentLike {
+  name?: string;
   status: AgentStatus;
   task: 'issue' | 'qa' | 'fix' | null;
   issueNumber: number | null;
@@ -26,13 +28,20 @@ export interface AgentLike {
   needsSignIn?: boolean;
 }
 
+/** After "Needs you: …": what happens then. */
+const NEXT: Record<NeedsWhy, string> = {
+  question: 'in the chat, then they carry on',
+  prompt: 'the office tells you if it lasts 5 minutes',
+  'sign-in': 'open their terminal',
+};
+
 /** What an agent is doing, and what happens next. `autoAssign`: their floor hands out work by itself. */
 export function agentPhrase(a: AgentLike, o: { autoAssign?: boolean } = {}): string {
   const working = a.status === 'working' || a.status === 'preparing';
-  if (a.needsSignIn) return 'Waiting for you to sign their coding agent in · open their terminal';
-  if (a.blocked && working) return 'Stuck on a prompt · the office tells you if it lasts 5 minutes';
+  const why = needsYou(a);
+  if (why) return `${needsYouLine(a.name ?? 'this agent', why)} · ${NEXT[why]}`;
   if (a.reviewedBy && working) return `${a.reviewedBy} is reviewing your change · they decide if this work goes on`;
-  if (a.waiting && !working) return a.waiting === 'ceo' ? 'Asked a question · the CEO answers, then they carry on' : 'Asked you a question · answer in the chat and they carry on';
+  if (a.waiting === 'ceo' && !working) return 'Asked a question · the CEO answers, then they carry on';
   const pr = a.prNumber != null ? `PR #${a.prNumber}` : 'a PR';
   switch (a.status) {
     case 'idle':
@@ -44,8 +53,8 @@ export function agentPhrase(a: AgentLike, o: { autoAssign?: boolean } = {}): str
       if (a.task === 'fix') return `Fixing ${pr} · goes back to QA after`;
       return `Building${a.issueNumber != null ? ` #${a.issueNumber}` : ''} · opens a PR, then QA tests it`;
     case 'done':
-      if (a.task === 'issue' && a.prNumber != null) return `Opened ${pr} · QA tests it next`;
-      return 'Done · free for the next task';
+      if (a.task === 'issue' && a.prNumber != null) return `Free · opened ${pr}, QA tests it next`;
+      return 'Free · finished, ready for the next task';
     case 'error':
       return 'Needs help · open their terminal to see why';
     case 'stopped':

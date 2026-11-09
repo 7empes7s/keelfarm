@@ -1,0 +1,423 @@
+/* ---------- pocket mode (pocket/Pocket.tsx): the office as a 2D app for phones and touch screens ---------- */
+
+.app-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: var(--muted);
+}
+.office-failed {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
+}
+.office-failed h2 {
+  margin: 0;
+}
+.office-failed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.start-meta {
+  flex-wrap: wrap;
+}
+.start-pocket {
+  font-size: 0.95rem;
+}
+.pocket {
+  position: fixed;
+  inset: 0;
+  /* the visible part of the page (viewport.ts): above the keyboard, never a height left over from it; in the UI scale's
+     zoomed px (a phone's default is 115%) */
+  top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
+  bottom: auto;
+  height: calc(100vh / var(--ui-scale, 1));
+  height: calc(var(--app-height, 100dvh) / var(--ui-scale, 1));
+  display: flex;
+  flex-direction: column;
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+  overflow: clip; /* hidden boxes can still be scrolled by a focused field, and iOS leaves them scrolled */
+}
+.pk-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  padding-top: max(8px, var(--ds-safe-top));
+  background: var(--accent);
+  border-bottom: 3px solid var(--ds-outline);
+}
+.pk-logo {
+  display: inline-flex;
+  --ds-icon: var(--ds-icon-md);
+  color: #fff;
+}
+.pk-title {
+  min-width: 0;
+  font-size: 1.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-outline);
+  background: var(--bad);
+}
+.pk-dot-on {
+  background: var(--good);
+}
+.pk-head-tools {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+/* iOS-style icon buttons (#134): a soft fill and a hairline, the glyph at about 55% of the button */
+.pk-icon-btn,
+.pk-head .info-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-1);
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 0;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-line);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  --ds-icon: var(--ds-icon-md);
+}
+.pk-main {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.pk-main-chat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overflow: clip;
+}
+.pk-main-chat .phone-chat {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--paper);
+}
+.pk-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.pk-tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 6px 4px;
+  padding-bottom: max(6px, var(--ds-safe-bottom));
+  background: #23263a;
+  border-top: 3px solid var(--ds-outline);
+}
+.pk-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #b8bbd6;
+  font-weight: 600;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.pk-tab-on {
+  background: #3b3f5c;
+  color: #fff;
+}
+.pk-tab-icon {
+  position: relative;
+  display: inline-flex;
+  --ds-icon: 25px;
+}
+.pk-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-card {
+  min-width: 0;
+  background: var(--ds-surface-raised);
+  border: 3px solid var(--ds-outline);
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+}
+.pk-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 1rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.pk-banner {
+  padding: 8px 12px;
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 14px;
+  background: var(--ds-surface-hover);
+  font-weight: 500;
+}
+.pk-banner-bad {
+  background: #ffe0e6;
+}
+.pk-callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 3px solid var(--ds-outline);
+  border-radius: 16px;
+  background: #ffe0e6;
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+  font-size: 1rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+/* a ⚠ in a tinted circle, the count, and "Approvals ›" that never splits from its chevron (#223) */
+.pk-callout-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ds-bad-fill) 45%, var(--ds-surface-raised));
+  font-size: var(--ds-text-sm);
+}
+.pk-callout-text {
+  flex: 1 1 12em;
+  min-width: 0;
+  line-height: var(--ds-leading-tight);
+}
+.pk-callout-go {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+  font-weight: var(--ds-weight-strong);
+}
+.pk-ceo,
+.pk-floor-head,
+.pk-agent-head,
+.pk-pr-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pk-pr-head {
+  align-items: flex-start;
+}
+.pk-pr-head .grow {
+  display: grid;
+  gap: var(--ds-space-2);
+  overflow-wrap: anywhere;
+}
+.pk-floor {
+  container: pkfloor / inline-size;
+  border-left: 10px solid var(--accent);
+}
+.pk-floor-name {
+  font-size: 1.05rem;
+}
+.pk-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, auto); /* each chip as wide as its label needs, the rest shared */
+  gap: 6px;
+  margin: 10px 0 8px;
+}
+.pk-stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 2px;
+  border: 2px solid rgba(31, 29, 43, 0.15);
+  border-radius: 12px;
+  background: var(--ds-surface-sunken);
+}
+.pk-stage-n {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.pk-stage-icon {
+  display: inline-flex;
+  margin-right: 3px;
+  --ds-icon: 16px;
+  vertical-align: -2px;
+}
+.pk-stage-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+}
+.pk-stage-zero {
+  opacity: 0.72;
+}
+.pk-stage-hot {
+  border-color: var(--bad);
+  background: #ffe0e6;
+}
+.pk-floor-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pk-floor-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+/* one row, the people and backlog line on the left and Board · Team on the right, wrapping as a whole only on a narrow card */
+@container pkfloor (max-width: 300px) {
+  .pk-pipeline {
+    gap: var(--ds-space-1);
+  }
+  .pk-stage-label {
+    font-size: 0.62rem;
+  }
+}
+@container pkfloor (max-width: 239px) {
+  .pk-floor-foot {
+    flex-wrap: wrap;
+  }
+  .pk-floor-foot > .pk-ellipsis {
+    white-space: normal;
+  }
+}
+.pk-wide {
+  width: 100%;
+}
+.pk-center {
+  text-align: center;
+}
+.pk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pk-chip {
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 999px;
+  background: var(--ds-surface-raised);
+  font-weight: 600;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pk-chip-on {
+  background: var(--accent);
+  color: var(--ink);
+}
+.pk-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 2px 0;
+  font-size: 1rem;
+}
+.pk-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scroll-margin-top: 8px;
+}
+.pk-agent-bad {
+  background: #fff5f7;
+}
+.pk-agent-needs {
+  box-shadow: inset 6px 0 0 var(--ds-warn-fill), var(--ds-shadow-2);
+}
+.pk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pk-actions .btn {
+  min-height: 34px;
+}
+.pk-assign {
+  flex: 1 1 160px;
+  min-width: 0;
+  width: auto;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+.pk-msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pk-error {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.pk-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+}

@@ -8,8 +8,10 @@ import type { EveryProject } from '../practices.ts';
 import type { TestLabSettings } from '../testLab.ts';
 import type { ThemeSettings } from '../themes.ts';
 import type { ToolSettings } from '../tooling.ts';
+import type { RotationSettings } from './accounts.ts';
 import type { AgentCli, AgentRuntime, CloudSettings, EffortLevel } from './agents.ts';
 import type { NotifySettings } from './notify.ts';
+import type { UsageWarningChoice } from './office.ts';
 import type { ListenSettings, VoiceSettings } from './voice.ts';
 
 export interface SwarmSettings {
@@ -37,9 +39,13 @@ export interface SwarmSettings {
   autoUpdate?: boolean; // update the office itself once it's quiet (absent on servers without self-update)
   updateSettleMin?: number; // an automatic update waits this long after the latest commit (at most 15 min after the first), so a run of merges is one restart
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
+  usageWarnings?: UsageWarningChoice; // when Claude warns that usage is high (#323); absent: 'pace'
+  stuckRecheckMin?: number; // a PR in needs-human this long is re-checked: released if only a conflict or CI outage holds it, else the CEO looks again (#275)
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
   previewRecentHours: number; // an open PR updated this recently gets its own channel chip; older ones fold under "Older"
-  mainPreviewIdleMin: number; // a floor's main preview stops after this many minutes with nobody watching; 0 = never
+  mainPreviewIdleMin: number; // a floor's main preview stops this many minutes after its last use; 0 = never
+  prPreviewIdleMin: number; // a PR preview stops this many minutes after its last use; 0 = never (#252)
+  previewMaxLifeHours: number; // a preview runs at most this many hours, unless "Keep it running"; 0 = no max
   dailyLogDir: string; // the daily work log's folder (#49); '' = /opt/ai-vault/daily when it exists, else <SWARM_HOME>/daily
   historyDays: number; // days the session history and its transcripts are kept; 0 = forever
   voice: VoiceSettings;
@@ -52,5 +58,6 @@ export interface SwarmSettings {
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
   everyProject: EveryProject; // Settings → Every project: the practice switches every floor inherits (#24)
   statusReactions?: boolean; // the office's 👀 ⏳ ✅ under the manager's messages as the CEO or an agent works on them (#193: off by default)
+  rotation?: RotationSettings; // Providers & accounts → Rotation (#248); absent: the defaults (shared/accountRotation.ts)
   officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)
 }

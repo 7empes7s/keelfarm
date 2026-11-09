@@ -13,6 +13,7 @@ import { jumpFor } from './chatRefs';
 import { ArtifactView, Sheet } from './ChatArtifacts';
 import { sendToCeo } from './chatSend';
 import { MapCanvas, type MapPaint, type MapStageProps } from './MapCanvas';
+import { MapViewSwitch, Stage3d, useMapView } from './MapViewSwitch';
 import './memoryMap.css';
 import { CloseButton, Icon } from './Icon';
 import { iconFor } from './icons';
@@ -67,11 +68,14 @@ function useGraph(older: boolean): MemoryGraph {
 }
 
 /**
- * `Stage`: what draws the graph (the 2D canvas; the map room passes its 3D constellation), with everything else
- * shared. `action`: the bar's last button (the map room's way back to 2D); in the 3D office the 2D map's opens the room.
+ * `Stage`: what draws the graph (the map room passes its 3D constellation), with everything else shared. Without
+ * one the bar's 2D / 3D switch picks the 2D canvas or the constellation (#314). `action`: the bar's last button (the
+ * map room's way back to 2D); otherwise the switch, and in the 3D office a button that walks into the map room.
  */
-export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType<MapStageProps>; action?: ReactNode }) {
+export function MemoryMap({ Stage, action }: { Stage?: ComponentType<MapStageProps>; action?: ReactNode }) {
   const office = useMode((s) => s.mode === 'office');
+  const mapView = useMapView();
+  const StageNow = Stage ?? (mapView.view === '3d' ? Stage3d : MapCanvas);
   const [older, setOlder] = useState(false);
   const graph = useGraph(older);
   const repos = useStore((s) => s.repos);
@@ -159,7 +163,7 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
   const nFilters = activeFilters(filters);
 
   return (
-    <div className="mm">
+    <div className={`mm ${StageNow === MapCanvas ? '' : 'mm-3d'}`}>
       <div className="mm-bar">
         <div className="mm-search">
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search #12, a title, a name" aria-label="Search the map" enterKeyHint="search" onKeyDown={(e) => e.key === 'Enter' && hits[0] && pick(hits[0])} />
@@ -181,13 +185,22 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
         <button type="button" className="btn mm-filter-btn" onClick={() => setSheet('filters')} aria-label={`Filters and groups${nFilters ? `, ${nFilters} on` : ''}`}>
           <Icon name="sliders-horizontal" /> Filters{nFilters > 0 && <span className="badge">{nFilters}</span>}
         </button>
-        {action ??
-          (office && (
-            <button type="button" className="btn mm-filter-btn" onClick={() => useStore.getState().openOverlay({ kind: 'mapRoom' })} aria-label="Walk into the map room: the map in 3D">
-              <Icon name="orbit" /> 3D
-            </button>
-          ))}
+        {action ?? (
+          <>
+            <MapViewSwitch view={mapView.view} onChoose={mapView.choose} />
+            {office && (
+              <button type="button" className="btn mm-filter-btn" onClick={() => useStore.getState().openOverlay({ kind: 'mapRoom' })} aria-label="Walk into the map room" title="Walk into the map room">
+                <Icon name="orbit" />
+              </button>
+            )}
+          </>
+        )}
       </div>
+      {!action && mapView.note && (
+        <p className="muted small mm-note" role="status">
+          {mapView.note}
+        </p>
+      )}
 
       <div className="mm-insights" role="group" aria-label="Insights">
         {insights.map((i) => (
@@ -201,7 +214,7 @@ export function MemoryMap({ Stage = MapCanvas, action }: { Stage?: ComponentType
       </div>
 
       <div className="mm-stage">
-        <Stage graph={shown} paint={paint} selected={selected} lit={lit} pulses={pulses} centre={centre} onSelect={select} onMenu={(id) => (select(id), setSheet('node'))} />
+        <StageNow graph={shown} paint={paint} selected={selected} lit={lit} pulses={pulses} centre={centre} onSelect={select} onMenu={(id) => (select(id), setSheet('node'))} />
         <div className="mm-stats small" aria-live="polite">
           {shown.nodes.length} things · {shown.edges.length} links
           {local && byId.get(local.id) && <> · around {byId.get(local.id)!.label}</>}

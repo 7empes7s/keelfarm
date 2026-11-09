@@ -3,6 +3,7 @@ import path from 'node:path';
 import { checkCloseIssue } from '../ceo.ts';
 import { HttpError } from '../httpError.ts';
 import { DEFAULT_PREVIEW, parsePreviewPatch } from '../previews.ts';
+import type { GatewayUse } from '../previewGateway.ts';
 import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
@@ -291,6 +292,16 @@ export abstract class SwarmRepos extends SwarmCore {
     this.previews.watch(viewer, repoId, pr);
   }
 
+  /** Keep a preview running (📌) for an hour or until the manager stops it, or let it stop by itself again; no pin: "Keep it running" starts its max lifetime again (#252). */
+  keepPreview(id: string, pr: number | null, pin?: 'hour' | 'forever' | 'off') {
+    this.previews.keep(this.repo(id).id, pr, pin);
+  }
+
+  /** The preview gateway's side of a preview's use: its requests and sockets, and its pages' heartbeat (#252). */
+  get previewUse(): GatewayUse {
+    return { opened: (port) => this.previews.opened(port), beat: (port, keep) => this.previews.beat(port, keep) };
+  }
+
   /** The address of a sync proxy in front of the floor's app (pr null) or a PR preview, for compare mode's synced scrolling. */
   async previewSyncUrl(id: string, pr: number | null): Promise<{ url: string }> {
     return { url: await this.previews.syncUrl(this.repo(id), pr) };
@@ -375,6 +386,7 @@ export abstract class SwarmRepos extends SwarmCore {
       this.refreshInsights(repo);
       this.reconcilePulls(repo, rt.pulls);
       this.rebaseConflicting(repo);
+      this.recheckStuck(repo);
       void this.refreshPractices(repo);
       // Something was merged since the last look (by the office or anyone else): bring the folder up to date.
       const newest = pulls.reduce<string | null>((m, p) => (p.mergedAt && (!m || p.mergedAt > m) ? p.mergedAt : m), null);

@@ -4,6 +4,8 @@ import { objectiveTag } from '../../../shared/charter';
 import type { HistoryEntry } from '../../../shared/history';
 import type { PullInfo, RepoView } from '../../../shared/types';
 import { api } from '../api';
+import { prDecision, prWhy } from '../../../shared/approvals';
+import { PrActions } from './PrActions';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { elapsedLabel } from '../qaCard';
 import { cardLabel, canPeel, locateCard } from '../world/whiteboard';
@@ -15,6 +17,7 @@ import { mergeRows, stateChip, type ChipTone } from './detailsRules';
 import { go } from './goTo';
 import { acceptanceProgress, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
 import { Key } from './Key';
+import { AssignButton } from './AssignSheet';
 import { Markdown } from './Markdown';
 import { Panel } from './Panel';
 import { ProgressBar } from './ProgressBar';
@@ -235,6 +238,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </>
         }
       >
+        {issue && !pull && col === 'backlog' && !card.untrusted && <AssignButton repoId={repo.id} number={issue.number} title={issue.title} />}
         {url && <LinkButton href={url}>Open on GitHub <Icon name="external-link" /></LinkButton>}
         {q?.commentUrl && <LinkButton href={q.commentUrl}>QA report <Icon name="external-link" /></LinkButton>}
         <button type="button" className="ds-btn" onClick={() => go({ kind: 'ceo', text: ask })}>
@@ -334,6 +338,12 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
   const opened = age(pull?.createdAt);
   return (
     <>
+      {q && pull?.state === 'OPEN' && (
+        <Section title="The decision">
+          <p>{q.status === 'testing' ? 'QA is running.' : q.status === 'fixing' ? 'An agent is fixing it.' : q.status === 'queued' ? 'Waiting for a free agent to test it.' : q.status === 'passed' && repo.autoMerge ? (q.mergeNote ?? 'QA passed. Waiting for automatic merge.') : prDecision(prWhy(q, pull), q.round, repo.autoMerge, pull.checks).text}</p>
+          <PrActions repo={repo} qa={q} pr={pull} />
+        </Section>
+      )}
       <StatStrip>
         <ChecksStat checks={q?.checks ?? []} to={id('checks')} />
         <Tile title="QA round" value={q ? q.round : '–'} note={q ? 'rounds so far' : 'not sent yet'} to={id('qa')} />

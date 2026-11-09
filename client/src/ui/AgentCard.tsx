@@ -4,6 +4,7 @@ import { isBusy, qaKey, useStore, type Agent } from '../store';
 import { reportCard } from '../world/activityProbe';
 import { useKeyName } from './controls';
 import { agentLabel, signInFor } from './floorRows';
+import { HostBadge } from './HostBadge';
 import { Icon } from './Icon';
 import { iconFor } from './icons';
 import { isTouch, openHoldMenu } from '../world/touch/touchState';
@@ -76,12 +77,7 @@ export function AgentCard() {
         <span className="ac-who">
           <span className="ac-name">
             {agent.name}
-            {agent.host === 'box' && (
-              <span className="cloud-badge" title="Works in an Upstash Box: carries on when the office is closed">
-                {' '}
-                <Icon name="cloud" /> cloud
-              </span>
-            )}
+            <HostBadge agent={agent} />
           </span>
           <span className="ac-title">{agentLabel(agent, settings, clis)}</span>
         </span>

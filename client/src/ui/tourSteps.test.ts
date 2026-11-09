@@ -82,7 +82,7 @@ describe("what's new", () => {
     const seen = seenIds(null, true);
     expect(seen).toContain('look');
     expect(seen).not.toContain('bell');
-    expect(newSince('office', seen).map((s) => s.id)).toEqual(['bell', 'chat-cards', 'console', 'charter', 'costs', 'agent-chat', 'chat-full', 'switch']);
+    expect(newSince('office', seen).map((s) => s.id)).toEqual(['bell', 'sound', 'chat-cards', 'console', 'charter', 'costs', 'agent-chat', 'chat-full', 'chat-charts', 'switch']);
     expect(seenIds(null, false)).toEqual([]); // mid-tour: nothing seen yet
     expect(seenIds('["bell"]', true)).toEqual(['bell']);
     expect(seenIds('not json', true)).toContain('look');

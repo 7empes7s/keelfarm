@@ -29,9 +29,12 @@ const SCREENS: Screen[] = [
       await expect(root.locator('.action-card').first()).toBeVisible();
       return root;
     },
-    tabs: [80, 100, 200].map((v) => ({
-      name: `text ${v}%`, go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
-    })),
+    tabs: [
+      ...[80, 100, 200].map((v) => ({
+        name: `text ${v}%`, go: (root: Locator) => root.page().evaluate((chatText) => (window as unknown as { __swarmA11y: { set: (p: object) => void } }).__swarmA11y.set({ chatText }), v),
+      })),
+      { name: 'steps', go: (root: Locator) => root.locator('.steps-row').last().click() }, // the reply's step log (#150)
+    ],
   },
   {
     // the questions waiting on the manager, in the tray above the message box, open and collapsed (#114)
@@ -84,6 +87,17 @@ const SCREENS: Screen[] = [
       return root;
     },
     tabs: ['', { name: 'everything', go: (root) => root.getByRole('button', { name: 'Everything' }).click() }],
+  },
+  {
+    // one header row (#270): docked, the dock's header is the chat's (no second row); 📊 Charts' prompts, and the ⋯
+    name: 'pocket chat header row',
+    widths: [390, 1280, 1920],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      if ((page.viewportSize()?.width ?? 0) >= 1200) await expect(root.locator('.pk-dock .chat-head')).toHaveCount(0);
+      return root;
+    },
+    tabs: ['', { name: 'charts', go: (root) => root.getByRole('button', { name: 'Charts', exact: true }).click() }, { name: 'more', go: (root) => root.getByRole('button', { name: /^More for the chat/ }).click() }],
   },
 ];
 

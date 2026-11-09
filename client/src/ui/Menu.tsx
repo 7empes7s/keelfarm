@@ -17,6 +17,7 @@ export function Menu({
   text,
   items: list,
   className,
+  badge = 0,
   initialOpen = false,
 }: {
   /** The ⋯ button's accessible name, e.g. "More for Ada". */
@@ -27,6 +28,8 @@ export function Menu({
   text?: string;
   items: (MenuItem | false | null | undefined)[];
   className?: string;
+  /** A count on the ⋯ for what's inside it (#270: a folded tool's badge), none at 0. */
+  badge?: number;
   initialOpen?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
@@ -62,13 +65,21 @@ export function Menu({
       if (t && (menu.current?.contains(t) || button.current?.contains(t))) return;
       close(false);
     };
+    const anchor = button.current?.getBoundingClientRect();
+    const scrolled = (e: Event) => {
+      if (menu.current?.contains(e.target as Node)) return;
+      const now = button.current?.getBoundingClientRect();
+      // A scroll queued while bringing the trigger into view can arrive after opening.
+      // Background panes can scroll too: only dismiss when this menu's anchor moves.
+      if (!anchor || !now || now.top !== anchor.top || now.left !== anchor.left) close(false);
+    };
     const moved = () => close(false);
     document.addEventListener('pointerdown', outside, true);
-    document.addEventListener('scroll', outside, true); // the page or a panel scrolled away under it
+    document.addEventListener('scroll', scrolled, true);
     window.addEventListener('resize', moved);
     return () => {
       document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('scroll', outside, true);
+      document.removeEventListener('scroll', scrolled, true);
       window.removeEventListener('resize', moved);
     };
   }, [open]);
@@ -127,7 +138,7 @@ export function Menu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
-        aria-label={label}
+        aria-label={badge > 0 ? `${label} (${badge})` : label}
         title={label}
         onClick={() => {
           first.current = 0;
@@ -140,6 +151,11 @@ export function Menu({
         <span aria-hidden className="ds-menu-dots">
           <Icon name="ellipsis" />
         </span>
+        {badge > 0 && (
+          <span className="badge badge-dot ds-menu-badge" aria-hidden>
+            {badge}
+          </span>
+        )}
       </button>
       {open && (
         <>

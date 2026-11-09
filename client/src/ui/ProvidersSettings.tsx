@@ -6,7 +6,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { BILLING_LINKS, kindSentence } from '../../../shared/accounts';
 import { clock, usageBars } from '../../../shared/usage';
-import type { AccountCli, AccountKind, AccountView } from '../../../shared/types';
+import type { AccountCli, AccountKind, AccountView, SignInMode } from '../../../shared/types';
 import { Menu } from './Menu';
 import { Sheet } from './Sheet';
 import { ProgressBar } from './ProgressBar';
@@ -15,6 +15,8 @@ import { confirmDialog } from './Confirm';
 import { workerCli } from './floorRows';
 import './accounts.css';
 import { Icon } from './Icon';
+import { SecretInput } from './SecretInput';
+import { LimitTimeline, RotationCard } from './RotationSettings';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
@@ -80,6 +82,7 @@ function Stats({ list }: { list: AccountView[] }) {
 
 function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: boolean; last: boolean; edit: () => void; signIn: () => void }) {
   const agents = useStore((s) => s.agents);
+  const demo = useStore((s) => s.demo);
   const now = useNow(30_000);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,6 +132,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
             !first && { label: 'Move up', onSelect: () => void api.moveAccount(a.id, -1).catch(() => undefined) },
             !last && { label: 'Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
             { label: a.kind === 'api-key' ? 'Rename, tags, daily cap' : 'Rename and tags', onSelect: edit },
+            demo && !a.removing && { label: 'Simulate a limit', hint: 'Demo: its sessions switch to the next account', onSelect: () => void api.simulateAccountLimit(a.id).catch(() => undefined) },
             !!billing && { label: 'Open billing and usage', onSelect: () => void window.open(billing, '_blank', 'noopener') },
             !a.builtIn && !a.removing && { label: 'Remove', danger: true, hint: 'Running sessions finish first', onSelect: () => void remove() },
           ]}
@@ -149,6 +153,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
       {a.dailyCostCap ? (
         <ProgressBar label="Today" value={`${usd(a.todayUsd)} of ${usd(a.dailyCostCap)}`} pct={Math.min(1, a.todayUsd / a.dailyCostCap)} tone={a.todayUsd >= a.dailyCostCap ? 'bad' : a.todayUsd >= a.dailyCostCap * 0.75 ? 'warn' : 'good'} aria={`${a.label}: ${usd(a.todayUsd)} of a ${usd(a.dailyCostCap)} daily cap`} />
       ) : null}
+      <LimitTimeline a={a} now={now} />
       <div className="ds-row-meta">
         {a.todaySessions} session{a.todaySessions === 1 ? '' : 's'} today · {usd(a.todayUsd)}
         {a.running ? ` · ${a.running} running` : ''}
@@ -192,7 +197,7 @@ function EditSheet({ a, close }: { a: AccountView; close: () => void }) {
   };
   return (
     <Sheet title={`Edit ${a.label}`} onClose={close}>
-      <form className="acc-form" onSubmit={(e) => void submit(e)}>
+      <form className="acc-form" autoComplete="off" onSubmit={(e) => void submit(e)}>
         <label className="field">
           <span>Name</span>
           <input value={label} maxLength={40} onChange={(e) => setLabel(e.target.value)} />
@@ -213,7 +218,7 @@ function EditSheet({ a, close }: { a: AccountView; close: () => void }) {
             </label>
             <label className="field">
               <span>New key (tested before it's saved)</span>
-              <input type="password" autoComplete="off" value={key} placeholder={`••••${a.keyHint}`} onChange={(e) => setKey(e.target.value)} />
+              <SecretInput name={`account-${a.id}-key`} value={key} placeholder={`••••${a.keyHint}`} onChange={(e) => setKey(e.target.value)} />
             </label>
           </>
         )}
@@ -259,7 +264,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
   };
   return (
     <Sheet title={`Add a ${cli === 'claude' ? 'Claude Code' : 'Codex'} account`} onClose={close}>
-      <form className="acc-form" onSubmit={(e) => void submit(e)}>
+      <form className="acc-form" autoComplete="off" onSubmit={(e) => void submit(e)}>
         <div role="radiogroup" aria-label="Kind of account" className="acc-kinds">
           {kinds.map((k) => (
             <label key={k} className={`acc-kind ${kind === k ? 'on' : ''}`}>
@@ -282,7 +287,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
         {kind === 'api-key' && (
           <label className="field">
             <span>{cli === 'claude' ? 'Anthropic' : 'OpenAI'} API key</span>
-            <input type="password" autoComplete="off" required value={key} placeholder={demo ? (cli === 'claude' ? 'sk-ant-anything works in the demo' : 'sk-anything works in the demo') : cli === 'claude' ? 'sk-ant-…' : 'sk-…'} onChange={(e) => setKey(e.target.value)} />
+            <SecretInput name="new-account-key" required value={key} placeholder={demo ? (cli === 'claude' ? 'sk-ant-anything works in the demo' : 'sk-anything works in the demo') : cli === 'claude' ? 'sk-ant-…' : 'sk-…'} onChange={(e) => setKey(e.target.value)} />
           </label>
         )}
         {kind === 'setup-token' && (
@@ -311,17 +316,42 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
   );
 }
 
-/** The login's own sign-in, in a terminal: open the link it prints and paste the code back. */
+/**
+ * The login's own sign-in, in a terminal: open the link it prints and paste the code back. Once it's over it says how it
+ * ended, with Try again (a fresh login in the same terminal); Claude Code can make a setup token there instead (#302).
+ */
 function SignInSheet({ a, close }: { a: AccountView; close: () => void }) {
+  const run = a.signIn;
+  const token = run?.mode === 'setup-token';
+  const failed = !!run && !run.running && !run.ok;
+  const again = (mode: SignInMode) => void api.signInAccount(a.id, mode).catch(() => undefined);
   return (
-    <Sheet title={`Sign in · ${a.label}`} onClose={close} className="acc-signin">
-      <p className="muted small">{a.cli === 'claude' ? 'Open the link below, approve it, and paste the code back here.' : 'Open the link below and enter the one-time code it shows.'} It signs in only this account's folder.</p>
+    <Sheet title={`${token ? 'Setup token' : 'Sign in'} · ${a.label}`} onClose={close} className="acc-signin">
+      <p className="muted small">
+        {a.cli === 'claude' ? 'Open the link below, approve it, and paste the code back here.' : 'Open the link below and enter the one-time code it shows.'}{' '}
+        {token ? 'It prints a token that lasts a year: put it in an environment variable of the office and add it as a Setup token account. The office never saves it.' : "It signs in only this account's folder."}
+      </p>
       <LiveTerminal agentId={`account:${a.id}`} cli={a.cli} compact keys signIn />
+      {run && !run.running && (
+        <div className={`small ${run.ok ? 'notify-ok' : 'term-error'}`} role="status">
+          {run.note}
+        </div>
+      )}
       <div className="row wrap">
+        {failed && (
+          <button className="btn btn-primary" onClick={() => again(run.mode)}>
+            <Icon name="rotate-ccw" /> Try again
+          </button>
+        )}
+        {a.cli === 'claude' && (
+          <button className="btn" onClick={() => again(token ? 'login' : 'setup-token')}>
+            <Icon name="key-round" /> {token ? 'Sign in with the browser instead' : 'Sign in with a setup token instead'}
+          </button>
+        )}
         <button className="btn" onClick={() => void api.testAccount(a.id).catch(() => undefined)}>
           <Icon name="flask-conical" /> Test
         </button>
-        <button className="btn btn-primary" onClick={close}>
+        <button className={`btn ${failed ? '' : 'btn-primary'}`} onClick={close}>
           Done
         </button>
       </div>
@@ -348,9 +378,10 @@ export function ProvidersSettings() {
       </h3>
       <p className="muted small">
         Every login and API key the coding agents on this computer run on. Agents and the CEO use the rotation (the first ready account, top first) unless you pin them to an account or a tag in their
-        setup. {onRotation} on the rotation now.
+        setup; when one is out, they move to the next. {onRotation} on the rotation now. Every other provider (text, audio, cloud, MCP servers) is in <a href="#settings/providers">Providers</a>.
       </p>
       <Stats list={list} />
+      <RotationCard />
       {CLI_INFO.map((c) => {
         const mine = list.filter((a) => a.cli === c.id);
         const users = agents.filter((x) => x.host !== 'box' && workerCli(x, settings) === c.id).length;

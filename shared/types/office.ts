@@ -13,7 +13,11 @@ export interface UsageView {
   state: 'normal' | 'pacing' | 'paused';
   until: number | null;
   warning: UsageWarningView | null; // the latest since the office started, for the usage meter
+  byChoice?: true; // full speed by the manager's choice (#323): "Keep full speed", or Resume full speed for this window
 }
+
+/** Settings → Agents, "When Claude warns that usage is high" (#323): pace new work, keep full speed until the limit, or pace and ask again after every restart. */
+export type UsageWarningChoice = 'pace' | 'full' | 'ask';
 
 /**
  * Claude's latest reading of one usage limit, from any session's status line or rate-limit event. These are the whole
@@ -66,7 +70,7 @@ export interface OfficeUpdateView {
 }
 
 /** What the manager did on a board (#207): the kinds of action the CEO hears about. */
-export type ManagerChangeKind = 'close-issue' | 'close-pr' | 'merge' | 're-qa' | 'send-back';
+export type ManagerChangeKind = 'close-issue' | 'close-pr' | 'merge' | 're-qa' | 'send-back' | 'assign';
 
 /** What the CEO did about a change that touched running work. */
 export type CeoVerdict = 'stopped' | 'redirected' | 'let-finish';

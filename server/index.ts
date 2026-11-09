@@ -74,7 +74,8 @@ if (scrub) {
 // Previews through the office's own address, for browsers on other devices (server/previewGateway.ts). First: their
 // request bodies pass on untouched.
 const proxied = (port: number) => swarm.previewProxied(port);
-app.use((req, res, next) => void (handleGateway(req, res, proxied) || next()));
+const previewUse = swarm.previewUse;
+app.use((req, res, next) => void (handleGateway(req, res, proxied, previewUse) || next()));
 // Agent CLIs calling back: hooks (a tool result can be a large screenshot, hence the limit) and the CEO's office tools.
 // The token in the path is the session's; unknown tokens get an empty answer.
 app.post('/api/hooks/:token', express.json({ limit: '64mb' }), (req, res) => void res.json(handleHook(String(req.params.token), req.body)));
@@ -166,6 +167,7 @@ app.post(
   })),
 );
 app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n))));
+app.post('/api/repos/:repo/issues/:n/assign', route((req) => swarm.assignIssue(repoId(req), num(req.params.n), str(req.body?.agentId))));
 app.post('/api/repos/:repo/issues/:n/trust', route((req) => swarm.trustIssue(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
 app.post('/api/repos/:repo/onboard', route((req) => swarm.onboardFloor(repoId(req))));
@@ -197,6 +199,16 @@ app.post(
     const repo = req.body?.repoId == null ? null : str(req.body.repoId);
     const pr = req.body?.pr == null ? null : num(req.body.pr);
     return swarm.watchPreview(viewer, repo || null, repo ? pr : null);
+  }),
+);
+// Keep a preview running (📌 an hour, until stopped, or off), or start its max lifetime again ("Keep it running", #252)
+app.post(
+  '/api/repos/:repo/preview/keep',
+  route((req) => {
+    const pr = req.body?.pr == null ? null : num(req.body.pr);
+    const pin = req.body?.pin ?? undefined;
+    if (pin !== undefined && pin !== 'hour' && pin !== 'forever' && pin !== 'off') throw new HttpError(400, "pin must be 'hour', 'forever' or 'off'");
+    return swarm.keepPreview(repoId(req), pr, pin);
   }),
 );
 app.post('/api/repos/:repo/preview/sync', route((req) => swarm.previewSyncUrl(repoId(req), req.body?.pr == null ? null : num(req.body.pr))));
@@ -241,6 +253,8 @@ app.post('/api/agents/:id/reset', route((req) => swarm.resetAgent(String(req.par
 app.post('/api/agents/:id/message', route((req) => swarm.message(String(req.params.id), str(req.body.text))));
 app.post('/api/agents/:id/react', route((req) => swarm.react(String(req.params.id), req.body?.itemId, req.body?.reaction)));
 app.post('/api/agents/:id/sign-in', route((req) => swarm.signIn(String(req.params.id))));
+app.post('/api/agents/:id/sign-in-check', route((req) => swarm.recheckSignIn(String(req.params.id))));
+app.get('/api/agents/:id/sign-in-link', route((req) => swarm.signInLinkOf(String(req.params.id))));
 app.get('/api/costs', route((req) => swarm.costsView(req.query.days, str(req.query.repo))));
 // The session history (#49): a page of entries, Settings' disk-usage line, and one entry with its transcript.
 app.get('/api/history', route((req) => swarm.history.page(historyFilter(req.query))));
@@ -290,21 +304,56 @@ app.put(
 app.post('/api/cloud/test', route(() => swarm.testCloud()));
 app.post('/api/cloud/orphans', route(() => swarm.deleteCloudOrphans()));
 app.post('/api/cloud/demo-expire', route(() => swarm.expireSignIns()));
+app.post('/api/cloud/key-again', route((req) => swarm.useKeyAgain(parse(z.object({ kind: z.enum(['anthropic', 'openai']) }), req.body).kind)));
+app.post('/api/cloud/demo-credit', route(() => swarm.simulateOutOfCredit()));
+// Usage (#361): an Admin key for the organisation's cost report; it goes in and never comes back out.
+app.put(
+  '/api/usage/admin-key',
+  route((req) => {
+    const body = parse(z.object({ provider: z.enum(['anthropic', 'openai']), key: z.string().max(400) }), req.body);
+    return swarm.setUsageAdminKey(body.provider, body.key);
+  }),
+);
+// Settings → Providers (#362): keys and MCP servers' secrets come in here and never go back out.
+app.post(
+  '/api/providers',
+  route((req) => {
+    const body = parse(z.object({ provider: z.string().max(40), key: z.string().max(400), label: z.string().max(60).optional() }), req.body);
+    return swarm.providers.add(body.provider, body.key, body.label);
+  }),
+);
+app.post('/api/providers/:id/test', route((req) => swarm.providers.test(String(req.params.id))));
+app.delete('/api/providers/:id', route(async (req) => ({ removed: await swarm.providers.remove(String(req.params.id)).then(() => true) })));
+app.post(
+  '/api/providers/mcp',
+  route((req) => {
+    const body = parse(
+      z.object({ name: z.string().max(40), command: z.string().max(500).optional(), url: z.string().max(500).optional(), secrets: z.record(z.string().max(64), z.string().max(2000)).optional(), agents: z.array(z.string().max(80)).max(200).optional() }),
+      req.body,
+    );
+    return swarm.addMcpServer(body);
+  }),
+);
+app.patch('/api/providers/mcp/:id', route((req) => swarm.providers.setMcp(String(req.params.id), parse(z.object({ on: z.boolean().optional(), agents: z.array(z.string().max(80)).max(200).optional() }), req.body))));
+app.post('/api/providers/mcp/:id/test', route((req) => swarm.providers.testMcp(String(req.params.id))));
+app.delete('/api/providers/mcp/:id', route(async (req) => ({ removed: await swarm.providers.removeMcp(String(req.params.id)).then(() => true) })));
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
 app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
 app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
 app.post('/api/accounts/:id/test', route(async (req) => ({ note: await swarm.accounts.test(String(req.params.id)) })));
-app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id))));
+app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id), (req.body ?? {}).mode === 'setup-token' ? 'setup-token' : 'login')));
 app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
+app.post('/api/accounts/:id/use-now', route((req) => swarm.useAccountNow(String(req.params.id))));
+app.post('/api/accounts/:id/simulate-limit', route((req) => swarm.simulateAccountLimit(String(req.params.id))));
 app.get('/api/voice/voices', route(() => swarm.voice.voices()));
 app.get(
   '/api/voice/messages/:id',
   route(async (req, res) => {
     const { id } = parse(z.object({ id: z.coerce.number().int().positive() }), req.params);
-    const q = parse(z.object({ cached: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
-    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id));
+    const q = parse(z.object({ cached: z.literal('1').optional(), whole: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
+    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id, !!q.whole));
     // The phone's ▶: a saved clip or a 404, never a new synthesis. Not kept by the browser, so "Clear saved clips" holds.
     const { audio, parts } = await swarm.voice.cachedAudio(id, q.part);
     res.setHeader('X-Voice-Parts', String(parts));
@@ -358,6 +407,9 @@ app.post('/api/usage/resume', route(() => swarm.resumeFullSpeed()));
 app.post('/api/usage/simulate', route((req) => swarm.simulateUsage(req.body?.kind)));
 // The health strip (#55): in the demo, low memory on demand
 app.post('/api/health/simulate', route((req) => swarm.health.simulate(req.body?.low === true)));
+// The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
+app.get('/api/server/trend', route(() => swarm.serverTrend()));
+app.post('/api/server/orphans/:pid/stop', route((req) => swarm.stopOrphan(Number(req.params.pid))));
 // The test lab desk's thumbnails (#56): a recent result's first screenshot.
 app.get('/api/testlab/shot/:id', (req, res) => {
   const file = swarm.testLab.shotFile(String(req.params.id));
@@ -399,6 +451,8 @@ app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
+app.get('/api/ceo/messages', route((req) => swarm.chatMessages(Number(req.query.before), Number(req.query.limit))));
+app.delete('/api/ceo/messages/:id', route((req) => swarm.removeChatMessage(Number(req.params.id))));
 app.post('/api/ceo/conversations', route((req) => swarm.newConversation(req.body?.repoId ?? null)));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));
@@ -489,7 +543,7 @@ terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
   const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : null;
-  if (!target && upgradeGateway(req, socket as Socket, head, proxied)) return;
+  if (!target && upgradeGateway(req, socket as Socket, head, proxied, previewUse)) return;
   if (!target) return void socket.destroy();
   if (PUBLIC_DEMO && !wsLimit.take(ipOf(req))) return void socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));

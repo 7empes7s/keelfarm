@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { barKeys, keyboardInset, MORE_KEYS, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
+import { barKeys, keyboardInset, keyClickSends, MORE_KEYS, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import type { AgentCli } from '../../../shared/types';
+import { Icon } from './Icon';
 
 // The terminal key bar (#37): the keys a phone keyboard lacks (Esc, Tab, arrows, Ctrl…) and the coding agent's own
 // shortcuts, docked above the on-screen keyboard. What each key sends is in shared/termKeys.ts.
@@ -86,8 +87,9 @@ function KeyButton({ k, latch, onPress }: { k: BarKey; latch?: ModState[Mod]; on
       onPointerLeave={stop}
       onPointerCancel={stop}
       onContextMenu={(e) => e.preventDefault()}
-      onClick={(e) => (paste || e.detail === 0) && onPress(k)} // Enter or Space on a focused key; every Paste
+      onClick={(e) => keyClickSends(paste, e.nativeEvent) && onPress(k)} // Enter or Space on a focused key; every Paste
     >
+      {paste && k.primary && <Icon name="clipboard-paste" />}
       {k.label}
     </button>
   );

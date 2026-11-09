@@ -100,19 +100,24 @@ const t = (label: string, title: string, text: string, repeat = false): BarKey =
 
 const ARROW_KEYS: BarKey[] = [k('↑', 'Up', 'up', { repeat: true }), k('↓', 'Down', 'down', { repeat: true }), k('←', 'Left', 'left', { repeat: true }), k('→', 'Right', 'right', { repeat: true })];
 
-/** Each coding agent's own top shortcuts, from their docs (Claude Code: code.claude.com/docs/en/interactive-mode). */
+/** Default CLI shortcuts (custom bindings can differ):
+ * https://code.claude.com/docs/en/interactive-mode
+ * https://developers.openai.com/codex/cli/reference
+ * https://github.com/openai/codex/blob/main/codex-rs/tui/src/keymap.rs
+ * https://opencode.ai/docs/keybinds/
+ */
 const CLI_KEYS: Record<AgentCli, BarKey[]> = {
   claude: [
-    k('⇧Tab', 'Shift+Tab: cycle permission modes (plan, accept edits)', 'tab', { mods: ['shift'] }),
-    t('Esc Esc', 'Esc twice: clear the draft, or rewind', '\x1b\x1b'),
-    t('^C', 'Ctrl+C: interrupt, or clear the input', '\x03'),
-    t('^R', 'Ctrl+R: search the prompt history', '\x12'),
-    t('^O', 'Ctrl+O: transcript viewer', '\x0f'),
-    t('^T', "Ctrl+T: Claude's task checklist", '\x14'),
-    t('^B', 'Ctrl+B: send running tasks to the background', '\x02'),
+    k('Mode', 'Shift+Tab: cycle permission modes (plan, accept edits)', 'tab', { mods: ['shift'] }),
+    t('Rewind', 'Esc Esc: clear the draft, or rewind', '\x1b\x1b'),
+    t('Stop', 'Ctrl+C: interrupt, or clear the input', '\x03'),
+    t('History', 'Ctrl+R: search the prompt history', '\x12'),
+    t('Transcript', 'Ctrl+O: transcript viewer', '\x0f'),
+    t('Tasks', "Ctrl+T: Claude's task checklist", '\x14'),
+    t('Background', 'Ctrl+B: send running tasks to the background', '\x02'),
   ],
-  codex: [t('Esc Esc', 'Esc twice: edit the previous message', '\x1b\x1b'), t('^C', 'Ctrl+C: interrupt, or quit', '\x03'), t('^T', 'Ctrl+T: transcript', '\x14'), t('^J', 'Ctrl+J: new line', '\n')],
-  opencode: [t('^C', 'Ctrl+C: interrupt', '\x03'), t('^X', 'Ctrl+X: the leader key', '\x18')],
+  codex: [t('Edit last', 'Esc Esc: edit the previous message', '\x1b\x1b'), t('Stop', 'Ctrl+C: interrupt, or quit', '\x03'), t('Transcript', 'Ctrl+T: transcript', '\x14'), t('New line', 'Ctrl+J: new line', '\n')],
+  opencode: [t('Stop', 'Ctrl+C: clear input, or exit', '\x03'), t('Leader', 'Ctrl+X: the leader key', '\x18')],
 };
 
 const PASTE: BarKey = { label: 'Paste', title: 'Paste from the clipboard', paste: true };
@@ -121,10 +126,10 @@ const PASTE: BarKey = { label: 'Paste', title: 'Paste from the clipboard', paste
 export function barKeys(cli: AgentCli, { signIn = false } = {}): BarKey[] {
   return [
     k('Esc', cli === 'claude' ? 'Esc: interrupt, or close a dialog' : 'Esc: interrupt', 'esc'),
-    signIn ? { ...PASTE, title: 'Paste the sign-in code from the clipboard', primary: true } : PASTE,
+    signIn ? { ...PASTE, label: 'Paste code', title: 'Paste the sign-in code from the clipboard', primary: true } : PASTE,
     k('Tab', 'Tab', 'tab'),
     ...ARROW_KEYS,
-    k('⏎', 'Enter', 'enter'),
+    k('Enter', 'Enter', 'enter'),
     { label: 'Ctrl', title: 'Ctrl: tap for the next key, double-tap to lock', mod: 'ctrl' },
     ...CLI_KEYS[cli],
     t('/', 'Commands', '/'),
@@ -151,6 +156,9 @@ export const MORE_KEYS: BarKey[] = [
   t('-', 'Dash', '-'),
   PASTE,
 ];
+
+/** Pointer keys already send on pointerdown. Touch clicks can have detail 0 too (e.g. inside a sheet). */
+export const keyClickSends = (paste: boolean, event: { detail: number; pointerType?: string }) => paste || (event.detail === 0 && !event.pointerType);
 
 // ---------- paste (#278) ----------
 

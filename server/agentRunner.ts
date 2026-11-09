@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentCli, AgentRole, AgentTask, EffortLevel, LogKind, UsageReading } from '../shared/types.ts';
+import type { AgentCli, AgentRole, AgentTask, EffortLevel, KeyTrouble, LogKind, UsageReading } from '../shared/types.ts';
 import { readingOf } from '../shared/usage.ts';
 import { usageTokens } from '../shared/startup.ts';
 import { memoryChars } from './tooling.ts';
@@ -56,6 +56,8 @@ export interface SessionOptions {
   box?: BoxTarget;
   /** The manager's Tools & skills switches (shared/tooling.ts): Claude Code sessions only. */
   tools?: SessionTools;
+  /** MCP servers added on Settings → Providers (#362), for this session's own MCP config: Claude Code on this computer only. */
+  mcpServers?: Record<string, Record<string, unknown>>;
   /** Report the session's text blocks as they are written (callbacks.text): the CEO's chat (#51). */
   stream?: boolean;
   /** A CEO's consult (server/consult.ts): edits, commits, pushes and pull requests are refused before they run. */
@@ -79,6 +81,10 @@ export interface SessionResult {
   interrupted?: boolean;
   /** A cloud agent's CLI isn't signed in, or its login expired: the task waits for the manager to sign it in again. */
   signedOut?: boolean;
+  /** A cloud agent's API key ran out of credit or was turned away (shared/keyTrouble.ts): they switch to their own login. */
+  keyTrouble?: KeyTrouble;
+  /** Every account it could run on is out (#248): the office pauses until the first is back; nothing counts against the task. */
+  outOfAccounts?: boolean;
 }
 
 export interface SessionCallbacks {
@@ -318,10 +324,23 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `↩ reply to message ${String(input.message_id ?? '?')}: ${clip(String(input.text ?? ''), 90)}`;
     case 'send_telegram':
       return `✈️ send_telegram: ${clip(String(input.text ?? ''), 90)}`;
+    case 'assign_issue':
+      return `📌 assign_issue #${String(input.number ?? '?')}${floor} · ${String(input.agent ?? 'next free')}`;
     case 'answer_agent':
       return `💬 answer_agent ${String(input.agent_id ?? '')}: ${clip(String(input.text ?? ''), 90)}`;
     case 'ask_manager_choice':
       return `❓ ask_manager_choice ${String(input.agent_id ?? '')}: ${clip(String(input.question ?? ''), 90)}`;
+    case 'wait_for': {
+      // "pr_merged floor 3 PR #138 or agent_idle <id> · up to 10 min" (shared/ceoSteps.ts reads it back)
+      const conds = (Array.isArray(input.conditions) ? (input.conditions as Record<string, unknown>[]) : []).map((c) =>
+        [c.kind, c.agent_id, c.usage, c.floor != null && `floor ${c.floor}`, c.pr != null && `PR #${c.pr}`, c.issue != null && `#${c.issue}`].filter((x) => x != null && x !== false && x !== '').join(' '),
+      );
+      return `⏳ wait_for ${clip(conds.join(' or '), 160)}${input.timeout_min != null ? ` · up to ${input.timeout_min} min` : ''}`;
+    }
+    case 'ask_manager':
+      return `❓ ask_manager: ${clip(String(input.question ?? ''), 90)}`;
+    case 'consult':
+      return `🧑‍💻 consult floor ${String(input.floor ?? '?')}${input.agent_id ? ` ${String(input.agent_id)}` : ''}: ${clip(String(input.question ?? ''), 90)}`;
   }
   return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }
@@ -397,7 +416,7 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
   Object.assign(env, nonInteractiveEnv(env), opts.env, toolsEnv(opts.tools));
   env.CLAUDE_AGENT_SDK_CLIENT_APP = `cubefarm/${VERSION}`;
 
-  const mcpServers: Options['mcpServers'] = {};
+  const mcpServers: Options['mcpServers'] = { ...(opts.mcpServers as Options['mcpServers']) };
   if (opts.browserTesting) {
     const browser = playwrightMcp();
     if (browser) mcpServers.playwright = browser;

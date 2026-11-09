@@ -59,6 +59,32 @@ export function stuckSince(was: string, status: string, prev: number | null | un
   return was === 'needs-human' && prev ? prev : (given ?? now);
 }
 
+/** A wait as the "waiting" lines say it: "<1 min", "12 min", "3 h 12 min", "2 days 3 h". */
+export function waitSpan(ms: number): string {
+  const min = Math.floor(Math.max(0, ms) / 60_000);
+  if (min < 1) return '<1 min';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return min % 60 ? `${h} h ${min % 60} min` : `${h} h`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? '' : 's'}${h % 24 ? ` ${h % 24} h` : ''}`;
+}
+
+/**
+ * How long a PR has waited and on what (#275), for the Approvals and the Kanban: "waiting 3 h 12 min: conflicts with
+ * main → a developer is updating it". Needs-human PRs and PRs back with a developer to resolve a conflict; else null.
+ */
+export function prWaitLine(qa: Pick<QaView, 'status' | 'stuckAt' | 'stuckWhy' | 'ceoLooking' | 'updatedAt' | 'fixReason'>, base: string, now: number): string | null {
+  if (qa.status === 'needs-human') {
+    const why = qa.stuckWhy?.replace(/^it /, '') ?? 'it needs a decision';
+    return `waiting ${waitSpan(now - (qa.stuckAt ?? qa.updatedAt))}: ${why} → ${qa.ceoLooking ? 'the CEO is looking first' : 'needs you'}`;
+  }
+  if ((qa.status === 'failed' || qa.status === 'fixing') && qa.fixReason === 'conflict') {
+    return `waiting ${waitSpan(now - qa.updatedAt)}: conflicts with ${base} → ${qa.status === 'fixing' ? 'a developer is updating it' : 'the next free developer updates it'}`;
+  }
+  return null;
+}
+
 /** "asked 2 h ago · open 3 days": when it was put to the manager and how long the PR (or request) has been open. */
 export function waitLine(askedAt: number, openedAt: number | null, now: number): string {
   const asked = span(now - askedAt);
@@ -69,10 +95,18 @@ export function waitLine(askedAt: number, openedAt: number | null, now: number):
 
 export type PrAction = 'merge' | 'retry' | 'sendBack' | 'close';
 
+/** The same manual overrides in CardView and PrDetail; active work keeps only its terminal. */
+export function prActions(status: QaView['status'], autoMerge: boolean): PrAction[] {
+  if (status === 'needs-human' || status === 'failed') return ['retry', 'sendBack', 'merge', 'close'];
+  if (status === 'passed' && !autoMerge) return ['merge'];
+  return [];
+}
+
 /** The decision card's plain sentence for a PR, and the action it recommends (null: nothing to do but wait). */
-export function prDecision(why: ApprovalWhy, round: number, autoMerge: boolean): { text: string; recommend: PrAction | null } {
+export function prDecision(why: ApprovalWhy, round: number, autoMerge: boolean, checks?: PullInfo['checks']): { text: string; recommend: PrAction | null } {
   switch (why) {
     case 'outage':
+      if (checks === 'passing') return { text: 'CI runs again: retry QA so it can merge.', recommend: 'retry' };
       return autoMerge
         ? { text: "GitHub didn't run CI (billing or no runner), so this isn't the code. It merges by itself once CI runs again.", recommend: null }
         : { text: "GitHub didn't run CI (billing or no runner), so this isn't the code. Merge it anyway if QA's report is enough for you.", recommend: 'merge' };

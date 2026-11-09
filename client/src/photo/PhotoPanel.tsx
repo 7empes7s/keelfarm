@@ -216,7 +216,7 @@ export default function PhotoPanel() {
               </>
             )}
             <button className="btn btn-ghost btn-small" onClick={() => focusCenter()}>
-              ◎ Focus on the middle <kbd>T</kbd>
+              <Icon name="focus" /> Focus on the middle <kbd>T</kbd>
             </button>
           </section>
 
@@ -346,7 +346,7 @@ export default function PhotoPanel() {
       <div className="toasts photo-toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.level}`} onClick={() => dismiss(t.id)}>
-            {t.text}
+            <span className="toast-text">{t.text}</span>
           </div>
         ))}
       </div>

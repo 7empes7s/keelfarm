@@ -26,9 +26,38 @@ const tapOpen = (name: string, group: string, section: string, row: string) => (
     await expect(head).toHaveAttribute('aria-expanded', 'true');
   },
 });
+/** Company → Memory map switched to 3D (#314): the constellation, or the note where this browser can't draw it. */
+const mapIn3d = (where: Where): View => ({
+  name: 'Memory map in 3D',
+  go: async (root) => {
+    await (where === 'pocket' ? pocketSection(root, 'Memory map') : consoleSection(root, 'Company', 'Memory map'));
+    await root.getByRole('button', { name: 'The map in 3D' }).click();
+    await expect(root.locator('.mm-3d canvas, .mm-note').first()).toBeVisible();
+  },
+});
 const wasteGroup = (where: Where, rounds = false): View =>
   tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
 const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
+
+/** Mission control's usage card (#361) with its worst source's detail open. */
+const usageDetail = (where: Where): View => ({
+  name: 'Mission control: a usage source open',
+  go: async (root) => {
+    await (where === 'pocket' ? pocketSection(root, 'Mission control') : consoleSection(root, 'Company', 'Mission control'));
+    await root.locator('#ops-card-sources .us-row').first().click();
+    await expect(root.page().locator('.us-sheet')).toBeVisible();
+  },
+});
+
+/** Settings → Providers' "Add provider" sheet with the catalogue (#362). */
+const addProvider: View = {
+  name: 'Providers: Add provider',
+  go: async (root) => {
+    await pocketSection(root, 'Providers');
+    await root.getByRole('button', { name: 'Add provider' }).click();
+    await expect(root.page().locator('.pv-sheet')).toBeVisible();
+  },
+};
 
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
@@ -64,7 +93,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office')],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office'), usageDetail('office'), mapIn3d('office')],
   },
   {
     name: 'pocket voice settings', // ElevenLabs on with a (demo) key: the voice picker with favourites, model and speed (#320)
@@ -76,6 +105,9 @@ const SCREENS: Screen[] = [
     },
     tabs: [{ name: 'Voice', go: (root) => pocketSection(root, 'Voice') }],
   },
+  { name: 'pocket usage detail', widths: [390, 1280], open: pocketSettings, tabs: [usageDetail('pocket')] }, // a screen of its own: the sheet stays open
+  { name: 'pocket add provider', widths: [390, 1280], open: pocketSettings, tabs: [addProvider] }, // a screen of its own: the sheet stays open
+  { name: 'pocket memory map in 3D', widths: [390, 1280], open: pocketSettings, tabs: [mapIn3d('pocket')] },
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];
 
@@ -116,3 +148,27 @@ for (const width of [360, 390, 430]) {
     expect(gaps).toEqual({ top: 0, left: 0, right: 0 });
   });
 }
+
+// Settings → Cloud agents' keys (#264): each its own field, in its own form, that password managers leave alone, and a
+// key pasted into the wrong field is refused, never saved.
+test('pocket Cloud agents: every key field is separate from password managers, and the wrong key is refused', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const panel = await pocketSettings(page);
+  await pocketSection(panel, 'Cloud agents');
+  const fields = await panel.locator('input[type="password"]').evaluateAll((els) =>
+    els.map((el) => ({
+      id: el.id,
+      name: el.getAttribute('name'),
+      autocomplete: el.getAttribute('autocomplete'),
+      ignored: ['data-bwignore', 'data-1p-ignore', 'data-lpignore'].every((a) => el.getAttribute(a) === 'true') && el.getAttribute('data-form-type') === 'other',
+      alone: el.closest('form')?.querySelectorAll('input[type="password"]').length === 1 && el.closest('form')?.getAttribute('autocomplete') === 'off',
+    })),
+  );
+  expect(fields.length).toBeGreaterThanOrEqual(3); // GitHub, Anthropic, OpenAI (and Upstash until it's saved)
+  expect(new Set(fields.map((f) => f.id)).size).toBe(fields.length);
+  for (const f of fields) expect(f).toEqual({ id: expect.stringMatching(/^cubefarm-cloud-/), name: f.id, autocomplete: 'new-password', ignored: true, alone: true });
+  const github = panel.locator('#cubefarm-cloud-github-key');
+  await github.fill('sk-ant-api03-a-claude-key');
+  await github.locator('xpath=ancestor::form').getByRole('button', { name: 'Save' }).click();
+  await expect(panel.getByRole('alert')).toHaveText('This looks like your Anthropic key, not a GitHub token.');
+});

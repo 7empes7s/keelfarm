@@ -5,10 +5,13 @@ import { useId, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { BOX_SIZE_INFO, BOX_SIZES, MAX_BOX_LIMIT } from '../../../shared/cloud';
+import { billingUrl } from '../../../shared/keyTrouble';
+import { secretMismatch, type SecretKind } from '../../../shared/secretFormats';
 import type { CloudCredentialView, CloudSettings as Cloud, CloudView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
+import { SecretInput } from './SecretInput';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/cloud.md';
 
@@ -34,14 +37,16 @@ function Command({ text }: { text: string }) {
   );
 }
 
-/** A write-only key or token: its hint once saved (Replace, Remove), else a field to paste one. */
-function SecretField({ label, saved, hint, placeholder, help, save }: { label: string; saved: boolean; hint: string; placeholder: string; help?: string; save: (value: string) => Promise<unknown> }) {
+/** A write-only key or token: its hint once saved (Replace, Remove), else a field in a form of its own to paste one. */
+function SecretField({ kind, label, saved, hint, placeholder, help, save }: { kind: SecretKind; label: string; saved: boolean; hint: string; placeholder: string; help?: string; save: (value: string) => Promise<unknown> }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const errorId = useId();
   const store = async (v: string) => {
+    const wrong = secretMismatch(kind, v); // a password manager's fill, or the wrong paste: never saved here
+    if (wrong) return setError(wrong);
     setBusy(true);
     setError('');
     try {
@@ -84,6 +89,7 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
   return (
     <form
       className="notify-form"
+      autoComplete="off"
       onSubmit={(e) => {
         e.preventDefault();
         void store(value);
@@ -92,13 +98,11 @@ function SecretField({ label, saved, hint, placeholder, help, save }: { label: s
       {help && <p className="muted small">{help}</p>}
       <label className="field">
         <span>{label}</span>
-        <input
-          type="password"
+        <SecretInput
+          name={`cloud-${kind}-key`}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
           aria-invalid={!!error}
           aria-describedby={error ? errorId : undefined}
         />
@@ -140,6 +144,29 @@ function Status({ view, what }: { view: CloudCredentialView; what: Partial<Recor
     <span className="small term-error">
       <Icon name="triangle-alert" /> Not set up yet
     </span>
+  );
+}
+
+/** A key that ran out of credit or was turned away (#258): when, what cloud agents do meanwhile, and the way back. */
+function KeyTroubleNote({ view, kind }: { view: CloudCredentialView; kind: 'anthropic' | 'openai' }) {
+  const t = view.trouble;
+  if (!t) return null;
+  const when = new Date(t.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <div className="term-error small" role="status">
+      <p>
+        <Icon name="triangle-alert" /> {t.kind === 'out-of-credit' ? `Out of credit since ${when}` : `Turned away since ${when}`}: cloud agents use their own sign-in meanwhile, and wait for you to sign each in.
+        Topped it up? They go back on it at their next task.
+      </p>
+      <div className="row wrap">
+        <button className="btn btn-small" onClick={() => void api.useKeyAgain(kind)}>
+          <Icon name="rotate-ccw" /> Use the key again
+        </button>
+        <a className="btn btn-small btn-ghost" href={billingUrl(kind === 'openai' ? 'codex' : 'claude')} target="_blank" rel="noreferrer">
+          <Icon name="credit-card" /> Add credit
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -197,6 +224,70 @@ function Boxes({ cloud }: { cloud: CloudView }) {
   );
 }
 
+/** A whole number field that saves on change. */
+function NumberField({ label, value, min, max, onSave }: { label: string; value: number; min: number; max: number; onSave: (n: number) => void }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => {
+          const n = Math.round(Number(e.target.value));
+          if (n >= min && n <= max) onSave(n);
+        }}
+      />
+    </label>
+  );
+}
+
+/** The demo's Simulate full computer: its memory runs low, so Hybrid hires in the cloud and a burst follows within half a minute; again to free it, and the added agent leaves. */
+function SimulateFull() {
+  const demo = useStore((s) => s.demo);
+  const memory = useStore((s) => s.health?.memory ?? null);
+  const headroom = useStore((s) => s.settings.memory.headroomMb);
+  if (!demo || !memory) return null;
+  const full = memory.availableMb < headroom * 2;
+  return (
+    <div className="row wrap hybrid-sim">
+      <span className="grow muted small">{full ? 'This computer is full (demo): waiting work gets a cloud agent soon.' : 'Try a burst: fill this computer up and watch a cloud agent join, then leave once it has room again.'}</span>
+      <button className="btn btn-small btn-ghost" onClick={() => void api.simulateMemory(!full)}>
+        <Icon name="monitor" /> {full ? 'Free this computer (demo)' : 'Simulate full computer (demo)'}
+      </button>
+    </div>
+  );
+}
+
+/** Hybrid's settings (#260): the most agents here, and the burst to the cloud when this computer is full. */
+function HybridOptions({ settings, save }: { settings: Cloud; save: (patch: Partial<Cloud>) => void }) {
+  const h = settings.hybrid;
+  const set = (patch: Partial<Cloud['hybrid']>) => save({ hybrid: { ...h, ...patch } });
+  return (
+    <div className="notify-hook">
+      <p className="muted small">
+        A new agent works on this computer when there's memory for one more session (and a free slot under the session limit); otherwise in a Box, within your Box limit. When work is ready, both the same, this
+        computer's agents get it first.
+      </p>
+      <NumberField label="Most agents on this computer (0: no limit)" value={h.localMax} min={0} max={64} onSave={(n) => set({ localMax: n })} />
+      <label className="toggle block">
+        <input type="checkbox" checked={h.burst} onChange={(e) => set({ burst: e.target.checked })} />
+        <span>Add a cloud agent by itself when work waits for memory</span>
+      </label>
+      {h.burst && (
+        <div className="row wrap">
+          <NumberField label="After waiting (minutes)" value={h.burstAfterMin} min={1} max={240} onSave={(n) => set({ burstAfterMin: n })} />
+          <NumberField label="Most added at once" value={h.burstMax} min={1} max={50} onSave={(n) => set({ burstMax: n })} />
+          <NumberField label="Leave after idle (minutes)" value={h.burstIdleMin} min={1} max={240} onSave={(n) => set({ burstIdleMin: n })} />
+        </div>
+      )}
+      <SimulateFull />
+      {h.burst && <p className="muted small">An added agent finishes their task first, then leaves once idle or when this computer has room again, and their Box is deleted. The chat and the CEO hear about each one.</p>}
+    </div>
+  );
+}
+
 export function CloudSettings() {
   const settings = useStore((s) => s.settings.cloud);
   const cloud = useStore((s) => s.cloud);
@@ -219,6 +310,7 @@ export function CloudSettings() {
       <h4 className="notify-h">Upstash account</h4>
       <div className="notify-hook">
         <SecretField
+          kind="upstash"
           label="Upstash Box API key"
           saved={cloud.keySet}
           hint={cloud.keyHint}
@@ -243,7 +335,16 @@ export function CloudSettings() {
             <Icon name="cloud" /> An Upstash Box each{!cloud.keySet && ' (save your API key first)'}
           </span>
         </label>
-        <p className="muted small">New hires work here; the lobby lets you pick for each one. Move an agent from their settings when they have no task.</p>
+        {(cloud.keySet || settings.machineKind === 'hybrid') && (
+          <label className="toggle block">
+            <input type="radio" name="cloud-kind" checked={settings.machineKind === 'hybrid'} onChange={() => save({ machineKind: 'hybrid' })} />
+            <span>
+              <Icon name="shuffle" /> Hybrid: this computer while it has room, then the cloud
+            </span>
+          </label>
+        )}
+        <p className="muted small">New hires work here; the lobby lets you pick for each one. Move an agent from their settings when they have no task. Changing this never moves anyone already working.</p>
+        {settings.machineKind === 'hybrid' && <HybridOptions settings={settings} save={save} />}
         <div className="row wrap">
           <label className="field grow">
             <span>Box size</span>
@@ -289,7 +390,7 @@ export function CloudSettings() {
           <Status view={cloud.github} what={{ gh: 'Your gh login', token: 'A token you saved' }} />
         </div>
         <p className="muted small">Your gh login is used unless you save a fine-grained token for your floors' repos (Contents, Pull requests and Issues: read and write), which is safer.</p>
-        <SecretField label="GitHub token" saved={cloud.github.source === 'token'} hint={cloud.github.hint} placeholder="github_pat_…" save={(v) => api.setCloudToken('github', v)} />
+        <SecretField kind="github" label="GitHub token" saved={cloud.github.source === 'token'} hint={cloud.github.hint} placeholder="github_pat_…" save={(v) => api.setCloudToken('github', v)} />
       </div>
       <div className="notify-hook">
         <div className="row wrap">
@@ -306,7 +407,8 @@ export function CloudSettings() {
         {cloud.claude.source !== 'subscription' && (
           <>
             <p className="muted small">Or pay per token with an API key, which every cloud agent then uses instead:</p>
-            <SecretField label="Anthropic API key" saved={cloud.claude.source === 'apiKey'} hint={cloud.claude.hint} placeholder="sk-ant-…" save={(v) => api.setCloudToken('anthropic', v)} />
+            <SecretField kind="anthropic" label="Anthropic API key" saved={cloud.claude.source === 'apiKey'} hint={cloud.claude.hint} placeholder="sk-ant-…" save={(v) => api.setCloudToken('anthropic', v)} />
+            <KeyTroubleNote view={cloud.claude} kind="anthropic" />
             <details className="small">
               <summary>Or one subscription token for every cloud agent</summary>
               <ol className="cloud-steps">
@@ -332,13 +434,22 @@ export function CloudSettings() {
         <p className="muted small">
           With your ChatGPT plan, each cloud agent signs in once in their own terminal: open the link it shows and enter its one-time code. Or an OpenAI API key works in every Box:
         </p>
-        <SecretField label="OpenAI API key" saved={cloud.codex.source === 'apiKey'} hint={cloud.codex.hint} placeholder="sk-…" save={(v) => api.setCloudToken('openai', v)} />
+        <SecretField kind="openai" label="OpenAI API key" saved={cloud.codex.source === 'apiKey'} hint={cloud.codex.hint} placeholder="sk-…" save={(v) => api.setCloudToken('openai', v)} />
+        <KeyTroubleNote view={cloud.codex} kind="openai" />
       </div>
       {demo && cloud.keySet && (
         <div className="row wrap">
           <span className="grow muted small">Try what happens when a cloud agent's sign-in runs out: every Box is signed out, and its agent asks to be signed in again.</span>
           <button className="btn btn-small btn-ghost" onClick={() => void api.expireSignIns()}>
             <Icon name="key-round" /> Expire sign-ins (demo)
+          </button>
+        </div>
+      )}
+      {demo && cloud.keySet && (
+        <div className="row wrap">
+          <span className="grow muted small">Try what happens when the Anthropic API key runs out of credit: cloud agents switch to their own sign-in and you get the steps to sign them in.</span>
+          <button className="btn btn-small btn-ghost" onClick={() => void api.simulateOutOfCredit()}>
+            <Icon name="credit-card" /> Simulate out of credit (demo)
           </button>
         </div>
       )}

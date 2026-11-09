@@ -1,0 +1,98 @@
+/* the CEO's chat, docked on the right (medium widths: a drawer over the pages) */
+.pk-dock-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  z-index: 1;
+  width: 14px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pk-dock-grip:is(:hover, :focus-visible, :active) {
+  background: linear-gradient(90deg, transparent 5px, var(--ds-focus) 5px, var(--ds-focus) 9px, transparent 9px);
+  outline: none;
+}
+/* what the last panel replaced (#212): one tap brings it back */
+.pk-back-chip {
+  min-width: 0;
+  max-width: 220px;
+  min-height: var(--ds-target);
+}
+.pk-dock {
+  position: relative;
+  flex: none;
+  /* dragged between 360 and 520 px (DockGrip.tsx), never leaving the rail and pages under 600 px */
+  width: clamp(360px, var(--pk-dock-w, 380px), max(360px, 100% - 692px));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border-left: var(--ds-border-strong) solid var(--ds-outline);
+}
+.pk-layout-medium .pk-dock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: min(400px, calc(100% - 68px));
+  box-shadow: -6px 0 0 var(--ds-shadow-color);
+}
+.pk-dock-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px 6px 12px;
+  background: var(--ds-surface-raised);
+  border-bottom: var(--ds-border-strong) solid var(--ds-outline);
+}
+.pk-dock .phone-chat {
+  width: 100%;
+  min-width: 0;
+  background: var(--paper);
+}
+/* expanded: the threads column (280px, threads.css) beside the chat, which keeps its dragged width (#212), and the
+   artifact or file it opens beside the dock, not over it (#132) */
+.pk-dock-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.pk-dock-threads {
+  width: clamp(640px, calc(var(--pk-dock-w, 380px) + 280px), max(640px, 100% - 692px));
+}
+html:has(.pocket:not(.pk-chat-full) .pk-dock-threads) .artifact-back {
+  right: calc(var(--pk-dock-w, 380px) + 280px);
+}
+/* the chat full screen (#201): wide, the docked chat covers the pages beside the rail (#242: the rail stays, and tapping
+   it leaves full screen), the pages keeping their place behind it; on a phone the tab bar and the working strip's
+   second line step aside */
+.pk-railed.pk-chat-full .pk-dock {
+  position: absolute;
+  inset: 0 0 0 var(--pk-rail-w);
+  z-index: 4;
+  width: auto;
+  border-left: none;
+  box-shadow: none;
+}
+.pk-railed.pk-chat-full .pk-work {
+  visibility: hidden;
+}
+.pocket.pk-chat-full:not(.pk-railed) :is(.pk-tabs, .working-next) {
+  display: none;
+}
+/* the chat's one header row (#270): who, then its tools; the name truncates, never the buttons */
+.pk-dock-chat {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+.pk-dock-chat > .chat-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

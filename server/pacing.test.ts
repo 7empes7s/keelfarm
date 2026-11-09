@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clampPacingSessions, clock, mayStart, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningView, type WorkKind } from './pacing.ts';
+import { keptWaiver } from '../shared/usage.ts';
+import { clampPacingSessions, clock, fullSpeedByChoice, mayStart, pacingMessage, resumeRefusal, usageLabel, usageView, waived, warningOutcome, warningView, type WorkKind } from './pacing.ts';
 
 const NOW = new Date(2026, 8, 28, 12, 0).getTime();
 const HOUR = 60 * 60_000;
@@ -105,5 +106,56 @@ describe('resume full speed', () => {
     expect(waived(warn('five_hour', NOW + 7 * HOUR), waiver, NOW)).toBe(false); // the usage was reset: a new window
     expect(waived(warn('five_hour', NOW + 2 * HOUR), waiver, NOW + 2 * HOUR)).toBe(false); // the waived window is over
     expect(waived(warn('five_hour', NOW + 2 * HOUR), null, NOW)).toBe(false);
+  });
+});
+
+describe('remembered choices (#323)', () => {
+  const warn = (resetsAt: number | null, rateLimitType: string | null = 'five_hour') => ({ rateLimitType, resetsAt, utilization: 0.85 });
+  const calm = { now: NOW, pacingUntil: 0, waiver: null };
+
+  it('a waiver restored after a restart keeps full speed in the same window and paces in a new one', () => {
+    const saved = JSON.parse(JSON.stringify({ until: NOW + 2 * HOUR, limit: 'five_hour' })) as unknown; // through state.json
+    const waiver = keptWaiver(saved, 'pace', NOW + HOUR);
+    expect(waiver).toEqual({ until: NOW + 2 * HOUR, limit: 'five_hour' });
+    const after = { now: NOW + HOUR, pacingUntil: 0, waiver, choice: 'pace' as const };
+    expect(warningOutcome(warn(NOW + 2 * HOUR), after)).toBeNull();
+    expect(warningOutcome(warn(NOW + 7 * HOUR), after)).toEqual({ until: NOW + 7 * HOUR, fresh: true }); // the usage was reset
+    expect(warningOutcome(warn(NOW + 30 * HOUR, 'seven_day'), after)).toEqual({ until: NOW + 30 * HOUR, fresh: true }); // another limit
+  });
+
+  it('drops a saved waiver whose window is over, or one that is not a waiver', () => {
+    expect(keptWaiver({ until: NOW, limit: 'five_hour' }, 'pace', NOW)).toBeNull();
+    expect(keptWaiver({ until: NOW + HOUR }, undefined, NOW)).toEqual({ until: NOW + HOUR, limit: null });
+    for (const raw of [null, undefined, 'x', { until: 'soon' }, {}]) expect(keptWaiver(raw, 'pace', NOW)).toBeNull();
+  });
+
+  it('"Keep full speed" never paces, while the warning still shows as full speed by choice', () => {
+    expect(warningOutcome(warn(NOW + HOUR), { ...calm, choice: 'full' })).toBeNull();
+    expect(warningOutcome(warn(null, null), { ...calm, choice: 'full' })).toBeNull();
+    const warning = warningView(warn(NOW + HOUR), NOW);
+    expect(fullSpeedByChoice('full', null, warning, NOW)).toBe(true);
+    expect(fullSpeedByChoice('full', null, warning, NOW + HOUR)).toBe(false); // that window reset
+    expect(fullSpeedByChoice('full', null, null, NOW)).toBe(false); // no warning: just normal
+    expect(fullSpeedByChoice('pace', null, warning, NOW)).toBe(false);
+    expect(fullSpeedByChoice('pace', { until: NOW + HOUR, limit: null }, warning, NOW)).toBe(true); // Resume full speed
+    expect(usageView({ now: NOW, pausedUntil: 0, pacingUntil: 0 }, warning, true)).toEqual({ state: 'normal', until: null, warning, byChoice: true });
+    expect(usageLabel(usageView({ now: NOW, pausedUntil: 0, pacingUntil: 0 }, warning, true), NOW)).toBe('normal (full speed by choice)');
+  });
+
+  it('a limit still pauses everything under "Keep full speed"', () => {
+    const u = usageView({ now: NOW, pausedUntil: NOW + HOUR, pacingUntil: 0 }, null, true);
+    expect(u).toEqual({ state: 'paused', until: NOW + HOUR, warning: null });
+    for (const kind of KINDS) expect(mayStart(kind, at({ pausedUntil: NOW + HOUR }))).toBe(false);
+  });
+
+  it('"Ask me each time" and "Pace new work" pace as before, and "Ask me each time" forgets the waiver on a restart', () => {
+    for (const choice of ['pace', 'ask'] as const) {
+      expect(warningOutcome(warn(NOW + HOUR), { ...calm, choice })).toEqual({ until: NOW + HOUR, fresh: true });
+      expect(warningOutcome(warn(null), { ...calm, choice })).toEqual({ until: NOW + HOUR, fresh: true }); // no reset given: PACING_MS
+      expect(warningOutcome(warn(NOW + 2 * HOUR), { ...calm, pacingUntil: NOW + HOUR, choice })).toEqual({ until: NOW + 2 * HOUR, fresh: false });
+      expect(warningOutcome(warn(NOW + HOUR), { ...calm, pacingUntil: NOW + HOUR, choice })).toBeNull(); // already pacing that long
+      expect(warningOutcome(warn(NOW + HOUR), { ...calm, waiver: { until: NOW + HOUR, limit: 'five_hour' }, choice })).toBeNull(); // resumed, same run
+    }
+    expect(keptWaiver({ until: NOW + HOUR, limit: 'five_hour' }, 'ask', NOW)).toBeNull();
   });
 });

@@ -277,7 +277,9 @@ function Transcript({ items, cut }: { items: TranscriptItem[]; cut: boolean }) {
                         <Icon name="triangle-alert" /> Error
                       </>
                     ) : (
-                      '↳ Result'
+                      <>
+                        <Icon name="corner-down-right" /> Result
+                      </>
                     )}
                   </span>
                   <span className="history-peek">{it.text.split('\n')[0]}</span>

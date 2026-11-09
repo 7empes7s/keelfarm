@@ -1,0 +1,364 @@
+// The demo's fake build, QA and fix sessions (#257), drawn in the agent's terminal, and Claude's made-up usage.
+import crypto from 'node:crypto';
+import { parseProgramStatus, programStatusStep } from '../programStatus.ts';
+import path from 'node:path';
+import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions } from '../agentRunner.ts';
+import { CLIS } from '../clis.ts';
+import { HOME_DIR } from '../config.ts';
+import { withDemoChat } from '../demoAgentChat.ts';
+import { demoConsultSession } from '../demoAwake.ts';
+import { demoPrFiles, demoPrSummary } from '../demoMap.ts';
+import { demoAsked, demoAsks } from '../demoPrompts.ts';
+import { withLab } from '../demoTestLab.ts';
+import { demoTranscript } from '../historySample.ts';
+import type { UsageWarning } from '../pacing.ts';
+import { charTokens } from '../../shared/startup.ts';
+import { keyName } from '../../shared/termKeys.ts';
+import { toolArgsLine } from '../../shared/tooling.ts';
+import type { UsageReading } from '../../shared/types.ts';
+import { ceoSession } from './ceo.ts';
+import { boxDeskRepo } from './cloud.ts';
+import { registerDemo } from './registry.ts';
+import { DARK_MODE_TITLE } from './seedRepos.ts';
+import { fixPromptPull, fixScript, issueScript, qaScript, type Step } from './sessionScripts.ts';
+import { fakeSha, now, repos, runChecks, signOuts, stalls, takeNumber } from './world.ts';
+
+function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
+  const timers: NodeJS.Timeout[] = [];
+  let stopped = false;
+  let stalled = false; // stuck: no more output, and messages go unanswered
+  if (opts.agentId) {
+    stalls.set(opts.agentId, () => {
+      stalled = true;
+      timers.forEach(clearTimeout);
+    });
+  }
+  // A cloud agent's session ends the way an expired login ends a real one when the fake account expires sign-ins.
+  const signOut = opts.box && opts.agentId ? { boxId: opts.box.boxId, end: (credit?: boolean) => expired(credit) } : null;
+  if (signOut) signOuts.set(opts.agentId!, signOut);
+  const forgetSignOut = () => {
+    if (signOut && signOuts.get(opts.agentId!) === signOut) signOuts.delete(opts.agentId!);
+  };
+  const nudged = /^You pushed nothing/.test(opts.prompt); // the office's nudge after a fix that pushed nothing
+  const resumedFix = opts.resumeSessionId?.startsWith('demo-fix-') ?? false;
+  // The task picks the script; a session started without one (a follow-up) is read from its prompt.
+  const fixPrompt = !opts.task && /FAILED|taking over pull request|git push origin HEAD:/.test(opts.prompt);
+  const kind = opts.task === 'qa' ? 'qa' : opts.task === 'fix' || nudged || resumedFix || fixPrompt ? 'fix' : 'issue';
+  // Fix sessions can be resumed (the office's nudge), like real ones.
+  if (kind === 'fix') cb.sessionId(opts.resumeSessionId ?? `demo-fix-${crypto.randomUUID()}`);
+  const pull = fixPromptPull(opts.prompt);
+  const issueMatch = opts.prompt.match(/#(\d+):\s*(.+)/);
+  const number = kind === 'issue' ? Number(issueMatch?.[1] ?? 0) : pull.number;
+  const { answered, question, title } = demoAsks(kind === 'issue', opts, number, (kind === 'issue' ? issueMatch?.[2]?.trim() : pull.title) ?? 'follow-up', repos.get(fullName)?.issues ?? []);
+  const round = Number(opts.prompt.match(/QA round (\d+)/)?.[1] ?? 1);
+  // Now and then a QA fix ends without pushing, so the office's nudge can be seen; half the nudged answer NO CHANGE NEEDED.
+  const pushes = kind !== 'fix' || !(nudged || /FAILED|taking over pull request/.test(opts.prompt)) || Math.random() > (nudged ? 0.5 : 0.25);
+
+  const tools = opts.tools ? toolArgsLine(opts.tools) : '';
+  const header: Step = [
+    { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
+    { kind: 'system', text: `  cwd ${opts.cwd}` },
+    ...(tools ? [{ kind: 'system' as const, text: `  $ claude --session-id … ${tools}` }] : []),
+  ];
+  const checks = opts.prompt.match(/^GitHub checks right now: .*$/m)?.[0] ?? 'GitHub checks right now: none';
+  const body = kind === 'qa' ? qaScript(cb, number, title, round, checks) : kind === 'fix' ? fixScript(number, pushes, nudged) : issueScript(opts, cb, number, title);
+  const script = [header, ...(question ? [...body.slice(0, 7), () => ((stopped = true), demoAsked(cb, question))] : answered ? [[{ kind: 'text', text: '● Thanks: going with that.' }] as LogEntry[], ...body.slice(-3)] : body)];
+
+  const expired = (credit = false) => { // credit: as an Anthropic key out of credit ends it instead (#258)
+    if (stopped) return;
+    stopped = true;
+    forgetSignOut();
+    timers.forEach(clearTimeout);
+    cb.tool(null);
+    cb.log([{ kind: 'error', text: credit ? 'API Error: 400 · Your credit balance is too low to access the Anthropic API. (demo)' : 'API Error: 401 · Login expired · Please run /login (demo)' }]);
+    const name = CLIS.find((c) => c.id === (opts.cli ?? 'claude'))?.label ?? 'Claude Code';
+    cb.finished({ ok: false, text: '', costUsd: 0.1, turns: i, ...(credit ? { errors: ['Claude Code stopped: credit balance is too low'], keyTrouble: 'out-of-credit' } : { errors: [`${name} stopped: authentication failed`], signedOut: true }) });
+  };
+
+  const finish = () => {
+    forgetSignOut();
+    const costUsd = 0.3 + Math.random();
+    const turns = 15 + Math.floor(Math.random() * 20);
+    cb.tool(null);
+    if (kind === 'qa') {
+      // Most first rounds pass; some fail so the fix loop can be seen in action.
+      const pass = round > 1 || (title !== DARK_MODE_TITLE && Math.random() > 0.35);
+      const full = opts.prompt.includes('graphics: "full"'); // a 3D PR (qaPrompt.ts fullQualityLine) reports its full pass
+      cb.log([{ kind: 'text', text: pass ? '● Everything checks out. Writing up the report.' : '● The toolbar overflows on a 375px screen. Failing this round.' }]);
+      cb.finished({
+        ok: true,
+        text: '',
+        costUsd,
+        turns,
+        errors: [],
+        structured: {
+          verdict: pass ? 'pass' : 'fail',
+          summary: pass
+            ? 'The change does what the issue asks: the feature works on desktop and mobile, all 41 tests pass, and lint and build are clean.'
+            : 'The feature works on desktop, but on a 375px-wide screen the toolbar overflows and the new button is cut off.',
+          checks: [
+            { name: 'Unit tests', result: 'pass', details: '41 passed, 0 failed' },
+            { name: 'Lint + build', result: 'pass', details: 'No lint errors; production build succeeds' },
+            { name: 'Feature works on desktop', result: 'pass', details: 'Clicked through the new flow at 1280x800' },
+            { name: 'Mobile layout (375px)', result: pass ? 'pass' : 'fail', details: pass ? 'Layout wraps correctly' : 'Toolbar overflows horizontally; button unreachable' },
+            { name: 'Console errors', result: 'pass', details: 'None' },
+            ...(full ? [{ name: 'Lab graphics profile', result: 'pass' as const, details: 'Canvas, controls, panels, 390px pocket mode, no console errors' }] : []),
+            ...(full ? [{ name: 'Full-quality pass', result: 'pass' as const, details: 'Real graphics at 1280px, shadows and lighting; ran alone, browser restarted after' }] : []),
+          ],
+          commands: [
+            { command: 'npm test -- --run', result: '41 passed' },
+            { command: 'npm run lint && npm run build', result: 'clean, built in 1.84s' },
+          ],
+          screenshots: ['Home page', 'The changed page at 375px', ...(full ? ['Full quality · the changed scene at 1280px'] : [])],
+          fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
+        },
+      });
+      return;
+    }
+    if (kind === 'fix') {
+      const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
+      if (pr && pushes) {
+        pr.headSha = fakeSha();
+        pr.mergeState = 'CLEAN';
+        pr.mergeable = 'MERGEABLE';
+        runChecks(pr, false);
+      }
+      const text = pushes
+        ? `● Fixed PR #${number} and pushed. Ready for another QA round.`
+        : nudged
+          ? 'NO CHANGE NEEDED: main already makes the toolbar wrap, so the PR is right as it is.'
+          : '● The toolbar wraps on narrow screens now. Ready for another QA round.';
+      cb.log([{ kind: 'text', text }]);
+      cb.finished({ ok: true, text, costUsd, turns, errors: [] });
+      return;
+    }
+    const repo = repos.get(fullName);
+    let url = '';
+    if (repo && number) {
+      const n = takeNumber(repo);
+      url = `https://github.com/${fullName}/pull/${n}`;
+      repo.pulls.unshift({
+        number: n,
+        title,
+        url,
+        headRefName: `swarm/issue-${number}-${path.basename(opts.cwd).replace(/-[0-9a-f]{4}$/, '')}`,
+        state: 'OPEN',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        reviewDecision: null,
+        closesIssues: [number],
+        createdAt: now(),
+        mergedAt: null,
+        additions: 40 + ((number * 13) % 200),
+        deletions: (number * 7) % 40,
+        checks: 'pending',
+        headSha: fakeSha(),
+        mergeState: 'CLEAN',
+        failedChecks: [],
+        pendingChecks: [],
+        files: demoPrFiles(fullName, repo.issues.find((i) => i.number === number), number),
+        summary: demoPrSummary(repo.issues.find((i) => i.number === number)),
+      });
+      runChecks(repo.pulls[0]);
+      cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);
+    }
+    cb.log([{ kind: 'text', text: `● Opened ${url || 'the pull request'}. It closes #${number} and includes tests.` }]);
+    cb.finished({ ok: true, text: url, costUsd, turns, errors: [] });
+  };
+
+  let i = 0;
+  const step = () => {
+    if (stopped || stalled) return;
+    if (i >= script.length) {
+      if (opts.agentId) stalls.delete(opts.agentId);
+      return finish();
+    }
+    const s = script[i++];
+    if (typeof s === 'function') s();
+    else {
+      const tool = s.find((e) => e.kind === 'tool');
+      cb.tool(tool?.tool ?? null);
+      cb.log(s);
+    }
+    timers.push(setTimeout(step, 1600 + Math.random() * 3800));
+  };
+  timers.push(setTimeout(step, 600));
+
+  return {
+    send(text) {
+      timers.push(
+        setTimeout(() => {
+          if (stopped || stalled) return;
+          cb.log([{ kind: 'text', text: `● Got it — "${text.slice(0, 60)}". Adjusting my approach.` }]);
+        }, 1500),
+      );
+    },
+    stop() {
+      stopped = true;
+      forgetSignOut();
+      if (opts.agentId) stalls.delete(opts.agentId);
+      timers.forEach(clearTimeout);
+      cb.finished({ ok: false, text: '', costUsd: 0.1, turns: i, errors: ['Stopped by manager'] });
+    },
+  };
+}
+
+// ---------- the terminal runtime ----------
+
+const ANSI: Record<LogEntry['kind'], (text: string) => string> = {
+  text: (t) => t.replace(/^● /, '\x1b[97m●\x1b[0m '),
+  tool: (t) => `\x1b[32m●\x1b[0m \x1b[1m${t.replace(/^⏺ /, '')}\x1b[0m`,
+  result: (t) => `\x1b[2m${t}\x1b[0m`,
+  thinking: (t) => `\x1b[35m${t}\x1b[0m`,
+  error: (t) => `\x1b[31m${t}\x1b[0m`,
+  system: (t) => `\x1b[2m${t}\x1b[0m`,
+  manager: (t) => `\x1b[36m${t.replace(/^▶ /, '❯ ')}\x1b[0m`,
+  done: (t) => `\x1b[32m${t}\x1b[0m`,
+};
+
+/**
+ * With a terminal (the terminal runtime), the fake session's lines are drawn there the way Claude Code draws them,
+ * and what the manager types into it is taken as a message.
+ */
+function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: SessionCallbacks) => SessionHandle): SessionHandle {
+  const term = opts.terminal;
+  if (!term) return start(cb);
+  const name = CLIS.find((c) => c.id === (opts.cli ?? 'claude'))?.label ?? 'Claude Code';
+  term.note(`── ${name}${opts.label ? ` · ${opts.label}` : ''} ──`);
+  term.write(
+    [
+      '',
+      ` \x1b[38;5;209m▐▛███▜▌\x1b[0m   \x1b[1m${name}\x1b[0m (demo)`,
+      `\x1b[38;5;209m▝▜█████▛▘\x1b[0m  ${opts.model || 'default model'} · ${opts.effort} effort`,
+      `\x1b[38;5;209m  ▘▘ ▝▝\x1b[0m    \x1b[2m${opts.cwd}\x1b[0m`,
+      '',
+      `\x1b[36m❯\x1b[0m ${opts.prompt.split('\n')[0].slice(0, 200)}`,
+      '',
+    ].join('\r\n'),
+  );
+  let handle: SessionHandle | null = null;
+  let line = '';
+  term.bind({
+    write: (data) => {
+      // Keys with no character (Esc, arrows, Shift+Tab, Ctrl+C…) are echoed by name, so the key bar can be checked here.
+      const key = keyName(data);
+      if (key) return term.write(`\x1b[2m⟨${key}⟩\x1b[0m`);
+      for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
+        if (ch === '\r') {
+          const text = line.trim();
+          line = '';
+          term.write('\r\n');
+          if (text && handle) {
+            cb.log([{ kind: 'manager', text: `▶ Typed in the terminal: ${text}` }]);
+            handle.send(text);
+          }
+        } else if (ch === '\x7f' || ch === '\b') {
+          if (line) term.write('\b \b');
+          line = line.slice(0, -1);
+        } else if (ch >= ' ') {
+          line += ch;
+          term.write(ch);
+        }
+      }
+    },
+    resize: () => undefined,
+  });
+  handle = start({
+    ...cb,
+    blocked: (reason) => {
+      // Fake CLI output exercises the same decoding and backup decision as a silent hook stream.
+      const raw = `\x1b]7501;state=${reason ? 'blocked' : 'working'}:app=codex${reason ? `:msg=${Buffer.from(reason).toString('base64')}` : ''}\x1b\\`;
+      const parsed = parseProgramStatus(undefined, raw);
+      term.write(parsed.text);
+      const status = parsed.statuses[0];
+      const step = programStatusStep(status && { ...status, at: 20_000 }, 0, 20_000);
+      cb.blocked?.(step.do === 'blocked' ? step.reason : null);
+    },
+    log: (entries) => {
+      cb.log(entries);
+      for (const e of entries) term.write(`${e.kind === 'tool' || (e.kind === 'text' && e.text.startsWith('●')) ? '\r\n' : ''}${ANSI[e.kind](e.text)}\r\n`);
+    },
+    finished: (r) => {
+      term.bind(null);
+      term.note(`── ${name} session ended ──`);
+      cb.finished(r);
+    },
+  });
+  return Object.assign(handle, { kept: true }); // as if the keeper held it: the demo's update restarts nothing
+}
+
+/**
+ * Claude's usage on demand (the manager's console → Mission control, in the demo): a weekly-limit warning at 91% that
+ * resets at midnight, or the 5-hour limit reached for 3 minutes.
+ */
+export function demoUsage(kind: 'warning' | 'limit', now: number): UsageWarning | { limitResetsAt: number } {
+  if (kind === 'limit') return { limitResetsAt: now + 3 * 60_000 };
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  return { resetsAt: midnight.getTime(), rateLimitType: 'seven_day', utilization: 0.91 };
+}
+
+// Claude's usage warning, faked once so the office can be seen pacing new work: the 4th session gets it, and the
+// window "resets" 5 minutes later.
+const USAGE_WARNING_AT = 4;
+const USAGE_WARNING_MS = 5 * 60_000;
+let sessionsStarted = 0;
+
+function fakeUsageWarning(cb: SessionCallbacks) {
+  setTimeout(() => {
+    const resetsAt = Date.now() + USAGE_WARNING_MS;
+    cb.log([{ kind: 'error', text: `⚠ Subscription usage warning (five_hour) · resets ${new Date(resetsAt).toLocaleTimeString()} (demo)` }]);
+    cb.usageWarning?.({ resetsAt, rateLimitType: 'five_hour', utilization: 0.82 });
+  }, 3000);
+}
+
+// Claude's usage readings, made up: they climb through a fast fake window (30 minutes for "5 hours", 6 hours for the
+// week) and reset, so the meter can be seen moving. Running sessions report them every 15 s, like a status line.
+const FAKE_WINDOW_MS = 30 * 60_000;
+const FAKE_WEEK_MS = 6 * 60 * 60_000;
+
+/** The demo's readings at `now`: the 5-hour window, the week and a weekly Sonnet limit. */
+function demoReadings(now: number): UsageReading[] {
+  const fill = (period: number, from: number, span: number) => ({ pct: Math.round(from + (span * (now % period)) / period), resetsAt: now - (now % period) + period });
+  return [
+    { type: 'five_hour', ...fill(FAKE_WINDOW_MS, 8, 70), at: now },
+    { type: 'seven_day', ...fill(FAKE_WEEK_MS, 35, 40), at: now },
+    { type: 'seven_day_sonnet', ...fill(FAKE_WEEK_MS, 20, 30), at: now },
+  ];
+}
+
+/** A session's callbacks that also report the made-up readings while it runs. */
+function withReadings(cb: SessionCallbacks): SessionCallbacks {
+  const feed = () => cb.usage?.(demoReadings(Date.now()));
+  const first = setTimeout(feed, 4000);
+  const every = setInterval(feed, 15_000);
+  return {
+    ...cb,
+    finished: (result) => {
+      clearTimeout(first);
+      clearInterval(every);
+      cb.finished(result);
+    },
+  };
+}
+
+registerDemo('sessions', ({ scale, deskRepo }) => ({
+  startSession: (opts, cb) => {
+    // The big company is for measuring the office at full speed, so it never paces.
+    if (++sessionsStarted === USAGE_WARNING_AT && !scale) fakeUsageWarning(cb);
+    if (!scale) cb = withReadings(cb);
+    // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
+    // connectors and plugins unless the session is lean.
+    if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
+    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
+  },
+  sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
+  terminals: true,
+  keeping: () => true,
+  reconnectClis: async () => [], // fake sessions end with the office
+  hooksReady: () => undefined,
+  releaseClis: async () => undefined,
+  // The idle check (#89) reads the made-up numbers; SWARM_DEMO_USAGE_CHECK=fail shows a check that can't read them.
+  usageCheck: async () => (process.env.SWARM_DEMO_USAGE_CHECK === 'fail' ? { error: 'failed' } : { readings: demoReadings(Date.now()) }),
+  simulateUsage: demoUsage,
+}));

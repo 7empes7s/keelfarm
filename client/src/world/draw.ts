@@ -1,3 +1,4 @@
+import { needsYou } from '../../../shared/needsYou';
 import type { LogLine, PreviewStatus, PreviewView, RepoView } from '../../../shared/types';
 import type { Agent, KanbanCard, KanbanColumns } from '../store';
 import { testingLabel } from '../qaCard';
@@ -511,21 +512,28 @@ function drawNote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
       ctx.fillText(meta, w - 12, 24);
       ctx.textAlign = 'left';
     }
-  } else if (card.agent) {
-    ctx.fillStyle = card.agent.color;
-    ctx.beginPath();
-    ctx.arc(22, h - 15, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#2d3142';
-    ctx.font = `600 17px ${SANS}`;
-    ctx.fillText(card.agent.name, 36, h - 14);
-  }
-  if (card.note && !card.ghost) {
-    ctx.font = `500 16px ${SANS}`;
-    ctx.fillStyle = '#5c6078';
-    ctx.textAlign = 'right';
-    ctx.fillText(card.note, w - 12, h - 14);
-    ctx.textAlign = 'left';
+  } else {
+    // the who row (#232): the name, then the note in what's left of the line, never over each other
+    let nameRight = 12;
+    if (card.agent) {
+      ctx.fillStyle = card.agent.color;
+      ctx.beginPath();
+      ctx.arc(22, h - 15, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2d3142';
+      ctx.font = `600 17px ${SANS}`;
+      const name = fitText(ctx, card.agent.name, (w - 48) * (card.note ? 0.5 : 1));
+      ctx.fillText(name, 36, h - 14);
+      nameRight = 36 + ctx.measureText(name).width + 10;
+    }
+    if (card.note) {
+      ctx.font = `500 16px ${SANS}`;
+      ctx.fillStyle = '#5c6078';
+      ctx.textAlign = 'right';
+      const room = w - 12 - nameRight;
+      if (room > 24) ctx.fillText(fitText(ctx, card.note, room), w - 12, h - 14);
+      ctx.textAlign = 'left';
+    }
   }
   if (look.shapes && card.tone && !card.ghost) drawStatusBadge(ctx, w - 18, 20, 13, TONE_KIND[card.tone], look);
   ctx.restore();
@@ -536,8 +544,10 @@ function drawNote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
 
 export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, agent: Agent, look: StatusLook = STANDARD_LOOK) {
   ctx.clearRect(0, 0, w, h);
-  const icon =
-    agent.status === 'working'
+  const needs = agent.role !== 'ceo' && needsYou(agent) != null; // #307: stands out; a finished agent reads as free
+  const icon = needs
+    ? '✋'
+    : agent.status === 'working'
       ? agent.currentTool?.startsWith('mcp__playwright')
         ? '🌐'
         : agent.currentTool === 'Bash' || agent.currentTool === 'PowerShell'
@@ -547,15 +557,13 @@ export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, age
             : '💭'
       : agent.status === 'preparing'
         ? '📦'
-        : agent.status === 'done'
-          ? '✅'
-          : agent.status === 'error'
-            ? '❗'
-            : agent.status === 'stopped'
-              ? '⏸️'
-              : agent.role === 'ceo'
-                ? '🏛️'
-                : '☕';
+        : agent.status === 'error'
+          ? '❗'
+          : agent.status === 'stopped'
+            ? '⏸️'
+            : agent.role === 'ceo'
+              ? '🏛️'
+              : '☕';
   roundRect(ctx, 4, 4, w - 8, h - 8, (h - 8) / 2);
   ctx.fillStyle = 'rgba(255,255,255,0.94)';
   ctx.fill();
@@ -567,11 +575,13 @@ export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, age
   ctx.fillText(icon, 22, h / 2 + 2);
   ctx.fillStyle = '#23263a';
   ctx.font = `700 40px ${SANS}`;
-  const busy = agent.status !== 'idle';
+  const busy = agent.status !== 'idle' && agent.status !== 'done';
   let label =
     agent.role === 'ceo'
       ? `${agent.name} · CEO`
-      : busy && agent.task === 'fix' && agent.prNumber
+      : needs
+        ? `${agent.name} · needs you`
+        : busy && agent.task === 'fix' && agent.prNumber
         ? `${agent.name} · 🔧 PR #${agent.prNumber}`
         : busy && agent.task === 'qa' && agent.prNumber
           ? `${agent.name} · 🧪 PR #${agent.prNumber}`
@@ -582,7 +592,7 @@ export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, age
   const badge = look.shapes ? h * 0.32 : 0;
   while (label.length > 4 && ctx.measureText(label).width > w - 96 - badge * 2) label = `${label.slice(0, -2)}…`;
   ctx.fillText(label, 78, h / 2 + 2);
-  if (badge) drawStatusBadge(ctx, w - 14 - badge, h / 2, badge, STATUS_KIND[agent.status], look);
+  if (badge) drawStatusBadge(ctx, w - 14 - badge, h / 2, badge, needs ? 'attention' : agent.status === 'done' ? 'idle' : STATUS_KIND[agent.status], look);
 }
 
 /** Name tag for a candidate in the waiting room: who they are, a detail (their coding agent, say) and their floor. */

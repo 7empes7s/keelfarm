@@ -10,6 +10,7 @@ import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
 import { Icon } from './Icon';
 import { BOTFATHER, telegramSteps } from './telegramSteps';
+import { SecretInput } from './SecretInput';
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -132,6 +133,7 @@ export function TelegramSettings() {
               {s.id === 'token' && s.state !== 'done' && (
                 <form
                   className="notify-form"
+                  autoComplete="off"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void saveToken();
@@ -139,13 +141,11 @@ export function TelegramSettings() {
                 >
                   <label className="field">
                     <span>Bot token</span>
-                    <input
-                      type="password"
+                    <SecretInput
+                      name="telegram-token"
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
                       placeholder="123456789:AAE…"
-                      autoComplete="off"
-                      spellCheck={false}
                       aria-invalid={!!error}
                       aria-describedby={error ? errorId : undefined}
                     />

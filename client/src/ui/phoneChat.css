@@ -1,0 +1,242 @@
+/* chat */
+.phone-chat {
+  position: relative; /* the + sheet's backdrop */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 12px;
+  border-bottom: 2px solid rgba(31, 29, 43, 0.08);
+  background: var(--ds-surface-raised);
+}
+.presence-busy {
+  color: var(--ds-warn-text);
+  font-weight: 600;
+}
+/* the log, its "jump to latest" button and the message actions sit in one box */
+.chat-log-wrap {
+  flex: 1;
+  min-height: 72px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.chat-log {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--ds-surface-sunken);
+}
+.bubble-row {
+  display: flex;
+}
+.bubble-row-me {
+  justify-content: flex-end;
+}
+.bubble-row {
+  align-items: center;
+  gap: 4px;
+  outline: none;
+  border-radius: 18px;
+  transition: background 0.3s;
+}
+.bubble-row-flash {
+  background: rgba(255, 196, 0, 0.35);
+}
+.bubble {
+  position: relative;
+  touch-action: pan-y; /* a sideways swipe is the chat's: reply */
+  -webkit-touch-callout: none;
+}
+/* The stack uses less width than the former 2/3-button row, preserving bubble width even at 390px.
+   Its zero height preserves short rows; the active tools paint above neighbouring bubbles and Latest. */
+.bubble-tools {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-dur-fast);
+}
+/* a log shorter than the stack (placeTools): one row over the bubble, still one stack's width in the row */
+.bubble-tools.bubble-tools-row {
+  flex-direction: row;
+  width: var(--ds-target);
+}
+.bubble-tools-row .xbtn-label {
+  display: none; /* it would slide over the next button */
+}
+.bubble-row:hover .bubble-tools,
+.bubble-row:focus-within .bubble-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  /* Touch keeps hold/swipe; keyboard focus still reveals the same tools. */
+  .bubble-tools:not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+.bubble-tool {
+  flex: none;
+  height: var(--ds-target);
+  border-radius: var(--ds-radius-pill);
+}
+/* Shared expanding labels point inward, over this bubble rather than the next message. */
+.bubble-row-me .bubble-tool .xbtn-label {
+  inset: 0 auto 0 0;
+  padding: 0 var(--ds-space-3) 0 calc(100% + var(--ds-space-1));
+}
+.bubble-swipe {
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.4;
+}
+.bubble-swipe-on {
+  opacity: 1;
+}
+.bubble-quote {
+  display: block;
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 3px 8px;
+  border: none;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: rgba(31, 29, 43, 0.07);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.bubble-quote:focus-visible {
+  outline: 2px solid var(--ds-outline);
+}
+.bubble-quote-gone {
+  cursor: default;
+  font-style: italic;
+  color: var(--muted);
+}
+.bubble-quote-from {
+  display: block;
+  font-weight: 700;
+}
+.bubble-quote-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.bubble-tick {
+  font-weight: 700;
+}
+.bubble-tick-read,
+.bubble-tick-replied {
+  color: #2b7a3d;
+}
+.bubble-failed {
+  border-style: dashed;
+  background: #ffe3e0;
+}
+.bubble-retry {
+  display: block;
+  margin: 4px 0 2px auto;
+  padding: 2px 8px;
+  border: 1.5px solid #c92a2a;
+  border-radius: 999px;
+  background: var(--ds-surface-raised);
+  color: #c92a2a;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chat-unread {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ds-warn-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-unread::before,
+.chat-unread::after {
+  content: '';
+  flex: 1;
+  border-top: 1.5px solid currentColor;
+}
+.chat-jump {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  padding: 4px 12px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 999px;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 2px 0 var(--ds-shadow-color);
+  cursor: pointer;
+}
+.chat-menu-back {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(31, 29, 43, 0.25);
+  z-index: 2;
+}
+.chat-menu {
+  width: 100%;
+  max-width: 340px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 14px;
+  background: var(--ds-surface-raised);
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+  outline: none;
+}
+.chat-menu-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.chat-menu-quote {
+  margin: 4px 0 8px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.chat-menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

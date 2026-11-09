@@ -70,3 +70,26 @@ export async function demoAwake(text: string, floors: Floor[], use: Use): Promis
   }
   return null;
 }
+
+/** A built-in tool's step in the demo: its log line (after "⏺ ") and its result (error: it failed). */
+type Step = (tool: string, line: string, result: string, error?: boolean) => Promise<void>;
+
+/**
+ * "Look into …": a round of reads, a search, a failed fetch, a wait and a filed issue through the real office tools, so
+ * the working strip, the typing bubble and the reply's step log all show (#150).
+ */
+export async function demoRound(text: string, floors: (Floor & { pullRequests: { number?: number }[] })[], use: Use, step: Step, objective?: string): Promise<string | null> {
+  if (!/\b(look into|investigate|dig into)\b/i.test(text)) return null;
+  const f = floors[0];
+  if (!f) return 'There are no floors yet, so there is nothing to look into.';
+  await step('Read', 'Read client/src/pocket/touch/joystickThumbZone.tsx', 'Read 212 lines'); // a long step, for the strip at 390 px
+  await step('Grep', 'Grep "joystick"', 'Found 6 matches in 4 files');
+  await step('WebSearch', 'Search "mobile joystick UX"', 'Did 1 search');
+  await step('WebFetch', 'Fetch https://example.com/joystick-study', '403 Forbidden', true);
+  const withPr = floors.find((x) => x.pullRequests[0]?.number); // floor 1 may have none
+  if (withPr) await use('pr_diff', { floor: withPr.floor, pr: withPr.pullRequests[0].number });
+  await use('wait_for', { conditions: [{ kind: 'usage', usage: 'normal' }], timeout_min: 1 });
+  const filed = await use('file_issue', { floor: f.floor, title: 'Mobile joystick: a bigger thumb zone', body: `Make the on-screen joystick easier to hit at 390 px.\n\nAcceptance criteria:\n- A 120 px thumb zone\n- Works one-handed${objective ? `\n\nObjective: ${objective}` : ''}` });
+  const n = filed.match(/#(\d+)/)?.[1];
+  return filed.startsWith('Refused') ? `I looked into it, but couldn't file it: ${filed.replace(/^Refused: /, '')}` : `I looked into it: the joystick's thumb zone is too small on phones. I filed #${n} on floor ${f.floor} for it.`;
+}

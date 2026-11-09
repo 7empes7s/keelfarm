@@ -7,6 +7,7 @@ import type { AgentCli, TermClientMessage, TermServerMessage } from '../../../sh
 import { activeMods, clipboardPaste, consumeMods, keySequence, NO_MODS, pasteText, tapMod, textSequence, type BarKey, type Mod, type ModState } from '../../../shared/termKeys';
 import { TermKeyBar, useTermKeysPref } from './TermKeyBar';
 import { PasteSheet } from './PasteSheet';
+import { signInCode } from '../../../shared/signIn';
 import { VIEWPORT_EVENT } from '../viewport';
 import { socketUrl } from '../socketUrl';
 import { liveStatus, TERM_FONT } from './termLayout';
@@ -67,6 +68,7 @@ export function LiveTerminal({
   signIn?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const [dropped, setDropped] = useState(false);
   const [live, setLive] = useState(false);
   const [connected, setConnected] = useState(true);
   const [focused, setFocused] = useState(false);
@@ -87,6 +89,7 @@ export function LiveTerminal({
   const sendRef = useRef<(data: string) => void>(() => undefined);
 
   useEffect(() => {
+    setDropped(false);
     const el = host.current!;
     const term = new Terminal({
       fontFamily: "'JetBrains Mono', Consolas, monospace",
@@ -100,6 +103,8 @@ export function LiveTerminal({
       // Coloured output is nudged until it reads at 4.5:1 on the terminal's background (WCAG AA).
       minimumContrastRatio: 4.5,
     });
+    // Keep native clipboard shortcuts out of the PTY (xterm otherwise sends Ctrl+V as a control byte).
+    term.attachCustomKeyEventHandler((e) => !((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'v'));
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon((_e, uri) => window.open(uri, '_blank', 'noopener')));
@@ -140,9 +145,14 @@ export function LiveTerminal({
             term.scrollToBottom();
           });
           setLive(m.live);
+          setDropped(false);
         } else if (m.t === 'data') term.write(m.data);
         else if (m.t === 'size' && (m.cols !== term.cols || m.rows !== term.rows)) term.resize(m.cols, m.rows);
-        else if (m.t === 'live') setLive(m.live);
+        else if (m.t === 'dropped') setDropped(true);
+        else if (m.t === 'live') {
+          setLive(m.live);
+          setDropped(false);
+        }
       };
       socket.onclose = (e) => {
         if (ws === socket) ws = null;
@@ -219,7 +229,7 @@ export function LiveTerminal({
       return;
     }
     if ('paste' in k) {
-      void clipboardPaste(navigator.clipboard).then((r) => ('text' in r ? termRef.current?.paste(r.text) : setPasting(true)));
+      void clipboardPaste(navigator.clipboard).then((r) => ('text' in r ? paste(r.text) : setPasting(true)));
       return;
     }
     const armed = activeMods(modsRef.current);
@@ -228,11 +238,15 @@ export function LiveTerminal({
     setMods(consumeMods(modsRef.current));
   };
 
-  // Through xterm's paste, so a CLI in bracketed paste mode gets it as one paste; never logged or kept.
+  // Through xterm's paste, so a CLI in bracketed paste mode gets it as one paste; never logged or kept. A sign-in
+  // terminal sends exactly the code (#302): its prompt takes a line, and stray spaces or escapes make the login fail.
+  const paste = (raw: string) => {
+    const text = signIn ? signInCode(raw) : pasteText(raw);
+    if (text) termRef.current?.paste(text);
+  };
   const pasteIn = (raw: string, enter: boolean) => {
     setPasting(false);
-    const text = pasteText(raw);
-    if (text) termRef.current?.paste(text);
+    paste(raw);
     if (enter) sendRef.current('\r');
     termRef.current?.focus();
   };
@@ -240,8 +254,9 @@ export function LiveTerminal({
   return (
     <div className={`live-term ${className ?? ''}`}>
       <div className="live-term-screen" ref={host} />
+      {dropped && <div className="live-term-foot" role="status">Nothing is running here: start the agent or sign in first</div>}
       {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} dock={!compact} signIn={signIn} />}
-      {pasting && <PasteSheet onSend={pasteIn} onClose={() => setPasting(false)} />}
+      {pasting && <PasteSheet onSend={pasteIn} onClose={() => setPasting(false)} signIn={signIn} />}
       {!compact && (
         <div className="live-term-foot">
           <span className={`live-dot ${live ? 'live-dot-on' : ''}`} />

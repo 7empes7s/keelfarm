@@ -100,8 +100,8 @@ export const PUBLIC_DEMO_RESET_H = envMinutes(process.env.SWARM_PUBLIC_DEMO_RESE
 // Floor previews run on this port + the floor number, PR previews 100 above it (docs/how-it-works.md). Moving it only
 // keeps a test office's previews clear of another office's; a demo office starts clear of the live one's (#227).
 export const PREVIEW_PORT = envPort(process.env.SWARM_PREVIEW_PORT, DEMO ? DEMO_PREVIEW_PORT : 6300);
-// A PR preview nobody has had on screen for this long stops.
-export const PR_PREVIEW_IDLE_MS = envMinutes(process.env.SWARM_PR_PREVIEW_IDLE_MIN, 20) * 60_000;
+// The default of Settings → Previews' PR idle stop (minutes after its last use, #252); the setting decides.
+export const PR_PREVIEW_IDLE_MIN = envMinutes(process.env.SWARM_PR_PREVIEW_IDLE_MIN, 1);
 
 // How often each connected repo's issues and PRs are refreshed from GitHub.
 export const SYNC_INTERVAL_MS = 45_000;

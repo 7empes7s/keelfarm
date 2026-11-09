@@ -1,0 +1,222 @@
+/* ---------- app viewer overlay ---------- */
+
+.panel-app {
+  width: 100%;
+  max-width: 1600px;
+}
+.panel-app .panel-body {
+  padding: 12px 16px;
+}
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.app-title-name,
+.app-title-ref {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-title-name {
+  flex: 0 1 auto;
+}
+.app-title-ref {
+  flex: 0 2 auto;
+  font-weight: 500;
+  color: var(--ink);
+  opacity: 0.8; /* 4.5:1 on the floor's colour */
+}
+.app-title .status {
+  flex: none;
+}
+.app-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+/* a phone's one row (#294): what doesn't fit is in ⋯ (viewerBar.ts), so it never wraps */
+.app-bar-narrow {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.app-bar-narrow > * {
+  flex: none;
+}
+.app-toolbar.app-bar-narrow > .spacer {
+  display: block;
+  flex: 1;
+}
+.app-bar-narrow .seg-btn {
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-1);
+}
+.app-ref {
+  width: 260px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 5px 8px;
+  font-size: 0.88rem;
+}
+.seg {
+  display: inline-flex;
+  border: 2px solid var(--ds-outline);
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 2px 0 var(--ds-shadow-color);
+}
+.seg-btn {
+  font-weight: 600;
+  font-size: 0.82rem;
+  padding: 4px 10px;
+  border: 0;
+  background: var(--ds-surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-btn + .seg-btn {
+  border-left: 2px solid var(--ds-outline);
+}
+.seg-btn.seg-on {
+  background: var(--accent);
+}
+.seg-btn:focus-visible {
+  outline: 3px solid #3a56d4;
+  outline-offset: -3px;
+}
+.app-stage {
+  position: relative;
+  flex: 1;
+  min-height: 280px;
+  display: flex;
+  justify-content: center;
+  background: repeating-linear-gradient(45deg, #efeadf 0 12px, #f6f2e9 12px 24px);
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.app-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--ds-surface-raised);
+}
+.app-stage-phone .app-frame {
+  width: 396px; /* 390px of app inside the side borders */
+  max-width: 100%;
+  border-left: 3px solid var(--ds-outline);
+  border-right: 3px solid var(--ds-outline);
+}
+.app-frame-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 24px));
+  padding: 10px 14px;
+  background: var(--ds-surface-hover);
+  border: 2.5px solid var(--ds-outline);
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--ds-shadow-color);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.app-foot {
+  margin: 8px 0 0;
+  line-height: 1.4;
+}
+.app-state {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--ds-surface-raised);
+  border: 3px dashed var(--ds-line-strong);
+  border-radius: 14px;
+}
+.app-state h3 {
+  margin: 0;
+}
+.app-state p {
+  margin: 0;
+  max-width: 560px;
+}
+.app-state-left {
+  align-items: stretch;
+  text-align: left;
+}
+.app-state-left p {
+  max-width: none;
+}
+.app-state-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  --ds-icon: 2.6rem;
+}
+.app-spin {
+  animation: spin 2.4s linear infinite;
+}
+.app-steps {
+  inline-size: 100%;
+  max-inline-size: 24rem;
+  text-align: left;
+}
+.app-log {
+  width: 100%;
+  max-width: 900px;
+  min-height: 0;
+  max-height: 320px;
+  margin: 0;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+.app-state-left .app-log {
+  max-width: none;
+  flex: 0 1 auto;
+}
+.app-settings {
+  width: min(640px, 100%);
+}
+.preview-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.preview-form input,
+.preview-form textarea {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.preview-form p {
+  margin: 2px 0 4px;
+}
+.preview-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.preview-details summary code {
+  font-weight: 400;
+  word-break: break-all;
+}
+.preview-details[open] summary {
+  margin-bottom: 6px;
+}
+.preview-details .status {
+  font-size: 0.68rem;
+}

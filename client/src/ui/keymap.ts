@@ -17,6 +17,7 @@ export type ActionId =
   | 'phone'
   | 'help'
   | 'mute'
+  | 'captions'
   | 'workers'
   | 'overview'
   | 'rotateLeft'
@@ -27,6 +28,7 @@ export type ActionId =
   | 'emote'
   | 'ping'
   | 'switchOffice'
+  | 'settings'
   | 'chatFull';
 
 /**
@@ -60,6 +62,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'phone', label: 'Phone', group: 'Office', scope: 'global', keys: ['KeyP'] },
   { id: 'help', label: 'Help', group: 'Office', scope: 'global', keys: ['KeyH'] },
   { id: 'mute', label: 'Mute', group: 'Office', scope: 'global', keys: ['KeyM'] },
+  { id: 'captions', label: 'Captions on or off', group: 'Office', scope: 'global', keys: ['KeyC'] },
   { id: 'workers', label: "Who's working list", group: 'Office', scope: 'global', keys: ['KeyL'] },
   { id: 'overview', label: 'Overview (twice: the building)', group: 'Overview', scope: 'global', keys: ['Tab'] },
   { id: 'rotateLeft', label: 'Turn the overview left', group: 'Overview', scope: 'overview', keys: ['KeyQ'] },
@@ -70,6 +73,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'photo', label: 'Photo mode', group: 'Office', scope: 'global', keys: ['KeyK'] },
   { id: 'saveReplay', label: 'Save the last 15 s (instant replay)', group: 'Office', scope: 'global', keys: ['KeyI'] },
   { id: 'switchOffice', label: '2D office / 3D office', group: 'Office', scope: 'global', keys: ['KeyO'] },
+  { id: 'settings', label: 'Settings', group: 'Office', scope: 'global', keys: ['Comma'] },
   { id: 'chatFull', label: 'CEO chat full screen (in the chat)', group: 'Office', scope: 'panel', keys: ['KeyF'] },
 ];
 

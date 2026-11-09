@@ -1,0 +1,17 @@
+/* pocket mode's ⚙️ (PocketConsole.tsx): the console's sections one column wide */
+.pk-console .tab-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pk-console .card,
+.pk-console .floor-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pk-console .row {
+  flex-wrap: wrap;
+}
+.pk-console input,
+.pk-console select,
+.pk-console textarea {
+  max-width: 100%;
+}

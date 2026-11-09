@@ -29,6 +29,8 @@ import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
 import { Icon } from './Icon';
+import { copySignInLink, SignInSteps } from './SignInCard';
+import { troubleLine } from '../../../shared/keyTrouble';
 import { useMode } from '../pocket/mode';
 import './termPhone.css';
 import { useDraft } from '../drafts';
@@ -227,7 +229,23 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
           <Icon name="ban" /> Blocked: {agent.blocked}. Answer it in the terminal.
         </div>
       )}
-      {signIn && (
+      {signIn && agent.signInWhy && (
+        <div className="sign-in-note sign-in-sheet" role="status">
+          <b>
+            <Icon name="key-round" /> {troubleLine(agent.name, agent.signInWhy)} Sign them in with your own account:
+          </b>
+          <SignInSteps name={agent.name} cli={signIn === 'Codex' ? 'codex' : 'claude'} here />
+          <div className="sign-in-actions">
+            <button className="btn btn-small" onClick={() => void copySignInLink(agent.id)}>
+              <Icon name="copy" /> Copy link
+            </button>
+            <button className="btn btn-small btn-ghost" disabled={busy} title="Close this sign-in and show a new link" onClick={() => void run(() => api.signIn(agent.id))}>
+              <Icon name="rotate-ccw" /> Start over
+            </button>
+          </div>
+        </div>
+      )}
+      {signIn && !agent.signInWhy && (
         <div className="sign-in-note" role="status">
           <span className="grow">
             <b>
@@ -374,7 +392,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
         </button>
       )}
       {!noChat && !phone && (
-        <div className="aw-panes" role="group" aria-label="Show">
+        <div className="aw-seg aw-panes" role="group" aria-label="Show">
           {(['chat', 'terminal'] as const).map((p) => (
             <button key={p} type="button" aria-pressed={pane === p} aria-label={p === 'chat' ? 'Chat' : 'Terminal'} title={p === 'chat' ? 'Their work as a conversation' : 'Their terminal'} onClick={() => choose(p)}>
               <Icon name={p === 'chat' ? 'message-circle' : 'keyboard'} />

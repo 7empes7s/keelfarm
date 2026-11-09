@@ -1,0 +1,166 @@
+/* Carrying something: sits under the interact hint. */
+.hud-held {
+  bottom: calc(22% - 56px);
+  font-size: 0.95rem;
+}
+/* Looking through the roof's telescope: a round eyepiece, dark beyond its rim, with a fine crosshair. */
+.roof-scope {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, transparent 0, transparent 41vmin, rgba(6, 8, 18, 0.88) 43.5vmin, #05060c 47vmin);
+}
+.roof-scope::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 84vmin;
+  height: 84vmin;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14), inset 0 0 50px 12px rgba(0, 0, 0, 0.5);
+}
+.roof-scope-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  transform: translate(-50%, -50%);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6)) center / 1px 100% no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.6)) center / 100% 1px no-repeat;
+}
+.roof-scope-hint {
+  bottom: 5%;
+}
+/* Throw charge, just under the crosshair. */
+.charge {
+  position: absolute;
+  top: calc(50% + 14px);
+  left: 50%;
+  width: 56px;
+  height: 9px;
+  margin-left: -28px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 6px;
+  background: var(--paper);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+.charge-on {
+  opacity: 1;
+}
+.charge-fill {
+  height: 100%;
+  background: #ffd166;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.charge-full .charge-fill {
+  background: #ff8a5b;
+}
+/* Ping-pong: the score at the top of the screen while you play, and what just happened under it. */
+.hud-pong {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 18px;
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+  pointer-events: none;
+  max-width: calc(100vw - 32px);
+}
+.hud-pong-score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hud-pong-score b {
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.hud-pong-score i {
+  font-style: normal;
+  opacity: 0.5;
+}
+.hud-pong-serving::after {
+  content: ' 🏓';
+}
+.hud-pong-status {
+  font-size: 0.9rem;
+  font-weight: 600;
+  opacity: 0.8;
+  text-align: center;
+}
+/* The controls while you play sit low, out of the way of the paddle. */
+.hud-pong-keys {
+  bottom: 64px;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+}
+/* Foam blaster ammo, bottom right above the phone, next to where the blaster sits in view. */
+.hud-ammo {
+  position: absolute;
+  right: 16px;
+  bottom: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--paper);
+  border: 3px solid var(--ds-outline);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ds-shadow-color);
+  font-weight: 700;
+  pointer-events: none;
+}
+.hud-ammo-count {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.hud-ammo-empty .hud-ammo-count {
+  color: #ef476f;
+}
+.hud-ammo-note {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.hud-ammo-bar {
+  width: 100%;
+  min-width: 110px;
+  height: 8px;
+  border: 2px solid var(--ds-outline);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.hud-ammo-fill {
+  height: 100%;
+  background: #ffd166;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.hud-resume {
+  position: absolute;
+  top: calc(50% + 26px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 2px 0 var(--ds-shadow-color), 0 0 6px var(--ink);
+  pointer-events: none;
+}

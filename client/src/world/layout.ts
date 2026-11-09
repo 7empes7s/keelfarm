@@ -312,6 +312,11 @@ export function officeColliders(): Rect[] {
 
 export const MANAGER_ROOM = { minX: -HALF_W, maxX: -6.5, minZ: -HALF_D, maxZ: -3.5, doorMinX: -11, doorMaxX: -9.2 };
 export const MANAGER_DESK = { x: -11.2, z: -8.6, w: 2.6, d: 1.1 };
+/**
+ * The manager's desk in its own frame (+z is the door's side): the chair sits at the back, the main screen faces it
+ * (`facing` -1 is towards -z) and the keyboard and mug are on its side; the screen's back shows the stats to visitors.
+ */
+export const MANAGER_WORKSTATION = { chairZ: -1.1, screenZ: 0.15, facing: -1, keyboardZ: -0.25, mugZ: -0.15 };
 export const RECEPTION = { x: 3, z: -3.5, w: 5, d: 1.2 };
 // The CEO's corner office mirrors the manager's across the lobby; the trophy cabinet ends up behind their desk.
 export const CEO_ROOM = { minX: 6.5, maxX: HALF_W, minZ: -HALF_D, maxZ: -3.5, doorMinX: 8.2, doorMaxX: 10 };
@@ -333,6 +338,13 @@ export const coffeeCorner = (): Rect => rect(COFFEE_CORNER.x, HALF_D - COFFEE_CO
 // trophy shelf against the south wall west of the elevator (facing north, clear of the hoop), seen as you step out.
 export const KIOSK = { x: -4.8, z: -2.2, w: 0.9, d: 0.7, h: 1.75 };
 export const TROPHY_SHELF = { x: -6, z: HALF_D - 0.25, w: 2.2, d: 0.5, h: 2.1 };
+
+/** Wall screens share their rendered positions and sizes with the lobby visibility guard. */
+export const LOBBY_SCREENS = {
+  timelapse: { at: [12.6, 1.75, HALF_D - 0.03], w: 2.2, h: 1.25 },
+  testlab: { at: [-3.4, 1.75, HALF_D - 0.03], w: 1.9, h: 1.08 },
+  directory: { at: [4.4, 1.75, HALF_D - 0.03], w: 2.6, h: 1.9 },
+} satisfies Record<string, { at: [number, number, number]; w: number; h: number }>;
 
 /**
  * Mission control: a curved bank of screens on the lobby's north wall between the two glass offices, behind reception
@@ -368,7 +380,12 @@ export function missionRects(): Rect[] {
 }
 
 export function lobbyColliders(): Rect[] {
-  const out = [...shellColliders('lobby'), ...outsideColliders('lobby')];
+  return [...shellColliders('lobby'), ...outsideColliders('lobby'), ...lobbyFurnitureColliders()];
+}
+
+/** Interior solids, without the shell the wall screens hang on. */
+export function lobbyFurnitureColliders(): Rect[] {
+  const out: Rect[] = [];
   const m = MANAGER_ROOM;
   const t = 0.12;
   out.push({ minX: m.maxX - t, maxX: m.maxX + t, minZ: m.minZ, maxZ: m.maxZ, h: SOLID_H.glass }); // glass east wall
@@ -384,7 +401,7 @@ export function lobbyColliders(): Rect[] {
   for (const z of WAITING.seats) out.push(rect(WAITING.x, z, 0.7, 0.7, SOLID_H.seated));
   out.push(rect(WAITING_TABLE.x, WAITING_TABLE.z, WAITING_TABLE.w, WAITING_TABLE.d, SOLID_H.coffeeTable));
   out.push(rect(MANAGER_DESK.x, MANAGER_DESK.z, MANAGER_DESK.w, MANAGER_DESK.d, SOLID_H.desk));
-  out.push(rect(MANAGER_DESK.x, MANAGER_DESK.z - 1.1, 0.8, 0.8, SOLID_H.seated)); // manager chair
+  out.push(rect(MANAGER_DESK.x, MANAGER_DESK.z + MANAGER_WORKSTATION.chairZ, 0.8, 0.8, SOLID_H.seated)); // manager chair
   out.push(rect(-HALF_W + 0.4, -8, 0.8, 5, SOLID_H.bookshelf)); // bookshelf
   out.push(blasterRack(BLASTER_RACK.lobbyX));
   out.push(jukeboxRect(JUKEBOX.lobbyX));
@@ -455,7 +472,7 @@ export function decorSlots(kind: FloorKind): DecorSlot[] {
     { id: 'lobby-feature', x: -12.6, y: 0, z: -1.5, rotY: Math.PI / 4, floor: true },
     // out on the west patio, just north of the bench, in view through the window beside it
     { id: 'patio', x: -(HALF_W + WALL_T + BALCONY.depth / 2 + 0.1), y: 0, z: -1.2, rotY: Math.PI / 2, floor: true },
-    // the manager's desk, left of the keyboard (desk frame: the visitor's side is +z)
+    // the manager's desk, on the visitor's side (+z), left of the monitor's stand
     { id: 'manager-desk', x: MANAGER_DESK.x - 0.6, y: 0.8, z: MANAGER_DESK.z + 0.25, rotY: 0 },
     // on top of the trophy cabinet (Lobby.tsx), at its east end
     { id: 'cabinet-top', x: 13.5, y: 2.1, z: -HALF_D + 0.55, rotY: 0 },

@@ -93,12 +93,14 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `search`: 🔍 search everything | ✓ | ✓ | ✓ |
 | `guide`: the ✅ guide checklist | ✓ | ✓ | ✓ |
 | `bell`: 🔔 the notification centre | ✓ | ✓ | ✓ |
+| `sound`: 🔊 Sound and CC by the bell (#267): mute and captions in one tap | ✓ | ✓ | ✓ |
 | `chat-cards`: starters, / commands, action cards with live steps | ✓ | ✓ | ✓ |
 | `console`: the console's tabs, side menus and search | ✓ | ✓ | ✓ |
 | `charter`: the charter page and its numbers | ✓ | ✓ | ✓ |
 | `costs`: Mission control's cost insights and cards | ✓ | ✓ | ✓ |
 | `agent-chat`: an agent's chat, chat mode and reactions | ✓ | ✓ | ✓ |
 | `chat-full`: ⛶ the CEO chat full screen | ✓ | ✓ | ✓ |
+| `chat-charts`: 📊 ready chart prompts in the chat's header, pinned ones on top | ✓ | ✓ | ✓ |
 | `info`: every screen's ⓘ | ✓ | ✓ | |
 | `switch`: the 2D office | | | ✓ |
 

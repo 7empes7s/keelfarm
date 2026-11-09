@@ -1,7 +1,7 @@
 // The PR theatre's channels, as pure helpers: a floor's big screen and app viewer show "main" (the floor's own
 // preview) or one of its open PRs, each PR running in a preview of its own.
 
-import type { AgentView, PreviewStatus, PreviewView, PrPreviewView, PullInfo, QaStatus, QaView } from '../../../shared/types';
+import type { AgentView, PreviewPin, PreviewStatus, PreviewView, PrPreviewView, PullInfo, QaStatus, QaView } from '../../../shared/types';
 import type { IconName } from './icons';
 
 /** What a floor's screen shows: its main preview (null) or an open PR's. */
@@ -63,11 +63,41 @@ export const busyPrs = (agents: Pick<AgentView, 'repoId' | 'status' | 'prNumber'
 export const previewingPrs = (prPreviews: Record<string, Pick<PrPreviewView, 'repoId' | 'pr' | 'status'>>, repoId: string) =>
   new Set(Object.values(prPreviews).flatMap((p) => (p.repoId === repoId && channelLed(p.status) !== 'off' && channelLed(p.status) !== 'bad' ? [p.pr] : [])));
 
-/** "stops in 12 min" for an unwatched preview with an idle stop; '' when it won't stop by itself. */
+/** "stops in 12 min" for an unused preview with an idle stop ("stops in 0:42" in its last 10 minutes); '' when it won't stop by itself. */
 export function stopsLabel(stopsAt: number | null | undefined, now: number): string {
   if (stopsAt == null) return '';
-  const min = Math.max(1, Math.ceil((stopsAt - now) / 60_000));
-  return `stops in ${min} min`;
+  const left = stopsAt - now;
+  if (left < 10 * 60_000) return `stops in ${clockLeft(left)}`;
+  return `stops in ${Math.ceil(left / 60_000)} min`;
+}
+
+/** "0:42", "9:05" */
+export const clockLeft = (ms: number) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+/** What an open viewer tells the office it has on screen: nothing while its tab is hidden (#252). */
+export const watchSays = (visible: boolean, repoId: string, pr: Channel): { repoId: string | null; pr: Channel } => (visible ? { repoId, pr } : { repoId: null, pr: null });
+
+/** "Kept until 15:00" / "Kept until you stop it" (drawn with the pin icon); '' when not kept. */
+export function pinLabel(pinned: PreviewPin | undefined): string {
+  if (pinned == null) return '';
+  return pinned === 'forever' ? 'Kept until you stop it' : `Kept until ${new Date(pinned).toTimeString().slice(0, 5)}`;
+}
+
+/**
+ * How a running preview stands, in a few words (#252): who keeps it, where it's in use, or when it stops. idleMin: its
+ * idle stop (Settings → Previews).
+ */
+export function standLabel(p: Pick<PreviewView, 'status' | 'heldBy' | 'pinned' | 'usedIn' | 'stopsAt'>, idleMin: number, now: number): string {
+  if (p.status !== 'running') return '';
+  if (p.heldBy) return `Kept by @${p.heldBy}'s QA`;
+  if (p.pinned != null) return pinLabel(p.pinned);
+  if (p.usedIn === 'tab') return 'In use (own tab)';
+  if (p.usedIn === 'app') return idleMin > 0 ? `Stops ${clockLeft(Math.max(idleMin, 1) * 60_000)} after you leave` : 'Never stops by itself';
+  const stops = stopsLabel(p.stopsAt, now);
+  return stops ? stops[0].toUpperCase() + stops.slice(1) : '';
 }
 
 /** The channel on screen: the picked PR while it's still open, otherwise main. */
@@ -89,6 +119,9 @@ export function prAsPreview(p: PrPreviewView | undefined, pr: number): PreviewVi
     logTail: p?.logTail ?? [],
     stopsAt: p?.stopsAt ?? null,
     heldBy: p?.heldBy ?? null,
+    usedIn: p?.usedIn ?? null,
+    pinned: p?.pinned ?? null,
+    lifeEndsAt: p?.lifeEndsAt ?? null,
   };
 }
 

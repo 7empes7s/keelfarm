@@ -1,8 +1,9 @@
 import http from 'node:http';
+import vm from 'node:vm';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import type net from 'node:net';
-import { BOOT_SCRIPT, escapedTo, gatewayLocation, handleGateway, injectBoot, mountAssets, parseMount, upgradeGateway, WORKER_SOURCE } from './previewGateway.ts';
+import { BEAT_SCRIPT, BOOT_SCRIPT, escapedTo, gatewayLocation, handleGateway, type GatewayUse, injectBoot, mountAssets, parseMount, upgradeGateway, WORKER_SOURCE } from './previewGateway.ts';
 
 describe('gateway paths', () => {
   it("reads the preview's port and the app's own path", () => {
@@ -61,9 +62,9 @@ describe('the boot script', () => {
 
   it('goes at the very top of the head, once', () => {
     const out = injectBoot('<!doctype html><html><head><script data-cubefarm-sync></script></head></html>');
-    expect(out).toBe(`<!doctype html><html><head>${BOOT_SCRIPT}<script data-cubefarm-sync></script></head></html>`);
+    expect(out).toBe(`<!doctype html><html><head>${BOOT_SCRIPT}${BEAT_SCRIPT}<script data-cubefarm-sync></script></head></html>`);
     expect(injectBoot(out)).toBe(out);
-    expect(injectBoot('<!DOCTYPE html><p>hi</p>')).toBe(`<!DOCTYPE html>${BOOT_SCRIPT}<p>hi</p>`);
+    expect(injectBoot('<!DOCTYPE html><p>hi</p>')).toBe(`<!DOCTYPE html>${BOOT_SCRIPT}${BEAT_SCRIPT}<p>hi</p>`);
   });
 
   /** Runs the script on a page; what it did. */
@@ -100,6 +101,23 @@ describe('the boot script', () => {
     expect(boot(null, 0, false)).toEqual({ stopped: false, registered: null, tries: null });
   });
 
+  it('the heartbeat is valid JavaScript that posts to its own preview without credentials, every 15 s while visible', () => {
+    const body = BEAT_SCRIPT.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '');
+    const posts: { url: string; init: RequestInit }[] = [];
+    const timers: number[] = [];
+    const doc = { visibilityState: 'visible', addEventListener: () => undefined, body: null };
+    const fetch = (url: string, init: RequestInit) => (posts.push({ url, init }), new Promise(() => undefined));
+    const run = (pathname: string, document = doc) => vm.runInNewContext(body, { location: { pathname }, document, window: { fetch }, fetch, setInterval: (_: unknown, ms: number) => timers.push(ms) });
+    run('/preview/6401/todos');
+    expect(posts).toEqual([{ url: '/preview/6401/.cubefarm/beat', init: { method: 'POST', credentials: 'omit', cache: 'no-store' } }]);
+    expect(timers).toEqual([15_000]);
+    // Hidden, it says nothing; off a preview's path it does nothing at all.
+    posts.length = 0;
+    run('/preview/6401/', { ...doc, visibilityState: 'hidden' });
+    run('/settings');
+    expect(posts).toEqual([]);
+  });
+
   it('the worker is valid JavaScript', () => {
     expect(() => new Function(WORKER_SOURCE)).not.toThrow();
   });
@@ -133,7 +151,7 @@ describe('the gateway in front of an app (loopback only)', () => {
 
     const page = await fetch(`${at}/preview/${target}/todos?x=1`);
     expect(page.headers.get('content-security-policy')).toBeNull();
-    expect(await page.text()).toBe(`<html><head>${BOOT_SCRIPT}<title>app</title></head></html>`);
+    expect(await page.text()).toBe(`<html><head>${BOOT_SCRIPT}${BEAT_SCRIPT}<title>app</title></head></html>`);
     expect(seen).toEqual([`GET /todos?x=1 localhost:${target}`]);
 
     expect(await (await fetch(`${at}/preview/${target}/data.json`)).json()).toEqual({ ok: true });
@@ -166,5 +184,47 @@ describe('the gateway in front of an app (loopback only)', () => {
     for (const url of ['/ws', '/ws/term?agent=a']) {
       expect(upgradeGateway({ url, headers: { referer: `${at}/preview/${target}/` } } as http.IncomingMessage, socket, Buffer.alloc(0), (p) => p === target)).toBe(false);
     }
+  });
+
+  it('puts the heartbeat in preview pages only, tells the previews of every request and socket, and answers its beat (#252)', async () => {
+    const target = await listen(
+      http.createServer((req, res) => {
+        if (req.url === '/data.json') return void res.writeHead(200, { 'content-type': 'application/json' }).end('{"html":"<head></head>"}');
+        if (req.url === '/style.css') return void res.writeHead(200, { 'content-type': 'text/css' }).end('head{}');
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end('<html><head></head><body>app</body></html>');
+      }),
+    );
+    const events: string[] = [];
+    const use: GatewayUse = {
+      opened: (port) => (events.push(`open ${port}`), () => events.push(`close ${port}`)),
+      beat: (port, keep) => (events.push(`${keep ? 'keep' : 'beat'} ${port}`), { lifeLeftMs: keep ? 7_200_000 : 30_000 }),
+    };
+    const office = http.createServer((req, res) => {
+      if (!handleGateway(req, res, (p) => p === target, use)) res.writeHead(200, { 'content-type': 'text/html' }).end('<html><head></head><body>the office</body></html>');
+    });
+    const at = `http://127.0.0.1:${await listen(office)}`;
+
+    expect(await (await fetch(`${at}/preview/${target}/`)).text()).toContain('data-cubefarm-beat');
+    expect(await (await fetch(`${at}/preview/${target}/data.json`)).text()).toBe('{"html":"<head></head>"}');
+    expect(await (await fetch(`${at}/preview/${target}/style.css`)).text()).toBe('head{}');
+    expect(await (await fetch(`${at}/`)).text()).not.toContain('data-cubefarm');
+    await new Promise((r) => setTimeout(r, 20)); // the last close
+    expect(events).toEqual([`open ${target}`, `close ${target}`, `open ${target}`, `close ${target}`, `open ${target}`, `close ${target}`]);
+
+    events.length = 0;
+    expect(await (await fetch(`${at}/preview/${target}/.cubefarm/beat`, { method: 'POST' })).json()).toEqual({ lifeLeftMs: 30_000 });
+    expect(await (await fetch(`${at}/preview/${target}/.cubefarm/keep`, { method: 'POST' })).json()).toEqual({ lifeLeftMs: 7_200_000 });
+    expect((await fetch(`${at}/preview/${target}/.cubefarm/beat`)).status).toBe(404); // only a POST
+    expect((await fetch(`${at}/preview/${target + 1}/.cubefarm/beat`, { method: 'POST' })).status).toBe(404); // not a running preview
+    expect(events).toEqual([`beat ${target}`, `keep ${target}`]);
+
+    // A socket through the gateway is in use until it closes.
+    events.length = 0;
+    const socket = new (await import('node:events')).EventEmitter() as unknown as net.Socket;
+    Object.assign(socket, { write: () => true, end: () => undefined, destroy: () => undefined, pipe: () => socket, setNoDelay: () => undefined, setTimeout: () => undefined });
+    upgradeGateway({ url: `/preview/${target}/ws`, method: 'GET', httpVersion: '1.1', rawHeaders: [], headers: { upgrade: 'websocket' } } as unknown as http.IncomingMessage, socket, Buffer.alloc(0), (p) => p === target, use);
+    expect(events).toEqual([`open ${target}`]);
+    socket.emit('close');
+    expect(events).toEqual([`open ${target}`, `close ${target}`]);
   });
 });

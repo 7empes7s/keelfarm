@@ -13,6 +13,7 @@ import { Interview } from './Interview';
 import { KanbanView } from './KanbanView';
 import { ManagerConsole } from './ConsoleNav';
 import { Panel } from './Panel';
+import { TrophyCard } from './TrophyCard';
 import { Phone } from './Phone';
 import { NoticeCentre } from './Notices';
 import { TerminalView } from './TerminalView';
@@ -470,6 +471,8 @@ export function Overlays() {
       return <Catalogue repoId={overlay.repoId} />;
     case 'decor-box':
       return <DecorBoxPanel repoId={overlay.repoId} />;
+    case 'trophy-card':
+      return <TrophyCard id={overlay.id} />;
     case 'floorList':
       return <FloorList />;
     case 'notices':

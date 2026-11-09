@@ -1,7 +1,8 @@
 import { upToDateStep } from '../shared/practices.ts';
 import type { PullInfo } from '../shared/types.ts';
 
-// Auto-merge: fixes for failing checks or conflicts before a PR needs the manager, how long checks may run before
+// Auto-merge: fixes for failing checks before a PR needs the manager (a conflict with the base never does, and its
+// rounds don't count toward the fixes, #275: finished work only needs bringing up to date), how long checks may run before
 // the manager hears about it, and how long to wait before retrying a merge GitHub refused. Failing checks are first
 // re-run once per head commit (a flake or an outage shouldn't cost a fix), and a re-run's old result is ignored for
 // a while, since GitHub's rollup can still show it just after the re-run starts.
@@ -44,7 +45,7 @@ export type MergeStep = { set: MergeBookkeeping } & (
   | { do: 'details' } // GitHub hasn't worked out mergeability: ask about the PR itself, then decide again with `detailed`
   | { do: 'requeue' } // commits arrived after QA's sign-off: QA tests them too
   | { do: 'rerun'; runIds: number[]; reason: 'checks'; instructions: string; needsHuman: boolean } // re-run these Actions runs' failed jobs; the rest is the send-back if that can't be done
-  | { do: 'send-back'; reason: 'checks' | 'conflict'; instructions: string; needsHuman: boolean } // needsHuman: the fix budget ran out
+  | { do: 'send-back'; reason: 'checks' | 'conflict'; instructions: string; needsHuman: boolean; counts: boolean } // needsHuman: the fix budget ran out; counts: it uses one of MAX_MERGE_FIXES
   | { do: 'outage'; runIds: number[]; reason: string } // GitHub didn't run its checks: park it until CI is back (#191)
   | { do: 'update-branch' } // the repo only merges up-to-date branches, or the floor wants every PR up to date (#24)
   | { do: 'behind' } // up to date before merge: ask how far behind its base it is, then decide again with `behind`
@@ -63,7 +64,7 @@ export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { 
   if (pr.headSha !== (set.passedSha ?? rec.passedSha)) return { do: 'requeue', set };
   const needsHuman = rec.mergeFixes >= MAX_MERGE_FIXES;
   if (pr.mergeable === 'CONFLICTING' || pr.mergeState === 'DIRTY') {
-    return { do: 'send-back', reason: 'conflict', instructions: `It conflicts with ${opts.base}.`, needsHuman, set };
+    return { do: 'send-back', reason: 'conflict', instructions: `It conflicts with ${opts.base}.`, needsHuman: false, counts: false, set };
   }
   const rerun = rec.rerunSha === pr.headSha;
   if (pr.checks === 'failing') {
@@ -74,8 +75,8 @@ export function mergeStep(pr: MergePull, rec: MergeRecord, now: number, opts: { 
     if (outage) return { do: 'outage', runIds, reason: outage, set };
     if (!rerun && runIds.length) return { do: 'rerun', runIds, reason: 'checks', instructions, needsHuman, set };
     // It only fails on the office's merge of the base: the change conflicts with newer work there, not QA's verdict.
-    if (opts.upToDate && rec.updatedSha === pr.headSha) return { do: 'send-back', reason: 'conflict', instructions: `It conflicts with ${opts.base}: after merging ${opts.base} into it, these checks fail:\n${instructions}`, needsHuman, set };
-    return { do: 'send-back', reason: 'checks', instructions, needsHuman, set };
+    if (opts.upToDate && rec.updatedSha === pr.headSha) return { do: 'send-back', reason: 'conflict', instructions: `It conflicts with ${opts.base}: after merging ${opts.base} into it, these checks fail:\n${instructions}`, needsHuman, counts: true, set };
+    return { do: 'send-back', reason: 'checks', instructions, needsHuman, counts: true, set };
   }
   if (pr.checks === 'pending') {
     const since = rec.pendingSince ?? now;

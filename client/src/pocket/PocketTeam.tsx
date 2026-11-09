@@ -22,11 +22,14 @@ import { EmptyState } from '../ui/EmptyState';
 import { flashInto } from '../ui/jumpFlash';
 import { takeTeamLanding } from './pocketJump';
 import { Icon } from '../ui/Icon';
+import { needsYou } from '../../../shared/needsYou';
 import { useDraft } from '../drafts';
 import { Sheet } from '../ui/Sheet';
 import { pushLayer } from '../ui/backStack';
 import { AddAgentForm } from '../ui/AddAgentForm';
 import { teamStats } from '../ui/addAgent';
+import { HostBadge } from '../ui/HostBadge';
+import { TeamCapacity } from '../ui/TeamCapacity';
 
 
 /** Runs one REST call at a time per card; api() already toasts errors. */
@@ -71,14 +74,15 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
     }
   };
   return (
-    <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : ''} ${fresh ? 'pk-agent-new' : ''}`} data-agent={agent.id}>
+    <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : needsYou(agent) ? 'pk-agent-needs' : ''} ${fresh ? 'pk-agent-new' : ''}`} data-agent={agent.id}>
       <button type="button" className="pk-agent-head pk-agent-open" title={`Open ${agent.name}'s window`} onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
         <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
           <AgentRing agent={agent} />
         </HoverCard>
         <span className="grow">
           <span>
-            <b>{agent.name}</b> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
+            <b>{agent.name}</b>
+            <HostBadge agent={agent} short /> <span className="muted small">{agentLabel(agent, settings, clis)}</span>
           </span>
           <span className="small pk-ellipsis">
             {doing(agent)}
@@ -259,6 +263,7 @@ export function Team({ focusRepo, flash = 0, top }: { focusRepo: string | null; 
   return (
     <div className="pk-page">
       {top}
+      <TeamCapacity />
       <CeoCard />
       {repos.length === 0 && <EmptyState kind="projects" />}
       {repos.map((repo) => {

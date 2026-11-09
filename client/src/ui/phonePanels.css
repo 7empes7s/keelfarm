@@ -1,0 +1,81 @@
+/* Panels on a phone, in pocket mode and the 3D office alike (#83): the whole visible screen, the header (with its 44px
+   ✕) fixed above a scrolling body, clear of the notch and the home bar. :root outranks the UI scale's sizes below. */
+@media (max-width: 760px) {
+  .overlay {
+    top: calc(var(--app-top, 0px) / var(--ui-scale, 1));
+    bottom: auto;
+    height: calc(100vh / var(--ui-scale, 1));
+    height: calc(var(--app-height, 100dvh) / var(--ui-scale, 1));
+    padding: 0;
+  }
+  :root .overlay .panel {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .overlay .panel-head {
+    flex: none;
+    padding: max(12px, var(--ds-safe-top)) max(16px, var(--ds-safe-right)) 12px max(16px, var(--ds-safe-left));
+  }
+  .overlay .panel-body {
+    padding: 12px max(12px, var(--ds-safe-right)) max(12px, var(--ds-safe-bottom)) max(12px, var(--ds-safe-left));
+    overscroll-behavior: contain;
+  }
+  .phone-overlay {
+    place-items: stretch;
+  }
+  :root .phone {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-width: 0; /* a grid item: its widest row mustn't widen the screen */
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: max(10px, var(--ds-safe-top)) max(10px, var(--ds-safe-right)) max(8px, var(--ds-safe-bottom)) max(10px, var(--ds-safe-left));
+  }
+  /* the 3D office on a touch screen: a band of the dimmed view above the window, to tap it closed */
+  html[data-touch] .overlay {
+    padding-top: calc(48px + var(--ds-safe-top));
+  }
+  html[data-touch] .overlay .panel,
+  html[data-touch] .phone {
+    border-top: 4px solid var(--ds-outline);
+    border-radius: 20px 20px 0 0;
+  }
+  html[data-touch] .overlay .panel-head {
+    padding-top: 12px;
+  }
+  html[data-touch] .phone {
+    padding-top: 10px;
+  }
+  /* full screen and the keyboard (#297): no band, the phone from the visible top, clear of the notch */
+  html[data-touch] .overlay.phone-overlay-flush {
+    padding-top: 0;
+  }
+  html[data-touch] .phone-overlay-flush .phone {
+    padding-top: max(10px, var(--ds-safe-top));
+    border-top: none;
+    border-radius: 0;
+  }
+  /* typing: the message box right on the keyboard, the phone's tabs and the decisions back once it closes (as pocket
+     mode's, #152) */
+  html[data-touch][data-typing] .phone {
+    padding-bottom: 0;
+  }
+  html[data-touch][data-typing] .phone :is(.phone-tabs, .phone-hint, .decision-tray) {
+    display: none;
+  }
+  .phone-status {
+    display: none;
+  }
+  .phone .phone-x {
+    display: inline-flex;
+    align-self: flex-end;
+    margin-bottom: 6px;
+  }
+}

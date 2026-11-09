@@ -5,9 +5,10 @@ import { api } from '../api';
 import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { Menu } from './Menu';
+import { AssignButton } from './AssignSheet';
 import { Panel } from './Panel';
-import { HistoryButton } from './HistoryTab';
 import { EmptyState } from './EmptyState';
 import { InfoButton } from './InfoButton';
 import type { EmptyKind } from './emptyStates';
@@ -18,20 +19,26 @@ import { COLUMN_IDS, foldSummary, isFolded, parseFolds, withFold, type ColumnId,
 import { useLayout } from '../pocket/mode';
 import { reduceMotion } from './a11y';
 import './kanbanFold.css';
+import './kanbanCard.css';
+import './kanbanHeader.css';
 import { TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
 import { HoverCard } from './HoverCard';
-import { AgentPeek, QaPeek, WorkPeek } from './Peeks';
+import { useMinute } from './Decisions';
+import { prWaitLine } from '../../../shared/approvals';
+import { AgentPeek, WorkPeek } from './Peeks';
+import { cardActions, cardState, DANGER, whoPhrase, type CardAction } from './cardActions';
 
-/** Who has the card; "QA" while they're testing it. */
-function AgentChip({ agent, card }: { agent?: Agent; card: KanbanCard }) {
-  if (!agent) return null;
+/** Who has the card; "QA" while they're testing it. With `note`, the who row (#232): one line, the long form in its tooltip. */
+function AgentChip({ agent, card, note }: { agent?: Agent; card: KanbanCard; note?: string }) {
+  if (!agent) return note ? <span className="muted small kcard-who-text" title={note}>{whoPhrase(undefined, note).short}</span> : null;
+  const who = whoPhrase(agent.name, note);
   return (
     <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
-      <span className="agent-chip" tabIndex={0}>
+      <span className="agent-chip" tabIndex={0} title={note ? who.long : undefined}>
         <span className="dot" style={{ background: agent.color }} />
-        {agent.name}
+        {note ? <span className="kcard-who-text">{who.short}</span> : agent.name}
         {agent.task === 'qa' && card.prNumber != null && agent.prNumber === card.prNumber && <span className="chip">QA</span>}
       </span>
     </HoverCard>
@@ -87,7 +94,7 @@ export function IssueForm({ repoId, agents, onDone }: { repoId: string; agents: 
 function Frame({ embedded, ...props }: Parameters<typeof Panel>[0] & { embedded?: boolean }) {
   if (!embedded) return <Panel {...props} />;
   return (
-    <section className="kanban-embedded" style={{ ['--accent' as string]: props.accent }}>
+    <section className="kanban-embedded kanban-frame" style={{ ['--accent' as string]: props.accent }}>
       <h2 className="kanban-embedded-title">{props.title}</h2>
       {props.children}
     </section>
@@ -113,22 +120,12 @@ function saveFolds(map: FoldMap) {
   }
 }
 
-function QaLink({ card }: { card: KanbanCard }) {
-  if (!card.qa?.commentUrl) return null;
-  return (
-    <HoverCard label={`QA on PR #${card.qa.prNumber}`} peek={<QaPeek qa={card.qa} />}>
-      <a className="small" href={card.qa.commentUrl} target="_blank" rel="noreferrer">
-        QA report <Icon name="external-link" />
-      </a>
-    </HoverCard>
-  );
-}
-
 export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const allAgents = useStore((s) => s.agents);
   const qaRecords = useStore((s) => s.qa);
   const usageState = useStore((s) => s.usage.state);
+  const now = useMinute(); // the cards' wait lines (#275)
   const openOverlay = useStore((s) => s.openOverlay);
   const agents = useMemo(() => agentsOnRepo(allAgents, repoId), [allAgents, repoId]);
   const cols = useMemo(() => (repo ? kanbanFor(repo, agents, qaRecords, { state: usageState }) : null), [repo, agents, qaRecords, usageState]);
@@ -162,7 +159,6 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     }
   };
   const workers = agents.filter((a) => a.role !== 'ceo');
-  const free = workers.filter((a) => a.status === 'idle' || a.status === 'done' || a.status === 'stopped' || a.status === 'error');
   const merge = async (c: KanbanCard) => {
     const passed = c.qa?.status === 'passed';
     const ok = await confirmDialog(
@@ -208,11 +204,6 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     });
     if (ok) void act(c.key, () => api.trustIssue(repo.id, c.number));
   };
-  const reviewOnGitHub = (c: KanbanCard) => (
-    <a className="btn btn-small" href={c.url} target="_blank" rel="noreferrer">
-      Review on GitHub <Icon name="external-link" />
-    </a>
-  );
   const closePr = async (c: KanbanCard) => {
     const ok = await confirmDialog({
       tone: 'danger',
@@ -222,22 +213,63 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     });
     if (ok) void act(c.key, () => api.closePull(repo.id, c.number));
   };
-  // Closing a PR is hard to undo: it sits in the card's ⋯ (docs/design.md).
-  const closeButton = (c: KanbanCard) => (
-    <Menu label={`More for PR #${c.number}`} title={`PR #${c.number} ${c.title}`} items={[{ label: 'Close PR…', hint: 'Closed without merging; the branch stays', danger: true, disabled: pending === c.key, onSelect: () => void closePr(c) }]} />
-  );
-  const previewButton = (c: KanbanCard) => (
-    <button className="btn btn-small" title={`Run PR #${c.number} beside ${repo.defaultBranch} and open it in the app viewer`} onClick={() => openOverlay({ kind: 'app', repoId: repo.id, pr: c.number })}>
-      Preview
-    </button>
-  );
-  const terminalButton = (c: KanbanCard) =>
-    c.agent && (
-      <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: c.agent!.id })}>
-        Terminal
+  // Every PR card's one action row (#232): two buttons chosen by its state, the rest in the ⋯ (closing last).
+  const actionSpec = (c: KanbanCard, a: CardAction): { label: string; icon: IconName; run: () => void; title?: string; hint?: string; good?: boolean; disabled?: boolean } => {
+    const busy = pending === c.key;
+    const pr = repo.pulls.find((p) => p.number === c.prNumber);
+    const open = (url?: string | null) => () => void (url && window.open(url, '_blank', 'noopener,noreferrer'));
+    switch (a) {
+      case 'preview':
+        return { label: 'Preview', icon: 'monitor', title: `Run PR #${c.number} beside ${repo.defaultBranch} and open it in the app viewer`, run: () => openOverlay({ kind: 'app', repoId: repo.id, pr: c.number }) };
+      case 'terminal':
+        return { label: 'Terminal', icon: 'terminal', title: c.agent && `Open ${c.agent.name}'s terminal`, run: () => c.agent && openOverlay({ kind: 'terminal', agentId: c.agent.id }) };
+      case 'history':
+        return { label: 'History', icon: 'scroll-text', title: `The sessions on PR #${c.number}`, run: () => openOverlay({ kind: 'manager', tab: 'history', history: { repoId: repo.id, pr: c.number } }) };
+      case 'qa-report':
+        return { label: 'QA report', icon: 'external-link', hint: 'On GitHub', run: open(c.qa?.commentUrl) };
+      case 'send-to-qa':
+        return { label: 'Send to QA', icon: 'flask-conical', good: true, disabled: busy, run: () => void act(c.key, () => api.sendToQa(repo.id, c.number)) };
+      case 'retry-qa':
+        return { label: 'Retry QA', icon: 'rotate-cw', good: true, disabled: busy, run: () => void act(c.key, () => api.sendToQa(repo.id, c.number)) };
+      case 'send-back':
+        return { label: 'Send back', icon: 'wrench', hint: "With QA's findings, no QA round first", title: "Hand it to its author, or any free agent, with QA's findings and your note, without another QA round first", disabled: busy, run: () => void sendBack(c) };
+      case 'merge':
+        return { label: 'Merge', icon: 'git-merge', good: true, disabled: busy || pr?.isDraft, run: () => void merge(c) };
+      case 'merge-anyway':
+        return { label: 'Merge anyway', icon: 'git-merge', hint: 'Without passing QA', disabled: busy, run: () => void merge(c) };
+      case 'review':
+        return { label: 'Review on GitHub', icon: 'external-link', run: open(c.url) };
+      case 'close':
+        return { label: 'Close PR…', icon: 'x', hint: 'Closed without merging; the branch stays', disabled: busy, run: () => void closePr(c) };
+    }
+  };
+  // the label hides on a narrow card, leaving the icon with the label as its tooltip (kanbanCard.css)
+  const actionButton = (c: KanbanCard, a: CardAction) => {
+    const x = actionSpec(c, a);
+    return (
+      <button key={a} className={`btn btn-small ${x.good ? 'btn-good' : ''}`} title={x.title ?? x.label} aria-label={x.label} disabled={x.disabled} onClick={x.run}>
+        <Icon name={x.icon} />
+        <span className="kcard-act-label">{x.label}</span>
       </button>
     );
-
+  };
+  const actionRow = (c: KanbanCard, col: 'qa' | 'ready') => {
+    const st = c.qa?.status;
+    const { visible, menu } = cardActions(cardState(col, st, c.untrusted), { agent: !!c.agent, qaReport: !!c.qa?.commentUrl, untested: !st, status: st });
+    return (
+      <div className="kcard-actions">
+        {visible.map((a) => actionButton(c, a))}
+        <Menu
+          label={`More for PR #${c.number}`}
+          title={`PR #${c.number} ${c.title}`}
+          items={menu.map((a) => {
+            const x = actionSpec(c, a);
+            return { label: x.label, hint: x.hint, danger: DANGER.has(a), disabled: x.disabled, onSelect: x.run };
+          })}
+        />
+      </div>
+    );
+  };
   const nameOf = (id: string | null) => (id ? allAgents[id]?.name : undefined);
   const ask = (text: string): Target => ({ kind: 'ceo', text: text.replace('{floor}', `floor ${repo.floor} (${repo.fullName})`) });
   const emptyAction: Partial<Record<EmptyKind, { onAction?: () => void; target?: Target }>> = {
@@ -318,38 +350,52 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   return (
     <Frame
       embedded={embedded}
+      className="kanban-frame"
       wide
       accent={repo.color}
       title={
-        <span>
-          <Icon name="clipboard-list" /> {repo.fullName}{' '}
-          <a className="small" href={repo.url} target="_blank" rel="noreferrer">
-            GitHub <Icon name="external-link" />
-          </a>
+        <span className="kanban-heading">
+          <span className="kanban-repo">
+            <Icon name="clipboard-list" />
+            <span className="kanban-repo-name" title={repo.fullName}>{repo.fullName}</span>
+            <a className="kanban-github small" href={repo.url} target="_blank" rel="noreferrer" aria-label="View repository on GitHub">
+              <span>GitHub</span> <Icon name="external-link" />
+            </a>
+          </span>
+          <button
+            className={`btn btn-small kanban-sync ${repo.syncError ? 'kanban-sync-error' : ''}`}
+            disabled={pending === 'sync'}
+            aria-label="Sync repository"
+            aria-busy={pending === 'sync'}
+            title={repo.syncError || 'Sync issues and pull requests from GitHub'}
+            onClick={() => void act('sync', () => api.syncRepo(repo.id))}
+          >
+            <Icon name="refresh-cw" className={pending === 'sync' ? 'kanban-sync-spin' : undefined} />
+            <span aria-live="polite">{pending === 'sync' ? 'Syncing…' : repo.syncError ? 'Sync failed' : repo.lastSync ? `Synced ${new Date(repo.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}` : 'Sync now'}</span>
+          </button>
           {!embedded && <InfoButton screen="kanban" />}
         </span>
       }
     >
       <div className="kanban-toolbar">
-        <button className="btn btn-good" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : '+ New issue'}
-        </button>
-        <label className="toggle">
-          <input type="checkbox" checked={repo.autoAssign} onChange={(e) => void api.updateRepo(repo.id, { autoAssign: e.target.checked }).catch(() => undefined)} />
-          <Icon name="zap" /> Auto-assign work to free agents
-        </label>
-        <label className="toggle" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
-          <input type="checkbox" checked={repo.autoMerge} onChange={(e) => void api.updateRepo(repo.id, { autoMerge: e.target.checked }).catch(() => undefined)} />
-          <Icon name="git-merge" /> Auto-merge when QA and checks pass
-        </label>
-        <span className="spacer" />
-        <button className="btn" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">
-          <Icon name="monitor" /> View app
-        </button>
-        <span className="muted small">{repo.lastSync ? `Synced ${new Date(repo.lastSync).toLocaleTimeString()}` : 'Syncing…'}</span>
-        <button className="btn" disabled={pending === 'sync'} onClick={() => act('sync', () => api.syncRepo(repo.id))}>
-          <Icon name="refresh-cw" /> Sync
-        </button>
+        <div className="kanban-actions">
+          <button className="btn btn-small btn-good" aria-expanded={showForm} onClick={() => setShowForm((v) => !v)}>
+            {showForm ? 'Cancel' : '+ New issue'}
+          </button>
+          <button className="btn btn-small" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">
+            <Icon name="monitor" /> View app
+          </button>
+        </div>
+        <div className="kanban-settings" role="group" aria-label="Floor settings">
+          <label className="kanban-setting" title="Auto-assign work to free agents">
+            <span className="kanban-setting-label"><Icon name="zap" /><span>Auto-assign</span></span>
+            <input type="checkbox" role="switch" checked={repo.autoAssign} onChange={(e) => void api.updateRepo(repo.id, { autoAssign: e.target.checked }).catch(() => undefined)} />
+          </label>
+          <label className="kanban-setting" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
+            <span className="kanban-setting-label"><Icon name="git-merge" /><span>Auto-merge</span></span>
+            <input type="checkbox" role="switch" checked={repo.autoMerge} onChange={(e) => void api.updateRepo(repo.id, { autoMerge: e.target.checked }).catch(() => undefined)} />
+          </label>
+        </div>
       </div>
       {repo.syncError && (
         <div className="term-error">
@@ -388,19 +434,8 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
             ) : (
             <div className="kcard-foot">
               {c.note && <span className="muted small">{c.note}</span>}
-              <select
-                value=""
-                disabled={pending === c.key || free.length === 0}
-                onChange={(e) => e.target.value && act(c.key, () => api.assign(e.target.value, c.number))}
-                aria-label={`Assign issue #${c.number}`}
-              >
-                <option value="">{free.length ? 'Assign to…' : 'Everyone is busy'}</option>
-                {free.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              <span className="spacer" />
+              <AssignButton repoId={repo.id} number={c.number} title={c.title} small />
             </div>
           ),
           'backlog',
@@ -412,12 +447,12 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'kcol-progress',
           cols.progress,
           (c) => (
-            <div className="kcard-foot">
-              <AgentChip agent={c.agent} card={c} />
-              <span className="muted small">{c.note}</span>
-              <span className="spacer" />
-              {terminalButton(c)}
-            </div>
+            <>
+              <div className="kcard-who">
+                <AgentChip agent={c.agent} card={c} note={c.note} />
+              </div>
+              {c.agent && <div className="kcard-actions">{actionButton(c, 'terminal')}</div>}
+            </>
           ),
           'progress',
         )}
@@ -428,43 +463,15 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'kcol-qa',
           cols.qa,
           (c) => {
-            const st = c.qa?.status;
-            if (c.untrusted) {
-              return (
-                <div className="kcard-foot">
-                  <span className="muted small">{c.note}</span>
-                  <span className="spacer" />
-                  {reviewOnGitHub(c)}
-                  {closeButton(c)}
-                </div>
-              );
-            }
+            const wait = c.qa && !c.untrusted ? prWaitLine(c.qa, repo.defaultBranch, now) : null;
             return (
-              <div className="kcard-foot">
-                <AgentChip agent={c.agent} card={c} />
-                <span className="muted small">{c.note}</span>
-                <span className="spacer" />
-                <QaLink card={c} />
-                {previewButton(c)}
-                <HistoryButton focus={{ repoId: repo.id, pr: c.number }} label={`The sessions on PR #${c.number}`} />
-                {(st === 'testing' || st === 'fixing') && terminalButton(c)}
-                {(!st || st === 'needs-human') && (
-                  <button className="btn btn-small btn-good" disabled={pending === c.key} onClick={() => act(c.key, () => api.sendToQa(repo.id, c.number))}>
-                    {st === 'needs-human' ? 'Retry QA' : 'Send to QA'}
-                  </button>
-                )}
-                {(st === 'needs-human' || st === 'failed') && (
-                  <button className="btn btn-small" disabled={pending === c.key} title="Hand it to its author, or any free agent, with QA's findings and your note, without another QA round first" onClick={() => sendBack(c)}>
-                    Send back for a fix
-                  </button>
-                )}
-                {st === 'needs-human' && (
-                  <button className="btn btn-small btn-ghost" disabled={pending === c.key} onClick={() => merge(c)}>
-                    Merge anyway
-                  </button>
-                )}
-                {closeButton(c)}
-              </div>
+              <>
+                <div className="kcard-who">
+                  <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={c.note} />
+                </div>
+                {wait && <div className="small kcard-wait">{wait}</div>}
+                {actionRow(c, 'qa')}
+              </>
             );
           },
           'qa',
@@ -478,21 +485,12 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           (c) => {
             const pr = repo.pulls.find((p) => p.number === c.prNumber);
             return (
-              <div className="kcard-foot">
-                <AgentChip agent={c.agent} card={c} />
-                <span className="muted small">
-                  {c.note}
-                  {pr ? ` · +${pr.additions} −${pr.deletions}` : ''}
-                </span>
-                <span className="spacer" />
-                <QaLink card={c} />
-                {previewButton(c)}
-                <HistoryButton focus={{ repoId: repo.id, pr: c.number }} label={`The sessions on PR #${c.number}`} />
-                <button className="btn btn-small btn-good" disabled={pending === c.key || pr?.isDraft} onClick={() => merge(c)}>
-                  Merge
-                </button>
-                {closeButton(c)}
-              </div>
+              <>
+                <div className="kcard-who">
+                  <AgentChip agent={c.agent} card={c} note={`${c.note ?? ''}${pr ? ` · +${pr.additions} −${pr.deletions}` : ''}`} />
+                </div>
+                {actionRow(c, 'ready')}
+              </>
             );
           },
           'ready',
@@ -504,7 +502,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'kcol-merged',
           cols.merged,
           (c) => (
-            <div className="kcard-foot">
+            <div className="kcard-who">
               <AgentChip agent={c.agent} card={c} />
             </div>
           ),

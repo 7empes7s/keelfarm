@@ -12,44 +12,181 @@
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
+  width: 100%;
+  min-height: var(--ds-target);
   margin-top: var(--ds-space-1);
-  padding-top: var(--ds-space-1);
+  padding: 0;
+  border: 0;
   border-top: 1px dashed var(--ds-line);
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: var(--ds-text-xs);
+  text-align: left;
+  cursor: pointer;
   min-width: 0;
 }
 .live-step {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.live-step-running {
+.live-step-running .live-step {
   font-weight: var(--ds-weight-strong);
 }
-.live-step-failed {
+.live-step-failed .live-step {
   color: var(--ds-danger-text);
 }
+.live-count {
+  flex: none;
+}
+/* the step running bobs gently (stilled by reduced motion) */
+.live-icon-busy,
+.working-strip .working-icon {
+  display: inline-block;
+  animation: step-bob 1.4s var(--ds-ease) infinite;
+}
+@keyframes step-bob {
+  50% {
+    transform: translateY(-2px) scale(1.08);
+    opacity: 0.7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-icon-busy,
+  .working-strip .working-icon,
+  .step-spin {
+    animation: none;
+  }
+}
 
-/* a finished reply's steps */
-.chat-steps {
+/* a round's step log (#150): the working strip's live one and a finished reply's */
+.step-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-tight);
+}
+.step-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-1) 0;
+  min-width: 0;
+}
+.step-row + .step-row {
+  border-top: 1px solid var(--ds-line);
+}
+.step-icon {
+  flex: none;
+  width: 1.3em;
+  text-align: center;
+}
+.step-body {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.step-text,
+.step-text p {
+  display: inline;
+  margin: 0;
+}
+.step-row-running .step-text {
+  font-weight: var(--ds-weight-strong);
+}
+.step-note {
+  display: block;
+  color: var(--ds-danger-text);
+}
+.step-meta {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.step-mark {
+  width: 1.1em;
+  text-align: center;
+}
+.step-row-done .step-mark {
+  color: var(--ds-accent);
+}
+.step-row-failed .step-mark {
+  color: var(--ds-danger-text);
+}
+.step-spin {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border: 2px solid var(--ds-line-strong);
+  border-top-color: var(--ds-accent);
+  border-radius: 50%;
+  animation: step-spin 0.9s linear infinite;
+}
+@keyframes step-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* a finished reply's steps: one row that opens the log */
+.steps-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-height: var(--ds-target);
   margin-top: var(--ds-space-1);
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--ds-line);
+  background: none;
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+.steps-row-chev,
+.working-chev {
+  flex: none;
+  transition: transform var(--ds-dur-fast) var(--ds-ease);
+}
+.steps-row[aria-expanded='true'] .steps-row-chev,
+.working-main[aria-expanded='true'] .working-chev {
+  transform: rotate(90deg);
+}
+.steps-row-foot {
+  margin: var(--ds-space-1) 0 0;
   font-size: var(--ds-text-xs);
 }
-.chat-steps summary {
+
+/* a floor named in the chat: one line high, the text's own size (#150) */
+.floor-chip {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-link);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  line-height: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
   cursor: pointer;
-  color: var(--ds-text-muted);
-  padding: var(--ds-space-1) 0;
 }
-.chat-steps ol {
-  margin: 0;
-  padding-left: 1.4em;
-}
-.chat-step-failed {
-  color: var(--ds-danger-text);
+.floor-chip:hover,
+.floor-chip:focus-visible {
+  text-decoration-style: solid;
 }
 
-/* a bubble's meta row (#215): Used, Steps and the time on one compact line; an open fold takes the whole width */
+/* a bubble's meta row (#215): Used and the time on one compact line; an open fold takes the whole width */
 .bubble-meta {
   display: flex;
   flex-wrap: wrap;
@@ -57,8 +194,7 @@
   gap: 0 var(--ds-space-3);
   margin-top: var(--ds-space-1);
 }
-.bubble-meta > .used,
-.bubble-meta > .chat-steps {
+.bubble-meta > .used {
   margin: 0;
 }
 .bubble-meta > details[open] {
@@ -397,13 +533,11 @@
 .chat-full .chat-log > .bubble-row:has(> .bubble-them :is(pre, table, .md-code, .viz-svg)) {
   margin-inline: calc(-1 * min(170px, max(0px, (100cqi - 780px) / 2)));
 }
-/* the chat's ⋯ only where its header has room for it; ⛶ is always there */
-.phone-chat,
-.pk-dock {
-  container: chatbox / inline-size;
+/* the chat's ⋯ (#270): what its header row has no room for, with a folded tool's badge */
+.chat-more > .ds-btn {
+  position: relative;
 }
-@container chatbox (max-width: 519px) {
-  .chat-more {
-    display: none;
-  }
+.chat-more .ds-menu-badge {
+  top: -7px;
+  right: -7px;
 }

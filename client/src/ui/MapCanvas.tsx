@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MapChange, MapNode, MemoryGraph } from '../../../shared/memoryMap';
 import { createSim, fitView, hitTest, settle, tick, zoomAt, ALPHA_MIN, type Body, type Sim, type View } from './mapForce';
 import { reduceMotion } from './a11y';
+import { Icon } from './Icon';
 
 export interface MapPaint {
   fill: (n: MapNode) => string;
@@ -381,13 +382,13 @@ export function MapCanvas({ graph, paint, selected, lit, pulses, centre, onSelec
       )}
       <div className="mm-zoom">
         <button type="button" className="mm-zoom-btn" aria-label="Zoom in" onClick={() => view.current && ((view.current = zoomAt(view.current, 1.4, size.current.w / 2, size.current.h / 2)), redraw())}>
-          +
+          <Icon name="plus" />
         </button>
         <button type="button" className="mm-zoom-btn" aria-label="Zoom out" onClick={() => view.current && ((view.current = zoomAt(view.current, 1 / 1.4, size.current.w / 2, size.current.h / 2)), redraw())}>
-          −
+          <Icon name="minus" />
         </button>
         <button type="button" className="mm-zoom-btn" aria-label="Fit the map" title="Fit the map" onClick={() => ((view.current = fitView(sim.current.bodies, size.current.w, size.current.h)), redraw())}>
-          ⤢
+          <Icon name="maximize-2" />
         </button>
       </div>
     </div>

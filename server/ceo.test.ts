@@ -1,6 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
+import { STEP_TOOLS, stepWords } from '../shared/ceoSteps.ts';
+import { describeOfficeTool } from './agentRunner.ts';
 import { EAST_DESKS, MAX_DESKS } from '../client/src/world/layout.ts';
 import { FLOOR_SEATS, OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type QaStatus } from '../shared/types.ts';
 import type { HttpError } from './httpError.ts';
@@ -143,6 +145,7 @@ describe('office tools', () => {
       restartAgent: () => '',
       stopAgent: () => '',
       messageAgent: async () => '',
+      assignIssue: async () => '',
       answerAgent: async (a) => (calls.push(['answer_agent', a]), 'sent'),
       askManagerChoice: (a) => (calls.push(['ask_manager_choice', a]), 'asked'),
       sendBack: async () => '',
@@ -182,6 +185,7 @@ describe('office tools', () => {
       'answer_agent',
       'ask_manager',
       'ask_manager_choice',
+      'assign_issue',
       'attach_file',
       'close_issue',
       'close_pull',
@@ -218,6 +222,17 @@ describe('office tools', () => {
     ]);
   });
 
+  // #150: the phone shows each call as a sentence; none may fall back to the tool's raw name.
+  it('says every tool in plain words, with no raw tool name', async () => {
+    const { client } = await connect();
+    const { tools } = await client.listTools();
+    for (const t of tools) {
+      expect(STEP_TOOLS, t.name).toContain(t.name);
+      const text = stepWords(`mcp__office__${t.name}`, `⏺ ${describeOfficeTool(t.name, { floor: 2, pr: 7, number: 7, agent_id: 'Ada', title: 'X', question: 'Q?', conditions: [{ kind: 'pr_merged', floor: 2, pr: 7 }] })}`).text;
+      expect(text, t.name).not.toMatch(/_|\bmcp\b/);
+    }
+  });
+
   // #215: a card that looks tappable but opens nothing. A new tool that changes something needs a sample here and a ref.
   it('gives the card of every tool that changes something a destination', async () => {
     const { client } = await connect();
@@ -245,6 +260,7 @@ describe('office tools', () => {
       restart_agent: agent,
       stop_agent: { ...agent, reason: 'r' },
       message_agent: { ...f, ...agent, text: 't' },
+      assign_issue: { ...f, number: 7 },
       answer_agent: { ...agent, text: 't' },
       ask_manager_choice: { ...agent, question: 'q' },
       send_telegram: { text: 't' },
@@ -672,7 +688,7 @@ describe('follow-ups (#27)', () => {
           companyStatus: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
-          restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
+          restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
         },
         () => researching,

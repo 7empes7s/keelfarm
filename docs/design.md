@@ -45,7 +45,7 @@ Rejected:
 | Type | `--ds-text-xs` .75 · `-sm` .875 · `-md` 1 · `-lg` 1.125 · `-xl` 1.375 rem; `--ds-leading`, `--ds-leading-tight`, `--ds-weight(-strong)` |
 | Radii | `--ds-radius-sm` 8 · `-md` 12 · `-lg` 16 · `-xl` 24 · `-pill`; borders `--ds-border` 2, `--ds-border-strong` 3 |
 | Touch | `--ds-target` 44 px |
-| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; chart series `--ds-series-1…8` (in order; charts group a donut's rest as "Other" in the 8th) |
+| Colour | `--ds-surface`, `-raised`, `-sunken`, `-hover`; `--ds-text`, `--ds-text-muted`; `--ds-outline`, `--ds-shadow-color`, `--ds-line(-strong)`; `--ds-link`, `--ds-focus`; `--ds-good-fill`, `--ds-bad-fill`, `--ds-warn-fill` with `--ds-on-color` text; `--ds-danger-text`, `--ds-warn-text`; `--ds-scrim`; `--ds-segment-track` (a segmented control on a coloured header); chart series `--ds-series-1…8` (in order; charts group a donut's rest as "Other" in the 8th) |
 | Elevation | `--ds-shadow-1` (buttons), `-2` (cards), `-3` (panels), `--ds-shadow-float` (menus) |
 | Motion | `--ds-dur-fast` 80 · `--ds-dur` 160 · `--ds-dur-slow` 240 ms, `--ds-ease`, `--ds-ease-spring`; all 0 under `prefers-reduced-motion` or the office's reduce-motion setting |
 | Layers | `--ds-z-base` 10 · `-panel` 30 · `-sheet` 40 · `-popover` 50 · `-toast` 60 · `-tour` 70 · `-modal` 80; no raw `z-index` over 10 (`designTokens.test.ts`) |
@@ -152,7 +152,9 @@ Android, Windows and Linux draw the same glyph in the text's colour, with no ico
 - **No emoji as chrome**: `ui/icons.test.ts` scans every string and JSX text in `client/src` and fails on an emoji or
   icon glyph. Emoji that are content stay emoji: what people type and react with in chat, what is drawn into the 3D
   scene's textures, speech bubbles and decorations, game pieces. Those files are listed, with the reason, in the
-  test's `CONTENT`. Plain-text strings (toasts, tooltips, notifications) use words, not emoji.
+  test's `CONTENT`. Plain-text strings (toasts, tooltips, notifications) use words, not emoji. Carets (▸ ▾), arrows
+  that lead or end a label (↻ Restart, ↓ Latest) and status dots (● live) count as glyphs too (#295); an arrow in prose
+  (Settings → Voice) or a key's name in `<kbd>` does not.
 
 ## Finding things and learning the office (#109)
 

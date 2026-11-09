@@ -8,7 +8,8 @@
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
-import type { AgentCli, CloudCredentialView, CloudView } from '../shared/types.ts';
+import type { AgentCli, CloudCredentialView, CloudView, KeyTrouble } from '../shared/types.ts';
+import { secretMismatch } from '../shared/secretFormats.ts';
 
 /** The environment variable the manager keeps their `claude setup-token` token in. */
 export const CLAUDE_TOKEN_ENV = 'CUBEFARM_CLAUDE_TOKEN';
@@ -23,6 +24,11 @@ export interface CloudSecrets {
 }
 
 export type CloudTokenKind = 'github' | 'anthropic' | 'openai';
+/** The API keys that can run out of credit, and which CLI uses each. */
+export type CloudKeyKind = 'anthropic' | 'openai';
+export const keyKindOf = (cli: 'claude' | 'codex'): CloudKeyKind => (cli === 'codex' ? 'openai' : 'anthropic');
+/** A key that stopped working (#258): kept in secrets.json beside it, gone when the key is replaced or the manager uses it again. */
+export type KeyTroubles = Partial<Record<CloudKeyKind, { kind: KeyTrouble; at: number }>>;
 const TOKEN_FIELD: Record<CloudTokenKind, keyof CloudSecrets> = { github: 'cloudGithubToken', anthropic: 'anthropicApiKey', openai: 'openaiApiKey' };
 
 // ---------- Box names ----------
@@ -52,6 +58,7 @@ export interface CredentialInput {
   claudeToken: string; // from the office's environment ('' when not set)
   secrets: CloudSecrets;
   ghToken: string; // the manager's gh login ('' when gh isn't signed in)
+  trouble?: KeyTroubles;
 }
 
 /** What one Box command runs with for a CLI, or what's missing. */
@@ -61,32 +68,42 @@ export interface Credentials {
   apiKeyHelper: string | null;
   /** The office has no credential for the CLI: it uses its own login in the Box, signed in in the agent's terminal. */
   ownLogin: boolean;
+  /** It runs on an API key the office was given (one that can run out of credit). */
+  onKey: boolean;
   missing: string[];
 }
 
 const github = (i: CredentialInput) => i.secrets.cloudGithubToken || i.ghToken;
 
-/** The environment a cloud agent's CLI gets in its Box: GitHub, and the one credential its CLI signs in with. */
-export function resolveCredentials(cli: AgentCli, i: CredentialInput): Credentials {
+/**
+ * The environment a cloud agent's CLI gets in its Box: GitHub, and the one credential its CLI signs in with.
+ * `own`: this agent is off the office's key (it stopped working, #258), so their CLI uses its own login.
+ */
+export function resolveCredentials(cli: AgentCli, i: CredentialInput, own = false): Credentials {
   const env: Record<string, string> = {};
   const missing: string[] = [];
   let apiKeyHelper: string | null = null;
   let ownLogin = false;
+  let onKey = false;
   const gh = github(i);
   if (gh) env.GH_TOKEN = gh;
   else missing.push('GitHub (sign in with gh auth login, or paste a token in Settings → Cloud agents)');
   if (cli === 'claude') {
     for (const k of CLAUDE_VARS) env[k] = '';
-    if (i.claudeToken) env.CLAUDE_CODE_OAUTH_TOKEN = i.claudeToken;
+    if (own) ownLogin = true;
+    else if (i.claudeToken) env.CLAUDE_CODE_OAUTH_TOKEN = i.claudeToken;
     else if (i.secrets.anthropicApiKey) {
       env[ANTHROPIC_KEY_ENV] = i.secrets.anthropicApiKey;
       apiKeyHelper = `printenv ${ANTHROPIC_KEY_ENV}`;
+      onKey = true;
     } else ownLogin = true;
   } else if (cli === 'codex') {
-    if (i.secrets.openaiApiKey) Object.assign(env, { OPENAI_API_KEY: i.secrets.openaiApiKey, CODEX_API_KEY: i.secrets.openaiApiKey });
-    else ownLogin = true;
+    if (i.secrets.openaiApiKey && !own) {
+      Object.assign(env, { OPENAI_API_KEY: i.secrets.openaiApiKey, CODEX_API_KEY: i.secrets.openaiApiKey });
+      onKey = true;
+    } else ownLogin = true;
   }
-  return { env, apiKeyHelper, ownLogin, missing };
+  return { env, apiKeyHelper, ownLogin, onKey, missing };
 }
 
 /** The same, for a command that needs GitHub but no coding agent (cloning, fetching, installing). */
@@ -109,10 +126,21 @@ export function credentialViews(i: CredentialInput): Pick<CloudView, 'github' | 
   const claude: CloudCredentialView = i.claudeToken
     ? { ready: true, source: 'subscription', hint: '' }
     : i.secrets.anthropicApiKey
-      ? { ready: true, source: 'apiKey', hint: hint(i.secrets.anthropicApiKey) }
+      ? { ready: true, source: 'apiKey', hint: hint(i.secrets.anthropicApiKey), ...(i.trouble?.anthropic && { trouble: i.trouble.anthropic }) }
       : login;
-  const codex: CloudCredentialView = i.secrets.openaiApiKey ? { ready: true, source: 'apiKey', hint: hint(i.secrets.openaiApiKey) } : login;
+  const codex: CloudCredentialView = i.secrets.openaiApiKey ? { ready: true, source: 'apiKey', hint: hint(i.secrets.openaiApiKey), ...(i.trouble?.openai && { trouble: i.trouble.openai }) } : login;
   return { github: gh, claude, codex };
+}
+
+/** The saved troubles, with anything malformed left out. */
+function keyTroubles(raw: unknown): KeyTroubles {
+  const out: KeyTroubles = {};
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, { kind?: unknown; at?: unknown } | undefined>;
+  for (const k of ['anthropic', 'openai'] as const) {
+    const t = r[k];
+    if (t && (t.kind === 'out-of-credit' || t.kind === 'invalid') && typeof t.at === 'number') out[k] = { kind: t.kind, at: t.at };
+  }
+  return out;
 }
 
 /** Text with every secret in it replaced, before it reaches a log, a phone message or the journal. */
@@ -146,6 +174,7 @@ export class Cloud {
   private gh = '';
   private ghAt = 0;
   private boxes: CloudView['boxes'] = null;
+  private troubles: KeyTroubles = {};
 
   constructor(private deps: CloudDeps) {}
 
@@ -153,6 +182,7 @@ export class Cloud {
     const s = await readSecrets(this.deps.secretsFile);
     for (const k of ['upstashBoxKey', 'cloudGithubToken', 'anthropicApiKey', 'openaiApiKey'] as const) if (typeof s[k] === 'string' && s[k]) this.secrets[k] = s[k] as string;
     if (this.secrets.upstashBoxKey) this.api = this.deps.boxes(this.secrets.upstashBoxKey);
+    this.troubles = keyTroubles(s.cloudKeyTrouble);
     await this.refreshGh(true);
   }
 
@@ -172,7 +202,7 @@ export class Cloud {
   }
 
   private async input(): Promise<CredentialInput> {
-    return { claudeToken: this.claudeToken(), secrets: this.secrets, ghToken: this.secrets.cloudGithubToken ? '' : await this.refreshGh() };
+    return { claudeToken: this.claudeToken(), secrets: this.secrets, ghToken: this.secrets.cloudGithubToken ? '' : await this.refreshGh(), trouble: this.troubles };
   }
 
   view(): CloudView {
@@ -180,7 +210,7 @@ export class Cloud {
       keySet: !!this.secrets.upstashBoxKey,
       keyHint: hint(this.secrets.upstashBoxKey),
       keyError: this.keyError,
-      ...credentialViews({ claudeToken: this.claudeToken(), secrets: this.secrets, ghToken: this.gh }),
+      ...credentialViews({ claudeToken: this.claudeToken(), secrets: this.secrets, ghToken: this.gh, trouble: this.troubles }),
       boxes: this.boxes,
     };
   }
@@ -190,9 +220,40 @@ export class Cloud {
     return [...Object.values(this.secrets), this.claudeToken(), this.gh].filter((s): s is string => !!s);
   }
 
-  /** What a CLI runs with in a Box. */
-  async credentials(cli: AgentCli): Promise<Credentials> {
-    return resolveCredentials(cli, await this.input());
+  /** What a CLI runs with in a Box; `own`: that agent is off the key (#258). */
+  async credentials(cli: AgentCli, own = false): Promise<Credentials> {
+    return resolveCredentials(cli, await this.input(), own);
+  }
+
+  /** The trouble the key a CLI runs on has, while it's saved (#258). */
+  trouble(cli: AgentCli): KeyTrouble | null {
+    if (cli === 'opencode' || (cli === 'claude' && this.claudeToken())) return null; // the subscription token comes first
+    const kind = keyKindOf(cli);
+    return this.secrets[TOKEN_FIELD[kind]] ? (this.troubles[kind]?.kind ?? null) : null;
+  }
+
+  /** A session showed the key stopped working: cloud agents go onto their own login. True when it's news. */
+  markTrouble(cli: 'claude' | 'codex', kind: KeyTrouble): boolean {
+    const k = keyKindOf(cli);
+    if (this.troubles[k]?.kind === kind) return false;
+    this.troubles = { ...this.troubles, [k]: { kind, at: Date.now() } };
+    void this.saveTroubles().catch((err) => this.deps.log(`couldn't save the key's trouble: ${(err as Error).message}`));
+    this.emit();
+    return true;
+  }
+
+  /** POST /api/cloud/key-again: the manager topped the key up, so cloud agents go back on it at their next task. */
+  async clearTrouble(kind: CloudKeyKind): Promise<CloudView> {
+    if (this.troubles[kind]) {
+      this.troubles = { ...this.troubles };
+      delete this.troubles[kind];
+      await this.saveTroubles();
+    }
+    return this.emit();
+  }
+
+  private saveTroubles() {
+    return mergeSecrets(this.deps.secretsFile, { cloudKeyTrouble: Object.keys(this.troubles).length ? this.troubles : undefined });
   }
 
   /** What a command that only needs GitHub (a clone, a fetch) runs with. */
@@ -205,6 +266,8 @@ export class Cloud {
     const key = raw.trim();
     if (key) {
       if (key.length > 400 || /\s/.test(key)) throw new HttpError(400, "That doesn't look like an Upstash Box API key.");
+      const wrong = secretMismatch('upstash', key);
+      if (wrong) throw new HttpError(400, wrong);
       const api = this.deps.boxes(key);
       try {
         await api.list();
@@ -228,10 +291,12 @@ export class Cloud {
     if (kind === 'anthropic' && value.startsWith('sk-ant-oat')) {
       throw new HttpError(400, `That's a claude setup-token token: it goes in your environment as ${CLAUDE_TOKEN_ENV} (see the steps above), not in the office.`);
     }
-    if (kind === 'anthropic' && value && !value.startsWith('sk-ant-')) throw new HttpError(400, 'Anthropic API keys start with sk-ant-.');
+    const wrong = secretMismatch(kind, value);
+    if (wrong) throw new HttpError(400, wrong);
     const field = TOKEN_FIELD[kind];
     this.secrets[field] = value || undefined;
     await mergeSecrets(this.deps.secretsFile, { [field]: value || undefined });
+    if (kind !== 'github') await this.clearTrouble(kind); // a new key (or none): its old trouble goes with the old one
     if (kind === 'github') await this.refreshGh(true);
     return this.emit();
   }

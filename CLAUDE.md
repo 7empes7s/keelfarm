@@ -80,6 +80,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `repos.ts` | connecting floors, syncing issues and PRs, previews, manager commands on GitHub |
   | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
   | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
+  | `cloudCredit.ts` | cloud agents off an API key out of credit (#258): own login, the sign-in card per burst, back on the key |
+  | `providers.ts` | Settings → Providers (#362): keys added there and MCP servers for agents' sessions (`server/providers.ts`, catalogue and cards pure in `shared/providers.ts`), the `providers` event, the CEO's line |
+  | `usage.ts` | usage for every account and provider (#361): the usage card's sources (`usageSources.ts`, `codexLimits.ts`), 90% notifications, Admin keys |
   | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
   | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |
   | `scheduling.ts` | the scheduler and hand-out, pacing on Claude's usage, mission control |
@@ -91,6 +94,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
+  | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
@@ -129,7 +133,10 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   holds the task) and runs the CLI's own login in their terminal (`cliRunner.ts` `startBoxSignIn`); the office never
   reads that login.
 - `demo.ts`: `createDemoBackend()`: fake GitHub, fake sessions (drawn into the agent's terminal in the terminal runtime), fake previews and machines for `--demo`;
-  `--floors N --agents N` (or `SWARM_DEMO_FLOORS` / `SWARM_DEMO_AGENTS`) makes it a big company for scale tests.
+  `--floors N --agents N` (or `SWARM_DEMO_FLOORS` / `SWARM_DEMO_AGENTS`) makes it a big company for scale tests. It only
+  wires `demo/`: each feature's module there registers its fakes (`registerDemo`) and the demo CEO's replies that show
+  its tools (`registerCeoReply`) in `demo/registry.ts`, `demo/index.ts` imports them, `demo/world.ts` is the fake GitHub's
+  state; `demo/parity.test.ts` checks every Backend member and CEO tool has a fake.
 - `github.ts`: all GitHub access through the `gh` CLI.
 - `workspace.ts`: floor checkouts, the preview worktrees (`<SWARM_HOME>/workspaces/<owner>__<repo>/desks/<name>`),
   local machines (clone, worktree, branch sweep, removal with leftovers), fast-forwarding main, a git lock per clone,
@@ -159,6 +166,10 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `health.ts`: resource safety (#55): sessions start only when memory and swap leave the headroom (per-kind estimates
   learned from peaks; the CEO always starts), each agent's processes measured through /proc on Linux (stopped over the
   ceiling or under pressure), killed sessions resumed twice then re-queued, the health strip's view. `shared/health.ts` has the settings.
+- `serverLoad.ts`: the server's load by program (#271): /proc read every 15 s (memory, swap, load, disk, each process's RSS
+  and CPU) and grouped into programs (agents' CLI sessions, their test browsers and demo offices, previews, the office,
+  Postgres/Docker), orphans, and a 24 h trend in memory; pure parsing and grouping first. `shared/serverLoad.ts` has the
+  types and trend rules; the chat's `server:*` sources and Mission control's `ServerCard.tsx` draw it; `demoServerLoad.ts` is the demo's.
 - `presence.ts`: shared presence: relays tabs' poses, emotes and pings on `/ws` to their floor (pure interest and rate
   rules), never saved; `demoVisitors.ts` walks the demo's fake visitors. Names and limits in `shared/presence.ts`.
 - `voice.ts`: phone messages read aloud (docs/voice.md): the ElevenLabs key in `secrets.json`, voices, cached clips;
@@ -198,6 +209,7 @@ Shared (`shared/`, imported by both sides):
   add a type to its area's file and import it from `shared/types`.
 - `issues.ts`: issue conventions (`swarm:skip`, `Depends on #N`, hold-up ranking).
 - `journal.ts`: the time-lapse journal's format and pure rules, for the server and the replay.
+- `chatPage.ts`: the CEO chat in pages (#145): the snapshot's latest page, older ones on scroll up (`client/src/ui/ChatPaging.tsx`), deleting and hiding messages.
 - `chat.ts`: the phone chat's rules: a reply's quote forwarded to the CEO, delivery states, quick Yes / No (links: `client/src/ui/chatLinks.ts`).
 - `watch.ts`: which terminal lines a tab gets: its floor, open panels, the workers list's latest lines.
 - `memoryMap.ts`: the memory map (#136): the office as a graph (nodes, edges, weights, caps), its filters, local graph, search, insights and live changes; built in the tab from the snapshot (`client/src/ui/MemoryMap.tsx`, canvas and physics in `MapCanvas.tsx` / `mapForce.ts`); the 3D office's map room (#137, a lazy `mapRoom` overlay from the CEO's map table) swaps the stage for `Constellation.tsx`, its 3D layout, LOD and effects pure in `skyLayout.ts`).
@@ -235,7 +247,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   `PhotoScene.tsx` (its own camera; frozen, the frame loop stops and it draws on change), `post.ts` (filters and depth
   of field on the finished picture), `recorder.ts` / `instantReplay.ts` (MediaRecorder; `webmRing.ts` keeps the last 15 s),
   `PhotoPanel.tsx`, and pure `flight.ts`, `shots.ts`, `filters.ts`.
-- `src/store.ts`: the zustand store; `apply(ServerEvent)` folds websocket events into UI state.
+- `src/store.ts`: the zustand store; `apply(ServerEvent)` folds websocket events into UI state through one handler per
+  event in `src/store/apply/<area>.ts` (each area also gives its share of the snapshot), merged in `store/apply/index.ts`.
 - `src/api.ts`: REST calls; errors become toasts.
 - `src/viewport.ts`: the phone's viewport (#73): `--app-height` / `--app-top` from visualViewport for every full-screen
   view (pocket mode divides them by the UI scale), put back after the keyboard, a send, a photo or `pageshow`; the
@@ -255,13 +268,13 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
 - Comments are sparse and say why: a short header comment per file describing its role, `/** */` on exported
   functions and interface fields when the name isn't enough, inline notes for Windows or safety reasons, and
   `// ---------- section ----------` dividers in long files. No commented-out code.
-- Demo parity: every new `Backend` method, CEO tool or capability gets a fake in `server/demo.ts`, so `--demo` works
-  with no GitHub, no git/npm and no Claude usage.
+- Demo parity: every new `Backend` method, CEO tool or capability gets a fake in its feature's module under
+  `server/demo/` (a new one, listed in `demo/index.ts`), so `--demo` works with no GitHub, no git/npm and no Claude usage.
 - UI state comes from the server: on connect the client gets a `snapshot`, then typed `ServerEvent`s (`repo`,
   `agent`, `qa`, `ceo`, `message`, `toast`, …) from `Swarm.broadcast`; agents' and floors' frequent changes come
   batched as `agents` / `repos` patches and terminal lines as `logs` / `latest`, only for what the tab shows
-  (`server/outbox.ts`). Add new state to `shared/types.ts`, the snapshot and an event, and handle it in `store.ts`'s
-  `apply`. REST is for commands, not for polling state. A big company must fit `server/scale.test.ts`'s budgets.
+  (`server/outbox.ts`). Add new state to `shared/types.ts`, the snapshot and an event, and handle it in its area's
+  `client/src/store/apply/<area>.ts` (or a new area listed in `index.ts`). REST is for commands, not for polling state. A big company must fit `server/scale.test.ts`'s budgets.
 - REST errors: throw `HttpError(4xx, message)`; the handler in `index.ts` returns `{ error }` JSON, anything else
   is a logged 500. Validate request bodies by hand at the route or in the swarm.
 - CEO tools: zod input schemas, errors worded so the CEO can act on them, small outputs.
@@ -272,7 +285,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   - kill process trees, not just the child (`taskkill /T /F` on Windows, process groups elsewhere);
   - `windowsHide: true` on spawns; npm on Windows goes through `cmd.exe`.
 - Agent prompts are paid for on every session: keep prompt text short and specific.
-- 2D UI follows docs/design.md: tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
+- 2D UI follows docs/design.md: new styles go in a css file next to their component, imported by it (`styles.css`
+  keeps tokens, resets and buttons; `sheets.css` keeps its old feature blocks in cascade order); tokens from `client/src/design.css`, 44px targets, destructive actions only in a ⋯
   `Menu` (`ui/Menu.tsx`) then a confirmation; add changed screens to their screen's file in `e2e/layout/` (under 300 lines each).
 
 ## Code health

@@ -8,7 +8,7 @@ import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
 import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord } from './boxCli.ts';
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
-import { cliLabel, CLIS, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, signedOutScreen, STATUSLINE_SOURCE, trustKey } from './clis.ts';
+import { cliLabel, CLIS, CODEX_HOOK_SOURCE, codexThread, commandFor, hookReviewKey, interruptions, isCli, launchArgs, lostLogin, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
 import {
@@ -35,6 +35,9 @@ import { isHarnessText } from '../shared/chat.ts';
 import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
+import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
+import { envSecrets } from './journal.ts';
+import { wireCli } from './cliWire.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -184,6 +187,8 @@ interface LiveCli {
   box?: { api: BoxApi; boxId: string };
   /** When its terminal last drew something (epoch ms). */
   lastData?: number;
+  lastHook?: number;
+  programStatus?: ProgramStatus & { at: number };
 }
 const lives = new Map<AgentTerminal, LiveCli>();
 /** How to trust Codex's hooks was said once this run (Codex asks at the start of every session until they are). */
@@ -239,20 +244,7 @@ const remember = (l: LiveCli) => l.proc?.setMeta(metaOf(l));
 
 /** A CLI is running in its terminal: its output, its keys and its hooks are connected. */
 function wire(l: LiveCli, office?: OfficeTools) {
-  const p = l.proc!;
-  lives.set(l.term, l);
-  routes.set(l.token, { hook: (b) => (l.session ? l.session.hook(b) : idleHook(l, b)), office });
-  l.term.bind({ write: (d) => quietly(() => p.write(d)), resize: (c, r) => quietly(() => p.resize(c, r)) });
-  p.onData((data) => {
-    l.lastData = Date.now();
-    if (lives.get(l.term) === l) l.term.write(data);
-  });
-  p.onExit((code) => {
-    l.proc = null;
-    if (lives.get(l.term) !== l) return; // already replaced or closed
-    if (l.session) l.session.exited(code);
-    else endLive(l); // quit while waiting at its prompt
-  });
+  wireCli(l, { lives, routes, office, idleHook, endLive, quietly });
 }
 
 /** The task is done but the CLI stays at its prompt for the manager (or a follow-up), for a while. */
@@ -518,11 +510,16 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
   let promptTimer: NodeJS.Timeout | undefined;
+  const statusSecrets = envSecrets({ ...process.env, ...opts.env, ...opts.box?.env });
   // The CEO's text as it writes it; everyone else's chat (#120).
   const tail = cli === 'claude' && !inBox ? (opts.stream ? new TranscriptTail(started, (t) => callbacks.text?.(t, true)) : new TranscriptTail(started, undefined, (ev) => cb.chat?.(ev))) : null;
 
   const cb: SessionCallbacks = { ...callbacks };
   const log = (entries: LogEntry[]) => entries.length && cb.log(entries);
+  const statusReport = new ProgramStatusReporter((reason) => {
+    if (reason) log([{ kind: 'error', text: `⛔ Blocked: ${reason}. Open the terminal to answer it.` }]);
+    cb.blocked?.(reason);
+  });
 
   /** Codex and OpenCode don't report tool results: pass on the screenshots their browser saved instead. all: the last look. */
   const collectShots = (all = false) => {
@@ -558,10 +555,11 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     if (done) return;
     done = true;
     let r = result;
-    // A cloud agent's CLI that failed (or said nothing) because its login expired: the task waits for a new sign-in.
+    // A cloud agent's CLI that failed (or said nothing) as its login expired or its API key stopped working (#258): it waits.
     const cut = r.interrupted || r.signedOut || r.errors[0] === 'Stopped by manager';
-    if (inBox && !cut && (!r.ok || !r.text) && (signedOutScreen(term.screen()) || r.errors.some((e) => /authentication failed/i.test(e)))) {
-      r = { ...r, ok: false, signedOut: true, errors: [`${label}'s sign-in in their cloud machine expired or was turned away.`] };
+    const lost = inBox && !cut && (!r.ok || !r.text) ? lostLogin(term.screen(), r.errors, label) : null;
+    if (lost) {
+      r = { ...r, ok: false, ...lost };
       keep = false;
     }
     for (const t of [finishTimer, bootTimer]) clearTimeout(t);
@@ -569,7 +567,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     clearInterval(shotTimer);
     clearInterval(promptTimer);
     tail?.stop();
-    if (onScreen?.blocked) cb.blocked?.(null);
+    if (onScreen?.blocked || statusReport.blocked) cb.blocked?.(null);
     collectShots(true);
     if (term.onInput === watchKeys) term.onInput = null;
     const l = live;
@@ -666,6 +664,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     const l = live;
     if (done || !l?.proc) return;
     const now = Date.now();
+    const stepFromStatus = programStatusStep(l.programStatus, Math.max(l.lastHook ?? 0, started), now, statusSecrets);
+    statusReport.check(stepFromStatus, !!onScreen?.blocked);
     if (!onScreen && begun && cli === 'claude' && now - (l.lastData ?? now) >= STALL_MS && permissionScreen(term.screen())) {
       onScreen = { kind: 'permission', since: now, ...lastCall, tries: 0, blocked: false };
     }
@@ -686,6 +686,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
 
   const hook = (b: Record<string, unknown>): Record<string, unknown> => {
     const event = String(b.hook_event_name ?? '');
+    statusReport.clear(!!onScreen?.blocked);
     if (tail && typeof b.transcript_path === 'string' && b.agent_id === undefined) tail.watch(b.transcript_path);
     if (event !== 'Notification' && event !== 'StatusLine') answered();
     const answer = inBox ? null : answerHook(b, roots); // a Box's hook script answers there
@@ -911,7 +912,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       // Plugins the manager switched off for this session (Tools & skills): flag settings win over their own.
       ...(opts.tools?.disabledPlugins.length ? { enabledPlugins: Object.fromEntries(opts.tools.disabledPlugins.map((p) => [p, false])) } : {}),
     };
-    const servers: Record<string, unknown> = {};
+    const servers: Record<string, unknown> = box ? {} : { ...opts.mcpServers }; // a Box gets credentials only as a command's environment
     if (browser) servers.playwright = browser;
     if (opts.office && !box) servers.office = { type: 'http', url: `${officeUrl}/api/mcp/${token}` };
     files = { settings: p.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? p.join(dir, 'mcp.json') : null, system: p.join(dir, 'instructions.md') };

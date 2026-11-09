@@ -1,0 +1,84 @@
+/* ---------- setup wizard ---------- */
+
+.wizard {
+  text-align: left;
+  width: min(680px, 100%);
+}
+.wizard h1,
+.wizard .start-logo,
+.wizard .start-tag,
+.wizard h2,
+.wizard-icon {
+  text-align: center;
+}
+.wizard h2 {
+  margin: 4px 0 6px;
+  font-size: 1.9rem;
+}
+.wizard-icon {
+  --ds-icon: 3rem;
+  line-height: 1.1;
+}
+.wizard .start-logo {
+  display: block;
+  width: fit-content;
+  margin: 0 auto;
+}
+.wizard .btn-big {
+  display: block;
+  margin: 0 auto;
+}
+.wizard-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.wizard-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-outline);
+  background: var(--ds-surface-raised);
+}
+.wizard-dot-done {
+  background: #80ed99;
+}
+.wizard-dot-on {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+.wizard-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.wizard-done {
+  text-align: center;
+  padding: 10px 0;
+}
+.wizard-done p {
+  margin: 6px 0;
+}
+.ceo-setup {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+.ceo-portrait {
+  width: 120px;
+  height: 120px;
+  flex: none;
+}
+.swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2.5px solid var(--ds-outline);
+  cursor: pointer;
+  padding: 0;
+}
+.swatch-on {
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--ink);
+}

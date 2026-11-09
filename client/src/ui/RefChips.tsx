@@ -32,6 +32,9 @@ export function takeChatScroll(): number | null {
   return at;
 }
 
+/** Whether the chat will take a scroll position back when it opens. */
+export const hasChatScroll = () => chatScroll !== null;
+
 /** Opens a panel, riding to `floor` first when you're elsewhere; closing it goes back to the phone it came from. */
 export function openFrom(overlay: Overlay, floor?: number) {
   const s = useStore.getState();
@@ -235,7 +238,7 @@ function FloorPeek({ chip }: { chip: Exclude<ChatRef, { kind: 'agent' | 'file' }
         {qa ? ` · QA ${qa.status}${qa.round > 1 ? ` (round ${qa.round})` : ''}` : ''}
       </p>
       {(pull || issue) && <p className="small"><Icon name="user" /> {who.length ? who.join(', ') : 'Nobody on it yet'}</p>}
-      {fail && <p className="small ref-peek-clip">✗ {fail.name}: {fail.line}</p>}
+      {fail && <p className="small ref-peek-clip"><Icon name="x" /> {fail.name}: {fail.line}</p>}
       {qa?.summary && <p className="small ref-peek-clip">{qa.summary}</p>}
       {chip.kind === 'qa' && n !== undefined && qa?.shots?.length ? <img className="ref-peek-shot" src={qaShotUrl(repo.id, n, 0, qa.updatedAt)} alt={qa.shots[0].caption} /> : null}
     </>

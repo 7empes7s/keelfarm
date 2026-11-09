@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixGoesTo, pickTester, PREP_HOLD_MS, prepFailure, prepHeld, runnerFor, SELF_QA_WAIT_MS, type FixAuthor } from './handOut.ts';
+import { fixGoesTo, pickTester, pipelineQueue, PREP_HOLD_MS, prepFailure, prepHeld, runnerFor, SELF_QA_WAIT_MS, WORK_PHASES, type FixAuthor } from './handOut.ts';
 
 const author = (o: Partial<FixAuthor> = {}): FixAuthor => ({ status: 'done', branch: 'swarm/issue-192-barbara', prNumber: 198, ...o });
 const HEAD = 'swarm/issue-192-barbara';
@@ -128,5 +128,24 @@ describe('runnerFor (#263: Box agents and this computer\'s memory)', () => {
     expect(runnerFor(ada, () => null, g.fits, g.admit)).toBe(ada);
     expect(g.asked).toEqual(['admit']);
     expect(runnerFor(ada, () => radia, gate(true).fits, gate(true).admit)).toBe(ada);
+  });
+});
+
+describe('finished work first (#275)', () => {
+  const rec = (pr: number, status: string, updatedAt: number, passedSha: string | null = null) => ({ pr, status, updatedAt, passedSha });
+
+  it('brings QA-passed PRs up to date before tests and other fixes, each oldest first', () => {
+    const queue = pipelineQueue([rec(1, 'failed', 1), rec(2, 'queued', 2), rec(3, 'failed', 5, 'abc'), rec(4, 'passed', 0, 'def'), rec(5, 'failed', 4, 'ghi'), rec(6, 'queued', 0)]);
+    expect(queue.map((q) => [q.rec.pr, q.task])).toEqual([
+      [5, 'fix'],
+      [3, 'fix'],
+      [6, 'qa'],
+      [2, 'qa'],
+      [1, 'fix'],
+    ]);
+  });
+
+  it('hands out work in flight before new issues', () => {
+    expect(WORK_PHASES.indexOf('pipeline')).toBeLessThan(WORK_PHASES.indexOf('issue'));
   });
 });

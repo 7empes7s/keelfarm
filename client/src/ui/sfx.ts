@@ -1,4 +1,4 @@
-// Every office sound, synthesized with WebAudio (no audio files). One shared AudioContext: sounds go
+// Every office sound, synthesized with WebAudio (the dog's barks are the only recordings, `sample`). One shared AudioContext: sounds go
 // through their group's gain (footsteps, typing, toys, alerts; or straight on), then the master gain, so
 // volume and mute apply to everything at once, then a gentle compressor. Sounds placed in the world pan
 // and fade with distance from the camera (SoundListener.tsx). Audio is optional: when it's blocked or
@@ -160,8 +160,6 @@ export function setAudioPrefs(patch: Partial<AudioPrefs>) {
   for (const g of SOUND_GROUPS) setGroupLevel(g, sliderGain(prefs[g]));
   for (const fn of listeners) fn();
 }
-
-export const toggleMute = () => setAudioPrefs({ muted: !prefs.muted });
 
 /** Turns every sound but the voice down by about 8 dB (while a message is read aloud), or back up. */
 export function duckOthers(on: boolean) {
@@ -549,6 +547,36 @@ export function noise(opts: NoiseOpts) {
     src.stop(t0 + dur + 0.05);
     voices.push({ end: t0 + dur + 0.05, loud: p.loud, env: gain, src });
     alerted(opts, a.ctx, t0, t0 + dur);
+  } catch {
+    // audio is optional
+  }
+}
+
+export interface SampleOpts extends PlaceOpts {
+  buffer: AudioBuffer;
+  peak: number;
+  /** Playback rate: 1 as recorded, a little over is higher and shorter. */
+  rate?: number;
+}
+
+/** A decoded recording (the dog's barks), through the same mixer as the synthesized sounds. */
+export function sample(opts: SampleOpts) {
+  const { buffer, peak, rate = 1 } = opts;
+  const p = place('sample', opts, peak);
+  if (!p) return;
+  const a = p.a;
+  try {
+    const t0 = a.ctx.currentTime;
+    const end = t0 + buffer.duration / rate;
+    const src = a.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = rate;
+    const gain = a.ctx.createGain();
+    gain.gain.value = peak * p.scale;
+    src.connect(gain).connect(p.dest);
+    src.start(t0);
+    voices.push({ end, loud: p.loud, env: gain, src });
+    alerted(opts, a.ctx, t0, end);
   } catch {
     // audio is optional
   }

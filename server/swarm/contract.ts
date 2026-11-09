@@ -15,6 +15,7 @@ export abstract class SwarmContract {
   protected abstract learnIssueClosed(...a: Parameters<Swarm['learnIssueClosed']>): ReturnType<Swarm['learnIssueClosed']>;
   protected abstract learnPull(...a: Parameters<Swarm['learnPull']>): ReturnType<Swarm['learnPull']>;
   protected abstract rebaseConflicting(...a: Parameters<Swarm['rebaseConflicting']>): ReturnType<Swarm['rebaseConflicting']>;
+  protected abstract recheckStuck(...a: Parameters<Swarm['recheckStuck']>): ReturnType<Swarm['recheckStuck']>;
   protected abstract refreshPractices(...a: Parameters<Swarm['refreshPractices']>): ReturnType<Swarm['refreshPractices']>;
   protected abstract settleLearned(...a: Parameters<Swarm['settleLearned']>): ReturnType<Swarm['settleLearned']>;
   protected abstract sweepFloor(...a: Parameters<Swarm['sweepFloor']>): ReturnType<Swarm['sweepFloor']>;
@@ -26,6 +27,10 @@ export abstract class SwarmContract {
   protected abstract ensureAgent(...a: Parameters<Swarm['ensureAgent']>): ReturnType<Swarm['ensureAgent']>;
   protected abstract fireAgent(...a: Parameters<Swarm['fireAgent']>): ReturnType<Swarm['fireAgent']>;
   protected abstract port(...a: Parameters<Swarm['port']>): ReturnType<Swarm['port']>;
+
+  // cloudCredit.ts
+  protected abstract creditSignIn(...a: Parameters<Swarm['creditSignIn']>): ReturnType<Swarm['creditSignIn']>;
+  protected abstract offKey(...a: Parameters<Swarm['offKey']>): ReturnType<Swarm['offKey']>;
 
   // sessions.ts
   protected abstract clearPrepStrikes(...a: Parameters<Swarm['clearPrepStrikes']>): ReturnType<Swarm['clearPrepStrikes']>;
@@ -65,6 +70,7 @@ export abstract class SwarmContract {
   protected abstract setAgentVoice(a: PersistedAgent, patch: { voiceId?: unknown; voiceName?: unknown }): void;
 
   // ceoJobs.ts
+  protected abstract ceoTold: string[]; // for the CEO's next job
   protected abstract ceo(...a: Parameters<Swarm['ceo']>): ReturnType<Swarm['ceo']>;
   protected abstract ceoInfo(...a: Parameters<Swarm['ceoInfo']>): ReturnType<Swarm['ceoInfo']>;
   protected abstract chatView(...a: Parameters<Swarm['chatView']>): ReturnType<Swarm['chatView']>;
@@ -117,6 +123,9 @@ export abstract class SwarmContract {
   protected abstract closeTestLab(...a: Parameters<Swarm['closeTestLab']>): ReturnType<Swarm['closeTestLab']>;
   protected abstract labSessions(...a: Parameters<Swarm['labSessions']>): ReturnType<Swarm['labSessions']>;
   protected abstract labView(...a: Parameters<Swarm['labView']>): ReturnType<Swarm['labView']>;
+
+  // upkeep.ts
+  protected abstract hybridHost(...a: Parameters<Swarm['hybridHost']>): ReturnType<Swarm['hybridHost']>;
 
   // swarm.ts
   protected abstract finishRestart(...a: Parameters<Swarm['finishRestart']>): ReturnType<Swarm['finishRestart']>;

@@ -14,6 +14,14 @@ async function openCard(page: Page, board: Locator) {
 }
 
 const SCREENS: Screen[] = [
+  {
+    name: 'PR card actions', widths: [390, 1280], tabs: [],
+    open: async (page) => {
+      const board = await pocket(page, 'kanban');
+      await board.locator('.kcard', { hasText: 'Checkout steps on a phone' }).first().locator('button.linkish').click();
+      return page.locator('.cardview');
+    },
+  },
   { name: 'pocket card', widths: [390, 1280], open: async (page) => openCard(page, await pocket(page, 'kanban')), tabs: [] },
   { name: 'card', widths: [1280], open: async (page) => openCard(page, await fromPhone(page, /Kanban/, /GitHub/, ON_FLOOR_1)), tabs: [] },
 ];

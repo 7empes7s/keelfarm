@@ -49,6 +49,7 @@ import {
 import { SHIRTS, HAIR, SKIN, NAMES, lookFor, LOOKS, pick } from './flavour.ts';
 import { removeScreens } from './screens.ts';
 import { SwarmMerge } from './merge.ts';
+import { rotationSettings } from '../../shared/accountRotation.ts';
 
 export abstract class SwarmAgents extends SwarmMerge {
   /** Providers & accounts (#247, docs/accounts.md): the logins and keys agents and the CEO run on. */
@@ -65,6 +66,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
     seed: this.backend.accounts.seed,
     poll: !process.env.VITEST,
+    rotation: () => rotationSettings(this.state.settings.rotation, undefined),
   });
 
   // ---------- agents ----------
@@ -159,10 +161,10 @@ export abstract class SwarmAgents extends SwarmMerge {
   /**
    * Where a new (or moving) agent works: what was asked, else the office default. A cloud agent needs the Upstash key,
    * room under the plan's Box limit and a CLI a Box can run (Claude Code or Codex). `strict`: the manager asked for the
-   * cloud, so say why not; otherwise (a floor's first agent, the demo) they work on this computer instead.
+   * cloud, so say why not; otherwise (a floor's first agent, the demo) they work on this computer instead. Hybrid: hybridHost.
    */
   protected hostFor(asked: string | undefined, cli: AgentCli, strict: boolean, moving?: PersistedAgent): MachineHost {
-    const want: MachineHost = asked === 'box' || asked === 'local' ? asked : this.state.settings.cloud.machineKind;
+    const want = asked === 'box' || asked === 'local' ? asked : this.state.settings.cloud.machineKind;
     if (want === 'local') return 'local';
     const why = !this.cloud.boxApi()
       ? 'Cloud agents need your Upstash Box API key first: Settings → Cloud agents.'
@@ -171,6 +173,7 @@ export abstract class SwarmAgents extends SwarmMerge {
         : !this.boxRoom(moving)
           ? `Your Upstash plan's Box limit (${this.state.settings.cloud.boxLimit}) is reached. Raise it in Settings → Cloud agents if your plan allows more, or delete Boxes you don't need.`
           : null;
+    if (want === 'hybrid') return this.hybridHost(why, strict);
     if (!why) return 'box';
     if (strict || asked === 'box') throw new HttpError(409, why);
     return 'local';
@@ -233,7 +236,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (!api) throw new Error('Cloud agents need your Upstash Box API key: Settings → Cloud agents.');
     const machine = this.machineOf(a);
     const boxId = await this.boxMachines.ensure(machine, (text) => this.appendLog(a, [{ kind: 'system', text: `☁ ${text}` }]));
-    const creds = await this.cloud.credentials(cli);
+    const creds = await this.cloud.credentials(cli, this.offKey(a, cli));
     if (creds.missing.length) throw new Error(`Cloud agents can't sign in yet. Missing: ${creds.missing.join('; ')}.`);
     if (check && creds.ownLogin && cli !== 'opencode' && (await this.boxMachines.signedIn(machine, cli).catch(() => null)) === false) throw new SignInNeeded(cli);
     // The Box's own Chromium starts with a first tab; Playwright attaches to it.
@@ -262,7 +265,7 @@ export abstract class SwarmAgents extends SwarmMerge {
 
   setCloudKey(key: string) {
     return this.cloud.setKey(key).then((view) => {
-      if (!view.keySet && this.state.settings.cloud.machineKind === 'box') {
+      if (!view.keySet && this.state.settings.cloud.machineKind !== 'local') {
         // No key, no cloud: new agents work on this computer until it's back.
         this.state.settings.cloud = { ...this.state.settings.cloud, machineKind: 'local' };
         this.broadcast({ type: 'settings', settings: this.state.settings });
@@ -299,7 +302,11 @@ export abstract class SwarmAgents extends SwarmMerge {
       };
       this.appendLog(a, [{ kind: 'system', text: `⏸ Their task waits until ${label} is signed in.` }]);
     }
-    if (!a.needsSignIn) {
+    if (!a.needsSignIn && a.ownLogin) {
+      a.needsSignIn = true; // off the office's key (#258): the manager gets the guided steps, one card per burst
+      this.appendLog(a, [{ kind: 'error', text: `🔑 Sign ${label} in with your own account in their terminal (at their desk, or 🔑 Sign in) to carry on.` }]);
+      this.creditSignIn(a, cli);
+    } else if (!a.needsSignIn) {
       a.needsSignIn = true;
       this.appendLog(a, [
         {
@@ -418,7 +425,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       if (s) s.run = null;
     }
     if (cli === 'opencode') return this.signedIn(a);
-    const creds = await this.cloud.credentials(cli).catch(() => null);
+    const creds = await this.cloud.credentials(cli, this.offKey(a, cli)).catch(() => null);
     const ok = !creds ? null : creds.ownLogin ? await this.boxMachines.signedIn(this.machineOf(a), cli).catch(() => null) : true;
     if (!this.state.agents.includes(a) || a.host !== 'box') return;
     if (ok === true) this.signedIn(a);

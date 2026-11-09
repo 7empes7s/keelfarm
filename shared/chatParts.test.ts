@@ -49,6 +49,13 @@ describe('parseCeoMessage', () => {
     expect(p.artifacts).toEqual([{ title: 'Issues to file', markdown: '# Floor 2\n| # | Title |\n|---|---|\n| 1 | Jukebox |' }]);
   });
 
+  it('lifts the spoken summary out of the text, cleaned for speaking (#282)', () => {
+    const raw = `Filed #278 and #279 for the terminal.\n\n${fence}spoken\nI filed **two** fixes for the terminal, see #278.\n${fence}`;
+    expect(parseCeoMessage(raw)).toEqual({ text: 'Filed #278 and #279 for the terminal.', spoken: 'I filed two fixes for the terminal, see 278.' });
+    const empty = `Hi.\n${fence}spoken\n\n${fence}`;
+    expect(parseCeoMessage(empty)).toEqual({ text: empty });
+  });
+
   it('keeps code blocks inside an artifact', () => {
     const raw = `See the plan.\n${fence}artifact title='Plan'\nStep one:\n${fence}bash\nnpm test\n${fence}\nDone.\n${fence}`;
     const p = parseCeoMessage(raw);
@@ -125,6 +132,16 @@ describe('artifacts', () => {
     expect(out[0].artifacts?.[0]).toEqual({ id: '1-1', title: 't', lead: 'l' });
     expect(out[2]).toBe(all[2]);
     expect(all[0].artifacts?.[0].markdown).toHaveLength(50); // the saved messages are untouched
+  });
+
+  it('keeps the newest step logs whole in the snapshot, older ones as their count and time (#150)', () => {
+    const step = { label: 'Checking the floors', icon: '🏢', state: 'done' as const, ms: 5 };
+    const msg = (id: number): PhoneMessage => ({ id, from: 'ceo', text: '', at: id, log: { steps: [step], count: 1, ms: 9 } });
+    const all = [msg(1), msg(2), { id: 3, from: 'manager', text: 'hi', at: 3 } as PhoneMessage, msg(4)];
+    const out = snapshotMessages(all, 0, 2);
+    expect(out.map((m) => m.log?.steps.length)).toEqual([0, 1, undefined, 1]);
+    expect(out[0].log).toEqual({ steps: [], count: 1, ms: 9 });
+    expect(all[0].log?.steps).toHaveLength(1); // the saved messages are untouched
   });
 
   it('says attachments aloud by title, and names downloads', () => {

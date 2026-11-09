@@ -63,4 +63,9 @@ describe('floorRows', () => {
     ]);
     expect(rows[1].kind).toBe('bad');
   });
+
+  it('lists who needs the manager, and a finished agent as free (#307)', () => {
+    const rows = floorRows([agent({ status: 'done', waiting: 'manager' }), agent({ status: 'working', blocked: 'a prompt' }), agent({ status: 'done' })], terminals, []);
+    expect(rows.map((r) => [r.status, r.kind])).toEqual([['Needs you', 'attention'], ['Needs you', 'attention'], ['Free', 'idle']]);
+  });
 });

@@ -12,7 +12,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { browserNote, DEFAULT_ESTIMATES, gb, type HealthView, type HeldWork, type MemoryReading, type MemorySettings, type SessionKind } from '../shared/health.ts';
+import type { ServerNow, ServerPoint } from '../shared/serverLoad.ts';
 import { HttpError } from './httpError.ts';
+import { realLoad, type LoadContext } from './serverLoad.ts';
 
 export { DEFAULT_MEMORY, memorySettings, type SessionKind } from '../shared/health.ts';
 
@@ -152,6 +154,12 @@ export interface ResourceProbe {
   kill(pids: number[]): void;
   /** What the test lab's browser uses (its whole process tree), MB; null when it isn't running or can't be measured. */
   browser?(): Promise<number | null>;
+  /** The server's load by program (#271, server/serverLoad.ts). */
+  server(ctx: LoadContext): Promise<ServerNow>;
+  /** Stop a process left over from an ended session, and what it started, by pid (#271). */
+  stopOrphan(pid: number, ctx: LoadContext): Promise<void>;
+  /** The 24 h trend's points from before the office started: the demo's made-up day; none for the real one. */
+  serverSeed(): ServerPoint[];
   /** The demo only: pretend memory is low, or back. */
   simulate?(low: boolean): void;
 }
@@ -244,7 +252,7 @@ function killPids(pids: number[]) {
   }
 }
 
-export const realResources: ResourceProbe = { memory: readMemory, usage: procUsage, kill: killPids, browser: () => labBrowserMb() };
+export const realResources: ResourceProbe = { memory: readMemory, usage: procUsage, kill: killPids, browser: () => labBrowserMb(), ...realLoad };
 
 // ---------- the office's side ----------
 
@@ -257,7 +265,7 @@ export interface LiveSession {
 }
 
 export interface HealthHost {
-  probe(): ResourceProbe;
+  probe(): Omit<ResourceProbe, 'server' | 'stopOrphan' | 'serverSeed'>; // the server's load is ServerLoad's (#271)
   settings(): MemorySettings;
   sessions(): LiveSession[];
   /** A line in the agent's feed. */
@@ -305,6 +313,24 @@ export class OfficeHealth {
     return admission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate), browserMb: this.browserMb });
   }
 
+  /** What's free for a new session of `kind` and what one needs (null: memory not read yet): Hybrid's room (#260). */
+  fit(kind: SessionKind, now = Date.now()): { freeMb: number; needMb: number } | null {
+    if (!this.memory) return null;
+    const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: now - s.startedAt }));
+    return memoryFit({ memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate) });
+  }
+
+  /** New work waiting for memory: since when, and the floors it waits on (null: none). */
+  heldFloors(): { since: number; floors: Set<string> } | null {
+    if (!this.wait || !this.held.size) return null;
+    return { since: this.wait.since, floors: new Set([...this.held.keys()].flatMap((k) => (k.includes(':') ? [k.slice(k.indexOf(':') + 1)] : []))) };
+  }
+
+  /** The demo's Simulate low memory is on: its waits are short, so a burst shows soon. */
+  get simulated() {
+    return this.demoDelayMs !== null;
+  }
+
   /** May the scheduler start a session of `kind` (for `floor`)? When not, the work waits and the health strip says why. */
   admit(kind: SessionKind, floor?: string): boolean {
     const why = this.refusal(kind);
@@ -314,6 +340,11 @@ export class OfficeHealth {
     this.wait = { why, since: this.wait?.since ?? Date.now(), told: this.wait?.told ?? false };
     this.emit();
     return false;
+  }
+
+  /** What a preview's processes used at the last reading, MB (0: not measured). */
+  previewMb(key: string): number {
+    return this.previewRss.get(key) ?? 0;
   }
 
   /** Before work waits for memory: stop the biggest idle preview, if any. */
