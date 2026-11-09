@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { gb, type MemorySettings } from '../../../shared/health';
+import { Section } from './DetailsPage';
 import { Icon } from './Icon';
 import { memoryLimit } from '../../../shared/progressBars';
 import { ProgressBar } from './ProgressBar';
@@ -32,44 +33,43 @@ export function HealthStrip() {
       .finally(() => setBusy(false));
   };
   return (
-    <div className="card office-card" id="ops-card-health">
-      <div className="row wrap">
-        <span className="floor-badge office-badge" aria-hidden>
-          <Icon name="stethoscope" />
+    <Section
+      id="ops-card-health"
+      title={
+        <span className="dp-chips">
+          <Icon name="stethoscope" /> Server
         </span>
-        <div className="grow">
-          <b>Server</b>{' '}
-          <span className="muted small">
-            {gb(m.availableMb)} of {gb(m.totalMb)} memory free{m.swapTotalMb > 0 && ` · swap ${gb(m.swapFreeMb)} free`}
-            {m.load !== null && ` · load ${m.load.toFixed(1)} on ${m.cpus} cores`}
-          </span>
-          <div className={`small office-state ${tone}`} role="status">
-            {health.held ?? `${health.running} session${health.running === 1 ? '' : 's'} running${health.waiting ? `, ${health.waiting} waiting for memory to resume` : ''}`}
-          </div>
-          <ProgressBar
-            label="Memory in use"
-            value={`${gb(m.totalMb - m.availableMb)} of ${gb(m.totalMb)}`}
-            pct={used.pct}
-            tone={used.tone}
-            aria={`Memory in use: ${Math.round(used.pct * 100)}%, ${gb(m.availableMb)} free, ${gb(headroom)} kept free`}
-            onClick={() => openOverlay({ kind: 'manager', tab: 'agents' })}
-            tap="Open the memory settings"
-          />
-          {stop && (
-            <div className="small muted">
-              {new Date(stop.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {stop.agent}: {stop.why}
-            </div>
-          )}
-        </div>
-        {demo && (
-          <div className="office-actions">
-            <button className="btn btn-small btn-ghost" disabled={busy} onClick={simulate} title="The demo only: pretend this computer is short of memory, or has it back">
-              {low ? 'Memory back' : 'Simulate low memory'}
-            </button>
-          </div>
-        )}
+      }
+    >
+      <div className="dp-meta">
+        {gb(m.availableMb)} of {gb(m.totalMb)} memory free{m.swapTotalMb > 0 && ` · swap ${gb(m.swapFreeMb)} free`}
+        {m.load !== null && ` · load ${m.load.toFixed(1)} on ${m.cpus} cores`}
       </div>
-    </div>
+      <div className={`small office-state ${tone}`} role="status">
+        {health.held ?? `${health.running} session${health.running === 1 ? '' : 's'} running${health.waiting ? `, ${health.waiting} waiting for memory to resume` : ''}`}
+      </div>
+      <ProgressBar
+        label="Memory in use"
+        value={`${gb(m.totalMb - m.availableMb)} of ${gb(m.totalMb)}`}
+        pct={used.pct}
+        tone={used.tone}
+        aria={`Memory in use: ${Math.round(used.pct * 100)}%, ${gb(m.availableMb)} free, ${gb(headroom)} kept free`}
+        onClick={() => openOverlay({ kind: 'manager', tab: 'agents' })}
+        tap="Open the memory settings"
+      />
+      {stop && (
+        <div className="small muted">
+          {new Date(stop.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: {stop.agent}: {stop.why}
+        </div>
+      )}
+      {demo && (
+        <div className="row wrap">
+          <button className="btn btn-small btn-ghost" disabled={busy} onClick={simulate} title="The demo only: pretend this computer is short of memory, or has it back">
+            {low ? 'Memory back' : 'Simulate low memory'}
+          </button>
+        </div>
+      )}
+    </Section>
   );
 }
 

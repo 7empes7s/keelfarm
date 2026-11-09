@@ -23,7 +23,7 @@ export function ManagerChangesCard() {
   const today = changes.filter((c) => new Date(c.at).toDateString() === new Date().toDateString()).reverse();
   const deciding = s.touched - s.stopped - s.redirected - s.letFinish;
   return (
-    <div className="card office-card" id="ops-card-changes">
+    <div className="dp-card dp-section" id="ops-card-changes">
       <ProgressBar
         label={
           <>
