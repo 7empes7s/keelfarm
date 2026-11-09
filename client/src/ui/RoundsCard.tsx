@@ -6,7 +6,7 @@ import type { RepoView } from '../../../shared/types';
 import './rounds.css';
 import { Icon } from './Icon';
 import { TrendChart } from './TrendChart';
-import { firstPassBubble, lastDays, roundsBubble } from './trendChart';
+import { firstPassBubble, lastDays, roundsBubble } from './trendPoints';
 
 // Mission control → Rounds (#188): QA rounds per merge and the first-round pass rate against O2's targets, the failed
 // rounds by cause (a cause opens to its PRs), each floor over 7 and 30 days, and cost per merge by build, QA and fix.

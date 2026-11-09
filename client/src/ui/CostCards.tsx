@@ -11,7 +11,7 @@ import type { RepoView } from '../../../shared/types';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { TrendChart } from './TrendChart';
-import { costBubble, costDays } from './trendChart';
+import { costBubble, costDays } from './trendPoints';
 
 // Mission control → Where the plan goes (#106): the insight strip, the most expensive issues as ranked cards and the
 // waste grouped by cause. The numbers are shared/costs.ts's; these only draw them (docs/design.md: stat card, ranked

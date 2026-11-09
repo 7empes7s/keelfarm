@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costBubble, costDays, dayLabel, firstPassBubble, lastDays, pickPoint, pointTone, roundsBubble, stepPoint, TREND_H, TREND_PAD, trendX, trendY } from './trendChart';
+import { costBubble, costDays, dayLabel, firstPassBubble, lastDays, pickPoint, pointTone, roundsBubble, stepPoint, TREND_H, TREND_PAD, trendX, trendY } from './trendPoints';
 import type { CostDayRow } from '../../../shared/costs';
 
 const WED = new Date(2026, 10, 4, 15, 30); // Wed 4 Nov 2026, local time

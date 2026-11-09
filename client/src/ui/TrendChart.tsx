@@ -1,6 +1,6 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useWidth } from './useWidth';
-import { pickPoint, pointTone, stepPoint, TREND_H, TREND_PAD, trendX, trendY } from './trendChart';
+import { pickPoint, pointTone, stepPoint, TREND_H, TREND_PAD, trendX, trendY } from './trendPoints';
 import './trendChart.css';
 
 // A stat card's trend (#325), on the chat charts' pattern (ChatVisuals.tsx): our own SVG at its real width, no chart
