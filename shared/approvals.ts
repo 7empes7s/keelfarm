@@ -95,10 +95,18 @@ export function waitLine(askedAt: number, openedAt: number | null, now: number):
 
 export type PrAction = 'merge' | 'retry' | 'sendBack' | 'close';
 
+/** The same manual overrides in CardView and PrDetail; active work keeps only its terminal. */
+export function prActions(status: QaView['status'], autoMerge: boolean): PrAction[] {
+  if (status === 'needs-human' || status === 'failed') return ['retry', 'sendBack', 'merge', 'close'];
+  if (status === 'passed' && !autoMerge) return ['merge'];
+  return [];
+}
+
 /** The decision card's plain sentence for a PR, and the action it recommends (null: nothing to do but wait). */
-export function prDecision(why: ApprovalWhy, round: number, autoMerge: boolean): { text: string; recommend: PrAction | null } {
+export function prDecision(why: ApprovalWhy, round: number, autoMerge: boolean, checks?: PullInfo['checks']): { text: string; recommend: PrAction | null } {
   switch (why) {
     case 'outage':
+      if (checks === 'passing') return { text: 'CI runs again: retry QA so it can merge.', recommend: 'retry' };
       return autoMerge
         ? { text: "GitHub didn't run CI (billing or no runner), so this isn't the code. It merges by itself once CI runs again.", recommend: null }
         : { text: "GitHub didn't run CI (billing or no runner), so this isn't the code. Merge it anyway if QA's report is enough for you.", recommend: 'merge' };
