@@ -34,6 +34,7 @@ import { TouchZoneHints } from './TouchZoneHints';
 import { switchOffice } from '../pocket/switchOffice';
 import { Icon, IconText } from './Icon';
 import { useChatMode } from './chatMode';
+import { SessionsButton, SettingsButton } from './HudSettings';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -229,9 +230,10 @@ export function HUD() {
         <OverviewButton />
       </div>
 
-      {/* the bell first: when the row wraps, its last pills go under the workers list, never the bell */}
+      {/* the bell and Settings first: when the row wraps, its last pills go under the workers list, never these */}
       <div className="hud-status">
         <NoticeBell className="pill" />
+        <SettingsButton />
         <QuickToggles className="pill" />
         {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
         <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>
@@ -240,16 +242,16 @@ export function HUD() {
               <Icon name="play" /> replay
             </>
           ) : connected ? (
-            '● live'
-          ) : restarting ? (
-            '○ restarting'
+            <>
+              <Icon name="circle-dot" /> live
+            </>
           ) : (
-            '○ reconnecting'
+            <>
+              <Icon name="circle" /> {restarting ? 'restarting' : 'reconnecting'}
+            </>
           )}
         </span>
-        <span className="pill">
-          <Icon name="settings" /> {settings.sessionLimit ? `${running}/${settings.sessionLimit}` : running} sessions
-        </span>
+        <SessionsButton running={running} limit={settings.sessionLimit} />
         <CoinChip />
         {user && (
           <span className="pill">

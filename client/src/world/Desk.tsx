@@ -13,6 +13,7 @@ import { Box, Cyl, Ball } from './Toon';
 import { Character } from './Character';
 import { greetPick } from './Chatter';
 import { drawSign, drawTag, drawTerminal } from './draw';
+import { needsYou } from '../../../shared/needsYou';
 import { useCanvasTexture, useInteractable } from './interact';
 import { PaintedTexture } from './paint/painter';
 import { BLOOM } from './gfx/bloomMarks';
@@ -105,7 +106,7 @@ export function NameTag({ agent }: { agent: Agent }) {
     512,
     96,
     (ctx) => drawTag(ctx, 512, 96, agent, { palette, shapes }),
-    [agent.name, agent.status, agent.issueNumber, agent.currentTool, agent.color, palette, shapes],
+    [agent.name, agent.status, agent.issueNumber, agent.currentTool, agent.color, needsYou(agent), palette, shapes],
     { anchor, range: TAG_RANGE },
   );
   return (

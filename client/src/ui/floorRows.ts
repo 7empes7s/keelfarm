@@ -1,6 +1,7 @@
 // The floor as a list (FloorList.tsx), for anyone who can't use the 3D view: one row per person with their status in
 // words and its shape, the coding agent they run, and what they're doing. Pure, so the wording is tested.
 
+import { needsYou } from '../../../shared/needsYou';
 import type { AgentCli, AgentStatus, CliView, SwarmSettings } from '../../../shared/types';
 import type { Agent } from '../store';
 import type { IconName } from './icons';
@@ -23,7 +24,7 @@ const STATUS_WORDS: Record<AgentStatus, string> = {
   idle: 'Idle',
   preparing: 'Setting up',
   working: 'Working',
-  done: 'Finished',
+  done: 'Free',
   error: 'Needs help',
   stopped: 'Stopped',
 };
@@ -66,12 +67,14 @@ export function doingText(a: Pick<Agent, 'role' | 'status' | 'task' | 'issueNumb
 export function floorRows(agents: Agent[], settings: Runtime, clis: CliView[]): FloorRow[] {
   return agents.map((a) => {
     const signIn = signInFor(a, settings);
-    const kind = signIn ? 'attention' : STATUS_KIND[a.status];
+    const why = a.role === 'ceo' ? null : needsYou(a);
+    const needs = why === 'question' || why === 'prompt'; // a sign-in is signIn's, which also checks they're in a Box
+    const kind = signIn || needs ? 'attention' : a.status === 'done' ? 'idle' : STATUS_KIND[a.status];
     return {
       id: a.id,
       name: a.name,
       agent: agentLabel(a, settings, clis),
-      status: signIn ? 'Needs you to sign in' : STATUS_WORDS[a.status],
+      status: signIn ? 'Needs you to sign in' : needs ? 'Needs you' : STATUS_WORDS[a.status],
       kind,
       icon: KIND_ICON_NAME[kind],
       doing: signIn ? `Waiting for ${signIn} to be signed in${a.status === 'idle' ? '' : ` · ${doingText(a)}`}` : doingText(a),

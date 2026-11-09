@@ -14,6 +14,7 @@ import { useMode } from '../pocket/mode';
 import { useChatFull, useChatFullBack } from './chatFull';
 import { CloseButton, Icon } from './Icon';
 import type { IconName } from './icons';
+import { chatDock, VIEWPORT_EVENT } from '../viewport';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -198,6 +199,32 @@ const waitingNow = () => {
   return pendingRequests(s.requests).length + unreadMessages(s.messages, s.phoneReadAt);
 };
 
+/** On a phone screen, the overlay's box from the visual viewport (#297), set here rather than by the cascade: the UI
+ *  scale's and touch screens' rules had sized it to the whole page, under the keyboard. */
+function useChatDock(full: boolean) {
+  const [dock, setDock] = useState<ReturnType<typeof chatDock> | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const narrow = matchMedia('(max-width: 760px)');
+    const update = () => {
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-scale')) || 1;
+      setDock(narrow.matches ? chatDock(window.innerHeight, vv, scale, full) : null);
+    };
+    update();
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    window.addEventListener(VIEWPORT_EVENT, update);
+    return () => {
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      window.removeEventListener(VIEWPORT_EVENT, update);
+    };
+  }, [full]);
+  return dock;
+}
+
 export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestId?: string }) {
   const [tab, setTab] = useState<PhoneTab>(() =>
     resumeGames && !requestId && waitingNow() <= resumeGames.waiting ? 'games' : (initialTab ?? (requestId ? 'hires' : 'chat')),
@@ -220,6 +247,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
   // The chat full screen (#201): over the whole office, which stops drawing behind it (store.ts coversView).
   const full = useChatFull((s) => s.on) && tab === 'chat';
   useChatFullBack(full);
+  const dock = useChatDock(full);
   const requests = useStore((s) => s.requests);
   const messages = useStore((s) => s.messages);
   const readAt = useStore((s) => s.phoneReadAt);
@@ -262,7 +290,11 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
     ['games', 'gamepad-2', 'Games', 0],
   ];
   return (
-    <div className={`overlay phone-overlay ${full ? 'phone-overlay-full' : ''}`} {...backdropClose(closeOverlay)}>
+    <div
+      className={`overlay phone-overlay ${full ? 'phone-overlay-full' : ''} ${dock && !dock.band ? 'phone-overlay-flush' : ''}`}
+      style={dock ? { top: dock.top, height: dock.height } : undefined}
+      {...backdropClose(closeOverlay)}
+    >
       <div className={`phone ds-screen ${full ? 'phone-full' : ''}`} ref={box} role="dialog" aria-modal="true" aria-label="Your phone" tabIndex={-1}>
         <CloseButton className="phone-x" onClick={closeOverlay} label="Close" />
         <div className="phone-status" aria-hidden>

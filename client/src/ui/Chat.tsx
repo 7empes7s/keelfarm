@@ -419,7 +419,15 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
         <OlderSpinner loading={pages.loading} />
         {!atEnd && (
           <button type="button" className="chat-jump" onClick={toEnd} aria-label={unseen ? `${unseen} new messages: jump to the latest` : 'Jump to the latest message'}>
-            {unseen ? `${unseen} new ↓` : '↓ Latest'}
+            {unseen ? (
+              <>
+                {unseen} new <Icon name="arrow-down" />
+              </>
+            ) : (
+              <>
+                <Icon name="arrow-down" /> Latest
+              </>
+            )}
           </button>
         )}
         {versions && <MessageVersions m={byId.get(versions.id) ?? versions} author={versions.from === 'manager' ? 'you' : ceo.name} onClose={() => setVersions(null)} />}

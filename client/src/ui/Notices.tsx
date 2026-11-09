@@ -1,7 +1,7 @@
 // Notifications you can act on (#107): the toasts (rich ones with an icon, title, floor chip and up to two buttons;
 // paused while touched or hovered, swiped or ✕'d away, errors and what needs you staying), the bell with the unread
 // count, and the notification centre listing the recent ones. Tapping one jumps where it's about (noticeNav.ts).
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react';
 import { api } from '../api';
 import { useStore, type Toast } from '../store';
 import { useMode } from '../pocket/mode';
@@ -61,8 +61,8 @@ const read = (n: NoticeView) => {
   if (!n.read) void api.readNotices([n.id]).catch(() => undefined);
 };
 
-/** A notice's icon, title, detail and floor chip, as one button that jumps where it's about. */
-function NoticeBody({ n, pocket, after }: { n: NoticeView; pocket: boolean; after?: () => void }) {
+/** A notice's icon, title (with `meta` on its line), detail and floor chip, as one button that jumps where it's about. */
+function NoticeBody({ n, pocket, after, meta, textRef }: { n: NoticeView; pocket: boolean; after?: () => void; meta?: ReactNode; textRef?: Ref<HTMLSpanElement> }) {
   const color = useStore((s) => s.repos.find((r) => r.floor === n.floor)?.color);
   return (
     <button
@@ -78,8 +78,13 @@ function NoticeBody({ n, pocket, after }: { n: NoticeView; pocket: boolean; afte
         <Icon name={iconFor(noticeIcon(n.kind), 'bell')} />
       </span>
       <span className="notice-main">
-        <b className="notice-title">{n.title}</b>
-        <span className="notice-text">{n.text}</span>
+        <span className="notice-head">
+          <b className="notice-title">{n.title}</b>
+          {meta}
+        </span>
+        <span className="notice-text" ref={textRef}>
+          {n.text}
+        </span>
       </span>
       {n.floor !== undefined && (
         <span className="notice-floor" style={{ ['--accent' as string]: color ?? 'var(--ds-accent)' }} title={`Floor ${n.floor}`}>
@@ -235,6 +240,44 @@ export function NoticeBell({ className }: { className: string }) {
   );
 }
 
+/** One cell of the centre (#298): body clamped to three lines, More opens it; the unread dot by the time. */
+function NoticeRow({ n, pocket, today }: { n: NoticeView; pocket: boolean; today: boolean }) {
+  const text = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = text.current;
+    if (!el || open) return;
+    const check = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [n.text, open]);
+  const meta = (
+    <span className="notice-meta">
+      {!n.read && <span className="notice-dot" aria-hidden />}
+      <time dateTime={new Date(n.at).toISOString()}>{when(n.at, today)}</time>
+      {!n.read && <span className="sr-only">unread</span>}
+    </span>
+  );
+  return (
+    <li className={`notice-row notice-${n.level} ${n.read ? '' : 'notice-unread'} ${open ? 'notice-open' : ''}`}>
+      <NoticeBody n={n} pocket={pocket} meta={meta} textRef={text} />
+      {(clamped || open || !!n.actions?.length) && (
+        <span className="notice-foot">
+          {(clamped || open) && (
+            <button type="button" className="btn btn-small btn-ghost notice-expand" aria-expanded={open} onClick={() => setOpen(!open)}>
+              {open ? 'Less' : 'More'}
+            </button>
+          )}
+          <NoticeButtons n={n} pocket={pocket} />
+        </span>
+      )}
+    </li>
+  );
+}
+
 const when = (at: number, today: boolean) => new Date(at).toLocaleString([], today ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 /** The notification centre: the recent notices, Today and Earlier, by floor and kind, each with its buttons. */
@@ -283,14 +326,7 @@ export function NoticeCentre() {
           <h3>{g.label}</h3>
           <ul>
             {g.items.map((n) => (
-              <li key={n.id} className={`notice-row ${n.read ? '' : 'notice-unread'}`}>
-                <NoticeBody n={n} pocket={pocket} />
-                <span className="notice-foot">
-                  <time dateTime={new Date(n.at).toISOString()}>{when(n.at, g.label === 'Today')}</time>
-                  {!n.read && <span className="sr-only">unread</span>}
-                  <NoticeButtons n={n} pocket={pocket} />
-                </span>
-              </li>
+              <NoticeRow key={n.id} n={n} pocket={pocket} today={g.label === 'Today'} />
             ))}
           </ul>
         </section>

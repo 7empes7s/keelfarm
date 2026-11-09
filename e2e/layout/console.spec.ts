@@ -26,6 +26,15 @@ const tapOpen = (name: string, group: string, section: string, row: string) => (
     await expect(head).toHaveAttribute('aria-expanded', 'true');
   },
 });
+/** Company → Memory map switched to 3D (#314): the constellation, or the note where this browser can't draw it. */
+const mapIn3d = (where: Where): View => ({
+  name: 'Memory map in 3D',
+  go: async (root) => {
+    await (where === 'pocket' ? pocketSection(root, 'Memory map') : consoleSection(root, 'Company', 'Memory map'));
+    await root.getByRole('button', { name: 'The map in 3D' }).click();
+    await expect(root.locator('.mm-3d canvas, .mm-note').first()).toBeVisible();
+  },
+});
 const wasteGroup = (where: Where, rounds = false): View =>
   tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
 const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
@@ -39,6 +48,16 @@ const usageDetail = (where: Where): View => ({
     await expect(root.page().locator('.us-sheet')).toBeVisible();
   },
 });
+
+/** Settings → Providers' "Add provider" sheet with the catalogue (#362). */
+const addProvider: View = {
+  name: 'Providers: Add provider',
+  go: async (root) => {
+    await pocketSection(root, 'Providers');
+    await root.getByRole('button', { name: 'Add provider' }).click();
+    await expect(root.page().locator('.pv-sheet')).toBeVisible();
+  },
+};
 
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
@@ -74,7 +93,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office'), usageDetail('office')],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office'), usageDetail('office'), mapIn3d('office')],
   },
   {
     name: 'pocket voice settings', // ElevenLabs on with a (demo) key: the voice picker with favourites, model and speed (#320)
@@ -87,6 +106,8 @@ const SCREENS: Screen[] = [
     tabs: [{ name: 'Voice', go: (root) => pocketSection(root, 'Voice') }],
   },
   { name: 'pocket usage detail', widths: [390, 1280], open: pocketSettings, tabs: [usageDetail('pocket')] }, // a screen of its own: the sheet stays open
+  { name: 'pocket add provider', widths: [390, 1280], open: pocketSettings, tabs: [addProvider] }, // a screen of its own: the sheet stays open
+  { name: 'pocket memory map in 3D', widths: [390, 1280], open: pocketSettings, tabs: [mapIn3d('pocket')] },
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];
 

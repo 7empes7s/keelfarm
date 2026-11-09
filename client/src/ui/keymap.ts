@@ -28,6 +28,7 @@ export type ActionId =
   | 'emote'
   | 'ping'
   | 'switchOffice'
+  | 'settings'
   | 'chatFull';
 
 /**
@@ -72,6 +73,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'photo', label: 'Photo mode', group: 'Office', scope: 'global', keys: ['KeyK'] },
   { id: 'saveReplay', label: 'Save the last 15 s (instant replay)', group: 'Office', scope: 'global', keys: ['KeyI'] },
   { id: 'switchOffice', label: '2D office / 3D office', group: 'Office', scope: 'global', keys: ['KeyO'] },
+  { id: 'settings', label: 'Settings', group: 'Office', scope: 'global', keys: ['Comma'] },
   { id: 'chatFull', label: 'CEO chat full screen (in the chat)', group: 'Office', scope: 'panel', keys: ['KeyF'] },
 ];
 

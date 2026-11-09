@@ -49,7 +49,7 @@ export function FloorBuilds({ repoId }: { repoId: string }) {
                       <Icon name={c.status === 'live' ? 'monitor' : GLYPH[c.status]} />
                     </span>
                   )}
-                  {c.preview === 'running' && <span className="fb-running">● live</span>}
+                  {c.preview === 'running' && <span className="fb-running"><Icon name="circle-dot" /> live</span>}
                 </span>
                 <span className="fb-title">
                   {c.pr ? <span className="muted">#{c.pr} </span> : null}

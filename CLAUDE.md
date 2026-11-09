@@ -81,6 +81,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `merge.ts` | auto-merge, folder syncs after merges, closed issues and PRs |
   | `agents.ts` | hiring and firing, agent commands, cloud agents' machines and sign-ins, Tools & skills |
   | `cloudCredit.ts` | cloud agents off an API key out of credit (#258): own login, the sign-in card per burst, back on the key |
+  | `providers.ts` | Settings → Providers (#362): keys added there and MCP servers for agents' sessions (`server/providers.ts`, catalogue and cards pure in `shared/providers.ts`), the `providers` event, the CEO's line |
   | `usage.ts` | usage for every account and provider (#361): the usage card's sources (`usageSources.ts`, `codexLimits.ts`), 90% notifications, Admin keys |
   | `sessions.ts` | terminals, desk setup, prompts, starting and finishing build sessions |
   | `qa.ts` | queueing PRs for QA, QA and fix sessions and their outcomes |

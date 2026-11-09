@@ -174,7 +174,7 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
           </span>
           {steps.length > 0 && (
             <span className="working-chev" aria-hidden>
-              ▸
+              <Icon name="chevron-right" />
             </span>
           )}
         </button>

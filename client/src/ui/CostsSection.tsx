@@ -126,7 +126,7 @@ export function CostsSection() {
           ))}
         </select>
         <button className="btn btn-small btn-ghost" disabled={loading} onClick={load}>
-          ↻ Refresh
+          <Icon name="refresh-cw" /> Refresh
         </button>
       </div>
       {!view ? (

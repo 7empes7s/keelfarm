@@ -1,7 +1,7 @@
 // Usage for every account and provider (#361): one row per source on the Company page and in Mission control, in
 // the accounts view (snapshot and `accounts` event). Imported through shared/types.ts. Never a key.
 
-export type UsageProvider = 'claude' | 'codex' | 'elevenlabs' | 'upstash' | 'anthropic' | 'openai';
+export type UsageProvider = 'claude' | 'codex' | 'elevenlabs' | 'upstash' | 'anthropic' | 'openai' | 'gemini' | 'openrouter' | 'hetzner';
 type UsageCategory = 'coding' | 'text' | 'audio' | 'video' | 'image' | 'cloud' | 'mcp';
 export type UsageSourceStatus = 'ready' | 'near' | 'limited' | 'signed-out' | 'error';
 

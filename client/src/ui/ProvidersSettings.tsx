@@ -378,7 +378,7 @@ export function ProvidersSettings() {
       </h3>
       <p className="muted small">
         Every login and API key the coding agents on this computer run on. Agents and the CEO use the rotation (the first ready account, top first) unless you pin them to an account or a tag in their
-        setup; when one is out, they move to the next. {onRotation} on the rotation now.
+        setup; when one is out, they move to the next. {onRotation} on the rotation now. Every other provider (text, audio, cloud, MCP servers) is in <a href="#settings/providers">Providers</a>.
       </p>
       <Stats list={list} />
       <RotationCard />

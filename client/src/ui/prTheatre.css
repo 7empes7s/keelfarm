@@ -11,7 +11,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 360px;
+  max-width: min(360px, 70%);
   font-weight: 600;
   font-size: 0.82rem;
   padding: 4px 12px;
@@ -23,6 +23,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* a chip never wider than the row (#294): its title shortens, the LED, QA status and stop time stay */
+.channel > * {
+  flex: none;
+}
+.channel > :is(.channel-name, .channel-stops) {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.channel > .channel-stops {
+  flex-shrink: 100; /* the stop time gives way before the PR's name */
 }
 .channel-on {
   background: var(--accent);
