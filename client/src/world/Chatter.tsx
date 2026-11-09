@@ -2,10 +2,11 @@ import { useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { CEO_ID } from '../../../shared/types';
 import { isBusy, useStore, type Agent, type Focus } from '../store';
+import { lineVoiceNow, speakAgent } from '../ui/agentSpeech';
 import { babble, babbleNodes, hushBabble, moveBabble, renderBabble } from '../ui/babble';
 import { LINE_TTL, MAX_SPEAKERS, PACE, admitSpeaker, babbleVoice, bubbleSeconds, mayTalk, planBabble, type BabbleVoice, type Priority } from '../ui/babbleRules';
 import { chatterLine, type ChatTopic, type ChatterEvent } from '../ui/chatterLines';
-import { getAudioPrefs, listenerAt } from '../ui/sfx';
+import { getAudioPrefs, listenerAt, type Vec3 } from '../ui/sfx';
 import { DROP_NEW, PLAY } from '../ui/sfxMix';
 import type { BodyState } from './body';
 import { CI_SLOW, DEMO_CI_SLOW, currentWork, greeting, lastFile, logNews, slowChecks, storeNews, type Said } from './chatterEvents';
@@ -343,7 +344,7 @@ export function greetable(id: string) {
 }
 
 /** The player said hi (E on them): a hello or a quip about their work, straight away. False when they can't answer. */
-export function greet(id: string): boolean {
+function greet(id: string): boolean {
   const st = useStore.getState();
   const a = st.agents[id];
   const b = bodyState(id);
@@ -352,6 +353,32 @@ export function greet(id: string): boolean {
   if (mine >= 0) cut(mine);
   const d = distanceTo(b);
   speak(id, greeting(a, st, st.settings.managerName, Date.now()), 'greet', takeSlot(d, true), d);
+  return true;
+}
+
+/** A clicked agent's own line (#321, agentSpeech.ts): their bubble with the words, any babble of theirs cut off. Where their head is. */
+function ownLine(id: string, text: string): Vec3 | null {
+  const b = bodyState(id);
+  if (!b) return null;
+  const mine = speakingSlot(id);
+  if (mine >= 0) cut(mine);
+  say(id, text, bubbleSeconds(text) + 1);
+  lastLine.set(id, text);
+  lastAt.set(id, clock());
+  recent.push({ at: Math.round(performance.now()), id, name: useStore.getState().agents[id]?.name ?? id, line: text, why: 'say', voiced: true, d: round(distanceTo(b)), slot: -1 });
+  if (recent.length > RECENT) recent.splice(0, recent.length - RECENT);
+  return { x: b.x, y: headY(b), z: b.z };
+}
+
+/** Says `id`'s own line in their voice, from their head (#321): as their window opens, or for a hello. False when nobody would say it. */
+export function speakOwnLine(id: string): Promise<boolean> {
+  return speakAgent(id, (text) => ownLine(id, text));
+}
+
+/** Clicked or E on someone (#321): their own line when a voice says it here, else a hello babbled as before (greet). */
+export function sayHi(id: string): boolean {
+  if (!lineVoiceNow()) return greet(id);
+  void speakOwnLine(id).then((ok) => ok || greet(id));
   return true;
 }
 

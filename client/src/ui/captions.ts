@@ -121,6 +121,11 @@ onSoundRecorded((rec, heard) => {
   if (heard) captionSound(rec.name, rec.at, rec.pan);
 });
 
+/** A clicked agent's spoken line (#321, agentSpeech.ts), written out: "Ada: Free! Got anything for me?". */
+export function captionSaid(who: string, text: string) {
+  if (getA11y().captions) addLine(`${who}: ${text}`, 2);
+}
+
 // ---------- the CEO's voice ----------
 
 const ceoName = () => useStore.getState().agents[CEO_ID]?.name ?? 'CEO';

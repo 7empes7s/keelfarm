@@ -107,7 +107,7 @@ function lobbyPlaces(rects: Rect[]): Omit<DogPlaces, 'floor' | 'rects' | 'door' 
       { id: 'coffee', x: COFFEE_CORNER.x - COFFEE_CORNER.w / 2 - 0.75, z: HALF_D - 0.7, heading: EAST },
       { id: 'reception', x: RECEPTION.x - 2, z: RECEPTION.z + RECEPTION.d / 2 + 0.4, heading: NORTH },
       { id: 'trophies', x: 12, z: -HALF_D + 1.55, heading: NORTH },
-      { id: 'bookshelf', x: -HALF_W + 1.2, z: -8.2, heading: WEST },
+      { id: 'manager-screen', x: -HALF_W + 1.2, z: -8.2, heading: WEST },
       { id: 'jukebox', x: JUKEBOX.lobbyX, z: HALF_D - JUKEBOX.d - 0.45, heading: SOUTH },
     ],
   };

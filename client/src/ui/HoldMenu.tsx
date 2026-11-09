@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useStore, type Focus } from '../store';
 import { peelAimed } from '../world/boardHands';
 import { followAgent } from '../world/camera/rig';
-import { greet } from '../world/Chatter';
+import { sayHi } from '../world/Chatter';
 import { runFocusAction } from '../world/Player';
 import { focusAgent, holdOptions, type HoldOptionId } from '../world/touch/holdOptions';
 import { closeHoldMenu, useHoldMenu } from '../world/touch/touchState';
@@ -19,7 +19,7 @@ function run(id: HoldOptionId) {
   const agent = focusAgent(focus);
   if (id === 'use') runFocusAction(focus, 'click');
   else if (id === 'follow' && agent) followAgent(agent);
-  else if (id === 'greet' && agent && !greet(agent)) useStore.getState().pushToast('info', "They're busy right now: say hi when they're free");
+  else if (id === 'greet' && agent && !sayHi(agent)) useStore.getState().pushToast('info', "They're busy right now: say hi when they're free");
   else if (id === 'carry') peelAimed(focus);
 }
 
