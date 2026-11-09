@@ -42,11 +42,14 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
       </button>
       {live.map((p) => {
         const label = channelLabel(p, qa[qaKey(repo.id, p.number)]);
+        const badge = qaBadge(qa[qaKey(repo.id, p.number)]);
         const preview = prPreviews[qaKey(repo.id, p.number)];
         const left = stops(preview);
         return (
           <button key={p.number} role="tab" aria-selected={channel === p.number} className={`channel ${channel === p.number ? 'channel-on' : ''}`} onClick={() => onPick(p.number)} title={left ? `${label} · ${left}` : label}>
-            <span className={`led led-${channelLed(preview?.status)}`} aria-hidden /> {label}
+            {/* the title shortens on a phone, its QA status stays readable (#294) */}
+            <span className={`led led-${channelLed(preview?.status)}`} aria-hidden /> <span className="channel-name">{channelLabel(p)}</span>
+            {badge && <span>· {badge}</span>}
             {pin(preview)}
             {left && <span className="channel-stops">· {left}</span>}
           </button>

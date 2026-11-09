@@ -1,0 +1,321 @@
+// Settings → Providers (#362), pure: the catalogue of providers the office knows, each one's cheap read-only test
+// call, every connection as one card (Claude and Codex accounts, the ElevenLabs and Upstash keys from their own stores,
+// keys added here, MCP servers), the CEO's one line, and the MCP servers a session gets. Adding a provider = one entry
+// in PROVIDERS, plus a usage reader in testUsage when it has a usage API.
+import { secretMismatch } from './secretFormats.ts';
+import type { AccountView, CloudView, CliView, McpServerConfig, ProviderAuth, ProviderCategory, ProvidersView, UsageProvider, UsageSource, UsageWindow } from './types.ts';
+
+/** Where a provider's key or login lives: its old store (whose settings stay where they were) or the Providers page. */
+type ProviderHome = 'accounts' | 'voice' | 'cloud' | 'providers' | 'own-setup';
+
+export interface ProviderDef {
+  id: string;
+  name: string;
+  category: ProviderCategory;
+  auth: ProviderAuth;
+  home: ProviderHome;
+  /** The environment variable the provider's own tools read the key from. */
+  keyEnv?: string;
+  placeholder?: string;
+  docsUrl: string;
+  /** Its row on the usage card (#361). */
+  usage?: UsageProvider;
+  blurb: string;
+}
+
+export const CATEGORIES: { id: ProviderCategory; label: string }[] = [
+  { id: 'coding', label: 'Coding agents' },
+  { id: 'text', label: 'Text' },
+  { id: 'audio', label: 'Audio' },
+  { id: 'video', label: 'Video' },
+  { id: 'image', label: 'Image' },
+  { id: 'cloud', label: 'Cloud' },
+  { id: 'mcp', label: 'MCP servers' },
+];
+
+export const PROVIDERS: ProviderDef[] = [
+  { id: 'claude', name: 'Claude Code', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://docs.claude.com/en/docs/claude-code', usage: 'claude', blurb: 'Claude subscription logins, Anthropic API keys and setup tokens for agents' },
+  { id: 'codex', name: 'Codex', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://developers.openai.com/codex', usage: 'codex', blurb: 'ChatGPT plan logins and OpenAI API keys for agents' },
+  { id: 'opencode', name: 'OpenCode', category: 'coding', auth: 'none', home: 'own-setup', docsUrl: 'https://opencode.ai/docs', blurb: 'Runs with its own setup (opencode auth login)' },
+  { id: 'anthropic', name: 'Anthropic API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'ANTHROPIC_API_KEY', placeholder: 'sk-ant-…', docsUrl: 'https://docs.claude.com/en/api/overview', usage: 'anthropic', blurb: 'Claude models over the API' },
+  { id: 'openai', name: 'OpenAI API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/api-reference', usage: 'openai', blurb: 'GPT models over the API' },
+  { id: 'gemini', name: 'Google Gemini API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs', usage: 'gemini', blurb: 'Gemini models over the API' },
+  { id: 'openrouter', name: 'OpenRouter', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENROUTER_API_KEY', placeholder: 'sk-or-…', docsUrl: 'https://openrouter.ai/docs', usage: 'openrouter', blurb: 'Many models behind one key, with its credit' },
+  { id: 'elevenlabs', name: 'ElevenLabs', category: 'audio', auth: 'api-key', home: 'voice', keyEnv: 'ELEVENLABS_API_KEY', placeholder: 'sk_…', docsUrl: 'https://elevenlabs.io/docs', usage: 'elevenlabs', blurb: 'Voices for agents and messages read aloud' },
+  { id: 'openai-audio', name: 'OpenAI TTS & Whisper', category: 'audio', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech', usage: 'openai', blurb: 'Speech and transcription over the OpenAI API' },
+  { id: 'upstash', name: 'Upstash Box', category: 'cloud', auth: 'api-key', home: 'cloud', docsUrl: 'https://upstash.com/docs/box', usage: 'upstash', blurb: 'Cloud machines for cloud agents' },
+  { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
+];
+
+export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
+
+// ---------- test calls ----------
+
+/** One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH. */
+export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string };
+export interface ProbeResult {
+  status: number; // HTTP status; 0 unreachable; 200 a command found
+  body?: unknown;
+}
+
+/** The test call for a key the Providers page saves, or null when its home tests it (accounts, voice, cloud). */
+export function testRequest(provider: string, key: string): ProbeRequest | null {
+  const bearer = { Authorization: `Bearer ${key}` };
+  switch (provider) {
+    case 'anthropic':
+      return { kind: 'http', url: 'https://api.anthropic.com/v1/models?limit=1', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } };
+    case 'openai':
+    case 'openai-audio':
+      return { kind: 'http', url: 'https://api.openai.com/v1/models', headers: bearer };
+    case 'gemini':
+      return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', headers: { 'x-goog-api-key': key } };
+    case 'openrouter':
+      return { kind: 'http', url: 'https://openrouter.ai/api/v1/key', headers: bearer };
+    case 'hetzner':
+      return { kind: 'http', url: 'https://api.hetzner.cloud/v1/servers?per_page=1', headers: bearer };
+    default:
+      return null;
+  }
+}
+
+/** What a test's answer says, in one plain line. */
+export function testNote(r: ProbeResult): { ok: boolean; note: string } {
+  if (r.status >= 200 && r.status < 300) return { ok: true, note: 'Key works' };
+  if (r.status === 401 || r.status === 403) return { ok: false, note: `Turned away (${r.status}): check the key` };
+  if (r.status === 0) return { ok: false, note: "Couldn't reach the provider" };
+  return { ok: false, note: `The provider answered ${r.status}` };
+}
+
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
+
+/** Usage from a test call's answer, where the provider tells: OpenRouter's GET /api/v1/key credit. */
+export function testUsage(provider: string, body: unknown): UsageWindow[] {
+  if (provider !== 'openrouter' || !body || typeof body !== 'object') return [];
+  const d = (body as { data?: Record<string, unknown> }).data ?? {};
+  const used = num(d.usage);
+  const limit = num(d.limit);
+  if (!Number.isFinite(used)) return [];
+  return [{ name: 'Credit', usedPct: limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : null, used, ...(limit > 0 ? { limit } : {}), unit: '$', resetsAt: null }];
+}
+
+/** Why a pasted key can't be saved for `provider`, or null. */
+export function keyProblem(provider: string, raw: string): string | null {
+  const key = raw.trim();
+  const def = providerDef(provider);
+  if (!def || def.home !== 'providers') return 'Pick a provider from the list.';
+  if (!key) return 'Paste the key first.';
+  if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
+  if (provider === 'anthropic') return secretMismatch('anthropic', key);
+  if (provider === 'openai' || provider === 'openai-audio') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
+  if (provider === 'openrouter' && !key.startsWith('sk-or-')) return 'OpenRouter keys start with sk-or-.';
+  return null;
+}
+
+export const keyHint = (key: string) => (key ? key.slice(-4) : '');
+
+// ---------- cards ----------
+
+export type CardStatus = 'ready' | 'near' | 'limited' | 'signed-out' | 'error' | 'untested' | 'paused' | 'off';
+
+/** One connection on the Providers page, wherever it's stored. */
+export interface ProviderCard {
+  key: string; // 'account:<id>', 'voice', 'cloud', 'connection:<id>', 'mcp:<id>', 'cli:opencode'
+  provider: string;
+  name: string;
+  label: string;
+  category: ProviderCategory;
+  status: CardStatus;
+  note: string;
+  plan: string;
+  keyHint: string;
+  uses: string[]; // "What uses it": agents' names, Voice, Cloud agents…
+  usageId?: string; // its row on the usage card
+  /** Where it's changed: its old settings section, or here. */
+  settings: 'accounts' | 'voice' | 'cloud-agents' | 'tools' | null;
+}
+
+export interface CardInput {
+  accounts: readonly AccountView[];
+  voiceKeySet: boolean;
+  voiceKeyHint: string;
+  cloud: CloudView;
+  providers: ProvidersView;
+  clis: readonly CliView[];
+  /** An agent's name by id (the CEO's too). */
+  agentName: (id: string) => string;
+  /** Agents running in a cloud machine. */
+  cloudAgents: number;
+}
+
+const ACCOUNT_STATUS: Record<AccountView['status'], CardStatus> = { ready: 'ready', near: 'near', limited: 'limited', 'signed-out': 'signed-out', paused: 'paused' };
+
+/** Every connection as a card, by the catalogue's order. Nothing in it is a secret. */
+export function providerCards(i: CardInput): ProviderCard[] {
+  const out: ProviderCard[] = [];
+  for (const a of i.accounts) {
+    if (a.removing) continue;
+    const def = providerDef(a.cli)!;
+    out.push({
+      key: `account:${a.id}`,
+      provider: a.cli,
+      name: def.name,
+      label: a.label,
+      category: 'coding',
+      status: ACCOUNT_STATUS[a.status],
+      note: a.kind === 'api-key' ? 'API key' : a.kind === 'setup-token' ? 'Setup token' : 'Subscription login',
+      plan: a.plan ?? '',
+      keyHint: a.keyHint,
+      uses: a.agents.length ? a.agents.map(i.agentName) : a.enabled ? ['Agents on the rotation'] : [],
+      usageId: a.id,
+      settings: 'accounts',
+    });
+  }
+  if (i.clis.some((c) => c.id === 'opencode' && c.installed)) {
+    out.push({ key: 'cli:opencode', provider: 'opencode', name: 'OpenCode', label: 'OpenCode', category: 'coding', status: 'ready', note: 'Its own setup on this computer', plan: '', keyHint: '', uses: [], settings: null });
+  }
+  if (i.voiceKeySet) {
+    out.push({ key: 'voice', provider: 'elevenlabs', name: 'ElevenLabs', label: 'ElevenLabs', category: 'audio', status: 'ready', note: 'API key', plan: '', keyHint: i.voiceKeyHint, uses: ['Voice'], usageId: 'elevenlabs', settings: 'voice' });
+  }
+  if (i.cloud.keySet) {
+    out.push({
+      key: 'cloud',
+      provider: 'upstash',
+      name: 'Upstash Box',
+      label: 'Upstash Box',
+      category: 'cloud',
+      status: i.cloud.keyError ? 'error' : 'ready',
+      note: i.cloud.keyError ?? 'API key',
+      plan: '',
+      keyHint: i.cloud.keyHint,
+      uses: i.cloudAgents ? [`Cloud agents (${i.cloudAgents})`] : ['Cloud agents'],
+      usageId: 'upstash',
+      settings: 'cloud-agents',
+    });
+  }
+  for (const c of i.providers.connections) {
+    const def = providerDef(c.provider);
+    if (!def) continue;
+    out.push({
+      key: `connection:${c.id}`,
+      provider: c.provider,
+      name: def.name,
+      label: c.label,
+      category: def.category,
+      status: !c.test ? 'untested' : c.test.ok ? 'ready' : 'error',
+      note: c.test?.note ?? 'Not tested yet',
+      plan: c.test?.plan ?? 'API',
+      keyHint: c.keyHint,
+      uses: [],
+      usageId: `provider:${c.id}`,
+      settings: null,
+    });
+  }
+  for (const m of i.providers.mcp) {
+    out.push({
+      key: `mcp:${m.id}`,
+      provider: 'mcp',
+      name: m.name,
+      label: m.name,
+      category: 'mcp',
+      status: !m.on ? 'off' : !m.test ? 'untested' : m.test.ok ? 'ready' : 'error',
+      note: m.url ?? [m.command, ...(m.args ?? [])].join(' '),
+      plan: '',
+      keyHint: '',
+      uses: m.agents.length ? m.agents.map(i.agentName) : ['Every agent'],
+      settings: null,
+    });
+  }
+  const order = (c: ProviderCard) => CATEGORIES.findIndex((x) => x.id === c.category);
+  return out.sort((a, b) => order(a) - order(b));
+}
+
+/** The CEO's one line: "Providers: Claude Code (Max), ElevenLabs, OpenAI API (failed test) · MCP: github". */
+export function providersLine(cards: readonly ProviderCard[]): string {
+  const word = (c: ProviderCard) => {
+    const bad = c.status === 'error' ? ' (failed test)' : c.status === 'signed-out' ? ' (signed out)' : c.status === 'limited' ? ' (limited)' : c.status === 'paused' ? ' (paused)' : '';
+    return `${c.label === c.name ? c.name : `${c.name} "${c.label}"`}${bad}`;
+  };
+  const conns = cards.filter((c) => c.category !== 'mcp');
+  const mcp = cards.filter((c) => c.category === 'mcp' && c.status !== 'off');
+  return `Providers: ${conns.length ? conns.map(word).join(', ') : 'none'}${mcp.length ? ` · MCP: ${mcp.map((c) => c.name).join(', ')}` : ''}`;
+}
+
+/** A Providers-page key's row on the usage card (#361): its credit where the provider tells, else its last test. */
+export function connectionSource(c: ProvidersView['connections'][number]): UsageSource | null {
+  const def = providerDef(c.provider);
+  if (!def?.usage) return null;
+  const windows = c.test?.windows ?? [];
+  const worst = Math.max(0, ...windows.map((w) => w.usedPct ?? 0));
+  return {
+    id: `provider:${c.id}`,
+    provider: def.usage,
+    category: def.category,
+    label: c.label,
+    plan: c.test?.plan ?? 'API',
+    windows,
+    status: !c.test ? 'ready' : !c.test.ok ? 'error' : worst >= 100 ? 'limited' : worst >= 80 ? 'near' : 'ready',
+    checkedAt: c.test?.at ?? null,
+    note: !c.test ? 'Not tested yet' : !c.test.ok ? c.test.note : windows.length ? 'From the key’s test call' : 'Key works; this provider has no usage API for a plain key',
+  };
+}
+
+// ---------- MCP servers ----------
+
+/** Names the office's own servers use: an added one can't take them. */
+const RESERVED = ['office', 'playwright'];
+const NAME = /^[a-z0-9][a-z0-9_-]{0,39}$/i;
+const ENV = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
+
+export interface McpInput {
+  name: string;
+  command?: string;
+  url?: string;
+  envKeys?: string[];
+  agents?: string[];
+}
+
+/** Why an MCP server can't be added as given, or null. */
+export function mcpProblem(m: McpInput, taken: readonly string[]): string | null {
+  const name = m.name.trim();
+  if (!NAME.test(name)) return 'Name it with letters, digits, - or _ (up to 40).';
+  if (RESERVED.includes(name.toLowerCase())) return `"${name}" is the office's own server: pick another name.`;
+  if (taken.some((t) => t.toLowerCase() === name.toLowerCase())) return `There's already a server called ${name}.`;
+  const command = m.command?.trim() ?? '';
+  const url = m.url?.trim() ?? '';
+  if (!command === !url) return 'Give it a command or a URL (one of them).';
+  if (url && !/^https?:\/\/[^\s]+$/.test(url)) return 'The URL should start with https:// (or http://).';
+  if (command.length > 500) return 'That command is too long.';
+  if ((m.envKeys ?? []).some((k) => !ENV.test(k))) return 'Secret names are letters, digits and _ (like GITHUB_TOKEN).';
+  return null;
+}
+
+/** "npx -y @modelcontextprotocol/server-github" → command and arguments (quotes keep spaces together). */
+export function splitCommand(raw: string): { command: string; args: string[] } {
+  const parts = [...raw.trim().matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+  return { command: parts[0] ?? '', args: parts.slice(1) };
+}
+
+/**
+ * The MCP servers an agent's session gets, for the session's own mcp.json (never ~/.claude): the ones switched on for
+ * every agent or for them, each with its saved secrets as environment variables (a command) or headers (a URL).
+ */
+export function sessionMcpServers(mcp: readonly McpServerConfig[], agentId: string, secret: (serverId: string, name: string) => string): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const m of mcp) {
+    if (!m.on || (m.agents.length && !m.agents.includes(agentId)) || RESERVED.includes(m.name.toLowerCase())) continue;
+    const vals = Object.fromEntries(m.envKeys.map((k) => [k, secret(m.id, k)]).filter(([, v]) => v));
+    out[m.name] = m.url ? { type: 'http', url: m.url, ...(Object.keys(vals).length ? { headers: vals } : {}) } : { command: m.command, args: m.args ?? [], ...(Object.keys(vals).length ? { env: vals } : {}) };
+  }
+  return out;
+}
+
+/** An MCP server's test: a URL answers at all, a command is on the PATH. */
+export function mcpTestRequest(m: Pick<McpServerConfig, 'url' | 'command'>): ProbeRequest {
+  return m.url ? { kind: 'http', url: m.url, headers: {} } : { kind: 'command', command: m.command ?? '' };
+}
+
+export function mcpTestNote(m: Pick<McpServerConfig, 'url'>, r: ProbeResult): { ok: boolean; note: string } {
+  if (!m.url) return r.status === 200 ? { ok: true, note: 'Command found' } : { ok: false, note: 'Command not found on this computer' };
+  // An MCP endpoint often turns a plain GET away (405, 406, 401 without its token): it's there all the same.
+  return r.status === 0 ? { ok: false, note: "Couldn't reach it" } : r.status >= 500 ? { ok: false, note: `It answered ${r.status}` } : { ok: true, note: 'It answers' };
+}

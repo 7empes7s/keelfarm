@@ -1,0 +1,32 @@
+/* Mission control's needs-you wait tile (#275) */
+.wait-tile {
+  border-left: 6px solid var(--good);
+}
+.wait-tile.wait-warn {
+  border-left-color: var(--warn);
+}
+.wait-tile.wait-bad {
+  border-left-color: var(--bad);
+}
+.wait-bars {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  align-items: end;
+  gap: var(--ds-space-1);
+  height: 56px;
+  margin: var(--ds-space-2) 0;
+}
+.wait-bar {
+  border-radius: 4px 4px 0 0;
+  background: var(--good);
+}
+.wait-bar-over {
+  background: var(--bad);
+}
+.wait-target {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--muted);
+}

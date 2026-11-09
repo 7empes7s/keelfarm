@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store';
 import { ACCEPT } from '../../../shared/files';
@@ -8,15 +8,16 @@ import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 import { openTextPill } from './ChatZoom';
 import { canGoFullscreen, goFullscreen, useChatFull } from './chatFull';
-import { Menu } from './Menu';
+import { Menu, type MenuItem } from './Menu';
+import { foldedBadge, foldTools, type ChatToolId } from './chatToolFold';
 import { keyLabel } from './keymap';
 import { useControls } from './controls';
 import { XLabel } from './HoverCard';
 import { startCall } from './voiceCallEngine';
 
 // The CEO chat's composer extras (#81): the + by the message box and its action sheet (camera, files, research, quick
-// prompts), and the chat's top-bar buttons (threads, search and memory; files & artifacts; text size; hands-free; full
-// screen and its ⋯).
+// prompts), and the chat's header row (threads, search and memory; charts; files & artifacts; text size; call;
+// hands-free; full screen; and a ⋯ with what doesn't fit, #270).
 
 interface PlusProps {
   text: string;
@@ -99,49 +100,107 @@ function Sheet({ actions, ceoName, onPick, onClose }: { actions: SheetAction[]; 
 
 interface ToolsProps {
   ceoName: string;
+  /** The CEO's avatar, name and presence, first in the row. */
+  who: ReactNode;
   files: number; // the thread's artifacts and files (#132)
   onChats: () => void;
   onFiles: () => void;
-  /** Where to draw them: pocket mode's header (null until it's there); undefined draws them in place. */
+  onCharts: () => void;
+  /** Where to draw the row: pocket mode's docked header (null until it's there); undefined draws it as the chat's own. */
   into?: HTMLElement | null;
-  /** ⛶ and ⋯ here: off where the screen draws ⛶ itself (pocket mode on a phone, in its top bar). */
+  /** ⛶ and the real full screen here: off where the screen draws ⛶ itself (pocket mode on a phone, in its top bar). */
   full?: boolean;
 }
 
-/** Icon buttons with their counts as badges: threads and search, files & artifacts, text size, hands-free, full screen. */
-export function ChatTools({ ceoName, files, onChats, onFiles, into, full = true }: ToolsProps) {
-  const tools = (
+/** A box's content width, kept up to date (0 until it's there). */
+function useWidth(el: HTMLElement | null): number {
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    setW(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return w;
+}
+
+/**
+ * The chat's one header row (#270): who, then icon buttons with their counts as badges (threads and search, 📊 charts,
+ * files & artifacts, text size, call, hands-free, full screen), the ones that don't fit folded into ⋯ (chatToolFold.ts).
+ */
+export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, into, full = true }: ToolsProps) {
+  const [own, setOwn] = useState<HTMLDivElement | null>(null);
+  const width = useWidth(into ?? own);
+  const handsFree = useHandsFree(ceoName);
+  const fullScreen = useChatFull();
+  const fullKey = keyLabel(useControls((s) => s.bindings.chatFull)[0] ?? '');
+  const present: ChatToolId[] = ['search', 'charts', 'text', 'call'];
+  if (files > 0) present.push('files');
+  if (handsFree) present.push('handsFree');
+  if (full) present.push('full');
+  const { shown, folded } = foldTools(width, present);
+  const has = (t: ChatToolId) => shown.includes(t);
+  const fold = (t: ChatToolId, item: MenuItem) => folded.includes(t) && item;
+  const row = (
     <>
+      {who}
       <button type="button" className="chat-tool xbtn" onClick={onChats} aria-haspopup="dialog" aria-label="Threads and search" title="Threads: a new one, an earlier one, search them all, and what the CEO remembers">
         <Icon name="search" />
         <XLabel text="Threads" />
       </button>
-      {files > 0 && (
+      {has('charts') && (
+        <button type="button" data-tour="chat-charts" className="chat-tool xbtn" onClick={onCharts} aria-haspopup="dialog" aria-label="Charts" title={`Charts: ready prompts ${ceoName} answers with a live chart`}>
+          <Icon name="chart-column" />
+          <XLabel text="Charts" />
+        </button>
+      )}
+      {has('files') && (
         <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
           <Icon name="paperclip" />
           <XLabel text="Files" />
           <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
         </button>
       )}
-      <button type="button" className="chat-tool xbtn" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
-        Aa
-        <XLabel text="Text size" />
-      </button>
-      <button type="button" className="chat-tool xbtn" aria-label={`Call ${ceoName}`} title={`A voice call with ${ceoName}: just talk, talk over to interrupt. It goes on whatever you open.`} onClick={startCall}>
-        <Icon name="phone" />
-        <XLabel text="Call" />
-      </button>
-      <HandsFreeToggle ceoName={ceoName} />
-      {full && (
-        <>
-          <FullButton />
-          <FullMenu />
-        </>
+      {has('text') && (
+        <button type="button" className="chat-tool xbtn" onClick={openTextPill} aria-label="Text size" title="Text size: A− and A+ (or pinch the chat, or Ctrl + wheel over it)">
+          Aa
+          <XLabel text="Text size" />
+        </button>
       )}
+      {has('call') && (
+        <button type="button" className="chat-tool xbtn" aria-label={`Call ${ceoName}`} title={`A voice call with ${ceoName}: just talk, talk over to interrupt. It goes on whatever you open.`} onClick={startCall}>
+          <Icon name="phone" />
+          <XLabel text="Call" />
+        </button>
+      )}
+      {handsFree && has('handsFree') && <HandsFreeToggle ceoName={ceoName} {...handsFree} />}
+      {has('full') && <FullButton />}
+      <Menu
+        label="More for the chat"
+        className="chat-more"
+        badge={foldedBadge(folded, { files })}
+        items={[
+          fold('charts', { label: 'Charts', hint: 'Ready prompts for a live chart', onSelect: onCharts }),
+          fold('files', { label: `Files & artifacts (${files})`, onSelect: onFiles }),
+          fold('text', { label: 'Text size', onSelect: openTextPill }),
+          fold('call', { label: `Call ${ceoName}`, onSelect: startCall }),
+          handsFree && fold('handsFree', { label: handsFree.on ? 'Turn hands-free off' : 'Hands-free', hint: handsFree.why || undefined, onSelect: () => void setHandsFree(!handsFree.on, ceoName) }),
+          { label: 'Threads', hint: 'A new one, an earlier one, or search them all', onSelect: onChats },
+          full && { label: fullScreen.on ? 'Leave full screen' : 'Full screen', hint: fullKey || undefined, onSelect: () => fullScreen.set(!fullScreen.on) },
+          full && canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen },
+        ]}
+      />
     </>
   );
-  if (into === undefined) return tools;
-  return into ? createPortal(tools, into) : null;
+  if (into === undefined)
+    return (
+      <div ref={setOwn} className="chat-head">
+        {row}
+      </div>
+    );
+  return into ? createPortal(row, into) : null;
 }
 
 // Lucide's maximize-2 and minimize-2 (ISC, lucide.dev).
@@ -163,24 +222,15 @@ export function FullButton() {
   );
 }
 
-/** The chat's ⋯: full screen, and where the browser allows it the real one. */
-function FullMenu() {
-  const { on, set } = useChatFull();
-  return (
-    <Menu
-      label="More for the chat"
-      className="chat-more"
-      items={[{ label: on ? 'Leave full screen' : 'Full screen', onSelect: () => set(!on) }, canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen }]}
-    />
-  );
-}
-
-function HandsFreeToggle({ ceoName }: { ceoName: string }) {
+/** Hands-free's state, or null where it's off in Settings (no button then). */
+function useHandsFree(ceoName: string): { on: boolean; why: string } | null {
   const listen = useStore((s) => s.settings.listen);
   useStore((s) => `${s.voiceKeySet}:${s.settings.voice.provider}`); // handsFreeProblem() follows the key and the voice
   if (!listen || listen.provider === 'off') return null;
-  const on = listen.handsFree;
-  const why = handsFreeProblem(ceoName);
+  return { on: listen.handsFree, why: handsFreeProblem(ceoName) };
+}
+
+function HandsFreeToggle({ ceoName, on, why }: { ceoName: string; on: boolean; why: string }) {
   return (
     <button
       type="button"

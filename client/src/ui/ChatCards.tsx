@@ -132,6 +132,30 @@ export function UseKeyCard({ text, account }: { text: string; account: string })
   );
 }
 
+/** Pacing started on a usage warning (#323): the office's line, Resume full speed for this window, and Always keep full speed (Settings → Agents). */
+export function PacingCard({ text }: { text: string }) {
+  const [busy, setBusy] = useState(false);
+  const pacing = useStore((s) => s.usage.state === 'pacing');
+  const always = useStore((s) => s.settings.usageWarnings === 'full');
+  const act = (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    void fn().catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
+  };
+  return (
+    <div className="notice-card" role="note">
+      <p className="notice-card-title">{text}</p>
+      <div className="notice-card-links">
+        <button type="button" className="btn" disabled={busy || !pacing} onClick={() => act(api.resumeFullSpeed)}>
+          <Icon name="fast-forward" /> Resume full speed
+        </button>
+        <button type="button" className="btn" disabled={busy || always} title="Remember this choice: usage warnings never pace new work (Settings → Agents)" onClick={() => act(() => api.updateSettings({ usageWarnings: 'full' }))}>
+          {always ? 'Full speed kept' : 'Always keep full speed'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** While the CEO is on a job: the step it's on in plain words, for how long, which step, Stop, and the job waiting next. A tap opens the round's live log. */
 export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onStop: () => void; open: boolean; onToggle: () => void; linked: (t: string) => string; onFloor: (n: number) => void }) {
   const info = useStore((s) => s.ceo);
@@ -174,7 +198,7 @@ export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onSt
           </span>
           {steps.length > 0 && (
             <span className="working-chev" aria-hidden>
-              ▸
+              <Icon name="chevron-right" />
             </span>
           )}
         </button>

@@ -4,7 +4,8 @@ import { useStore } from '../store';
 import { parseRefs, soleRef, type RefContext } from '../../../shared/chatRefs';
 import { deltaTone, formatDelta, formatValue, SERIES_COLORS, sortRows, xTicks, type ChatVisual, type VisualChart, type VisualColor, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
 import type { CostsView } from '../../../shared/costs';
-import { costDays, resolveVisual, type Resolved, type SourceData } from './chatVisualSources';
+import { costDays, needsServerTrend, resolveVisual, type Resolved, type SourceData } from './chatVisualSources';
+import type { ServerPoint } from '../../../shared/serverLoad';
 import { useRefOpen } from './RefChips';
 import { Sheet } from './ChatArtifacts';
 import './chatVisuals.css';
@@ -29,21 +30,35 @@ function costsFor(days: number): Promise<CostsView> {
   return view;
 }
 
+let trendCache: { at: number; points: Promise<ServerPoint[]> } | null = null;
+function serverTrend(): Promise<ServerPoint[]> {
+  if (trendCache && Date.now() - trendCache.at < COSTS_TTL) return trendCache.points;
+  const points = api.serverTrend();
+  trendCache = { at: Date.now(), points };
+  points.catch(() => (trendCache = null));
+  return points;
+}
+
 function useResolved(v: ChatVisual): Resolved {
   const ops = useStore((s) => s.ops);
   const repos = useStore((s) => s.repos);
   const usage = useStore((s) => s.claudeUsage);
+  const server = useStore((s) => s.serverLoad);
+  const held = useStore((s) => s.health?.heldWork?.tasks ?? 0);
   const [costs, setCosts] = useState<SourceData['costs']>({});
+  const [trend, setTrend] = useState<ServerPoint[] | undefined>(undefined);
   const days = useMemo(() => costDays(v), [v]);
+  const wantsTrend = useMemo(() => needsServerTrend(v), [v]);
   useEffect(() => {
     let live = true;
     for (const d of days) costsFor(d).then((view) => live && setCosts((c) => ({ ...c, [d]: view })), () => undefined);
+    if (wantsTrend) serverTrend().then((points) => live && setTrend(points), () => undefined);
     return () => {
       live = false;
     };
-  }, [days]);
+  }, [days, wantsTrend]);
   const floors = useMemo(() => repos.map((r) => ({ floor: r.floor, repoId: r.id })), [repos]);
-  return useMemo(() => resolveVisual(v, { costs, ops, floors, usage, now: Date.now() }), [v, costs, ops, floors, usage]);
+  return useMemo(() => resolveVisual(v, { costs, ops, floors, usage, now: Date.now(), server, serverTrend: trend, held }), [v, costs, ops, floors, usage, server, trend, held]);
 }
 
 /** What a ref written in a block ("floor 3 #116", "qa: floor 3 #116", "@Ada") opens, or null. `whole`: only when the
@@ -525,7 +540,7 @@ function VisualCard({ visual }: { visual: ChatVisual }) {
     <figure className="viz-card" aria-labelledby={titleId}>
       {head(
         <button type="button" className="viz-expand" aria-label={`Open ${title} full screen`} title="Full screen" onClick={() => setFull(true)}>
-          ⤢
+          <Icon name="maximize-2" />
         </button>,
       )}
       <Body v={v} />

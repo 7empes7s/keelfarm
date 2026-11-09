@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SPEECH_MAX_CHARS, dayPart, speechText, standupLine } from './speech.ts';
+import { SPEECH_MAX_CHARS, SPOKEN_MAX_CHARS, bookkeeping, briefSpeech, dayPart, messageSpeech, speechText, spokenLine, spokenOf, standupLine } from './speech.ts';
 
 describe('speechText', () => {
   it('strips markdown', () => {
@@ -44,6 +44,51 @@ describe('speechText', () => {
   it('leaves short text whole', () => {
     expect(speechText('Hello.')).toBe('Hello.');
     expect(speechText('')).toBe('');
+  });
+});
+
+describe('the spoken summary (#282)', () => {
+  const long = 'I looked at the terminal on your phone.\n\n- Paste fails\n- Keys have no names\n\n## Filed\n\n#278 and #279, see https://github.com/a/b/issues/278.';
+
+  it('reads the spoken line when a message has one, and the whole text only when asked', () => {
+    const m = { text: long, spoken: 'I filed two fixes for the terminal.', artifacts: [{ id: '1-1', title: 'Plan', lead: '' }] };
+    expect(messageSpeech(m)).toBe('I filed two fixes for the terminal.');
+    expect(messageSpeech(m, { whole: true })).toBe('I looked at the terminal on your phone. Paste fails. Keys have no names. Filed. number 278 and number 279, see a link. Plus an attachment: Plan.');
+  });
+
+  it('falls back to the first paragraph, at most three sentences', () => {
+    expect(messageSpeech({ text: long })).toBe('I looked at the terminal on your phone.');
+    expect(briefSpeech('One. Two! Three? Four. Five.')).toBe('One. Two! Three?');
+    expect(briefSpeech('## Status\n\n> what you asked\n\nAll green. Nothing waits.\n\nMore later.')).toBe('All green. Nothing waits.');
+    expect(briefSpeech('```ts\nx\n```\n\nDone.')).toBe('Done.');
+    const one = briefSpeech('word '.repeat(2000));
+    expect(one.length).toBeLessThanOrEqual(SPEECH_MAX_CHARS + 1);
+  });
+
+  it('never says "#", markdown or links, and stays short', () => {
+    const said = spokenLine('**Merged** #278 and `#279` today, see [the PR](https://x.y/z) and https://github.com/a/b/pull/3. C# too.');
+    expect(said).toBe('Merged 278 and 279 today, see the PR and. C too.');
+    expect(said).not.toMatch(/[#*`[\]]|https?:|a link/);
+    expect(spokenLine('- team:4baf6066-dc66-4d33-8a29-cb2e6c8c84d2: Hire Frances? msg:36 asked at 10:30, see 4baf6066-dc66-4d33-8a29-cb2e6c8c84d2.')).toBe('Hire Frances? asked at 10:30, see.');
+    expect(spokenLine('This is long. '.repeat(40)).length).toBeLessThanOrEqual(SPOKEN_MAX_CHARS);
+  });
+});
+
+describe('what a CEO message says aloud (#282)', () => {
+  it('never speaks bookkeeping', () => {
+    for (const filler of ["I've answered message 1865 on your phone.", 'Both messages are answered on your phone.', 'Replied in the chat.', 'All three messages answered.']) expect(bookkeeping(filler), filler).toBe(true);
+    for (const news of ['I filed two fixes for the terminal.', 'Floor 2 merged the login page, and QA passed it.', 'Your message about the phone made me check the terminal.']) expect(bookkeeping(news), news).toBe(false);
+  });
+
+  it('speaks the spoken line, the fallback, or nothing', () => {
+    expect(spokenOf({ text: 'Done.', spoken: 'I filed two fixes.' }, false)).toEqual({ spoken: 'I filed two fixes.' });
+    expect(spokenOf({ text: 'Done.', spoken: 'I filed two fixes.' }, true)).toEqual({ spoken: 'I filed two fixes.' });
+    expect(spokenOf({ text: 'Floor 2 shipped the login page.' }, false)).toEqual({});
+    expect(spokenOf({ text: 'Floor 2 shipped the login page.', spoken: "I've answered message 12 on your phone." }, false)).toEqual({});
+    // A turn's closing text after its replies: silent unless it has a useful spoken line of its own.
+    expect(spokenOf({ text: 'Both messages are answered on your phone.' }, true)).toEqual({ silent: true });
+    expect(spokenOf({ text: 'Both are done.', spoken: 'Both messages are answered.' }, true)).toEqual({ silent: true });
+    expect(spokenOf({ text: "I've answered message 1865 on your phone." }, false)).toEqual({ silent: true });
   });
 });
 

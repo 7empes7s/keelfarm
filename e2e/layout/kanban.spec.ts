@@ -7,6 +7,16 @@ import { checkScreens, fromPhone, OFFICE, ON_FLOOR_1, pocket, POCKET, type Scree
 const SCREENS: Screen[] = [
   { name: 'pocket kanban', widths: POCKET, open: (page) => pocket(page, 'kanban'), tabs: [] },
   { name: 'kanban', widths: OFFICE, open: (page) => fromPhone(page, /Kanban/, /GitHub/, ON_FLOOR_1), tabs: [] },
+  // Assign to… (#265): the floor's agents in an action sheet, free first
+  {
+    name: 'pocket assign sheet',
+    widths: POCKET,
+    open: async (page) => {
+      await (await pocket(page, 'kanban')).locator('.kcol-backlog').getByRole('button', { name: /^Assign issue #/ }).first().click();
+      return page.locator('.assign-sheet');
+    },
+    tabs: [],
+  },
 ];
 
 checkScreens(SCREENS);

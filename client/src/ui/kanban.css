@@ -121,6 +121,11 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* how long it has waited and on what (#275) */
+.kcard-wait {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
 .kcard-foot select {
   width: auto;
   margin-left: auto;

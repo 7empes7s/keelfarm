@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { api } from '../api';
 import { fmtDuration, fmtPct, fmtUsd, usageMeter } from '../ops';
+import { usageChoice, USAGE_WARNING_CHOICES } from '../../../shared/usage';
 import { useStore } from '../store';
 import type { DoctorFinding, DoctorFix, OpsAlarm, OpsNumbers, RepoView } from '../../../shared/types';
 import { confirmDialog } from './Confirm';
@@ -14,11 +15,14 @@ import { FloorProgress } from './FloorProgress';
 import { ManagerChangesCard } from './ManagerChangesCard';
 import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
+import { UsageSources } from './UsageSources';
 import { HealthStrip } from './HealthStrip';
+import { ServerCard } from './ServerCard';
 import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
+import { WaitTile } from './WaitTile';
 
-// The manager's console → Mission control: Claude's usage with "Resume full speed", what needs you (the alarms the
+// The manager's console → Mission control: Claude's usage with "Resume full speed", the server and what uses it, what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
 // from the wall as a table, and where the Claude plan goes (CostsSection.tsx).
 
@@ -53,13 +57,19 @@ export async function confirmResume() {
   if (ok) await attempt(() => api.resumeFullSpeed());
 }
 
+/** "Always keep full speed" (#323): saves Settings → Agents' choice, which also ends pacing now. */
+const keepFullSpeed = () => attempt(() => api.updateSettings({ usageWarnings: 'full' }));
+
 function UsageCard({ hot }: { hot: boolean }) {
   const usage = useStore((s) => s.usage);
   const sessions = useStore((s) => s.settings.pacingSessions);
+  const choice = useStore((s) => usageChoice(s.settings.usageWarnings));
+  const openOverlay = useStore((s) => s.openOverlay);
   const demo = useStore((s) => s.demo);
   const m = usageMeter(usage, Date.now());
-  const why =
-    usage.state === 'pacing'
+  const why = usage.byChoice
+    ? 'Usage high: full speed by your choice. New work starts as usual; if Claude turns a session away at the limit, the office still pauses until it resets.'
+    : usage.state === 'pacing'
       ? `Until ${m.resets}, new issues only start while fewer than ${sessions} session${sessions === 1 ? '' : 's'} run; QA, fixes and the CEO carry on. Topped up, or was your usage reset? Resume full speed.`
       : usage.state === 'paused'
         ? `Claude turned a session away at the limit, so nothing new starts until ${m.resets}. That can't be cleared early; sessions already running carry on.`
@@ -82,6 +92,14 @@ function UsageCard({ hot }: { hot: boolean }) {
         </div>
       )}
       <div className="dp-meta">{why}</div>
+      <div className="row wrap small">
+        <span>
+          When Claude warns: <b>{USAGE_WARNING_CHOICES.find((c) => c.value === choice)?.label}</b>
+        </span>
+        <button type="button" className="btn btn-small btn-ghost" title="Settings → Agents: When Claude warns that usage is high" onClick={() => openOverlay({ kind: 'manager', tab: 'agents' })}>
+          Change
+        </button>
+      </div>
       <Actions>
         <button
           className="ds-btn"
@@ -91,6 +109,11 @@ function UsageCard({ hot }: { hot: boolean }) {
         >
           <Icon name="fast-forward" /> Resume full speed
         </button>
+        {choice !== 'full' && (
+          <button className="ds-btn" title="Remember this choice: Claude's usage warnings never pace new work (Settings → Agents)" onClick={() => void keepFullSpeed()}>
+            Always keep full speed
+          </button>
+        )}
       </Actions>
       {demo && (
         <div className="row wrap">
@@ -289,6 +312,7 @@ const COLUMNS: [string, (n: OpsNumbers) => string, string?][] = [
   ['Fixing', (n) => String(n.fixing), 'Back with an agent: QA findings, checks or a conflict'],
   ['To merge', (n) => String(n.toMerge)],
   ['Needs you', (n) => `${n.needsYou}${n.triage ? ` (+${n.triage})` : ''}`, 'The number in parentheses: the CEO is looking first'],
+  ['Longest wait for you', (n) => fmtDuration(n.longestWaitMs), 'The longest a PR has waited in needs-you right now (the CEO looking included); target under 30 minutes'],
   ['Merged today', (n) => `${n.mergedToday} (${n.mergedHour} last hour)`],
   ['Lead time', (n) => fmtDuration(n.leadMs), 'Median issue → merge over the last 24 hours'],
   ['QA wait', (n) => fmtDuration(n.qaWaitMs), 'Median wait for a free agent over the last 24 hours'],
@@ -351,10 +375,22 @@ export function OpsTab({ card }: { card?: string }) {
   return (
     <div className="tab-grid">
       <div>
+        <Section
+          id="ops-card-sources"
+          title={
+            <span className="dp-chips">
+              <Icon name="gauge" /> Usage
+            </span>
+          }
+        >
+          <UsageSources />
+        </Section>
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <ServerCard />
         <CloudToday />
         <TestLabCard />
+        <WaitTile />
         <h3 className="section">
           <Icon name="siren" /> Needs you {alarms.length > 0 && <span className="badge">{alarms.length}</span>}
         </h3>

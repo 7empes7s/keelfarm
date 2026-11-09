@@ -11,6 +11,7 @@ import type { ToolSettings } from '../tooling.ts';
 import type { RotationSettings } from './accounts.ts';
 import type { AgentCli, AgentRuntime, CloudSettings, EffortLevel } from './agents.ts';
 import type { NotifySettings } from './notify.ts';
+import type { UsageWarningChoice } from './office.ts';
 import type { ListenSettings, VoiceSettings } from './voice.ts';
 
 export interface SwarmSettings {
@@ -38,6 +39,8 @@ export interface SwarmSettings {
   autoUpdate?: boolean; // update the office itself once it's quiet (absent on servers without self-update)
   updateSettleMin?: number; // an automatic update waits this long after the latest commit (at most 15 min after the first), so a run of merges is one restart
   pacingSessions: number; // after Claude warns about usage, new issues start only while fewer sessions than this run
+  usageWarnings?: UsageWarningChoice; // when Claude warns that usage is high (#323); absent: 'pace'
+  stuckRecheckMin?: number; // a PR in needs-human this long is re-checked: released if only a conflict or CI outage holds it, else the CEO looks again (#275)
   trimIdleDesksMin: number; // a desk idle this many minutes loses its node_modules and build output; 0 = never
   previewRecentHours: number; // an open PR updated this recently gets its own channel chip; older ones fold under "Older"
   mainPreviewIdleMin: number; // a floor's main preview stops this many minutes after its last use; 0 = never

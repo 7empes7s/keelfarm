@@ -85,7 +85,7 @@ export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog
         <Icon name="settings" />
         <span className="grow">{stepsSummary(log, actions)}</span>
         <span className="steps-row-chev" aria-hidden>
-          ▸
+          <Icon name="chevron-right" />
         </span>
       </button>
       {open && (

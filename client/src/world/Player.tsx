@@ -13,7 +13,6 @@ import { LOOK_RADIANS_PER_PX, createLookFilter, filterLookDelta, resetLookFilter
 import { confirmDialog, isConfirmOpen } from '../ui/Confirm';
 import { confirmResume } from '../ui/MissionConsole';
 import { photoActive, photoOwnsLock } from '../photo/gate';
-import { getAudioPrefs, toggleMute } from '../ui/sfx';
 import { getA11y, reduceMotion } from '../ui/a11y';
 import { footstepsFollow } from '../ui/footsteps';
 import { dropHeld, startCharge, throwHeld, walk } from './toys/hands';
@@ -32,7 +31,7 @@ import { decorationAction } from './decor/actions';
 import { eAction } from './toys/sip';
 import { sipCoffee, sipPose, tickSip } from './toys/sipping';
 import { peelAimed, placeSticky, pressBoard, releaseBoard } from './boardHands';
-import { bindings, keyName, useControls } from '../ui/controls';
+import { bindings, useControls } from '../ui/controls';
 import { actionsForKey, anyHeld, isBound, type ActionId, type Scope } from '../ui/keymap';
 import { lookCurve, pad, padName, pollPad, wasPressed, wasReleased, watchPads } from './gamepad';
 import { arriveOnFloor, cameraMode, exitView, homeSpot, lookAllowed, playerAt, rigInput, rigOwnsCamera, rotateView, setHomeLook, stepRig, tapView } from './camera/rig';
@@ -43,6 +42,7 @@ import { findPath, walkways } from './walkways';
 import { recordHitch } from '../hitches';
 import { newStuck, STUCK_MS, stuckStep } from '../hitchLog';
 import { joinPong, pongCamera, pongMouse, tickPaddle } from './toys/pongState';
+import { openSettings } from '../ui/HudSettings';
 
 /** How fast the right stick moves the ping-pong paddle, full over (in mouse pixels a second). */
 const PAD_PADDLE = 600;
@@ -343,10 +343,6 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       }
       const s = useStore.getState();
       const b = bindings();
-      if (isBound(b, 'mute', e.code) && !e.repeat && !isConfirmOpen()) {
-        toggleMute();
-        s.pushToast('info', getAudioPrefs().muted ? `Sound off (${keyName('mute')} to turn it back on)` : 'Sound on');
-      }
       if (s.overlay || !s.started || isConfirmOpen() || photoActive()) return;
       keys.current.add(e.code);
       const mode = cameraMode();
@@ -370,6 +366,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
         if (action === 'drop' && !e.repeat && !placeSticky(s.focus, true) && !peelAimed(s.focus)) dropHeld();
         if (action === 'reload' && !e.repeat && !s.travel) reloadHeld();
         if (action === 'help') s.openOverlay({ kind: 'help' });
+        if (action === 'settings') openSettings();
         if (action === 'phone') {
           e.preventDefault(); // don't type the "p" into the phone's message box
           openPhone();

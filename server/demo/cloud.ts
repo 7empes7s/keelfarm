@@ -1,7 +1,7 @@
 // The demo's cloud agents and accounts (#257, docs/cloud.md): a fake Upstash account, Boxes and sign-ins.
 import type { CloudBackend } from '../backend.ts';
 import { CloudError, type BoxApi, type BoxInfo } from '../box.ts';
-import { demoAccounts } from '../demoAccounts.ts';
+import { demoAccounts, demoUsageApi } from '../demoAccounts.ts';
 import { demoSignIn } from '../demoSignIn.ts';
 import { registerDemo } from './registry.ts';
 import { signOuts } from './world.ts';
@@ -108,4 +108,5 @@ function demoCloud(): CloudBackend {
 registerDemo('cloud', () => ({
   cloud: demoCloud(),
   accounts: demoAccounts((o, exited) => demoSignIn({ ...o, boxId: 'accounts' }, new Map(), exited)),
+  usage: demoUsageApi,
 }));

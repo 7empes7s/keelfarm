@@ -154,6 +154,7 @@ export interface ModelCatalogView {
 /** Messages on an agent's terminal socket (/ws/term?agent=<id>), server to browser. */
 export type TermServerMessage =
   | { t: 'snapshot'; data: string; cols: number; rows: number; live: boolean } // the screen and scrollback so far
+  | { t: 'dropped' } // input had no running CLI to receive it
   | { t: 'data'; data: string }
   | { t: 'size'; cols: number; rows: number } // another viewer resized the terminal
   | { t: 'live'; live: boolean }; // a CLI is (or is no longer) running in it
@@ -188,6 +189,7 @@ export interface AgentView {
   branch: string | null;
   prNumber: number | null; // the PR they opened, are testing or are fixing
   prUrl: string | null;
+  nextIssue?: number | null; // an issue the manager or the CEO gave them while busy: it starts when they're free (#265; absent for the CEO)
   currentTool: string | null; // while preparing: the setup step (INSTALL_STEP), null for the worktree
   startedAt: number | null;
   endedAt: number | null;

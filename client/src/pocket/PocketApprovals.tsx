@@ -11,7 +11,7 @@ import { waitingOnYou } from './pocketData';
 import { DecisionCard, useMinute } from '../ui/Decisions';
 import { DecisionLog } from '../ui/DecisionLog';
 import { waitingDecisions } from '../../../shared/decisions';
-import { impactOf, impactScore, prWhy, waitLine, whySummary, WHY_LABELS, WHY_ORDER, type ApprovalWhy } from '../../../shared/approvals';
+import { impactOf, impactScore, prWaitLine, prWhy, waitLine, whySummary, WHY_LABELS, WHY_ORDER, type ApprovalWhy } from '../../../shared/approvals';
 import { EmptyState } from '../ui/EmptyState';
 import { useBackLayer } from '../ui/Panel';
 import { DesignDetail, PrDetail, WhyTag } from './ApprovalDetail';
@@ -33,6 +33,7 @@ interface Item {
   askedAt: number;
   openedAt: number | null;
   meta: string[]; // round, author…
+  wait?: string | null; // a PR's "waiting 3 h 12 min: … → needs you" (#275)
   dots: Dot[];
   score: number; // the impact sort
   detail: ReactNode;
@@ -72,6 +73,7 @@ function useItems(now: number): Item[] {
         askedAt: q.stuckAt ?? q.updatedAt,
         openedAt: Number.isFinite(opened) ? opened : null,
         meta: [`round ${q.round}`, author ? `by ${author}` : ''].filter(Boolean),
+        wait: prWaitLine(q, repo.defaultBranch, now),
         dots: dotsOf(q, pr),
         score: impactScore(impactOf(pr.files ?? [], pr.additions, pr.deletions)),
         detail: <PrDetail repo={repo} qa={q} pr={pr} why={why} now={now} />,
@@ -163,6 +165,7 @@ function Row({ item, now, on, peek, onOpen }: { item: Item; now: number; on: boo
       </span>
       <span className="apr-row-title">{item.title}</span>
       <span className="muted small">{[waitLine(item.askedAt, item.openedAt, now), ...item.meta].join(' · ')}</span>
+      {item.wait && <span className="small">{item.wait}</span>}
       {item.dots.length > 0 && (
         <span className="apr-dots" aria-label={`${item.dots.filter((d) => d === 'fail').length} failing, ${item.dots.filter((d) => d === 'pass').length} passing checks`}>
           {item.dots.slice(0, 12).map((d, i) => (

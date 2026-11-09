@@ -27,7 +27,7 @@ export function publicDemoProblem(o: { demo: boolean; loopback: boolean; home: s
 /** Settings a visitor may change: how the demo office looks and behaves. Everything else (models, CLIs, folders, notifications, keys) is refused. */
 const OPEN_SETTINGS = new Set([
   'sessionLimit', 'defaultEffort', 'taskEffort', 'scaling', 'maxAgents', 'ceoHeartbeatMin', 'researchMin', 'ceoFollowups', 'ceoMandates', 'ceoAwake',
-  'managerName', 'companyName', 'dogName', 'setupDone', 'tutorialStep', 'pacingSessions', 'historyDays', 'voice', 'listen', 'themes', 'weather',
+  'managerName', 'companyName', 'dogName', 'setupDone', 'tutorialStep', 'pacingSessions', 'usageWarnings', 'historyDays', 'voice', 'listen', 'themes', 'weather',
   'worldEvents', 'everyProject', 'officePlaybook',
 ]);
 

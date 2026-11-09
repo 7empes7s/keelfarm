@@ -91,7 +91,7 @@ function Results({ e }: { e: ExperimentView }) {
           {METRICS.map((m) => (
             <tr key={m.key}>
               <th title={m.better === 'lower' ? 'Lower is better' : 'Higher is better'}>
-                {m.label} <span className="muted small">{m.better === 'lower' ? '↓' : '↑'}</span>
+                {m.label} <span className="muted small"><Icon name={m.better === 'lower' ? 'arrow-down' : 'arrow-up'} /></span>
               </th>
               {r.variants.map((v, i) => (
                 <td key={v.id} data-v={`${v.id.toUpperCase()} · ${v.name}`} style={{ ['--v' as string]: COLORS[i] }}>

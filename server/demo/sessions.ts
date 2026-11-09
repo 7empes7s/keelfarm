@@ -1,5 +1,6 @@
 // The demo's fake build, QA and fix sessions (#257), drawn in the agent's terminal, and Claude's made-up usage.
 import crypto from 'node:crypto';
+import { parseProgramStatus, programStatusStep } from '../programStatus.ts';
 import path from 'node:path';
 import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions } from '../agentRunner.ts';
 import { CLIS } from '../clis.ts';
@@ -264,6 +265,15 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
   });
   handle = start({
     ...cb,
+    blocked: (reason) => {
+      // Fake CLI output exercises the same decoding and backup decision as a silent hook stream.
+      const raw = `\x1b]7501;state=${reason ? 'blocked' : 'working'}:app=codex${reason ? `:msg=${Buffer.from(reason).toString('base64')}` : ''}\x1b\\`;
+      const parsed = parseProgramStatus(undefined, raw);
+      term.write(parsed.text);
+      const status = parsed.statuses[0];
+      const step = programStatusStep(status && { ...status, at: 20_000 }, 0, 20_000);
+      cb.blocked?.(step.do === 'blocked' ? step.reason : null);
+    },
     log: (entries) => {
       cb.log(entries);
       for (const e of entries) term.write(`${e.kind === 'tool' || (e.kind === 'text' && e.text.startsWith('●')) ? '\r\n' : ''}${ANSI[e.kind](e.text)}\r\n`);

@@ -14,6 +14,8 @@ import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
 import type { ToolInventory } from '../shared/tooling.ts';
 import { checkUsage, type UsageCheck } from './usagePoll.ts';
+import { realUsageApi } from './usageApi.ts';
+import type { UsageApi } from './usageSources.ts';
 import { readCatalog } from './modelCatalog.ts';
 import { checkAccount } from './accountCheck.ts';
 import { startLocalSignIn } from './localSignIn.ts';
@@ -46,6 +48,8 @@ import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
 import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
+import { realProbe } from './providers.ts';
+import type { McpInput, ProbeRequest, ProbeResult } from '../shared/providers.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
 export interface Backend {
@@ -168,6 +172,12 @@ export interface Backend {
   cloud: CloudBackend;
   /** Providers & accounts (#247, docs/accounts.md): testing them and their logins' sign-in terminals (the demo's are fake). */
   accounts: AccountsBackend;
+  /** Usage for every provider (#361): ElevenLabs' subscription, Admin keys' cost reports (the demo's are fake). */
+  usage: UsageApi;
+  /** Settings → Providers (#362): one cheap read-only call testing a key or an MCP server; never throws. */
+  providerProbe(req: ProbeRequest): Promise<ProbeResult>;
+  /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
+  demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
@@ -330,6 +340,8 @@ export const realBackend: Backend = {
   modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
   accounts: { check: checkAccount, signIn: startLocalSignIn },
+  usage: realUsageApi,
+  providerProbe: realProbe,
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

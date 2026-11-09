@@ -5,6 +5,7 @@ import type { Decision } from '../decisions.ts';
 import type { LabView } from '../experiments.ts';
 import type { FileView } from '../files.ts';
 import type { HealthView } from '../health.ts';
+import type { ServerNow } from '../serverLoad.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
 import type { WeatherView } from '../outside.ts';
@@ -19,6 +20,8 @@ import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
 import type { AccountsView } from './accounts.ts';
+import type { ProvidersView } from './providers.ts';
+import type { UsageSource } from './usage.ts';
 import type { VoiceCacheView } from './voice.ts';
 
 export interface WorldSnapshot {
@@ -35,7 +38,8 @@ export interface WorldSnapshot {
   previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's latest page (shared/chatPage.ts); older ones: GET /api/ceo/messages?before=
+  messagesOlder?: boolean; // the thread has earlier messages than these
   phoneReadAt: number; // CEO messages newer than this are unread
   notices: NoticeView[]; // the notification centre's, newest last (shared/notices.ts keeps them)
   decisions?: Decision[]; // questions waiting on the manager (#114, shared/decisions.ts); absent in a replay
@@ -45,6 +49,7 @@ export interface WorldSnapshot {
   publicDemo?: { resetHours: number }; // the demo for visitors (#95): what they can't change, and when it starts over
   usage: UsageView;
   health?: HealthView; // memory, load and sessions, for the health strip (#55); absent in a replay
+  serverLoad?: ServerNow | null; // the server's latest reading by program (#271); absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
   ops: OpsView;
@@ -59,6 +64,7 @@ export interface WorldSnapshot {
   notifyChannels: NotifyChannelsView;
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   accounts?: AccountsView; // Settings → Providers & accounts (#247): no secrets
+  providers?: ProvidersView; // Settings → Providers (#362): keys added there and MCP servers, never a secret
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
   careers?: Record<string, CareerRow>; // agents' careers by id as rows (#291), their `career` then null; absent in a replay
@@ -109,11 +115,12 @@ export type ServerEvent =
   | { type: 'files'; files: FileView[] }
   | { type: 'phoneRead'; at: number }
   | { type: 'decisions'; decisions: Decision[] }
-  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited). */
-  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; message?: PhoneMessage } & Partial<CeoChatView>)
+  /** The CEO chat changed: what's given replaces the tab's (messages: another conversation opened; message: one edited; removed: messages the manager deleted or hid, #145). */
+  | ({ type: 'ceoChat'; messages?: PhoneMessage[]; messagesOlder?: boolean; message?: PhoneMessage; removed?: number[] } & Partial<CeoChatView>)
   | { type: 'officeUpdate'; officeUpdate: OfficeUpdateView }
   | { type: 'usage'; usage: UsageView }
   | { type: 'health'; health: HealthView }
+  | { type: 'serverLoad'; serverLoad: ServerNow }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null }
   | { type: 'ops'; ops: OpsView }
@@ -126,7 +133,9 @@ export type ServerEvent =
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
-  | { type: 'accounts'; accounts: AccountsView }
+  | { type: 'accounts'; accounts: AccountsView } // without `sources`: they come in usageSources
+  | { type: 'usageSources'; sources: UsageSource[] } // the usage card's rows (#361), only when they changed
+  | { type: 'providers'; providers: ProvidersView } // a key or MCP server added, changed, tested or removed (#362)
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
   | { type: 'managerChanges'; changes: ManagerChange[] }

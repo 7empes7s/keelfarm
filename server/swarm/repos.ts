@@ -394,6 +394,7 @@ export abstract class SwarmRepos extends SwarmCore {
       this.refreshInsights(repo);
       this.reconcilePulls(repo, rt.pulls);
       this.rebaseConflicting(repo);
+      this.recheckStuck(repo);
       void this.refreshPractices(repo);
       // Something was merged since the last look (by the office or anyone else): bring the folder up to date.
       const newest = pulls.reduce<string | null>((m, p) => (p.mergedAt && (!m || p.mergedAt > m) ? p.mergedAt : m), null);

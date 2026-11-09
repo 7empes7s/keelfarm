@@ -3,6 +3,7 @@
 import path from 'node:path';
 import { HOME_DIR } from '../config.ts';
 import { demoPreviewDesks } from '../demoPreviewDesks.ts';
+import { demoServerLoad } from '../demoServerLoad.ts';
 import { registerDemo } from './registry.ts';
 import { fakeSha, mergedSinceSync } from './world.ts';
 
@@ -15,8 +16,9 @@ async function fakeTrim(stillIdle: () => boolean) {
 
 registerDemo('desks', ({ scale, deskRepo, installedDesks }) => {
   let lowMemory = false; // the health strip's Simulate low memory: too little left for another session (a big company: a big server)
+  const memory = async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() });
   return {
-    resources: { memory: async () => ({ availableMb: lowMemory ? 900 : scale ? 250_000 : 9800, totalMb: scale ? 262_144 : 16_384, swapFreeMb: 0, swapTotalMb: 0, load: 1.4, cpus: 8, at: Date.now() }), usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, browser: async () => (lowMemory ? 640 : null), simulate: (low) => void (lowMemory = low) },
+    resources: { memory, usage: async (dirs) => new Map(dirs.map((d) => [d, { rssMb: 1500, pids: [] }])), kill: () => undefined, browser: async () => (lowMemory ? 640 : null), simulate: (low) => void (lowMemory = low), ...demoServerLoad(memory) },
     ensureClone: async () => new Promise((r) => setTimeout(r, 400)),
     syncMain: async (fullName, _branch, { touch }) => {
       const behind = mergedSinceSync.get(fullName) ?? 0;

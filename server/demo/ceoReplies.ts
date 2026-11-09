@@ -1,6 +1,6 @@
 // The demo CEO's chat replies that show its office tools (#257), tried in this order through the real tools; a new
 // tool's demo registers its own reply here or in its feature's module.
-import { demoMoneyAnswer, objectiveIds, plannedSize, plural, refused, short } from './ceo.ts';
+import { demoMoneyAnswer, demoServerAnswer, objectiveIds, plannedSize, plural, refused, short } from './ceo.ts';
 import { registerCeoReply } from './registry.ts';
 
 // "Where did the money go this week?": a dashboard on the office's live costs (#146, shared/chatVisuals.ts).
@@ -38,6 +38,17 @@ registerCeoReply('close_issue', async ({ text, s, use }) => {
   const out = await use('close_issue', { floor: closeFloor.floor, number: Number(close[1]), reason });
   return out.startsWith('Refused') ? `I couldn't close #${close[1]}: ${refused(out)}` : `Done: ${out} I left "${short(reason, 80)}" on it as a comment.`;
 });
+
+// "put the freed agent on #3" / "assign #3 to Ada": through the real tool (#265), before the demo's files.
+registerCeoReply('assign_issue', async ({ text, s, use }) => {
+  const put = text.match(/\b(?:put|assign)\b(?:.*?\bon #(\d+)|\s+#(\d+)(?:\s+to\s+(\w+))?)/i);
+  const putNumber = put && Number(put[1] ?? put[2]);
+  const named = put?.[3] && s.floors.find((f) => f.agents?.some((a) => a.name.toLowerCase() === put[3].toLowerCase())); // "to Bjarne": Bjarne's floor
+  const putFloor = putNumber && (named || s.floors.find((f) => f.backlog.some((i) => i.number === putNumber)) || s.floors[0]);
+  if (!put || !putNumber || !putFloor) return null;
+  const out = await use('assign_issue', { floor: putFloor.floor, number: putNumber, ...(put[3] && { agent: put[3] }) });
+  return out.startsWith('Refused') ? `I couldn't assign #${putNumber}: ${refused(out)}` : `Done: ${out}`;
+}, { early: true });
 
 // "Tighten floor 2's charter": a change for the manager to approve, through the real tool.
 registerCeoReply('propose_charter', async ({ text, s, use }) => {
@@ -91,3 +102,6 @@ registerCeoReply('scale_team', ({ text, s, scale }) => {
     reason: `You asked for a bigger team, and floor ${f.floor} has the most work waiting: ${plural(ready, 'issue')} ready to start, ${plural(f.team.free, 'agent')} free.`,
   });
 });
+
+// "How much of the server is used, and by what?": its live sources (#271). Last, so a plan or a hire about a server isn't taken for it.
+registerCeoReply('server', ({ text }) => (/\b(how much|by what|which programs?)\b.*\b(server|memory|ram|cpu)\b|\b(server|memory|cpu) (use|usage|load)\b/i.test(text) ? demoServerAnswer() : null));

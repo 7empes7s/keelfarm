@@ -3,9 +3,10 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
+import type { ServerPoint } from '../../shared/serverLoad';
 import type { HistoryDetail, HistoryFilter, HistoryPage, HistoryUsage } from '../../shared/history';
 import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
@@ -16,6 +17,7 @@ import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
 import type { LibraryFilter, LibraryPage } from '../../shared/library';
 import type { HealthView } from '../../shared/health';
+import type { ChatPage } from '../../shared/chatPage';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -110,6 +112,8 @@ export const api = {
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
   closeIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/close`),
+  /** Assign to… (#265): a free agent starts it now, a busy one gets it as their next task. */
+  assignIssue: (repoId: string, n: number, agentId: string) => call<{ started: boolean; text: string }>('POST', `${r(repoId)}/issues/${n}/assign`, { agentId }),
   trustIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/trust`),
   planFloor: (repoId: string, mission?: string, research = false) => call('POST', `${r(repoId)}/plan`, { mission, research }),
   onboardFloor: (repoId: string) => call('POST', `${r(repoId)}/onboard`),
@@ -175,6 +179,8 @@ export const api = {
   ceoRetry: () => call('POST', '/api/ceo/retry'),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
+  chatMessages: (before: number) => call<ChatPage>('GET', `/api/ceo/messages?before=${before}`),
+  removeMessage: (id: number) => call('DELETE', `/api/ceo/messages/${id}`),
   newConversation: (repoId: string | null = null) => call<{ id: string }>('POST', '/api/ceo/conversations', { repoId }),
   openConversation: (id: string) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/open`),
   editConversation: (id: string, patch: ConversationPatch) => call('POST', `/api/ceo/conversations/${encodeURIComponent(id)}/edit`, patch),
@@ -198,6 +204,16 @@ export const api = {
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
   demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
+  /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
+  // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
+  addProvider: (provider: string, key: string, label?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label }, false),
+  testProvider: (id: string) => call<ProviderConnection>('POST', `/api/providers/${encodeURIComponent(id)}/test`),
+  removeProvider: (id: string) => call('DELETE', `/api/providers/${encodeURIComponent(id)}`),
+  addMcpServer: (m: { name: string; command?: string; url?: string; secrets?: Record<string, string>; agents?: string[] }) => call<McpServerConfig>('POST', '/api/providers/mcp', m, false),
+  setMcpServer: (id: string, patch: { on?: boolean; agents?: string[] }) => call<McpServerConfig>('PATCH', `/api/providers/mcp/${encodeURIComponent(id)}`, patch),
+  testMcpServer: (id: string) => call<McpServerConfig>('POST', `/api/providers/mcp/${encodeURIComponent(id)}/test`),
+  removeMcpServer: (id: string) => call('DELETE', `/api/providers/mcp/${encodeURIComponent(id)}`),
+  setUsageAdminKey: (provider: 'anthropic' | 'openai', key: string) => call<{ set: boolean }>('PUT', '/api/usage/admin-key', { provider, key }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
@@ -207,6 +223,8 @@ export const api = {
   history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
   historyEntry: (id: string) => call<HistoryDetail>('GET', `/api/history/${encodeURIComponent(id)}`),
   historyUsage: () => call<HistoryUsage>('GET', '/api/history/usage'),
+  serverTrend: () => call<ServerPoint[]>('GET', '/api/server/trend'),
+  stopOrphan: (pid: number) => call<void>('POST', `/api/server/orphans/${pid}/stop`),
   costs: (days: number, repo?: string) => call<CostsView>('GET', `/api/costs?days=${days}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`),
   defineExperiment: (input: ExperimentInput) => call<Experiment>('POST', '/api/experiments', input),
   /** A stopped experiment's variant's practice switches become every project's default (#24). */

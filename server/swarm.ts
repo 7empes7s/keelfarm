@@ -13,10 +13,10 @@ import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecover
 import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
-import { mergeReadings } from '../shared/usage.ts';
-import { clampPacingSessions } from './pacing.ts';
+import { keptWaiver, mergeReadings } from '../shared/usage.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
+import { clampStuckRecheckMin } from './stuckRecheck.ts';
 import { isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
@@ -37,7 +37,7 @@ import { forwardText, hideHarness } from '../shared/chat.ts';
 import { messageGoesIn } from './ceoLane.ts';
 import type { CeoJob } from './ceo.ts';
 import { CeoChat } from './ceoChat.ts';
-import { snapshotMessages } from '../shared/chatParts.ts';
+import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { rotationSettings } from '../shared/accountRotation.ts';
@@ -68,7 +68,7 @@ import {
 } from './swarm/model.ts';
 import { lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmVoices } from './swarm/voices.ts';
+import { SwarmServerLoad } from './swarm/serverLoad.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 import { FLOOR_THEMES } from '../shared/floorThemes.ts';
 
@@ -77,7 +77,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmVoices {
+export class Swarm extends SwarmServerLoad {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null);
 
   // ---------- lifecycle ----------
@@ -143,6 +143,7 @@ export class Swarm extends SwarmVoices {
         notices: keepNotices(loaded.notices, Date.now()),
         prLimits: loaded.prLimits ?? 1,
         outageReleased: loaded.outageReleased ?? false,
+        stuckReleased: loaded.stuckReleased ?? false,
         ops: loadHistory(loaded.ops, Date.now()),
         held: loaded.held ?? [],
         questions: Array.isArray(loaded.questions) ? loaded.questions : [],
@@ -151,6 +152,7 @@ export class Swarm extends SwarmVoices {
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
+        usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
@@ -159,6 +161,7 @@ export class Swarm extends SwarmVoices {
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
       if (!isCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
       this.state.settings.trimIdleDesksMin = clampTrimIdleMin(this.state.settings.trimIdleDesksMin);
+      this.state.settings.stuckRecheckMin = clampStuckRecheckMin(this.state.settings.stuckRecheckMin);
       this.state.settings.historyDays = clampHistoryDays(this.state.settings.historyDays);
       if (typeof this.state.settings.dailyLogDir !== 'string') this.state.settings.dailyLogDir = '';
       if (!this.state.settings.defaultModel && this.state.settings.defaultCli === 'claude') this.state.settings.defaultModel = DEFAULT_MODEL;
@@ -213,7 +216,7 @@ export class Swarm extends SwarmVoices {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await Promise.all([this.cloud.init(), this.accounts.init()]);
+    await Promise.all([this.cloud.init(), this.accounts.init(), this.initProviders(), this.startUsage()]);
     if (this.state.settings.cloud.machineKind !== 'local' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
     const interrupted: PersistedAgent[] = [];
@@ -326,6 +329,7 @@ export class Swarm extends SwarmVoices {
     for (const rec of orphanedQa(this.state.qa, this.state.agents, BUSY)) this.setQa(rec, { status: 'queued', qaAgentId: null });
     if (this.state.prLimits < PR_LIMITS_VERSION) this.catchUpPrs();
     if (!this.state.outageReleased) this.releaseOutageStuck();
+    if (!this.state.stuckReleased) this.releaseStuck();
     this.officeHead = await this.backend.office.head();
     const updated = await this.backend.office.takeLastUpdate().catch(() => null);
     if (updated) await this.reportUpdate(updated);
@@ -606,7 +610,7 @@ export class Swarm extends SwarmVoices {
     this.state.messages = messages;
     Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
-    this.broadcast({ type: 'ceoChat', messages: snapshotMessages(messages.slice(-100)), ...this.chatView() });
+    this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();
   }
 
@@ -700,7 +704,8 @@ export class Swarm extends SwarmVoices {
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
     for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
-    if (patch.pacingSessions !== undefined) s.pacingSessions = clampPacingSessions(patch.pacingSessions);
+    this.pacingSettings(patch);
+    if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
       setTimeout(() => void this.trimIdleDesks(), 1000);

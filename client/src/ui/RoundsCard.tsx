@@ -133,7 +133,7 @@ export function RoundsCard({ view, repo, floorName }: { view: CostsView; repo: (
                     <b>{c.rounds}</b>
                     <span className="costs-group-count">{Math.round((c.rounds / failed) * 100)}%</span>
                     <span className="costs-caret" aria-hidden="true">
-                      {on ? '▴' : '▾'}
+                      <Icon name={on ? 'chevron-up' : 'chevron-down'} />
                     </span>
                   </button>
                   {on && (

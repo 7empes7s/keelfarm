@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -8,6 +8,7 @@ import type { ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
+import type { ServerNow } from '../../shared/serverLoad';
 import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
@@ -46,6 +47,7 @@ export type Overlay =
   | { kind: 'help'; tab?: HelpTab }
   | { kind: 'catalogue'; repoId?: string } // the lobby kiosk (#210)
   | { kind: 'decor-box'; repoId: string } // a floor's decor box
+  | { kind: 'trophy-card'; id: string } // a trophy's story, from the lobby shelf (#311)
   /** The floor as a list (Settings → Accessibility): who is there, their status and what they're doing. */
   | { kind: 'floorList' }
   | { kind: 'notices' } // the notification centre (ui/Notices.tsx)
@@ -134,7 +136,8 @@ export interface State {
   previewStats: PreviewStatsView;
   requests: HireRequestView[];
   ceo: CeoInfo;
-  messages: PhoneMessage[];
+  messages: PhoneMessage[]; // the chat's pages loaded so far (shared/chatPage.ts)
+  chatOlder: boolean; // the thread has earlier messages than these
   chat: CeoChatView; // the live reply, conversations and pinned notes (#51)
   files: FileView[]; // the chat's files store (shared/files.ts), newest first
   chatOutbox: OutgoingMessage[]; // this tab's messages to the CEO the office doesn't have yet (ui/chatSend.ts)
@@ -146,6 +149,7 @@ export interface State {
   officeUpdate?: OfficeUpdateView;
   usage: UsageView; // Claude's subscription usage: normal, pacing after a warning, or paused at the limit
   health: HealthView | null; // memory, load and sessions for the health strip (null: a server without it, or a replay)
+  serverLoad: ServerNow | null; // the server's latest reading by program (#271)
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
@@ -162,6 +166,7 @@ export interface State {
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
   accounts: AccountsView; // Settings → Providers & accounts (#247): logins and keys (never a key)
+  providers: ProvidersView; // Settings → Providers (#362): keys added there and MCP servers (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
   managerChanges: ManagerChange[]; // the manager's board actions and what the CEO did about them (#207)
@@ -270,6 +275,7 @@ export const useStore = create<State>((set, get) => ({
     tutorialStep: -1,
     pacingSessions: 3,
     trimIdleDesksMin: 120,
+    stuckRecheckMin: 30,
     previewRecentHours: 48,
     mainPreviewIdleMin: 1, prPreviewIdleMin: 1, previewMaxLifeHours: 0,
     dailyLogDir: '',
@@ -302,6 +308,7 @@ export const useStore = create<State>((set, get) => ({
   requests: [],
   ceo: { queue: [], job: null, lastReviewAt: null, nextReviewAt: null, followups: { pending: [], startsAt: null, held: null } },
   messages: [],
+  chatOlder: false,
   chat: EMPTY_CHAT,
   files: [],
   chatOutbox: [],
@@ -310,6 +317,7 @@ export const useStore = create<State>((set, get) => ({
   decisions: [],
   usage: { state: 'normal', until: null, warning: null },
   health: null,
+  serverLoad: null,
   testLab: null,
   claudeUsage: [],
   claudeUsageCheck: null,
@@ -333,6 +341,7 @@ export const useStore = create<State>((set, get) => ({
   },
   cloud: EMPTY_CLOUD,
   accounts: { accounts: [] },
+  providers: { connections: [], mcp: [] },
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
   managerChanges: [],

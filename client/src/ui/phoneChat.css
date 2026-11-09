@@ -57,18 +57,35 @@
   touch-action: pan-y; /* a sideways swipe is the chat's: reply */
   -webkit-touch-callout: none;
 }
+/* The stack uses less width than the former 2/3-button row, preserving bubble width even at 390px.
+   Its zero height preserves short rows; the active tools paint above neighbouring bubbles and Latest. */
 .bubble-tools {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  height: 0;
   display: flex;
-  gap: 2px;
+  flex-direction: column;
+  gap: var(--ds-space-1);
   opacity: 0;
-  transition: opacity 0.12s;
+  pointer-events: none;
+  transition: opacity var(--ds-dur-fast);
+}
+/* a log shorter than the stack (placeTools): one row over the bubble, still one stack's width in the row */
+.bubble-tools.bubble-tools-row {
+  flex-direction: row;
+  width: var(--ds-target);
+}
+.bubble-tools-row .xbtn-label {
+  display: none; /* it would slide over the next button */
 }
 .bubble-row:hover .bubble-tools,
-.bubble-tools:focus-within {
+.bubble-row:focus-within .bubble-tools {
   opacity: 1;
+  pointer-events: auto;
 }
 @media (hover: none) {
-  /* touch: hold or swipe the bubble instead; the buttons still show for a keyboard */
+  /* Touch keeps hold/swipe; keyboard focus still reveals the same tools. */
   .bubble-tools:not(:focus-within) {
     position: absolute;
     width: 1px;
@@ -78,22 +95,14 @@
   }
 }
 .bubble-tool {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1.5px solid rgba(31, 29, 43, 0.25);
-  border-radius: 50%;
-  background: var(--ds-surface-raised);
-  color: var(--ink);
-  font-size: 0.8rem;
-  line-height: 1;
-  cursor: pointer;
+  flex: none;
+  height: var(--ds-target);
+  border-radius: var(--ds-radius-pill);
 }
-.bubble-tool:hover,
-.bubble-tool:focus-visible {
-  border-color: var(--ink);
-  outline: none;
-  background: #ffe9a8;
+/* Shared expanding labels point inward, over this bubble rather than the next message. */
+.bubble-row-me .bubble-tool .xbtn-label {
+  inset: 0 auto 0 0;
+  padding: 0 var(--ds-space-3) 0 calc(100% + var(--ds-space-1));
 }
 .bubble-swipe {
   position: absolute;
@@ -207,6 +216,8 @@
 .chat-menu {
   width: 100%;
   max-width: 340px;
+  max-height: 100%;
+  overflow-y: auto;
   padding: 10px 12px;
   border: 2px solid var(--ds-outline);
   border-radius: 14px;

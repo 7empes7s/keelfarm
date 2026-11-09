@@ -23,6 +23,7 @@ export type SectionId =
   | 'runtime'
   | 'office'
   | 'profile'
+  | 'providers'
   | 'accounts'
   | 'cloud-agents'
   | 'voice'
@@ -60,7 +61,7 @@ export const GROUPS: Group[] = [
 
 export const SECTIONS: Section[] = [
   { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices'] },
-  { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', only: 'office', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
+  { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
   { id: 'team', group: 'work', icon: 'laptop', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
   { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Test lab'] },
   { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
@@ -71,11 +72,12 @@ export const SECTIONS: Section[] = [
   { id: 'history', group: 'history', icon: 'scroll-text', label: 'Sessions', find: ['Session history', 'Transcripts', 'Daily log entries'] },
   { id: 'daily-log', group: 'history', icon: 'archive', label: 'Daily log', find: ['Daily log folder', 'Keep transcripts for', 'History storage'] },
   { id: 'timelapse', group: 'history', icon: 'film', label: 'Time-lapse', only: 'office', find: ['Replay the day', 'Since I was last here'] },
-  { id: 'agents', group: 'settings', icon: 'laptop', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'Most agents per floor'] },
+  { id: 'agents', group: 'settings', icon: 'laptop', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'When Claude warns that usage is high', 'Most agents per floor'] },
   { id: 'projects', group: 'settings', icon: 'hard-hat', label: 'Every project', find: ['Version control', "Every project's playbook"] },
   { id: 'runtime', group: 'settings', icon: 'keyboard', label: 'How agents run', find: ['Real terminals', 'Agent SDK', 'Chat mode'] },
   { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Previews', 'Stop a PR preview after no use', 'Max lifetime', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
+  { id: 'providers', group: 'settings', icon: 'plug', label: 'Providers', find: ['Add provider', 'MCP servers', 'What uses it', 'OpenAI API', 'Anthropic API', 'Gemini', 'OpenRouter', 'Hetzner', 'ElevenLabs', 'Upstash', 'Test'] },
   { id: 'accounts', group: 'settings', icon: 'key-round', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'API keys only as a last resort', 'Simulate a limit', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
   { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text', 'Speed', 'Favourite voices', 'Model'] },

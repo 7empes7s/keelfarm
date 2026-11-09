@@ -264,3 +264,20 @@
   white-space: nowrap;
   max-width: 100%;
 }
+/* nothing to look at yet (#294): a slim one-line handle */
+.app-body:has(> .prc-peek-slim) > .app-main {
+  padding-bottom: 48px;
+}
+.prc-peek-slim {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  padding-top: var(--ds-space-3);
+}
+.prc-peek-slim b {
+  flex: none;
+}
+.prc-peek-slim .prc-grip {
+  top: var(--ds-space-1);
+}
