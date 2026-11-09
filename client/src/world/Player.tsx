@@ -42,6 +42,7 @@ import { findPath, walkways } from './walkways';
 import { recordHitch } from '../hitches';
 import { newStuck, STUCK_MS, stuckStep } from '../hitchLog';
 import { joinPong, pongCamera, pongMouse, tickPaddle } from './toys/pongState';
+import { openSettings } from '../ui/HudSettings';
 
 /** How fast the right stick moves the ping-pong paddle, full over (in mouse pixels a second). */
 const PAD_PADDLE = 600;
@@ -365,6 +366,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
         if (action === 'drop' && !e.repeat && !placeSticky(s.focus, true) && !peelAimed(s.focus)) dropHeld();
         if (action === 'reload' && !e.repeat && !s.travel) reloadHeld();
         if (action === 'help') s.openOverlay({ kind: 'help' });
+        if (action === 'settings') openSettings();
         if (action === 'phone') {
           e.preventDefault(); // don't type the "p" into the phone's message box
           openPhone();
