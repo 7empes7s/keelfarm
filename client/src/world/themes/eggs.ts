@@ -65,8 +65,11 @@ export function hidingPlaces(kind: FloorKind): Pt[] {
   const rects = solids(kind);
   const canReach = reachable(kind);
   const out: Pt[] = [];
-  for (let x = -HALF_W + 0.35; x < HALF_W - 0.3; x += 0.5) {
-    for (let z = -HALF_D + 0.35; z < HALF_D - 0.3; z += 0.5) {
+  for (let gx = -HALF_W + 0.35; gx < HALF_W - 0.3; gx += 0.5) {
+    for (let gz = -HALF_D + 0.35; gz < HALF_D - 0.3; gz += 0.5) {
+      // checked where it's kept: the grid's float drift could put the rounded point a hair inside something
+      const x = Math.round(gx * 100) / 100;
+      const z = Math.round(gz * 100) / 100;
       if (!clear(rects, x, z, EGG_R)) continue; // inside or touching something
       if (clear(rects, x, z, WALK_R + 0.1)) continue; // out in the open: not hidden
       if (Math.abs(x) < 2.5 && z > HALF_D - 3) continue; // not right by the elevator
@@ -82,7 +85,7 @@ export function hidingPlaces(kind: FloorKind): Pt[] {
           }
         }
       }
-      if (ok) out.push({ x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 });
+      if (ok) out.push({ x, z });
     }
   }
   cache.set(kind, out);

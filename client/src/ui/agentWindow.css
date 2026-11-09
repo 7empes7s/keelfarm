@@ -67,6 +67,24 @@
   min-width: 0;
   padding-left: 4px; /* room for the ring */
 }
+/* The avatar as a button (#321): a tap hears their line. A 44px target around the ring, drawn as before. */
+.aw-hear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  margin: -6px; /* the target reaches past the ring without widening the header */
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.aw-hear:focus-visible {
+  outline: 2px solid var(--ds-focus);
+}
 .aw-who {
   flex: 1 1 auto;
   display: flex;

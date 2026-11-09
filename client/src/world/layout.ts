@@ -25,7 +25,7 @@ export interface Rect {
 export const rect = (cx: number, cz: number, w: number, d: number, h?: number): Rect => ({ minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, h });
 
 // How tall the furniture is, so toys can bounce off it (and land on it).
-const SOLID_H = { desk: 0.78, seated: 1.3, board: 3.45, couch: 0.95, coffeeTable: 0.5, kitchen: 2, cooler: 1.5, bookshelf: 2.2, cabinet: 2.1, reception: 1.13, glass: 2.8, coffeeCorner: 1.55 };
+const SOLID_H = { desk: 0.78, seated: 1.3, board: 3.45, couch: 0.95, coffeeTable: 0.5, kitchen: 2, cooler: 1.5, cabinet: 2.1, reception: 1.13, glass: 2.8, coffeeCorner: 1.55 };
 
 // ---------- outside: windows, side doors and balconies ----------
 
@@ -317,6 +317,8 @@ export const MANAGER_DESK = { x: -11.2, z: -8.6, w: 2.6, d: 1.1 };
  * (`facing` -1 is towards -z) and the keyboard and mug are on its side; the screen's back shows the stats to visitors.
  */
 export const MANAGER_WORKSTATION = { chairZ: -1.1, screenZ: 0.15, facing: -1, keyboardZ: -0.25, mugZ: -0.15 };
+/** The manager office's "Waiting on you" screen (#326), flat on the west wall facing east, in view of the desk and the door. */
+export const MANAGER_SCREEN = { at: [-HALF_W + 0.03, 1.75, -8] as [number, number, number], w: 2.6, h: 1.5 };
 export const RECEPTION = { x: 3, z: -3.5, w: 5, d: 1.2 };
 // The CEO's corner office mirrors the manager's across the lobby; the trophy cabinet ends up behind their desk.
 export const CEO_ROOM = { minX: 6.5, maxX: HALF_W, minZ: -HALF_D, maxZ: -3.5, doorMinX: 8.2, doorMaxX: 10 };
@@ -402,7 +404,6 @@ export function lobbyFurnitureColliders(): Rect[] {
   out.push(rect(WAITING_TABLE.x, WAITING_TABLE.z, WAITING_TABLE.w, WAITING_TABLE.d, SOLID_H.coffeeTable));
   out.push(rect(MANAGER_DESK.x, MANAGER_DESK.z, MANAGER_DESK.w, MANAGER_DESK.d, SOLID_H.desk));
   out.push(rect(MANAGER_DESK.x, MANAGER_DESK.z + MANAGER_WORKSTATION.chairZ, 0.8, 0.8, SOLID_H.seated)); // manager chair
-  out.push(rect(-HALF_W + 0.4, -8, 0.8, 5, SOLID_H.bookshelf)); // bookshelf
   out.push(blasterRack(BLASTER_RACK.lobbyX));
   out.push(jukeboxRect(JUKEBOX.lobbyX));
   out.push(rect(RECEPTION.x, RECEPTION.z, RECEPTION.w, RECEPTION.d, SOLID_H.reception));
