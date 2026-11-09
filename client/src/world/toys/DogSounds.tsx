@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { createStepTracker } from '../../ui/footstepRules';
-import { listenerAt, noise, tone, type Vec3 } from '../../ui/sfx';
+import { audio, listenerAt, noise, sample, tone, type Vec3 } from '../../ui/sfx';
 import { surfaceAt } from '../layout';
 import type { ToyFloor } from './balls';
 import { DOG_EVENT, type Dog } from './dogBrain';
 import { GALLOP } from './dogRig';
-import { clawLevel, mayVoice, pantDue, pawDown, tapDue } from './dogSound';
+import { CLIP_PEAK, clawLevel, clipRate, clipUrl, createClipBank, mayVoice, pantDue, pawDown, tapDue, voiceOf, type DogVoice } from './dogSound';
 
-// The dog's sounds, synthesized and from where it is, in the toys group and quiet: a soft woof (a pet, a ball back at
-// your feet), one bark at the passing roomba, a delighted yip, little sniffs, panting while it runs and for a while
-// after, and claws tapping on hard floors (dogSound.ts decides when).
+// The dog's sounds, from where it is, in the toys group and quiet: a soft woof (a pet, a ball back at your feet), one
+// bark at the passing roomba, a delighted yip (recorded clips, synthesized while they can't load), little sniffs,
+// panting while it runs and for a while after, and claws tapping on hard floors (dogSound.ts decides when).
 
 const o = (name: string, pos: Vec3) => ({ name: `dog:${name}`, group: 'toys', pos }) as const;
 
@@ -47,9 +47,23 @@ function claw(pos: Vec3, level: number) {
   noise({ ...o('claw', pos), dur: 0.018, peak: 0.006 * level * (0.85 + Math.random() * 0.3), filter: 'bandpass', freq: 3600 * (0.9 + Math.random() * 0.2), q: 2.2, attack: 0.001 });
 }
 
+const SYNTH: Record<DogVoice, (pos: Vec3) => void> = { woof, bark, yip };
+
+let canOgg: boolean | undefined;
+/** Fetches and decodes one clip; only asked for once audio is running (a user gesture unlocked it). */
+async function loadClip(name: string): Promise<AudioBuffer> {
+  const a = audio();
+  if (!a) throw new Error('audio is off');
+  canOgg ??= typeof Audio !== 'undefined' && new Audio().canPlayType('audio/ogg; codecs=vorbis') !== '';
+  const res = await fetch(clipUrl(name, canOgg, import.meta.env.BASE_URL));
+  if (!res.ok) throw new Error(`${name}: ${res.status}`);
+  return a.ctx.decodeAudioData(await res.arrayBuffer());
+}
+const clips = createClipBank(loadClip);
+
 /** `pending` collects the brain's events from each physics step (Dog.tsx); `gait.phase` is the walk cycle DogLook keeps. */
 export function DogSounds({ brain, pending, gait, floor }: { brain: Dog; pending: { bits: number }; gait: { phase: number }; floor: ToyFloor }) {
-  const t = useMemo(() => ({ voice: -Infinity, pant: -Infinity, tap: -Infinity, breath: 0, steps: createStepTracker(), pos: { x: 0, y: 0, z: 0 } }), []);
+  const t = useMemo(() => ({ voice: -Infinity, want: null as DogVoice | null, asked: 0, pant: -Infinity, tap: -Infinity, breath: 0, steps: createStepTracker(), pos: { x: 0, y: 0, z: 0 } }), []);
   useFrame(() => {
     const now = performance.now() / 1000;
     const pos = t.pos;
@@ -58,11 +72,18 @@ export function DogSounds({ brain, pending, gait, floor }: { brain: Dog; pending
     pos.z = brain.z;
     const ev = pending.bits;
     pending.bits = 0;
-    if (ev & (DOG_EVENT.woof | DOG_EVENT.bark | DOG_EVENT.yip) && mayVoice(t.voice, now)) {
+    const kind = voiceOf(ev, DOG_EVENT);
+    if (kind && mayVoice(t.voice, now)) {
       t.voice = now;
-      if (ev & DOG_EVENT.bark) bark(pos);
-      else if (ev & DOG_EVENT.yip) yip(pos);
-      else woof(pos);
+      t.want = kind;
+      t.asked = now;
+    }
+    if (t.want) {
+      // Without audio nothing plays: the synthesized one still shows in __swarmSfx.
+      const clip = audio() ? clips.voice(t.want, t.asked, now, Math.random()) : 'synth';
+      if (clip === 'synth') SYNTH[t.want](pos);
+      else if (clip !== 'wait') sample({ ...o(`${t.want}:clip`, pos), buffer: clip, peak: CLIP_PEAK[t.want], rate: clipRate(Math.random()) });
+      if (clip !== 'wait') t.want = null;
     }
     if (ev & DOG_EVENT.sniff) sniff(pos);
     const ear = listenerAt();
