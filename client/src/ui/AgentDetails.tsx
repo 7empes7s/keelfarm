@@ -47,12 +47,14 @@ export function AgentDetails(p: Props) {
   const { agent } = p;
   return (
     <div className="aw-details">
-      <div className="aw-tabs" role="tablist" aria-label={`${agent.name}'s details`}>
-        {TABS.map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={p.tab === id} className={`aw-tab ${p.tab === id ? 'aw-tab-on' : ''}`} onClick={() => p.onTab(id)}>
-            {label}
-          </button>
-        ))}
+      <div className="aw-tabs">
+        <div className="aw-seg" role="tablist" aria-label={`${agent.name}'s details`}>
+          {TABS.map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={p.tab === id} onClick={() => p.onTab(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
         <span className="spacer" />
         <CloseButton className="aw-details-x" label="Close the details" onClick={p.onClose} />
       </div>
