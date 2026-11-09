@@ -13,6 +13,7 @@ import type { OpsHistory } from '../metrics.ts';
 import { cliLabel } from '../clis.ts';
 import type { LedgerState } from '../ledger.ts';
 import type { LabState } from '../experiments.ts';
+import type { Waiver } from '../pacing.ts';
 import type { ChangesState } from '../../shared/managerChanges.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
@@ -211,6 +212,7 @@ export interface Persisted {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
+  usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
   decisions: DecisionsState; // questions waiting on the manager (#114, shared/decisions.ts)

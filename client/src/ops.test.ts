@@ -48,6 +48,12 @@ describe('usage', () => {
     expect(usageMeter({ state: 'normal', until: null, warning: { ...warning, resetsAt: NOW - MIN } }, NOW).resets).toBeNull();
     expect(usageMeter({ state: 'paused', until: NOW + 5 * MIN, warning: null }, NOW)).toMatchObject({ state: 'Paused', tone: 'bad', resets: '12:05' });
   });
+
+  it('says when a warning runs at full speed by the manager\'s choice (#323)', () => {
+    const full: UsageView = { state: 'normal', until: null, warning, byChoice: true };
+    expect(usageChip(full, 3, NOW)).toBe('Usage high: full speed by your choice');
+    expect(usageMeter(full, NOW)).toMatchObject({ state: 'Full speed', tone: 'warn', limit: 'weekly limit · 91%' });
+  });
 });
 
 describe('newAlarms', () => {

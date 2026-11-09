@@ -1,7 +1,7 @@
 // How Claude's usage reads, on the server (phone messages, the CEO's company status) and in the office (the usage
 // meter, the HUD's pacing chip): clock times and the names of Claude's limits.
 
-import type { UsageCheckError, UsageReading } from './types.ts';
+import type { UsageCheckError, UsageReading, UsageWarningChoice } from './types.ts';
 
 /** "14:30", with the weekday when it isn't today. */
 export function clock(at: number, now: number): string {
@@ -131,4 +131,27 @@ export function readingsLabel(readings: readonly UsageReading[], now: number, ch
   const nums = readings.map((r) => `${SHORT_NAMES[r.type] ?? r.type.replace(/_/g, ' ')} ${r.pct}%`).join(' · ');
   const note = readingsNote(readings, now, check);
   return note ? `${nums} (${note})` : nums;
+}
+
+// ---------- when Claude warns that usage is high (#323) ----------
+
+/** Settings → Agents' choices, in the order shown. */
+export const USAGE_WARNING_CHOICES: { value: UsageWarningChoice; label: string }[] = [
+  { value: 'pace', label: 'Pace new work' },
+  { value: 'full', label: 'Keep full speed until the limit' },
+  { value: 'ask', label: 'Ask me each time' },
+];
+
+/** The saved choice, or 'pace' (the default) for anything else. */
+export const usageChoice = (v: unknown): UsageWarningChoice => (v === 'full' || v === 'ask' ? v : 'pace');
+
+/**
+ * Pacing the manager waived with Resume full speed, saved before a restart (server/pacing.ts's Waiver), if it still
+ * holds: its window isn't over and the choice isn't "Ask me each time", which asks again after a restart.
+ */
+export function keptWaiver(raw: unknown, choice: unknown, now: number): { until: number; limit: string | null } | null {
+  if (usageChoice(choice) === 'ask' || !raw || typeof raw !== 'object') return null;
+  const { until, limit } = raw as { until?: unknown; limit?: unknown };
+  if (typeof until !== 'number' || !(now < until)) return null;
+  return { until, limit: typeof limit === 'string' ? limit : null };
 }
