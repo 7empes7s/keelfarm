@@ -334,6 +334,13 @@ export const coffeeCorner = (): Rect => rect(COFFEE_CORNER.x, HALF_D - COFFEE_CO
 export const KIOSK = { x: -4.8, z: -2.2, w: 0.9, d: 0.7, h: 1.75 };
 export const TROPHY_SHELF = { x: -6, z: HALF_D - 0.25, w: 2.2, d: 0.5, h: 2.1 };
 
+/** Wall screens share their rendered positions and sizes with the lobby visibility guard. */
+export const LOBBY_SCREENS = {
+  timelapse: { at: [12.6, 1.75, HALF_D - 0.03], w: 2.2, h: 1.25 },
+  testlab: { at: [-3.4, 1.75, HALF_D - 0.03], w: 1.9, h: 1.08 },
+  directory: { at: [4.4, 1.75, HALF_D - 0.03], w: 2.6, h: 1.9 },
+} satisfies Record<string, { at: [number, number, number]; w: number; h: number }>;
+
 /**
  * Mission control: a curved bank of screens on the lobby's north wall between the two glass offices, behind reception
  * and over the roomba's dock. Three columns, a top and a bottom screen each (y: their middles), stand on an arc of
@@ -368,7 +375,12 @@ export function missionRects(): Rect[] {
 }
 
 export function lobbyColliders(): Rect[] {
-  const out = [...shellColliders('lobby'), ...outsideColliders('lobby')];
+  return [...shellColliders('lobby'), ...outsideColliders('lobby'), ...lobbyFurnitureColliders()];
+}
+
+/** Interior solids, without the shell the wall screens hang on. */
+export function lobbyFurnitureColliders(): Rect[] {
+  const out: Rect[] = [];
   const m = MANAGER_ROOM;
   const t = 0.12;
   out.push({ minX: m.maxX - t, maxX: m.maxX + t, minZ: m.minZ, maxZ: m.maxZ, h: SOLID_H.glass }); // glass east wall

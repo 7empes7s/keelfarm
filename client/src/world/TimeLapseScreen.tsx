@@ -3,15 +3,13 @@ import { useStore } from '../store';
 import { useKeyName } from '../ui/controls';
 import { roundRect, SANS } from './draw';
 import { useCanvasTexture, useInteractable } from './interact';
-import { HALF_D } from './layout';
+import { LOBBY_SCREENS } from './layout';
 import { Box } from './Toon';
 
-// The lobby's time-lapse screen, on the south wall between the basketball hoop and the elevator: E opens the
+// The lobby's time-lapse screen, on the south wall east of the coffee corner, facing the waiting area: E opens the
 // manager's console on its Time-lapse tab, to replay a day or catch up on what happened while you were away.
 
-const AT: [number, number, number] = [-5.8, 1.75, HALF_D - 0.03];
-const W = 2.2;
-const H = 1.25;
+const { at: AT, w: W, h: H } = LOBBY_SCREENS.timelapse;
 const PX: [number, number] = [704, 400];
 
 function drawScreen(ctx: CanvasRenderingContext2D, replaying: boolean, use: string) {
