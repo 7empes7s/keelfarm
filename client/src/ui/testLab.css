@@ -1,17 +1,115 @@
-/* The test lab card's recent results (#56), on the console's Floors tab. */
-.ds-console .lab-results {
-  list-style: none;
-  margin: var(--ds-space-2) 0;
-  padding: 0;
+/* The test lab card (#56, #313): queue and result rows alike, one line each for the title and its summary (tap to
+   read it all), a fixed thumbnail slot, and the agent and PR as small links. */
+.lab-card {
+  container-type: inline-size;
 }
-.ds-console .lab-results li {
+.lab-rows {
+  display: grid;
   gap: var(--ds-space-2);
-  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.ds-console .lab-thumb {
+.lab-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-areas: 'slot text links';
+  align-items: center;
+  column-gap: var(--ds-space-2);
+  min-width: 0;
+}
+.lab-slot {
+  grid-area: slot;
+  display: grid;
+  place-items: center;
   width: 64px;
   height: 40px;
-  object-fit: cover;
   border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+  overflow: hidden;
+}
+.lab-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lab-text {
+  grid-area: text;
+  display: grid;
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.lab-line {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.lab-clip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lab-line .lab-clip {
+  flex: 1;
+}
+.lab-row-open .lab-clip {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.lab-time {
   flex: none;
+  font-size: var(--ds-text-xs);
+}
+.lab-links {
+  grid-area: links;
+  display: flex;
+  min-width: 0;
+}
+.lab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target);
+  max-width: 10rem;
+  padding: 0 var(--ds-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ds-link);
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  cursor: pointer;
+}
+.lab-chip:hover,
+.lab-text:hover .lab-clip {
+  text-decoration: underline;
+}
+/* Narrow cards: the agent and PR go under the text, the same on every row. */
+@container (max-width: 460px) {
+  .lab-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-areas: 'slot text' 'slot links';
+    align-items: start;
+  }
+  .lab-slot {
+    margin-top: 2px;
+  }
+  .lab-links {
+    margin-left: calc(-1 * var(--ds-space-2));
+  }
 }

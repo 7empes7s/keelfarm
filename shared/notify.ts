@@ -11,6 +11,7 @@ export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
   { id: 'agentError', label: 'Someone is stuck in an error for over 10 minutes' },
   { id: 'usage', label: "Claude's usage limit pauses or paces the office" },
   { id: 'memory', label: 'Work has waited long for memory (hourly at most), or lost its session to it' },
+  { id: 'disk', label: 'The disk is getting full (once, until it has room again)' },
   { id: 'merge', label: 'Every merge' },
   { id: 'decisions', label: 'A daily digest of decisions waiting on me' },
 ];
@@ -20,7 +21,7 @@ export const NOTIFY_CHANNELS: NotifyChannel[] = ['desktop', 'push', ...NOTIFY_WE
 
 /** Merges are optional: on a busy office they're the noisiest event. The decisions digest is opt-in (#114). */
 export const DEFAULT_NOTIFY: NotifySettings = {
-  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, merge: false, decisions: false },
+  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, disk: true, merge: false, decisions: false },
   channels: { desktop: true, push: true, ntfy: true, telegram: true },
   officeUrl: '',
   telegramMirror: false,

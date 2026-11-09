@@ -40,10 +40,11 @@ const PLURAL: Record<NotifyEvent, string> = {
   agentError: 'agents need help',
   usage: 'usage changes',
   memory: 'memory alerts',
+  disk: 'disk warnings',
   merge: 'merges',
   decisions: 'decision digests',
 };
-const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', merge: '🔀', decisions: '🧭', test: '🔔' };
+const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', disk: '💽', merge: '🔀', decisions: '🧭', test: '🔔' };
 
 export const clip = (s: string, max = BODY_MAX) => {
   const t = cleanTerminalText(s, Infinity).replace(/\s+/g, ' ');
