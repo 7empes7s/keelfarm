@@ -4,7 +4,8 @@ import { achievementDef, type AchievementView } from '../../../shared/progress';
 import type { RepoView } from '../../../shared/types';
 
 export interface TrophyStory {
-  icon: string;
+  /** The trophy's emoji; null on a locked one, which shows the lock icon. */
+  icon: string | null;
   name: string;
   /** What it was for; on a locked one, what it takes. */
   blurb: string;
@@ -20,7 +21,7 @@ export function trophyStory(id: string, achievements: AchievementView[], repos: 
   const def = achievementDef(id);
   if (!def) return null;
   const got = achievements.find((a) => a.id === id);
-  if (!got) return { icon: '🔒', name: 'A locked trophy', blurb: def.blurb, locked: true, when: null, detail: null, pr: null, floor: null };
+  if (!got) return { icon: null, name: 'A locked trophy', blurb: def.blurb, locked: true, when: null, detail: null, pr: null, floor: null };
   const detail = got.detail || null;
   // the longest name the detail mentions, so "o/app" never wins over "o/app-2"
   const repo = detail ? repos.filter((r) => detail.includes(r.fullName)).sort((a, b) => b.fullName.length - a.fullName.length)[0] : undefined;

@@ -1,6 +1,7 @@
 // A trophy up close (#311): E on one on the lobby shelf opens this card with its whole story, the PR it names as a
 // link. One at a time: looking at another trophy replaces it.
 import { useStore } from '../store';
+import { Icon } from './Icon';
 import { Panel } from './Panel';
 import { trophyStory } from './trophyStory';
 import './trophyCard.css';
@@ -14,7 +15,7 @@ export function TrophyCard({ id }: { id: string }) {
     <Panel
       title={
         <span>
-          {t.icon} {t.name}
+          {t.icon ?? <Icon name="lock" />} {t.name}
         </span>
       }
       className="trophy-card"
