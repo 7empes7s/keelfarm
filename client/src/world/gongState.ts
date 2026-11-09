@@ -1,4 +1,5 @@
-import { bell, gong as boom } from '../ui/sfx';
+import { bell } from '../ui/bellSfx';
+import { gong as boom } from '../ui/sfx';
 import { celebrating, createGong, strike, type Strike } from './gongRules';
 
 // The merge gong's live state, shared by store.ts (a merge on this floor), Gong.tsx (pressing E; drawing the swing),
