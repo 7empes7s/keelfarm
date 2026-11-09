@@ -1,3 +1,4 @@
+import { bell } from '../ui/bellSfx';
 import { gong as boom } from '../ui/sfx';
 import { celebrating, createGong, strike, type Strike } from './gongRules';
 
@@ -13,9 +14,13 @@ export function setGongVolume(level: number) {
   volume = level;
 }
 
-/** Gong.tsx says which floor's gong is on screen (null when it goes). */
-export function setGongHere(repoId: string | null) {
+/** The trading floor rings a bell instead (#370). */
+let ring: 'gong' | 'bell' = 'gong';
+
+/** Gong.tsx says which floor's gong is on screen (null when it goes) and whether it's a bell. */
+export function setGongHere(repoId: string | null, look: 'gong' | 'bell' = 'gong') {
   gongState.here = repoId;
+  ring = look;
 }
 
 const partyListeners = new Set<(repoId: string) => void>();
@@ -33,7 +38,7 @@ export function onGongParty(fn: (repoId: string) => void) {
  */
 export function hitGong(opts: { repoId?: string | null; celebrate?: boolean } = {}): Strike {
   const result = strike(gongState, performance.now(), opts);
-  if (result === 'boom') boom(volume);
+  if (result === 'boom') (ring === 'bell' ? bell : boom)(volume);
   if (result !== 'absent' && opts.celebrate && gongState.celebrateRepo) for (const fn of partyListeners) fn(gongState.celebrateRepo);
   return result;
 }

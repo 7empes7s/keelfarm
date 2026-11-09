@@ -21,6 +21,8 @@ import { shade } from './materials';
 import { MergeConfetti } from './MergeConfetti';
 import { Beacon, useFloorAlarm } from './MissionControl';
 import { CoinBurst } from './decor/CoinBurst';
+import { FloorThemeLayer } from './floorThemes/FloorThemeLayer';
+import { themePack } from './floorThemes/packs';
 import { Decorations } from './decor/Decorations';
 import { DeskStory, MvpSign } from './desk/DeskStory';
 import { CoffeeTable, Couch, Kitchenette, Plant, Rug, WallClock, WaterCooler } from './Props';
@@ -71,13 +73,16 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
   const ops = useStore((s) => signLine(s.ops.floors.find((f) => f.repoId === repo.id) ?? EMPTY_NUMBERS));
   const { alarm, ref: signRef } = useFloorAlarm(repo.id);
   const name = repo.fullName.split('/')[1] ?? repo.fullName;
-  const rugColor = shade(repo.color, 0.24);
+  // a floor theme (#370) re-dresses the room; the plain office has no pack and looks as it always has
+  const pack = themePack(repo.theme);
+  const rugColor = pack?.shell.rug ?? shade(repo.color, 0.24);
   // whose lunch the tupperware in the fridge might be
   const lunchNames = agents.filter((a) => a.role !== 'ceo').map((a) => a.name).join('\n');
 
   return (
     <group>
-      <Shell kind="office" accent={repo.color} floorColor="#d9b48a" />
+      <Shell kind="office" accent={repo.color} floorColor={pack?.shell.floor ?? '#d9b48a'} wallColor={pack?.shell.wall} />
+      <FloorThemeLayer pack={pack} repo={repo} agents={agents} />
       {DESK_RUGS.map((r) => (
         <Rug key={r.minZ} position={[(r.minX + r.maxX) / 2, 0.004, (r.minZ + r.maxZ) / 2]} size={[r.maxX - r.minX, r.maxZ - r.minZ]} color={rugColor} />
       ))}
@@ -106,7 +111,7 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
       <DeskStory agents={agents} />
       <MvpSign agents={agents} />
       <Decorations repo={repo} />
-      <Gong repoId={repo.id} />
+      <Gong repoId={repo.id} bell={pack?.merge === 'bell'} />
       <PongTable repoId={repo.id} />
       <Elevator floorLabel={`▲ ${repo.floor} · ${name}`} accent={repo.color} />
       <Toys floor="office" />
@@ -173,20 +178,22 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
       <WaterCooler position={[HALF_W - 0.5, 0, -9.5]} />
       <Jukebox x={JUKEBOX.officeX} floor={repo.floor} />
       <WallClock position={[-10, 2.75, -HALF_D + 0.05]} />
-      <WallSign
-        position={[10, 2.2, -HALF_D + 0.03]}
-        rotationY={0}
-        size={[2.2, 1.4]}
-        px={[512, 326]}
-        draw={(ctx) =>
-          drawSign(ctx, 512, 326, [
-            { text: '🚀', size: 90 },
-            { text: 'SHIP IT', size: 64 },
-            { text: 'small PRs, happy reviewers', size: 26, weight: 500 },
-          ], '#3a86ff')
-        }
-        deps={[]}
-      />
+      {!pack && (
+        <WallSign
+          position={[10, 2.2, -HALF_D + 0.03]}
+          rotationY={0}
+          size={[2.2, 1.4]}
+          px={[512, 326]}
+          draw={(ctx) =>
+            drawSign(ctx, 512, 326, [
+              { text: '🚀', size: 90 },
+              { text: 'SHIP IT', size: 64 },
+              { text: 'small PRs, happy reviewers', size: 26, weight: 500 },
+            ], '#3a86ff')
+          }
+          deps={[]}
+        />
+      )}
     </group>
   );
 });

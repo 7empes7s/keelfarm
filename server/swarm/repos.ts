@@ -8,6 +8,7 @@ import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
 import { floorOverrides } from '../../shared/practices.ts';
+import { cleanFloorTheme } from '../../shared/floorThemes.ts';
 import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveStatus, MISSION_MAX, newRecord, noteObjectives, withChange, withNote, type Charter } from '../../shared/charter.ts';
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
@@ -155,9 +156,16 @@ export abstract class SwarmRepos extends SwarmCore {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown; theme?: unknown },
   ) {
     const repo = this.repo(id);
+    if (patch.theme !== undefined) {
+      try {
+        repo.theme = cleanFloorTheme(patch.theme);
+      } catch (err) {
+        throw new HttpError(400, (err as Error).message);
+      }
+    }
     if (patch.trustedAuthors !== undefined) {
       try {
         repo.trustedAuthors = cleanTrustedAuthors(patch.trustedAuthors);

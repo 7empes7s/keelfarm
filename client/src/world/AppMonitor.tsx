@@ -21,7 +21,7 @@ const LIVE_GLOW = mix('#7CFFB2', '#fbf3e4', 0.35);
 const LED: Record<string, string> = { running: '#7CFFB2', error: '#ff6b6b', preparing: '#ffd166', installing: '#ffd166', starting: '#ffd166' };
 
 /** The latest agent screenshot on this floor, as "agentId|timestamp", so the selector result stays a stable string. */
-function useLatestShot(agents: Agent[]) {
+export function useLatestShot(agents: Agent[]) {
   return useStore((s) => {
     let best: Agent | null = null;
     let at = 0;
