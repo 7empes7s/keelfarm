@@ -62,7 +62,7 @@ export function speakMessage(message: PhoneMessage, arrived: number, wait: numbe
 let queue: Queued[] = [];
 let stopCurrent: (() => void) | null = null;
 let busy = false;
-let pendingLine: { line: VoiceLine; arrived: number } | null = null;
+let pendingLine: { line: VoiceLine; arrived: number; clip?: Promise<Response> } | null = null;
 let activeLine: VoiceLine | null = null;
 let replayNext: { message: PhoneMessage; kind: Replay } | null = null;
 let replaying = false;
@@ -113,16 +113,15 @@ async function pump() {
   try {
     for (;;) {
       if (pendingLine) {
-        const { line, arrived } = pendingLine;
+        const { line, arrived, clip } = pendingLine;
         pendingLine = null;
         const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
         const v = callVoice(settings.voice);
         const quiet = { micOpen: lineMicOpen(callOn(), useMic.getState().state, useCall.getState().managerSpeaking), speaking: voiceSpeaking !== null };
-        const maxAge = line.kind === 'ack' ? ACK_MAX_AGE_MS : LINE_MAX_AGE_MS;
-        if (Date.now() - arrived <= maxAge && v.provider !== 'off' && (v.provider !== 'elevenlabs' || voiceKeySet) && sayNow(line, talkMode(v.talk, callOn()), quiet)) {
+        if (Date.now() - arrived <= maxAge(line) && v.provider !== 'off' && (v.provider !== 'elevenlabs' || voiceKeySet) && sayNow(line, talkMode(v.talk, callOn()), quiet)) {
           activeLine = line;
           try {
-            await sayLine(line, v.provider, v.voiceName, v.speed);
+            await sayLine(line, v.provider, v.voiceName, v.speed, clip);
           } finally {
             activeLine = null;
           }
@@ -418,6 +417,7 @@ async function speakSentences(id: number, text: string, voiceName: string, rate:
 const LINE_MAX_AGE_MS = 5000;
 /** Keep an ack briefly behind existing speech, ahead of the next reply. */
 const ACK_MAX_AGE_MS = 20_000;
+const maxAge = (line: VoiceLine) => (line.kind === 'ack' ? ACK_MAX_AGE_MS : LINE_MAX_AGE_MS);
 
 /** The acks and progress lines said in this tab, for QA and e2e (window.__swarmVoiceLines): what went to the voice. */
 export interface SaidLine {
@@ -444,13 +444,13 @@ const stopActiveLine = () => lineStop?.();
 export function speakLine(line: VoiceLine, arrived: number, wait: number) {
   setTimeout(
     () => {
-      if (!wonVoice(-line.id) || Date.now() - arrived > LINE_MAX_AGE_MS) return;
+      if (!wonVoice(-line.id) || Date.now() - arrived > maxAge(line)) return;
       const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
       const v = callVoice(settings.voice);
       const mic = useMic.getState().state;
       const quiet = { micOpen: lineMicOpen(callOn(), mic, useCall.getState().managerSpeaking), speaking: line.kind === 'progress' && (busy || voiceSpeaking !== null || lineStop !== null) };
       if (v.provider === 'off' || (v.provider === 'elevenlabs' && !voiceKeySet) || !sayNow(line, talkMode(v.talk, callOn()), quiet)) return;
-      pendingLine = { line, arrived };
+      pendingLine = { line, arrived, ...(v.provider === 'elevenlabs' ? { clip: lineFetch(line.id) } : {}) }; // downloads while it waits
       if (line.kind === 'ack' && activeLine?.kind === 'progress') stopActiveLine();
       void pump();
     },
@@ -458,7 +458,7 @@ export function speakLine(line: VoiceLine, arrived: number, wait: number) {
   );
 }
 
-async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>, voiceName: string, speed: number) {
+async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>, voiceName: string, speed: number, clip?: Promise<Response>) {
   let started = false;
   let stopped = false;
   let cut: () => void = () => undefined;
@@ -483,7 +483,7 @@ async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>,
   try {
     const playing = provider === 'browser'
       ? speak(line.text, voiceName, speed, began, () => undefined, stopper, () => stopped)
-      : lineClip(line.id, began, stopper);
+      : lineClip(clip ?? lineFetch(line.id), began, stopper);
     await Promise.race([playing, cancelled]);
   } catch (err) {
     console.warn(`[voice] couldn't say a line: ${(err as Error).message}`);
@@ -493,11 +493,18 @@ async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>,
   }
 }
 
-/** The line's ElevenLabs clip (GET /api/voice/lines/:id), through the 'voice' group. */
-async function lineClip(id: number, began: () => void, stopper: (stop: () => void) => void) {
+/** The line's ElevenLabs clip (GET /api/voice/lines/:id), started when the line is queued; a failure is reported when it's played. */
+function lineFetch(id: number) {
+  const res = fetch(`/api/voice/lines/${id}`);
+  res.catch(() => undefined);
+  return res;
+}
+
+/** Plays a line's clip through the 'voice' group. */
+async function lineClip(clip: Promise<Response>, began: () => void, stopper: (stop: () => void) => void) {
   let stopped = false;
   stopper(() => void (stopped = true));
-  const res = await fetch(`/api/voice/lines/${id}`);
+  const res = await clip;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.arrayBuffer();
   const a = audio();

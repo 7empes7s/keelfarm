@@ -169,3 +169,23 @@ it('says an ack waiting behind a slow progress line before the reply that cuts i
   await vi.advanceTimersByTimeAsync(8000);
   expect(starts).toEqual(['Heard you, one moment.', 'Here is what I found.']);
 });
+
+it('says an ack whose claim wait ran late, as long as the player keeps it', async () => {
+  player.speakLine(line(), Date.now() - 6000, 0); // a busy tab: the lazy player and its timer ran seconds after it arrived
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(starts).toEqual(['Heard you, one moment.']);
+});
+
+it("downloads a waiting ack's clip while the reply ahead of it is still being read", async () => {
+  durationMs = 3000;
+  const fetch = vi.fn(() => new Promise<Response>(() => undefined));
+  vi.stubGlobal('fetch', fetch);
+  player.speakMessage(message(1, 'I am checking the tests.'), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(500);
+  mocks.state.settings.voice.provider = 'elevenlabs';
+  player.speakLine(line(), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(fetch).toHaveBeenCalledWith('/api/voice/lines/100');
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(fetch).toHaveBeenCalledTimes(1); // its turn uses the same download
+});

@@ -1,7 +1,7 @@
 import { type Page } from '@playwright/test';
 import { CEO_ID } from '../shared/types';
 import { ACKS } from '../shared/voiceTalk';
-import { enterOffice, expect, test } from './helpers';
+import { expect, test } from './helpers';
 
 // The CEO talking while it works (#286, docs/voice.md "While the CEO works"), with the demo's fake ElevenLabs: a message
 // sent mid-job is acked out loud at once and answered before the job ends, and progress lines follow the setting.
@@ -45,7 +45,10 @@ async function busyCeo(page: Page) {
 
 test('a message mid-job is acked out loud and answered before the job ends; progress follows the setting', async ({ page }) => {
   test.setTimeout(240_000); // three of the demo CEO's rounds, each waiting for quiet first
-  await enterOffice(page);
+  // Pocket mode: no software-WebGL frames holding up the player's timers for seconds; a key press unlocks audio.
+  await page.goto('/?pocket=1&tab=chat');
+  await expect(page.locator('.pk-tabs')).toBeVisible();
+  await page.keyboard.press('Shift');
   await busyCeo(page);
   // Reproduce the race: the demo replies after 1.5 s, before this first clip becomes playable.
   let firstClip = true;
@@ -58,8 +61,8 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   });
   const before = (await state(page)).messages.filter((m) => m.from === 'ceo').length;
   await textCeo(page, 'Also check the footer');
-  // As long as the player keeps an ack (ACK_MAX_AGE_MS): the 2 s delay above, plus the server's one-at-a-time synthesis.
-  await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'ack').length, { timeout: 20_000 }).toBe(1);
+  // The player keeps an ack until its turn for ACK_MAX_AGE_MS (20 s), then it plays once its clip, fetched meanwhile, decodes.
+  await expect.poll(async () => (await lines(page)).filter((l) => l.kind === 'ack').length, { timeout: 30_000 }).toBe(1);
   const [ack] = (await lines(page)).filter((l) => l.kind === 'ack');
   expect(ACKS).toContain(ack.text);
   expect(ack.provider).toBe('elevenlabs');
