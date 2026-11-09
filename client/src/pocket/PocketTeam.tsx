@@ -12,6 +12,7 @@ import { MessageBox } from '../ui/MessageBox';
 import { badgeStatus, StatusPill as Status } from '../ui/StatusPill';
 import { agentPhrase } from '../ui/statusPhrase';
 import { AgentRing } from '../ui/AgentRing';
+import { speakAgent, useLineVoice } from '../ui/agentSpeech';
 import { HoverCard } from '../ui/HoverCard';
 import { AgentPeek } from '../ui/Peeks';
 import { TaskRing } from '../ui/TaskProgress';
@@ -75,7 +76,15 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
   };
   return (
     <div className={`pk-card pk-agent ${agent.status === 'error' ? 'pk-agent-bad' : needsYou(agent) ? 'pk-agent-needs' : ''} ${fresh ? 'pk-agent-new' : ''}`} data-agent={agent.id}>
-      <button type="button" className="pk-agent-head pk-agent-open" title={`Open ${agent.name}'s window`} onClick={() => openOverlay({ kind: 'terminal', agentId: agent.id })}>
+      <button
+        type="button"
+        className="pk-agent-head pk-agent-open"
+        title={`Open ${agent.name}'s window`}
+        onClick={() => {
+          openOverlay({ kind: 'terminal', agentId: agent.id });
+          void speakAgent(agent.id); // they say what they're on as their window opens (#321)
+        }}
+      >
         <HoverCard label={agent.name} peek={<AgentPeek agent={agent} />}>
           <AgentRing agent={agent} />
         </HoverCard>
@@ -200,14 +209,24 @@ function CeoCard() {
   const ceo = useStore((s) => s.agents[CEO_ID]);
   const info = useStore((s) => s.ceo);
   const [busy, run] = useBusy();
+  const speaks = useLineVoice();
   if (!ceo) return null;
   const working = ceo.status === 'working';
+  const avatar = (
+    <span className="avatar" style={{ background: ceo.color }}>
+      {ceo.name[0]}
+    </span>
+  );
   return (
     <div className="pk-card pk-agent">
       <div className="pk-agent-head">
-        <span className="avatar" style={{ background: ceo.color }}>
-          {ceo.name[0]}
-        </span>
+        {speaks ? (
+          <button type="button" className="aw-hear" aria-label={`Hear ${ceo.name}`} title="Hear how the company is doing" onClick={() => void speakAgent(ceo.id)}>
+            {avatar}
+          </button>
+        ) : (
+          avatar
+        )}
         <div className="grow">
           <b>{ceo.name}</b> <span className="muted small">CEO</span>
           <div className="small pk-ellipsis">{working ? (info.job?.label ?? 'Working') : info.queue.length ? `Up next: ${info.queue.map((j) => j.label).join(' → ')}` : 'Free'}</div>

@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { spokenLine } from '../shared/agentLines.ts';
 import { SAMPLE_LINE, messageSpeech, standupLine, type DayPart } from '../shared/speech.ts';
 import { clampKeepDays, KEEP_DAYS_DEFAULT } from '../shared/voiceClips.ts';
 import { clipProblem, clipType } from '../shared/clipLimits.ts';
@@ -30,6 +31,7 @@ export const CACHE_MAX_AGE_MS = KEEP_DAYS_DEFAULT * DAY_MS;
 /** The clips of this many of the newest CEO messages stay whatever their age. */
 export const KEEP_NEWEST_MESSAGES = 20;
 const MANIFEST = 'clips.json';
+const USAGE = 'usage.json';
 export const KEY_REJECTED_NOTE = "🔇 ElevenLabs rejected the key, so messages aren't read aloud until you set a new one in the voice settings.";
 
 type Labels = VoiceOption['labels'];
@@ -66,6 +68,7 @@ export const DEFAULT_VOICE: VoiceSettings = {
   keepDays: KEEP_DAYS_DEFAULT,
   speed: SPEED_DEFAULT,
   favourites: [],
+  agentsSpeak: true,
 };
 
 const MODEL_ID = /^[a-z0-9_.-]{1,64}$/;
@@ -80,6 +83,7 @@ export function voiceSettings(base: VoiceSettings, patch: unknown): VoiceSetting
   if (typeof p.voiceName === 'string') out.voiceName = p.voiceName.trim().slice(0, 80);
   if (typeof p.model === 'string' && MODEL_ID.test(p.model.trim())) out.model = p.model.trim();
   if (typeof p.speakOffice === 'boolean') out.speakOffice = p.speakOffice;
+  if (typeof p.agentsSpeak === 'boolean') out.agentsSpeak = p.agentsSpeak;
   out.keepDays = clampKeepDays(p.keepDays ?? out.keepDays);
   out.speed = clampSpeed(p.speed ?? out.speed);
   out.favourites = cleanFavourites(p.favourites ?? out.favourites);
@@ -195,6 +199,43 @@ export function clipHash(req: SynthRequest): string {
   return crypto.createHash('sha256').update(`${req.voiceId}\n${model_id}\n${JSON.stringify(voice_settings)}\n${text}`).digest('hex').slice(0, 12);
 }
 
+/** A clip's file in the cache: what it's for, then clipHash. */
+export const clipName = (name: string, req: SynthRequest) => `${name}-${clipHash(req)}.mp3`;
+
+/**
+ * A clicked agent's line (#321) as a clip to make: in their voice (else the office voice), at the office's model and
+ * speed, its audio tags kept only for a v4 model. Lines repeat, so most clicks find the clip already cached.
+ */
+export function lineRequest(s: Pick<VoiceSettings, 'voiceId' | 'model' | 'speed'>, voiceId: string, line: string): SynthRequest {
+  return { voiceId: voiceId && VOICE_ID.test(voiceId) ? voiceId : s.voiceId, model: s.model, speed: s.speed, text: spokenLine(line, s.model) };
+}
+
+// ---------- characters used ----------
+
+/** Characters sent to ElevenLabs on one day (usage.json), for Settings → Voice. */
+export interface CharUsage {
+  day: string;
+  chars: number;
+}
+
+/** The local date of `ms`, "2026-11-09". */
+export function localDay(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** `u` with `n` more characters on `day` (a new day starts from zero). */
+export const addChars = (u: CharUsage, day: string, n: number): CharUsage => ({ day, chars: (u.day === day ? u.chars : 0) + n });
+
+/** The characters used on `day`. */
+export const charsOn = (u: CharUsage, day: string) => (u.day === day ? u.chars : 0);
+
+/** usage.json as read from disk; anything malformed is no usage. */
+export function parseUsage(raw: unknown): CharUsage {
+  const { day, chars } = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof CharUsage, unknown>>;
+  return typeof day === 'string' && typeof chars === 'number' && Number.isFinite(chars) && chars >= 0 ? { day, chars } : { day: '', chars: 0 };
+}
+
 /** An ElevenLabs call that failed; status 0 when it never answered. */
 export class VoiceApiError extends Error {
   constructor(
@@ -248,7 +289,8 @@ export class Voice {
   private making = new Map<string, Promise<Buffer>>();
   private queue: Promise<unknown> = Promise.resolve();
   private clips: ClipManifest = {};
-  private cacheView: VoiceCacheView = { clips: 0, bytes: 0, saved: [] };
+  private cacheView: VoiceCacheView = { clips: 0, bytes: 0, saved: [], charsToday: 0 };
+  private usage: CharUsage = { day: '', chars: 0 };
   private cacheWork: Promise<unknown> = Promise.resolve(); // manifest changes, prunes and clears, one after another
 
   constructor(private deps: VoiceDeps) {}
@@ -262,6 +304,12 @@ export class Voice {
       this.clips = parseManifest(raw ? JSON.parse(raw) : {});
     } catch {
       this.clips = {};
+    }
+    const usage = await fs.readFile(path.join(this.deps.cacheDir, USAGE), 'utf8').catch(() => '');
+    try {
+      this.usage = parseUsage(usage ? JSON.parse(usage) : null);
+    } catch {
+      this.usage = { day: '', chars: 0 };
     }
     await this.prune();
   }
@@ -437,10 +485,22 @@ export class Voice {
     return this.audio('standup', { voiceId: s.voiceId, model: s.model, speed: s.speed, text: standupLine(count, part) });
   }
 
+  /** Clicked agents' lines are spoken by ElevenLabs now: it's the provider, the setting is on and a key works. */
+  speaksLines(): boolean {
+    const s = this.deps.settings();
+    return s.provider === 'elevenlabs' && s.agentsSpeak && !!this.key && !this.rejected;
+  }
+
+  /** GET /api/voice/lines/:agent: a clicked agent's line (lineRequest), cached by voice, model, speed and words. */
+  async lineAudio(voiceId: string, line: string): Promise<Buffer> {
+    if (!this.speaksLines()) throw new HttpError(404, "Agents aren't voiced by ElevenLabs right now.");
+    return this.audio('line', lineRequest(this.deps.settings(), voiceId, line));
+  }
+
   private async audio(name: string, req: SynthRequest, m?: PhoneMessage): Promise<Buffer> {
     if (!VOICE_ID.test(req.voiceId)) throw new HttpError(400, 'Pick an ElevenLabs voice first.');
     // The voice, model, speed and words are in the file name, so a change or a reused message id never plays stale audio.
-    const file = path.join(this.deps.cacheDir, `${name}-${clipHash(req)}.mp3`);
+    const file = path.join(this.deps.cacheDir, clipName(name, req));
     const cached = await fs.readFile(file).catch(() => null);
     if (cached) {
       if (m) await this.record(m, [path.basename(file)]);
@@ -468,6 +528,7 @@ export class Voice {
     const tmp = `${file}.${process.pid}.tmp`;
     await fs.writeFile(tmp, audio);
     await fs.rename(tmp, file);
+    await this.used(req.text.length);
     this.deps.log?.(`voice: made a new clip ${path.basename(file)} (${req.text.length} characters)`);
     if (m) await this.record(m, [path.basename(file)]);
     else await this.prune();
@@ -488,6 +549,13 @@ export class Voice {
   private requireKey() {
     if (!this.key) throw new HttpError(409, 'Add an ElevenLabs API key first.');
     if (this.rejected) throw new HttpError(502, 'ElevenLabs rejected the key. Set a new one in the voice settings.');
+  }
+
+  /** Counts `chars` more sent to ElevenLabs today (saved, so a restart keeps the day's count; re-measured on the next prune). */
+  private async used(chars: number) {
+    this.usage = addChars(this.usage, localDay(this.now()), chars);
+    const file = path.join(this.deps.cacheDir, USAGE);
+    await fs.writeFile(`${file}.${process.pid}.tmp`, JSON.stringify(this.usage)).then(() => fs.rename(`${file}.${process.pid}.tmp`, file)).catch(() => undefined);
   }
 
   // ---------- the clip manifest ----------
@@ -524,7 +592,7 @@ export class Voice {
 
   /** The cache view for `files` (what's on disk), told to the clients when it changed. */
   private measure(files: { size: number }[]): VoiceCacheView {
-    const view: VoiceCacheView = { clips: files.length, bytes: files.reduce((n, f) => n + f.size, 0), saved: savedMessages(this.clips, this.deps.messages()) };
+    const view: VoiceCacheView = { clips: files.length, bytes: files.reduce((n, f) => n + f.size, 0), saved: savedMessages(this.clips, this.deps.messages()), charsToday: charsOn(this.usage, localDay(this.now())) };
     if (JSON.stringify(view) !== JSON.stringify(this.cacheView)) {
       this.cacheView = view;
       this.deps.cacheChanged(view);
