@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockers, holdUps, setDependsOn, waitsMessage } from './issues.ts';
+import { blockers, managerCloseComment, holdUps, setDependsOn, waitsMessage } from './issues.ts';
 
 const open = (...n: number[]) => new Set(n);
 
@@ -108,5 +108,14 @@ describe('waitsMessage', () => {
   it('names what the issue waits for', () => {
     expect(waitsMessage(12, [10])).toBe('#12 waits for #10: it can start once that is closed');
     expect(waitsMessage(12, [10, 11])).toBe('#12 waits for #10, #11: it can start once those are closed');
+  });
+});
+
+describe('the manager closing an issue', () => {
+  it('includes the short reason on GitHub and preserves callers without one', () => {
+    expect(managerCloseComment('Mimoun', '  Superseded by #42  ')).toBe('Closed as not planned by Mimoun from the cubefarm office.\n\nSuperseded by #42');
+    expect(managerCloseComment('Mimoun')).toBe('Closed as not planned by Mimoun from the cubefarm office.');
+    expect(managerCloseComment('Mimoun', '  ')).toBe(managerCloseComment('Mimoun'));
+    expect(managerCloseComment('Mimoun', 'x'.repeat(600))).toBe(managerCloseComment('Mimoun') + '\n\n' + 'x'.repeat(500));
   });
 });

@@ -6,6 +6,7 @@ import { DEFAULT_PREVIEW, parsePreviewPatch } from '../previews.ts';
 import type { GatewayUse } from '../previewGateway.ts';
 import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
+import { managerCloseComment } from '../../shared/issues.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
 import { floorOverrides } from '../../shared/practices.ts';
 import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveStatus, MISSION_MAX, newRecord, noteObjectives, withChange, withNote, type Charter } from '../../shared/charter.ts';
@@ -510,7 +511,7 @@ export abstract class SwarmRepos extends SwarmCore {
   }
 
   /** The manager's Close on an issue: closed on GitHub as not planned; whoever builds it carries on until the CEO decides (#207). */
-  async closeIssueByManager(repoId: string, number: number, resolvedBy?: number) {
+  async closeIssueByManager(repoId: string, number: number, resolvedBy?: number, reason?: string) {
     const repo = this.repo(repoId);
     const rt = this.repoRt.get(repo.id);
     const state = rt?.issues.some((i) => i.number === number) ? 'OPEN' : await this.backend.issueState(repo.fullName, number).catch(() => null);
@@ -518,7 +519,7 @@ export abstract class SwarmRepos extends SwarmCore {
     const by = this.state.settings.managerName || 'the manager';
     // From the office doctor, for an issue a merged PR resolved: closed as completed, not as not planned.
     if (resolvedBy) await this.backend.closeIssue(repo.fullName, number, `Resolved by #${resolvedBy}; closed by ${by} from the cubefarm office.`, 'completed');
-    else await this.backend.closeIssue(repo.fullName, number, `Closed as not planned by ${by} from the cubefarm office.`, 'not planned');
+    else await this.backend.closeIssue(repo.fullName, number, managerCloseComment(by, reason), 'not planned');
     const title = rt?.issues.find((i) => i.number === number)?.title;
     const affects = this.runningOn(repo, { issues: [number] });
     this.managerChange(repo, 'close-issue', { issue: number }, `closed #${number}${title ? ` "${clip(title, 60)}"` : ''}${resolvedBy ? ` as resolved by #${resolvedBy}` : ' as not planned'}`, affects);
