@@ -14,7 +14,7 @@ import { useCanvasTexture, useInteractable } from './interact';
 import { Jukebox } from './Jukebox';
 import { MapTable } from './MapTable';
 import { MissionControl } from './MissionControl';
-import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, MANAGER_DESK, MANAGER_ROOM, RECEPTION } from './layout';
+import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, LOBBY_SCREENS, MANAGER_DESK, MANAGER_ROOM, RECEPTION } from './layout';
 import { glow, shade } from './materials';
 import { WallSign } from './OfficeFloor';
 import { Bookshelf, CoffeeCorner, Couch, CoffeeTable, GlassWall, Plant, Rug, WallClock } from './Props';
@@ -187,9 +187,9 @@ function Directory() {
     [stats],
   );
   return (
-    <group ref={ref} position={[4.4, 1.75, HALF_D - 0.03]} rotation={[0, Math.PI, 0]}>
+    <group ref={ref} position={LOBBY_SCREENS.directory.at} rotation={[0, Math.PI, 0]}>
       <mesh>
-        <planeGeometry args={[2.6, 1.9]} />
+        <planeGeometry args={[LOBBY_SCREENS.directory.w, LOBBY_SCREENS.directory.h]} />
         <meshBasicMaterial map={tex} transparent toneMapped={false} />
       </mesh>
     </group>

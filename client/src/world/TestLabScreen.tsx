@@ -4,16 +4,14 @@ import { TEST_LAB_SECTION } from '../ui/consoleNavRules';
 import { useKeyName } from '../ui/controls';
 import { roundRect, SANS, wrap } from './draw';
 import { useCanvasTexture, useInteractable } from './interact';
-import { HALF_D } from './layout';
+import { LOBBY_SCREENS } from './layout';
 import { Box } from './Toon';
 import type { TestLabView } from '../../../shared/testLab';
 
-// The test lab's desk in the lobby (#56), on the south wall between the time-lapse screen and the elevator: the job it
+// The test lab's desk in the lobby (#56), on the south wall between the trophy shelf and the elevator: the job it
 // runs, the queue and the latest results. E opens the manager's console on Mission control, with the Test lab card.
 
-const AT: [number, number, number] = [-3.4, 1.75, HALF_D - 0.03];
-const W = 1.9;
-const H = 1.08;
+const { at: AT, w: W, h: H } = LOBBY_SCREENS.testlab;
 const PX: [number, number] = [704, 400];
 
 const line = (ctx: CanvasRenderingContext2D, text: string, max: number) => wrap(ctx, text, max, 1)[0] ?? '';
