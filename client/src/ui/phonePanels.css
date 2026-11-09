@@ -53,6 +53,23 @@
   html[data-touch] .phone {
     padding-top: 10px;
   }
+  /* full screen and the keyboard (#297): no band, the phone from the visible top, clear of the notch */
+  html[data-touch] .overlay.phone-overlay-flush {
+    padding-top: 0;
+  }
+  html[data-touch] .phone-overlay-flush .phone {
+    padding-top: max(10px, var(--ds-safe-top));
+    border-top: none;
+    border-radius: 0;
+  }
+  /* typing: the message box right on the keyboard, the phone's tabs and the decisions back once it closes (as pocket
+     mode's, #152) */
+  html[data-touch][data-typing] .phone {
+    padding-bottom: 0;
+  }
+  html[data-touch][data-typing] .phone :is(.phone-tabs, .phone-hint, .decision-tray) {
+    display: none;
+  }
   .phone-status {
     display: none;
   }

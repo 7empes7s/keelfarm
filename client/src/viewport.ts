@@ -1,6 +1,7 @@
 // The phone's viewport, page-wide (#73): the visible height (keyboard and browser bars taken off) as --app-height and
 // --app-top for every full-screen view, put back when the keyboard closes or the app comes back, the zoom lock on touch
 // screens, and which browsers misreport the safe areas. The rules are pure and tested; watchViewport() wires them up.
+import { keyboardInset } from '../../shared/termKeys';
 
 /** What the page sees of the visual viewport. */
 export interface Viewport {
@@ -14,6 +15,17 @@ export function appViewport(innerHeight: number, vv: Viewport | null): { height:
   // Pinch zoom (if a browser lets it through) shrinks the visual viewport without changing the room the layout has.
   if (!vv || Math.abs(vv.scale - 1) > 0.01) return { height: Math.round(innerHeight), top: 0 };
   return { height: Math.round(vv.height), top: Math.max(0, Math.round(vv.offsetTop)) };
+}
+
+/**
+ * The 3D office's phone on a phone screen (#297): its overlay's box in CSS px under the UI scale (the root's zoom), the
+ * visible part of the page, so the message box sits right on the keyboard. `band` keeps the strip of dimmed office above
+ * it (a tap there puts the phone away); full screen and the keyboard drop it, every px going to the chat.
+ */
+export function chatDock(innerHeight: number, vv: Viewport | null, uiScale: number, full: boolean): { top: number; height: number; band: boolean } {
+  const { height, top } = appViewport(innerHeight, vv);
+  const keyboard = !!vv && Math.abs(vv.scale - 1) <= 0.01 && keyboardInset(innerHeight, vv) > 0;
+  return { top: top / uiScale, height: height / uiScale, band: !full && !keyboard };
 }
 
 /** Whether a touch move is a pinch to block: two fingers or more, anywhere but a terminal (it zooms its own text). */
@@ -49,7 +61,7 @@ export function typing(touch: boolean, innerHeight: number, visibleHeight: numbe
 export const VIEWPORT_EVENT = 'cubefarm:viewport';
 
 /** Overflow-hidden boxes the browser may scroll to show a focused field, and leave scrolled after the keyboard closes. */
-const CLIPPED = '.pocket, .pk-main-chat, .phone-chat';
+const CLIPPED = '.pocket, .pk-main-chat, .phone-chat, .phone-screen';
 
 /** Puts the page back where it belongs: the window at the top, no hidden scroll in the shell. */
 export function resetViewport() {
