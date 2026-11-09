@@ -1,0 +1,9 @@
+.pr-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.pr-actions {
+  margin-block: var(--ds-space-3);
+}
