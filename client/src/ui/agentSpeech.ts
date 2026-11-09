@@ -33,11 +33,15 @@ export function useLineVoice(): boolean {
   return !!lineVoice({ agentsSpeak: v.agentsSpeak, provider: v.provider, keySet, demo, muted, replaying, reading: false });
 }
 
-/** Plays a clip from `pos` through the office's mixer (the voice group), or straight out when there's no 3D audio. */
-async function playFrom(blob: Blob, pos: Vec3 | null, name: string): Promise<number> {
+/**
+ * Plays a clip from `pos` through the office's mixer (the voice group), or straight out when there's no 3D audio.
+ * Resolves how long it plays, or null when the line may no longer be said once it's decoded (`stillOn`).
+ */
+async function playFrom(blob: Blob, pos: Vec3 | null, name: string, stillOn: () => boolean): Promise<number | null> {
   const a = pos ? audio() : null;
   if (a && pos) {
     const buffer = await a.ctx.decodeAudioData(await blob.arrayBuffer());
+    if (!stillOn()) return null;
     sample({ name: `line:${name}`, group: 'voice', pos, buffer, peak: LINE_PEAK });
     const unduck = holdMusicDuck();
     setTimeout(unduck, buffer.duration * 1000);
@@ -50,7 +54,8 @@ async function playFrom(blob: Blob, pos: Vec3 | null, name: string): Promise<num
 
 /**
  * Says `id`'s line now. `place` (3D) puts up their bubble with the words and says where their head is. Resolves false
- * when nobody would say it or it couldn't be had, so the caller can babble instead.
+ * when nobody would say it or it couldn't be had, so the caller can babble instead. When the CEO starts talking, a
+ * replay starts or sound goes off while the line is on its way, it's dropped quietly (true: no babble either).
  */
 export async function speakAgent(id: string, place?: (text: string) => Vec3 | null): Promise<boolean> {
   const how = lineVoiceNow();
@@ -58,17 +63,25 @@ export async function speakAgent(id: string, place?: (text: string) => Vec3 | nu
   if (!how || !a) return false;
   if ((talking.get(id) ?? 0) > performance.now()) return true;
   talking.set(id, performance.now() + 2000); // until the line is in
+  const stillOn = () => lineVoiceNow() === how;
+  const drop = () => {
+    talking.delete(id);
+    return true;
+  };
   try {
     const r = await fetch(`/api/voice/lines/${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hour: new Date().getHours() }) });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const { text, clip } = (await r.json()) as { text: string; clip: boolean };
+    if (!stillOn()) return drop();
     const eleven = how === 'elevenlabs' && clip;
     if (!eleven && how !== 'browser') throw new Error('no voice'); // the key stopped working meanwhile: babble
     const blob = eleven ? await fetch(`/api/voice/lines/${encodeURIComponent(id)}`).then((x) => (x.ok ? x.blob() : Promise.reject(new Error(`HTTP ${x.status}`)))) : null;
+    if (!stillOn()) return drop();
     const pos = place?.(text) ?? null;
     captionSaid(a.name, text);
     if (blob) {
-      const ms = await playFrom(blob, pos, a.name);
+      const ms = await playFrom(blob, pos, a.name, stillOn);
+      if (ms === null) return drop();
       talking.set(id, performance.now() + ms);
     } else {
       const v = useStore.getState().settings.voice;
