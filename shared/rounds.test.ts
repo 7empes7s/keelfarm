@@ -108,5 +108,6 @@ describe('roundsView', () => {
     expect(v.trend.perMerge).toHaveLength(30);
     expect(v.trend.perMerge.at(-1)).toBe(1);
     expect(v.trend.perMerge[14]).toBe(2); // the week up to 15 days ago
+    expect([v.trend.merges[14], v.trend.merges.at(-1)]).toEqual([1, 1]);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { parseRefs, soleRef, type RefContext } from '../../../shared/chatRefs';
@@ -7,6 +7,7 @@ import type { CostsView } from '../../../shared/costs';
 import { costDays, needsServerTrend, resolveVisual, type Resolved, type SourceData } from './chatVisualSources';
 import type { ServerPoint } from '../../../shared/serverLoad';
 import { useRefOpen } from './RefChips';
+import { useWidth } from './useWidth';
 import { Sheet } from './ChatArtifacts';
 import './chatVisuals.css';
 import { Icon } from './Icon';
@@ -87,21 +88,6 @@ const W = 320; // before it is measured
 const PAD = { l: 44, r: 8, t: 8, b: 24 };
 const CHAR_PX = 7; // a character of axis text, about
 const heightOf = (w: number) => Math.min(260, Math.max(140, Math.round(w * 0.47)));
-
-/** An element's width in px, measured as it changes (a callback ref: the plot appears once its data loads). */
-function useWidth(): [(el: HTMLElement | null) => void, number] {
-  const [el, setEl] = useState<HTMLElement | null>(null);
-  const [w, setW] = useState(W);
-  useLayoutEffect(() => {
-    if (!el) return;
-    const read = () => el.clientWidth && setW(Math.round(el.clientWidth));
-    read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [el]);
-  return [setEl, w];
-}
 
 /** A round top for the y axis: 1, 2, 2.5 or 5 times a power of ten. */
 function niceMax(v: number): number {
@@ -330,7 +316,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
   const [hidden, setHidden] = useState<Set<number>>(new Set());
   const [sel, setSel] = useState<number | null>(null);
   const refOpen = useRefText();
-  const [plotRef, w] = useWidth();
+  const [plotRef, w] = useWidth(W);
   if (c.missing || !c.labels.length) return <p className="viz-missing">{c.missing ?? 'Nothing to show yet.'}</p>;
   const donut = c.type === 'donut';
   const props: ChartProps = { c, hidden, sel: sel !== null && sel < c.labels.length ? sel : null, onSel: setSel, w };

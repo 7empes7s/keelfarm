@@ -10,6 +10,8 @@ import { HoverCard, PeekCard } from './HoverCard';
 import type { RepoView } from '../../../shared/types';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
+import { TrendChart } from './TrendChart';
+import { costBubble, costDays } from './trendChart';
 
 // Mission control → Where the plan goes (#106): the insight strip, the most expensive issues as ranked cards and the
 // waste grouped by cause. The numbers are shared/costs.ts's; these only draw them (docs/design.md: stat card, ranked
@@ -26,21 +28,6 @@ export function Change({ change }: { change: number | null }) {
     <span className={change > 0 ? 'costs-up' : 'costs-down'}>
       <Icon name={change > 0 ? 'arrow-up' : 'arrow-down'} label={change > 0 ? 'Up' : 'Down'} /> {pct(Math.abs(change))}
     </span>
-  );
-}
-
-/** The cost per merge day by day, oldest first; days without a merge are left out of the line. */
-function Sparkline({ points }: { points: (number | null)[] }) {
-  const vals = points.flatMap((p, i) => (p === null ? [] : [[i, p] as const]));
-  if (vals.length < 2) return null;
-  const max = Math.max(...vals.map(([, v]) => v));
-  const min = Math.min(...vals.map(([, v]) => v));
-  const x = (i: number) => (i / Math.max(1, points.length - 1)) * 100;
-  const y = (v: number) => 22 - ((v - min) / (max - min || 1)) * 20;
-  return (
-    <svg className="costs-spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points={vals.map(([i, v]) => `${x(i)},${y(v)}`).join(' ')} />
-    </svg>
   );
 }
 
@@ -63,6 +50,7 @@ export function InsightStrip({ view, floorName, onCause }: { view: CostsView; fl
   const spend = i.today && spendLimit(i.today);
   // Each stat explains itself on hover or focus (#213): what it means, how it's counted, its last 7 days.
   const week = view.byDay.slice(0, 7).reverse();
+  const perDay = costDays(view.byDay, view.days, Date.now());
   const tip = (title: string, children: ReactElement<Record<string, unknown>>, means: string, counted: string, spark?: number[]) => (
     <HoverCard label={title} peek={<PeekCard title={title} sub={means} stats={[['How it’s counted', counted]]} spark={spark} note={spark && spark.length > 1 ? `The last ${spark.length} days, oldest first` : undefined} />}>
       {children}
@@ -85,22 +73,25 @@ export function InsightStrip({ view, floorName, onCause }: { view: CostsView; fl
           'Every finished session’s cost in the ledger today; a usual day is the 7-day average',
           week.map((d) => d.usd),
         )}
-      {tip(
-        'Per merge',
-        <button className="costs-stat" onClick={() => jump(view.byDay.length > 1 ? 'costs-days' : 'costs-floors')}>
-          <span className="costs-stat-label">Per merge</span>
-          <b className="costs-stat-value">{view.total.perMerge === null ? '—' : fmtUsd(view.total.perMerge)}</b>
-          <Sparkline points={i.perMerge.points} />
-          {i.perMerge.change !== null && (
-            <span className="costs-stat-note">
-              <Change change={i.perMerge.change} /> over the days
-            </span>
-          )}
-        </button>,
-        'What one merged PR costs, everything included.',
-        'All sessions’ cost (builds, QA, fixes, the CEO) over the merges in the window',
-        week.flatMap((d) => (d.perMerge === null ? [] : [d.perMerge])),
-      )}
+      {/* The trend is a control of its own, so the card is a box around the button and the chart (#325). */}
+      <div className="costs-stat costs-stat-trend">
+        {tip(
+          'Per merge',
+          <button className="costs-stat-head" onClick={() => jump(view.byDay.length > 1 ? 'costs-days' : 'costs-floors')}>
+            <span className="costs-stat-label">Per merge</span>
+            <b className="costs-stat-value">{view.total.perMerge === null ? '—' : fmtUsd(view.total.perMerge)}</b>
+          </button>,
+          'What one merged PR costs, everything included.',
+          'All sessions’ cost (builds, QA, fixes, the CEO) over the merges in the window',
+          week.flatMap((d) => (d.perMerge === null ? [] : [d.perMerge])),
+        )}
+        <TrendChart values={perDay.map((d) => d.perMerge)} label={`Cost per merge a day, over ${view.days} days`} bubble={(n) => costBubble(perDay[n].day, perDay[n].perMerge!, perDay[n].merges)} />
+        {i.perMerge.change !== null && (
+          <span className="costs-stat-note">
+            <Change change={i.perMerge.change} /> over the days
+          </span>
+        )}
+      </div>
       {tip(
         'Waste',
         <button className="costs-stat" onClick={() => jump('costs-waste')}>
