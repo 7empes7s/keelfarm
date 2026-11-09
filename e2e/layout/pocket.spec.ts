@@ -177,7 +177,7 @@ for (const width of [820, 1280]) {
   test(`at ${width}px the chat opens from the header, and the rail only navigates`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     const root = await pocket(page, 'kanban');
-    await expect(root.locator('.pk-tabs .pk-tab')).toHaveText([/Company/, /Kanban/, /Team/, /Approvals/, /Console/]);
+    await expect(root.locator('.pk-tabs .pk-tab')).toHaveText([/Company/, /Kanban/, /Team/, /Approvals/, /Previews/, /Console/]);
     const button = root.locator('.pk-head .pk-chat-btn');
     const main = root.locator('.pk-main');
     let open = width >= 1024; // docked when wide, a drawer closed at first in between

@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useSyncExternalStore } from 'react';
 import { useStore, type HelpTab } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { AppViewer } from './AppViewer';
+import { PreviewsPage } from './PreviewsPage';
 import { CardView } from './CardView';
 import { Catalogue, DecorBoxPanel } from './Catalogue';
 import { ControlsSettings } from './ControlsSettings';
@@ -456,6 +457,8 @@ export function Overlays() {
       return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
     case 'app':
       return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} path={overlay.path} />;
+    case 'previews':
+      return <PreviewsPage repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} path={overlay.path} />;
     case 'elevator':
       return <ElevatorPanel />;
     case 'manager':

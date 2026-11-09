@@ -38,7 +38,7 @@ export type Overlay =
   | { kind: 'kanban'; repoId: string }
   /** One whiteboard card up close (CardView.tsx). `peel`: its sticky can come off the board (G). */
   | { kind: 'card'; repoId: string; key: string; number: number; pr: boolean; peel?: boolean }
-  | { kind: 'app'; repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string } // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so; path: at that page (an agent's browser address, #230)
+  | (({ kind: 'app'; repoId: string } | { kind: 'previews'; repoId?: string }) & { pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string }) // pr: open the viewer on that channel (null: main); qa: with its QA panel; merged: main opened for a merged PR, at its page, saying so; path: at that page (an agent's browser address, #230). 'previews': the Previews page (#226), where pocket mode opens 'app' too
   | { kind: 'elevator' }
   | { kind: 'manager'; tab?: ManagerTab; repoId?: string; card?: string; history?: { agent?: string; repoId?: string; pr?: number } } // card: an OpsAlarm id, or 'usage'; history: what the History tab starts filtered to
   | { kind: 'phone'; tab?: PhoneTab; requestId?: string; full?: boolean }
@@ -379,7 +379,7 @@ export const useStore = create<State>((set, get) => ({
   setOfficeUpdate: (officeUpdate) => set({ officeUpdate }),
   openOverlay(overlay) {
     // Terminals and the floor's app are live, whatever the time-lapse shows.
-    if (overlay && get().replaying && (overlay.kind === 'terminal' || overlay.kind === 'app')) {
+    if (overlay && get().replaying && (overlay.kind === 'terminal' || overlay.kind === 'app' || overlay.kind === 'previews')) {
       get().pushToast('info', 'That shows the live office: press Esc to leave the replay first.');
       return;
     }
