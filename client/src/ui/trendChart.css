@@ -1,0 +1,82 @@
+/* A stat card's trend (ui/TrendChart.tsx): the card's own font and sizes, design tokens only. */
+
+.trend {
+  position: relative;
+  align-self: stretch;
+  height: 64px; /* TREND_H: a finger's room to tap and drag */
+  border-radius: var(--ds-radius-sm);
+  cursor: crosshair;
+  touch-action: pan-y; /* a sideways drag picks days, the page still scrolls up and down */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.trend:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+.trend svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.trend-line {
+  fill: none;
+  stroke: var(--ds-outline);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.trend-target line {
+  stroke: var(--ds-text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.trend-target text {
+  fill: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  paint-order: stroke;
+  stroke: var(--ds-surface-raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.trend-cursor {
+  stroke: var(--ds-line-strong);
+  stroke-width: 1;
+}
+.trend-dot {
+  fill: var(--ds-outline);
+}
+.trend-dot.trend-good {
+  fill: var(--ds-good-fill);
+}
+.trend-dot.trend-bad {
+  fill: var(--ds-bad-fill);
+}
+.trend-dot.trend-good,
+.trend-dot.trend-bad,
+.trend-dot.trend-on {
+  stroke: var(--ds-outline);
+  stroke-width: 1;
+}
+.trend-dot.trend-on {
+  stroke-width: 1.5;
+}
+.trend-bubble {
+  position: absolute;
+  bottom: calc(100% + var(--ds-space-1));
+  z-index: 1;
+  width: max-content;
+  max-width: 100%;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  color: var(--ds-text);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
