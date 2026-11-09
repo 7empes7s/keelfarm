@@ -386,6 +386,9 @@
 .pk-agent-bad {
   background: #fff5f7;
 }
+.pk-agent-needs {
+  box-shadow: inset 6px 0 0 var(--ds-warn-fill), var(--ds-shadow-2);
+}
 .pk-actions {
   display: flex;
   flex-wrap: wrap;

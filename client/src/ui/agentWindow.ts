@@ -1,23 +1,24 @@
 // The agent window's header and details (#117): the status ring round their avatar, the task as one line, this task's
 // steps for the Now tab's timeline, and when a swipe opens or closes the details sheet. Pure; TerminalView.tsx and
 // the team lists use it.
+import { needsYou } from '../../../shared/needsYou';
 import type { AgentView, QaView } from '../../../shared/types';
 import type { IconName } from './icons';
 
 export type Ring = 'working' | 'qa' | 'fixing' | 'idle' | 'error' | 'waiting';
 
 /** The ring round their avatar: colour, an icon and a label, so it never relies on colour alone. */
-export function ringStatus(a: Pick<AgentView, 'status' | 'task' | 'waiting' | 'blocked'>): { ring: Ring; icon: IconName; label: string } {
-  if (a.status === 'error' || (a.blocked && a.status === 'working')) return { ring: 'error', icon: 'triangle-alert', label: a.status === 'error' ? 'Needs help' : 'Blocked' };
-  if (a.waiting && a.status !== 'working') return { ring: 'waiting', icon: 'circle-help', label: a.waiting === 'ceo' ? 'Waiting for the CEO' : 'Waiting for you' };
+export function ringStatus(a: Pick<AgentView, 'status' | 'task' | 'waiting' | 'blocked' | 'needsSignIn'>): { ring: Ring; icon: IconName; label: string } {
+  if (a.status === 'error') return { ring: 'error', icon: 'triangle-alert', label: 'Needs help' };
+  if (needsYou(a)) return { ring: 'waiting', icon: 'hand', label: 'Needs you' };
+  if (a.waiting === 'ceo' && a.status !== 'working') return { ring: 'waiting', icon: 'circle-help', label: 'Waiting for the CEO' };
   if (a.status === 'working' || a.status === 'preparing') {
     if (a.task === 'qa') return { ring: 'qa', icon: 'search', label: 'Testing' };
     if (a.task === 'fix') return { ring: 'fixing', icon: 'wrench', label: 'Fixing' };
     return { ring: 'working', icon: 'activity', label: a.status === 'preparing' ? 'Setting up' : 'Working' };
   }
-  if (a.status === 'done') return { ring: 'idle', icon: 'check', label: 'Done' };
   if (a.status === 'stopped') return { ring: 'idle', icon: 'square', label: 'Stopped' };
-  return { ring: 'idle', icon: 'circle-dot', label: 'Free' };
+  return { ring: 'idle', icon: 'circle-dot', label: 'Free' }; // idle, or done with their task (#307)
 }
 
 /** Whether the Now tab offers them work: whenever they aren't working, as the server still assigns done, stopped and failed agents. */
