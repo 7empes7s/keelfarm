@@ -14,6 +14,7 @@ import { reduceMotion } from './a11y';
 import { tone } from './sfx';
 import { bounds, createSky, labelIds, lightAt, settleSky, sparkParticles, starDetail, taskLights, tickSky, SPARK_MS, type Sky, type Star } from './skyLayout';
 import type { MapStageProps } from './MapCanvas';
+import './mapRoom.css';
 
 const BG = '#0b0d1a';
 const HUBS = new Set<MapNode['type']>(['company', 'floor', 'objective', 'ceo']);

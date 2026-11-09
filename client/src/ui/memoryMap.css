@@ -294,6 +294,18 @@ button.mm-key:hover {
 }
 
 /* ---------- sheets ---------- */
+.mm-view {
+  display: flex;
+  flex: none;
+  gap: var(--ds-space-1);
+}
+.mm-note {
+  margin: 0;
+}
+.mm-3d-loading {
+  display: grid;
+  place-items: center;
+}
 .mm-segs {
   display: flex;
   gap: var(--ds-space-1);
