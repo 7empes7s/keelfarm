@@ -145,7 +145,7 @@ function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
   if (!n) {
     return (
       <div className={`toast toast-${t.level}`} title={`${t.text} (click to dismiss)`} onClick={dismiss} {...hold}>
-        {t.text}
+        <span className="toast-text">{t.text}</span>
       </div>
     );
   }

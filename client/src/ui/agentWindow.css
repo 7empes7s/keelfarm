@@ -135,6 +135,67 @@
   white-space: normal;
 }
 
+/* ---------- segmented controls (#309): the header's Chat | Terminal and the details' tabs, as iOS draws them ---------- */
+/* One track; the chosen segment is a raised light thumb inside it, the rest plain text on the track. */
+.aw-seg {
+  display: inline-flex;
+  flex: none;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.aw-panes {
+  background: var(--ds-segment-track); /* a light veil over the floor's colour */
+}
+.aw-seg > button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-1);
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-4);
+  border: none;
+  border-radius: var(--ds-radius-pill);
+  background: none;
+  color: var(--ds-on-color);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.aw-seg > button::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  opacity: 0;
+  transition: opacity var(--ds-dur) var(--ds-ease);
+}
+.aw-seg > button:is([aria-pressed='true'], [aria-selected='true'])::before {
+  opacity: 1;
+}
+/* over .ds-screen's ring; high contrast keeps its own two-tone one */
+html:not([data-high-contrast]) .aw-seg > button:focus-visible {
+  outline: var(--ds-border-strong) solid var(--ds-focus);
+  outline-offset: calc(-1 * (var(--ds-space-1) + var(--ds-border-strong))); /* on the thumb's edge, inside the track: a floor's colour can be too close to blue */
+}
+@media (max-width: 760px) {
+  .aw-pane-label {
+    display: none;
+  }
+  .aw-panes > button {
+    padding: 0;
+  }
+}
+
 /* ---------- the body: terminal, and the side panel or sheet ---------- */
 .panel.aw .panel-body {
   padding: 0;
@@ -241,27 +302,6 @@
   display: flex;
   align-items: center;
   gap: var(--ds-space-1);
-}
-.aw-tab {
-  min-height: var(--ds-target);
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border: var(--ds-border) solid transparent;
-  border-radius: var(--ds-radius-md);
-  background: none;
-  color: var(--ds-text);
-  font: inherit;
-  font-size: var(--ds-text-sm);
-  cursor: pointer;
-}
-.aw-tab:hover {
-  background: var(--ds-surface-hover);
-}
-.aw-tab-on {
-  border-color: var(--ds-outline);
-  background: var(--accent);
-  color: var(--ds-on-color);
-  font-weight: var(--ds-weight-strong);
-  box-shadow: var(--ds-shadow-1);
 }
 .aw-tab-body {
   display: flex;
