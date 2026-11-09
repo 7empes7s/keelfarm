@@ -28,6 +28,8 @@ const tapOpen = (name: string, group: string, section: string, row: string) => (
 });
 const wasteGroup = (where: Where, rounds = false): View =>
   tapOpen(`Mission control: a ${rounds ? 'rounds cause' : 'waste group'} open`, 'Company', 'Mission control', rounds ? '#ops-card-rounds .costs-group-head' : '#costs-waste ~ .costs-groups .costs-group-head')(where);
+/** Mission control's test lab card (#313) with a result's full text tapped open. */
+const labRow = (where: Where) => tapOpen('Mission control: a test lab row open', 'Company', 'Mission control', '#ops-card-lab .lab-text')(where);
 const objectiveProgress = tapOpen('Charter: an objective’s progress listed', 'Company', 'Charter', '.cs-objective .pb-tap');
 
 /** Mission control's usage card (#361) with its worst source's detail open. */
@@ -74,7 +76,7 @@ const SCREENS: Screen[] = [
       await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
       return pocketSettings(page);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), charterEditor, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), labRow('pocket'), charterEditor, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",
@@ -84,7 +86,7 @@ const SCREENS: Screen[] = [
       await page.keyboard.press('e');
       return dialog(page, /Manager's console/);
     },
-    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), charterDrift('office'), usageDetail('office')],
+    tabs: [...consoleSections('office'), wasteGroup('office'), wasteGroup('office', true), labRow('office'), charterDrift('office'), usageDetail('office')],
   },
   {
     name: 'pocket voice settings', // ElevenLabs on with a (demo) key: the voice picker with favourites, model and speed (#320)
