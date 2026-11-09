@@ -119,10 +119,11 @@ function Plaques({ row, won }: { row: number; won: Map<string, AchievementView> 
   );
 }
 
-const Trophy = memo(function Trophy({ a, i }: { a: AchievementView; i: number }) {
+const Trophy = memo(function Trophy({ i, won }: { i: number; won: boolean }) {
   const def = ACHIEVEMENTS[i];
   const p = trophySpot(i);
-  const ref = useInteractable<THREE.Group>({ id: `trophy:${a.id}`, label: `${def.name}: what it was for, and when`, action: { kind: 'trophy', id: a.id } }, 3.5);
+  const label = won ? `${def.name}: what it was for, and when` : 'A locked trophy: how to win it';
+  const ref = useInteractable<THREE.Group>({ id: `trophy:${def.id}`, label, action: { kind: 'trophy', id: def.id } }, 3.5);
   return (
     <group ref={ref} position={[p.x, p.y + 0.14, p.z]}>
       <mesh visible={false}>
@@ -175,8 +176,8 @@ export function TrophyShelf() {
       {ROWS_Y.map((_, row) => (
         <Plaques key={row} row={row} won={won} />
       ))}
-      {spots.map((i) => (
-        <Trophy key={ACHIEVEMENTS[i].id} a={won.get(ACHIEVEMENTS[i].id)!} i={i} />
+      {ACHIEVEMENTS.map((d, i) => (
+        <Trophy key={d.id} i={i} won={won.has(d.id)} />
       ))}
       <mesh position={[0, S.h + 0.38, -S.d / 2 + 0.05]}>
         <planeGeometry args={[1.9, 0.32]} />

@@ -1,3 +1,4 @@
+import { HALF_D, TROPHY_SHELF } from '../../client/src/world/layout';
 import { enterOffice, expect } from '../helpers';
 import { AT_ELEVATOR, checkScreens, dialog, fromPhone, game, office, OFFICE, type Screen } from './helpers';
 
@@ -52,6 +53,18 @@ const SCREENS: Screen[] = [
     open: async (page) => {
       await office(page);
       return page.locator('.hud');
+    },
+    tabs: [],
+  },
+  {
+    // the Century cup's spot (bottom shelf, left as you face it), locked in a fresh demo
+    name: 'trophy card (#311)',
+    widths: OFFICE,
+    open: async (page) => {
+      await office(page, { floor: 0, x: TROPHY_SHELF.x + 0.86, z: HALF_D - 1.4, yaw: Math.PI, pitch: -0.72 });
+      await page.waitForTimeout(2000); // a few frames to aim at it on software WebGL
+      await page.keyboard.press('e');
+      return dialog(page, /locked trophy/);
     },
     tabs: [],
   },

@@ -346,7 +346,7 @@ export default function PhotoPanel() {
       <div className="toasts photo-toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.level}`} onClick={() => dismiss(t.id)}>
-            {t.text}
+            <span className="toast-text">{t.text}</span>
           </div>
         ))}
       </div>
