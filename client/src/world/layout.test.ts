@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FLOOR_SEATS } from '../../../shared/types';
 import { BALCONY, BALCONY_LIGHTS, BALCONY_OUT, BALCONY_TOP, BENCH, FLOOR_HEIGHT, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFloor, balconyFurniture, balconyRailing, floorElevation, inBuilding, outsideAt, outsideColliders, sideDoorway, sideSign, toyOnlyAt } from './layout.ts';
-import { APP_SCREEN, BOARD, CEO_DESK, CEO_ROOM, COFFEE_CORNER, coffeeCorner, collide, DESK_RUGS, ELEVATOR, GONG, GONG_SPOT, gongRect, HALF_D, LOBBY_RUG, lobbyColliders, MANAGER_DESK, MANAGER_ROOM, MISSION, missionColumn, missionRects, officeColliders, PLAYER_RADIUS, RECEPTION, rect, shellColliders, SPAWN, surfaceAt, WAITING, WAITING_TABLE, type Rect } from './layout.ts';
+import { APP_SCREEN, BOARD, CEO_DESK, CEO_ROOM, COFFEE_CORNER, coffeeCorner, collide, DESK_RUGS, ELEVATOR, GONG, GONG_SPOT, gongRect, HALF_D, LOBBY_RUG, lobbyColliders, MANAGER_DESK, MANAGER_ROOM, MANAGER_WORKSTATION, MISSION, missionColumn, missionRects, officeColliders, PLAYER_RADIUS, RECEPTION, rect, shellColliders, SPAWN, surfaceAt, WAITING, WAITING_TABLE, type Rect } from './layout.ts';
 import { DESK, DESK_ROWS, EAST_DESKS, EAST_ROTATION, MAX_DESKS, SEATS, deskPosition, deskRotation, isEastDesk } from './layout.ts';
 
 const R = 0.3;
@@ -199,6 +199,21 @@ describe('the desks', () => {
         expect(Math.hypot(p.x - x, p.z - z), `desks ${s} and ${o}`).toBeGreaterThan(DESK.w + 0.5);
       }
     }
+  });
+});
+
+describe("the manager's desk", () => {
+  it('faces its screen, keyboard and mug towards the chair, and keeps the stats showing to the door', () => {
+    const w = MANAGER_WORKSTATION;
+    const front = (z: number) => (z - w.screenZ) * w.facing;
+    expect(front(w.chairZ)).toBeGreaterThan(0);
+    expect(front(w.keyboardZ)).toBeGreaterThan(0);
+    expect(front(w.mugZ)).toBeGreaterThan(0);
+    // the visitor's console spot (+z, the door's side) sees the screen's back, which shows the same stats
+    expect(front(MANAGER_DESK.d / 2 + 0.8)).toBeLessThan(0);
+    // all on the desk, and the chair's collider where it's drawn
+    for (const z of [w.screenZ, w.keyboardZ, w.mugZ]) expect(Math.abs(z)).toBeLessThan(MANAGER_DESK.d / 2);
+    expect(lobbyColliders()).toContainEqual(rect(MANAGER_DESK.x, MANAGER_DESK.z + w.chairZ, 0.8, 0.8, expect.any(Number)));
   });
 });
 
