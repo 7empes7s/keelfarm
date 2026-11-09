@@ -68,6 +68,7 @@ export function LiveTerminal({
   signIn?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const [dropped, setDropped] = useState(false);
   const [live, setLive] = useState(false);
   const [connected, setConnected] = useState(true);
   const [focused, setFocused] = useState(false);
@@ -88,6 +89,7 @@ export function LiveTerminal({
   const sendRef = useRef<(data: string) => void>(() => undefined);
 
   useEffect(() => {
+    setDropped(false);
     const el = host.current!;
     const term = new Terminal({
       fontFamily: "'JetBrains Mono', Consolas, monospace",
@@ -101,6 +103,8 @@ export function LiveTerminal({
       // Coloured output is nudged until it reads at 4.5:1 on the terminal's background (WCAG AA).
       minimumContrastRatio: 4.5,
     });
+    // Keep native clipboard shortcuts out of the PTY (xterm otherwise sends Ctrl+V as a control byte).
+    term.attachCustomKeyEventHandler((e) => !((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'v'));
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon((_e, uri) => window.open(uri, '_blank', 'noopener')));
@@ -141,9 +145,14 @@ export function LiveTerminal({
             term.scrollToBottom();
           });
           setLive(m.live);
+          setDropped(false);
         } else if (m.t === 'data') term.write(m.data);
         else if (m.t === 'size' && (m.cols !== term.cols || m.rows !== term.rows)) term.resize(m.cols, m.rows);
-        else if (m.t === 'live') setLive(m.live);
+        else if (m.t === 'dropped') setDropped(true);
+        else if (m.t === 'live') {
+          setLive(m.live);
+          setDropped(false);
+        }
       };
       socket.onclose = (e) => {
         if (ws === socket) ws = null;
@@ -245,6 +254,7 @@ export function LiveTerminal({
   return (
     <div className={`live-term ${className ?? ''}`}>
       <div className="live-term-screen" ref={host} />
+      {dropped && <div className="live-term-foot" role="status">Nothing is running here: start the agent or sign in first</div>}
       {keysOn && <TermKeyBar cli={cli} mods={mods} onPress={press} dock={!compact} signIn={signIn} />}
       {pasting && <PasteSheet onSend={pasteIn} onClose={() => setPasting(false)} signIn={signIn} />}
       {!compact && (

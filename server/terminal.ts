@@ -189,6 +189,10 @@ export class AgentTerminal {
       if (msg.t === 'input' && typeof msg.data === 'string') {
         const data = msg.data.slice(0, 64 * 1024);
         this.onInput?.(data); // first: a CLI that ends on this key would otherwise look ended to its watcher already
+        if (!this.sink) {
+          this.sendTo(ws, { t: 'dropped' });
+          return;
+        }
         this.sink?.write(data);
       } else if (msg.t === 'resize') {
         this.resize(msg.cols, msg.rows);
