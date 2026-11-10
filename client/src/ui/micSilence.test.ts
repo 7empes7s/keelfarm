@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { CLIP_MAX_MS } from '../../../shared/clipLimits';
-import { FLOOR_SAMPLES, freshEars, heardLevel, heardWords, listenRules, MIN_SPEECH_LEVEL, NO_SPEECH_MS, noiseFloor, sendsWhenDone, SILENCE_MS, verdict, WARMUP_SAMPLES, type Ears } from './micSilence';
+import {
+  DRAIN_SHOW_MS,
+  drainOf,
+  FLOOR_SAMPLES,
+  freshEars,
+  heardLevel,
+  heardWords,
+  listenRules,
+  MIN_SPEECH_LEVEL,
+  NO_SPEECH_MS,
+  noiseFloor,
+  PAUSE_CHOICES,
+  sendsWhenDone,
+  SILENCE_MS,
+  UNFINISHED_CAP_MS,
+  verdict,
+  WARMUP_SAMPLES,
+  type Ears,
+} from './micSilence';
 
 /** Feeds a level every 50 ms from `from` to `to` and returns the ears. */
 function feed(e: Ears, level: (t: number) => number, from: number, to: number): Ears {
@@ -17,7 +35,47 @@ describe('the silence detector', () => {
     expect(verdict(e, NO_SPEECH_MS, tap)).toBe('no-speech');
   });
 
-  it("ends 1.2 s after the last words, not before", () => {
+  it('a 2.5 s pause keeps listening, 3.1 s ends it (the 3 s default)', () => {
+    expect(SILENCE_MS).toBe(3000);
+    const e = heardWords(freshEars(0), 1000);
+    expect(verdict(e, 1000 + 2500, tap)).toBe('listening');
+    expect(verdict(e, 1000 + 3100, tap)).toBe('done');
+  });
+
+  it('waits the pause this device picked', () => {
+    const e = heardWords(freshEars(0), 1000);
+    for (const ms of PAUSE_CHOICES) {
+      const rules = listenRules('tap', false, ms);
+      expect(verdict(e, 1000 + ms - 1, rules)).toBe('listening');
+      expect(verdict(e, 1000 + ms, rules)).toBe('done');
+    }
+    expect(listenRules('call', false, 5000).silenceMs).toBe(5000);
+    expect(listenRules('hold', false, 5000).silenceMs).toBeNull();
+  });
+
+  it('a sentence left on a filler waits 3 times the pause, up to 15 s', () => {
+    const e = heardWords(freshEars(0), 1000);
+    const text = 'Clicking on the, uh';
+    expect(verdict(e, 1000 + 5000, tap, text)).toBe('listening');
+    expect(verdict(e, 1000 + 9000 - 1, tap, text)).toBe('listening');
+    expect(verdict(e, 1000 + 9000, tap, text)).toBe('done');
+    const slow = listenRules('tap', false, 8000);
+    expect(verdict(e, 1000 + UNFINISHED_CAP_MS - 1, slow, text)).toBe('listening');
+    expect(verdict(e, 1000 + UNFINISHED_CAP_MS, slow, text)).toBe('done');
+    expect(verdict(e, 1000 + 3000, tap, 'It breaks the page.')).toBe('done');
+  });
+
+  it('the drain shows after a breath of quiet, over the pause still needed', () => {
+    const e = heardWords(freshEars(0), 1000);
+    expect(drainOf(null, 2000, tap)).toBeNull();
+    expect(drainOf(freshEars(0), 2000, tap)).toBeNull(); // nobody spoke yet
+    expect(drainOf(e, 1000 + DRAIN_SHOW_MS - 1, tap)).toBeNull();
+    expect(drainOf(e, 1000 + DRAIN_SHOW_MS, tap)).toEqual({ from: 1000, ms: 3000 });
+    expect(drainOf(e, 2000, tap, 'and the')).toEqual({ from: 1000, ms: 9000 }); // slower while unfinished
+    expect(drainOf(e, 2000, listenRules('hold', false))).toBeNull();
+  });
+
+  it("ends after the pause since the last words, not before", () => {
     let e = heardWords(freshEars(0), 2000);
     e = heardWords(e, 3000);
     expect(verdict(e, 3000 + SILENCE_MS - 1, tap)).toBe('listening');

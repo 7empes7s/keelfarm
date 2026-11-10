@@ -19,6 +19,52 @@ export function withTranscript(before: string, heard: string): string {
   return kept ? `${kept} ${words}` : words;
 }
 
+// ---------- a sentence left hanging ----------
+
+/** Sounds people make while thinking. */
+const FILLERS = new Set(['uh', 'uhm', 'um', 'umm', 'ah', 'er', 'erm', 'hmm', 'hm', 'mm', 'mmm']);
+/** Words a finished sentence doesn't end on: joiners, articles, prepositions. */
+const DANGLING = new Set(['and', 'or', 'but', 'so', 'like', 'the', 'a', 'an', 'to', 'of', 'with', 'for', 'in', 'on', 'that', 'because']);
+
+const lastWord = (text: string) => (/([\p{L}']+)[^\p{L}']*$/u.exec(text)?.[1] ?? '').toLowerCase();
+
+/** What was heard stops mid-thought: on a filler ("uh"), a joiner or article ("and", "the"), or a comma. */
+export function unfinished(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (t.endsWith(',')) return true;
+  if (/[.!?]$/.test(t)) return false;
+  const w = lastWord(t);
+  return FILLERS.has(w) || DANGLING.has(w);
+}
+
+/** The words without the fillers at their end ("…the page, uh" → "…the page"). */
+export function withoutTrailingFillers(text: string): string {
+  let t = text.trim();
+  for (;;) {
+    const m = /[\s,]*([\p{L}']+)[\s,.!?…-]*$/u.exec(t);
+    if (!m || !FILLERS.has(m[1].toLowerCase())) return t;
+    t = t.slice(0, m.index).trim();
+  }
+}
+
+/**
+ * What a new recognition heard, after what the ended ones heard. A browser that starts again sometimes repeats the
+ * last words it already gave: they're kept once.
+ */
+export function joinHeard(before: string, next: string): string {
+  const a = before.trim();
+  const b = next.trim();
+  if (!a || !b) return a || b;
+  const norm = (w: string) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
+  const aw = a.split(/\s+/);
+  const bw = b.split(/\s+/);
+  for (let k = Math.min(aw.length, bw.length, 8); k >= 2; k--) {
+    if (aw.slice(-k).every((w, i) => norm(w) === norm(bw[i]))) return [...aw, ...bw.slice(k)].join(' ');
+  }
+  return `${a} ${b}`;
+}
+
 /** One phrase of the browser's recognition: its best guess, and whether it's settled. */
 export interface Phrase {
   transcript: string;
