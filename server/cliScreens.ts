@@ -48,19 +48,33 @@ const KNOWN_SCREENS: readonly KnownScreen[] = [
   { id: 'hooks', clis: ['codex'], what: "hooks review (went on without them: trusting them is the manager's call)", key: hookReviewKey },
 ];
 
-/** A sign-in on screen: only the manager can do it (Settings → Providers, or the agent's terminal). */
-const SIGN_IN = /Not logged in|run \/login|Select login method|Sign in with ChatGPT|Please login|Invalid API key|Browser didn't open|Paste code here/i;
+/**
+ * A CLI's own sign-in, drawn in full: its title with the menu or field it waits on, each on a line of its own (a
+ * command's output that quotes one of these phrases isn't a sign-in). Only the manager can do it.
+ */
+const SIGN_IN: Record<AgentCli, ((screen: string) => boolean)[]> = {
+  claude: [
+    (s) => /Select login method/i.test(s) && options(s).some((o) => /^Claude account with subscription/i.test(o.text)),
+    (s) => /^\s*Browser didn't open\?/im.test(s) && /^\s*Paste code here if prompted\b/im.test(s),
+    (s) => /^\s*(?:⎿\s*)?Not logged in · Please run \/login\s*$/m.test(s),
+  ],
+  codex: [(s) => options(s).some((o) => /^Sign in with ChatGPT/i.test(o.text)) && options(s).some((o) => /^Provide your own API key/i.test(o.text))],
+  opencode: [],
+};
+/** A sign-in phrase anywhere on screen: worth a line in the log, never a reason to end a session. */
+const SIGN_IN_HINT = /Not logged in|run \/login|Select login method|Sign in with ChatGPT|Please login|Invalid API key|Browser didn't open|Paste code here/i;
 
-export type ScreenStep = { do: 'keys'; screen: KnownScreen; key: ScreenKey } | { do: 'sign-in' } | null;
+export type ScreenStep = { do: 'keys'; screen: KnownScreen; key: ScreenKey } | { do: 'sign-in' } | { do: 'sign-in-hint' } | null;
 
-/** What a CLI's screen asks for while it starts: a known screen's key, a sign-in nobody here can do, or nothing. */
+/** What a CLI's screen asks for while it starts: a known screen's key, its sign-in nobody here can do, a sign-in phrase, or nothing. */
 export function screenStep(screen: string, cli: AgentCli): ScreenStep {
   for (const s of KNOWN_SCREENS) {
     if (!s.clis.includes(cli)) continue;
     const key = s.key(screen);
     if (key) return { do: 'keys', screen: s, key };
   }
-  return SIGN_IN.test(screen) ? { do: 'sign-in' } : null;
+  if (SIGN_IN[cli].some((test) => test(screen))) return { do: 'sign-in' };
+  return SIGN_IN_HINT.test(screen) ? { do: 'sign-in-hint' } : null;
 }
 
 /** The terminal bytes for a key (`app`: the terminal is in application cursor mode). */

@@ -57,6 +57,15 @@ describe('screenStep', () => {
     expect(screenStep(SIGN_IN, 'claude')).toEqual({ do: 'sign-in' });
     expect(screenStep(LOGIN_METHOD, 'claude')).toEqual({ do: 'sign-in' });
     expect(screenStep(' Sign in with ChatGPT\n › 1. Sign in with ChatGPT\n   2. Provide your own API key', 'codex')).toEqual({ do: 'sign-in' });
+    expect(screenStep('> hi\n  ⎿ Not logged in · Please run /login', 'claude')).toEqual({ do: 'sign-in' });
+  });
+
+  it('reads sign-in phrases in commands and their output mid-turn as a hint only, never a sign-in', () => {
+    const codex = ['• Ran rg -n "Paste code here" server', '  └ server/demo/sessions.ts:27:  \'Paste code here if prompted >\',', '    server/clis.ts:388: Not logged in · Please run /login', '', '› Explain this codebase'].join('\n');
+    expect(screenStep(codex, 'codex')).toEqual({ do: 'sign-in-hint' });
+    expect(screenStep('reading issue: Not logged in on claude-rvuese', 'opencode')).toEqual({ do: 'sign-in-hint' });
+    expect(screenStep('● Bash(grep -n "Select login method" server/cliScreens.ts)\n  ⎿ 52: Select login method', 'claude')).toEqual({ do: 'sign-in-hint' });
+    expect(screenStep(' Invalid API key · Fix external API key', 'claude')).toEqual({ do: 'sign-in-hint' });
   });
 
   it("skips Codex's update offer and goes on without its hooks", () => {

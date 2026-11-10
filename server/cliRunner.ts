@@ -975,22 +975,22 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
           }
         }
         quietly(() => pty.write(keyBytes(step.key, term.appCursor)));
-      } else if (step?.do === 'sign-in' && (box || !begun) && !nudged.has('login')) {
+      } else if (step && step.do !== 'keys' && !nudged.has('login')) {
         nudged.add('login');
-        // A cloud agent's CLI is signed in through the office's own sign-in, which then starts the task again.
+        // A cloud agent's CLI is signed in through the office's own sign-in, which then starts the task again. Here only
+        // the CLI's own sign-in before it took the task ends the session (#360): a sign-in phrase on screen is a hint.
         if (box) return finish({ ok: false, text: '', errors: [`${label} isn't signed in in their cloud machine.`], signedOut: true });
-        log([{ kind: 'error', text: `⚠ ${signInError(label, opts.account)}` }]);
-        return finish({ ok: false, text: '', errors: [signInError(label, opts.account)], signedOut: true });
+        const end = step.do === 'sign-in' && !begun && turns === 0;
+        log([{ kind: 'error', text: `⚠ ${end ? signInError(label, opts.account) : `${label} may need you to sign in: open the terminal and sign in there, or run "${cli}" in a terminal of your own.`}` }]);
+        if (end) return finish({ ok: false, text: '', errors: [signInError(label, opts.account)], signedOut: true });
       }
     }, 1000);
     bootTimer = setTimeout(() => {
       if (done || begun || cli !== 'claude') return;
       log([{ kind: 'error', text: `⚠ ${label} hasn't started on the task yet. Open the terminal to see what it's waiting for.` }]);
       // A screen the office doesn't know: the session ends rather than sit (the manager hears of it as a failed session).
-      bootTimer = setTimeout(() => {
-        const last = clip(term.screen().split('\n').map((x) => x.trim()).filter(Boolean).pop() ?? '', 120);
-        if (!done && !begun) finish({ ok: false, text: '', errors: [`${label} never started on the task: it sat on a screen the office doesn't answer${last ? ` ("${last}")` : ''}. Open the terminal to see it.`] });
-      }, BOOT_MS);
+      const stuck = () => clip(term.screen().split('\n').map((x) => x.trim()).filter(Boolean).pop() ?? '', 120);
+      bootTimer = setTimeout(() => !done && !begun && finish({ ok: false, text: '', errors: [`${label} never started on the task: it sat on a screen the office doesn't answer ("${stuck()}"). Open the terminal to see it.`] }), BOOT_MS);
     }, BOOT_MS);
   };
 
