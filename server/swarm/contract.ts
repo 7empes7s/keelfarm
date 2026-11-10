@@ -55,6 +55,7 @@ export abstract class SwarmContract {
   protected abstract recordUsage(...a: Parameters<Swarm['recordUsage']>): ReturnType<Swarm['recordUsage']>;
   protected abstract schedule(...a: Parameters<Swarm['schedule']>): ReturnType<Swarm['schedule']>;
   protected abstract usageNow(...a: Parameters<Swarm['usageNow']>): ReturnType<Swarm['usageNow']>;
+  protected abstract usageSharesSoon(...a: Parameters<Swarm['usageSharesSoon']>): ReturnType<Swarm['usageSharesSoon']>;
 
   // update.ts
   protected abstract labGateNow(...a: Parameters<Swarm['labGateNow']>): ReturnType<Swarm['labGateNow']>;

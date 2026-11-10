@@ -303,6 +303,7 @@ export const MAX_ISSUE_FAILURES = 2;
 export const MAX_QA_FAILURES = 2;
 // How long the office waits after Claude's usage limit is hit when Claude doesn't say when it resets.
 export const LIMIT_PAUSE_MS = 15 * 60_000;
+export const SHARES_MS = 60_000; // the usage meter's floor shares after sessions end: at most once a minute, only when they change (#334)
 export const READINGS_MS = 3000; // Claude's usage readings arrive with every status line: the office gets them at most this often
 // Everyone on a floor this size or bigger busy at once is a full house (an achievement).
 export const FULL_HOUSE = 4;

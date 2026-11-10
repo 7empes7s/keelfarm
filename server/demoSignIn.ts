@@ -17,9 +17,14 @@ export function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: Ag
   const claude = o.cli === 'claude';
   const token = claude && o.mode === 'setup-token';
   term.note(token ? '── Making a Claude Code setup token (demo) ──' : `── Signing ${claude ? 'Claude Code' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
+  const link = ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter ("fail" in it fails).\x1b[0m', 'Paste code here if prompted > '].join('\r\n');
+  // An account's login asks its login method first, as an older Claude Code does: the guided sign-in answers it (#350).
+  let menu = claude && !token && o.boxId === 'accounts';
   term.write(
     (claude
-      ? ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter ("fail" in it fails).\x1b[0m', 'Paste code here if prompted > ']
+      ? menu
+        ? ['Select login method:', '', ' ❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise', '   2. Anthropic Console account · API usage billing', '   3. 3rd-party platform · Amazon Bedrock, Microsoft Foundry, or Vertex AI']
+        : [link]
       : [
           'Welcome to Codex (demo)',
           '',
@@ -47,6 +52,12 @@ export function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: Ag
       raw += data.split('\r')[0];
       for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
         if (over) return;
+        if (menu) {
+          if (ch !== '\r') continue;
+          menu = false;
+          term.write(`\x1b[4A\r\x1b[0J${link}`); // the menu goes, as Ink clears it
+          continue;
+        }
         if (ch === '\r') {
           if (claude && !line.trim()) continue;
           const fail = claude && line.includes('fail');

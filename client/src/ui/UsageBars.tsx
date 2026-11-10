@@ -3,7 +3,8 @@ import { isReset, readingsNote, usageBars } from '../../../shared/usage';
 import { useStore } from '../store';
 import { ProgressBar } from './ProgressBar';
 import { HoverCard, PeekCard } from './HoverCard';
-import { floorShares } from './peekFacts';
+import { fmtUsd } from '../ops';
+import { sharesNote, shareStats } from './peekFacts';
 
 // Claude's latest usage, one bar per limit ("5-hour: 42%, resets 18:30"), in Mission control and on pocket mode's
 // company page. The numbers are the whole subscription's, read from the agents' and the CEO's sessions,
@@ -28,13 +29,14 @@ export function UsageBars({ link = true }: { link?: boolean }) {
   const check = useStore((s) => s.claudeUsageCheck);
   const now = useNow(30_000);
   const note = readingsNote(readings, now, check) ?? (readings.some((r) => isReset(r, now)) ? 'Reset, waiting for a new reading' : null);
-  const agents = useStore((s) => s.agents);
+  const allShares = useStore((s) => s.claudeUsageShares);
   const repos = useStore((s) => s.repos);
-  // The meters' hover card (#213): what's counted, when it resets, and the floors' share of the running sessions.
-  const shares = floorShares(Object.values(agents), (id) => {
+  const floorOf = (id: string) => {
     const r = repos.find((x) => x.id === id);
     return r && `Floor ${r.floor} · ${r.fullName.split('/')[1]}`;
-  });
+  };
+  // The meters' hover card (#213): what's counted, when it resets, and who spent the office's part of each bar's window (#334).
+  const shares = new Map(allShares.filter((s) => s.rows.length).map((s) => [s.type, { rows: shareStats(s, floorOf, fmtUsd), note: sharesNote(s, now, fmtUsd) }]));
   return (
     <div className="usage-bars">
       {usageBars(readings, now).map((b) => (
@@ -45,9 +47,9 @@ export function UsageBars({ link = true }: { link?: boolean }) {
             <PeekCard
               title={`${b.name}: ${b.pct}%`}
               sub="The whole Claude plan’s use in this window: every agent’s and the CEO’s sessions, plus your own."
-              stats={[['Resets', b.resets ?? 'not said'], ...shares.slice(0, 4).map((x) => [x.name, `${Math.round(x.share * 100)}%`] as [string, string])]}
+              stats={[['Resets', b.resets ?? 'not said'], ...(shares.get(b.type)?.rows ?? [])]}
               bar={{ pct: b.pct / 100, tone: b.tone, label: `${b.pct}% used` }}
-              note={shares.length ? 'Floor shares: what the agents working now have spent so far.' : note}
+              note={shares.get(b.type)?.note ?? note}
             />
           }
         >

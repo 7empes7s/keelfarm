@@ -6,11 +6,11 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { BILLING_LINKS, kindSentence } from '../../../shared/accounts';
 import { clock, isReset, usageBars } from '../../../shared/usage';
-import type { AccountCli, AccountKind, AccountView, SignInMode } from '../../../shared/types';
+import type { AccountCli, AccountKind, AccountView } from '../../../shared/types';
 import { Menu } from './Menu';
 import { Sheet } from './Sheet';
 import { ProgressBar } from './ProgressBar';
-import { LiveTerminal } from './LiveTerminal';
+import { SignInSheet } from './SignInSheet';
 import { confirmDialog } from './Confirm';
 import { workerCli } from './floorRows';
 import './accounts.css';
@@ -324,49 +324,6 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
           {busy ? 'Checking…' : kind === 'subscription-login' ? 'Add and sign in' : 'Add'}
         </button>
       </form>
-    </Sheet>
-  );
-}
-
-/**
- * The login's own sign-in, in a terminal: open the link it prints and paste the code back. Once it's over it says how it
- * ended, with Try again (a fresh login in the same terminal); Claude Code can make a setup token there instead (#302).
- */
-function SignInSheet({ a, close }: { a: AccountView; close: () => void }) {
-  const run = a.signIn;
-  const token = run?.mode === 'setup-token';
-  const failed = !!run && !run.running && !run.ok;
-  const again = (mode: SignInMode) => void api.signInAccount(a.id, mode).catch(() => undefined);
-  return (
-    <Sheet title={`${token ? 'Setup token' : 'Sign in'} · ${a.label}`} onClose={close} className="acc-signin">
-      <p className="muted small">
-        {a.cli === 'claude' ? 'Open the link below, approve it, and paste the code back here.' : 'Open the link below and enter the one-time code it shows.'}{' '}
-        {token ? 'It prints a token that lasts a year: put it in an environment variable of the office and add it as a Setup token account. The office never saves it.' : "It signs in only this account's folder."}
-      </p>
-      <LiveTerminal agentId={`account:${a.id}`} cli={a.cli} compact keys signIn />
-      {run && !run.running && (
-        <div className={`small ${run.ok ? 'notify-ok' : 'term-error'}`} role="status">
-          {run.note}
-        </div>
-      )}
-      <div className="row wrap">
-        {failed && (
-          <button className="btn btn-primary" onClick={() => again(run.mode)}>
-            <Icon name="rotate-ccw" /> Try again
-          </button>
-        )}
-        {a.cli === 'claude' && (
-          <button className="btn" onClick={() => again(token ? 'login' : 'setup-token')}>
-            <Icon name="key-round" /> {token ? 'Sign in with the browser instead' : 'Sign in with a setup token instead'}
-          </button>
-        )}
-        <button className="btn" onClick={() => void api.testAccount(a.id).catch(() => undefined)}>
-          <Icon name="flask-conical" /> Test
-        </button>
-        <button className={`btn ${failed ? '' : 'btn-primary'}`} onClick={close}>
-          Done
-        </button>
-      </div>
     </Sheet>
   );
 }
