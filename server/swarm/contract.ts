@@ -45,7 +45,6 @@ export abstract class SwarmContract {
   protected abstract queueQa(...a: Parameters<Swarm['queueQa']>): ReturnType<Swarm['queueQa']>;
 
   // scheduling.ts
-  protected abstract claudeUsageEvent(...a: Parameters<Swarm['claudeUsageEvent']>): ReturnType<Swarm['claudeUsageEvent']>;
   protected abstract issueFailed(...a: Parameters<Swarm['issueFailed']>): ReturnType<Swarm['issueFailed']>;
   protected abstract limited(...a: Parameters<Swarm['limited']>): ReturnType<Swarm['limited']>;
   protected abstract opsNow(...a: Parameters<Swarm['opsNow']>): ReturnType<Swarm['opsNow']>;
@@ -56,6 +55,7 @@ export abstract class SwarmContract {
   protected abstract recordUsage(...a: Parameters<Swarm['recordUsage']>): ReturnType<Swarm['recordUsage']>;
   protected abstract schedule(...a: Parameters<Swarm['schedule']>): ReturnType<Swarm['schedule']>;
   protected abstract usageNow(...a: Parameters<Swarm['usageNow']>): ReturnType<Swarm['usageNow']>;
+  protected abstract usageSharesSoon(...a: Parameters<Swarm['usageSharesSoon']>): ReturnType<Swarm['usageSharesSoon']>;
 
   // update.ts
   protected abstract labGateNow(...a: Parameters<Swarm['labGateNow']>): ReturnType<Swarm['labGateNow']>;

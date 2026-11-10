@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CostRecord, CostSession, TaskKind } from './costs.ts';
-import { usageShares, windowShares, windowSince } from './usageShares.ts';
+import { sharesSignature, usageShares, windowShares, windowSince } from './usageShares.ts';
 
 const H = 3_600_000;
 const NOW = Date.UTC(2026, 10, 7, 12);
@@ -83,5 +83,15 @@ describe('windowShares', () => {
     expect(windowShares([], week, NOW)).toEqual({ type: 'seven_day', since: NOW - 5 * 24 * H, usd: 0, rows: [], others: null });
     const all = usageShares(ledger, [{ ...fiveHour, pct: 40, at: NOW }, { ...week, pct: 93, at: NOW }], NOW);
     expect(all.map((x) => x.type)).toEqual(['five_hour', 'seven_day']);
+  });
+});
+
+describe('sharesSignature', () => {
+  it('changes when a row or a whole percentage does, not when only the dollars grow', () => {
+    const base = [s('a', 3, 1), s('b', 1, 1)];
+    const sig = sharesSignature([windowShares(base, week, NOW)]);
+    expect(sharesSignature([windowShares([...base, s('a', 0.03, 0.5), s('b', 0.01, 0.5)], week, NOW)])).toBe(sig);
+    expect(sharesSignature([windowShares([...base, s('b', 2, 0.5)], week, NOW)])).not.toBe(sig);
+    expect(sharesSignature([windowShares([...base, s('c', 0.01, 0.5)], week, NOW)])).not.toBe(sig);
   });
 });

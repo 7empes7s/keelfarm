@@ -13,7 +13,7 @@ import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged, usageChoice } from '../../shared/usage.ts';
-import { usageShares } from '../../shared/usageShares.ts';
+import { sharesSignature, usageShares } from '../../shared/usageShares.ts';
 import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
   clampPacingSessions,
@@ -48,6 +48,7 @@ import {
   MAX_ISSUE_FAILURES,
   LIMIT_PAUSE_MS,
   READINGS_MS,
+  SHARES_MS,
 } from './model.ts';
 import { SwarmQa } from './qa.ts';
 
@@ -79,6 +80,8 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected lastUsage = '';
   protected shownReadings: UsageReading[] = []; // the readings the office was last sent
   protected readingsTimer: NodeJS.Timeout | null = null;
+  private sharesTimer: NodeJS.Timeout | null = null;
+  private sentShares = ''; // the floor shares the tabs were last sent (#334)
   protected usagePoll: PollState = { lastTry: 0, failures: 0 }; // the office's own checks of Claude's usage while idle (#89)
   protected usagePolling = false;
 
@@ -403,7 +406,19 @@ export abstract class SwarmScheduling extends SwarmQa {
 
   /** Claude's readings for the usage meter, with their floor shares. */
   protected claudeUsageEvent(check = this.usageCheck): ServerEvent {
-    return { type: 'claudeUsage', readings: this.state.claudeUsage, check, shares: this.usageSharesNow() };
+    const shares = this.usageSharesNow();
+    this.sentShares = sharesSignature(shares);
+    return { type: 'claudeUsage', readings: this.state.claudeUsage, check, shares };
+  }
+
+  /** A session's cost was booked: within a minute, the meter's shares if their rows or percentages changed (one pending at most). */
+  protected usageSharesSoon() {
+    if (this.sharesTimer) return;
+    this.sharesTimer = setTimeout(() => {
+      this.sharesTimer = null;
+      if (sharesSignature(this.usageSharesNow()) !== this.sentShares) this.broadcast(this.claudeUsageEvent());
+    }, SHARES_MS);
+    this.sharesTimer.unref?.();
   }
 
   override snapshot(): WorldSnapshot {

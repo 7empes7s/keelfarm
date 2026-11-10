@@ -66,5 +66,8 @@ export function windowShares(records: readonly CostRecord[], r: Pick<UsageReadin
   };
 }
 
+/** What a tab would see change: each bar's rows and whole percentages (the dollars move with every session, so not them). */
+export const sharesSignature = (shares: readonly UsageShares[]) => shares.map((s) => `${s.type}:${s.rows.map((r) => `${r.repoId}=${r.pct}`).join(',')}${s.others ? `,+${s.others.count}=${s.others.pct}` : ''}`).join('|');
+
 /** Every bar's shares, one per reading. */
 export const usageShares = (records: readonly CostRecord[], readings: readonly UsageReading[], now: number): UsageShares[] => readings.map((r) => windowShares(records, r, now));
