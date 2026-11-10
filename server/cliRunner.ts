@@ -507,7 +507,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const roots = sessionRoots(opts.cwd, opts.env, dir); // the folders the session may write in
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
-  const watch = new SessionWatch(started, requiredKeys(opts.outputSchema), cli !== 'opencode'); // its live state (#359)
+  const watch = new SessionWatch(started, requiredKeys(opts.outputSchema), cli !== 'opencode'); // its live state (#359): blocked, never started, or done unheard
   let promptTimer: NodeJS.Timeout | undefined;
   const statusSecrets = envSecrets({ ...process.env, ...opts.env, ...opts.box?.env });
   // The CEO's text as it writes it; everyone else's chat (#120).
@@ -655,7 +655,6 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     onScreen = null;
   };
 
-  /** The session's live state (#359): blocked on a screen, never started, or its result printed with nobody hearing of it. */
   const watchLive = (l: LiveCli, now: number) =>
     actOn(watch.tick({ now, begun, screen: term.screen(), tail: term.tail(120), quietMs: now - Math.max(l.lastData ?? started, l.lastHook ?? started) }), label, {
       log: (text, error) => log([{ kind: error ? 'error' : 'system', text }]), blocked: (s) => (s ? cb.blocked?.(s.reason, s.kind) : !onScreen?.blocked && !statusReport.blocked && cb.blocked?.(null)),
