@@ -99,6 +99,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      scanKeys: (a) => this.keyScanForCeo(!!a.rescan),
       editMessage: async (a) => this.editCeoMessage(a),
       waitFor: (a) => this.waitFor(a),
       askManager: (a) => this.askManager(a),

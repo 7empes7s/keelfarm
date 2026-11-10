@@ -50,6 +50,10 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'openai', name: 'OpenAI API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/api-reference', usage: 'openai', blurb: 'GPT models over the API' },
   { id: 'gemini', name: 'Google Gemini API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs', usage: 'gemini', blurb: 'Gemini models over the API' },
   { id: 'openrouter', name: 'OpenRouter', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENROUTER_API_KEY', placeholder: 'sk-or-…', docsUrl: 'https://openrouter.ai/docs', usage: 'openrouter', blurb: 'Many models behind one key, with its credit' },
+  { id: 'groq', name: 'Groq', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'GROQ_API_KEY', placeholder: 'gsk_…', docsUrl: 'https://console.groq.com/docs', blurb: 'Fast open models over the API' },
+  { id: 'cerebras', name: 'Cerebras', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'CEREBRAS_API_KEY', placeholder: 'csk-…', docsUrl: 'https://inference-docs.cerebras.ai', blurb: 'Fast open models over the API' },
+  { id: 'nvidia', name: 'NVIDIA NIM', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'NVIDIA_API_KEY', placeholder: 'nvapi-…', docsUrl: 'https://docs.api.nvidia.com', blurb: "Models on NVIDIA's API catalogue" },
+  { id: 'aihubmix', name: 'AIHubMix', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'AIHUBMIX_API_KEY', placeholder: 'sk-…', docsUrl: 'https://docs.aihubmix.com', blurb: 'Many models behind one OpenAI-style key' },
   { id: 'elevenlabs', name: 'ElevenLabs', category: 'audio', auth: 'api-key', home: 'voice', keyEnv: 'ELEVENLABS_API_KEY', placeholder: 'sk_…', docsUrl: 'https://elevenlabs.io/docs', usage: 'elevenlabs', blurb: 'Voices for agents and messages read aloud' },
   { id: 'openai-audio', name: 'OpenAI TTS & Whisper', category: 'audio', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech', usage: 'openai', blurb: 'Speech and transcription over the OpenAI API' },
   { id: 'nano-banana', name: 'Nano Banana (Gemini image)', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/image-generation', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', icon: 'banana', blurb: 'Gemini image generation and editing over the Gemini API key', note: "Google AI Plus's Nano Banana and Veo work only in the Gemini app and Flow, not through the API: it takes a Gemini API key." },
@@ -60,6 +64,8 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'kling', name: 'Kling', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'KLING_ACCESS_KEY', placeholder: 'access key:secret key', docsUrl: 'https://app.klingai.com/global/dev/document-api', usage: 'kling', usageNote: 'No resource pack on the account', blurb: 'Kling video on resource packs' },
   // No OpenAI Sora: its API was removed on 2026-09-24 with no successor. Don't add it back.
   { id: 'upstash', name: 'Upstash Box', category: 'cloud', auth: 'api-key', home: 'cloud', docsUrl: 'https://upstash.com/docs/box', usage: 'upstash', blurb: 'Cloud machines for cloud agents' },
+  { id: 'cloudflare', name: 'Cloudflare', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'CLOUDFLARE_API_TOKEN', placeholder: 'API token', docsUrl: 'https://developers.cloudflare.com/fundamentals/api/', blurb: 'DNS, tunnels and Workers' },
+  { id: 'github', name: 'GitHub token', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'GITHUB_TOKEN', placeholder: 'ghp_… or github_pat_…', docsUrl: 'https://docs.github.com/en/rest', blurb: 'A personal access token for the GitHub API' },
   { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
 ];
 
@@ -114,6 +120,18 @@ export function testRequest(provider: string, key: string, now = Date.now()): Pr
       return { kind: 'http', url: 'https://openrouter.ai/api/v1/key', headers: bearer };
     case 'hetzner':
       return { kind: 'http', url: 'https://api.hetzner.cloud/v1/servers?per_page=1', headers: bearer };
+    case 'groq':
+      return { kind: 'http', url: 'https://api.groq.com/openai/v1/models', headers: bearer };
+    case 'cerebras':
+      return { kind: 'http', url: 'https://api.cerebras.ai/v1/models', headers: bearer };
+    case 'nvidia': // its /v1/models answers without a key: the functions list doesn't
+      return { kind: 'http', url: 'https://api.nvcf.nvidia.com/v2/nvcf/functions', headers: bearer };
+    case 'aihubmix':
+      return { kind: 'http', url: 'https://aihubmix.com/v1/models', headers: bearer };
+    case 'cloudflare':
+      return { kind: 'http', url: 'https://api.cloudflare.com/client/v4/user/tokens/verify', headers: bearer };
+    case 'github':
+      return { kind: 'http', url: 'https://api.github.com/user', headers: { ...bearer, Accept: 'application/vnd.github+json', 'User-Agent': 'cubefarm' } };
     default:
       return null;
   }

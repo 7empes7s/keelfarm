@@ -8,6 +8,7 @@ export type NoticeStep =
   | Jump
   | { kind: 'chat' }
   | { kind: 'approvals'; requestId?: string }
+  | { kind: 'keys' } // Settings → Providers with the found keys' review open (#367)
   | { kind: 'call'; call: 'approve'; requestId: string }
   | { kind: 'call'; call: 'reset' | 'ceoRetry'; agentId: string }
   | null;
@@ -17,6 +18,7 @@ export function noticeJump(n: Pick<NoticeView, 'kind' | 'target' | 'requestId'>,
   if (n.target && n.kind !== 'approval') return jumpFor({ ...n.target, start: 0, end: 0 }, mode, w);
   if (n.kind === 'ceo') return { kind: 'chat' };
   if (n.kind === 'approval') return { kind: 'approvals', ...(n.requestId && { requestId: n.requestId }) };
+  if (n.kind === 'keys') return { kind: 'keys' };
   return n.target ? jumpFor({ ...n.target, start: 0, end: 0 }, mode, w) : null;
 }
 
@@ -42,5 +44,7 @@ export function noticeStep(a: NoticeAction, n: Pick<NoticeView, 'target' | 'requ
       return { kind: 'approvals', ...(n.requestId && { requestId: n.requestId }) };
     case 'approve':
       return n.requestId ? { kind: 'call', call: 'approve', requestId: n.requestId } : null;
+    case 'reviewKeys':
+      return { kind: 'keys' };
   }
 }

@@ -20,7 +20,7 @@ import type { EmoteId, VisitorPose, VisitorView } from './presence.ts';
 import type { PongRow, PreviewStatsView, PrPreviewView, QaView, RepoView, TickerItem } from './repos.ts';
 import type { SwarmSettings } from './settings.ts';
 import type { AccountsView } from './accounts.ts';
-import type { ProvidersView } from './providers.ts';
+import type { KeyScanView, ProvidersView } from './providers.ts';
 import type { UsageSource } from './usage.ts';
 import type { VoiceCacheView } from './voice.ts';
 
@@ -66,6 +66,7 @@ export interface WorldSnapshot {
   cloud?: CloudView; // Settings → Cloud agents: the Upstash account and the credentials cloud agents use
   accounts?: AccountsView; // Settings → Providers & accounts (#247): no secrets
   providers?: ProvidersView; // Settings → Providers (#362): keys added there and MCP servers, never a secret
+  keyScan?: KeyScanView; // keys found on this computer (#367): last 4 and test results, never a value
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers?: PastCareer[]; // careers of people let go, kept for a rehire (#205); absent in a replay
   careers?: Record<string, CareerRow>; // agents' careers by id as rows (#291), their `career` then null; absent in a replay
@@ -137,6 +138,7 @@ export type ServerEvent =
   | { type: 'accounts'; accounts: AccountsView } // without `sources`: they come in usageSources
   | { type: 'usageSources'; sources: UsageSource[] } // the usage card's rows (#361), only when they changed
   | { type: 'providers'; providers: ProvidersView } // a key or MCP server added, changed, tested or removed (#362)
+  | { type: 'keyScan'; keyScan: KeyScanView } // the scan for keys on this computer started, finished, imported (#367)
   | { type: 'tooling'; tooling: ToolInventory }
   | { type: 'experiments'; experiments: LabView }
   | { type: 'managerChanges'; changes: ManagerChange[] }
