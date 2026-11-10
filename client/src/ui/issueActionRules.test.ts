@@ -18,7 +18,11 @@ describe('issue actions shared by the console and pocket CardView', () => {
   it('cannot assign an untrusted issue', () => {
     expect(issueActions({ ...ready, untrusted: true })).toMatchObject({ primary: null, assign: false, close: true, stop: false });
   });
-  it.each([{ open: false }, { pr: true }])('has no issue mutations for closed issues or PR cards (%j)', (state) => {
-    expect(issueActions({ ...ready, ...state })).toMatchObject({ primary: null, close: false, stop: false });
+  it('has no issue mutations for closed issues', () => {
+    expect(issueActions({ ...ready, open: false })).toMatchObject({ primary: null, close: false, stop: false });
+  });
+  it('keeps Close but no new assignment while an open PR closes the issue', () => {
+    expect(issueActions({ ...ready, pr: true })).toMatchObject({ primary: null, assign: false, close: true, stop: false });
+    expect(issueActions({ ...ready, pr: true, agentStatus: 'working' })).toMatchObject({ primary: 'agent', assign: false, close: true, stop: false });
   });
 });

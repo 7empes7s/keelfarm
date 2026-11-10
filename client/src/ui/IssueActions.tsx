@@ -15,9 +15,12 @@ export function IssueActions({ repo, number }: { repo: RepoView; number: number 
   const all = useStore((s) => s.agents);
   const [busy, setBusy] = useState(false);
   const issue = repo.issues.find((i) => i.number === number);
-  const agent = agentsOnRepo(all, repo.id).sort((a, b) => Number(isBusy(b)) - Number(isBusy(a))).find((a) => a.role !== 'ceo' && a.task === 'issue' && a.issueNumber === number && a.prNumber == null && a.status !== 'idle');
+  const pr = repo.pulls.some((p) => p.state === 'OPEN' && !p.untrusted && p.closesIssues.includes(number));
+  const onIt = agentsOnRepo(all, repo.id).sort((a, b) => Number(isBusy(b)) - Number(isBusy(a))).filter((a) => a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber === number && a.status !== 'idle');
+  // Its builder; once a PR is open, whoever holds it (usually fixing that PR).
+  const agent = onIt.find((a) => a.task === 'issue' && a.prNumber == null) ?? (pr ? onIt[0] : undefined);
   const waits = issue ? blockers(issue.body, new Set(repo.issues.map((i) => i.number))) : [];
-  const actions = issueActions({ open: !!issue, pr: repo.pulls.some((p) => p.state === 'OPEN' && !p.untrusted && p.closesIssues.includes(number)), untrusted: issue?.untrusted, agentStatus: agent?.status, waits });
+  const actions = issueActions({ open: !!issue, pr, untrusted: issue?.untrusted, agentStatus: agent?.status, waits });
   if (!issue || !actions.close) return null;
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);

@@ -31,6 +31,14 @@ describe('issue controls rendered by CardView and the console', () => {
     expect(html).not.toContain('Assign issue');
     expect(html).toContain('More for issue #12');
   });
+  it('keeps Close and shows the fixer while an open PR closes the issue', () => {
+    const withPr = { ...repo, pulls: [{ number: 30, state: 'OPEN', closesIssues: [12] }] } as unknown as RepoView;
+    const html = renderToStaticMarkup(<IssueActions repo={withPr} number={12} />);
+    expect(html).toContain('More for issue #12');
+    expect(html).not.toContain('Assign issue');
+    state.agents = { dev: { id: 'dev', repoId: 'floor', role: 'dev', name: 'Ada', task: 'fix', issueNumber: 12, prNumber: 30, status: 'working' } as unknown as Agent };
+    expect(renderToStaticMarkup(<IssueActions repo={withPr} number={12} />)).toContain('>Open Ada</button>');
+  });
   it('does not offer mutations after closing', () => {
     expect(renderToStaticMarkup(<IssueActions repo={{ ...repo, issues: [] }} number={12} />)).toBe('');
   });
