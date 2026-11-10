@@ -12,6 +12,8 @@ describe('officeUpdateText', () => {
     expect(officeUpdateText(u({ state: 'draining', behind: 3, running: 2 }))).toBe('Waiting for 2 sessions to finish');
     expect(officeUpdateText(u({ state: 'waiting', behind: 3, running: 1 }))).toBe('Waiting for 1 session to finish');
     expect(officeUpdateText(u({ state: 'draining', behind: 3 }))).toBe('Updating shortly…');
+    expect(officeUpdateText(u({ state: 'draining', behind: 3, lab: 2 }))).toBe('Waiting for 2 lab checks to finish'); // #333
+    expect(officeUpdateText(u({ state: 'draining', behind: 3, running: 1, lab: 1 }))).toBe('Waiting for 1 session and 1 lab check to finish');
     expect(officeUpdateText(u({ state: 'updating', behind: 3, holds: true }))).toBe('Updating…');
     expect(officeUpdateText(u({ state: 'updating', behind: 3 }))).toBe('Checking the update; agents keep working, then the office restarts for a few seconds');
     expect(officeUpdateText(u({ state: 'settling', behind: 3, updateAt: 1_000_000 + 90_000 }), 1_000_000)).toBe('Updating in 2 min, 3 commits; agents keep working');
@@ -27,6 +29,8 @@ describe('officeUpdateChip', () => {
     expect(officeUpdateChip(u({ state: 'failed', detail: 'x' }))).toBeNull();
     expect(officeUpdateChip(u({ state: 'draining', running: 2 }))).toBe('Updating the office after 2 sessions finish');
     expect(officeUpdateChip(u({ state: 'waiting', running: 1 }))).toBe('Updating the office after 1 session finishes');
+    expect(officeUpdateChip(u({ state: 'draining', lab: 1 }))).toBe('Updating the office after 1 lab check finishes');
+    expect(officeUpdateChip(u({ state: 'draining', running: 1, lab: 2 }))).toBe('Updating the office after 1 session and 2 lab checks finish');
     expect(officeUpdateChip(u({ state: 'updating' }))).toBe('Updating the office…');
     expect(officeUpdateChip(u({ state: 'settling', behind: 1, updateAt: 1_000_000 + 10_000 }), 1_000_000)).toBe('Updating in 1 min, 1 commit');
   });

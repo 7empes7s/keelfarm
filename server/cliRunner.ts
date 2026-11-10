@@ -37,7 +37,7 @@ import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
 import { envSecrets } from './journal.ts';
-import { wireCli } from './cliWire.ts';
+import { mcpGone, wireCli } from './cliWire.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -94,10 +94,7 @@ export function handleHook(token: string, body: unknown): Record<string, unknown
 /** The CEO's office tools over MCP (Streamable HTTP, stateless: a fresh server per request). */
 export async function handleMcp(token: string, req: Request, res: Response) {
   const office = routes.get(token)?.office;
-  if (!office) {
-    res.status(404).json({ jsonrpc: '2.0', error: { code: -32001, message: 'This session has ended.' }, id: null });
-    return;
-  }
+  if (!office) return mcpGone(res, routes.has(token));
   const server = office.serve();
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {
@@ -850,6 +847,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     term.releaseIdle = null;
     live.session = { hook, exited };
     Object.assign(live, { statusLine });
+    // A CLI picked up after a restart keeps calling its old address: its office tools (the lab's) answer there again (#333).
+    if (opts.office && !live.box) Object.assign(routes.get(live.token) ?? {}, { office: opts.office });
     remember(live);
     if (live.resumeId) cb.sessionId(live.resumeId);
     if (opts.typed || opts.reattach) busy(); // typed at the prompt, or still at it after a restart: already running

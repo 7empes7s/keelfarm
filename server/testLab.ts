@@ -389,11 +389,14 @@ export interface TestLabHost {
   /** page: the address the browser was sent to. */
   shot(agentId: string, file: string, page: string): void;
   emit(view: TestLabView): void;
+  /** While the office updates itself (#333): the agents whose queued jobs may still start (labGate); null: anyone's. */
+  updateGate?(): readonly string[] | null;
 }
 
 const BROWSER_IDLE_MS = 5 * 60_000;
 const RETRY_MS = 5_000;
 const DEFAULT_RUN_MIN = 15;
+const UPDATE_WAIT = 'Waiting for the office update: queued jobs start once the office has restarted.';
 
 let seq = 0;
 
@@ -407,6 +410,7 @@ export class TestLab {
   private held: string | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private idle: ReturnType<typeof setTimeout> | null = null;
+  private lastLab = new Map<string, number>(); // agent → when their last job ended (#333)
 
   constructor(private host: TestLabHost) {}
 
@@ -458,16 +462,30 @@ export class TestLab {
     return this.recent.find((r) => r.id === id)?.file ?? null;
   }
 
+  /** What the office's update waits for (#333, labHold): whose jobs run and wait, and when each agent's last one ended. */
+  activity(): { running: string[]; waiting: string[]; lastLab: ReadonlyMap<string, number> } {
+    return { running: this.running.map((j) => j.who.agentId), waiting: this.queue.map((j) => j.who.agentId), lastLab: this.lastLab };
+  }
+
+  /** The office's update gate changed: start what it now lets start. */
+  reopen() {
+    this.pump();
+  }
+
   /** Running lab jobs, for #55's admission: what they still reserve. */
   sessions(): { id: string; kind: SessionKind; dir: null; startedAt: number }[] {
     return this.running.map((j) => ({ id: `lab:${j.id}`, kind: laneOf(j.kind) === 'browser' ? 'labBrowser' : 'labRun', dir: null, startedAt: j.startedAt ?? Date.now() }));
   }
 
-  async close() {
+  /** restart: the office comes back at once (an update), and its sessions in the terminal keeper ask again (#333). */
+  async close(restart = false) {
     if (this.retry) clearTimeout(this.retry);
     if (this.idle) clearTimeout(this.idle);
-    for (const j of this.queue) j.done('Refused: the office is stopping; ask the lab again once it is back.');
+    const again = restart ? 'the office is restarting. Make the same lab call again in a minute, once it is back: that is not a finding.' : 'the office is stopping; ask the lab again once it is back.';
+    for (const j of this.queue) j.done(`Not run: ${again}`);
+    for (const j of this.running) j.done(`Cut off: ${again}`);
     this.queue = [];
+    this.running = [];
     await this.host.runner().close().catch(() => undefined);
   }
 
@@ -481,7 +499,10 @@ export class TestLab {
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
     const s = this.host.settings();
-    const next = pickNext(this.queue, this.running, { browser: s.browserJobs, heavy: s.heavyJobs }, this.served);
+    const gate = this.host.updateGate?.() ?? null;
+    const open = gate ? this.queue.filter((j) => gate.includes(j.who.agentId)) : this.queue;
+    const gated = this.queue.length > open.length;
+    const next = pickNext(open, this.running, { browser: s.browserJobs, heavy: s.heavyJobs }, this.served);
     let held: string | null = null;
     for (const j of next) {
       const why = this.host.refusal(laneOf(j.kind) === 'browser' ? 'labBrowser' : 'labRun');
@@ -495,7 +516,7 @@ export class TestLab {
       this.served.set(j.repoId, j.startedAt);
       void this.execute(j);
     }
-    this.held = held;
+    this.held = held ?? (gated ? UPDATE_WAIT : null); // the update reopens the gate itself
     if (held) this.retry = setTimeout(() => this.pump(), RETRY_MS);
     if (this.idle) clearTimeout(this.idle);
     this.idle = null;
@@ -563,7 +584,9 @@ export class TestLab {
     const u = this.usage.get(j.repoId) ?? { floor: j.who.floor, jobs: 0, ms: 0 };
     this.usage.set(j.repoId, { floor: j.who.floor, jobs: u.jobs + 1, ms: u.ms + ms });
     this.recent = [{ id: j.id, kind: j.kind, repoId: j.repoId, floor: j.who.floor, agentId: j.who.agentId, agent: j.who.agent, pr: j.who.pr, title: j.title, queuedAt: j.queuedAt, startedAt: j.startedAt, endedAt, ok, summary, shot: !!file, file }, ...this.recent].slice(0, RECENT_MAX);
+    if (!this.running.includes(j)) return; // answered by close()
     this.running = this.running.filter((r) => r !== j);
+    this.lastLab.set(j.who.agentId, endedAt);
     j.done(text);
     this.pump();
   }

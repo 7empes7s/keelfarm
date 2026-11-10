@@ -46,6 +46,9 @@ function testStep(hasChecks: boolean): string {
     : "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).";
 }
 
+/** QA's lab rule (#333): an office restart mid-round loses a lab call, never the round. */
+export const LAB_RESTART_LINE = 'If a lab call fails because the office restarted (it says so, or the call errors while the office updates), make the same call again a minute later: a restart is never a finding.';
+
 // ---------- the full-quality pass (#301) ----------
 
 /** Files that change how the 3D office looks: the world, photo mode, rendering, shaders and the 3D HUD's styles. */

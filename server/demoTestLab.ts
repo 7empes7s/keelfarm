@@ -66,7 +66,7 @@ export function demoLabRunner(): LabRunner {
     },
     async check(o) {
       up = true;
-      await pause(2000);
+      await pause(2000 + Math.min(60_000, o.steps.reduce((ms, s) => ms + (s.do === 'wait' ? (s.ms ?? s.value ?? 0) : 0), 0))); // its waits, so a check can run long (#333)
       return { steps: o.steps.map((s) => ({ step: [s.do, s.selector, s.text ?? s.url].filter(Boolean).join(' '), ok: true })), consoleErrors: [], pageErrors: [], failedRequests: [] };
     },
     checkout: async (o) => o.worktree,

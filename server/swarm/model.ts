@@ -162,6 +162,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
   recheckAt?: number | null; // the CEO's last triage from a needs-human re-check (#275, stuckRecheck.ts)
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
+  restartRetryRound?: number | null; // the round QA already re-ran by itself after losing its lab to an office restart (#333)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
   cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
@@ -239,6 +240,7 @@ export interface AgentRuntime {
   shots: Shot[]; // every screenshot of the current session (QA evidence)
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
+  acrossRestart?: boolean; // the current session's CLI kept working through an office restart (#333)
   blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
   chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }

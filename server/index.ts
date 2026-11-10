@@ -493,6 +493,7 @@ app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params
 // The demo office only: the CEO grows (or shrinks) a floor's team on demand.
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
 app.post('/api/demo/new-commit', route(() => swarm.demoNewCommit()));
+app.post('/api/demo/lab-update', route(() => swarm.demoLabUpdate()));
 
 // Office progression (#210): the lobby kiosk, a floor's decorations, the player's coffees, and the demo's coins and
 // tenure for QA.
