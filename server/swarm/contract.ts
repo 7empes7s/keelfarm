@@ -102,6 +102,7 @@ export abstract class SwarmContract {
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
 
   // upkeep.ts
+  protected abstract alertBlocked(...a: Parameters<Swarm['alertBlocked']>): ReturnType<Swarm['alertBlocked']>;
   protected abstract careerWork(...a: Parameters<Swarm['careerWork']>): ReturnType<Swarm['careerWork']>;
   protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
   protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
@@ -109,6 +110,7 @@ export abstract class SwarmContract {
   protected abstract progressTick(...a: Parameters<Swarm['progressTick']>): ReturnType<Swarm['progressTick']>;
   protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
   protected abstract restoreDesk(...a: Parameters<Swarm['restoreDesk']>): ReturnType<Swarm['restoreDesk']>;
+  protected abstract requeue(a: PersistedAgent, why: string): void; // protected there
 
   // team.ts
   protected abstract applyTeamChanges(...a: Parameters<Swarm['applyTeamChanges']>): ReturnType<Swarm['applyTeamChanges']>;

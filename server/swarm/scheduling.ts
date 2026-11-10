@@ -61,6 +61,7 @@ export abstract class SwarmScheduling extends SwarmQa {
    */
   protected isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
+    if (this.pinnedSignedOut(a)) return false;
     if (this.setupBlocks(a.id)) return false; // signed out, as the setup advisor found (#366)
     if (questionOf(this.state.questions, a.id)) return false; // waiting on an answer: it resumes their task
     if (this.consulting(a)) return false;

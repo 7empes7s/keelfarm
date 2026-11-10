@@ -553,7 +553,11 @@ export abstract class SwarmSessions extends SwarmRotation {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
+        blocked: (reason, kind) => {
+          rt.blocked = reason ? { reason, since: Date.now(), told: false, kind: kind ?? 'prompt' } : null;
+          this.emitAgent(a);
+          this.alertBlocked(a); // a sign-in, setup screen or the like: the manager and the CEO hear at once (#359)
+        },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -632,7 +636,11 @@ export abstract class SwarmSessions extends SwarmRotation {
     const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' || !!killed };
 
     if (killed) Object.assign(a, { status: 'stopped', lastError: killed });
-    else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
+    else if (result.signedOut && a.host !== 'box' && a.status !== 'stopped' && !this.dropping.has(a.id)) {
+      // It opened on its CLI's sign-in (#360): no strike, the work goes back in line for an account that's signed in.
+      a.status = 'idle';
+      this.requeue(a, `${result.errors[0] ?? 'their coding agent needs signing in'}`.replace(/\.$/, ''));
+    } else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
     else if (a.task === 'qa') await this.onQaFinished(a, repo, result);
     else if (a.task === 'fix') await this.onFixFinished(a, repo, result);
     else await this.onIssueFinished(a, repo, result);

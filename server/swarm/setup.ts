@@ -97,10 +97,9 @@ export abstract class SwarmSetup extends SwarmDisk {
     if (a.host === 'box' && a.needsSignIn) return { why: 'Their cloud machine waits for a sign-in.', fix: 'terminal' };
     const cli = a.cli || this.state.settings.defaultCli;
     if (cli === 'claude' || cli === 'codex') {
-      // Pinned: that account. In the rotation (on), only when every enabled login of theirs is out: another one runs it.
-      const pinned = !!a.account && a.account !== 'rotation';
+      // With the rotation on, only when every enabled login of theirs is out (another one runs it, pinned or not, #360).
       const acc = resolveAccount(accounts, a.account, cli);
-      const runsOn = pinned || !rotationSettings(this.state.settings.rotation, undefined).on ? accounts.filter((x) => x.id === acc?.id) : accounts.filter((x) => x.cli === cli && x.enabled && !x.removing);
+      const runsOn = rotationSettings(this.state.settings.rotation, undefined).on ? accounts.filter((x) => x.cli === cli && x.enabled && !x.removing) : accounts.filter((x) => x.id === acc?.id);
       const out = runsOn.length > 0 && runsOn.every((x) => x.status === 'signed-out');
       return out ? { why: `Their ${cli === 'claude' ? 'Claude' : 'Codex'} login${runsOn.length > 1 ? 's are' : ` "${runsOn[0].label}" is`} signed out.`, fix: 'accounts' } : null;
     }

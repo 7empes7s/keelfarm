@@ -14,6 +14,7 @@ import { CEO_DISALLOWED, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '
 import { VERSION } from './config.ts';
 import { consultRefusal } from './consult.ts';
 import { keyHelperCommand, nonInteractiveEnv } from './unblock.ts';
+import type { StuckKind } from './liveState.ts';
 import { transcriptEvents, type TranscriptEvent } from '../shared/agentChat.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
@@ -50,6 +51,8 @@ export interface SessionOptions {
   typed?: boolean;
   /** Whose terminal it is (the terminal keeper holds this, for the office that picks the CLI up after a restart). */
   agentId?: string;
+  /** The account it runs on (#247), for the log's count of screens answered on it (#360). */
+  account?: string;
   /** Follow the session of the CLI still running in the terminal after the office restarted; start nothing. */
   reattach?: boolean;
   /** A cloud agent's: the CLI runs in their Upstash Box (docs/cloud.md), always in the terminal runtime. */
@@ -79,7 +82,7 @@ export interface SessionResult {
   structured?: unknown;
   /** The manager interrupted the turn in the agent's terminal (Esc). */
   interrupted?: boolean;
-  /** A cloud agent's CLI isn't signed in, or its login expired: the task waits for the manager to sign it in again. */
+  /** Its CLI isn't signed in, or its login expired: a cloud agent's task waits for the manager to sign it in again; another goes back in line (#360). */
   signedOut?: boolean;
   /** A cloud agent's API key ran out of credit or was turned away (shared/keyTrouble.ts): they switch to their own login. */
   keyTrouble?: KeyTrouble;
@@ -108,8 +111,8 @@ export interface SessionCallbacks {
   usage?(readings: UsageReading[]): void;
   /** A new session's first turn: the input tokens it sent before any work, and the CLAUDE.md files it loaded (#50). */
   startup?(s: { tokens: number; memoryChars: number }): void;
-  /** The session waits on a prompt the office couldn't answer (the reason), or no longer does (null). */
-  blocked?(reason: string | null): void;
+  /** The session waits on a prompt the office couldn't answer (the reason), or no longer does (null). kind: why (#359; default 'prompt'). */
+  blocked?(reason: string | null, kind?: StuckKind): void;
   finished(result: SessionResult): void;
 }
 

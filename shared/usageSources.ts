@@ -208,9 +208,10 @@ export function resetsIn(at: number | null, now: number): string | null {
 const compact = (n: number) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}k` : `${Math.round(n)}`);
 const SHORT: Record<string, string> = { '5-hour': '5h', Weekly: 'week', 'Weekly Opus': 'week Opus', 'Weekly Sonnet': 'week Sonnet' };
 
-/** A window in a few words: "week 98%", "61% of 100k chars", "$3.20 today of $20", "4 of 10 Boxes". */
+/** A window in a few words: "week 98%", "61% of 100k chars", "$3.20 today of $20", "4 of 10 Boxes", "1.3k credits left". */
 export function windowWords(w: UsageWindow): string {
   if (w.unit === '$') return `$${(w.used ?? 0).toFixed(2)} ${w.name.toLowerCase()}${w.limit ? ` of $${w.limit}` : ''}`;
+  if (w.unit && w.limit === undefined && w.usedPct === null) return `${compact(w.used ?? 0)} ${w.unit} left`;
   if (w.unit && w.limit !== undefined) return w.unit === 'chars' ? `${w.usedPct ?? 0}% of ${compact(w.limit)} chars` : `${w.used ?? 0} of ${w.limit} ${w.unit}`;
   return `${SHORT[w.name] ?? w.name} ${w.usedPct ?? 0}%`;
 }

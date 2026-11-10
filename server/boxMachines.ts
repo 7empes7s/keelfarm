@@ -8,6 +8,7 @@ import path from 'node:path';
 import { HOME_DIR } from './config.ts';
 import { boxLabels, boxName, machineOfBox, redact } from './cloud.ts';
 import { BOX_HELPERS } from './boxHelpers.ts';
+import { claudeSeed } from './cliSetup.ts';
 import { sweepStrayClis } from './boxCli.ts';
 import {
   BOX_BIN,
@@ -198,7 +199,8 @@ export class BoxMachines implements MachineProvider {
     const lines = r.output.trim().split('\n');
     if (r.code !== 0) throw failure(`Couldn't set up the desk in ${fullName}'s cloud machine`, r.output, this.deps.secrets());
     for (const l of lines.slice(0, -1)) if (/stale git lock|rebuilt/.test(l)) note?.(l.trim());
-    await api.run(id, `node ${sq(`${BOX_BIN}/seed-claude.cjs`)} ${sq(boxDeskDir(fullName))}`);
+    const version = this.deps.versions.claude;
+    await api.run(id, `node ${sq(`${BOX_BIN}/seed-claude.cjs`)} ${sq(JSON.stringify(claudeSeed([boxDeskDir(fullName)], version === 'latest' ? null : version)))}`);
     return boxDeskDir(fullName);
   }
 

@@ -20,6 +20,8 @@ import {
 } from '../watchdog.ts';
 import { PREVIEW_SLUG } from '../previewRunner.ts';
 import { pruneQaShots } from '../qaShots.ts';
+import { QA_SCHEMA } from '../qaReport.ts';
+import { alertOnce, canNudge, forgetTold, requiredKeys, stuckNotice } from '../liveState.ts';
 import { previewSettings, upgradePreviewIdle } from '../prTheatre.ts';
 import { desksToTrim, formatBytes, freedMessage, idleSince } from '../deskTrim.ts';
 import { machineName } from '../machines.ts';
@@ -40,6 +42,8 @@ import {
 } from '../ledger.ts';
 import { careerTimeline, type TimelineView } from '../../shared/careerTimeline.ts';
 import { followupEvents } from '../../shared/followups.ts';
+import { redact as scrub } from '../../shared/journal.ts';
+import { clip } from '../notify.ts';
 import { achievementDef, type ProgressView } from '../../shared/progress.ts';
 import { parsePongResult, PONG_PLAYER, recordGame } from '../../shared/pong.ts';
 import type { CostRecord, CostSession } from '../../shared/costs.ts';
@@ -48,6 +52,9 @@ import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { slugify } from './flavour.ts';
 import { SwarmCeo } from './ceoJobs.ts';
+
+/** An agent's current task, for telling each blocked state once per task. */
+const blockedTask = (a: PersistedAgent) => `${a.id}@${a.startedAt ?? 0}`;
 
 export abstract class SwarmUpkeep extends SwarmCeo {
   // ---------- idle desks ----------
@@ -223,9 +230,14 @@ export abstract class SwarmUpkeep extends SwarmCeo {
     const what = p.prNumber != null ? `PR #${p.prNumber}` : `#${p.issueNumber}`;
     const mins = Math.round((now - p.since) / 60_000);
     if (remedy === 'nudge') {
-      const session = a && this.agentRt.get(a.id)?.session;
+      const rt = a && this.agentRt.get(a.id), session = rt?.session;
       if (!a || !session) return null;
       this.watch.nudged.set(p.key, now);
+      // Typed into a menu it could pick an option, and a printed result needs no nudge (#359): its work goes back in line later instead.
+      if (rt.terminal && !canNudge(rt.terminal.screen(), rt.terminal.tail(120), a.task === 'qa' ? requiredKeys(QA_SCHEMA) : null)) {
+        this.appendLog(a, [{ kind: 'system', text: `🩺 No sign of life for ${mins} minutes, but their screen shows a menu or a result: the office didn't type into it.` }]);
+        return null;
+      }
       this.appendLog(a, [{ kind: 'system', text: `🩺 No sign of life for ${mins} minutes: the office nudged them.` }]);
       session.send(nudgeText(now - p.since));
       return null;
@@ -586,5 +598,28 @@ export abstract class SwarmUpkeep extends SwarmCeo {
     this.broadcast({ type: 'pong', repoId, board });
     this.save();
     return board;
+  }
+
+  private toldBlocked = new Set<string>(); // agents' blocked states already told, per task (alertBlocked)
+
+  /**
+   * An agent blocked, not started or finished unnoticed (liveState.ts, #359): one notification with what fixes it, and
+   * one follow-up naming the state and their last screen lines so the CEO can restart, message or redirect them.
+   * Once per state and task (toldBlocked), and the follow-up's key is the agent and the state. No agent: everyone's
+   * (every minute), and what was told about tasks that are over is forgotten.
+   */
+  protected alertBlocked(a?: PersistedAgent) {
+    if (!a) {
+      for (const x of this.state.agents) this.alertBlocked(x);
+      return forgetTold(this.toldBlocked, new Set(this.state.agents.map(blockedTask)));
+    }
+    const rt = this.agentRt.get(a.id), b = rt?.blocked, now = Date.now();
+    if (!rt || !b || !alertOnce(this.toldBlocked, blockedTask(a), b, now)) return;
+    const repo = this.state.repos.find((r) => r.id === a.repoId);
+    const n = stuckNotice(a.name, b, now, repo?.floor);
+    this.notice({ kind: 'stuck', title: n.title, text: n.body, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: n.actions }, { event: 'agentError', line: n.who });
+    if (a.role === 'ceo') return;
+    const screen = scrub(rt.terminal?.tail(8).filter((l) => l.trim()).join(' / ') ?? '', this.secrets());
+    this.followup(followupEvents.agentBlocked(a, b.kind ?? 'prompt', clip(scrub(b.reason, this.secrets()), 160), clip(screen, 400), repo?.id, repo && this.floorName(repo)));
   }
 }

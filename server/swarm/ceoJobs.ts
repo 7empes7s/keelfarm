@@ -14,7 +14,6 @@ import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
 import { officeParts } from '../../shared/startup.ts';
 import { speaks } from '../voice.ts';
 import { teamKeyboard, telegramChat, telegramMessage } from '../telegram.ts';
-import { blockedNotice } from '../unblock.ts';
 import { clip, plainText, stuckAgents, type TeamChange } from '../notify.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import {
@@ -782,10 +781,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
       this.notice({ kind: 'stuck', title: `${a.name} needs help`, text: `In an error for ${mins} minutes${repo ? ` on floor ${repo.floor}` : ''}: ${clip(a.lastError ?? 'their session failed', 200)}`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal', 'retry'] }, { event: 'agentError', line: `${a.name}${repo ? ` (floor ${repo.floor})` : ''}` });
       if (a.role !== 'ceo') this.followup(followupEvents.agentError(a, key, mins, clip(scrub(a.lastError ?? 'their session failed', this.secrets()), 200), repo?.id, repo && this.floorName(repo)));
     }
-    for (const a of this.state.agents) { // blocked on a prompt the watchdog couldn't answer: told once (unblock.ts)
-      const b = this.agentRt.get(a.id)?.blocked, n = blockedNotice(a.name, b, now, this.state.repos.find((r) => r.id === a.repoId)?.floor);
-      if (n && b) { b.told = true; this.notice({ kind: 'stuck', title: n.title, text: n.body, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal'] }, { event: 'agentError', line: n.who }); }
-    }
+    this.alertBlocked(); // a prompt the watchdog couldn't answer is told after 5 minutes (liveState.ts)
     for (const q of this.state.questions) if (renotifyDue(q, now)) this.notifyQuestion(Object.assign(q, { renotified: true }), true);
     for (const key of this.toldStuck) if (!this.state.agents.some((a) => key === `${a.id}:${a.endedAt ?? 0}` && a.status === 'error')) this.toldStuck.delete(key);
   }
