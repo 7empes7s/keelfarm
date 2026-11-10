@@ -58,6 +58,11 @@ export interface SignInRun {
   running: boolean;
   ok: boolean;
   note: string; // when it's over: "Sign-in failed (400). Try again…", never anything typed
+  // What its terminal shows, for the guided sign-in (#350):
+  url?: string; // the sign-in page it printed
+  deviceCode?: string; // Codex's one-time code for that page
+  waiting?: boolean; // Claude Code's prompt waits for the code
+  question?: { text: string; options: string[] }; // a menu the office didn't answer by itself
 }
 
 export interface AccountsView {

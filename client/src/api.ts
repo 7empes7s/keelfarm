@@ -257,6 +257,8 @@ export const api = {
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
   testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
   signInAccount: (id: string, mode: SignInMode = 'login') => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`, { mode }),
+  signInCode: (id: string, code: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/code`, { code }),
+  signInAnswer: (id: string, option: number) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/answer`, { option }),
   useAccountNow: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/use-now`),
   simulateAccountLimit: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-limit`),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),

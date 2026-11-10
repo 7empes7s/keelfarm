@@ -194,6 +194,69 @@ describe('Accounts', () => {
     term.dispose();
   });
 
+  it('the guided sign-in (#350): answers the login menu, reads the link off the real output, sends exactly the pasted code', async () => {
+    const URL_ = 'https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile&code_challenge=hhuUE_dFmZsg-B2VkqAw6DsYoqxyL71ICyyl2k7uhcw&code_challenge_method=S256&state=JqzKsMJrwWFRbVCJe098AtKRjuOp4eNrchRoSyEHvaI';
+    const got: string[] = [];
+    const { accounts } = await office({
+      signIn: (o) => {
+        o.term.note('── Signing Claude Code in ──');
+        o.term.write(' Select login method:\r\n\r\n ❯ 1. Claude account with subscription · Pro, Max\r\n   2. Anthropic Console account · API usage billing\r\n');
+        o.term.bind({
+          write: (d) => {
+            got.push(d);
+            // As `claude auth login` prints it: the link as an OSC 8 hyperlink, wider than the terminal; bracketed paste on.
+            if (d === '\r' && got.length === 1) o.term.write(`\x1b[4A\r\x1b[0J\x1b[?2004hOpening browser to sign in…\r\nIf the browser didn't open, visit: \x1b]8;;${URL_}\x07${URL_}\x1b]8;;\x07\r\nPaste code here if prompted > `);
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.signIn(id);
+    const run = () => accounts.view().accounts.find((a) => a.id === id)?.signIn;
+    await vi.waitFor(() => expect(run()).toMatchObject({ running: true, url: URL_, waiting: true }));
+    expect(got[0]).toBe('\r'); // the subscription login, chosen by the office
+    expect(run()?.question).toBeUndefined();
+    expect(() => accounts.signInCodeIn(id, URL_)).toThrow(/web address/);
+    expect(() => accounts.signInCodeIn(id, 'two words')).toThrow(/spaces/);
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    accounts.signInCodeIn(id, '  abc123#state456\n');
+    spy.mockRestore();
+    expect(got.slice(1)).toEqual(['\x1b[200~abc123#state456\x1b[201~', '\r']);
+    accounts.terminal(id)!.bind(null);
+    expect(() => accounts.signInCodeIn(id, 'abc#1')).toThrow(/has ended/);
+    accounts.terminal(id)!.dispose();
+  });
+
+  it('the guided sign-in asks a menu it does not know, and Codex’s one-time code is on the run (#350)', async () => {
+    const got: string[] = [];
+    const { accounts } = await office({
+      signIn: (o) => {
+        o.term.note('── Signing Codex in ──');
+        o.term.write(' Pick a workspace\r\n ❯ 1. Personal\r\n   2. Acme\r\n');
+        o.term.bind({
+          write: (d) => {
+            got.push(d);
+            o.term.write('\x1b[3A\r\x1b[0J1. Open this link in your browser and sign in to your account\r\n   \x1b[94mhttps://auth.openai.com/codex/device\x1b[0m\r\n\r\n2. Enter this one-time code \x1b[90m(expires in 15 minutes)\x1b[0m\r\n   \x1b[94mB0VZ-0ZW5L\x1b[0m\r\n');
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'codex', kind: 'subscription-login', label: 'ChatGPT Plus' });
+    accounts.signIn(id);
+    const run = () => accounts.view().accounts.find((a) => a.id === id)?.signIn;
+    await vi.waitFor(() => expect(run()?.question).toEqual({ text: 'Pick a workspace', options: ['Personal', 'Acme'] }));
+    expect(got).toEqual([]);
+    expect(() => accounts.signInAnswer(id, 5)).toThrow(/has gone/);
+    accounts.signInAnswer(id, 1);
+    expect(got).toEqual(['\x1b[B\r']);
+    await vi.waitFor(() => expect(run()).toEqual({ mode: 'login', running: true, ok: false, note: '', url: 'https://auth.openai.com/codex/device', deviceCode: 'B0VZ-0ZW5L' }));
+    accounts.terminal(id)!.dispose();
+  });
+
   it('keeps an API key out of the registry, the views and events; the session gets it through apiKeyHelper only', async () => {
     const { accounts, home, events } = await office();
     await expect(accounts.add({ cli: 'claude', kind: 'api-key', key: 'nope' })).rejects.toThrow(/sk-ant-/);
