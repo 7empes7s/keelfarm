@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { BILLING_LINKS, kindSentence } from '../../../shared/accounts';
-import { clock, usageBars } from '../../../shared/usage';
+import { clock, isReset, usageBars } from '../../../shared/usage';
 import type { AccountCli, AccountKind, AccountView, SignInMode } from '../../../shared/types';
 import { Menu } from './Menu';
 import { Sheet } from './Sheet';
@@ -118,6 +118,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
           <div className="ds-row-meta">
             {KIND_NAME[a.kind]}
             {a.plan ? ` · ${a.plan}` : ''}
+            {a.loginPlan ? ` · login is ${a.loginPlan}` : ''}
             {a.keyHint ? ` · ••••${a.keyHint}` : ''}
             {a.builtIn ? ' · already here' : ''}
           </div>
@@ -147,9 +148,20 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
           ))}
         </div>
       )}
+      {a.planWarning && (
+        <div className="acc-flag acc-flag-warn" role="status">
+          <Icon name="triangle-alert" /> {a.planWarning}
+        </div>
+      )}
+      {a.tokenRefresh && (
+        <div className="acc-flag" role="status">
+          <Icon name="refresh-cw" /> Token expired: it refreshes on its next session
+        </div>
+      )}
       {usageBars(a.usage, now).map((b) => (
         <ProgressBar key={b.type} label={b.name} value={`${b.pct}%${b.resets ? `, ${b.resets}` : ''}`} pct={b.pct / 100} tone={b.tone} aria={`${a.label}: ${b.name} ${b.pct}%`} />
       ))}
+      {a.usage.some((r) => isReset(r, now)) && <div className="ds-row-meta">Reset, waiting for a new reading</div>}
       {a.dailyCostCap ? (
         <ProgressBar label="Today" value={`${usd(a.todayUsd)} of ${usd(a.dailyCostCap)}`} pct={Math.min(1, a.todayUsd / a.dailyCostCap)} tone={a.todayUsd >= a.dailyCostCap ? 'bad' : a.todayUsd >= a.dailyCostCap * 0.75 ? 'warn' : 'good'} aria={`${a.label}: ${usd(a.todayUsd)} of a ${usd(a.dailyCostCap)} daily cap`} />
       ) : null}

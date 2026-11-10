@@ -1,5 +1,6 @@
-// The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Anthropic API key, an OpenAI
-// key), a Test that never leaves the computer, and sign-ins drawn as the CLIs' own (demoSignIn.ts).
+// The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Ultra login whose token
+// expired after its week reset, an Anthropic API key, an OpenAI key), a Test that never leaves the computer, and
+// sign-ins drawn as the CLIs' own (demoSignIn.ts).
 import type { AccountsBackend } from './backend.ts';
 import type { AccountsDeps } from './accounts.ts';
 import type { UsageApi } from './usageSources.ts';
@@ -13,12 +14,13 @@ const reading = (type: string, pct: number, inMs: number, now: number): UsageRea
 /** The seeded accounts. Their keys are made up, and the demo keeps them in a secrets file of its own. */
 const SEED: ProviderAccount[] = [
   { id: 'claude-keelop', cli: 'claude', kind: 'subscription-login', label: 'Max · keelops', tags: ['max', 'backup'], priority: 1, enabled: true, plan: 'Max' },
+  { id: 'claude-ultra', cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra', tags: ['ultra'], priority: 3, enabled: true, plan: 'Ultra' },
   { id: 'claude-apikey', cli: 'claude', kind: 'api-key', label: 'Anthropic API', tags: ['api'], priority: 2, enabled: true, plan: 'API', dailyCostCap: 20 },
   { id: 'codex-apikey', cli: 'codex', kind: 'api-key', label: 'OpenAI API', tags: ['api'], priority: 1, enabled: false, plan: 'API' },
 ];
 
 export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
-  const signedIn = new Set<string>(['claude-keelop']); // login folders the demo has "signed in"
+  const signedIn = new Set<string>(['claude-keelop', 'claude-ultra']); // login folders the demo has "signed in"
   return {
     check: async (a) => {
       await new Promise((r) => setTimeout(r, 300));
@@ -26,6 +28,9 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
       if (a.kind !== 'subscription-login') return { signedIn: true, readings: [], note: '✓ The demo accepts any key.' };
       if (a.builtIn) return { signedIn: true, readings: a.cli === 'codex' ? codexReadings(codexLimits(now), now) : [], note: '✓ Signed in (demo).' };
       if (!signedIn.has(a.id)) return { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
+      // #442: Ultra's token expired after its week reset (last week's 100% reads 0%); keelops is signed in with a Pro account.
+      if (a.id === 'claude-ultra') return { signedIn: true, refresh: true, plan: 'Max 20x', readings: [{ type: 'seven_day', pct: 100, resetsAt: now - 2 * HOUR, at: now - 30 * HOUR }], note: '✓ Signed in; its token refreshes on its next session.' };
+      if (a.id === 'claude-keelop') return { signedIn: true, plan: 'Pro', readings: [reading('five_hour', 42, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)], note: '✓ Signed in; usage read (demo).' };
       return { signedIn: true, readings: a.cli === 'claude' ? [reading('five_hour', 42, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)] : [], note: '✓ Signed in; usage read (demo).' };
     },
     signIn: (o, exited) => {

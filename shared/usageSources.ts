@@ -1,6 +1,6 @@
 // Usage for every account and provider (#361), pure: each provider's answer as windows, an account as a source, the
 // worst row first, the CEO's one line, the 90% notifications (once per window) and "resets in 3h".
-import { barName, readingOf } from './usage.ts';
+import { barName, isReset, livePct, readingOf } from './usage.ts';
 import type { AccountView, UsageReading, UsageSource, UsageSourceStatus, UsageWindow } from './types.ts';
 
 const HOUR = 60 * 60_000;
@@ -140,10 +140,18 @@ export function accountSource(a: AccountView, spendUsd7d: number, now: number): 
   const api = a.kind === 'api-key';
   const windows: UsageWindow[] = api
     ? [{ name: 'Today', usedPct: a.dailyCostCap ? pctOf(a.todayUsd, a.dailyCostCap) : null, used: a.todayUsd, ...(a.dailyCostCap ? { limit: a.dailyCostCap } : {}), unit: '$', resetsAt: nextMidnight(now) }]
-    : a.usage.map((r) => ({ name: barName(r.type), usedPct: r.pct, resetsAt: r.resetsAt }));
+    : a.usage.map((r) => ({ name: barName(r.type), usedPct: livePct(r, now), resetsAt: r.resetsAt }));
   const status: UsageSourceStatus = a.status === 'paused' ? 'ready' : a.status;
   const newest = a.usage.length ? Math.max(...a.usage.map((r) => r.at)) : null;
-  const note = api ? "From the office's cost ledger" : !a.usage.length ? (a.status === 'signed-out' ? 'Not signed in' : 'No reading yet: it updates while an agent works on it') : undefined;
+  const note = api
+    ? "From the office's cost ledger"
+    : !a.usage.length
+      ? a.status === 'signed-out'
+        ? 'Not signed in'
+        : 'No reading yet: it updates while an agent works on it'
+      : a.usage.some((r) => isReset(r, now))
+        ? 'Reset, waiting for a new reading'
+        : undefined;
   return {
     id: a.id,
     provider: a.cli,

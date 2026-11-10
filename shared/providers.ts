@@ -130,6 +130,7 @@ export interface ProviderCard {
   keyHint: string;
   uses: string[]; // "What uses it": agents' names, Voice, Cloud agents…
   usageId?: string; // its row on the usage card
+  warning?: string; // a Claude login signed in with another plan than its name says (#442)
   /** Where it's changed: its old settings section, or here. */
   settings: 'accounts' | 'voice' | 'cloud-agents' | 'tools' | null;
 }
@@ -163,11 +164,12 @@ export function providerCards(i: CardInput): ProviderCard[] {
       category: 'coding',
       status: ACCOUNT_STATUS[a.status],
       note: a.kind === 'api-key' ? 'API key' : a.kind === 'setup-token' ? 'Setup token' : 'Subscription login',
-      plan: a.plan ?? '',
+      plan: [a.plan, a.loginPlan && `login is ${a.loginPlan}`, a.tokenRefresh && 'token refreshes on its next session'].filter(Boolean).join(' · '),
       keyHint: a.keyHint,
       uses: a.agents.length ? a.agents.map(i.agentName) : a.enabled ? ['Agents on the rotation'] : [],
       usageId: a.id,
       settings: 'accounts',
+      ...(a.planWarning ? { warning: a.planWarning } : {}),
     });
   }
   if (i.clis.some((c) => c.id === 'opencode' && c.installed)) {
