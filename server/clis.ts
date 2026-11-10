@@ -6,7 +6,6 @@ import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel, KeyTrouble } from '../shared/types.ts';
 import { keyTrouble } from '../shared/keyTrouble.ts';
 import { resetTime } from '../shared/accountRotation.ts';
-import { prepareGeminiHome } from './geminiHome.ts';
 import type { BoxVersions } from './boxScripts.ts';
 import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 
@@ -357,13 +356,9 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
   }
 }
 
-/**
- * Before a CLI starts on this computer: the files it reads, and a Gemini login folder's first-run settings (the
- * office's own logins only: the manager's ~/.gemini is never changed).
- */
-export function prepareLaunch(cli: AgentCli, launch: Launch, env: Record<string, string> | undefined) {
+/** Before a CLI starts on this computer: the files it reads (Gemini CLI's settings and instructions). */
+export function prepareLaunch(launch: Launch) {
   for (const [file, text] of launch.write ?? []) fs.writeFileSync(file, text);
-  if (cli === 'gemini' && env?.GEMINI_CLI_HOME) prepareGeminiHome(env.GEMINI_CLI_HOME);
 }
 
 // ---------- Codex's saved threads ----------
@@ -583,11 +578,17 @@ export default async function CubefarmPlugin({ client } = {}) {
 }
 `;
 
-/** The helper programs above, by file name, written to the office's bin folder for the CLIs to run. */
-export const HELPER_FILES: [string, string][] = [
+/** The helper programs above, by file name. */
+const HELPER_FILES: [string, string][] = [
   ['statusline.cjs', STATUSLINE_SOURCE],
   ['notify.cjs', NOTIFY_SOURCE],
   ['codex-hook.cjs', CODEX_HOOK_SOURCE],
   ['opencode-plugin.mjs', OPENCODE_PLUGIN_SOURCE],
   ['gemini-hook.cjs', GEMINI_HOOK_SOURCE],
 ];
+
+/** Writes the helper programs into the office's bin folder, for the CLIs to run. */
+export function writeHelperFiles(dir: string) {
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [name, source] of HELPER_FILES) fs.writeFileSync(path.join(dir, name), source);
+}

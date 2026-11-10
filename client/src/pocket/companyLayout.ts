@@ -1,6 +1,6 @@
-// The Company page's layout decisions (#223), pure: how many columns the floor cards get in the width the page has
-// (the chat open or closed and the browser's zoom only change that width), and the one status row while the office
-// connects, updates or restarts.
+// The Company page's layout decisions (#223), pure: how many columns the floor cards and the summary cards get in the
+// width the page has (the chat open or closed and the browser's zoom only change that width), and the one status row
+// while the office connects, updates or restarts.
 import type { IconName } from '../ui/icons';
 
 /** A floor card is at least this wide; a little narrower (SOFT_MIN) only to keep a card from sitting alone in a row. */
@@ -20,6 +20,18 @@ export function floorColumns(width: number, count: number, gap = 12): number {
   if (!lonely(count, cols)) return cols;
   const more = balance(count, Math.min(count, cols + 1));
   return more > cols && more <= fits(width, SOFT_MIN, gap) && !lonely(count, more) ? more : cols;
+}
+
+/** A summary card (usage, the memory map, the CEO) is at least this wide. */
+export const SUMMARY_MIN = 240;
+
+/** The summary row's grid (#345) for `count` cards in `width` px: as many columns as fit, never more than there are
+ *  cards (no empty track), and the last card spanning what its row leaves, so every row ends at the floors' right edge. */
+export function summaryGrid(width: number, count: number, gap = 8): { cols: number; lastSpan: number } {
+  if (count <= 1 || !(width > 0)) return { cols: 1, lastSpan: 1 };
+  const cols = balance(count, Math.min(count, fits(width, SUMMARY_MIN, gap)));
+  const rest = count % cols;
+  return { cols, lastSpan: rest ? cols - rest + 1 : 1 };
 }
 
 export interface StatusInput {

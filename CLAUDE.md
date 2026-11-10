@@ -116,6 +116,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `unblock.ts`: nothing waits on a human (pure): each Claude Code session's worktree permission rules, every CLI's
   non-interactive environment (`cliEnv`), the answers to PermissionRequest / Elicitation / AskUserQuestion hooks, and
   the watchdog's steps for a prompt still on screen (answer it, else the agent is `blocked`, notified after 5 minutes).
+  `cliScreens.ts` (#360) is the table of first-run and warning screens answered at start-up (theme, trust, warnings),
+  and the sign-in that ends a session instead; `cliSetup.ts` sets up an account's login folder before each session
+  (onboarding, theme, the worktree trusted; the Box seed applies the same), never the built-in login's.
 - `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode, Gemini CLI): detection, Windows `.cmd` shim
   unwrapping, each one's command line, and the helper scripts they call back with. `geminiHome.ts`: a Gemini login
   folder's first-run settings (#365); what each CLI suits is in `shared/cliNotes.ts`.

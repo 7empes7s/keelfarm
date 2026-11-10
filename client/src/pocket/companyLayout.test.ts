@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLOOR_MIN, floorColumns, statusLine } from './companyLayout';
+import { FLOOR_MIN, floorColumns, statusLine, SUMMARY_MIN, summaryGrid } from './companyLayout';
 
 const GAP = 12;
 const cardWidth = (width: number, cols: number) => (width - (cols - 1) * GAP) / cols;
@@ -37,6 +37,35 @@ describe('floorColumns', () => {
         if (cols > 1) expect(cardWidth(width, cols)).toBeGreaterThanOrEqual(300);
         // narrower than the minimum only to save a card from sitting alone
         if (cols > 1 && cardWidth(width, cols) < FLOOR_MIN) expect(!alone(count, cols) && alone(count, cols - 1)).toBe(true);
+      }
+  });
+});
+
+describe('summaryGrid', () => {
+  it('three cards share one row when they fit, so the row ends at the floors\' right edge (#345)', () => {
+    expect(summaryGrid(1100, 3)).toEqual({ cols: 3, lastSpan: 1 });
+    expect(summaryGrid(760, 3)).toEqual({ cols: 3, lastSpan: 1 });
+  });
+
+  it('one column in the side column, on a phone or with no width yet', () => {
+    expect(summaryGrid(300, 3)).toEqual({ cols: 1, lastSpan: 1 });
+    expect(summaryGrid(0, 3)).toEqual({ cols: 1, lastSpan: 1 });
+    expect(summaryGrid(1600, 1)).toEqual({ cols: 1, lastSpan: 1 });
+  });
+
+  it('a card alone in the last row spans it', () => {
+    expect(summaryGrid(600, 3)).toEqual({ cols: 2, lastSpan: 2 });
+  });
+
+  it('never leaves an empty track and never makes a card narrower than the minimum', () => {
+    const gap = 8;
+    for (let width = 0; width <= 1900; width += 10)
+      for (let count = 1; count <= 6; count++) {
+        const { cols, lastSpan } = summaryGrid(width, count, gap);
+        expect(cols).toBeLessThanOrEqual(count);
+        expect(((count - 1 + lastSpan) % cols)).toBe(0); // every row full, the last one too
+        expect(count - 1 + lastSpan).toBeGreaterThanOrEqual(cols); // the first row too
+        if (cols > 1) expect((width - (cols - 1) * gap) / cols).toBeGreaterThanOrEqual(SUMMARY_MIN);
       }
   });
 });

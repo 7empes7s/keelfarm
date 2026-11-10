@@ -20,8 +20,13 @@ const SEED: ProviderAccount[] = [
   { id: 'gemini-plus', cli: 'gemini', kind: 'subscription-login', label: 'Google AI Plus', tags: ['gemini'], priority: 0, enabled: true, plan: 'Plus' }, // the demo's Gemini CLI agent runs on it (#365)
 ];
 
+/** Login folders the demo has "signed in": a session on any other login account opens on its sign-in (demo/sessions.ts). */
+export const demoSignedIn = new Set<string>();
+
 export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
-  const signedIn = new Set<string>(['claude-keelop', 'claude-ultra', 'gemini-plus']); // login folders the demo has "signed in"
+  const signedIn = demoSignedIn;
+  signedIn.clear();
+  for (const id of ['claude-keelop', 'claude-ultra', 'gemini-plus']) signedIn.add(id);
   return {
     check: async (a) => {
       await new Promise((r) => setTimeout(r, 300));

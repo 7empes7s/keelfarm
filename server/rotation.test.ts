@@ -191,3 +191,83 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(i.state.messages.filter((m) => m.switch)).toHaveLength(0);
   });
 });
+
+// #360: a session starts ready to work on any account, and one that opens on a sign-in never sits.
+describe('sessions on a fresh login', { timeout: 30_000 }, () => {
+  /** Ada, pinned to the second Max, on the floor's first issue; sessions on `signedOut` accounts open on their sign-in. */
+  async function pinned(signedOut: string[], rotation = true) {
+    const o = await office([]);
+    const notify = vi.spyOn(o.i.notifier, 'notify');
+    if (!rotation) o.swarm.updateSettings({ rotation: { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false } });
+    const seen: SessionOptions[] = [];
+    const start = o.i.backend.startSession.bind(o.i.backend);
+    o.i.backend.startSession = (opts, cb) => {
+      seen.push(opts);
+      if (opts.role === 'ceo' || !signedOut.includes(accountOf(opts))) return start(opts, cb);
+      // What cliRunner.ts does on a sign-in screen (cliScreens.ts): the session ends signed out.
+      const t = setTimeout(() => cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Claude Code is not signed in on claude-keelop: it showed its sign-in screen, so the task goes back in line.'], signedOut: true }), 10);
+      return { send: () => undefined, stop: () => clearTimeout(t) };
+    };
+    const ada = o.swarm.hireAgent(o.repo.id, { name: 'Ada', strict: true });
+    o.swarm.updateAgent(ada.id, { account: 'claude-keelop' });
+    await wait(10_000);
+    const [issue] = o.swarm.snapshot().repos.find((r) => r.id === o.repo.id)!.issues;
+    void o.swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    const agent = () => o.swarm.snapshot().agents.find((a) => a.id === ada.id)!;
+    const signInNotices = () => notify.mock.calls.filter(([, title]) => /needs signing in/.test(title));
+    return { ...o, ada, issue, agent, seen: () => seen.filter((s) => s.agentId === ada.id), signInNotices };
+  }
+
+  it("sets up the account's login folder before its first session: onboarding done, the worktree trusted, keys kept", async () => {
+    const dir = path.join(home, 'accounts', 'claude-keelop', 'claude');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: 'a@b.c' }, theme: 'light' }));
+    const { seen, agent } = await pinned([]);
+    const first = seen()[0];
+    expect(first.account).toBe('claude-keelop');
+    const config = JSON.parse(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8'));
+    expect(config).toMatchObject({ oauthAccount: { emailAddress: 'a@b.c' }, theme: 'light', hasCompletedOnboarding: true });
+    expect(config.projects[first.cwd]).toMatchObject({ hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true });
+    expect(agent().status).toBe('working');
+  });
+
+  it('a sign-in screen ends the session, marks the account signed out, carries on on the next account and tells the manager once', async () => {
+    const { swarm, agent, issue, seen, signInNotices, i } = await pinned(['claude-keelop']);
+    expect(seen().map(accountOf)).toEqual(['claude-keelop', 'claude-login']);
+    expect(agent()).toMatchObject({ status: 'working', issueNumber: issue.number, lastError: null });
+    expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.status).toBe('signed-out');
+    expect(signInNotices()).toHaveLength(1);
+    expect(i.issueFailures.size).toBe(0);
+  });
+
+  it('with rotation off, the task goes back in line without a strike, and a second sign-in on the account adds no notice', async () => {
+    const { swarm, agent, signInNotices, i, ada, issue, seen } = await pinned(['claude-keelop'], false);
+    expect(agent()).toMatchObject({ issueNumber: null, lastError: null });
+    expect(agent().status).not.toBe('error');
+    expect(i.issueFailures.size).toBe(0);
+    expect(signInNotices()).toHaveLength(1);
+    const free = () => (swarm as unknown as { isFree(a: unknown): boolean }).isFree(i.state.agents.find((a) => a.id === ada.id));
+    expect(free()).toBe(false); // the scheduler leaves them be until the account is signed in
+    expect(seen()).toHaveLength(1);
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(signInNotices()).toHaveLength(1);
+  });
+
+  it("the demo's session on a login nobody signed in opens on its sign-in and ends the same way", async () => {
+    const { demoSignedIn } = await import('./demoAccounts.ts');
+    const o = await office([]);
+    demoSignedIn.delete('claude-keelop');
+    o.swarm.updateSettings({ rotation: { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false } });
+    const notify = vi.spyOn(o.i.notifier, 'notify');
+    const ada = o.swarm.hireAgent(o.repo.id, { name: 'Ada', strict: true });
+    o.swarm.updateAgent(ada.id, { account: 'claude-keelop' });
+    await wait(10_000);
+    const [issue] = o.swarm.snapshot().repos.find((r) => r.id === o.repo.id)!.issues;
+    void o.swarm.assign(ada.id, issue.number);
+    await wait(30_000);
+    expect(notify.mock.calls.filter(([, title]) => /needs signing in/.test(title))).toHaveLength(1);
+    expect(o.swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.status).toBe('signed-out');
+  });
+});

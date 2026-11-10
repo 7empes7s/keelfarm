@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { afterAll, describe, expect, it } from 'vitest';
 import { BOX_HELPERS } from './boxHelpers.ts';
 import { EventLines } from './boxCli.ts';
+import { claudeSeed, mergeClaudeConfig } from './cliSetup.ts';
 
 // The helpers run in a Box with its node; here they run with this one, in a temp folder, the way the CLIs call them.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-boxhelpers-'));
@@ -93,11 +94,15 @@ describe('seed-claude.cjs', () => {
   it("marks Claude Code's onboarding done and the worktree trusted, keeping what was there", () => {
     const home = fs.mkdtempSync(path.join(dir, 'home-'));
     fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ theme: 'dark', projects: { '/a': { allowedTools: ['x'] } } }));
-    node('seed-claude.cjs', ['/a', '/workspace/home/work/acme__web'], '', { HOME: home });
+    const seed = claudeSeed(['/a', '/workspace/home/work/acme__web'], '2.1.3');
+    const before = JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'));
+    node('seed-claude.cjs', [JSON.stringify(seed)], '', { HOME: home });
     const c = JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'));
     expect(c.theme).toBe('dark');
     expect(c.hasCompletedOnboarding).toBe(true);
+    expect(c.lastOnboardingVersion).toBe('2.1.3');
     expect(c.projects['/a']).toEqual({ allowedTools: ['x'], hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true });
     expect(c.projects['/workspace/home/work/acme__web'].hasTrustDialogAccepted).toBe(true);
+    expect(c).toEqual(mergeClaudeConfig(before, seed)); // the same merge as a login folder here gets (cliSetup.ts)
   });
 });

@@ -4,8 +4,9 @@ import { buttonRowProblems } from '../buttonRows';
 import { pocket } from './helpers';
 
 // The Company page at every width the page itself gets (#223): the chat open or closed and the browser's zoom only
-// change that width. Whole "What's new" tiles, side cards at their own height, the callout on one line, Board and Team
-// on one row, one status row at most, and no sideways scroll.
+// change that width. Whole "What's new" tiles at one height, the summary row filling its width with cards of one height
+// (#345), floor footers on one line, the callout on one line, Board and Team on one row, one status row at most, and no
+// sideways scroll.
 
 /** Problems on the Company page as it is now. */
 async function companyProblems(root: Locator): Promise<string[]> {
@@ -24,17 +25,30 @@ async function companyProblems(root: Locator): Promise<string[]> {
         if (!inside && !outside) out.push(`a "What's new" tile is cut off (${Math.round(t.left)}–${Math.round(t.right)} in ${Math.round(r.left)}–${Math.round(r.right)})`);
       }
     }
-    // a side card no taller than what's in it plus its padding: never stretched to its neighbours
-    for (const card of el.querySelectorAll<HTMLElement>('.pk-company-side > *')) {
+    // the summary row (#345): no empty track, every row ending at the floors' right edge, cards in a row at one height
+    const side = el.querySelector('.pk-company-side')!.getBoundingClientRect();
+    const rows = new Map<number, DOMRect[]>();
+    for (const card of el.querySelectorAll('.pk-company-side > *')) {
       const box = card.getBoundingClientRect();
-      if (!box.height) continue;
-      const range = document.createRange();
-      range.selectNodeContents(card);
-      const content = range.getBoundingClientRect();
-      const css = getComputedStyle(card);
-      if (box.height <= (parseFloat(css.minHeight) || 0) + 1) continue; // a 44px target centres its label
-      const room = parseFloat(css.paddingBottom) + parseFloat(css.borderBottomWidth) + 4;
-      if (box.bottom - content.bottom > room) out.push(`side card .${card.className.split(' ')[0]} is ${Math.round(box.bottom - content.bottom)}px taller than its content`);
+      if (box.height) rows.set(Math.round(box.top), [...(rows.get(Math.round(box.top)) ?? []), box]);
+    }
+    for (const boxes of side.width ? rows.values() : []) {
+      const right = Math.max(...boxes.map((b) => b.right));
+      if (Math.abs(right - side.right) > 1) out.push(`the summary row ends ${Math.round(side.right - right)}px short of its column`);
+      if (Math.max(...boxes.map((b) => b.height)) - Math.min(...boxes.map((b) => b.height)) > 1) out.push('summary cards in a row differ in height');
+    }
+    const floorsBox = el.querySelector('.pk-company-floors')!.getBoundingClientRect();
+    if (side.width && side.top < floorsBox.top && Math.abs(side.right - floorsBox.right) > 1) out.push('the summary row and the floors end at different right edges');
+    // floor cards in a row: footers on one line, "What's new" tiles at one height
+    const feet = new Map<number, number[]>();
+    for (const card of el.querySelectorAll('.pk-floor')) {
+      const top = Math.round(card.getBoundingClientRect().top);
+      feet.set(top, [...(feet.get(top) ?? []), card.querySelector('.pk-floor-foot')!.getBoundingClientRect().top]);
+    }
+    for (const tops of feet.values()) if (Math.max(...tops) - Math.min(...tops) > 2) out.push(`floor card footers differ by ${Math.round(Math.max(...tops) - Math.min(...tops))}px`);
+    for (const row of el.querySelectorAll('.pk-floor .fb-row')) {
+      const heights = [...row.querySelectorAll('.fb-card')].map((t) => t.getBoundingClientRect().height);
+      if (heights.length && Math.max(...heights) - Math.min(...heights) > 1) out.push('"What\'s new" tiles in a row differ in height');
     }
     const callout = el.querySelector('.pk-callout');
     const label = callout?.querySelector('.pk-callout-text');
@@ -72,7 +86,7 @@ async function company(page: Page, width: number, chat: boolean) {
 
 const mainWidth = (root: Locator) => root.locator('.pk-main').evaluate((m) => m.getBoundingClientRect().width);
 
-for (const width of [1280, 1440, 1920])
+for (const width of [1278, 1280, 1440, 1600, 1920])
   for (const chat of [true, false])
     test(`Company at ${width}px, chat ${chat ? 'open' : 'closed'}`, async ({ page }) => {
       const root = await company(page, width, chat);

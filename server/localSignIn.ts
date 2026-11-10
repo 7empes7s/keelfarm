@@ -7,7 +7,6 @@ import { signInCommand } from './boxScripts.ts';
 import { cliLabel, commandFor } from './clis.ts';
 import { spawnPty, terminalsAvailable, type Pty } from './ptyClient.ts';
 import { cliEnv } from './unblock.ts';
-import { prepareGeminiHome } from './geminiHome.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AccountCli, SignInMode } from '../shared/types.ts';
@@ -35,8 +34,7 @@ export function startLocalSignIn(o: { cli: AccountCli; env: Record<string, strin
   term.note(token ? `── Making a ${cliLabel(o.cli)} setup token ──` : `── Signing ${cliLabel(o.cli)} in ──`);
   try {
     if (!terminalsAvailable || !cmd) throw new Error(!terminalsAvailable ? 'the terminal module could not be loaded on this machine' : `${cliLabel(o.cli)} isn't installed`);
-    const gemini = o.cli === 'gemini';
-    if (gemini && o.env.GEMINI_CLI_HOME) prepareGeminiHome(o.env.GEMINI_CLI_HOME);
+    const gemini = o.cli === 'gemini'; // its folder was set up first (Accounts.signIn)
     const args = token ? ['setup-token'] : o.cli === 'gemini' ? GEMINI_SIGN_IN.args : signInCommand(o.cli).args;
     const p = spawnPty(cmd.file, [...cmd.args, ...args], { cols: term.cols, rows: term.rows, cwd: os.homedir(), env: cliEnv(process.env, gemini ? GEMINI_SIGN_IN.env : {}, { machine: o.env }) }, {});
     pty = p;

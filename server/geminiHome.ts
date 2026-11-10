@@ -1,6 +1,7 @@
-// Gemini CLI's login folders (#365): what one needs so a session or sign-in never stops on a setup screen. Only the
-// office's own login folders (accounts under <SWARM_HOME>/accounts) are prepared, never the manager's ~/.gemini.
-// Gemini CLI keeps its files in <GEMINI_CLI_HOME>/.gemini; folder trust is per session (--skip-trust, clis.ts).
+// Gemini CLI's login folders (#365): what one needs so a session or sign-in never stops on a setup screen, the way
+// cliSetup.ts does Claude Code's and Codex's (#360). Only the office's own login folders (accounts under
+// <SWARM_HOME>/accounts) are prepared, never the manager's ~/.gemini. Gemini CLI keeps its files in
+// <GEMINI_CLI_HOME>/.gemini; its sessions also pass --skip-trust (clis.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -34,19 +35,46 @@ export function geminiLoginSettings(raw: string): string | null {
   return raw.trim() && JSON.stringify(next) === JSON.stringify(cur) ? null : JSON.stringify(next, null, 2);
 }
 
-/** Prepares a login folder (GEMINI_CLI_HOME) before a session or sign-in; written to a temp file and renamed. */
-export function prepareGeminiHome(home: string): void {
-  const dir = path.join(home, '.gemini');
-  const file = path.join(dir, 'settings.json');
-  fs.mkdirSync(dir, { recursive: true });
-  let raw = '';
+/** A login folder's trustedFolders.json with each worktree trusted, keeping every folder there; null: nothing to change, or not plain JSON. */
+export function geminiTrusted(raw: string, dirs: readonly string[]): string | null {
+  let cur: Json = {};
   try {
-    raw = fs.readFileSync(file, 'utf8');
+    const parsed: unknown = raw.trim() ? JSON.parse(raw) : {};
+    if (!isObject(parsed)) return null;
+    cur = parsed;
   } catch {
-    // a new folder
+    return null;
   }
-  const next = geminiLoginSettings(raw);
-  if (next === null) return;
-  fs.writeFileSync(`${file}.tmp`, next);
-  fs.renameSync(`${file}.tmp`, file);
+  const missing = dirs.filter((d) => cur[d] !== 'TRUST_FOLDER');
+  return missing.length ? JSON.stringify({ ...cur, ...Object.fromEntries(missing.map((d) => [d, 'TRUST_FOLDER'])) }, null, 2) : null;
+}
+
+const read = (file: string) => {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return ''; // a new folder
+  }
+};
+
+/**
+ * Prepares a login folder (GEMINI_CLI_HOME) before a session or sign-in: its settings, and `dirs` (the session's
+ * worktree) trusted. Written to a temp file and renamed: several sessions share it. Returns whether it changed.
+ */
+export function prepareGeminiHome(home: string, dirs: readonly string[] = []): boolean {
+  const dir = path.join(home, '.gemini');
+  fs.mkdirSync(dir, { recursive: true });
+  let changed = false;
+  for (const [name, next] of [
+    ['settings.json', (raw: string) => geminiLoginSettings(raw)],
+    ['trustedFolders.json', (raw: string) => geminiTrusted(raw, dirs)],
+  ] as const) {
+    const file = path.join(dir, name);
+    const text = next(read(file));
+    if (text === null) continue;
+    fs.writeFileSync(`${file}.${process.pid}.tmp`, text);
+    fs.renameSync(`${file}.${process.pid}.tmp`, file);
+    changed = true;
+  }
+  return changed;
 }

@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GEMINI_CONTEXT_FILE, geminiLimit, launchArgs, type LaunchContext } from './clis.ts';
-import { geminiLoginSettings, prepareGeminiHome } from './geminiHome.ts';
+import { geminiLoginSettings, geminiTrusted, prepareGeminiHome } from './geminiHome.ts';
+import { prepareLogin } from './cliSetup.ts';
+import { screenStep } from './cliScreens.ts';
 import { cliEnv } from './unblock.ts';
 import { accountSetup, builtInDir } from '../shared/accounts.ts';
 import { detectLimit, resetTime } from '../shared/accountRotation.ts';
@@ -82,6 +84,21 @@ describe("a Gemini login folder's first-run settings", () => {
     expect(geminiLoginSettings('[]')).toBeNull();
   });
 
+  it("trusts the session's worktree, keeping the folders already trusted or not", () => {
+    const own = JSON.stringify({ '/home/m/code': 'TRUST_PARENT', '/tmp/x': 'DO_NOT_TRUST' });
+    expect(JSON.parse(geminiTrusted(own, ['/w/desk'])!)).toEqual({ '/home/m/code': 'TRUST_PARENT', '/tmp/x': 'DO_NOT_TRUST', '/w/desk': 'TRUST_FOLDER' });
+    expect(geminiTrusted(geminiTrusted('', ['/w/desk'])!, ['/w/desk'])).toBeNull();
+    expect(geminiTrusted('not json', ['/w/desk'])).toBeNull();
+  });
+
+  it("is what an account's login folder gets before each session (#360's prepareLogin)", () => {
+    const login = path.join(home, 'login');
+    const desk = path.join(home, 'desk');
+    expect(prepareLogin('gemini', login, [desk])).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(login, '.gemini', 'trustedFolders.json'), 'utf8'))).toEqual({ [desk]: 'TRUST_FOLDER' });
+    expect(prepareLogin('gemini', login, [desk])).toBe(false); // already set up
+  });
+
   it('writes them into <GEMINI_CLI_HOME>/.gemini/settings.json', () => {
     prepareGeminiHome(home);
     const file = path.join(home, '.gemini', 'settings.json');
@@ -114,6 +131,13 @@ describe("Gemini CLI's usage limit", () => {
 });
 
 describe("Gemini CLI's sign-in", () => {
+  it("ends a session that opens on its sign-in: only the manager can sign it in", () => {
+    const menu = ['How would you like to authenticate for this project?', '', '● 1. Sign in with Google', '  2. Use Gemini API Key', '  3. Vertex AI'].join('\n');
+    expect(screenStep(menu, 'gemini')).toEqual({ do: 'sign-in' });
+    expect(screenStep('  Waiting for authentication... (Press Esc or Ctrl+C to cancel)', 'gemini')).toEqual({ do: 'sign-in' });
+    expect(screenStep('● Wrote docs/accounts.md', 'gemini')).toBeNull();
+  });
+
   it('waits for the code at its prompt, and reads a failed code', () => {
     const start = '── Signing Gemini CLI in ──';
     const asked = [start, 'Please visit the following URL to authorize the application:', '', 'https://accounts.google.com/o/oauth2/v2/auth?x=1', '', 'Enter the authorization code: '].join('\n');

@@ -18,7 +18,7 @@ import { Sheet } from './Sheet';
 import { sharesNote, shareStats } from './peekFacts';
 import './usageSources.css';
 
-const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server' };
+const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server', runway: 'clapperboard', luma: 'film', kling: 'video' };
 const STATUS: Record<UsageSourceStatus, [string, ChipTone]> = { ready: ['Ready', 'good'], near: ['Near limit', 'warn'], limited: ['Limited', 'bad'], 'signed-out': ['Signed out', 'bad'], error: ['Error', 'warn'] };
 const tone = (w: UsageWindow) => (w.usedPct === null ? 'neutral' : w.usedPct >= 90 ? 'bad' : w.usedPct >= 75 ? 'warn' : 'good');
 

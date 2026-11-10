@@ -162,18 +162,22 @@ for (const pid of doomed) { try { process.kill(pid, 'SIGKILL'); } catch {} }
 process.stdout.write(String(doomed.size));
 `;
 
-/** Claude Code's first-run screens answered for a worktree: onboarding done, the folder trusted. */
+/** Claude Code's first-run screens answered for a worktree: cliSetup.ts's seed (argv[2], JSON), merged as mergeClaudeConfig does. */
 export const BOX_SEED_CLAUDE_SOURCE = String.raw`// cubefarm: marks Claude Code's onboarding done and a folder trusted, in a cloud agent's Box.
 const fs = require('fs');
 const path = require('path');
 const file = path.join(process.env.HOME || '/home/boxuser', '.claude.json');
+const seed = JSON.parse(process.argv[2]);
+const obj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 let c = {};
 try { c = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
-if (!c || typeof c !== 'object' || Array.isArray(c)) c = {};
-c.hasCompletedOnboarding = true;
-c.projects = c.projects && typeof c.projects === 'object' ? c.projects : {};
-for (const dir of process.argv.slice(2)) c.projects[dir] = Object.assign({}, c.projects[dir], { hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true });
-fs.writeFileSync(file, JSON.stringify(c, null, 2));
+if (!obj(c)) c = {};
+for (const [k, v] of Object.entries(seed.defaults)) if (c[k] === undefined) c[k] = v;
+Object.assign(c, seed.set);
+c.projects = obj(c.projects) ? c.projects : {};
+for (const [dir, flags] of Object.entries(seed.projects)) c.projects[dir] = Object.assign({}, obj(c.projects[dir]) ? c.projects[dir] : {}, flags);
+fs.writeFileSync(file + '.tmp', JSON.stringify(c, null, 2));
+fs.renameSync(file + '.tmp', file);
 `;
 
 /** Each helper's file name in BOX_BIN and its source. */

@@ -43,7 +43,10 @@ coding agent, and agents never fall back to it.
   it expires. A failed sign-in says why (a code works once, for a few minutes) and offers **Try again**; Claude Code's
   can run `claude setup-token` there instead.
   A new login's folder starts empty: your skills, plugins and settings in `~/.claude` aren't in it. Copy
-  `settings.json` and `plugins/` in if you want them there too.
+  `settings.json` and `plugins/` in if you want them there too. The office sets it up before every session (#360):
+  onboarding done, your theme, the agent's worktree trusted (Codex: in its `config.toml`), so no first-run screen
+  stops an agent. A session that still opens on a sign-in ends at once: the account reads signed out, the task goes
+  to the next account (or back in line), and you get one notification.
 - **API key**: paste it; the office makes one free request (the provider's model list) to check it before saving it.
 - **Setup token**: name the environment variable that holds it.
 
