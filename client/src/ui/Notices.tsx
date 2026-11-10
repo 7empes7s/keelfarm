@@ -12,6 +12,7 @@ import { openFrom } from './RefChips';
 import { Panel } from './Panel';
 import { XLabel } from './HoverCard';
 import { useToastSpot } from './useToastSpot';
+import { useKeyReview } from './keyReview';
 import './notices.css';
 import { CloseButton, Icon } from './Icon';
 import { iconFor } from './icons';
@@ -39,6 +40,9 @@ function run(step: NoticeStep, pocket: boolean) {
       return openFrom(step.overlay, step.floor);
     case 'chat':
       return s.openOverlay({ kind: 'phone', tab: 'chat' });
+    case 'keys':
+      useKeyReview.setState({ open: true });
+      return s.openOverlay({ kind: 'manager', tab: 'providers' });
     case 'approvals':
       if (!pocket) return s.openOverlay({ kind: 'phone', tab: 'hires', requestId: step.requestId });
       s.openOverlay(null);

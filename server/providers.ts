@@ -73,6 +73,14 @@ export class Providers {
     return [...this.keys.values()];
   }
 
+  /** The saved keys with their connections' names, for finding duplicates (#367). Server memory only. */
+  savedKeys(): { value: string; label: string }[] {
+    return this.data.connections.flatMap((c) => {
+      const value = this.keys.get(keyOf(c.id));
+      return value ? [{ value, label: c.label }] : [];
+    });
+  }
+
   /** The MCP servers an agent's session gets (its own mcp.json). */
   mcpFor(agentId: string): Record<string, Record<string, unknown>> {
     return sessionMcpServers(this.data.mcp, agentId, (id, name) => this.keys.get(mcpKeyOf(id, name)) ?? '');

@@ -43,3 +43,25 @@ export interface ProvidersView {
   connections: ProviderConnection[];
   mcp: McpServerConfig[];
 }
+
+/** Keys found on this computer (#367): what a key's authenticated test said. */
+export type KeyCheck = 'live' | 'dead' | 'no-credit' | 'unknown';
+
+/** One key the scan found, without its value (kept in the server's memory until imported or dismissed). */
+export interface FoundKeyView {
+  id: string;
+  provider: string; // a catalogue id, or 'other' for an unknown *_API_KEY / *_TOKEN
+  variable: string; // GEMINI_API_KEY
+  sources: string[]; // "LiteLLM litellm.env", every file it was in
+  keyHint: string; // its last 4 characters
+  check: { result: KeyCheck; note: string } | null;
+  savedAs?: string; // the connection it already is (saved before, or imported)
+  importable: boolean; // a catalogue provider the Providers page saves
+}
+
+export interface KeyScanView {
+  state: 'idle' | 'scanning' | 'done' | 'failed';
+  at: number | null;
+  keys: FoundKeyView[];
+  note?: string; // why it failed
+}

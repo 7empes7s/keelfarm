@@ -322,6 +322,10 @@ app.post(
     return swarm.providers.add(body.provider, body.key, body.label);
   }),
 );
+// Keys found on this computer (#367): the scan runs on the server and reports through keyScan events; values never come out.
+app.post('/api/providers/scan', route(() => (void swarm.scanKeys(), swarm.keyScanView())));
+app.post('/api/providers/scan/import', route((req) => swarm.importKeys(parse(z.object({ ids: z.array(z.string().max(20)).max(200) }), req.body).ids)));
+app.delete('/api/providers/scan', route(() => (swarm.dismissKeys(), { dismissed: true })));
 app.post('/api/providers/:id/test', route((req) => swarm.providers.test(String(req.params.id))));
 app.delete('/api/providers/:id', route(async (req) => ({ removed: await swarm.providers.remove(String(req.params.id)).then(() => true) })));
 app.post(
