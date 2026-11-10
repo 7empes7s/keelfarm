@@ -77,3 +77,9 @@ export function holdUps(issues: { number: number; body: string }[]) {
   }
   return out;
 }
+
+/** The manager's note on GitHub when closing as not planned. Old callers may omit a reason. */
+export function managerCloseComment(by: string, reason?: string) {
+  const note = reason?.trim().slice(0, 500);
+  return `Closed as not planned by ${by} from the cubefarm office.${note ? `\n\n${note}` : ''}`;
+}
