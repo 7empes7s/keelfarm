@@ -44,7 +44,7 @@ import { DEFAULT_NOTIFY, notifySettings } from '../../shared/notify.ts';
 import { addNotice, makeNotice, type NoticeInput } from '../../shared/notices.ts';
 import { DEFAULT_CLOUD } from '../../shared/cloud.ts';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, officeItems, type ToolInventory } from '../../shared/tooling.ts';
-import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../../shared/activity.ts';
+import { agentActivity, lineActivity, sameActivity, stuckSign, type SeenActivity } from '../../shared/activity.ts';
 import { WeatherService } from '../weather.ts';
 import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
@@ -498,7 +498,7 @@ export abstract class SwarmCore extends SwarmContract {
     const chat = a.role === 'ceo' && this.state.ceo.job?.kind === 'chat';
     const { status, task, issueNumber, prNumber, startedAt } = a;
     const rt = this.agentRt.get(a.id);
-    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
+    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: stuckSign(rt.blocked.kind) }; // the reason may name paths: kept off the sign
     return agentActivity({ status, task, currentTool: rt?.currentTool ?? null, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 

@@ -14,6 +14,8 @@ describe('doingText', () => {
     expect(doingText(agent({ status: 'working', task: 'issue', issueNumber: 12, issueTitle: 'Add dark mode' }))).toBe('Issue #12: Add dark mode');
     expect(doingText(agent({ status: 'working', task: 'fix', prNumber: 40, issueTitle: 'Add dark mode' }))).toBe('Fixing PR #40: Add dark mode');
     expect(doingText(agent({ status: 'working', task: 'qa', prNumber: 40, issueTitle: 'Dark mode' }))).toBe('Testing PR #40: Dark mode');
+    expect(doingText(agent({ status: 'stopped', task: 'qa', prNumber: 40, issueTitle: 'Dark mode' }))).toBe('Stopped'); // #359
+    expect(doingText(agent({ status: 'done', task: 'qa', prNumber: 40, issueTitle: 'Dark mode' }))).toBe('Nothing assigned');
     expect(doingText(agent({ role: 'ceo', status: 'working', issueTitle: 'Reviewing the company' }))).toBe('Reviewing the company');
     expect(doingText(agent({ role: 'ceo' }))).toBe('Free for a chat');
   });

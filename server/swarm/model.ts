@@ -31,6 +31,7 @@ import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
 import type { RoundCause } from '../../shared/rounds.ts';
+import type { BlockedState } from '../liveState.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -244,7 +245,7 @@ export interface AgentRuntime {
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
   acrossRestart?: boolean; // the current session's CLI kept working through an office restart (#333)
-  blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
+  blocked?: BlockedState | null; // waiting on a prompt the office couldn't answer (unblock.ts), or stuck in their session's live state (liveState.ts)
   chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }
 

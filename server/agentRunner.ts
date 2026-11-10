@@ -14,6 +14,7 @@ import { CEO_DISALLOWED, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '
 import { VERSION } from './config.ts';
 import { consultRefusal } from './consult.ts';
 import { keyHelperCommand, nonInteractiveEnv } from './unblock.ts';
+import type { StuckKind } from './liveState.ts';
 import { transcriptEvents, type TranscriptEvent } from '../shared/agentChat.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
@@ -108,8 +109,8 @@ export interface SessionCallbacks {
   usage?(readings: UsageReading[]): void;
   /** A new session's first turn: the input tokens it sent before any work, and the CLAUDE.md files it loaded (#50). */
   startup?(s: { tokens: number; memoryChars: number }): void;
-  /** The session waits on a prompt the office couldn't answer (the reason), or no longer does (null). */
-  blocked?(reason: string | null): void;
+  /** The session waits on a prompt the office couldn't answer (the reason), or no longer does (null). kind: why (#359; default 'prompt'). */
+  blocked?(reason: string | null, kind?: StuckKind): void;
   finished(result: SessionResult): void;
 }
 
