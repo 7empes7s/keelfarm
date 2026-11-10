@@ -1,6 +1,7 @@
 /* Company (#223): sized by the page's own width (pkmain, beside the chat), never the viewport, so the chat open or closed
    and the browser's zoom only change that width. Floors in floorColumns()'s --pk-cols columns; usage and the CEO in a
-   column beside them from 1100px, else a compact strip above them, every card at its own height. */
+   column beside them from 1100px, else a strip above them in summaryGrid()'s --pk-side-cols columns, filling the row
+   with no empty track and every card in a row at one height, its content centred (#345). */
 .pk-railed .pk-page:has(> .pk-company) {
   max-width: 1600px;
 }
@@ -12,12 +13,14 @@
 }
 .pk-railed .pk-company-side {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(var(--pk-side-cols, 1), minmax(0, 1fr));
   gap: var(--ds-space-2);
-  align-items: start;
 }
-.pk-railed .pk-company-side > :not(.pk-usage, .pk-ceo, .pk-wide) {
+.pk-railed .pk-company-side > :not(.pk-summary) {
   grid-column: 1 / -1;
+}
+.pk-railed .pk-summary.pk-usage {
+  justify-content: center;
 }
 .pk-railed .pk-company-side .tour-invite > .grow {
   flex-basis: 14em; /* its buttons go below the text in the narrow column */
@@ -31,6 +34,14 @@
 .pk-railed .pk-company-floors > :not(.pk-floor) {
   grid-column: 1 / -1;
 }
+/* floor cards in a row share its height (#345): the footer pinned to the bottom, so every footer is on one line */
+.pk-railed .pk-floor {
+  display: flex;
+  flex-direction: column;
+}
+.pk-railed .pk-floor-foot {
+  margin-top: auto;
+}
 @container pkmain (min-width: 1100px) {
   .pk-railed .pk-company {
     grid-template-columns: minmax(0, 1fr) clamp(280px, 24%, 340px);
@@ -38,7 +49,7 @@
   .pk-railed .pk-company-side {
     grid-column: 2;
     grid-row: 1;
-    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
   }
   .pk-railed .pk-company-floors {
     grid-row: 1;
@@ -57,8 +68,14 @@
   padding-inline: 0;
   mask-image: linear-gradient(to right, black calc(100% - var(--fb-fade)), transparent);
 }
+.pk-floor .fb-item {
+  display: flex; /* the tile takes its row's height, its chip and link at the bottom (#345) */
+}
 .pk-floor .fb-card {
   width: calc((100cqi - (var(--fb-n) - 1) * var(--ds-space-2)) / var(--fb-n));
+}
+.pk-floor .fb-meta {
+  margin-top: auto;
 }
 @container pkfloor (min-width: 260px) {
   .pk-floor .fb-row {
