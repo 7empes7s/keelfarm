@@ -251,7 +251,7 @@ const ANSI: Record<LogEntry['kind'], (text: string) => string> = {
 /** How a fake session gets stuck (#359): left on its sign-in screen until the manager presses Enter there, or its result printed but never reported. */
 type DemoStuck = 'sign-in' | 'result' | null;
 
-const SIGN_IN_SCREEN = [
+const STUCK_SIGN_IN_SCREEN = [
   '',
   ' Welcome to Claude Code (demo)',
   '',
@@ -365,7 +365,7 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
     },
   });
   if (stuck === 'sign-in') {
-    term.write(SIGN_IN_SCREEN);
+    term.write(STUCK_SIGN_IN_SCREEN);
     signIn = () => {
       signIn = null;
       term.write('\x1b[2J\x1b[H\x1b[32m✓ Signed in (demo)\x1b[0m\r\n');
