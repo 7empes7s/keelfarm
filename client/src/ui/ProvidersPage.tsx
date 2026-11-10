@@ -183,7 +183,9 @@ function AddSheet({ onClose }: { onClose: () => void }) {
                 ) : list.length ? (
                   list.map((p) => (
                     <button key={p.id} className="pv-pick" onClick={() => setPick(p)}>
-                      <b>{p.name}</b>
+                      <b>
+                        {p.icon && <Icon name={p.icon as IconName} />} {p.name}
+                      </b>
                       <span className="muted small">{p.blurb}</span>
                     </button>
                   ))
@@ -256,6 +258,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
       <p className="muted small">
         {def.blurb}. <a href={def.docsUrl} target="_blank" rel="noopener noreferrer">Where to get a key</a>
       </p>
+      {def.note && <p className="muted small">{def.note}</p>}
       {def.home === 'providers' && (
         <label className="field">
           <span>Name</span>
