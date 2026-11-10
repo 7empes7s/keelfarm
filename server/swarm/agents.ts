@@ -65,6 +65,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     builtInUsage: () => this.state.claudeUsage,
     changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
     seed: this.backend.accounts.seed,
+    shareFrom: this.backend.accounts.shareFrom?.(),
     poll: !process.env.VITEST,
     rotation: () => rotationSettings(this.state.settings.rotation, undefined),
   });

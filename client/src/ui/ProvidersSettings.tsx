@@ -100,6 +100,17 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
       setBusy(false);
     }
   };
+  const repair = async () => {
+    setBusy(true);
+    setNote('');
+    try {
+      setNote((await api.repairShare(a.id)).note);
+    } catch {
+      // toasted
+    } finally {
+      setBusy(false);
+    }
+  };
   const remove = async () => {
     const ok = await confirmDialog({
       title: `Remove ${a.label}?`,
@@ -158,6 +169,16 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
           <Icon name="refresh-cw" /> Token expired: it refreshes on its next session
         </div>
       )}
+      {a.shareMissing && (
+        <div className={`acc-flag ${a.shareMissing.length ? 'acc-flag-warn' : ''}`} role="status">
+          <Icon name={a.shareMissing.length ? 'triangle-alert' : 'link'} /> {a.shareMissing.length ? `Doesn't share ${a.shareMissing.join(', ')} with this computer's login` : "Shares memory, skills and settings with this computer's login"}
+        </div>
+      )}
+      {a.shareMissing && a.shareMissing.length > 0 && (
+        <button className="btn acc-action" onClick={() => void repair()}>
+          <Icon name="wrench" /> Repair
+        </button>
+      )}
       {usageBars(a.usage, now).map((b) => (
         <ProgressBar key={b.type} label={b.name} value={`${b.pct}%${b.resets ? `, ${b.resets}` : ''}`} pct={b.pct / 100} tone={b.tone} aria={`${a.label}: ${b.name} ${b.pct}%`} />
       ))}
@@ -181,7 +202,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
       {a.status === 'signed-out' && a.kind === 'setup-token' && <p className="muted small">Set {a.tokenEnv} in the office's environment (claude setup-token prints it) and restart the office.</p>}
       {(note || busy) && (
         <span className="small muted" role="status">
-          {busy ? 'Testing…' : note}
+          {busy ? 'Working…' : note}
         </span>
       )}
     </div>
