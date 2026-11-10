@@ -11,6 +11,7 @@ import type { HistoryDetail, HistoryFilter, HistoryPage, HistoryUsage } from '..
 import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
+import type { FloorTheme } from '../../shared/floorThemes';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
@@ -86,6 +87,7 @@ export const api = {
       autoMerge?: boolean;
       browserTesting?: boolean;
       color?: string;
+      theme?: FloorTheme;
       links?: string[];
       mission?: string;
       summary?: string;

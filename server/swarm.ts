@@ -66,7 +66,7 @@ import {
   TERMINAL_SAVE_MS,
   clampMaxAgents,
 } from './swarm/model.ts';
-import { lookFor, LOOKS } from './swarm/flavour.ts';
+import { FLOOR_THEMES, lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
 import { SwarmDisk } from './swarm/disk.ts';
 import { loadDecisions } from '../shared/decisions.ts';
@@ -280,7 +280,7 @@ export class Swarm extends SwarmDisk {
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
         for (let i = 1; i < size; i++) this.hireAgent(repo.id, {}); // connecting hired the first
-        this.updateRepo(repo.id, { autoAssign: true, ...(repo.floor === 1 ? { practices: { busyFiles: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256)
+        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256); floors 1-3 a floor theme each (#370)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
       }

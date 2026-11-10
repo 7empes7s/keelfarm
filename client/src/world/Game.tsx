@@ -14,6 +14,8 @@ import { Chatter } from './Chatter';
 import { CUT_PLANES } from './camera/rig';
 import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
 import { decorRects } from './decor/decor';
+import { themePack } from './floorThemes/packs';
+import { themePropRects } from './floorThemes/placement';
 import { LAB_GFX, LAB_GFX_LIMITS } from './gfx/device';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
@@ -102,12 +104,13 @@ export function Game() {
   const top = useStore((s) => s.repos.reduce((m, r) => Math.max(m, r.floor), 0));
   const placed = useStore((s) => (repoId ? s.progress.floors[repoId]?.placed : undefined));
   const theme = useTheme((s) => s.id);
+  const pack = useStore((s) => (repoId ? themePack(s.repos.find((r) => r.id === repoId)?.theme) : null));
   const colliders = useMemo(
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {})] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
-    [onRoof, isOffice, placed, theme],
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {}), ...themePropRects(pack, placed)] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+    [onRoof, isOffice, placed, theme, pack],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {
@@ -167,7 +170,7 @@ export function Game() {
       <FrameWhilePaused paused={paused} />
       {LAB_GFX && started && <FrameCap fps={LAB_GFX_LIMITS.fps} paused={paused || frozen} />}
       <AdaptiveResolution paused={paused || frozen} />
-      <ScenePrecompile paused={paused || frozen} watch={`${floor}:${theme}`} />
+      <ScenePrecompile paused={paused || frozen} watch={`${floor}:${theme}:${pack?.id ?? ''}`} />
       <Graphics paused={paused || photo} />
       <HitchProbe paused={paused || frozen} camera={cameraMode} events={eventIds} />
       {statsEnabled && <StatsProbe paused={paused} />}

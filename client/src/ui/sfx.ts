@@ -652,6 +652,12 @@ export function swish() {
 }
 
 let lastGong = -Infinity;
+/** A merge strike (the gong, or the trading floor's bell #370) may sound: never into the 🎙 or a call, one a second. */
+export function mergeStrike(): boolean {
+  if (micOpen || callQuiet || performance.now() - lastGong < 1000) return false;
+  lastGong = performance.now();
+  return true;
+}
 
 // A gong's inharmonic partials over its ~92 Hz fundamental: [ratio, peak, seconds to fade out]. The low ones ring
 // longest; the ratios are off whole numbers, which is what makes it a gong rather than a bell or a chord.
@@ -673,8 +679,7 @@ const GONG_PARTIALS: [number, number, number][] = [
  * plays it quieter (the time-lapse's merges).
  */
 export function gong(level = 1) {
-  if (micOpen || callQuiet || performance.now() - lastGong < 1000) return; // never into the 🎙 or a call
-  lastGong = performance.now();
+  if (!mergeStrike()) return;
   const o = { name: 'gong', group: 'alerts' } as const;
   const k = Math.max(0, Math.min(1, level));
   // the padded mallet: a low thud and a dull puff, no click

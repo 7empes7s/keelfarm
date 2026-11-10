@@ -4,12 +4,13 @@
 // useFrame with no allocations or re-renders, and skipped while the clock, the weather and the floor's evening dim
 // stand still (?daytime, 'Always day'). The weather (weather/) dims and greys the light, brings the lamps on earlier
 // in heavy weather, and a lightning flash lights the office through the windows on this same rig. A floor winding down
-// for the evening (ritualLook.ts) dims them a little on top.
+// for the evening (ritualLook.ts) dims them a little on top, and a themed floor (floorLook.ts) sets its own mood.
 import { useMemo, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { DEVICE_PROFILE } from '../gfx/device';
 import { DIM_BY, ritualLook } from '../ritualLook';
+import { floorLook } from '../floorThemes/floorLook';
 import { gloomOf, weatherSky } from '../weather/weatherRules';
 import { weather } from '../weather/weatherState';
 import { indoorLight, newIndoorLight, newShadowBox, shadowBox, type IndoorWeather } from './indoor';
@@ -29,17 +30,18 @@ export function DayLights() {
   const key = useRef<THREE.DirectionalLight>(null);
   const state = useMemo(() => {
     const indoors: IndoorWeather = { gloom: 0, sky: (p) => void weatherSky(p, weather.mix) };
-    return { light: newIndoorLight(), box: newShadowBox(), t: -1, version: -1, dim: 0, indoors };
+    return { light: newIndoorLight(), box: newShadowBox(), t: -1, version: -1, dim: 0, look: -1, indoors };
   }, []);
 
   useSkyFrame(() => {
     const h = hemi.current;
     const a = ambient.current;
     const k = key.current;
-    if (!h || !a || !k || (dayTime.t === state.t && weather.version === state.version && ritualLook.dim === state.dim)) return;
+    if (!h || !a || !k || (dayTime.t === state.t && weather.version === state.version && ritualLook.dim === state.dim && floorLook.version === state.look)) return;
     state.t = dayTime.t;
     state.version = weather.version;
     state.dim = ritualLook.dim;
+    state.look = floorLook.version;
     state.indoors.gloom = gloomOf(weather.mix);
     const L = indoorLight(state.t, state.light, weather.active ? state.indoors : undefined);
     const flash = weather.flash;
@@ -51,11 +53,12 @@ export function DayLights() {
     }
     // a floor winding down for the evening (Rituals.tsx) turns its main lights down a little
     const down = 1 - DIM_BY * state.dim;
+    const mood = floorLook.light;
 
     const [x, y, z] = L.dir;
     k.position.set(x * DISTANCE, y * DISTANCE, z * DISTANCE);
     k.color.setHex(L.keyColor);
-    k.intensity = L.keyIntensity * down;
+    k.intensity = L.keyIntensity * down * (0.5 + 0.5 * mood);
     const b = shadowBox(L.dir, DISTANCE, state.box);
     const cam = k.shadow.camera;
     cam.left = b.left;
@@ -68,9 +71,14 @@ export function DayLights() {
 
     h.color.setHex(L.hemiSky);
     h.groundColor.setHex(L.hemiGround);
-    h.intensity = L.hemiIntensity * down;
+    h.intensity = L.hemiIntensity * down * mood;
     a.color.setHex(L.ambientColor);
-    a.intensity = L.ambient * down;
+    a.intensity = L.ambient * down * mood;
+    if (floorLook.tintAmount > 0) {
+      h.color.lerp(floorLook.tint, floorLook.tintAmount);
+      h.groundColor.lerp(floorLook.tint, floorLook.tintAmount * 0.6);
+      a.color.lerp(floorLook.tint, floorLook.tintAmount);
+    }
     gl.toneMappingExposure = L.exposure;
     setLamps(L.lamps);
     setSunPatches(L.dir, L.keyColor, L.keyIntensity);

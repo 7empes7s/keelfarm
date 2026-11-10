@@ -17,6 +17,12 @@ visit. Five tabs, at the bottom:
 | **Team** | Everyone's status and what they're on, with **Message**, **■ Stop**, **↺ Clear desk**, assigning an issue (or a PR to test) and their terminal. |
 | **Approvals** | Team changes waiting for you (new agents to set up and hire, agents leaving), stuck PRs (**Retry QA**, **Send back**, **Merge anyway**, **Close**) and passed PRs on floors without auto-merge. |
 
+**🖥️ Previews** (in the rail on a computer, at the top of ⚙️ on a phone) is every floor's live app and PR previews on
+one page: a list grouped as Running now, By project, By agent and By PR, with plain status words (Building, Testing,
+Being fixed, Waiting for you, Ready, Merged), a search and **Running**, **Needs you** and **Mine to check** filters,
+and the picked one beside it. Older PRs wait under **Show older (N)**. Opening a floor's app anywhere lands here, and
+`#previews/<floor>/<main|pr-N>` links to one.
+
 **⚙️** (top right) is the manager's console, with the same controls as in the 3D office, one section at a time:
 
 | Section | What's there |
@@ -83,6 +89,7 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `pocket-tabs`: the five tabs | ✓ | ✓ | |
 | `desk-keys`: 1-5, / and 🏢 3D office | | ✓ | |
 | `chat-button`: the chat opens from the header's avatar | | ✓ | |
+| `previews`: the Previews page, from the rail or ⚙️ | ✓ | ✓ | |
 | `search`: 🔍 search everything | ✓ | ✓ | ✓ |
 | `guide`: the ✅ guide checklist | ✓ | ✓ | ✓ |
 | `bell`: 🔔 the notification centre | ✓ | ✓ | ✓ |

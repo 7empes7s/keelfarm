@@ -13,6 +13,7 @@ import { useCanvasTexture, useInteractable } from './interact';
 import { SONGS, beatAt, beatPulse, firstSongFor, holidayTrack, isFocusSong, moodOf, nextSong, noteAge, parseStation, stationSongs, trackFor, type Song, type Station } from './jukeboxSongs';
 import { HALF_D, JUKEBOX } from './layout';
 import { themeSongs } from './themes/active';
+import { themePack } from './floorThemes/packs';
 import { markBloom } from './gfx/bloomMarks';
 import { glow, toon } from './materials';
 import { Ball, Box, Cyl } from './Toon';
@@ -48,12 +49,14 @@ const listeners = new Set<() => void>();
 const songIndex = (floor: number) => songs.get(floor) ?? firstSongFor(floor, stationFor(floor));
 
 // While a holiday theme is on, its songs (themes.ts) take turns with the usual ones on the All station: per floor,
-// whether the theme's song is up next, and which of them.
+// whether the theme's song is up next, and which of them. A themed floor's songs (floorThemes/packs.ts) do the same
+// the rest of the year.
 const holiday = new Map<number, { turn: boolean; n: number }>();
 
 /** The theme's song this floor plays now, or null (no theme, Focus, or the usual song's turn). */
 function holidayNow(floor: number) {
-  const ids = themeSongs();
+  const holidays = themeSongs();
+  const ids = holidays.length ? holidays : (themePack(useStore.getState().repos.find((r) => r.floor === floor)?.theme)?.playlist ?? []);
   if (!ids.length || stationFor(floor) !== 'all') return null;
   let h = holiday.get(floor);
   if (!h) holiday.set(floor, (h = { turn: true, n: floor }));

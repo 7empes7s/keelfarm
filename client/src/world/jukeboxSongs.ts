@@ -837,9 +837,9 @@ export function trackFor(i: number): Track {
   return t;
 }
 
-/** Holiday song `n` of `ids` (a theme's playlist, wrapping round), compiled once; null when it names none. */
+/** Song `n` of `ids` (a holiday's or a floor theme's playlist, wrapping round), compiled once; null when it names none. */
 export function holidayTrack(ids: readonly string[], n: number): Track | null {
-  const list = ids.map((id) => HOLIDAY_SONGS.find((s) => s.id === id)).filter((s): s is Song => !!s);
+  const list = ids.map((id) => HOLIDAY_SONGS.find((s) => s.id === id) ?? SONGS.find((s) => s.id === id)).filter((s): s is Song => !!s);
   if (!list.length) return null;
   const song = list[((n % list.length) + list.length) % list.length];
   let t = tracks.get(song.id);

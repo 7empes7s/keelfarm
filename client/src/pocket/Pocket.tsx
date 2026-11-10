@@ -43,6 +43,7 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { heldNote } from '../../../shared/health';
+import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { pushLayer } from '../ui/backStack';
 import { markTeamLanding, pocketJump } from './pocketJump';
 import { Icon, IconText } from '../ui/Icon';
@@ -57,7 +58,6 @@ import './pages.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
-const AppViewer = lazy(() => import('../ui/AppViewer').then((m) => ({ default: m.AppViewer })));
 const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.CardView })));
 // The console's tabs, loaded when Settings is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
@@ -332,15 +332,13 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 
 // ---------- the shell ----------
 
-/** The overlays that open in the pane: an agent's terminal, a floor's app, a card and the notification centre. */
-const inPane = (o: Overlay | null) => (o?.kind === 'terminal' && o.agentId !== CEO_ID) || o?.kind === 'app' || o?.kind === 'card' || o?.kind === 'notices';
+/** The overlays that open in the pane: an agent's terminal, a card and the notification centre (a floor's app opens the Previews page). */
+const inPane = (o: Overlay | null) => (o?.kind === 'terminal' && o.agentId !== CEO_ID) || o?.kind === 'card' || o?.kind === 'notices';
 
 /** The pane's overlay for the panel manager (#212): its key, and what the back chip says. */
 function paneEntry(o: Overlay): PanelEntry<Overlay> {
   const s = useStore.getState();
-  const floor = (repoId: string) => s.repos.find((r) => r.id === repoId)?.floor;
   if (o.kind === 'terminal') return { key: `terminal:${o.agentId}`, slot: 'pane', label: `${s.agents[o.agentId]?.name ?? 'Agent'}'s ${o.view === 'chat' ? 'chat' : 'window'}`, value: o };
-  if (o.kind === 'app') return { key: `app:${o.repoId}:${o.pr ?? ''}`, slot: 'pane', label: o.pr ? `PR #${o.pr} preview` : `Floor ${floor(o.repoId) ?? ''} preview`, value: o };
   if (o.kind === 'card') return { key: `card:${o.repoId}:${o.key}`, slot: 'pane', label: `${o.pr ? 'PR' : 'Issue'} #${o.number}`, value: o };
   return { key: o.kind, slot: 'pane', label: 'Notifications', value: o };
 }
@@ -382,7 +380,6 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} profile={overlay.profile} />;
-  if (overlay?.kind === 'app') return <AppViewer repoId={overlay.repoId} pr={overlay.pr} qa={overlay.qa} merged={overlay.merged} path={overlay.path} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;
   return null;
@@ -421,6 +418,7 @@ export default function Pocket() {
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);
   const connected = useStore((s) => s.connected);
+  const previewsOpen = useStore((s) => s.overlay?.kind === 'previews' || s.overlay?.kind === 'app');
   const [chatTools, setChatTools] = useState<HTMLElement | null>(null); // the chat's header row, in the docked chat's header (#81, #270)
   const switchKey = useKeyName('switchOffice');
   const layout = useLayout();
@@ -477,12 +475,18 @@ export default function Pocket() {
     setTab(t);
     setSettings(null);
     const p = paneHost.current;
-    if (useStore.getState().overlay && inPane(useStore.getState().overlay) && (!wide || (p && getComputedStyle(p).position === 'absolute'))) useStore.getState().openOverlay(null);
+    const o = useStore.getState().overlay;
+    if (o?.kind === 'previews' || o?.kind === 'app') useStore.getState().openOverlay(null); // the Previews page covers the pages
+    else if (o && inPane(o) && (!wide || (p && getComputedStyle(p).position === 'absolute'))) useStore.getState().openOverlay(null);
   };
   // The rail's Console toggles it; from the full chat it shows it (#242).
   const railConsole = () => {
     if (full) leaveFullFor(wide);
-    if (!settings) setSettings('menu');
+    if (previewsOpen) {
+      useStore.getState().openOverlay(null); // the console under the Previews page comes back
+      if (settings) panels.focus('console');
+      else setSettings('menu');
+    } else if (!settings) setSettings('menu');
     else if (top?.slot === 'main' && !full) setSettings(null);
     else panels.focus('console');
   };
@@ -553,6 +557,7 @@ export default function Pocket() {
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
     panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
+  usePreviewsLink(loaded);
   useEffect(() => {
     if (!backToChat) return;
     if (tab !== 'team') return setBackToChat(false);
@@ -678,7 +683,7 @@ export default function Pocket() {
         <nav className="pk-tabs" aria-label="Pocket office" data-tour="pocket-tabs">
           {railTabs(layout).map((k) => {
             const [icon, label, badge] = entries[k];
-            const on = tab === k;
+            const on = tab === k && !previewsOpen; // the Previews page covers the tab
             return (
               <button
                 key={k}
@@ -696,8 +701,9 @@ export default function Pocket() {
               </button>
             );
           })}
+          {wide && <PreviewsRailButton open={previewsOpen} />}
           {wide && (
-            <button data-tour="console" className={`pk-tab pk-tab-console ${settings ? 'pk-tab-on' : ''}`} aria-pressed={!!settings} onClick={railConsole} title="Settings and notifications">
+            <button data-tour="console" className={`pk-tab pk-tab-console ${settings && !previewsOpen ? 'pk-tab-on' : ''}`} aria-pressed={!!settings && !previewsOpen} onClick={railConsole} title="Settings and notifications">
               <span className="pk-tab-icon">
                 <Icon name="settings" />
               </span>
@@ -749,6 +755,12 @@ export default function Pocket() {
           {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
           <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
             {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
+          </div>
+          {/* the Previews page takes everything beside the chat, over the console it may have been opened from */}
+          <div className="pk-page-host">
+            <Suspense fallback={null}>
+              <PreviewsHost />
+            </Suspense>
           </div>
           {/* beside the console when there's room, else over it: whichever was opened or touched last is in front */}
           <div ref={paneHost} className="pk-pane" style={layer(order, 'pane')} onFocus={() => pane && panels.focus(paneEntry(pane).key)}>

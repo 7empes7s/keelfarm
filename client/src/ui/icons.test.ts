@@ -37,6 +37,7 @@ const CONTENT: Record<string, string> = {
   'world/camera/BuildingView.tsx': "drawn into the 3D scene's canvas textures",
   'world/decor/Decorations.tsx': "drawn into the 3D scene's canvas textures",
   'world/decor/RewardsCorner.tsx': "drawn into the 3D scene's canvas textures",
+  'world/floorThemes/themeDraw.ts': "drawn into the 3D scene's canvas textures",
   'world/desk/DeskStory.tsx': "drawn into the 3D scene's canvas textures",
   'world/draw.ts': "drawn into the 3D scene's canvas textures",
   'world/drawOps.ts': "drawn into the 3D scene's canvas textures",
