@@ -108,7 +108,7 @@ export function readingsNote(readings: readonly UsageReading[], now: number, che
   return check ? `as of ${ago(newest, now)} · ${checkNote(check)}` : `as of ${ago(newest, now)}`;
 }
 
-/** One bar on the usage meter: "5-hour", 42%, its tone, and "resets 18:30" (or "reset 18:30" once it has). */
+/** One bar on the usage meter: "5-hour", 42%, its tone, and "resets 18:30" (or "reset" once it has: short enough for a phone). */
 export interface UsageBar {
   type: string;
   name: string;
@@ -127,7 +127,7 @@ export function usageBars(readings: readonly UsageReading[], now: number): Usage
     name: barName(r.type),
     pct: livePct(r, now),
     tone: pctTone(livePct(r, now)),
-    resets: r.resetsAt === null ? null : isReset(r, now) ? 'reset, waiting for a new reading' : `resets ${clock(r.resetsAt, now)}`,
+    resets: r.resetsAt === null ? null : isReset(r, now) ? 'reset' : `resets ${clock(r.resetsAt, now)}`,
   }));
 }
 

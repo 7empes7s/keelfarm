@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { readingsNote, usageBars } from '../../../shared/usage';
+import { isReset, readingsNote, usageBars } from '../../../shared/usage';
 import { useStore } from '../store';
 import { ProgressBar } from './ProgressBar';
 import { HoverCard, PeekCard } from './HoverCard';
@@ -27,7 +27,7 @@ export function UsageBars({ link = true }: { link?: boolean }) {
   const readings = useStore((s) => s.claudeUsage);
   const check = useStore((s) => s.claudeUsageCheck);
   const now = useNow(30_000);
-  const note = readingsNote(readings, now, check);
+  const note = readingsNote(readings, now, check) ?? (readings.some((r) => isReset(r, now)) ? 'Reset, waiting for a new reading' : null);
   const agents = useStore((s) => s.agents);
   const repos = useStore((s) => s.repos);
   // The meters' hover card (#213): what's counted, when it resets, and the floors' share of the running sessions.
