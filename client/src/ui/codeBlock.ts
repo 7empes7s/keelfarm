@@ -18,6 +18,9 @@ export function languageLabel(lang: string): string {
   return LABELS[lang] ?? (lang ? lang.toUpperCase() : 'Code');
 }
 
+/** The header's title (#339): the language and how many lines, "Terminal · 3 lines". */
+export const codeTitle = (lang: string, lines: number) => `${languageLabel(lang)} · ${lines} line${lines === 1 ? '' : 's'}`;
+
 export const isShell = (lang: string) => SHELLS.has(lang);
 
 export interface CodeLine {

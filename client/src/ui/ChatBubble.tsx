@@ -249,7 +249,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
             )}
           </div>
         ) : (
-          text && <LongText text={text}><Markdown className="bubble-md" text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
+          text && <LongText text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))}>{(md) => <Markdown className="bubble-md" text={md} onFloor={onFloor} renderRef={renderRef} />}</LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
