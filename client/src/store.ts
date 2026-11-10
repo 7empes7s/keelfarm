@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageShares, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -153,6 +153,7 @@ export interface State {
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
+  claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
@@ -321,6 +322,7 @@ export const useStore = create<State>((set, get) => ({
   testLab: null,
   claudeUsage: [],
   claudeUsageCheck: null,
+  claudeUsageShares: [],
   ops: EMPTY_OPS,
   doctor: [],
   voiceKeySet: false,

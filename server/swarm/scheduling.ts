@@ -13,6 +13,7 @@ import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged, usageChoice } from '../../shared/usage.ts';
+import { usageShares } from '../../shared/usageShares.ts';
 import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
   clampPacingSessions,
@@ -35,7 +36,7 @@ import { planAssign } from '../../shared/assignIssue.ts';
 import { questionOf } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import { areaFiles, isPriorityLabel, pickNext, playbookAreas } from '../../shared/conflicts.ts';
-import type { OpsView, PullInfo, SwarmSettings, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
+import type { OpsView, PullInfo, ServerEvent, SwarmSettings, UsageReading, UsageView, UsageWarningView, WorldSnapshot } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -395,6 +396,20 @@ export abstract class SwarmScheduling extends SwarmQa {
     }
   }
 
+  /** Each usage bar's floor shares of the office's spend in its window, from the cost ledger (#334). */
+  private usageSharesNow() {
+    return usageShares(this.spend.ledger.all(), this.state.claudeUsage, Date.now());
+  }
+
+  /** Claude's readings for the usage meter, with their floor shares. */
+  protected claudeUsageEvent(check = this.usageCheck): ServerEvent {
+    return { type: 'claudeUsage', readings: this.state.claudeUsage, check, shares: this.usageSharesNow() };
+  }
+
+  override snapshot(): WorldSnapshot {
+    return { ...super.snapshot(), claudeUsageShares: this.usageSharesNow() };
+  }
+
   /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
   protected recordUsage(readings: UsageReading[]) {
     this.usageCheck = null; // a fresh reading answers for itself
@@ -403,7 +418,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     this.readingsTimer = setTimeout(() => {
       this.readingsTimer = null;
       this.shownReadings = this.state.claudeUsage;
-      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage, check: this.usageCheck });
+      this.broadcast(this.claudeUsageEvent());
       this.save();
     }, READINGS_MS);
     this.readingsTimer.unref?.();
@@ -423,7 +438,7 @@ export abstract class SwarmScheduling extends SwarmQa {
         if ('error' in res) {
           if (res.error === this.usageCheck) return; // quiet: no repeats, nothing logged
           this.usageCheck = res.error;
-          this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage, check: res.error });
+          this.broadcast(this.claudeUsageEvent(res.error));
           return;
         }
         this.recordUsage(res.readings); // clears the failed check
