@@ -28,7 +28,7 @@ async function companyProblems(root: Locator): Promise<string[]> {
     // the summary row (#345): no empty track, every row ending at the floors' right edge, cards in a row at one height
     const side = el.querySelector('.pk-company-side')!.getBoundingClientRect();
     const rows = new Map<number, DOMRect[]>();
-    for (const card of el.querySelectorAll('.pk-company-side > .pk-summary')) {
+    for (const card of el.querySelectorAll('.pk-company-side > *')) {
       const box = card.getBoundingClientRect();
       if (box.height) rows.set(Math.round(box.top), [...(rows.get(Math.round(box.top)) ?? []), box]);
     }
