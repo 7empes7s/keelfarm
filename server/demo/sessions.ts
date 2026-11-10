@@ -363,12 +363,12 @@ export function demoUsage(kind: 'warning' | 'limit', now: number): UsageWarning 
 const USAGE_WARNING_AT = 4;
 const USAGE_WARNING_MS = 5 * 60_000;
 let sessionsStarted = 0;
-let fakesStarted = 0;
+const fakesStarted = { builds: 0, qa: 0 };
 
-/** Now and then a fake builder or QA gets stuck (#359): the 2nd of every 8 on its sign-in screen, the 5th printing its result without reporting it. */
+/** Now and then a fake session gets stuck (#359): the 2nd of every 8 builders on its sign-in screen, the 2nd of every 8 QAs printing its report without reporting it. */
 function demoStuck(task: SessionOptions['task']): DemoStuck {
-  const n = ++fakesStarted % 8;
-  return n === 2 ? 'sign-in' : n === 5 && (task === 'qa' || task === 'issue') ? 'result' : null;
+  if (task === 'qa') return ++fakesStarted.qa % 8 === 2 ? 'result' : null;
+  return task === 'issue' && ++fakesStarted.builds % 8 === 2 ? 'sign-in' : null;
 }
 
 function fakeUsageWarning(cb: SessionCallbacks) {

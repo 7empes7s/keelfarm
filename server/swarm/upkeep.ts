@@ -234,7 +234,7 @@ export abstract class SwarmUpkeep extends SwarmCeo {
       if (!a || !session) return null;
       this.watch.nudged.set(p.key, now);
       // Typed into a menu it could pick an option, and a printed result needs no nudge (#359): its work goes back in line later instead.
-      if (rt.terminal && !canNudge(rt.terminal.screen(), rt.terminal.tail(60), a.task === 'qa' ? requiredKeys(QA_SCHEMA) : null)) {
+      if (rt.terminal && !canNudge(rt.terminal.screen(), rt.terminal.tail(120), a.task === 'qa' ? requiredKeys(QA_SCHEMA) : null)) {
         this.appendLog(a, [{ kind: 'system', text: `🩺 No sign of life for ${mins} minutes, but their screen shows a menu or a result: the office didn't type into it.` }]);
         return null;
       }
