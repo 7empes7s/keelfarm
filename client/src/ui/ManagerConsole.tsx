@@ -118,6 +118,11 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
             <Icon name="refresh-cw" /> Simulate an office update
           </button>
+          {update.launcher && (
+            <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoLabUpdate)} title="A 20-second lab browser check starts, then a commit lands: the update waits for the check">
+              <Icon name="flask-conical" /> Update during a lab check
+            </button>
+          )}
         </div>
       )}
     </div>

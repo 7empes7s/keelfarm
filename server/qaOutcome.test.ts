@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fixOutcome, type FixRecord } from './fixOutcome.ts';
 import { MAX_MERGE_FIXES, mergeStep } from './mergeGate.ts';
-import { conflictFixInstructions, labErrorNext, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, qaRoundResult, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, qaRoundResult, restartLossNext, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
 
 const CONFLICTING: QaPull = { mergeable: 'CONFLICTING', mergeState: 'DIRTY' };
 const MERGEABLE: QaPull = { mergeable: 'MERGEABLE', mergeState: 'CLEAN' };
@@ -124,5 +124,24 @@ describe('labErrorNext (#189)', () => {
     expect(labErrorNext({ round: 2, labRetryRound: null })).toBe('retry');
     expect(labErrorNext({ round: 2, labRetryRound: 2 })).toBe('stuck');
     expect(labErrorNext({ round: 3, labRetryRound: 2 })).toBe('retry'); // a new round (fixes pushed) gets its own retry
+  });
+});
+
+describe('restartLossNext (#333)', () => {
+  const lost = { acrossRestart: true, stopped: false, verdict: null, round: 3, restartRetryRound: null } as const;
+
+  it('re-queues a round that lost its lab to an office restart, once a round', () => {
+    expect(restartLossNext(lost)).toBe('retry'); // no report
+    expect(restartLossNext({ ...lost, verdict: 'lab-error' })).toBe('retry');
+    expect(restartLossNext({ ...lost, verdict: 'fail', cause: 'lab-error' })).toBe('retry');
+    expect(restartLossNext({ ...lost, restartRetryRound: 3 })).toBeNull(); // already re-run this round
+    expect(restartLossNext({ ...lost, restartRetryRound: 2 })).toBe('retry'); // a new round gets its own
+  });
+
+  it('leaves real verdicts, rounds with no restart and stopped sessions alone', () => {
+    expect(restartLossNext({ ...lost, verdict: 'fail', cause: 'bug' })).toBeNull();
+    expect(restartLossNext({ ...lost, verdict: 'pass' })).toBeNull();
+    expect(restartLossNext({ ...lost, acrossRestart: false })).toBeNull();
+    expect(restartLossNext({ ...lost, stopped: true })).toBeNull();
   });
 });

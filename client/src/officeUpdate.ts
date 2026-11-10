@@ -6,6 +6,9 @@ export const DRAIN_TIMEOUT_MS = 20 * 60_000;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** What a draining update waits for, e.g. "2 sessions and 1 lab check" (#333); '' for nothing. */
+const waitsFor = (u: OfficeUpdateView) => [u.running > 0 ? plural(u.running, 'session') : '', u.lab ? plural(u.lab, 'lab check') : ''].filter(Boolean).join(' and ');
+
 /** "Updating in 2 min, 3 commits": a run of merges settling into one update (#74). */
 const settlingText = (u: OfficeUpdateView, now: number) => `Updating in ${Math.max(1, Math.ceil(((u.updateAt ?? now) - now) / 60_000))} min, ${plural(u.behind, 'commit')}`;
 
@@ -20,7 +23,7 @@ export function officeUpdateText(u: OfficeUpdateView, now = Date.now()): string 
       return `${settlingText(u, now)}; agents keep working`;
     case 'waiting':
     case 'draining':
-      return u.running > 0 ? `Waiting for ${plural(u.running, 'session')} to finish` : 'Updating shortly…';
+      return waitsFor(u) ? `Waiting for ${waitsFor(u)} to finish` : 'Updating shortly…';
     case 'updating':
       return u.holds ? 'Updating…' : 'Checking the update; agents keep working, then the office restarts for a few seconds';
     case 'failed':
@@ -34,7 +37,7 @@ export function officeUpdateChip(u: OfficeUpdateView | undefined, now = Date.now
   if (u.state === 'settling') return settlingText(u, now);
   if (u.state === 'updating') return 'Updating the office…';
   if (u.state !== 'waiting' && u.state !== 'draining') return null;
-  return u.running > 0 ? `Updating the office after ${plural(u.running, 'session')} finish${u.running === 1 ? 'es' : ''}` : 'Updating the office shortly';
+  return waitsFor(u) ? `Updating the office after ${waitsFor(u)} finish${u.running + (u.lab ?? 0) === 1 ? 'es' : ''}` : 'Updating the office shortly';
 }
 
 /** When a drain gives up on the sessions still running, or null when it isn't draining. */

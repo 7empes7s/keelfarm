@@ -1,7 +1,7 @@
 // The office's own update: settling, draining, the hand-over to the launcher, the result after a restart.
 import crypto from 'node:crypto';
 import { HttpError } from '../httpError.ts';
-import { drainDecision, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
+import { drainDecision, labGate, labHold, labWaits, LAB_DRAIN_CAP_MS, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
 import { packCareers } from '../../shared/careers.ts';
 import type { OfficeUpdateView } from '../../shared/types.ts';
@@ -16,6 +16,8 @@ export abstract class SwarmUpdate extends SwarmScheduling {
    * into one update), and whether nothing new starts (the drain, or the hand-over if new sessions wouldn't outlive the restart).
    */
   protected updateRun = { pendingSince: null as number | null, lastCommitAt: null as number | null, holding: false };
+  /** The test lab's update gate last given to it (#333), so it reopens only when that changes. */
+  private labGateKey = 'null';
 
   /**
    * Busy agents an office restart would stop: not cloud agents in their Boxes, nor CLIs in the terminal keeper, which
@@ -34,6 +36,31 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     return { commit: this.officeHead.slice(0, 7) };
   }
 
+  /** The test lab's work an update waits for (#333): running jobs, and QA rounds between lab calls (labHold). */
+  protected labHold() {
+    const qa = this.state.agents.filter((a) => a.task === 'qa' && a.status === 'working').map((a) => ({ agentId: a.id, since: a.startedAt ?? 0 }));
+    return labHold({ ...this.testLab.activity(), qa, now: Date.now() });
+  }
+
+  /**
+   * Demo only (#333): a 20-second lab browser check starts for an agent on the office's own floor, then a commit lands
+   * and the office updates itself now. The update waits for the check, then goes ahead (faked: nothing restarts).
+   */
+  async demoLabUpdate() {
+    const office = this.backend.office;
+    const own = this.state.repos.find((r) => office.isOwnFolder(this.backend.mainDir(r.fullName)));
+    const a = own && this.state.agents.find((x) => x.repoId === own.id && x.role !== 'ceo');
+    if (!this.backend.demo || !office.fakeCommit || !this.officeHead) throw new HttpError(404, 'Only the demo office makes up office updates');
+    if (!office.launcher) throw new HttpError(409, 'Start the demo with SWARM_DEMO_LAUNCHER=1 to fake office updates.');
+    if (!own || !a) throw new HttpError(409, "The office's own floor has nobody to ask the lab.");
+    const who = { agentId: a.id, agent: a.name, repoId: own.id, floor: own.floor, fullName: own.fullName, defaultBranch: own.defaultBranch, worktree: this.backend.deskDir(own.fullName, this.agentSlug(a)), pr: a.prNumber ?? null, labCommands: [] };
+    const check = this.testLab.submit(who, { kind: 'check', url: 'http://localhost/', viewport: 390, profile: 'iphone', theme: 'light', steps: [{ do: 'wait', ms: 20_000 }, { do: 'expect_visible', selector: 'canvas' }] });
+    void check.then((text) => this.appendLog(a, [{ kind: 'system', text: `🧪 ${text.split('\n')[0]}` }]));
+    office.fakeCommit();
+    await this.syncFolder(own);
+    return this.updateOffice('now');
+  }
+
   protected drainInput(): DrainInput {
     const u = this.officeUpdate;
     return {
@@ -49,6 +76,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
       drainingSince: u.drainingSince,
       sent: u.sent,
       running: this.unkept().length,
+      lab: this.labHold().count,
       pendingSince: this.updateRun.pendingSince,
       lastCommitAt: this.updateRun.lastCommitAt,
       settleMs: settleMinutes(this.state.settings.updateSettleMin) * 60_000,
@@ -62,7 +90,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     const d = drainDecision(input);
     const until = u.postponedUntil ? new Date(u.postponedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const detail = d.state === 'failed' ? u.failed : d.state === 'waiting' ? `Postponed until ${until}, or until a newer commit lands.` : null;
-    return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: u.drainingSince ?? d.drainingSince, running: input.running, updateAt: d.updateAt, holds: d.holds || (d.send && !input.keeper), detail };
+    return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: u.drainingSince ?? d.drainingSince, running: input.running, lab: input.lab, updateAt: d.updateAt, holds: d.holds || (d.send && !input.keeper), detail };
   }
 
   protected emitOfficeUpdate() {
@@ -112,9 +140,27 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     u.drainingSince = d.drainingSince;
     this.updateRun.holding = d.holds || (d.send && !input.keeper);
     if (d.state === 'draining') this.cancelHolds('Cancelled: the office is restarting for an update. End this job now; pick it up again after the update.');
+    if (d.send && input.lab > 0) this.postMessage('office', `⏱ The test lab still had ${input.lab} job${input.lab === 1 ? '' : 's'} going after ${LAB_DRAIN_CAP_MS / 60_000} minutes: the update goes ahead and cuts ${input.lab === 1 ? 'it' : 'them'} off. Their sessions ask the lab again after the restart.`);
     if (d.send) void this.handOver(d.timedOut);
+    this.gateLab();
     this.emitOfficeUpdate();
     return this.updateRun.holding;
+  }
+
+  /** Tell the test lab whose queued jobs may start while the office updates (labGate), when that changed. */
+  private gateLab() {
+    const key = JSON.stringify(this.labGateNow());
+    if (key === this.labGateKey) return;
+    this.labGateKey = key;
+    this.testLab.reopen();
+  }
+
+  /** The test lab's update gate right now (TestLabHost.updateGate). */
+  protected labGateNow(): readonly string[] | null {
+    if (!this.officeHead) return null;
+    const input = this.drainInput();
+    const d = drainDecision(input);
+    return labGate(d.state, labWaits({ ...input, drainingSince: d.drainingSince }), this.labHold().agents);
   }
 
   /**

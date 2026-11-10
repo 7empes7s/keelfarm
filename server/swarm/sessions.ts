@@ -358,6 +358,7 @@ export abstract class SwarmSessions extends SwarmRotation {
     previewUrl: (repoId, pr, agentId) => this.labPreviewUrl(repoId, pr, agentId),
     shot: (agentId, file, page) => this.labShot(agentId, file, page),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
+    updateGate: () => this.labGateNow(),
   });
 
   /** Running lab jobs, for #55's admission (health.ts). */
@@ -369,8 +370,8 @@ export abstract class SwarmSessions extends SwarmRotation {
     return this.testLab.view();
   }
 
-  protected closeTestLab() {
-    return this.testLab.close();
+  protected closeTestLab(restart: boolean) {
+    return this.testLab.close(restart);
   }
 
   /** Does this agent's session use the test lab? Claude Code on this computer (the lab's tools reach it over MCP). */
@@ -474,6 +475,7 @@ export abstract class SwarmSessions extends SwarmRotation {
       return;
     }
     a.status = 'working';
+    rt.acrossRestart = mode === 'reattach'; // its CLI kept working through an office restart (#333)
     this.activity.set(a.id, Date.now());
     this.dropQuestion(a.id); // they moved on
     const how = this.sessionRuntime(a, resumeSessionId);

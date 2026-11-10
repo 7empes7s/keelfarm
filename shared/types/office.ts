@@ -73,6 +73,7 @@ export interface OfficeUpdateView {
   launcher: boolean; // started by npm run dev / npm start, which can install the update and restart the office
   drainingSince: number | null;
   running: number; // sessions still running that an office restart would stop (CLIs in the terminal keeper or a Box carry on)
+  lab?: number; // test-lab checks the update waits for (#333): running jobs and QA rounds between lab calls
   updateAt: number | null; // settling: when the update goes ahead unless another commit lands
   holds: boolean; // nothing new starts until the office has restarted
   detail: string | null;

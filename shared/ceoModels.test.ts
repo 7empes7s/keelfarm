@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ceoKeepsSession, ceoModelFor, ceoModelRetry, ceoModelSettings, DEFAULT_CEO_MODELS, isModelError } from './ceoModels.ts';
+import { AUTOMATED_KINDS, ceoKeepsSession, ceoModelFor, ceoModelRetry, ceoModelSettings, DEFAULT_CEO_MODELS, isAutomatedJob, isModelError, redoEstimate, redoRefusal } from './ceoModels.ts';
 
 const OPUS = 'claude-opus-5-5';
 const SONNET = 'claude-sonnet-5';
@@ -10,9 +10,9 @@ describe('the CEO model per job kind (#331)', () => {
     for (const kind of ['chat', 'plan', 'research', 'onboard', 'changes'] as const) expect(ceoModelFor(kind, DEFAULT_CEO_MODELS, OPUS)).toBe(OPUS);
   });
 
-  it('follows the manager’s choice per kind, with "same as the CEO model" as a choice', () => {
+  it('follows the manager’s choice per automated kind, with "same as the CEO model" as a choice', () => {
     const s = ceoModelSettings(DEFAULT_CEO_MODELS, { chat: 'claude-fable-5-1', review: '' });
-    expect(ceoModelFor('chat', s, OPUS)).toBe('claude-fable-5-1');
+    expect(ceoModelFor('chat', s, OPUS)).toBe(OPUS); // chat always runs on the CEO model (#332)
     expect(ceoModelFor('review', s, OPUS)).toBe(OPUS);
     expect(ceoModelFor('triage', s, OPUS)).toBe(SONNET);
     expect(ceoModelFor('review', s, 'claude-opus-5')).toBe('claude-opus-5'); // follows the CEO's own model
@@ -46,5 +46,33 @@ describe('the CEO model per job kind (#331)', () => {
     expect(ceoModelRetry({ ...base, model: OPUS })).toBe(false); // already on the CEO model
     expect(ceoModelRetry({ ...base, ok: true })).toBe(false);
     expect(ceoModelRetry({ ...base, errors: ['Session failed'] })).toBe(false);
+  });
+
+  it('lets only the jobs the office starts by itself run on another model (#332)', () => {
+    expect(AUTOMATED_KINDS).toEqual(['review', 'followup', 'triage']);
+    for (const kind of ['chat', 'plan', 'research', 'onboard', 'changes'] as const) {
+      expect(isAutomatedJob(kind)).toBe(false);
+      expect(ceoModelFor(kind, { chat: SONNET, plan: SONNET, research: SONNET }, OPUS)).toBe(OPUS);
+    }
+  });
+
+  it('runs every automated job on the CEO model with the quick switch on, whatever each kind says', () => {
+    const s = ceoModelSettings(DEFAULT_CEO_MODELS, { review: 'claude-haiku-4-5', triage: SONNET });
+    for (const kind of AUTOMATED_KINDS) expect(ceoModelFor(kind, s, OPUS, true)).toBe(OPUS);
+    expect(ceoModelFor('review', s, OPUS, false)).toBe('claude-haiku-4-5');
+  });
+
+  it('offers a redo only for an automated job that ran on another model, once', () => {
+    expect(redoRefusal({ kind: 'followup', model: SONNET }, OPUS)).toBeNull();
+    for (const kind of ['chat', 'plan', 'research'] as const) expect(redoRefusal({ kind, model: SONNET }, OPUS)).toMatch(/Only jobs the office starts by itself/);
+    expect(redoRefusal({ kind: 'review', model: OPUS }, OPUS)).toMatch(/already ran on the CEO model/);
+    expect(redoRefusal({ kind: 'triage', model: SONNET, redoneBy: 9 }, OPUS)).toMatch(/already redone \(job #9\)/);
+    expect(redoRefusal(undefined, OPUS)).toMatch(/no longer kept/);
+  });
+
+  it('estimates a redo from what the job cost and the two models’ prices', () => {
+    expect(redoEstimate(0.3, SONNET, OPUS)).toBe(0.5);
+    expect(redoEstimate(0.3, 'claude-fable-5-1', OPUS)).toBe(0.3); // an unknown price: the same again
+    expect(redoEstimate(0, SONNET, OPUS)).toBeNull();
   });
 });

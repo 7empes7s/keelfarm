@@ -27,6 +27,7 @@ import { Icon } from './Icon';
 import { SignInCard } from './SignInCard';
 import { toolsInRow, toolsOffset } from './bubbleTools';
 import { XLabel } from './HoverCard';
+import { CeoJobLine } from './CeoJobRedo';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -249,7 +250,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
             )}
           </div>
         ) : (
-          text && <LongText text={text}><Markdown className="bubble-md" text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
+          text && <LongText text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))}>{(md) => <Markdown className="bubble-md" text={md} onFloor={onFloor} renderRef={renderRef} />}</LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
@@ -262,6 +263,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
         {m && log && <StepsRow log={log} actions={m.actions?.length ?? 0} used={m.used} linked={linked} onFloor={onFloor} />}
+        {m?.ceoJob && <CeoJobLine tag={m.ceoJob} onJump={onQuote} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         {/* one compact meta row (#215): Used (when there's no steps row to carry it) folds open across it, the time on its right */}
         <div className="bubble-meta">

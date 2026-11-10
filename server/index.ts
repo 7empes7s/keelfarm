@@ -457,6 +457,7 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 // The chat closer to Claude's (#51): stop, edit and retry, conversations, and what the CEO remembers
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
+app.post('/api/ceo/jobs/:id/redo', route((req) => swarm.redoCeoJob(Number(req.params.id))));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
 app.get('/api/ceo/messages', route((req) => swarm.chatMessages(Number(req.query.before), Number(req.query.limit))));
@@ -493,6 +494,7 @@ app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params
 // The demo office only: the CEO grows (or shrinks) a floor's team on demand.
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
 app.post('/api/demo/new-commit', route(() => swarm.demoNewCommit()));
+app.post('/api/demo/lab-update', route(() => swarm.demoLabUpdate()));
 
 // Office progression (#210): the lobby kiosk, a floor's decorations, the player's coffees, and the demo's coins and
 // tenure for QA.

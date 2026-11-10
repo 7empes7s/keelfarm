@@ -10,10 +10,11 @@ export abstract class SwarmCeoModels extends SwarmReactions {
   protected ceoRunModel = ''; // the model the CEO's current job runs on
   protected ceoFresh = false; // the current job runs in a fresh session of its own, apart from the chat's kept one (#330)
 
-  /** The model `job` runs on: its kind's (CEO settings), or the CEO's own for a retry. */
+  /** The model `job` runs on: an automated kind's (CEO settings), or the CEO's own for the rest, a retry and a redo. */
   protected ceoJobModel(a: PersistedAgent, job: CeoJob): string {
     const ceoModel = a.model || CEO_MODEL;
-    this.ceoRunModel = job.onCeoModel ? ceoModel : ceoModelFor(job.kind, this.state.settings.ceoAwake.models, ceoModel);
+    const awake = this.state.settings.ceoAwake;
+    this.ceoRunModel = job.onCeoModel ? ceoModel : ceoModelFor(job.kind, awake.models, ceoModel, awake.automatedOnCeo);
     return this.ceoRunModel;
   }
 

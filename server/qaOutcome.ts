@@ -50,6 +50,16 @@ export function labErrorNext(rec: { round: number; labRetryRound: number | null 
   return rec.labRetryRound === rec.round ? 'stuck' : 'retry';
 }
 
+/**
+ * A QA round that lost its lab to an office restart (#333): its session lived through the restart in the terminal
+ * keeper and ended with no report, a lab-error verdict or a fail QA put down to the lab. It goes back to QA by itself
+ * once a round (retry): no failed round, no lab error counted, never needs-human. Anything else: null, as before.
+ */
+export function restartLossNext(x: { acrossRestart: boolean; stopped: boolean; verdict: 'pass' | 'fail' | 'lab-error' | null; cause?: string | null; round: number; restartRetryRound: number | null }): 'retry' | null {
+  if (!x.acrossRestart || x.stopped || x.restartRetryRound === x.round) return null;
+  return x.verdict === null || x.verdict === 'lab-error' || (x.verdict === 'fail' && x.cause === 'lab-error') ? 'retry' : null;
+}
+
 /** A conflict found before QA tested the head: the head it was found on, and the fixReason of the test QA was queued for. */
 export interface PreQa {
   sha: string;

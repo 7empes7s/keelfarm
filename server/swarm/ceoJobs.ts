@@ -59,9 +59,9 @@ import {
   QA_SHOTS_DIR,
 } from './model.ts';
 import { SKIN, lookFor, pick } from './flavour.ts';
-import { SwarmCeoFresh } from './ceoFresh.ts';
+import { SwarmCeoLog } from './ceoLog.ts';
 
-export abstract class SwarmCeo extends SwarmCeoFresh {
+export abstract class SwarmCeo extends SwarmCeoLog {
   protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
   // ---------- the CEO ----------
 
@@ -353,6 +353,7 @@ export abstract class SwarmCeo extends SwarmCeoFresh {
     const floorJob = job?.repoId && this.state.repos.some((r) => r.id === job.repoId) ? job.repoId : '';
     const run = this.spend.take(a.id);
     if (run && this.ceoWaited) run.kind = 'ceo-wait';
+    this.ceoJobEnds(job, run, result, this.ceoIssues.total, preempted || retry); // its row in the CEO jobs log, its inputs for a redo (#332)
     void this.spend.record({ ...a, issueNumber: null, prNumber: job?.prNumber ?? null }, floorJob, run, 'ceo-chat', result, { stopped: a.status === 'stopped' || preempted, ceoHint: result.ok ? (this.ceoIssues.total > 0 || this.spend.ceoActs > 0 ? 'ceo-acted' : 'ceo-idle') : undefined });
     if (a.status === 'stopped') {
       // the manager already logged the stop
@@ -420,7 +421,7 @@ export abstract class SwarmCeo extends SwarmCeoFresh {
 
   requestReview() {
     if (this.state.repos.length === 0) throw new HttpError(400, 'Connect a repo first: the CEO needs a floor to review.');
-    this.enqueueCeo({ kind: 'review', at: Date.now() });
+    this.enqueueCeo({ kind: 'review', by: 'manager', at: Date.now() });
   }
 
   onboardFloor(repoId: string) {
@@ -643,7 +644,7 @@ export abstract class SwarmCeo extends SwarmCeoFresh {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'pacing'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'pacing' | 'ceoJob'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
     const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);
@@ -703,7 +704,7 @@ export abstract class SwarmCeo extends SwarmCeoFresh {
     const extra = { ...this.ceoFiles.takeReply(), ...researchRef(job), ...this.ceoChat.finishTurn(text) };
     if (job && BACKGROUND_KINDS.includes(job.kind) && text.trim()) this.state.ceo.lastJob = jobNote(job.kind, jobLabel(job, this.ceoFloor(job.repoId)), text, extra, Date.now()); // for the chat's digest (#330)
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
-    if (turnEnding(text, extra) === 'reply') this.postMessage('ceo', text, undefined, { ...extra, ...(replyTo !== undefined && { replyTo }), closing: true }); // else a reaction said it, or nothing needed saying: no blank bubble, no push
+    if (turnEnding(text, extra) === 'reply') this.ceoJobReplied(this.postMessage('ceo', text, undefined, { ...extra, ...this.ceoJobTag(), ...(replyTo !== undefined && { replyTo }), closing: true })); // else a reaction said it, or nothing needed saying: no blank bubble, no push
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */
