@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountSource, anthropicCosts, boxSource, codexPlan, codexReadings, elevenLabsSource, openaiCosts, resetsIn, usageAlerts, usageLine, worstFirst } from './usageSources';
+import { accountSource, anthropicCosts, boxSource, codexPlan, codexReadings, elevenLabsSource, openaiCosts, resetsIn, usageAlerts, usageLine, windowWords, worstFirst } from './usageSources';
 import type { AccountView, UsageSource } from './types';
 
 const NOW = Date.UTC(2026, 10, 8, 12, 0, 0);
@@ -140,5 +140,12 @@ describe('notifications', () => {
     const limited = usageAlerts([src('codex-login', 40, { status: 'limited' })], [], NOW);
     expect(limited.alerts.map((a) => a.title)).toEqual(['codex-login is at its limit']);
     expect(usageAlerts([src('codex-login', 40, { status: 'limited' })], limited.sent, NOW).alerts).toEqual([]);
+  });
+});
+
+describe('a balance in words (#364)', () => {
+  it("says what's left when there's no limit to measure against", () => {
+    expect(windowWords({ name: 'Balance', usedPct: null, used: 1250, unit: 'credits', resetsAt: null })).toBe('1.3k credits left');
+    expect(windowWords({ name: 'Balance', usedPct: null, used: 10.01, unit: '$', resetsAt: null })).toBe('$10.01 balance');
   });
 });

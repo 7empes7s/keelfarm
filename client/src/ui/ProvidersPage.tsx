@@ -215,6 +215,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
   const [label, setLabel] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const reuses = useStore((s) => (def.sharesKeyWith ? s.providers.connections.find((c) => c.provider === def.sharesKeyWith) : undefined));
   if (def.home === 'accounts' || def.home === 'own-setup') {
     return (
       <div className="acc-form">
@@ -269,7 +270,8 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
         <span>API key</span>
         <SecretInput name={`provider-${def.id}`} value={key} placeholder={def.placeholder} onChange={(e) => setKey(e.target.value)} />
       </label>
-      <button className="btn btn-primary" disabled={busy || !key.trim()}>
+      {reuses && !key.trim() && <p className="muted small">Leave it empty to use {reuses.label} (••••{reuses.keyHint}).</p>}
+      <button className="btn btn-primary" disabled={busy || (!key.trim() && !reuses)}>
         {busy ? 'Testing…' : 'Save and test'}
       </button>
       {note && (

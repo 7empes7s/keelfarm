@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectionSource, keyProblem, mcpProblem, providerCards, providersLine, sessionMcpServers, splitCommand, testNote, testUsage, type CardInput } from './providers.ts';
+import { connectionSource, geminiVideoModels, keyProblem, mcpProblem, PROVIDERS, providerCards, providersLine, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type CardInput } from './providers.ts';
 import { EMPTY_CLOUD } from './cloud.ts';
 import type { AccountView, McpServerConfig } from './types.ts';
 
@@ -103,6 +103,77 @@ describe('test calls', () => {
   it("puts a key's credit on the usage card", () => {
     const row = connectionSource({ id: 'r1', provider: 'openrouter', label: 'OpenRouter', addedAt: 1, keyHint: '', test: { at: 5, ok: true, note: 'Key works', windows: [{ name: 'Credit', usedPct: 90, used: 9, limit: 10, unit: '$', resetsAt: null }] } });
     expect(row).toMatchObject({ id: 'provider:r1', provider: 'openrouter', category: 'text', status: 'near', checkedAt: 5 });
+  });
+});
+
+// Recorded answers (keys and ids made up), as the providers document them.
+const RUNWAY_ORG = {
+  creditBalance: 1250,
+  tier: { maxMonthlyCreditSpend: 10000, models: { gen4_turbo: { maxConcurrentGenerations: 2, maxDailyGenerations: 50 }, gen4_aleph: { maxConcurrentGenerations: 1, maxDailyGenerations: 20 } } },
+  usage: { models: { gen4_turbo: { dailyGenerations: 12 }, gen4_aleph: { dailyGenerations: 0 } } },
+};
+const KLING_COSTS = {
+  code: 0,
+  message: 'SUCCEED',
+  request_id: 'r-1',
+  data: {
+    code: 0,
+    msg: 'SUCCEED',
+    resource_pack_subscribe_infos: [
+      { resource_pack_name: 'Video Generation - 1000 units', resource_pack_id: 'p1', resource_pack_type: 'decreasing_total', total_quantity: 1000, remaining_quantity: 640.5, purchase_time: 1, effective_time: 1, invalid_time: 2_000_000_000_000, status: 'online' },
+      { resource_pack_name: 'Old pack', resource_pack_id: 'p0', resource_pack_type: 'decreasing_total', total_quantity: 100, remaining_quantity: 100, purchase_time: 1, effective_time: 1, invalid_time: 1_000, status: 'expired' },
+    ],
+  },
+};
+const NOW = 1_800_000_000_000;
+
+describe('video providers (#364)', () => {
+  it('lists Runway, Google video, Luma and Kling under Video, and never Sora (its API is gone)', () => {
+    expect(PROVIDERS.filter((p) => p.category === 'video').map((p) => p.id)).toEqual(['runway', 'gemini-video', 'luma', 'kling']);
+    expect(PROVIDERS.some((p) => /sora/i.test(p.id) || /sora/i.test(p.name))).toBe(false);
+  });
+
+  it('tests every video key with a read: the organisation, the models list, the credits, the account costs', () => {
+    const urls = ['runway', 'gemini-video', 'luma', 'kling'].map((id) => {
+      const r = testRequest(id, 'k', NOW);
+      expect(r).toMatchObject({ kind: 'http' });
+      expect(Object.keys(r!).sort()).toEqual(['headers', 'kind', 'url']); // no method, no body: a GET
+      return r!.kind === 'http' ? r!.url : '';
+    });
+    expect(urls).toEqual([
+      'https://api.dev.runwayml.com/v1/organization',
+      'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000',
+      'https://api.lumalabs.ai/dream-machine/v1/credits',
+      `https://api-singapore.klingai.com/account/costs?start_time=${NOW - 30 * 86_400_000}&end_time=${NOW}`,
+    ]);
+    expect(testRequest('runway', 'k')).toMatchObject({ headers: { Authorization: 'Bearer k', 'X-Runway-Version': '2024-11-06' } });
+  });
+
+  it("reads Runway's credit balance, each model's generations today and its monthly cap", () => {
+    expect(testUsage('runway', RUNWAY_ORG)).toEqual([
+      { name: 'Balance', usedPct: null, used: 1250, unit: 'credits', resetsAt: null },
+      { name: 'gen4_turbo today', usedPct: 24, used: 12, limit: 50, unit: 'videos', resetsAt: null },
+    ]);
+    expect(testPlan('runway', RUNWAY_ORG)).toBe('Up to 10,000 credits a month');
+    expect(testUsage('runway', { error: 'nope' })).toEqual([]);
+  });
+
+  it("reads Luma's balance in cents as dollars, and Kling's live resource packs", () => {
+    expect(testUsage('luma', { credit_balance: 1000.5 })).toEqual([{ name: 'Balance', usedPct: null, used: 10.01, unit: '$', resetsAt: null }]);
+    expect(testUsage('luma', { generations: [] })).toEqual([]);
+    expect(testUsage('kling', KLING_COSTS, NOW)).toEqual([{ name: 'Video Generation - 1000 units', usedPct: 36, used: 359.5, limit: 1000, unit: 'units', resetsAt: 2_000_000_000_000 }]);
+  });
+
+  it('names only the video models Gemini lists for the key', () => {
+    const list = { models: [{ name: 'models/gemini-3-flash' }, { name: 'models/gemini-omni-1.2-flash' }, { name: 'models/veo-3.1-generate-001' }] };
+    expect(geminiVideoModels(list)).toEqual(['gemini-omni-1.2-flash', 'veo-3.1-generate-001']);
+    expect(testPlan('gemini-video', { models: [{ name: 'models/gemini-3-flash' }] })).toBe('No video models on this key');
+  });
+
+  it("puts Runway's balance on the usage card, and says where the ledger stands in for a balance", () => {
+    const at = { at: 5, ok: true, note: 'Key works' };
+    expect(connectionSource({ id: 'v1', provider: 'runway', label: 'Runway', addedAt: 1, keyHint: '', test: { ...at, windows: testUsage('runway', RUNWAY_ORG) } })).toMatchObject({ provider: 'runway', category: 'video', status: 'ready', windows: [{ name: 'Balance', used: 1250 }, { name: 'gen4_turbo today' }] });
+    expect(connectionSource({ id: 'v2', provider: 'gemini-video', label: 'Google video', addedAt: 1, keyHint: '', test: at })?.note).toMatch(/ledger/);
   });
 });
 

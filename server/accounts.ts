@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { HttpError } from './httpError.ts';
+import { builtInPrefs, prepareLogin } from './cliSetup.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
@@ -480,6 +481,14 @@ export class Accounts {
     this.signIns.get(id)?.stop();
     const dir = this.dirOf(a);
     const env: Record<string, string> = a.builtIn ? {} : a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir };
+    // A new login starts with the built-in one's theme and its onboarding done, so its sign-in opens on the sign-in (#360).
+    if (!a.builtIn && a.cli === 'claude') {
+      try {
+        prepareLogin('claude', dir, [], { prefs: builtInPrefs() });
+      } catch (err) {
+        console.warn(`account ${id}: couldn't set up its login folder: ${(err as Error).message}`);
+      }
+    }
     const term = this.terminal(id)!;
     const run = this.deps.signIn({ cli: a.cli, env, term, mode }, (code) => {
       if (this.signIns.get(id) !== run) return; // replaced by a newer one
