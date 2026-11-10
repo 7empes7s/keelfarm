@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agoText, bodyLines, firstFailing, floorShares, mergesToday, prAdvice, whoIsOn } from './peekFacts';
+import { agoText, bodyLines, firstFailing, mergesToday, prAdvice, sharesNote, shareStats, whoIsOn } from './peekFacts';
 
 const agent = (id: string, task: string | null, issueNumber: number | null, prNumber: number | null, repoId = 'r1') => ({ id, name: id.toUpperCase(), repoId, task, issueNumber, prNumber });
 
@@ -46,11 +46,12 @@ describe('mergesToday', () => {
   });
 });
 
-describe('floorShares', () => {
-  it('splits running spend by floor, biggest first', () => {
-    const shares = floorShares([{ repoId: 'a', costUsd: 1 }, { repoId: 'b', costUsd: 3 }, { repoId: null, costUsd: 5 }, { repoId: 'a', costUsd: 0 }], (id) => `Floor ${id}`);
-    expect(shares).toEqual([{ name: 'Floor b', share: 0.75 }, { name: 'Floor a', share: 0.25 }]);
-    expect(floorShares([], () => 'x')).toEqual([]);
+describe('shareStats', () => {
+  it('names the floors and the CEO with % and $, then others', () => {
+    const usd = (n: number) => `$${n}`;
+    const rows = shareStats({ rows: [{ repoId: 'a', usd: 412, pct: 61 }, { repoId: '', usd: 100, pct: 15 }, { repoId: 'gone', usd: 50, pct: 7 }], others: { count: 2, usd: 110, pct: 17 } }, (id) => (id === 'a' ? 'Floor 3 · keelfarm' : undefined), usd);
+    expect(rows).toEqual([['Floor 3 · keelfarm', '61% · $412'], ['CEO (lobby)', '15% · $100'], ['A removed floor', '7% · $50'], ['Others (2)', '17% · $110']]);
+    expect(sharesNote({ since: Date.now() - 60_000, usd: 672 }, Date.now(), usd)).toMatch(/^Office share of the office’s spend since \d\d:\d\d \(\$672 in all\)\. Other \(outside the office\)/);
   });
 });
 

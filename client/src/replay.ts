@@ -76,6 +76,7 @@ function frameSnapshot(f: JournalFrame): WorldSnapshot {
     officeUpdate: s.officeUpdate,
     usage: f.usage,
     claudeUsage: s.claudeUsage ?? [], // Claude's readings are the subscription's, now
+    claudeUsageShares: s.claudeUsageShares,
     clis: s.clis,
     voiceKeySet: s.voiceKeySet,
     voiceKeyHint: s.voiceKeyHint,
