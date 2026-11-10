@@ -21,6 +21,7 @@ async function signInTerminal(page: Page) {
   await settings.getByRole('button', { name: 'More for Max · keelops' }).click();
   await page.getByRole('menuitem', { name: /Sign in again/ }).click();
   const sheet = page.locator('.acc-signin');
+  await sheet.getByRole('button', { name: 'Show terminal' }).tap(); // folded under the guided sign-in (#350)
   await expect(sheet.locator('.xterm-rows')).toBeVisible();
   return sheet;
 }

@@ -344,6 +344,8 @@ app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req
 app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
 app.post('/api/accounts/:id/test', route(async (req) => ({ note: await swarm.accounts.test(String(req.params.id)) })));
 app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id), (req.body ?? {}).mode === 'setup-token' ? 'setup-token' : 'login')));
+app.post('/api/accounts/:id/signin/code', route((req) => swarm.accounts.signInCodeIn(String(req.params.id), (req.body ?? {}).code)));
+app.post('/api/accounts/:id/signin/answer', route((req) => swarm.accounts.signInAnswer(String(req.params.id), (req.body ?? {}).option)));
 app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
 app.post('/api/accounts/:id/use-now', route((req) => swarm.useAccountNow(String(req.params.id))));
 app.post('/api/accounts/:id/simulate-limit', route((req) => swarm.simulateAccountLimit(String(req.params.id))));
