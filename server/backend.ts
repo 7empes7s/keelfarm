@@ -50,6 +50,8 @@ import type { HistoryEntry } from '../shared/history.ts';
 import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
+import { realKeyScan } from './keyScan.ts';
+import type { RawKey } from '../shared/keyScan.ts';
 import type { McpInput, ProbeRequest, ProbeResult } from '../shared/providers.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
@@ -179,6 +181,8 @@ export interface Backend {
   usage: UsageApi;
   /** Settings → Providers (#362): one cheap read-only call testing a key or an MCP server; never throws. */
   providerProbe(req: ProbeRequest): Promise<ProbeResult>;
+  /** Keys found on this computer (#367): the retired projects' env and JSON files, read server-side (the demo's archive is fake). */
+  scanForKeys(): Promise<RawKey[]>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
   demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
@@ -348,6 +352,7 @@ export const realBackend: Backend = {
   accounts: { check: checkAccount, signIn: startLocalSignIn },
   usage: realUsageApi,
   providerProbe: realProbe,
+  scanForKeys: realKeyScan,
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

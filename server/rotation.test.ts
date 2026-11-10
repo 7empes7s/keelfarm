@@ -75,11 +75,11 @@ async function office(out: string[]) {
   await testing;
   i.state.ceo.queue = []; // no onboarding
   i.ensureCeo([]);
-  const runs: { account: string; role?: string; resume?: string }[] = [];
+  const runs: { account: string; role?: string; resume?: string; cli?: string }[] = [];
   const start = i.backend.startSession.bind(i.backend);
   i.backend.startSession = (opts, cb) => {
     const account = accountOf(opts);
-    runs.push({ account, role: opts.role, resume: opts.resumeSessionId });
+    runs.push({ account, role: opts.role, resume: opts.resumeSessionId, cli: opts.cli });
     if (!out.includes(account)) return start(opts, cb);
     cb.sessionId(opts.resumeSessionId ?? 'conversation-1'); // a conversation the next account can resume (#377)
     const t = setTimeout(() => cb.finished({ ok: false, text: '', costUsd: 0.01, turns: 0, errors: [LIMIT] }), 10);
@@ -192,6 +192,22 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(swarm.snapshot().qa.length).toBe(qa);
     expect(notify.mock.calls.filter(([event]) => event === 'needsHuman' || event === 'error')).toHaveLength(0);
     expect(i.state.messages.filter((m) => m.switch)).toHaveLength(0); // an agent's switch isn't a chat pill
+  });
+
+  it("never moves an agent's task onto Gemini CLI, which isn't a builder (#365)", async () => {
+    const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
+    const testing = swarm.accounts.test('gemini-plus'); // signed in, and ready
+    await vi.advanceTimersByTimeAsync(500);
+    await testing;
+    swarm.accounts.update('codex-login', { enabled: false }); // no Codex to go to either
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex', 'gemini'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
+    await wait(10_000);
+    const [issue] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(runs.filter((r) => r.role !== 'ceo').length).toBeGreaterThan(0);
+    expect(runs.filter((r) => r.cli === 'gemini')).toEqual([]);
   });
 
   it('with rotation off, a limit stays on its account as before', async () => {

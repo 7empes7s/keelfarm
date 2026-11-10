@@ -1,27 +1,32 @@
 // The demo's sign-ins (#302): each CLI's own login drawn in a terminal, with made-up links and codes.
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
-import type { SignInMode } from '../shared/types.ts';
+import type { AccountCli, SignInMode } from '../shared/types.ts';
 import { inputShape } from '../shared/signIn.ts';
 
 /** Where the demo's sign-ins send the manager: nowhere real. */
-const DEMO_SIGN_IN = { claude: 'https://example.com/cubefarm-demo/claude-sign-in', codex: 'https://example.com/cubefarm-demo/codex-device' };
+const DEMO_SIGN_IN = { claude: 'https://example.com/cubefarm-demo/claude-sign-in', codex: 'https://example.com/cubefarm-demo/codex-device', gemini: 'https://example.com/cubefarm-demo/google-sign-in' };
 
 /**
  * The demo's sign-in in a cloud agent's terminal, drawn as each CLI's own one looks, with a made-up link: Enter (after
  * pasting anything, for Claude Code) finishes it, and the fake account remembers the Box as signed in. A code with
  * "fail" in it fails as a stale code does (#302), and Claude Code's prompt shows the shape of what it got, for e2e.
  */
-export function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: AgentTerminal; mode?: SignInMode }, logins: Map<string, Set<string>>, exited: (code: number) => void): BoxSignIn {
+export function demoSignIn(o: { boxId: string; cli: AccountCli; term: AgentTerminal; mode?: SignInMode }, logins: Map<string, Set<string>>, exited: (code: number) => void): BoxSignIn {
   const { term } = o;
   const claude = o.cli === 'claude';
+  const gemini = o.cli === 'gemini';
+  const paste = claude || gemini; // a code pasted at a prompt, not Codex's device code
   const token = claude && o.mode === 'setup-token';
-  term.note(token ? '── Making a Claude Code setup token (demo) ──' : `── Signing ${claude ? 'Claude Code' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
-  const link = ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', '\x1b[2m(demo) Paste anything and press Enter ("fail" in it fails).\x1b[0m', 'Paste code here if prompted > '].join('\r\n');
+  term.note(token ? '── Making a Claude Code setup token (demo) ──' : `── Signing ${claude ? 'Claude Code' : gemini ? 'Gemini CLI' : 'Codex'} in${o.boxId === 'accounts' ? '' : ' · ☁ cloud machine'} (demo) ──`);
+  const hint = '\x1b[2m(demo) Paste anything and press Enter ("fail" in it fails).\x1b[0m';
+  const link = gemini
+    ? ['Please visit the following URL to authorize the application:', '', DEMO_SIGN_IN.gemini, '', hint, 'Enter the authorization code: '].join('\r\n')
+    : ['Opening browser to sign in…', `If the browser didn't open, visit: ${DEMO_SIGN_IN.claude}`, '', hint, 'Paste code here if prompted > '].join('\r\n');
   // An account's login asks its login method first, as an older Claude Code does: the guided sign-in answers it (#350).
   let menu = claude && !token && o.boxId === 'accounts';
   term.write(
-    (claude
+    (paste
       ? menu
         ? ['Select login method:', '', ' ❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise', '   2. Anthropic Console account · API usage billing', '   3. 3rd-party platform · Amazon Bedrock, Microsoft Foundry, or Vertex AI']
         : [link]
@@ -59,10 +64,18 @@ export function demoSignIn(o: { boxId: string; cli: 'claude' | 'codex'; term: Ag
           continue;
         }
         if (ch === '\r') {
-          if (claude && !line.trim()) continue;
-          const fail = claude && line.includes('fail');
-          if (claude) term.write(`\r\n\x1b[2m(demo) the prompt got ${inputShape(raw)}\x1b[0m`);
-          term.write(fail ? '\r\nLogin failed: Request failed with status code 400\r\n' : token ? '\r\n✓ Long-lived authentication token created: sk-ant-oat01-demo-0000\r\n' : `\r\n\x1b[32m${claude ? 'Login successful.' : 'Successfully logged in'}\x1b[0m\r\n`);
+          if (paste && !line.trim()) continue;
+          const fail = paste && line.includes('fail');
+          if (paste) term.write(`\r\n\x1b[2m(demo) the prompt got ${inputShape(raw)}\x1b[0m`);
+          term.write(
+            fail
+              ? gemini
+                ? '\r\nFailed to authenticate with user code.\r\n'
+                : '\r\nLogin failed: Request failed with status code 400\r\n'
+              : token
+                ? '\r\n✓ Long-lived authentication token created: sk-ant-oat01-demo-0000\r\n'
+                : `\r\n\x1b[32m${claude ? 'Login successful.' : gemini ? 'Authentication succeeded' : 'Successfully logged in'}\x1b[0m\r\n`,
+          );
           if (!token && !fail) logins.set(o.boxId, new Set([...(logins.get(o.boxId) ?? []), o.cli]));
           close();
           exited(fail ? 1 : 0);

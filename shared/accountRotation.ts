@@ -39,6 +39,7 @@ const USAGE_LIMIT = [
   // "You've hit your Opus limit", "You've hit your usage limit. … try again in 2 hours"
   /you['’]ve hit your (?:usage |weekly |(?:weekly )?opus |session |5-hour )?limit/i,
   /usage_limit_reached/i, // Codex
+  /exhausted your (?:daily )?(?:capacity|quota)/i, // Gemini CLI: "You have exhausted your capacity on this model. Your quota will reset after 10m."
   /stopped: rate limit/i, // cliRunner's StopFailure line
 ];
 const BUSY = [/(?:API Error|status):? 429\b/i, /rate_limit_error/i, /rate limit reached/i, /429 too many requests/i, /overloaded_error/i, /API Error:? 529\b/i];
@@ -85,7 +86,8 @@ function zoned(y: number, mo: number, d: number, h: number, mi: number, zone: st
 
 /**
  * The reset a limit message names: an epoch ("|1730000000"), "resets Nov 13, 2pm (UTC)", "resets Nov 13 at 2pm",
- * "resets 4pm", "reset at 16:30", "try again in 2 hours 5 minutes", "try again at 3:15 PM".
+ * "resets 4pm", "reset at 16:30", "try again in 2 hours 5 minutes", "try again at 3:15 PM", Gemini CLI's "reset after
+ * 19h14m47s", "retry in 44.09s" and "Access resets at 4:15 PM UTC" (its computer's own time).
  */
 export function resetTime(text: string, now: number): number | null {
   const epoch = /limit reached\|(\d{10})\b/i.exec(text);
@@ -98,6 +100,12 @@ export function resetTime(text: string, now: number): number | null {
     const zone = date[6] ?? date[7];
     const at = zoned(year, month, Number(date[2]), h, Number(date[4] ?? 0), zone);
     return at < now - DAY ? zoned(year + 1, month, Number(date[2]), h, Number(date[4] ?? 0), zone) : at; // "Jan 2" read in late December
+  }
+  const after = /(?:reset after|retry in)\s+((?:\d+(?:\.\d+)?(?:ms|h|m|s))+)/i.exec(text);
+  if (after) {
+    let ms = 0;
+    for (const m of after[1].matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/gi)) ms += Number(m[1]) * ({ ms: 1, h: HOUR, m: MIN, s: 1000 } as Record<string, number>)[m[2].toLowerCase()];
+    if (ms > 0) return now + Math.ceil(ms);
   }
   const rel = /try again in ((?:\s*\d+\s*(?:days?|hours?|hrs?|minutes?|mins?|seconds?|secs?)[\s,]*(?:and)?)+)/i.exec(text);
   if (rel) {
