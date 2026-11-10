@@ -68,7 +68,7 @@ import {
 } from './swarm/model.ts';
 import { FLOOR_THEMES, lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmDisk } from './swarm/disk.ts';
+import { SwarmSetup } from './swarm/setup.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -76,7 +76,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmDisk {
+export class Swarm extends SwarmSetup {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null);
 
   // ---------- lifecycle ----------
@@ -275,7 +275,7 @@ export class Swarm extends SwarmDisk {
     if (seeded) {
       // The demo opens on a busy office; the tutorial still runs so it can be tried.
       Object.assign(this.state.settings, { setupDone: true, managerName: 'Demo Manager', companyName: 'Demo Co.' });
-      for (const r of await this.backend.listMyRepos()) {
+      for (const r of (await this.backend.listMyRepos()).filter((x) => !this.backend.demoSetup?.().spare.includes(x.nameWithOwner))) { // the spare one waits to be moved in by hand (#366)
         const repo = await this.connectRepo(r.nameWithOwner);
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors

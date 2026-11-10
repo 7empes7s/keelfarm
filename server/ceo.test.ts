@@ -137,6 +137,7 @@ describe('office tools', () => {
       resolveDecision: () => 'closed',
       proposeDesign: async (a) => (calls.push(['propose_design', a]), 'proposed'),
       setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
+      applySetup: (a) => (calls.push(['apply_setup', a]), 'applied'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
@@ -184,6 +185,7 @@ describe('office tools', () => {
       'agent_detail',
       'agent_log',
       'answer_agent',
+      'apply_setup',
       'ask_manager',
       'ask_manager_choice',
       'assign_issue',
@@ -244,6 +246,7 @@ describe('office tools', () => {
     const samples: Record<string, Record<string, unknown>> = {
       set_floor_profile: { ...f, summary: 's' },
       set_office_playbook: { playbook: 'p' },
+      apply_setup: { ...f, gap: 'preview' },
       scale_team: { ...f, size: 3, reason: 'r' },
       configure_agent: { ...agent, model: 'm' },
       file_issue: { ...f, title: 't', body: 'b' },
@@ -687,7 +690,7 @@ describe('follow-ups (#27)', () => {
     const office = createOfficeTools(
       researchReadOnly(
         {
-          companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, applySetup: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',

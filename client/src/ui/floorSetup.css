@@ -1,0 +1,181 @@
+/* The setup advisor (#366, FloorSetup.tsx, GuidesPage.tsx). Tokens only. */
+
+.fs-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  margin-top: var(--ds-space-2);
+}
+.fs-card h4,
+.fs-sheet h4,
+.fs-guides h4 {
+  margin: var(--ds-space-2) 0 0;
+}
+.fs-usecase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.fs-kind {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.fs-kind small {
+  font-weight: var(--ds-weight);
+}
+.fs-gap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-left-width: calc(var(--ds-border) * 3);
+  border-left-color: var(--ds-warn-fill);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+}
+.fs-gap-blocks {
+  border-left-color: var(--ds-bad-fill);
+}
+.fs-gap-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fs-gap-actions,
+.fs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.fs-gap-actions .btn,
+.fs-chips .btn {
+  min-height: var(--ds-target);
+  white-space: normal;
+}
+.fs-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--ds-space-2);
+}
+.fs-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+  min-height: var(--ds-target);
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fs-pick:hover {
+  background: var(--ds-surface-hover);
+}
+.fs-pick-on {
+  border-color: var(--ds-good-fill);
+  border-width: var(--ds-border-strong);
+}
+.fs-pick > svg {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+}
+.fs-pick span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.fs-pick small {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.fs-rec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.fs-rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: var(--ds-space-2);
+}
+.fs-rec-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  overflow-wrap: anywhere;
+}
+.fs-rec-item small {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  text-transform: uppercase;
+}
+.fs-rec-list,
+.fs-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding-left: var(--ds-space-5);
+  overflow-wrap: anywhere;
+}
+.fs-rec-list {
+  padding-left: 0;
+  list-style: none;
+}
+.fs-rec-list code,
+.fs-steps code {
+  overflow-wrap: anywhere;
+}
+.fs-done {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--ds-space-3);
+}
+.fs-guides,
+.fs-guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+.fs-guide > .btn:first-child {
+  align-self: flex-start;
+}
+.fs-guide h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+.fs-search {
+  width: 100%;
+  min-height: var(--ds-target);
+  font-size: var(--ds-text-md);
+}

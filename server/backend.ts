@@ -47,7 +47,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
 import type { McpInput, ProbeRequest, ProbeResult } from '../shared/providers.ts';
@@ -181,6 +181,8 @@ export interface Backend {
   providerProbe(req: ProbeRequest): Promise<ProbeResult>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
   demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
+  /** The demo only (#366): the company's main use cases, repos listed but not moved in (a three.js game), and a floor's agent left signed out. */
+  demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string } };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
