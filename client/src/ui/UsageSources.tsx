@@ -15,7 +15,7 @@ import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { ProgressBar } from './ProgressBar';
 import { Sheet } from './Sheet';
-import { floorShares } from './peekFacts';
+import { sharesNote, shareStats } from './peekFacts';
 import './usageSources.css';
 
 const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server' };
@@ -77,15 +77,16 @@ export function UsageSources({ limit }: { limit?: number }) {
 function UsageDetail({ s, now, onClose }: { s: UsageSource; now: number; onClose: () => void }) {
   const agents = useStore((st) => st.agents);
   const repos = useStore((st) => st.repos);
+  const allShares = useStore((st) => st.claudeUsageShares);
   const names = (s.agents ?? []).map((id) => `${agents[id]?.name ?? id}${id === CEO_ID ? ' (CEO)' : ''}`);
-  // The agents' Claude login: the floors' share of the running sessions, as Mission control's meter shows (#213).
-  const shares =
-    s.id === 'claude-login'
-      ? floorShares(Object.values(agents), (id) => {
-          const r = repos.find((x) => x.id === id);
-          return r && `Floor ${r.floor} · ${r.fullName.split('/')[1]}`;
-        })
-      : [];
+  // The agents' Claude login: who spent the office's part of this week, as Mission control's meter shows (#213, #334).
+  const week = s.id === 'claude-login' ? allShares.find((x) => x.type === 'seven_day') : undefined;
+  const shares = week
+    ? shareStats(week, (id) => {
+        const r = repos.find((x) => x.id === id);
+        return r && `Floor ${r.floor} · ${r.fullName.split('/')[1]}`;
+      }, fmtUsd)
+    : [];
   const [word, chip] = STATUS[s.status];
   const admin = s.provider === 'anthropic' || s.provider === 'openai' ? s.provider : s.windows.some((w) => w.unit === '$') ? (s.provider === 'codex' ? 'openai' : 'anthropic') : null;
   return (
@@ -119,8 +120,8 @@ function UsageDetail({ s, now, onClose }: { s: UsageSource; now: number; onClose
         <History points={s.history ?? []} />
         {shares.length > 0 && (
           <div>
-            <b className="small">Floor shares</b> <span className="muted small">what the agents working now have spent so far</span>
-            <p className="small">{shares.map((x) => `${x.name} ${Math.round(x.share * 100)}%`).join(' · ')}</p>
+            <b className="small">Floor shares this week</b> <span className="muted small">{sharesNote(week!, now, fmtUsd)}</span>
+            <p className="small">{shares.map(([name, v]) => `${name} ${v}`).join(' · ')}</p>
           </div>
         )}
         <div>
