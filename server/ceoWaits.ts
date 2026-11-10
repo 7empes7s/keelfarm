@@ -131,10 +131,10 @@ export const NO_ANSWER = "No answer yet. End this job now: say you're waiting fo
 
 // ---------- the kept session ----------
 
-/** Whether the CEO's next job carries on in its kept session, or starts a fresh one (and why). */
-export function ceoSessionStep(s: CeoAwakeSettings, k: { sessionId: string | null; turns: number; lastEndedAt: number | null }, now: number): { resume: boolean; why: string | null } {
+/** Whether the CEO's next job carries on in its kept session, or starts a fresh one (and why); `handover`: a full session hands over first (#330). */
+export function ceoSessionStep(s: CeoAwakeSettings, k: { sessionId: string | null; turns: number; lastEndedAt: number | null }, now: number): { resume: boolean; why: string | null; handover?: true } {
   if (!s.keepAlive || !k.sessionId) return { resume: false, why: null };
-  if (k.turns >= s.restartTurns) return { resume: false, why: `its session took ${k.turns} turns, so its context is full` };
+  if (k.turns >= s.restartTurns) return { resume: false, why: `its session took ${k.turns} turns, so its context is full`, handover: true };
   if (k.lastEndedAt && now - k.lastEndedAt >= s.idleHours * 3_600_000) return { resume: false, why: `it was idle for ${s.idleHours}h` };
   return { resume: true, why: null };
 }

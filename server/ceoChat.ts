@@ -63,6 +63,11 @@ export class CeoChat {
     this.set(foldStream(this.live, { kind: 'text', text, done }, Date.now()), true);
   }
 
+  /** A step of the office's own: how the job's session started, fresh or carried on (#330). */
+  note(icon: string, label: string) {
+    this.set(foldStream(this.live, { kind: 'note', icon, label }, Date.now()), true);
+  }
+
   /** The session's log lines: its tool calls become steps. */
   log(entries: readonly LogEntry[]) {
     let live = this.live;
