@@ -118,6 +118,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
           <div className="ds-row-meta">
             {KIND_NAME[a.kind]}
             {a.plan ? ` · ${a.plan}` : ''}
+            {a.loginPlan ? ` · login is ${a.loginPlan}` : ''}
             {a.keyHint ? ` · ••••${a.keyHint}` : ''}
             {a.builtIn ? ' · already here' : ''}
           </div>
@@ -145,6 +146,16 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
               {t}
             </span>
           ))}
+        </div>
+      )}
+      {a.planWarning && (
+        <div className="acc-flag acc-flag-warn" role="status">
+          <Icon name="triangle-alert" /> {a.planWarning}
+        </div>
+      )}
+      {a.tokenRefresh && (
+        <div className="acc-flag" role="status">
+          <Icon name="refresh-cw" /> Token expired: it refreshes on its next session
         </div>
       )}
       {usageBars(a.usage, now).map((b) => (

@@ -89,6 +89,12 @@ describe('adapters', () => {
     expect(s).toMatchObject({ spendUsd7d: 41.2, status: 'near', plan: 'API', accountId: 'claude-apikey' });
   });
 
+  it('shows a window whose reset has passed as 0%, waiting for a new reading (#442)', () => {
+    const s = accountSource(account({ usage: [{ type: 'seven_day', pct: 100, resetsAt: NOW - HOUR, at: NOW - 30 * HOUR }] }), 0, NOW);
+    expect(s.windows[0]).toMatchObject({ name: 'Weekly', usedPct: 0 });
+    expect(s.note).toBe('Reset, waiting for a new reading');
+  });
+
   it('counts Boxes against the plan limit', () => {
     expect(boxSource({ total: 9, running: 2 }, 10, NOW)).toMatchObject({ status: 'near', windows: [{ used: 9, limit: 10, usedPct: 90 }] });
   });

@@ -53,6 +53,12 @@ export function readingOf(raw: { type: string; percent?: unknown; fraction?: unk
   return { type: raw.type, pct: Math.max(0, Math.min(100, Math.round(pct))), resetsAt, at };
 }
 
+/** A reading whose window has reset since: its number was the last window's, so it counts as 0% until a new reading comes. */
+export const isReset = (r: Pick<UsageReading, 'resetsAt'>, now: number) => r.resetsAt !== null && r.resetsAt <= now;
+
+/** How full a limit is now: its reading, or 0 once its window has reset. */
+export const livePct = (r: Pick<UsageReading, 'pct' | 'resetsAt'>, now: number) => (isReset(r, now) ? 0 : r.pct);
+
 const rank = (type: string) => (ORDER.includes(type) ? ORDER.indexOf(type) : ORDER.length);
 
 /** The latest reading per limit with `next` folded in: the newest reading of each type wins; in the meter's order, at most 8. */
@@ -114,21 +120,21 @@ export interface UsageBar {
 /** How full is too full on the meter: amber from 75%, red from 90%. */
 export const pctTone = (pct: number): UsageBar['tone'] => (pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : 'good');
 
-/** The usage meter's bars, one per limit. */
+/** The usage meter's bars, one per limit; one whose window has reset reads 0% until a new reading comes. */
 export function usageBars(readings: readonly UsageReading[], now: number): UsageBar[] {
   return readings.map((r) => ({
     type: r.type,
     name: barName(r.type),
-    pct: r.pct,
-    tone: pctTone(r.pct),
-    resets: r.resetsAt === null ? null : `${r.resetsAt > now ? 'resets' : 'reset'} ${clock(r.resetsAt, now)}`,
+    pct: livePct(r, now),
+    tone: pctTone(livePct(r, now)),
+    resets: r.resetsAt === null ? null : isReset(r, now) ? 'reset, waiting for a new reading' : `resets ${clock(r.resetsAt, now)}`,
   }));
 }
 
 /** The latest numbers for the CEO's company status: "5h 42% · week 61%", with "(as of 12 min ago)" when old; "no reading yet" without any. */
 export function readingsLabel(readings: readonly UsageReading[], now: number, check: UsageCheckError | null = null): string {
   if (!readings.length) return 'no reading yet';
-  const nums = readings.map((r) => `${SHORT_NAMES[r.type] ?? r.type.replace(/_/g, ' ')} ${r.pct}%`).join(' · ');
+  const nums = readings.map((r) => `${SHORT_NAMES[r.type] ?? r.type.replace(/_/g, ' ')} ${livePct(r, now)}%`).join(' · ');
   const note = readingsNote(readings, now, check);
   return note ? `${nums} (${note})` : nums;
 }

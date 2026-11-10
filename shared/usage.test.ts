@@ -96,7 +96,16 @@ describe('labels', () => {
     expect(bars).toEqual([
       { type: 'five_hour', name: '5-hour', pct: 42, tone: 'good', resets: 'resets 18:30' },
       { type: 'seven_day', name: 'Weekly', pct: 80, tone: 'warn', resets: null },
-      { type: 'seven_day_opus', name: 'Weekly Opus', pct: 95, tone: 'bad', resets: 'reset 11:59' },
+      { type: 'seven_day_opus', name: 'Weekly Opus', pct: 0, tone: 'good', resets: 'reset, waiting for a new reading' },
     ]);
+  });
+
+  it('counts a window that has reset as 0% until a new reading comes (#442)', () => {
+    const old = [at('five_hour', 30, NOW - 26 * 60 * MIN, NOW + 60 * MIN), at('seven_day', 100, NOW - 26 * 60 * MIN, NOW - 2 * 60 * MIN)];
+    expect(usageBars(old, NOW).map((b) => [b.pct, b.resets])).toEqual([
+      [30, 'resets 13:00'],
+      [0, 'reset, waiting for a new reading'],
+    ]);
+    expect(readingsLabel(old, NOW)).toMatch(/^5h 30% · week 0% /);
   });
 });

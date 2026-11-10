@@ -60,6 +60,11 @@ describe('the providers page shows what the old stores hold', () => {
     expect(cards.find((c) => c.key === 'cloud')).toMatchObject({ uses: ['Cloud agents (2)'], usageId: 'upstash', settings: 'cloud-agents' });
   });
 
+  it("shows a login's real plan, a token to refresh and a plan warning (#442)", () => {
+    const [card] = providerCards(input({ accounts: [account({ id: 'ultra', label: 'Claude Ultra', plan: 'Ultra', loginPlan: 'Pro', planWarning: 'This login is Pro, not Ultra: sign in with the Ultra account.', tokenRefresh: true })] }));
+    expect(card).toMatchObject({ plan: 'Ultra · login is Pro · token refreshes on its next session', warning: 'This login is Pro, not Ultra: sign in with the Ultra account.' });
+  });
+
   it('adds keys from the page and MCP servers, sorted by category', () => {
     const mcp: McpServerConfig = { id: 'm1', name: 'github', command: 'npx', args: ['server-github'], envKeys: [], on: true, agents: [], test: null };
     const cards = providerCards(

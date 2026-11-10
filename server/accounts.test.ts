@@ -50,6 +50,23 @@ async function office(over: Partial<AccountsDeps> = {}) {
 }
 
 describe('Accounts', () => {
+  it('an expired token to refresh (#442): signed in and in the rotation, until a session really fails to sign in; its real plan on the card', async () => {
+    const { accounts } = await office({
+      rotation: () => ({ on: true, apiLast: true, ceoClis: [], agentsSwitchCli: false }),
+      check: async (a) => (a.builtIn ? { signedIn: true, readings: [], note: 'ok' } : { signedIn: true, readings: [], refresh: true, plan: 'Pro', note: 'refreshes' }),
+    });
+    const ultra = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra' });
+    await accounts.test(ultra.id);
+    const card = () => accounts.view().accounts.find((a) => a.id === ultra.id)!;
+    expect(card()).toMatchObject({ status: 'ready', tokenRefresh: true, loginPlan: 'Pro', planWarning: 'This login is Pro, not Ultra: sign in with the Ultra account.' });
+    accounts.limited('claude-login', Date.now() + 3600_000);
+    expect(accounts.use(undefined, 'claude')?.id).toBe(ultra.id);
+    accounts.signedOut(ultra.id); // its session couldn't sign in
+    expect(await accounts.test(ultra.id)).toMatch(/couldn't sign in/);
+    expect(card().status).toBe('signed-out');
+    expect(card().tokenRefresh).toBeUndefined();
+  });
+
   it('rotation (#248): skips a limited login for the next one, API keys last, and takes the login back once its poll shows room', async () => {
     let reading = { type: 'five_hour', pct: 100, resetsAt: Date.now() + 3600_000, at: Date.now() };
     const { accounts } = await office({
