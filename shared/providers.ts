@@ -20,7 +20,15 @@ export interface ProviderDef {
   docsUrl: string;
   /** Its row on the usage card (#361). */
   usage?: UsageProvider;
+  /** Its usage row's note when its test tells no usage. */
+  usageNote?: string;
+  /** Another catalogue entry whose saved key it can reuse: an empty key field takes that one's key. */
+  sharesKeyWith?: string;
+  /** A Lucide icon name (client/src/ui/icons.ts has it). */
+  icon?: string;
   blurb: string;
+  /** A line on its add form, after the blurb. */
+  note?: string;
 }
 
 export const CATEGORIES: { id: ProviderCategory; label: string }[] = [
@@ -43,6 +51,8 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'openrouter', name: 'OpenRouter', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENROUTER_API_KEY', placeholder: 'sk-or-…', docsUrl: 'https://openrouter.ai/docs', usage: 'openrouter', blurb: 'Many models behind one key, with its credit' },
   { id: 'elevenlabs', name: 'ElevenLabs', category: 'audio', auth: 'api-key', home: 'voice', keyEnv: 'ELEVENLABS_API_KEY', placeholder: 'sk_…', docsUrl: 'https://elevenlabs.io/docs', usage: 'elevenlabs', blurb: 'Voices for agents and messages read aloud' },
   { id: 'openai-audio', name: 'OpenAI TTS & Whisper', category: 'audio', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech', usage: 'openai', blurb: 'Speech and transcription over the OpenAI API' },
+  { id: 'nano-banana', name: 'Nano Banana (Gemini image)', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/image-generation', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', icon: 'banana', blurb: 'Gemini image generation and editing over the Gemini API key', note: "Google AI Plus's Nano Banana and Veo work only in the Gemini app and Flow, not through the API: it takes a Gemini API key." },
+  { id: 'openai-images', name: 'OpenAI Images', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/image-generation', usage: 'openai', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'openai', icon: 'image', blurb: 'GPT Image generation and editing over the OpenAI API key' },
   { id: 'upstash', name: 'Upstash Box', category: 'cloud', auth: 'api-key', home: 'cloud', docsUrl: 'https://upstash.com/docs/box', usage: 'upstash', blurb: 'Cloud machines for cloud agents' },
   { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
 ];
@@ -50,6 +60,15 @@ export const PROVIDERS: ProviderDef[] = [
 export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
 
 // ---------- test calls ----------
+
+/**
+ * The live image models each image entry's test looks for (docs, 2026-11). Left out: Imagen (shut down), dall-e-2/3 and
+ * gpt-image-1 (shut down), gpt-image-1-mini, gpt-image-1.5 and chatgpt-image-latest (removed 2026-12-01).
+ */
+export const IMAGE_MODELS: Record<string, string[]> = {
+  'nano-banana': ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image'],
+  'openai-images': ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2'],
+};
 
 /** One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH. */
 export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string };
@@ -66,9 +85,12 @@ export function testRequest(provider: string, key: string): ProbeRequest | null 
       return { kind: 'http', url: 'https://api.anthropic.com/v1/models?limit=1', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } };
     case 'openai':
     case 'openai-audio':
+    case 'openai-images':
       return { kind: 'http', url: 'https://api.openai.com/v1/models', headers: bearer };
     case 'gemini':
       return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', headers: { 'x-goog-api-key': key } };
+    case 'nano-banana':
+      return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', headers: { 'x-goog-api-key': key } };
     case 'openrouter':
       return { kind: 'http', url: 'https://openrouter.ai/api/v1/key', headers: bearer };
     case 'hetzner':
@@ -98,6 +120,21 @@ export function testUsage(provider: string, body: unknown): UsageWindow[] {
   return [{ name: 'Credit', usedPct: limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : null, used, ...(limit > 0 ? { limit } : {}), unit: '$', resetsAt: null }];
 }
 
+/** The catalogue's image models a models list names (Gemini's `models: [{ name: 'models/…' }]`, OpenAI's `data: [{ id }]`). */
+export function imageModels(provider: string, body: unknown): string[] {
+  const o = body && typeof body === 'object' ? (body as { models?: unknown; data?: unknown }) : {};
+  const list = Array.isArray(o.models) ? o.models : Array.isArray(o.data) ? o.data : [];
+  const ids = new Set(list.map((m: { name?: unknown; id?: unknown }) => String(m?.name ?? m?.id ?? '').replace(/^models\//, '')));
+  return (IMAGE_MODELS[provider] ?? []).filter((id) => ids.has(id));
+}
+
+/** The plan a test's answer tells: the image models the key can use. */
+export function testPlan(provider: string, body: unknown): string | undefined {
+  if (!IMAGE_MODELS[provider]) return undefined;
+  const models = imageModels(provider, body);
+  return models.length ? models.slice(0, 3).join(', ') + (models.length > 3 ? ` +${models.length - 3}` : '') : 'No image models on this key';
+}
+
 /** Why a pasted key can't be saved for `provider`, or null. */
 export function keyProblem(provider: string, raw: string): string | null {
   const key = raw.trim();
@@ -106,7 +143,7 @@ export function keyProblem(provider: string, raw: string): string | null {
   if (!key) return 'Paste the key first.';
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
   if (provider === 'anthropic') return secretMismatch('anthropic', key);
-  if (provider === 'openai' || provider === 'openai-audio') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
+  if (provider === 'openai' || provider === 'openai-audio' || provider === 'openai-images') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
   if (provider === 'openrouter' && !key.startsWith('sk-or-')) return 'OpenRouter keys start with sk-or-.';
   return null;
 }
@@ -257,7 +294,7 @@ export function connectionSource(c: ProvidersView['connections'][number]): Usage
     windows,
     status: !c.test ? 'ready' : !c.test.ok ? 'error' : worst >= 100 ? 'limited' : worst >= 80 ? 'near' : 'ready',
     checkedAt: c.test?.at ?? null,
-    note: !c.test ? 'Not tested yet' : !c.test.ok ? c.test.note : windows.length ? 'From the key’s test call' : 'Key works; this provider has no usage API for a plain key',
+    note: !c.test ? 'Not tested yet' : !c.test.ok ? c.test.note : windows.length ? 'From the key’s test call' : (def.usageNote ?? 'Key works; this provider has no usage API for a plain key'),
   };
 }
 

@@ -183,7 +183,9 @@ function AddSheet({ onClose }: { onClose: () => void }) {
                 ) : list.length ? (
                   list.map((p) => (
                     <button key={p.id} className="pv-pick" onClick={() => setPick(p)}>
-                      <b>{p.name}</b>
+                      <b>
+                        {p.icon && <Icon name={p.icon as IconName} />} {p.name}
+                      </b>
                       <span className="muted small">{p.blurb}</span>
                     </button>
                   ))
@@ -211,6 +213,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
   const [label, setLabel] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const reuses = useStore((s) => (def.sharesKeyWith ? s.providers.connections.find((c) => c.provider === def.sharesKeyWith) : undefined));
   if (def.home === 'accounts' || def.home === 'own-setup') {
     return (
       <div className="acc-form">
@@ -255,6 +258,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
       <p className="muted small">
         {def.blurb}. <a href={def.docsUrl} target="_blank" rel="noopener noreferrer">Where to get a key</a>
       </p>
+      {def.note && <p className="muted small">{def.note}</p>}
       {def.home === 'providers' && (
         <label className="field">
           <span>Name</span>
@@ -265,7 +269,8 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
         <span>API key</span>
         <SecretInput name={`provider-${def.id}`} value={key} placeholder={def.placeholder} onChange={(e) => setKey(e.target.value)} />
       </label>
-      <button className="btn btn-primary" disabled={busy || !key.trim()}>
+      {reuses && !key.trim() && <p className="muted small">Leave it empty to use {reuses.label} (••••{reuses.keyHint}).</p>}
+      <button className="btn btn-primary" disabled={busy || (!key.trim() && !reuses)}>
         {busy ? 'Testing…' : 'Save and test'}
       </button>
       {note && (

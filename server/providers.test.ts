@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { ServerEvent } from '../shared/types.ts';
 import { providerCards } from '../shared/providers.ts';
 import { EMPTY_CLOUD } from '../shared/cloud.ts';
+import { redact } from '../shared/journal.ts';
 
 // Its own folder: the demo's secrets files are read straight from SWARM_HOME.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-providers-'));
@@ -74,6 +75,35 @@ describe('the providers store', () => {
   });
 });
 
+describe('image keys (#368)', () => {
+  it("reuses the saved Gemini and OpenAI keys when an image entry's key is left empty, and keeps them out of the view", async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'images-'));
+    const { p, probe, changed } = store(dir, vi.fn(async () => ({ status: 200, body: { models: [{ name: 'models/gemini-3-pro-image' }] } })));
+    await p.init();
+    await expect(p.add('nano-banana', '')).rejects.toThrow(/Paste the key/);
+    await p.add('gemini', 'AIzaSy-gemini-secret-1234');
+    const nb = await p.add('nano-banana', '  ');
+    expect(probe).toHaveBeenLastCalledWith({ kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', headers: { 'x-goog-api-key': 'AIzaSy-gemini-secret-1234' } });
+    expect(nb.test).toMatchObject({ ok: true, plan: 'gemini-3-pro-image' });
+    await p.add('openai', OPENAI);
+    await p.add('openai-images', '');
+    expect(probe).toHaveBeenLastCalledWith({ kind: 'http', url: 'https://api.openai.com/v1/models', headers: { Authorization: `Bearer ${OPENAI}` } });
+    for (const text of [JSON.stringify(p.view()), JSON.stringify(changed.mock.calls), fs.readFileSync(path.join(dir, 'providers.json'), 'utf8')]) {
+      expect(text).not.toContain('gemini-secret');
+      expect(text).not.toContain(OPENAI);
+    }
+    expect(p.secretValues()).toEqual(expect.arrayContaining(['AIzaSy-gemini-secret-1234', OPENAI]));
+  });
+
+  it("keeps no plan from a turned-away key's answer", async () => {
+    const { p } = store(fs.mkdtempSync(path.join(home, 'images-bad-')), vi.fn(async () => ({ status: 403, body: { models: [{ name: 'models/gemini-3-pro-image' }] } })));
+    await p.init();
+    const c = await p.add('nano-banana', 'AIza-bad');
+    expect(c.test).toMatchObject({ ok: false });
+    expect(c.test?.plan).toBeUndefined();
+  });
+});
+
 describe('Settings → Providers in the office', () => {
   it('keeps the accounts, the ElevenLabs key and the Upstash key, emits an event per change, and never puts a key in the snapshot', async () => {
     // Keys saved before the Providers page: they stay where they were and show on it.
@@ -81,7 +111,7 @@ describe('Settings → Providers in the office', () => {
     fs.writeFileSync(path.join(home, 'demo-cloud-secrets.json'), JSON.stringify({ upstashBoxKey: UPSTASH }));
     const swarm = new Swarm(createDemoBackend());
     const events: ServerEvent[] = [];
-    const inside = swarm as unknown as { broadcast(ev: ServerEvent): void; initProviders(): Promise<void>; providersLine(): string };
+    const inside = swarm as unknown as { broadcast(ev: ServerEvent): void; initProviders(): Promise<void>; providersLine(): string; secrets(): string[] };
     inside.broadcast = (ev) => void events.push(ev);
     await Promise.all([swarm.voice.init(), swarm.cloud.init(), swarm.accounts.init(), inside.initProviders()]);
 
@@ -91,7 +121,7 @@ describe('Settings → Providers in the office', () => {
     expect(cards.find((c) => c.key === 'voice')?.keyHint).toBe(ELEVEN.slice(-4));
     expect(cards.find((c) => c.key === 'cloud')?.keyHint).toBe(UPSTASH.slice(-4));
     // The demo's made-up connections: one in every category the catalogue has.
-    expect(new Set(cards.map((c) => c.category))).toEqual(new Set(['coding', 'text', 'audio', 'cloud', 'mcp']));
+    expect(new Set(cards.map((c) => c.category))).toEqual(new Set(['coding', 'text', 'audio', 'image', 'cloud', 'mcp']));
     expect(swarm.voice.secret()).toBe(ELEVEN);
 
     events.length = 0;
@@ -102,6 +132,16 @@ describe('Settings → Providers in the office', () => {
     const json = JSON.stringify([swarm.snapshot(), events]);
     for (const k of [OPENAI, ELEVEN, UPSTASH, 'demo-gh-token-0000']) expect(json).not.toContain(k);
     expect(inside.providersLine()).toMatch(/^Providers: .*OpenAI API/);
+    // The demo's image keys: on the Image cards, tested with the models they name, and redacted from logs.
+    expect(cards.filter((c) => c.category === 'image').map((c) => [c.provider, c.status, c.plan])).toEqual([
+      ['nano-banana', 'ready', 'gemini-nano-banana-2.1, gemini-3-pro-image'],
+      ['openai-images', 'ready', 'gpt-image-2.6-flare, gpt-image-2.5-sunburst'],
+    ]);
+    for (const k of ['AIza-demo-banana-00001f2a', 'sk-demo-images-00003b4c']) {
+      expect(json).not.toContain(k);
+      expect(inside.secrets()).toContain(k);
+      expect(redact(`log line ${k}`, inside.secrets())).not.toContain(k);
+    }
 
     events.length = 0;
     await swarm.providers.remove(c.id);

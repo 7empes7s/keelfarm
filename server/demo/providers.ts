@@ -1,5 +1,5 @@
 // The demo's Settings → Providers (#362): test calls that never leave the computer (a key with "bad" in it is turned
-// away; OpenRouter tells a made-up credit), and a made-up key or server in every category for a fresh demo office.
+// away; OpenRouter tells a made-up credit, the Gemini and OpenAI models lists name image models), and a made-up key or server in every category for a fresh demo office.
 import type { ProbeRequest, ProbeResult } from '../../shared/providers.ts';
 import { registerDemo } from './registry.ts';
 
@@ -7,6 +7,8 @@ async function demoProbe(req: ProbeRequest): Promise<ProbeResult> {
   if (req.kind === 'command') return { status: /^(npx|node|uvx|docker)$/.test(req.command) ? 200 : 404 };
   if (Object.values(req.headers).some((v) => /bad/i.test(v))) return { status: 401 };
   if (req.url.includes('openrouter.ai')) return { status: 200, body: { data: { label: 'demo', usage: 3.4, limit: 10 } } };
+  if (req.url.includes('generativelanguage.googleapis.com')) return { status: 200, body: { models: [{ name: 'models/gemini-3-flash' }, { name: 'models/gemini-nano-banana-2.1' }, { name: 'models/gemini-3-pro-image' }] } };
+  if (req.url.includes('api.openai.com')) return { status: 200, body: { data: [{ id: 'gpt-5' }, { id: 'gpt-image-2.6-flare' }, { id: 'gpt-image-2.5-sunburst' }] } };
   return { status: 200, body: {} };
 }
 
@@ -18,6 +20,8 @@ registerDemo('providers', () => ({
       { provider: 'openrouter', key: 'sk-or-demo-0000000000003c4d', label: 'OpenRouter' },
       { provider: 'gemini', key: 'AIza-demo-bad-key-00005e6f', label: 'Gemini (old key)' },
       { provider: 'openai-audio', key: 'sk-demo-whisper-000000007a8b', label: 'Whisper & TTS' },
+      { provider: 'nano-banana', key: 'AIza-demo-banana-00001f2a', label: 'Nano Banana' },
+      { provider: 'openai-images', key: 'sk-demo-images-00003b4c', label: 'OpenAI Images' },
       { provider: 'hetzner', key: 'demo-hcloud-token-00009c0d', label: 'Hetzner Cloud' },
     ],
     mcp: [

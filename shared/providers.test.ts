@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectionSource, keyProblem, mcpProblem, providerCards, providersLine, sessionMcpServers, splitCommand, testNote, testUsage, type CardInput } from './providers.ts';
+import { connectionSource, IMAGE_MODELS, imageModels, keyProblem, mcpProblem, PROVIDERS, providerCards, providersLine, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type CardInput } from './providers.ts';
 import { EMPTY_CLOUD } from './cloud.ts';
 import type { AccountView, McpServerConfig } from './types.ts';
 
@@ -103,6 +103,42 @@ describe('test calls', () => {
   it("puts a key's credit on the usage card", () => {
     const row = connectionSource({ id: 'r1', provider: 'openrouter', label: 'OpenRouter', addedAt: 1, keyHint: '', test: { at: 5, ok: true, note: 'Key works', windows: [{ name: 'Credit', usedPct: 90, used: 9, limit: 10, unit: '$', resetsAt: null }] } });
     expect(row).toMatchObject({ id: 'provider:r1', provider: 'openrouter', category: 'text', status: 'near', checkedAt: 5 });
+  });
+});
+
+describe('image providers (#368)', () => {
+  it('lists Nano Banana and OpenAI Images under Image, on the Gemini and OpenAI keys, and says the subscription stays out', () => {
+    expect(PROVIDERS.filter((p) => p.category === 'image').map((p) => [p.id, p.sharesKeyWith, p.usage, p.icon])).toEqual([
+      ['nano-banana', 'gemini', 'gemini', 'banana'],
+      ['openai-images', 'openai', 'openai', 'image'],
+    ]);
+    expect(PROVIDERS.find((p) => p.id === 'nano-banana')?.note).toMatch(/Google AI Plus.*Gemini app and Flow, not through the API/);
+    // Only live models: no Imagen, DALL·E or gpt-image-1, all shut down.
+    expect(Object.values(IMAGE_MODELS).flat().filter((m) => /imagen|dall-e|gpt-image-1/.test(m))).toEqual([]);
+  });
+
+  it('tests each with a models list: a GET with only its key, no generation', () => {
+    const reqs = ['nano-banana', 'openai-images'].map((id) => testRequest(id, 'k'));
+    expect(reqs).toEqual([
+      { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', headers: { 'x-goog-api-key': 'k' } },
+      { kind: 'http', url: 'https://api.openai.com/v1/models', headers: { Authorization: 'Bearer k' } },
+    ]);
+    expect(keyProblem('openai-images', 'sk-ant-api03-x')).toMatch(/not an OpenAI/);
+  });
+
+  it("names only the catalogue's image models the key's list has", () => {
+    const gemini = { models: [{ name: 'models/gemini-3-flash' }, { name: 'models/gemini-3-pro-image' }, { name: 'models/gemini-2.5-flash-image' }, { name: 'models/imagen-4.0-generate' }] };
+    expect(imageModels('nano-banana', gemini)).toEqual(['gemini-3-pro-image', 'gemini-2.5-flash-image']);
+    const openai = { data: [{ id: 'gpt-5' }, ...IMAGE_MODELS['openai-images'].map((id) => ({ id })), { id: 'dall-e-3' }] };
+    expect(testPlan('openai-images', openai)).toBe('gpt-image-2.6-sunburst, gpt-image-2.6-flare, gpt-image-2.5-sunburst +2');
+    expect(testPlan('nano-banana', { models: [{ name: 'models/gemini-3-flash' }] })).toBe('No image models on this key');
+    expect(testPlan('openai', openai)).toBeUndefined();
+  });
+
+  it('puts each on the usage card as an image row whose spend the office ledger counts', () => {
+    const at = { at: 5, ok: true, note: 'Key works', plan: 'gemini-3-pro-image' };
+    expect(connectionSource({ id: 'i1', provider: 'nano-banana', label: 'Nano Banana', addedAt: 1, keyHint: '', test: at })).toMatchObject({ id: 'provider:i1', provider: 'gemini', category: 'image', plan: 'gemini-3-pro-image', status: 'ready', windows: [], note: expect.stringMatching(/ledger/) });
+    expect(connectionSource({ id: 'i2', provider: 'openai-images', label: 'OpenAI Images', addedAt: 1, keyHint: '', test: at })).toMatchObject({ provider: 'openai', category: 'image', note: expect.stringMatching(/ledger/) });
   });
 });
 

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
-import { keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
+import { keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
 import type { McpServerConfig, ProviderConnection, ProvidersView, ProviderTest } from '../shared/types.ts';
 
 const keyOf = (id: string) => `provider:${id}`;
@@ -69,9 +69,11 @@ export class Providers {
 
   // ---------- keys ----------
 
-  /** A key for a catalogue provider: saved, then tested. */
+  /** A key for a catalogue provider: saved, then tested. An empty one reuses the key it shares (Nano Banana's Gemini key). */
   async add(provider: string, rawKey: string, rawLabel = ''): Promise<ProviderConnection> {
-    const key = rawKey.trim();
+    const shared = providerDef(provider)?.sharesKeyWith;
+    const from = shared && this.data.connections.find((x) => x.provider === shared);
+    const key = rawKey.trim() || (from ? (this.keys.get(keyOf(from.id)) ?? '') : '');
     const problem = keyProblem(provider, key);
     if (problem) throw new HttpError(400, problem);
     const def = providerDef(provider)!;
@@ -100,8 +102,10 @@ export class Providers {
     const req = testRequest(c.provider, this.keys.get(keyOf(id)) ?? '');
     if (!req) throw new HttpError(400, `${c.label} is tested in its own settings.`);
     const r = await this.deps.probe(req);
-    const windows = testUsage(c.provider, r.body);
-    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}) };
+    const ok = r.status >= 200 && r.status < 300;
+    const windows = ok ? testUsage(c.provider, r.body) : [];
+    const plan = ok ? testPlan(c.provider, r.body) : undefined;
+    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}), ...(plan ? { plan } : {}) };
     await this.save();
     return { ...c };
   }
