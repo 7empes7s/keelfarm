@@ -19,6 +19,10 @@ import type { ChatNotice, OfficeUpdateState } from '../shared/types.ts';
 
 /** Sessions still running this long after draining started are stopped, and the update goes ahead. */
 export const DRAIN_TIMEOUT_MS = 20 * 60_000;
+/** Lab work (#333) holds a draining update at most this long after draining started; then it goes ahead and the work is cut off. */
+export const LAB_DRAIN_CAP_MS = 10 * 60_000;
+/** A QA session between lab calls holds the update until its last lab call is this old (or its round ends). */
+export const LAB_UNIT_MS = 2 * 60_000;
 /** Later: ask again after this long, or sooner when a newer commit lands. */
 export const POSTPONE_MS = 2 * 60 * 60_000;
 /** Batching: an automatic update waits until no commit has landed for this many minutes (Settings)… */
@@ -59,6 +63,7 @@ export interface DrainInput {
   drainingSince: number | null;
   sent: boolean; // handed to the launcher
   running: number; // sessions an office restart would stop (not CLIs in the terminal keeper or in a Box)
+  lab: number; // test-lab work a restart would cut off (#333): running jobs and QA rounds between lab calls (labHold)
   pendingSince: number | null; // the first commit of this update was seen then (null: don't wait for more)
   lastCommitAt: number | null; // the latest one
   settleMs: number;
@@ -80,7 +85,7 @@ export interface DrainDecision {
 /**
  * Where the office's own update stands and what to do about it. An update is due when there is one, a launcher, and
  * either autoUpdate is on or the manager pressed Update now. An automatic one first settles (more commits may come),
- * then drains: nothing new starts while the sessions a restart would stop finish (up to DRAIN_TIMEOUT_MS). With none
+ * then drains: nothing new starts while the sessions a restart would stop finish (up to DRAIN_TIMEOUT_MS), and the test lab's work (up to LAB_DRAIN_CAP_MS). With none
  * of those, it goes to the launcher at once. Later holds an automatic update back for POSTPONE_MS or until a newer
  * commit lands ('waiting'); a failed update is only retried automatically for a newer commit.
  */
@@ -97,7 +102,48 @@ export function drainDecision(s: DrainInput): DrainDecision {
   if (at !== null && s.now < at) return idle('settling', at);
   const since = s.drainingSince ?? s.now;
   const timedOut = s.running > 0 && s.now - since >= DRAIN_TIMEOUT_MS;
-  return { state: 'draining', drainingSince: since, send: s.running === 0 || timedOut, timedOut, holds: true, updateAt: null };
+  return { state: 'draining', drainingSince: since, send: (s.running === 0 && !labWaits(s)) || timedOut, timedOut, holds: true, updateAt: null };
+}
+
+/** The drain still waits for the test lab: lab work is under way and the drain is younger than LAB_DRAIN_CAP_MS. */
+export function labWaits(s: Pick<DrainInput, 'lab' | 'now' | 'drainingSince'>): boolean {
+  return s.lab > 0 && s.now - (s.drainingSince ?? s.now) < LAB_DRAIN_CAP_MS;
+}
+
+/** Where the test lab's work stands, for the drain: agents with a job running or waiting, QA sessions and when each agent's last lab call ended. */
+export interface LabActivity {
+  running: readonly string[]; // the agent of each running job
+  waiting: readonly string[]; // the agent of each queued job
+  qa: readonly { agentId: string; since: number }[]; // QA sessions under way, and when each started
+  lastLab: ReadonlyMap<string, number>; // agent → when their last lab job ended
+  now: number;
+}
+
+/**
+ * The lab work an update waits for (#333). Every running job counts. A QA round's lab work holds as a unit: a QA
+ * session with a job running or waiting, or whose last lab call this round ended under LAB_UNIT_MS ago, holds the
+ * update until its round ends or that call is older. count: running jobs plus such QA sessions not running one.
+ * agents: those QA sessions, whose queued jobs may still start while the office drains.
+ */
+export function labHold(x: LabActivity): { count: number; agents: string[] } {
+  const agents = x.qa
+    .filter((q) => {
+      if (x.running.includes(q.agentId) || x.waiting.includes(q.agentId)) return true;
+      const last = x.lastLab.get(q.agentId);
+      return last !== undefined && last >= q.since && x.now - last < LAB_UNIT_MS;
+    })
+    .map((q) => q.agentId);
+  return { count: x.running.length + agents.filter((id) => !x.running.includes(id)).length, agents };
+}
+
+/**
+ * Whose queued lab jobs may start (#333): null, anyone's (no update under way); while draining, only the QA rounds
+ * holding it (labHold's agents), until the lab's cap; once the update is handed to the launcher, nobody's.
+ */
+export function labGate(state: OfficeUpdateState, waits: boolean, agents: readonly string[]): readonly string[] | null {
+  if (state === 'updating') return [];
+  if (state !== 'draining') return null;
+  return waits ? agents : [];
 }
 
 /** Where an update failed: before the live office was touched, while switching it, or in the probation after its restart. */
@@ -198,6 +244,8 @@ export interface OfficeHost {
    * preflight refuses the update and resolves with that result. The demo resolves with a fake result.
    */
   update(from: string): Promise<LastUpdate | null>;
+  /** The demo only (#333): a commit lands on the office's folder, so an update is ready. */
+  fakeCommit?(): void;
 }
 
 export const OFFICE_DIR = path.resolve(import.meta.dirname, '..');

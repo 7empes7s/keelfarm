@@ -56,6 +56,22 @@ export interface PhoneMessage {
   signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
   switch?: ChatSwitch; // the office's: the CEO moved to another account (#248), shown as a pill
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
+  ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
+}
+
+/** A CEO job's reply in the chat (#332): which job, the model it ran on, and the links between a job and its redo. */
+export interface CeoJobTag {
+  job: number; // the job's number, as in the CEO jobs log
+  kind: CeoJobKind;
+  model: string;
+  usd?: number; // what the job cost, once it ended
+  redoOf?: CeoJobLink; // this reply is a redo's
+  redoneBy?: CeoJobLink; // this job was redone (message: null while the redo runs, or when it said nothing)
+}
+
+interface CeoJobLink {
+  job: number;
+  message: number | null;
 }
 
 /** The CEO moved off an account that was limited or signed out (to: null, every account is out). Labels only. */

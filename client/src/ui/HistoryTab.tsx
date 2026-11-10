@@ -6,6 +6,7 @@ import { kindLabel, OUTCOME_LABELS, utcDay, workLabel, type HistoryDetail, type 
 import { EmptyState } from './EmptyState';
 import { Icon } from './Icon';
 import './history.css';
+import { CeoJobsLog } from './CeoJobsLog';
 
 // The console's 📜 History (#49): every session the office ran and every PR it merged, from the session history, loaded
 // on demand (never in the snapshot) and reloaded when a `history` event says there's a new one. Filters by floor,
@@ -59,6 +60,7 @@ export function HistoryTab({ focus }: { focus?: HistoryFocus }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<'all' | 'ceo'>('all'); // every session, or the CEO jobs log (#332)
 
   useEffect(() => {
     const t = setTimeout(() => setQ(typed), 300);
@@ -85,6 +87,22 @@ export function HistoryTab({ focus }: { focus?: HistoryFocus }) {
 
   const repo = (id: string) => repos.find((r) => r.id === id);
   if (open) return <HistorySession id={open} back={() => setOpen(null)} />;
+  const seg = (
+    <div className="seg history-seg" role="tablist" aria-label="Every session or the CEO jobs">
+      {(['all', 'ceo'] as const).map((v) => (
+        <button key={v} type="button" role="tab" aria-selected={view === v} className={`seg-btn ${view === v ? 'seg-on' : ''}`} onClick={() => setView(v)}>
+          {v === 'all' ? 'All sessions' : 'CEO jobs'}
+        </button>
+      ))}
+    </div>
+  );
+  if (view === 'ceo')
+    return (
+      <div className="history">
+        {seg}
+        <CeoJobsLog onOpen={setOpen} />
+      </div>
+    );
 
   const days: [string, HistoryEntry[]][] = [];
   for (const e of entries) {
@@ -95,6 +113,7 @@ export function HistoryTab({ focus }: { focus?: HistoryFocus }) {
   const team = Object.values(agents).sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div className="history">
+      {seg}
       <div className="history-filters">
         <input type="search" aria-label="Search titles and outcomes" placeholder="Search titles and outcomes" value={typed} onChange={(e) => setTyped(e.target.value)} />
         <select aria-label="Floor" value={repoId} onChange={(e) => setRepoId(e.target.value)}>

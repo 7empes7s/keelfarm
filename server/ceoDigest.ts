@@ -16,8 +16,8 @@ export const BACKGROUND_KINDS: readonly CeoJobKind[] = ['review', 'followup', 't
  * else `resume` says whether it carries on in the kept session (`step`, from ceoSessionStep): a chat does unless
  * the kept session is full or idle.
  */
-export function ceoJobSession(kind: CeoJobKind, s: Pick<CeoAwakeSettings, 'freshJobs'>, step: { resume: boolean; why: string | null }): { fresh: boolean; resume: boolean; why: string | null } {
-  if (s.freshJobs && BACKGROUND_KINDS.includes(kind)) return { fresh: true, resume: false, why: null };
+export function ceoJobSession(kind: CeoJobKind, s: Pick<CeoAwakeSettings, 'freshJobs'>, step: { resume: boolean; why: string | null }, redo = false): { fresh: boolean; resume: boolean; why: string | null } {
+  if (redo || (s.freshJobs && BACKGROUND_KINDS.includes(kind))) return { fresh: true, resume: false, why: null }; // a redo always starts fresh (#332)
   return { fresh: false, resume: step.resume || (kind === 'chat' && !step.why), why: step.why };
 }
 

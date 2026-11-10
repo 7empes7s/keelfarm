@@ -4,7 +4,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { FLOOR_HREF } from './chatLinks';
 import { copyText } from './clipboard';
-import { COLLAPSE_LINES, codeLanguage, copiedText, isShell, languageLabel, shellLines } from './codeBlock';
+import { COLLAPSE_LINES, codeLanguage, codeTitle, copiedText, isShell, shellLines } from './codeBlock';
 import './chat.css';
 import { REF_HREF } from '../../../shared/chatRefs';
 import { Icon } from './Icon';
@@ -96,7 +96,7 @@ function CodeBlock({ node }: { node?: HastNode }) {
   return (
     <div className={`md-code${shell ? ' md-code-shell' : ''}`}>
       <div className="md-code-head">
-        <span className="md-code-lang">{languageLabel(lang)}</span>
+        <span className="md-code-lang">{codeTitle(lang, lines.length)}</span>
         <button type="button" className={`ds-btn ds-btn-ghost md-copy${copied === null ? ' ds-btn-icon' : ''}`} onClick={copy} aria-label={copied === null ? 'Copy the code' : copied ? 'Copied' : "Couldn't copy"}>
           <CopyGlyph done={copied === true} />
           {copied !== null && <span aria-live="polite">{copied ? 'Copied' : "Couldn't copy"}</span>}

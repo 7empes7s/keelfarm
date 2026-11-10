@@ -16,6 +16,7 @@ import { HttpError } from './httpError.ts';
 import type { LogEntry } from './agentRunner.ts';
 import type { FileStore } from './files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
+import { countTools } from '../shared/ceoJobLog.ts';
 
 const EMIT_MS = 250;
 const ID = /^c[a-z0-9]{1,24}$/;
@@ -31,6 +32,7 @@ export interface DemoThread {
 
 export class CeoChat {
   live: CeoLive | null = null;
+  tools: Record<string, number> = {}; // the job's tool calls by name, for the CEO jobs log (#332)
   private calls: OfficeCall[] = [];
   private turnFrom = 0; // the current turn's first office call
   private readonly inflight = new Set<Promise<unknown>>();
@@ -52,6 +54,7 @@ export class CeoChat {
   /** A CEO job starts: nothing live, no office calls yet. */
   startJob() {
     this.calls = [];
+    this.tools = {};
     this.turnFrom = 0;
     this.lastReply = '';
     this.set(null);
@@ -70,6 +73,7 @@ export class CeoChat {
 
   /** The session's log lines: its tool calls become steps. */
   log(entries: readonly LogEntry[]) {
+    countTools(this.tools, entries);
     let live = this.live;
     for (const entry of entries) if (entry.kind === 'tool' || entry.kind === 'result' || entry.kind === 'error') live = foldStream(live, { kind: 'log', entry }, Date.now(), this.nameOf);
     if (live !== this.live) this.set(live, true);

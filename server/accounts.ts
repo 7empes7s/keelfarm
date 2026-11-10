@@ -36,7 +36,7 @@ import {
 } from '../shared/accounts.ts';
 import { addSpan, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
 import { mergeReadings } from '../shared/usage.ts';
-import { inputShape, signInEnd } from '../shared/signIn.ts';
+import { codeProblem, inputShape, menuKeys, signInCode, signInEnd, signInScreen } from '../shared/signIn.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
 import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
@@ -486,7 +486,7 @@ export class Accounts {
       this.signIns.delete(id);
       void term.flush().then(() => {
         if (this.signIns.has(id)) return;
-        const end = signInEnd(mode, code, term.tail(8));
+        const end = signInEnd(mode, code, term.unwrapped().split('\n')); // joined: a narrow phone's terminal wraps the reason (#350)
         this.runs.set(id, { mode, running: false, ...end });
         if (!end.ok) term.note(end.note);
         this.emit();
@@ -495,7 +495,73 @@ export class Accounts {
     });
     this.signIns.set(id, run);
     this.runs.set(id, { mode, running: true, ok: false, note: '' });
+    this.watchSignIn(id, term, run);
     this.emit();
+  }
+
+  /**
+   * The guided sign-in (#350): its screen read as it changes, for the link, Codex's code and whether the prompt waits,
+   * and the menus the sign-in needs answered (login method, theme, folder trust) answered by the office itself.
+   */
+  private watchSignIn(id: string, term: AgentTerminal, run: BoxSignIn) {
+    let queued = false;
+    let answered = '';
+    let answeredAt = 0;
+    term.onOutput = () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        void term.flush().then(() => {
+          queued = false;
+          const was = this.runs.get(id);
+          if (this.signIns.get(id) !== run || !was?.running) return;
+          const s = signInScreen(term.unwrapped());
+          const menu = s.menu && `${s.menu.text}|${s.menu.at}`;
+          if (s.menu && s.pick !== null && (menu !== answered || Date.now() - answeredAt > 3000)) {
+            answered = menu!;
+            answeredAt = Date.now();
+            term.input(menuKeys(s.menu.at, s.pick, term.appCursor), false);
+          }
+          const next: SignInRun = { mode: was.mode, running: true, ok: false, note: '' };
+          if (s.url) next.url = s.url;
+          if (s.deviceCode) next.deviceCode = s.deviceCode;
+          if (s.waiting) next.waiting = true;
+          if (s.menu && s.pick === null) next.question = { text: s.menu.text, options: s.menu.options };
+          if (JSON.stringify(next) === JSON.stringify(was)) return;
+          this.runs.set(id, next);
+          this.emit();
+        });
+      }, 100);
+    };
+    term.onOutput(); // what it printed as it started
+  }
+
+  /** POST /api/accounts/:id/signin/code: the guided sign-in's pasted code to its prompt, exactly, then Enter (#350). */
+  signInCodeIn(id: string, raw: unknown): void {
+    const term = this.runningSignIn(id);
+    const text = typeof raw === 'string' ? raw : '';
+    const problem = codeProblem(text);
+    if (problem) throw new HttpError(400, problem);
+    const code = signInCode(text);
+    // As xterm's paste sends it (#302's path): wrapped when the prompt asked for bracketed paste.
+    term.input(term.bracketedPaste ? `\x1b[200~${code}\x1b[201~` : code);
+    term.input('\r');
+  }
+
+  /** POST /api/accounts/:id/signin/answer: an option of the menu the sign-in shows, chosen in the guide (#350). */
+  signInAnswer(id: string, option: unknown): void {
+    const term = this.runningSignIn(id);
+    const menu = signInScreen(term.unwrapped()).menu;
+    const n = Number(option);
+    if (!menu || !Number.isInteger(n) || n < 0 || n >= menu.options.length) throw new HttpError(409, 'That question has gone: look at the terminal for what it asks now.');
+    term.input(menuKeys(menu.at, n, term.appCursor), false);
+  }
+
+  private runningSignIn(id: string): AgentTerminal {
+    this.find(id);
+    const term = this.terms.get(id);
+    if (!this.signIns.has(id) || !term?.live) throw new HttpError(409, 'This sign-in has ended: tap Try again for a new one.');
+    return term;
   }
 
   /** DELETE /api/accounts/:id: at once, or once the sessions on it finish (paused meanwhile). */

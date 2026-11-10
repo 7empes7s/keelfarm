@@ -269,7 +269,7 @@ for (const width of [360, 390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/?pocket=1&tab=chat');
     const block = page.locator('.md-code-shell').filter({ hasText: 'merge.ts server/swarm/qa.ts' }).last();
-    await expect(block.locator('.md-code-lang')).toHaveText('Terminal');
+    await expect(block.locator('.md-code-lang')).toHaveText(/^Terminal · \d+ lines?$/);
     const problems = await block.evaluate((el) => {
       const out: string[] = [];
       const vw = document.documentElement.clientWidth;

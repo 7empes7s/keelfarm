@@ -145,7 +145,7 @@ function fakeRunner(log: string[], ms = 0, runs: Partial<RunResult>[] = []): Lab
 const who = (agentId: string, repoId = 'r1', floor = 1): Requester => ({ agentId, agent: agentId.toUpperCase(), repoId, floor, fullName: `o/${repoId}`, defaultBranch: 'main', worktree: path.join(os.tmpdir(), 'labdesk', agentId), pr: 7, labCommands: [] });
 const shot = (url: string) => ({ kind: 'screenshot' as const, url, viewports: [375, 390, 1280], profile: 'phone' as const, theme: 'light' as const, actions: [], fullPage: false });
 
-function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null) {
+function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null, updateGate?: () => readonly string[] | null) {
   const views: TestLabView[] = [];
   const shots: string[] = [];
   const pages: string[] = [];
@@ -160,6 +160,7 @@ function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () 
       pages.push(page);
     },
     emit: (v) => views.push(v),
+    updateGate,
   };
   return { lab: new TestLab(host), views, shots, pages };
 }
@@ -229,6 +230,40 @@ describe('TestLab', () => {
     for (let i = 0; i < 3; i++) void l.submit(who('a'), shot('http://localhost:1/'));
     expect(() => l.submit(who('a'), shot('http://localhost:1/'))).toThrow(/already have 3 lab jobs/);
     expect(l.view().queue.length + l.view().running.length).toBe(3);
+  });
+
+  it("starts no queued job while the office drains for an update, except a holding QA round's, and says why (#333)", async () => {
+    const log: string[] = [];
+    const runner = fakeRunner(log, -1);
+    let gate: readonly string[] | null = ['qa1'];
+    const { lab: l } = lab(runner, undefined, () => gate);
+    const dev = l.submit(who('dev1', 'r2'), shot('http://localhost:1/'));
+    const qa = l.submit(who('qa1'), shot('http://localhost:2/'));
+    await Promise.resolve();
+    expect(l.view().running.map((j) => j.agentId)).toEqual(['qa1']);
+    expect(l.view().held).toBe('Waiting for the office update: queued jobs start once the office has restarted.');
+    expect(l.activity()).toMatchObject({ running: ['qa1'], waiting: ['dev1'] });
+    gate = []; // handed to the launcher: nothing new starts
+    runner.release();
+    await qa;
+    expect(l.view().running).toEqual([]);
+    expect(l.activity().lastLab.has('qa1')).toBe(true);
+    gate = null; // the update is over (here: the preflight refused it)
+    l.reopen();
+    await Promise.resolve();
+    expect(l.view().running.map((j) => j.agentId)).toEqual(['dev1']);
+    expect(l.view().held).toBeNull();
+    runner.release();
+    await dev;
+  });
+
+  it('answers running and waiting jobs when the office restarts, so their sessions ask again (#333)', async () => {
+    const { lab: l } = lab(fakeRunner([], -1));
+    const running = l.submit(who('a'), shot('http://localhost:1/'));
+    const waiting = l.submit(who('b'), shot('http://localhost:2/'));
+    await l.close(true);
+    expect(await running).toMatch(/^Cut off: the office is restarting\. Make the same lab call again/);
+    expect(await waiting).toMatch(/^Not run: the office is restarting/);
   });
 
   it("reports a check's steps, opens the requester's preview, and shows failures on their screen", async () => {

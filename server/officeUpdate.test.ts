@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DRAIN_TIMEOUT_MS, POSTPONE_MS, SETTLE_MAX_MS, drainDecision, settleAt, settleMinutes, lastUpdateNotice, parseLastUpdate, takeLastUpdate, underLauncher, type DrainInput } from './officeUpdate.ts';
+import { DRAIN_TIMEOUT_MS, LAB_DRAIN_CAP_MS, LAB_UNIT_MS, POSTPONE_MS, SETTLE_MAX_MS, drainDecision, labGate, labHold, settleAt, settleMinutes, lastUpdateNotice, parseLastUpdate, takeLastUpdate, underLauncher, type DrainInput } from './officeUpdate.ts';
 
 const NOW = 1_000_000_000;
 const input = (over: Partial<DrainInput> = {}): DrainInput => ({
@@ -18,6 +18,7 @@ const input = (over: Partial<DrainInput> = {}): DrainInput => ({
   drainingSince: null,
   sent: false,
   running: 2,
+  lab: 0,
   pendingSince: null,
   lastCommitAt: null,
   settleMs: 3 * 60_000,
@@ -119,6 +120,19 @@ describe('drainDecision', () => {
 
     it('holds new work through the preflight when new sessions would not outlive the restart', () => {
       expect(drainDecision(input({ keeper: false, sent: true, drainingSince: NOW })).holds).toBe(true);
+    });
+  });
+
+  // #333: the test lab runs in the office's process, so a restart cuts off its browser checks and heavy runs.
+  describe('with the test lab', () => {
+    it('holds while lab work runs, even when every session is kept', () => {
+      expect(drainDecision(input({ keeper: true, running: 0, lab: 1 }))).toMatchObject({ state: 'draining', send: false, holds: true });
+      expect(drainDecision(input({ keeper: true, running: 0, lab: 0 })).send).toBe(true);
+    });
+
+    it('goes ahead after the cap, and the lab work is cut off', () => {
+      expect(drainDecision(input({ running: 0, lab: 2, drainingSince: NOW - LAB_DRAIN_CAP_MS + 1 })).send).toBe(false);
+      expect(drainDecision(input({ running: 0, lab: 2, drainingSince: NOW - LAB_DRAIN_CAP_MS }))).toMatchObject({ send: true, timedOut: false });
     });
   });
 
@@ -230,5 +244,39 @@ describe('last-update.json', () => {
     } finally {
       await fs.rm(home, { recursive: true, force: true, maxRetries: 3 });
     }
+  });
+});
+
+describe('labHold (#333)', () => {
+  const at = (over: Partial<Parameters<typeof labHold>[0]> = {}) => labHold({ running: [], waiting: [], qa: [], lastLab: new Map(), now: NOW, ...over });
+
+  it('counts every running lab job', () => {
+    expect(at({ running: ['dev1', 'dev2'] })).toEqual({ count: 2, agents: [] });
+  });
+
+  it("holds a QA round between lab calls as a unit, until its last call is two minutes old", () => {
+    const qa = [{ agentId: 'qa1', since: NOW - 10 * 60_000 }];
+    expect(at({ qa, lastLab: new Map([['qa1', NOW - LAB_UNIT_MS + 1]]) })).toEqual({ count: 1, agents: ['qa1'] });
+    expect(at({ qa, lastLab: new Map([['qa1', NOW - LAB_UNIT_MS]]) })).toEqual({ count: 0, agents: [] });
+    expect(at({ qa, waiting: ['qa1'] })).toEqual({ count: 1, agents: ['qa1'] });
+    expect(at({ qa, running: ['qa1'] })).toEqual({ count: 1, agents: ['qa1'] }); // one job, counted once
+  });
+
+  it("doesn't hold for a QA session's lab call from before its round began, or for one that never used the lab", () => {
+    expect(at({ qa: [{ agentId: 'qa1', since: NOW - 1000 }], lastLab: new Map([['qa1', NOW - 2000]]) }).count).toBe(0);
+    expect(at({ qa: [{ agentId: 'qa1', since: NOW - 1000 }] }).count).toBe(0);
+  });
+});
+
+describe('labGate (#333)', () => {
+  it("lets anyone's lab jobs start with no update under way", () => {
+    expect(labGate('none', false, [])).toBeNull();
+    expect(labGate('settling', false, ['qa1'])).toBeNull();
+  });
+
+  it('starts only the holding QA rounds\' jobs while draining, and nobody\'s once past the cap or handed over', () => {
+    expect(labGate('draining', true, ['qa1'])).toEqual(['qa1']);
+    expect(labGate('draining', false, ['qa1'])).toEqual([]);
+    expect(labGate('updating', true, ['qa1'])).toEqual([]);
   });
 });

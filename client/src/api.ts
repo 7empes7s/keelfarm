@@ -183,6 +183,7 @@ export const api = {
   // The chat closer to Claude's (#51)
   ceoStop: () => call('POST', '/api/ceo/stop'),
   ceoRetry: () => call('POST', '/api/ceo/retry'),
+  redoCeoJob: (job: number) => call<{ job: number }>('POST', `/api/ceo/jobs/${job}/redo`),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
   chatMessages: (before: number) => call<ChatPage>('GET', `/api/ceo/messages?before=${before}`),
@@ -210,6 +211,7 @@ export const api = {
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
   demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
+  demoLabUpdate: () => call<OfficeUpdateView>('POST', '/api/demo/lab-update'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
   addProvider: (provider: string, key: string, label?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label }, false),
@@ -257,6 +259,8 @@ export const api = {
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
   testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
   signInAccount: (id: string, mode: SignInMode = 'login') => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`, { mode }),
+  signInCode: (id: string, code: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/code`, { code }),
+  signInAnswer: (id: string, option: number) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/answer`, { option }),
   useAccountNow: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/use-now`),
   simulateAccountLimit: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-limit`),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),

@@ -7,6 +7,7 @@ import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
 import type { CeoJob } from '../ceo.ts';
 import type { CeoHandover, CeoJobNote } from '../ceoDigest.ts';
+import type { CeoJobRecord } from '../ceoRedo.ts';
 import type { LearnedPull } from '../closeCleanup.ts';
 import type { PreQa } from '../qaOutcome.ts';
 import type { RestartCounts } from '../reconcile.ts';
@@ -162,6 +163,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
   recheckAt?: number | null; // the CEO's last triage from a needs-human re-check (#275, stuckRecheck.ts)
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
+  restartRetryRound?: number | null; // the round QA already re-ran by itself after losing its lab to an office restart (#333)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
   cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
@@ -189,6 +191,8 @@ interface CeoState {
   kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null; model?: string }; // its kept session (#28) and the model it started on (#331)
   handover?: CeoHandover | null; // what the full chat session left the next one, until a fresh session gets it (#330)
   lastJob?: CeoJobNote | null; // the latest background job's reply and issues, for the digest (#330)
+  jobs?: CeoJobRecord[]; // finished jobs' inputs, for Redo on Opus (#332, server/ceoRedo.ts)
+  jobSeq?: number; // the last job's number
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */
@@ -239,6 +243,7 @@ export interface AgentRuntime {
   shots: Shot[]; // every screenshot of the current session (QA evidence)
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
+  acrossRestart?: boolean; // the current session's CLI kept working through an office restart (#333)
   blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
   chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
 }
