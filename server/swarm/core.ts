@@ -647,7 +647,7 @@ export abstract class SwarmCore extends SwarmContract {
       model: line.model,
       effort: line.effort,
       sessionId: run?.sessionId ?? null,
-      transcript: null,
+      transcript: null, ...(run?.ceo && { ceo: run.ceo }), // a CEO job's row in the CEO jobs log (#332)
     };
     // Only Claude Code's transcripts on this computer: a cloud agent's stays in their Box.
     const local = agent?.host !== 'box' && (agent?.sessionCli ?? 'claude') === 'claude';

@@ -10,7 +10,8 @@ type Block = Record<string, unknown>;
 /** A made-up session's lines: the task, a look around, a test run and the reply. Pure. */
 function demoTranscriptLines(about: Pick<HistoryEntry, 'kind' | 'title' | 'at'>, sessionId: string): string[] {
   const t = (s: number) => new Date(about.at - (60 - s) * 1000).toISOString();
-  const line = (type: 'user' | 'assistant', content: string | Block[], s: number) => JSON.stringify({ type, sessionId, timestamp: t(s), message: { role: type, content } });
+  const usage = { input_tokens: 900, cache_read_input_tokens: 14_000, output_tokens: 320 }; // the CEO jobs log's tokens (#332)
+  const line = (type: 'user' | 'assistant', content: string | Block[], s: number) => JSON.stringify({ type, sessionId, timestamp: t(s), message: { role: type, content, ...(type === 'assistant' && { usage }) } });
   const qa = about.kind === 'qa';
   return [
     line('user', `${qa ? 'Test' : 'Work on'} ${about.title || 'the task'} (demo).`, 0),

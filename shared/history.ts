@@ -4,6 +4,7 @@
 // the server (server/history.ts) and the client (ui/HistoryTab.tsx).
 import { redact } from './journal.ts';
 import { TASK_KIND_LABELS, type SessionOutcome, type TaskKind } from './costs.ts';
+import type { CeoJobInfo } from './ceoJobLog.ts';
 
 export type HistoryKind = TaskKind | 'merge';
 export type HistoryOutcome = SessionOutcome | 'merged';
@@ -30,6 +31,7 @@ export interface HistoryEntry {
   effort: string;
   sessionId: string | null;
   transcript: string | null; // the kept copy, relative to the history folder ('/'-separated), when there was one
+  ceo?: CeoJobInfo; // a CEO job's: what started it and came of it, for the CEO jobs log (#332)
 }
 
 /** The History screen's and session_history's filters; every field narrows. */

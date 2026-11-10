@@ -1,0 +1,36 @@
+/* Redo on Opus and the CEO jobs log (#332): the job line under an automated job's reply (ui/CeoJobRedo.tsx) and the
+   log's rows in CEO → Sessions (ui/CeoJobsLog.tsx), on the History tab's rows. */
+
+.ceo-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1) var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+.ceo-job > .btn {
+  min-height: var(--ds-target);
+}
+.ceo-job-link {
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-1);
+  font: inherit;
+  color: var(--ds-link);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ceo-log-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.ceo-log-redo {
+  align-self: flex-end;
+  min-height: var(--ds-target);
+}
+.history-seg {
+  align-self: flex-start;
+}

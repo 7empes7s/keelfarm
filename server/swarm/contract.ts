@@ -90,6 +90,7 @@ export abstract class SwarmContract {
   protected abstract postMessage(...a: Parameters<Swarm['postMessage']>): ReturnType<Swarm['postMessage']>;
   protected abstract startCeoWork(...a: Parameters<Swarm['startCeoWork']>): ReturnType<Swarm['startCeoWork']>;
   protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
+  protected abstract stuckRecord(...a: Parameters<Swarm['stuckRecord']>): ReturnType<Swarm['stuckRecord']>;
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
 
   // upkeep.ts

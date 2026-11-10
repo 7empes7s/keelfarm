@@ -11,9 +11,10 @@ export interface CeoAwakeSettings {
   consultMin: number; // a consult's time cap
   consultMax: number; // consults running at once
   models: CeoModelSettings; // the model per kind of job (#331): a session can't change model, so these decide what carries on too
+  automatedOnCeo: boolean; // "Run all automated jobs on Opus" (#332): reviews, follow-ups and triage on the CEO's model, whatever `models` says
 }
 
-export const DEFAULT_CEO_AWAKE: CeoAwakeSettings = { keepAlive: true, freshJobs: true, restartTurns: 300, idleHours: 8, maxWaitMin: 30, consultMin: 10, consultMax: 3, models: DEFAULT_CEO_MODELS };
+export const DEFAULT_CEO_AWAKE: CeoAwakeSettings = { keepAlive: true, freshJobs: true, restartTurns: 300, idleHours: 8, maxWaitMin: 30, consultMin: 10, consultMax: 3, models: DEFAULT_CEO_MODELS, automatedOnCeo: false };
 
 /** The CEO tab's view of its session: how full its context is, what it cost, and what it waits on. */
 export interface CeoSessionView {
@@ -33,7 +34,7 @@ const clampInt = (v: unknown, lo: number, hi: number, d: number) => {
 export function ceoAwakeSettings(base: Partial<CeoAwakeSettings> | undefined, patch: unknown): CeoAwakeSettings {
   const b = { ...DEFAULT_CEO_AWAKE, ...base };
   const p = (patch && typeof patch === 'object' ? patch : {}) as Partial<Record<keyof CeoAwakeSettings, unknown>>;
-  const int = (k: Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'freshJobs' | 'models'>, lo: number, hi: number) => (p[k] === undefined ? b[k] : clampInt(p[k], lo, hi, b[k]));
+  const int = (k: Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'freshJobs' | 'models' | 'automatedOnCeo'>, lo: number, hi: number) => (p[k] === undefined ? b[k] : clampInt(p[k], lo, hi, b[k]));
   return {
     keepAlive: typeof p.keepAlive === 'boolean' ? p.keepAlive : b.keepAlive,
     freshJobs: typeof p.freshJobs === 'boolean' ? p.freshJobs : b.freshJobs,
@@ -43,5 +44,6 @@ export function ceoAwakeSettings(base: Partial<CeoAwakeSettings> | undefined, pa
     consultMin: int('consultMin', 2, 30),
     consultMax: int('consultMax', 1, 10),
     models: ceoModelSettings(b.models, p.models),
+    automatedOnCeo: typeof p.automatedOnCeo === 'boolean' ? p.automatedOnCeo : b.automatedOnCeo,
   };
 }
