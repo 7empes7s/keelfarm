@@ -10,7 +10,7 @@ import { redact } from '../shared/journal.ts';
 // Its own folder: the demo's secrets files are read straight from SWARM_HOME.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-providers-'));
 process.env.SWARM_HOME = home;
-const { Providers, readProvidersFile } = await import('./providers.ts');
+const { Providers, readProvidersFile, klingToken } = await import('./providers.ts');
 const { createDemoBackend } = await import('./demo.ts');
 const { Swarm } = await import('./swarm.ts');
 afterAll(() => fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 }));
@@ -75,6 +75,49 @@ describe('the providers store', () => {
   });
 });
 
+describe('video keys (#364)', () => {
+  it("signs Kling's access key and secret into a short JWT, and sends the secret nowhere", async () => {
+    const token = klingToken('ak-123:sk-secret-456', 1_800_000_000_000);
+    const [head, body, sig] = token.split('.');
+    expect(JSON.parse(Buffer.from(head, 'base64url').toString())).toEqual({ alg: 'HS256', typ: 'JWT' });
+    expect(JSON.parse(Buffer.from(body, 'base64url').toString())).toEqual({ iss: 'ak-123', exp: 1_800_001_800, nbf: 1_799_999_995 });
+    const { createHmac } = await import('node:crypto');
+    expect(sig).toBe(createHmac('sha256', 'sk-secret-456').update(`${head}.${body}`).digest('base64url'));
+    expect(klingToken('one-api-key')).toBe('one-api-key');
+
+    const dir = fs.mkdtempSync(path.join(home, 'kling-'));
+    const { p, probe, changed } = store(dir, vi.fn(async () => ({ status: 200, body: { data: { resource_pack_subscribe_infos: [] } } })));
+    await p.init();
+    const c = await p.add('kling', 'ak-123:sk-secret-456');
+    const sent = JSON.stringify(probe.mock.calls);
+    expect(sent).not.toContain('sk-secret-456');
+    expect(sent).toContain('Bearer ey');
+    for (const text of [JSON.stringify(p.view()), JSON.stringify(changed.mock.calls), fs.readFileSync(path.join(dir, 'providers.json'), 'utf8')]) expect(text).not.toContain('sk-secret-456');
+    expect(c.keyHint).toBe('-456');
+  });
+
+  it("reuses the saved Gemini key for Google video when its key is left empty, and keeps the key out of the view", async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'veo-'));
+    const { p, probe } = store(dir, vi.fn(async () => ({ status: 200, body: { models: [{ name: 'models/gemini-omni-1.2-flash' }] } })));
+    await p.init();
+    await expect(p.add('gemini-video', '')).rejects.toThrow(/Paste the key/);
+    await p.add('gemini', 'AIzaSy-gemini-secret-1234');
+    const v = await p.add('gemini-video', '  ');
+    expect(probe).toHaveBeenLastCalledWith(expect.objectContaining({ headers: { 'x-goog-api-key': 'AIzaSy-gemini-secret-1234' } }));
+    expect(v.test).toMatchObject({ ok: true, plan: 'gemini-omni-1.2-flash' });
+    expect(JSON.stringify(p.view())).not.toContain('gemini-secret');
+  });
+
+  it("keeps a Runway answer's usage only when the key worked", async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'runway-'));
+    const { p } = store(dir, vi.fn(async () => ({ status: 401, body: { creditBalance: 5 } })));
+    await p.init();
+    const c = await p.add('runway', 'key_runway-secret');
+    expect(c.test).toMatchObject({ ok: false });
+    expect(c.test?.windows).toBeUndefined();
+  });
+});
+
 describe('image keys (#368)', () => {
   it("reuses the saved Gemini and OpenAI keys when an image entry's key is left empty, and keeps them out of the view", async () => {
     const dir = fs.mkdtempSync(path.join(home, 'images-'));
@@ -121,7 +164,7 @@ describe('Settings → Providers in the office', () => {
     expect(cards.find((c) => c.key === 'voice')?.keyHint).toBe(ELEVEN.slice(-4));
     expect(cards.find((c) => c.key === 'cloud')?.keyHint).toBe(UPSTASH.slice(-4));
     // The demo's made-up connections: one in every category the catalogue has.
-    expect(new Set(cards.map((c) => c.category))).toEqual(new Set(['coding', 'text', 'audio', 'image', 'cloud', 'mcp']));
+    expect(new Set(cards.map((c) => c.category))).toEqual(new Set(['coding', 'text', 'audio', 'video', 'image', 'cloud', 'mcp']));
     expect(swarm.voice.secret()).toBe(ELEVEN);
 
     events.length = 0;
