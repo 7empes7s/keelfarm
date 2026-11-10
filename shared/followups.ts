@@ -6,7 +6,7 @@ import { blockers } from './issues.ts';
 // file issues. Pure: the swarm keeps the state, the client shows the settings.
 
 /** Office events that wake the CEO for a follow-up job */
-export type FollowupKind = 'question' | 'merged' | 'qaFailed' | 'agentError' | 'stalled' | 'unblocked' | 'audit' | 'usage' | 'burst';
+export type FollowupKind = 'question' | 'merged' | 'qaFailed' | 'agentError' | 'agentBlocked' | 'stalled' | 'unblocked' | 'audit' | 'usage' | 'burst';
 
 export interface FollowupSettings {
   kinds: Record<FollowupKind, boolean>;
@@ -28,6 +28,7 @@ export const FOLLOWUP_KINDS: { id: FollowupKind; label: string }[] = [
   { id: 'merged', label: 'A pull request merged (checked against its issue)' },
   { id: 'qaFailed', label: 'QA failed a pull request for the 2nd time or more' },
   { id: 'agentError', label: 'An agent stayed in an error' },
+  { id: 'agentBlocked', label: 'An agent got blocked, never started, or finished without the office noticing' },
   { id: 'stalled', label: 'The watchdog put stalled work back in line' },
   { id: 'unblocked', label: 'An issue could start once what it waited for closed' },
   { id: 'audit', label: 'A code-health audit (docs/code-health.md) landed' },
@@ -36,7 +37,7 @@ export const FOLLOWUP_KINDS: { id: FollowupKind; label: string }[] = [
 ];
 
 export const DEFAULT_FOLLOWUPS: FollowupSettings = {
-  kinds: { question: true, merged: true, qaFailed: true, agentError: true, stalled: true, unblocked: true, audit: true, usage: true, burst: true },
+  kinds: { question: true, merged: true, qaFailed: true, agentError: true, agentBlocked: true, stalled: true, unblocked: true, audit: true, usage: true, burst: true },
   windowMin: 10,
   perHour: 4,
 };
@@ -208,6 +209,10 @@ export const followupEvents = {
   burst: (a: Who, repoId: string, where: string, waiting: number): NewEvent => ({
     kind: 'burst', key: `burst:${a.id}`, label: `${a.name} added in the cloud`, repoId,
     text: `Hybrid added ${a.name} (${a.id}) in the cloud on ${where}: this computer was full and ${waiting} task${waiting === 1 ? '' : 's'} waited for memory. They leave by themselves once idle.`,
+  }),
+  agentBlocked: (a: Who, state: string, reason: string, screen: string, repoId?: string, where?: string): NewEvent => ({
+    kind: 'agentBlocked', key: `blocked:${a.id}:${state}`, label: `${a.name} ${state === 'not-started' ? "hasn't started" : state === 'unregistered' ? 'finished unnoticed' : 'is blocked'}`, repoId,
+    text: `${a.name} (${a.id})${where ? ` on ${where}` : ''} is ${state}: ${reason}. Their screen ends: "${screen}". Restart, message or redirect them; agent_log has more.`,
   }),
   agentError: (a: Who, key: string, mins: number, error: string, repoId?: string, where?: string): NewEvent => ({
     kind: 'agentError', key: `error:${key}`, label: `${a.name}'s error`, repoId,

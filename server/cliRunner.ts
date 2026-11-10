@@ -35,6 +35,7 @@ import { readingOf } from '../shared/usage.ts';
 import { isHarnessText } from '../shared/chat.ts';
 import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { actOn, requiredKeys, SessionWatch } from './liveState.ts';
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
 import { envSecrets } from './journal.ts';
@@ -58,7 +59,7 @@ const SESSIONS_DIR = path.join(HOME_DIR, 'sessions');
 const BIN_DIR = path.join(HOME_DIR, 'bin');
 /** After a turn ends the CLI may still pick up a queued message: only an idle prompt this long means it's done. */
 const FINISH_GRACE_MS = 3000;
-/** Starting up: how long before the office says the CLI seems to be waiting on something. */
+/** Starting up: the folder-trust and sign-in screens are watched for twice this long. */
 const BOOT_MS = 60_000;
 /** Claude's usage warning, the way the SDK's allowed_warning is used: pace new work from here. */
 const USAGE_WARN_PCT = 90;
@@ -494,7 +495,6 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   let turnError: string | null = null; // the turn failed (OpenCode reports errors separately from going idle)
   let begun = false; // the CLI took its first prompt
   let finishTimer: NodeJS.Timeout | undefined;
-  let bootTimer: NodeJS.Timeout | undefined;
   let screenTimer: NodeJS.Timeout | undefined;
   let shotTimer: NodeJS.Timeout | undefined;
   const nudged = new Set<string>();
@@ -503,6 +503,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const roots = sessionRoots(opts.cwd, opts.env, dir); // the folders the session may write in
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
+  const watch = new SessionWatch(started, requiredKeys(opts.outputSchema), cli !== 'opencode'); // its live state (#359): blocked, never started, or done unheard
   let promptTimer: NodeJS.Timeout | undefined;
   const statusSecrets = envSecrets({ ...process.env, ...opts.env, ...opts.box?.env });
   // The CEO's text as it writes it; everyone else's chat (#120).
@@ -556,7 +557,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       r = { ...r, ok: false, ...lost };
       keep = false;
     }
-    for (const t of [finishTimer, bootTimer]) clearTimeout(t);
+    clearTimeout(finishTimer);
     clearInterval(screenTimer);
     clearInterval(shotTimer);
     clearInterval(promptTimer);
@@ -650,6 +651,11 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     onScreen = null;
   };
 
+  const watchLive = (l: LiveCli, now: number) =>
+    actOn(watch.tick({ now, begun, screen: term.screen(), tail: term.tail(120), quietMs: now - Math.max(l.lastData ?? started, l.lastHook ?? started) }), label, {
+      log: (text, error) => log([{ kind: error ? 'error' : 'system', text }]), blocked: (s) => (s ? cb.blocked?.(s.reason, s.kind) : !onScreen?.blocked && !statusReport.blocked && cb.blocked?.(null)),
+      retry: () => quietly(() => l.proc?.write('\r')), complete: (text) => finish({ ok: true, text, errors: [] }, true),
+    });
   /**
    * The watchdog: a prompt no hook answered (a Notification said so, or the terminal has shown one for a minute with
    * nothing else drawn) is answered in the terminal, or the session is reported blocked (unblock.ts watchdogStep).
@@ -660,6 +666,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     const now = Date.now();
     const stepFromStatus = programStatusStep(l.programStatus, Math.max(l.lastHook ?? 0, started), now, statusSecrets);
     statusReport.check(stepFromStatus, !!onScreen?.blocked);
+    if ((watchLive(l, now), done)) return; // completed: nothing on screen to answer
     if (!onScreen && begun && cli === 'claude' && now - (l.lastData ?? now) >= STALL_MS && permissionScreen(term.screen())) {
       onScreen = { kind: 'permission', since: now, ...lastCall, tries: 0, blocked: false };
     }
@@ -982,15 +989,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         const end = step.do === 'sign-in' && !begun && turns === 0;
         log([{ kind: 'error', text: `⚠ ${end ? signInError(label, opts.account) : `${label} may need you to sign in: open the terminal and sign in there, or run "${cli}" in a terminal of your own.`}` }]);
         if (end) return finish({ ok: false, text: '', errors: [signInError(label, opts.account)], signedOut: true });
-      }
+      } // a setup screen, or no start at all, is the live state's (liveState.ts)
     }, 1000);
-    bootTimer = setTimeout(() => {
-      if (done || begun || cli !== 'claude') return;
-      log([{ kind: 'error', text: `⚠ ${label} hasn't started on the task yet. Open the terminal to see what it's waiting for.` }]);
-      // A screen the office doesn't know: the session ends rather than sit (the manager hears of it as a failed session).
-      const stuck = () => clip(term.screen().split('\n').map((x) => x.trim()).filter(Boolean).pop() ?? '', 120);
-      bootTimer = setTimeout(() => !done && !begun && finish({ ok: false, text: '', errors: [`${label} never started on the task: it sat on a screen the office doesn't answer ("${stuck()}"). Open the terminal to see it.`] }), BOOT_MS);
-    }, BOOT_MS);
   };
 
   const begin = () => {

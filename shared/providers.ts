@@ -24,7 +24,11 @@ export interface ProviderDef {
   usageNote?: string;
   /** Another catalogue entry whose saved key it can reuse: an empty key field takes that one's key. */
   sharesKeyWith?: string;
+  /** A Lucide icon name (client/src/ui/icons.ts has it). */
+  icon?: string;
   blurb: string;
+  /** A line on its add form, after the blurb. */
+  note?: string;
 }
 
 export const CATEGORIES: { id: ProviderCategory; label: string }[] = [
@@ -48,6 +52,8 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'openrouter', name: 'OpenRouter', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENROUTER_API_KEY', placeholder: 'sk-or-…', docsUrl: 'https://openrouter.ai/docs', usage: 'openrouter', blurb: 'Many models behind one key, with its credit' },
   { id: 'elevenlabs', name: 'ElevenLabs', category: 'audio', auth: 'api-key', home: 'voice', keyEnv: 'ELEVENLABS_API_KEY', placeholder: 'sk_…', docsUrl: 'https://elevenlabs.io/docs', usage: 'elevenlabs', blurb: 'Voices for agents and messages read aloud' },
   { id: 'openai-audio', name: 'OpenAI TTS & Whisper', category: 'audio', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech', usage: 'openai', blurb: 'Speech and transcription over the OpenAI API' },
+  { id: 'nano-banana', name: 'Nano Banana (Gemini image)', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/image-generation', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', icon: 'banana', blurb: 'Gemini image generation and editing over the Gemini API key', note: "Google AI Plus's Nano Banana and Veo work only in the Gemini app and Flow, not through the API: it takes a Gemini API key." },
+  { id: 'openai-images', name: 'OpenAI Images', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/image-generation', usage: 'openai', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'openai', icon: 'image', blurb: 'GPT Image generation and editing over the OpenAI API key' },
   { id: 'runway', name: 'Runway', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'RUNWAYML_API_SECRET', placeholder: 'key_…', docsUrl: 'https://docs.dev.runwayml.com/guides/setup/', usage: 'runway', blurb: 'Gen-4 video with its credit balance' },
   { id: 'gemini-video', name: 'Google video (Gemini API)', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/video', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', blurb: 'Gemini Omni video over the Gemini API key' },
   { id: 'luma', name: 'Luma Dream Machine', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'LUMAAI_API_KEY', placeholder: 'luma-…', docsUrl: 'https://docs.lumalabs.ai/docs/api', usage: 'luma', usageNote: 'No balance in its answer: the office ledger counts its spend', blurb: 'Ray video on credits shared with the Luma app' },
@@ -60,6 +66,15 @@ export const PROVIDERS: ProviderDef[] = [
 export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
 
 // ---------- test calls ----------
+
+/**
+ * The live image models each image entry's test looks for (docs, 2026-11). Left out: Imagen (shut down), dall-e-2/3 and
+ * gpt-image-1 (shut down), gpt-image-1-mini, gpt-image-1.5 and chatgpt-image-latest (removed 2026-12-01).
+ */
+export const IMAGE_MODELS: Record<string, string[]> = {
+  'nano-banana': ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image'],
+  'openai-images': ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2'],
+};
 
 /** One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH. */
 export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string };
@@ -82,10 +97,12 @@ export function testRequest(provider: string, key: string, now = Date.now()): Pr
       return { kind: 'http', url: 'https://api.anthropic.com/v1/models?limit=1', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } };
     case 'openai':
     case 'openai-audio':
+    case 'openai-images':
       return { kind: 'http', url: 'https://api.openai.com/v1/models', headers: bearer };
     case 'gemini':
       return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', headers: { 'x-goog-api-key': key } };
     case 'gemini-video':
+    case 'nano-banana':
       return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', headers: { 'x-goog-api-key': key } };
     case 'runway':
       return { kind: 'http', url: 'https://api.dev.runwayml.com/v1/organization', headers: { ...bearer, 'X-Runway-Version': RUNWAY_VERSION } };
@@ -166,8 +183,20 @@ export function geminiVideoModels(body: unknown): string[] {
   return (Array.isArray(models) ? models : []).map((m) => String(obj(m).name ?? '').replace(/^models\//, '')).filter((n) => /veo|omni/i.test(n));
 }
 
-/** The plan a test's answer tells: Runway's monthly credit cap, Gemini's live video models. */
+/** The catalogue's image models a models list names (Gemini's `models: [{ name: 'models/…' }]`, OpenAI's `data: [{ id }]`). */
+export function imageModels(provider: string, body: unknown): string[] {
+  const b = obj(body);
+  const list = Array.isArray(b.models) ? b.models : Array.isArray(b.data) ? b.data : [];
+  const ids = new Set(list.map((m) => String(obj(m).name ?? obj(m).id ?? '').replace(/^models\//, '')));
+  return (IMAGE_MODELS[provider] ?? []).filter((id) => ids.has(id));
+}
+
+/** The plan a test's answer tells: Runway's monthly credit cap, Gemini's live video models, the key's image models. */
 export function testPlan(provider: string, body: unknown): string | undefined {
+  if (IMAGE_MODELS[provider]) {
+    const models = imageModels(provider, body);
+    return models.length ? models.slice(0, 3).join(', ') + (models.length > 3 ? ` +${models.length - 3}` : '') : 'No image models on this key';
+  }
   if (provider === 'runway') {
     const cap = num(obj(obj(body).tier).maxMonthlyCreditSpend);
     return Number.isFinite(cap) ? `Up to ${cap.toLocaleString('en-US')} credits a month` : undefined;
@@ -188,7 +217,7 @@ export function keyProblem(provider: string, raw: string): string | null {
   if (provider === 'kling' && key.split(':').length > 2) return 'Paste the access key, a colon, then the secret key (or one API key).';
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
   if (provider === 'anthropic') return secretMismatch('anthropic', key);
-  if (provider === 'openai' || provider === 'openai-audio') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
+  if (provider === 'openai' || provider === 'openai-audio' || provider === 'openai-images') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
   if (provider === 'openrouter' && !key.startsWith('sk-or-')) return 'OpenRouter keys start with sk-or-.';
   return null;
 }

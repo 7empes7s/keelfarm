@@ -26,15 +26,19 @@ export function canPickWork(a: Pick<AgentView, 'status'>): boolean {
   return a.status !== 'working' && a.status !== 'preparing';
 }
 
-/** The task as one line: "Building #1059 · Access package…", "Testing PR #12 · …", "Free". */
+/** The task as one line: "Building #1059 · Access package…", "Testing PR #12 · …", "Free". Stopped or free drops the task at once (#359). */
 export function taskLine(a: Pick<AgentView, 'status' | 'task' | 'issueNumber' | 'issueTitle' | 'prNumber'>): string {
-  if (a.status === 'idle') return 'Free · pick work in Details';
+  if (a.status === 'idle' || a.status === 'done') return 'Free · pick work in Details';
+  if (a.status === 'stopped') return 'Stopped · pick work in Details';
   const title = a.issueTitle ? ` · ${a.issueTitle}` : '';
   if (a.task === 'qa') return `Testing PR #${a.prNumber ?? '?'}${title}`;
   if (a.task === 'fix') return `Fixing PR #${a.prNumber ?? '?'}${title}`;
-  if (a.issueNumber != null) return `${a.status === 'done' ? 'Built' : 'Building'} #${a.issueNumber}${title}`;
-  return a.status === 'done' ? 'Finished' : 'Nothing assigned';
+  if (a.issueNumber != null) return `Building #${a.issueNumber}${title}`;
+  return 'Nothing assigned';
 }
+
+/** Whether the header's timer runs: only while they work (a stopped agent's kept counting, #359). */
+export const showsTimer = (a: Pick<AgentView, 'status' | 'startedAt'>) => !!a.startedAt && (a.status === 'working' || a.status === 'preparing');
 
 export interface Step {
   label: string;

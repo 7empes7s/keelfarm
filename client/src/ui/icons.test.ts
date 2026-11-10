@@ -6,6 +6,7 @@ import path from 'node:path';
 import { parseSync } from 'oxc-parser';
 import { describe, expect, it } from 'vitest';
 import { EMOJI_ICONS, ICONS, iconFor, leadingIcon } from './icons';
+import { PROVIDERS } from '../../../shared/providers';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -114,6 +115,10 @@ describe('one icon pack (#134)', () => {
 
   it('maps every old glyph to an icon that exists', () => {
     for (const [glyph, name] of Object.entries(EMOJI_ICONS)) expect(ICONS[name], glyph).toBeDefined();
+  });
+
+  it("has every Providers catalogue entry's icon", () => {
+    for (const p of PROVIDERS) if (p.icon) expect(ICONS, p.id).toHaveProperty(p.icon);
   });
 
   it('uses no emoji or icon glyph as UI chrome in client/src', () => {
