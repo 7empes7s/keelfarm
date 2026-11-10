@@ -44,7 +44,7 @@ import { DEFAULT_NOTIFY, notifySettings } from '../../shared/notify.ts';
 import { addNotice, makeNotice, type NoticeInput } from '../../shared/notices.ts';
 import { DEFAULT_CLOUD } from '../../shared/cloud.ts';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, officeItems, type ToolInventory } from '../../shared/tooling.ts';
-import { agentActivity, lineActivity, sameActivity, type SeenActivity } from '../../shared/activity.ts';
+import { agentActivity, lineActivity, sameActivity, stuckSign, type SeenActivity } from '../../shared/activity.ts';
 import { WeatherService } from '../weather.ts';
 import { dayKey, journalFrame, redact } from '../../shared/journal.ts';
 import { DEFAULT_FOLLOWUPS, emptyFollowups, followupSettings } from '../../shared/followups.ts';
@@ -267,7 +267,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); });
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); this.usageSharesSoon(); });
     // The machine's daily log folder only for the real office: never from the demo or the tests.
     const machineDir = !backend.demo && !process.env.VITEST && existsSync(MACHINE_DAILY_DIR) ? MACHINE_DAILY_DIR : null;
     this.history = new SessionHistory({
@@ -376,7 +376,7 @@ export abstract class SwarmCore extends SwarmContract {
       url: r.url,
       defaultBranch: r.defaultBranch,
       floor: r.floor,
-      color: r.color,
+      color: r.color, theme: r.theme ?? 'office', // only a known theme is ever saved (updateRepo)
       autoAssign: r.autoAssign,
       autoMerge: r.autoMerge,
       folderSync: rt.folderSync,
@@ -498,7 +498,7 @@ export abstract class SwarmCore extends SwarmContract {
     const chat = a.role === 'ceo' && this.state.ceo.job?.kind === 'chat';
     const { status, task, issueNumber, prNumber, startedAt } = a;
     const rt = this.agentRt.get(a.id);
-    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: 'a prompt' }; // the reason may name paths: kept off the sign
+    if (rt?.blocked && a.status === 'working') return { kind: 'blocked', detail: stuckSign(rt.blocked.kind) }; // the reason may name paths: kept off the sign
     return agentActivity({ status, task, currentTool: rt?.currentTool ?? null, issueNumber, prNumber, startedAt }, this.seenActivity.get(a.id) ?? null, chat);
   }
 
@@ -647,7 +647,7 @@ export abstract class SwarmCore extends SwarmContract {
       model: line.model,
       effort: line.effort,
       sessionId: run?.sessionId ?? null,
-      transcript: null,
+      transcript: null, ...(run?.ceo && { ceo: run.ceo }), // a CEO job's row in the CEO jobs log (#332)
     };
     // Only Claude Code's transcripts on this computer: a cloud agent's stays in their Box.
     const local = agent?.host !== 'box' && (agent?.sessionCli ?? 'claude') === 'claude';

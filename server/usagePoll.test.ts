@@ -60,9 +60,10 @@ describe('oauthReadings', () => {
 describe('tokenOf', () => {
   const cred = (o: object) => JSON.stringify({ claudeAiOauth: o });
   it('takes the login token, unless it is missing or expired', () => {
-    expect(tokenOf(cred({ accessToken: 'tok', expiresAt: NOW + MIN }), NOW)).toEqual({ token: 'tok' });
-    expect(tokenOf(cred({ accessToken: 'tok' }), NOW)).toEqual({ token: 'tok' });
-    expect(tokenOf(cred({ accessToken: 'tok', expiresAt: NOW - MIN }), NOW)).toEqual({ error: 'expired' });
+    expect(tokenOf(cred({ accessToken: 'tok', expiresAt: NOW + MIN }), NOW)).toEqual({ token: 'tok', refresh: false });
+    expect(tokenOf(cred({ accessToken: 'tok' }), NOW)).toEqual({ token: 'tok', refresh: false });
+    expect(tokenOf(cred({ accessToken: 'tok', expiresAt: NOW - MIN }), NOW)).toEqual({ error: 'expired', refresh: false });
+    expect(tokenOf(cred({ accessToken: 'tok', refreshToken: 'ref', expiresAt: NOW - MIN }), NOW)).toEqual({ error: 'expired', refresh: true });
     expect(tokenOf(cred({}), NOW)).toEqual({ error: 'no-login' });
     expect(tokenOf('{}', NOW)).toEqual({ error: 'no-login' });
     expect(tokenOf('not json', NOW)).toEqual({ error: 'no-login' });

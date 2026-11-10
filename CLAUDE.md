@@ -89,12 +89,15 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `update.ts` | the office's own update: drain, hand-over to the launcher, the result after a restart |
   | `reactions.ts` | the chat's delivery and status reactions, the CEO's react and reply tools, the manager's reactions (#118) |
   | `ceoModels.ts` | the CEO's model per kind of job, kept sessions on the same model, the retry on its own model (#331) |
+  | `ceoFresh.ts` | background jobs in fresh sessions with the office's digest, a full chat session's handover (#330; rules in `server/ceoDigest.ts`) |
+  | `ceoLog.ts` | the CEO jobs log and Redo on Opus (#332): each job's number, log row and kept inputs, the redo on the CEO's model (rules in `server/ceoRedo.ts`, `shared/ceoJobLog.ts`; the demo's in `server/ceoJobSample.ts`) |
   | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
+  | `disk.ts` | the disk (#340): free space on the health strip and its hold, the hourly cleanup and "Free up space", the working copies' disk |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
@@ -113,6 +116,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `unblock.ts`: nothing waits on a human (pure): each Claude Code session's worktree permission rules, every CLI's
   non-interactive environment (`cliEnv`), the answers to PermissionRequest / Elicitation / AskUserQuestion hooks, and
   the watchdog's steps for a prompt still on screen (answer it, else the agent is `blocked`, notified after 5 minutes).
+  `cliScreens.ts` (#360) is the table of first-run and warning screens answered at start-up (theme, trust, warnings),
+  and the sign-in that ends a session instead; `cliSetup.ts` sets up an account's login folder before each session
+  (onboarding, theme, the worktree trusted; the Box seed applies the same), never the built-in login's.
 - `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode): detection, Windows `.cmd` shim
   unwrapping, each one's command line, and the helper scripts they call back with.
 - `terminal.ts`: `AgentTerminal`, a headless xterm mirror per agent (replay for late viewers, saved to disk), its
@@ -170,6 +176,8 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   and CPU) and grouped into programs (agents' CLI sessions, their test browsers and demo offices, previews, the office,
   Postgres/Docker), orphans, and a 24 h trend in memory; pure parsing and grouping first. `shared/serverLoad.ts` has the
   types and trend rules; the chat's `server:*` sources and Mission control's `ServerCard.tsx` draw it; `demoServerLoad.ts` is the demo's.
+- `diskCare.ts`: the disk on this computer (#340, rules pure in `shared/disk.ts`): free space, what agents' machines hold, removing only inside them,
+  and machines on a second disk (linked from `<HOME_DIR>/machines/<machine>`, moved when idle); `demo/disk.ts` is the demo's.
 - `presence.ts`: shared presence: relays tabs' poses, emotes and pings on `/ws` to their floor (pure interest and rate
   rules), never saved; `demoVisitors.ts` walks the demo's fake visitors. Names and limits in `shared/presence.ts`.
 - `voice.ts`: phone messages read aloud (docs/voice.md): the ElevenLabs key in `secrets.json`, voices, cached clips;

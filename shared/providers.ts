@@ -20,7 +20,15 @@ export interface ProviderDef {
   docsUrl: string;
   /** Its row on the usage card (#361). */
   usage?: UsageProvider;
+  /** Its usage row's note when its test tells no usage. */
+  usageNote?: string;
+  /** Another catalogue entry whose saved key it can reuse: an empty key field takes that one's key. */
+  sharesKeyWith?: string;
+  /** A Lucide icon name (client/src/ui/icons.ts has it). */
+  icon?: string;
   blurb: string;
+  /** A line on its add form, after the blurb. */
+  note?: string;
 }
 
 export const CATEGORIES: { id: ProviderCategory; label: string }[] = [
@@ -43,6 +51,13 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'openrouter', name: 'OpenRouter', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENROUTER_API_KEY', placeholder: 'sk-or-…', docsUrl: 'https://openrouter.ai/docs', usage: 'openrouter', blurb: 'Many models behind one key, with its credit' },
   { id: 'elevenlabs', name: 'ElevenLabs', category: 'audio', auth: 'api-key', home: 'voice', keyEnv: 'ELEVENLABS_API_KEY', placeholder: 'sk_…', docsUrl: 'https://elevenlabs.io/docs', usage: 'elevenlabs', blurb: 'Voices for agents and messages read aloud' },
   { id: 'openai-audio', name: 'OpenAI TTS & Whisper', category: 'audio', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech', usage: 'openai', blurb: 'Speech and transcription over the OpenAI API' },
+  { id: 'nano-banana', name: 'Nano Banana (Gemini image)', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/image-generation', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', icon: 'banana', blurb: 'Gemini image generation and editing over the Gemini API key', note: "Google AI Plus's Nano Banana and Veo work only in the Gemini app and Flow, not through the API: it takes a Gemini API key." },
+  { id: 'openai-images', name: 'OpenAI Images', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/image-generation', usage: 'openai', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'openai', icon: 'image', blurb: 'GPT Image generation and editing over the OpenAI API key' },
+  { id: 'runway', name: 'Runway', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'RUNWAYML_API_SECRET', placeholder: 'key_…', docsUrl: 'https://docs.dev.runwayml.com/guides/setup/', usage: 'runway', blurb: 'Gen-4 video with its credit balance' },
+  { id: 'gemini-video', name: 'Google video (Gemini API)', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/video', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', blurb: 'Gemini Omni video over the Gemini API key' },
+  { id: 'luma', name: 'Luma Dream Machine', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'LUMAAI_API_KEY', placeholder: 'luma-…', docsUrl: 'https://docs.lumalabs.ai/docs/api', usage: 'luma', usageNote: 'No balance in its answer: the office ledger counts its spend', blurb: 'Ray video on credits shared with the Luma app' },
+  { id: 'kling', name: 'Kling', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'KLING_ACCESS_KEY', placeholder: 'access key:secret key', docsUrl: 'https://app.klingai.com/global/dev/document-api', usage: 'kling', usageNote: 'No resource pack on the account', blurb: 'Kling video on resource packs' },
+  // No OpenAI Sora: its API was removed on 2026-09-24 with no successor. Don't add it back.
   { id: 'upstash', name: 'Upstash Box', category: 'cloud', auth: 'api-key', home: 'cloud', docsUrl: 'https://upstash.com/docs/box', usage: 'upstash', blurb: 'Cloud machines for cloud agents' },
   { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
 ];
@@ -51,6 +66,15 @@ export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
 
 // ---------- test calls ----------
 
+/**
+ * The live image models each image entry's test looks for (docs, 2026-11). Left out: Imagen (shut down), dall-e-2/3 and
+ * gpt-image-1 (shut down), gpt-image-1-mini, gpt-image-1.5 and chatgpt-image-latest (removed 2026-12-01).
+ */
+export const IMAGE_MODELS: Record<string, string[]> = {
+  'nano-banana': ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image'],
+  'openai-images': ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2'],
+};
+
 /** One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH. */
 export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string };
 export interface ProbeResult {
@@ -58,17 +82,33 @@ export interface ProbeResult {
   body?: unknown;
 }
 
-/** The test call for a key the Providers page saves, or null when its home tests it (accounts, voice, cloud). */
-export function testRequest(provider: string, key: string): ProbeRequest | null {
+const RUNWAY_VERSION = '2024-11-06';
+const DAY = 24 * 60 * 60_000;
+
+/**
+ * The test call for a key the Providers page saves, or null when its home tests it (accounts, voice, cloud). Every one
+ * is a GET that reads. Kling's `key` is its API key or the JWT signed from its access key and secret (server/providers.ts).
+ */
+export function testRequest(provider: string, key: string, now = Date.now()): ProbeRequest | null {
   const bearer = { Authorization: `Bearer ${key}` };
   switch (provider) {
     case 'anthropic':
       return { kind: 'http', url: 'https://api.anthropic.com/v1/models?limit=1', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } };
     case 'openai':
     case 'openai-audio':
+    case 'openai-images':
       return { kind: 'http', url: 'https://api.openai.com/v1/models', headers: bearer };
     case 'gemini':
       return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', headers: { 'x-goog-api-key': key } };
+    case 'gemini-video':
+    case 'nano-banana':
+      return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', headers: { 'x-goog-api-key': key } };
+    case 'runway':
+      return { kind: 'http', url: 'https://api.dev.runwayml.com/v1/organization', headers: { ...bearer, 'X-Runway-Version': RUNWAY_VERSION } };
+    case 'luma':
+      return { kind: 'http', url: 'https://api.lumalabs.ai/dream-machine/v1/credits', headers: bearer };
+    case 'kling':
+      return { kind: 'http', url: `https://api-singapore.klingai.com/account/costs?start_time=${now - 30 * DAY}&end_time=${now}`, headers: bearer };
     case 'openrouter':
       return { kind: 'http', url: 'https://openrouter.ai/api/v1/key', headers: bearer };
     case 'hetzner':
@@ -88,14 +128,83 @@ export function testNote(r: ProbeResult): { ok: boolean; note: string } {
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
 
-/** Usage from a test call's answer, where the provider tells: OpenRouter's GET /api/v1/key credit. */
-export function testUsage(provider: string, body: unknown): UsageWindow[] {
-  if (provider !== 'openrouter' || !body || typeof body !== 'object') return [];
-  const d = (body as { data?: Record<string, unknown> }).data ?? {};
-  const used = num(d.usage);
-  const limit = num(d.limit);
-  if (!Number.isFinite(used)) return [];
-  return [{ name: 'Credit', usedPct: limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : null, used, ...(limit > 0 ? { limit } : {}), unit: '$', resetsAt: null }];
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+const pct = (used: number, limit: number) => Math.min(100, Math.max(0, Math.round((used / limit) * 100)));
+
+/**
+ * Usage from a test call's answer, where the provider tells: OpenRouter's credit, Runway's credit balance and each
+ * model's generations today, Luma's credit balance (cents), Kling's live resource packs.
+ */
+export function testUsage(provider: string, body: unknown, now = Date.now()): UsageWindow[] {
+  const b = obj(body);
+  switch (provider) {
+    case 'openrouter': {
+      const d = obj(b.data);
+      const used = num(d.usage);
+      const limit = num(d.limit);
+      if (!Number.isFinite(used)) return [];
+      return [{ name: 'Credit', usedPct: limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : null, used, ...(limit > 0 ? { limit } : {}), unit: '$', resetsAt: null }];
+    }
+    case 'runway': {
+      const balance = num(b.creditBalance);
+      if (!Number.isFinite(balance)) return [];
+      const caps = obj(obj(b.tier).models);
+      const days = Object.entries(obj(obj(b.usage).models)).flatMap(([model, u]): UsageWindow[] => {
+        const used = num(obj(u).dailyGenerations);
+        const limit = num(obj(caps[model]).maxDailyGenerations);
+        return used > 0 && limit > 0 ? [{ name: `${model} today`, usedPct: pct(used, limit), used, limit, unit: 'videos', resetsAt: null }] : [];
+      });
+      return [{ name: 'Balance', usedPct: null, used: balance, unit: 'credits', resetsAt: null }, ...days];
+    }
+    case 'luma': {
+      const cents = num(b.credit_balance);
+      return Number.isFinite(cents) ? [{ name: 'Balance', usedPct: null, used: Math.round(cents) / 100, unit: '$', resetsAt: null }] : [];
+    }
+    case 'kling': {
+      const packs = obj(b.data).resource_pack_subscribe_infos;
+      return (Array.isArray(packs) ? packs : []).flatMap((raw): UsageWindow[] => {
+        const p = obj(raw);
+        const total = num(p.total_quantity);
+        const left = num(p.remaining_quantity);
+        const ends = num(p.invalid_time);
+        if (!(total > 0) || !Number.isFinite(left) || (ends > 0 && ends <= now)) return [];
+        return [{ name: typeof p.resource_pack_name === 'string' && p.resource_pack_name ? p.resource_pack_name : 'Resource pack', usedPct: pct(total - left, total), used: Math.round((total - left) * 100) / 100, limit: total, unit: 'units', resetsAt: ends > 0 ? ends : null }];
+      });
+    }
+    default:
+      return [];
+  }
+}
+
+/** Video models a Gemini models.list answer names: models.list only lists live ones, so retired Veo previews drop out. */
+export function geminiVideoModels(body: unknown): string[] {
+  const models = obj(body).models;
+  return (Array.isArray(models) ? models : []).map((m) => String(obj(m).name ?? '').replace(/^models\//, '')).filter((n) => /veo|omni/i.test(n));
+}
+
+/** The catalogue's image models a models list names (Gemini's `models: [{ name: 'models/…' }]`, OpenAI's `data: [{ id }]`). */
+export function imageModels(provider: string, body: unknown): string[] {
+  const b = obj(body);
+  const list = Array.isArray(b.models) ? b.models : Array.isArray(b.data) ? b.data : [];
+  const ids = new Set(list.map((m) => String(obj(m).name ?? obj(m).id ?? '').replace(/^models\//, '')));
+  return (IMAGE_MODELS[provider] ?? []).filter((id) => ids.has(id));
+}
+
+/** The plan a test's answer tells: Runway's monthly credit cap, Gemini's live video models, the key's image models. */
+export function testPlan(provider: string, body: unknown): string | undefined {
+  if (IMAGE_MODELS[provider]) {
+    const models = imageModels(provider, body);
+    return models.length ? models.slice(0, 3).join(', ') + (models.length > 3 ? ` +${models.length - 3}` : '') : 'No image models on this key';
+  }
+  if (provider === 'runway') {
+    const cap = num(obj(obj(body).tier).maxMonthlyCreditSpend);
+    return Number.isFinite(cap) ? `Up to ${cap.toLocaleString('en-US')} credits a month` : undefined;
+  }
+  if (provider === 'gemini-video') {
+    const models = geminiVideoModels(body);
+    return models.length ? models.slice(0, 3).join(', ') : 'No video models on this key';
+  }
+  return undefined;
 }
 
 /** Why a pasted key can't be saved for `provider`, or null. */
@@ -104,9 +213,10 @@ export function keyProblem(provider: string, raw: string): string | null {
   const def = providerDef(provider);
   if (!def || def.home !== 'providers') return 'Pick a provider from the list.';
   if (!key) return 'Paste the key first.';
+  if (provider === 'kling' && key.split(':').length > 2) return 'Paste the access key, a colon, then the secret key (or one API key).';
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
   if (provider === 'anthropic') return secretMismatch('anthropic', key);
-  if (provider === 'openai' || provider === 'openai-audio') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
+  if (provider === 'openai' || provider === 'openai-audio' || provider === 'openai-images') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
   if (provider === 'openrouter' && !key.startsWith('sk-or-')) return 'OpenRouter keys start with sk-or-.';
   return null;
 }
@@ -130,6 +240,7 @@ export interface ProviderCard {
   keyHint: string;
   uses: string[]; // "What uses it": agents' names, Voice, Cloud agents…
   usageId?: string; // its row on the usage card
+  warning?: string; // a Claude login signed in with another plan than its name says (#442)
   /** Where it's changed: its old settings section, or here. */
   settings: 'accounts' | 'voice' | 'cloud-agents' | 'tools' | null;
 }
@@ -163,11 +274,12 @@ export function providerCards(i: CardInput): ProviderCard[] {
       category: 'coding',
       status: ACCOUNT_STATUS[a.status],
       note: a.kind === 'api-key' ? 'API key' : a.kind === 'setup-token' ? 'Setup token' : 'Subscription login',
-      plan: a.plan ?? '',
+      plan: [a.plan, a.loginPlan && `login is ${a.loginPlan}`, a.tokenRefresh && 'token refreshes on its next session'].filter(Boolean).join(' · '),
       keyHint: a.keyHint,
       uses: a.agents.length ? a.agents.map(i.agentName) : a.enabled ? ['Agents on the rotation'] : [],
       usageId: a.id,
       settings: 'accounts',
+      ...(a.planWarning ? { warning: a.planWarning } : {}),
     });
   }
   if (i.clis.some((c) => c.id === 'opencode' && c.installed)) {
@@ -255,7 +367,7 @@ export function connectionSource(c: ProvidersView['connections'][number]): Usage
     windows,
     status: !c.test ? 'ready' : !c.test.ok ? 'error' : worst >= 100 ? 'limited' : worst >= 80 ? 'near' : 'ready',
     checkedAt: c.test?.at ?? null,
-    note: !c.test ? 'Not tested yet' : !c.test.ok ? c.test.note : windows.length ? 'From the key’s test call' : 'Key works; this provider has no usage API for a plain key',
+    note: !c.test ? 'Not tested yet' : !c.test.ok ? c.test.note : windows.length ? 'From the key’s test call' : (def.usageNote ?? 'Key works; this provider has no usage API for a plain key'),
   };
 }
 

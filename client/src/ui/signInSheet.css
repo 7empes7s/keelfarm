@@ -1,0 +1,202 @@
+/* A login's guided sign-in (#350, SignInSheet.tsx): the three steps, a card per step, the terminal folded below. */
+
+.sig-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+  margin: 0 0 var(--ds-space-2);
+  padding: 0;
+  list-style: none;
+}
+.sig-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  text-align: center;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+}
+.sig-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  --ds-icon: var(--ds-icon-md);
+}
+.sig-step-mark .ds-icon {
+  width: var(--ds-icon-md);
+  height: var(--ds-icon-md);
+}
+.sig-step-now {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-strong);
+}
+.sig-step-now .sig-step-mark {
+  border-color: var(--ds-link);
+  background: var(--ds-surface-raised);
+  color: var(--ds-link);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-link) 18%, transparent);
+}
+.sig-step-done {
+  color: var(--ds-text);
+}
+.sig-step-done .sig-step-mark {
+  border-color: transparent;
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.sig-step-failed {
+  color: var(--ds-danger-text);
+  font-weight: var(--ds-weight-strong);
+}
+.sig-step-failed .sig-step-mark {
+  border-color: transparent;
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+
+.sig-card {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-2) 0;
+  padding: var(--ds-space-3);
+  border: 1.5px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  min-width: 0;
+}
+.sig-card p {
+  margin: 0;
+}
+.sig-center {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+}
+.sig-lead {
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.sig-wide {
+  width: 100%;
+  min-height: var(--ds-target);
+}
+.sig-option {
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+}
+
+.sig-open {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.sig-open > .btn {
+  min-height: var(--ds-target);
+}
+.sig-open > .btn-good {
+  flex: 1 1 12rem;
+}
+
+.sig-device {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.sig-device > .muted {
+  flex-basis: 100%;
+}
+.sig-device-code {
+  flex: 1 1 auto;
+  font-family: var(--mono);
+  font-size: var(--ds-text-xl);
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+.sig-device > .btn {
+  min-height: var(--ds-target);
+}
+
+.sig-code {
+  margin: 0;
+}
+.sig-code-row {
+  display: flex;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.sig-code-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ds-target);
+  font-size: var(--ds-text-md);
+  font-family: var(--mono);
+}
+.sig-code-row > .btn {
+  flex: none;
+  min-height: var(--ds-target);
+}
+.sig-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+  color: var(--ds-danger-text);
+}
+
+.sig-end {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+}
+.sig-end-icon {
+  flex: none;
+  width: var(--ds-icon-lg);
+  height: var(--ds-icon-lg);
+}
+.sig-end-ok {
+  border-color: color-mix(in srgb, var(--ds-good-fill) 80%, var(--ds-line-strong));
+  background: color-mix(in srgb, var(--ds-good-fill) 18%, var(--ds-surface-raised));
+}
+.sig-end-bad {
+  border-color: color-mix(in srgb, var(--ds-bad-fill) 80%, var(--ds-line-strong));
+  background: color-mix(in srgb, var(--ds-bad-fill) 14%, var(--ds-surface-raised));
+}
+.sig-end-bad .sig-end-icon {
+  color: var(--ds-danger-text);
+}
+
+.sig-term-toggle {
+  min-height: var(--ds-target);
+  justify-self: start;
+}
+
+.sig-spin {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  border: 2px solid var(--ds-line-strong);
+  border-top-color: var(--ds-link);
+  border-radius: 50%;
+  animation: sig-spin 0.9s linear infinite;
+}
+@keyframes sig-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sig-spin {
+    animation: none;
+  }
+}

@@ -55,8 +55,10 @@ export abstract class SwarmContract {
   protected abstract recordUsage(...a: Parameters<Swarm['recordUsage']>): ReturnType<Swarm['recordUsage']>;
   protected abstract schedule(...a: Parameters<Swarm['schedule']>): ReturnType<Swarm['schedule']>;
   protected abstract usageNow(...a: Parameters<Swarm['usageNow']>): ReturnType<Swarm['usageNow']>;
+  protected abstract usageSharesSoon(...a: Parameters<Swarm['usageSharesSoon']>): ReturnType<Swarm['usageSharesSoon']>;
 
   // update.ts
+  protected abstract labGateNow(...a: Parameters<Swarm['labGateNow']>): ReturnType<Swarm['labGateNow']>;
   protected abstract officeUpdateTick(...a: Parameters<Swarm['officeUpdateTick']>): ReturnType<Swarm['officeUpdateTick']>;
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
@@ -90,9 +92,11 @@ export abstract class SwarmContract {
   protected abstract postMessage(...a: Parameters<Swarm['postMessage']>): ReturnType<Swarm['postMessage']>;
   protected abstract startCeoWork(...a: Parameters<Swarm['startCeoWork']>): ReturnType<Swarm['startCeoWork']>;
   protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
+  protected abstract stuckRecord(...a: Parameters<Swarm['stuckRecord']>): ReturnType<Swarm['stuckRecord']>;
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
 
   // upkeep.ts
+  protected abstract alertBlocked(...a: Parameters<Swarm['alertBlocked']>): ReturnType<Swarm['alertBlocked']>;
   protected abstract careerWork(...a: Parameters<Swarm['careerWork']>): ReturnType<Swarm['careerWork']>;
   protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
   protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
@@ -100,6 +104,7 @@ export abstract class SwarmContract {
   protected abstract progressTick(...a: Parameters<Swarm['progressTick']>): ReturnType<Swarm['progressTick']>;
   protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
   protected abstract restoreDesk(...a: Parameters<Swarm['restoreDesk']>): ReturnType<Swarm['restoreDesk']>;
+  protected abstract requeue(a: PersistedAgent, why: string): void; // protected there
 
   // team.ts
   protected abstract applyTeamChanges(...a: Parameters<Swarm['applyTeamChanges']>): ReturnType<Swarm['applyTeamChanges']>;

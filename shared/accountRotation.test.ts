@@ -16,6 +16,18 @@ describe('detectLimit', () => {
     expect(detectLimit('Claude Code stopped: rate limit (5-hour limit reached)', NOW)?.kind).toBe('limited');
   });
 
+  it("reads Claude Code's weekly and Opus limits with either apostrophe, and a dated reset in its time zone (#442)", () => {
+    const until = Date.UTC(2026, 10, 13, 14, 0);
+    expect(detectLimit("You've hit your weekly limit · resets Nov 13, 2pm (UTC)", NOW)).toEqual({ kind: 'limited', until });
+    expect(detectLimit('You’ve hit your weekly limit · resets Nov 13, 2pm (UTC)', NOW)).toEqual({ kind: 'limited', until });
+    expect(detectLimit('You’ve hit your Opus limit · resets Nov 13 at 3pm (Europe/Berlin)', NOW)).toEqual({ kind: 'limited', until });
+    expect(detectLimit("You've hit your weekly Opus limit", NOW)?.kind).toBe('limited');
+    expect(detectLimit('Opus limit reached', NOW)?.kind).toBe('limited');
+    expect(resetTime('resets Nov 13 at 2pm UTC', NOW)).toBe(until);
+    expect(resetTime('resets Nov 13 at 2pm', NOW)).toBe(new Date(2026, 10, 13, 14, 0).getTime()); // no zone: this computer's
+    expect(resetTime('resets Jan 2, 9am (UTC)', Date.UTC(2026, 11, 30))).toBe(Date.UTC(2027, 0, 2, 9, 0));
+  });
+
   it('reads Codex limits', () => {
     const text = "■ You've hit your usage limit. Upgrade to Pro (https://openai.com/chatgpt/pricing) or try again in 2 hours 15 minutes.";
     expect(detectLimit(text, NOW)).toEqual({ kind: 'limited', until: NOW + (2 * 60 + 15) * 60_000 });

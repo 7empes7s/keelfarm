@@ -9,7 +9,7 @@ export const handlers = {
   health: (ev, { set }) => set({ health: ev.health }),
   serverLoad: (ev, { set }) => set({ serverLoad: ev.serverLoad }),
   testLab: (ev, { set }) => set({ testLab: ev.testLab }),
-  claudeUsage: (ev, { set }) => set({ claudeUsage: ev.readings, claudeUsageCheck: ev.check ?? null }),
+  claudeUsage: (ev, { set }) => set({ claudeUsage: ev.readings, claudeUsageCheck: ev.check ?? null, claudeUsageShares: ev.shares ?? [] }),
   ops: (ev, { set, get, cues }) => {
     // A new alarm sounds once (rate-limited); the beacons spin until it's handled.
     if (cues && newAlarms(get().ops.alarms, ev.ops.alarms).length) alarm();
@@ -28,6 +28,7 @@ export const snapshot: SnapshotPart = (d) => ({
   testLab: d.testLab ?? null,
   claudeUsage: d.claudeUsage ?? [],
   claudeUsageCheck: d.claudeUsageCheck ?? null,
+  claudeUsageShares: d.claudeUsageShares ?? [],
   ops: d.ops ?? EMPTY_OPS,
   doctor: d.doctor ?? [],
 });

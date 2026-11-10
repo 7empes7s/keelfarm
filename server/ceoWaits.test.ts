@@ -108,7 +108,7 @@ describe('the kept session', () => {
   const s = ceoAwakeSettings(undefined, { restartTurns: 100, idleHours: 2 });
   it('carries on until its context fills or it sits idle, and not at all with keep-alive off', () => {
     expect(ceoSessionStep(s, { sessionId: 'x', turns: 10, lastEndedAt: 0 }, 3_600_000)).toEqual({ resume: true, why: null });
-    expect(ceoSessionStep(s, { sessionId: 'x', turns: 100, lastEndedAt: 0 }, 1).resume).toBe(false);
+    expect(ceoSessionStep(s, { sessionId: 'x', turns: 100, lastEndedAt: 0 }, 1)).toMatchObject({ resume: false, handover: true }); // a full session hands over (#330)
     expect(ceoSessionStep(s, { sessionId: 'x', turns: 1, lastEndedAt: 1 }, 2 * 3_600_000 + 1).why).toMatch(/idle/);
     expect(ceoSessionStep({ ...s, keepAlive: false }, { sessionId: 'x', turns: 1, lastEndedAt: 0 }, 1)).toEqual({ resume: false, why: null });
     expect(ceoSessionStep(s, { sessionId: null, turns: 0, lastEndedAt: null }, 1).resume).toBe(false);

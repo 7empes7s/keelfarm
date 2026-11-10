@@ -13,6 +13,7 @@ import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
 import { mergeReadings, readingsChanged, usageChoice } from '../../shared/usage.ts';
+import { sharesSignature, usageShares } from '../../shared/usageShares.ts';
 import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
   clampPacingSessions,
@@ -35,7 +36,7 @@ import { planAssign } from '../../shared/assignIssue.ts';
 import { questionOf } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import { areaFiles, isPriorityLabel, pickNext, playbookAreas } from '../../shared/conflicts.ts';
-import type { OpsView, PullInfo, SwarmSettings, UsageReading, UsageView, UsageWarningView } from '../../shared/types.ts';
+import type { OpsView, PullInfo, ServerEvent, SwarmSettings, UsageReading, UsageView, UsageWarningView, WorldSnapshot } from '../../shared/types.ts';
 import {
   type PersistedRepo,
   type PersistedAgent,
@@ -47,6 +48,7 @@ import {
   MAX_ISSUE_FAILURES,
   LIMIT_PAUSE_MS,
   READINGS_MS,
+  SHARES_MS,
 } from './model.ts';
 import { SwarmQa } from './qa.ts';
 
@@ -59,6 +61,7 @@ export abstract class SwarmScheduling extends SwarmQa {
    */
   protected isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
+    if (this.pinnedSignedOut(a)) return false;
     if (questionOf(this.state.questions, a.id)) return false; // waiting on an answer: it resumes their task
     if (this.consulting(a)) return false;
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
@@ -78,6 +81,8 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected lastUsage = '';
   protected shownReadings: UsageReading[] = []; // the readings the office was last sent
   protected readingsTimer: NodeJS.Timeout | null = null;
+  private sharesTimer: NodeJS.Timeout | null = null;
+  private sentShares = ''; // the floor shares the tabs were last sent (#334)
   protected usagePoll: PollState = { lastTry: 0, failures: 0 }; // the office's own checks of Claude's usage while idle (#89)
   protected usagePolling = false;
 
@@ -395,6 +400,32 @@ export abstract class SwarmScheduling extends SwarmQa {
     }
   }
 
+  /** Each usage bar's floor shares of the office's spend in its window, from the cost ledger (#334). */
+  private usageSharesNow() {
+    return usageShares(this.spend.ledger.all(), this.state.claudeUsage, Date.now());
+  }
+
+  /** Claude's readings for the usage meter, with their floor shares. */
+  protected claudeUsageEvent(check = this.usageCheck): ServerEvent {
+    const shares = this.usageSharesNow();
+    this.sentShares = sharesSignature(shares);
+    return { type: 'claudeUsage', readings: this.state.claudeUsage, check, shares };
+  }
+
+  /** A session's cost was booked: within a minute, the meter's shares if their rows or percentages changed (one pending at most). */
+  protected usageSharesSoon() {
+    if (this.sharesTimer) return;
+    this.sharesTimer = setTimeout(() => {
+      this.sharesTimer = null;
+      if (sharesSignature(this.usageSharesNow()) !== this.sentShares) this.broadcast(this.claudeUsageEvent());
+    }, SHARES_MS);
+    this.sharesTimer.unref?.();
+  }
+
+  override snapshot(): WorldSnapshot {
+    return { ...super.snapshot(), claudeUsageShares: this.usageSharesNow() };
+  }
+
   /** Claude's latest usage readings from any session: kept and saved, and sent to the office at most every few seconds. */
   protected recordUsage(readings: UsageReading[]) {
     this.usageCheck = null; // a fresh reading answers for itself
@@ -403,7 +434,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     this.readingsTimer = setTimeout(() => {
       this.readingsTimer = null;
       this.shownReadings = this.state.claudeUsage;
-      this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage, check: this.usageCheck });
+      this.broadcast(this.claudeUsageEvent());
       this.save();
     }, READINGS_MS);
     this.readingsTimer.unref?.();
@@ -423,7 +454,7 @@ export abstract class SwarmScheduling extends SwarmQa {
         if ('error' in res) {
           if (res.error === this.usageCheck) return; // quiet: no repeats, nothing logged
           this.usageCheck = res.error;
-          this.broadcast({ type: 'claudeUsage', readings: this.state.claudeUsage, check: res.error });
+          this.broadcast(this.claudeUsageEvent(res.error));
           return;
         }
         this.recordUsage(res.readings); // clears the failed check

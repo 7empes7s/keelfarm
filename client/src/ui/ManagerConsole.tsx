@@ -29,6 +29,7 @@ import { workerCli } from './floorRows';
 import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
+import { FloorThemePicker } from './FloorThemePicker';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
 import { flashInto } from './jumpFlash';
@@ -118,6 +119,11 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
             <Icon name="refresh-cw" /> Simulate an office update
           </button>
+          {update.launcher && (
+            <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoLabUpdate)} title="A 20-second lab browser check starts, then a commit lands: the update waits for the check">
+              <Icon name="flask-conical" /> Update during a lab check
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -196,6 +202,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           <input type="checkbox" checked={repo.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> <Icon name="globe" /> Browser testing (Playwright MCP)
         </label>
       </div>
+      <FloorThemePicker repo={repo} onPick={(theme) => patch({ theme })} />
       {others.length > 0 && (
         <div className="ds-switches links">
           <span className="ds-row-meta">

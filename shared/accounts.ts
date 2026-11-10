@@ -1,5 +1,6 @@
 // Providers & accounts (#247, docs/accounts.md), pure: the built-in accounts, which account a session runs on (pinned
 // id, tag, or the rotation), what that changes in its environment, the status chip and the manager's edits.
+import { livePct } from './usage.ts';
 import type { AccountCli, AccountKind, AccountStatus, ProviderAccount, UsageReading } from './types.ts';
 
 export const ACCOUNT_CLIS: AccountCli[] = ['claude', 'codex'];
@@ -109,8 +110,34 @@ export function accountStatus(x: StatusInput): { status: AccountStatus; until: n
   if (a.limitedUntil && a.limitedUntil > now) full.push(a.limitedUntil);
   if (a.dailyCostCap && x.todayUsd >= a.dailyCostCap) full.push(startOfDay(now) + DAY_MS);
   if (full.length) return { status: 'limited', until: Math.max(...full) };
-  if (x.usage.some((r) => r.pct >= NEAR_PCT)) return { status: 'near', until: null };
+  if (x.usage.some((r) => livePct(r, now) >= NEAR_PCT)) return { status: 'near', until: null };
   return { status: 'ready', until: null };
+}
+
+// ---------- the plan a login really has (#442) ----------
+
+const PLAN_WORDS = ['pro', 'max', 'ultra', 'team', 'enterprise'];
+const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+
+/** A Claude login's plan from its .credentials.json fields: subscriptionType "max" and rateLimitTier "default_claude_max_20x" → "Max 20x". */
+export function loginPlanName(subscriptionType: unknown, rateLimitTier: unknown): string | null {
+  const type = typeof subscriptionType === 'string' ? subscriptionType.trim().toLowerCase() : '';
+  if (!/^[a-z_]{1,20}$/.test(type)) return null;
+  const tier = typeof rateLimitTier === 'string' ? /_(\d{1,2}x)$/i.exec(rateLimitTier)?.[1].toLowerCase() : undefined;
+  return `${cap(type.replace(/_/g, ' '))}${tier ? ` ${tier}` : ''}`;
+}
+
+/**
+ * A warning when the plan a login really has isn't the one its name, plan field or tags say ("Claude Ultra" signed in
+ * with a Pro account); null when they agree or none names a plan. An Ultra login read Max until 2026-11-08, so Max passes for Ultra.
+ */
+export function planWarning(a: Pick<ProviderAccount, 'label' | 'plan' | 'tags'>, loginPlan: string | null | undefined): string | null {
+  if (!loginPlan) return null;
+  const words = [a.plan ?? '', a.label, ...a.tags].join(' ').toLowerCase().split(/[^a-z]+/);
+  const claimed = words.find((w) => PLAN_WORDS.includes(w));
+  const real = loginPlan.split(' ')[0].toLowerCase();
+  if (!claimed || claimed === real || (claimed === 'ultra' && real === 'max')) return null;
+  return `This login is ${loginPlan}, not ${cap(claimed)}: sign in with the ${cap(claimed)} account.`;
 }
 
 const startOfDay = (now: number) => {

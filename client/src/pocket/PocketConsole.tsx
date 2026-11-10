@@ -7,6 +7,8 @@ import { Badge, ConsoleSearch, ConsoleSplit, SectionBody, useBadges, useFoundLab
 import { GROUPS, loadRemembered, opening, sectionById, sectionsIn, type SectionId } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import { InfoButton } from '../ui/InfoButton';
+import { useRunningPreviews } from '../ui/runningPreviews';
+import { useStore } from '../store';
 import { Icon } from '../ui/Icon';
 
 /** A section, or 'menu': the list of them. */
@@ -31,6 +33,7 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
   const body = useRef<HTMLDivElement>(null);
   const setFound = useFoundLabel(body);
   const badges = useBadges();
+  const previews = useRunningPreviews();
   useSectionAddress(open);
   // each screen opens at its top (a block: Chrome's scrollTo can return a promise, which React would take for a cleanup)
   useLayoutEffect(() => {
@@ -66,6 +69,23 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
           setFound(h.label === h.section.label ? null : h.label);
         }}
       />
+      {!query.trim() && (
+        // the phone's way to the Previews page (#226), which the rail has on a desktop
+        <section className="cn-list" aria-label="Pages">
+          <ul>
+            <li>
+              <button className="cn-item cn-row" onClick={() => useStore.getState().openOverlay({ kind: 'previews' })}>
+                <Icon name="monitor" />
+                <span className="cn-item-text">Previews</span>
+                <Badge n={previews} />
+                <span className="cn-chevron" aria-hidden>
+                  <Icon name="chevron-right" />
+                </span>
+              </button>
+            </li>
+          </ul>
+        </section>
+      )}
       {!query.trim() &&
         GROUPS.map((g) => (
           <section key={g.id} className="cn-list" aria-label={g.label}>

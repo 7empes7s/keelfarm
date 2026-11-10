@@ -50,6 +50,23 @@ async function office(over: Partial<AccountsDeps> = {}) {
 }
 
 describe('Accounts', () => {
+  it('an expired token to refresh (#442): signed in and in the rotation, until a session really fails to sign in; its real plan on the card', async () => {
+    const { accounts } = await office({
+      rotation: () => ({ on: true, apiLast: true, ceoClis: [], agentsSwitchCli: false }),
+      check: async (a) => (a.builtIn ? { signedIn: true, readings: [], note: 'ok' } : { signedIn: true, readings: [], refresh: true, plan: 'Pro', note: 'refreshes' }),
+    });
+    const ultra = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra' });
+    await accounts.test(ultra.id);
+    const card = () => accounts.view().accounts.find((a) => a.id === ultra.id)!;
+    expect(card()).toMatchObject({ status: 'ready', tokenRefresh: true, loginPlan: 'Pro', planWarning: 'This login is Pro, not Ultra: sign in with the Ultra account.' });
+    accounts.limited('claude-login', Date.now() + 3600_000);
+    expect(accounts.use(undefined, 'claude')?.id).toBe(ultra.id);
+    accounts.signedOut(ultra.id); // its session couldn't sign in
+    expect(await accounts.test(ultra.id)).toMatch(/couldn't sign in/);
+    expect(card().status).toBe('signed-out');
+    expect(card().tokenRefresh).toBeUndefined();
+  });
+
   it('rotation (#248): skips a limited login for the next one, API keys last, and takes the login back once its poll shows room', async () => {
     let reading = { type: 'five_hour', pct: 100, resetsAt: Date.now() + 3600_000, at: Date.now() };
     const { accounts } = await office({
@@ -175,6 +192,94 @@ describe('Accounts', () => {
     await term.flush();
     expect(term.tail(5).join('\n')).not.toMatch(/This sign-in has ended/);
     term.dispose();
+  });
+
+  it('a failed sign-in names the CLI’s status even when a phone narrowed its terminal and the line wrapped (#350)', async () => {
+    const { accounts } = await office({
+      signIn: (o, exited) => {
+        o.term.write('Paste code here if prompted > ');
+        o.term.bind({
+          write: () => {
+            o.term.write('\r\nLogin failed: Request failed with status code 400\r\n');
+            o.term.bind(null);
+            exited(1);
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.terminal(id)!.resize(40, 20);
+    accounts.signIn(id);
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    accounts.signInCodeIn(id, 'abc#1');
+    spy.mockRestore();
+    await vi.waitFor(() => expect(accounts.view().accounts.find((a) => a.id === id)?.signIn).toMatchObject({ running: false, note: expect.stringMatching(/^Sign-in failed \(400\)/) }));
+    accounts.terminal(id)!.dispose();
+  });
+
+  it('the guided sign-in (#350): answers the login menu, reads the link off the real output, sends exactly the pasted code', async () => {
+    const URL_ = 'https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile&code_challenge=hhuUE_dFmZsg-B2VkqAw6DsYoqxyL71ICyyl2k7uhcw&code_challenge_method=S256&state=JqzKsMJrwWFRbVCJe098AtKRjuOp4eNrchRoSyEHvaI';
+    const got: string[] = [];
+    const { accounts } = await office({
+      signIn: (o) => {
+        o.term.note('── Signing Claude Code in ──');
+        o.term.write(' Select login method:\r\n\r\n ❯ 1. Claude account with subscription · Pro, Max\r\n   2. Anthropic Console account · API usage billing\r\n');
+        o.term.bind({
+          write: (d) => {
+            got.push(d);
+            // As `claude auth login` prints it: the link as an OSC 8 hyperlink, wider than the terminal; bracketed paste on.
+            if (d === '\r' && got.length === 1) o.term.write(`\x1b[4A\r\x1b[0J\x1b[?2004hOpening browser to sign in…\r\nIf the browser didn't open, visit: \x1b]8;;${URL_}\x07${URL_}\x1b]8;;\x07\r\nPaste code here if prompted > `);
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.signIn(id);
+    const run = () => accounts.view().accounts.find((a) => a.id === id)?.signIn;
+    await vi.waitFor(() => expect(run()).toMatchObject({ running: true, url: URL_, waiting: true }));
+    expect(got[0]).toBe('\r'); // the subscription login, chosen by the office
+    expect(run()?.question).toBeUndefined();
+    expect(() => accounts.signInCodeIn(id, URL_)).toThrow(/web address/);
+    expect(() => accounts.signInCodeIn(id, 'two words')).toThrow(/spaces/);
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    accounts.signInCodeIn(id, '  abc123#state456\n');
+    spy.mockRestore();
+    expect(got.slice(1)).toEqual(['\x1b[200~abc123#state456\x1b[201~', '\r']);
+    accounts.terminal(id)!.bind(null);
+    expect(() => accounts.signInCodeIn(id, 'abc#1')).toThrow(/has ended/);
+    accounts.terminal(id)!.dispose();
+  });
+
+  it('the guided sign-in asks a menu it does not know, and Codex’s one-time code is on the run (#350)', async () => {
+    const got: string[] = [];
+    const { accounts } = await office({
+      signIn: (o) => {
+        o.term.note('── Signing Codex in ──');
+        o.term.write(' Pick a workspace\r\n ❯ 1. Personal\r\n   2. Acme\r\n');
+        o.term.bind({
+          write: (d) => {
+            got.push(d);
+            o.term.write('\x1b[3A\r\x1b[0J1. Open this link in your browser and sign in to your account\r\n   \x1b[94mhttps://auth.openai.com/codex/device\x1b[0m\r\n\r\n2. Enter this one-time code \x1b[90m(expires in 15 minutes)\x1b[0m\r\n   \x1b[94mB0VZ-0ZW5L\x1b[0m\r\n');
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'codex', kind: 'subscription-login', label: 'ChatGPT Plus' });
+    accounts.signIn(id);
+    const run = () => accounts.view().accounts.find((a) => a.id === id)?.signIn;
+    await vi.waitFor(() => expect(run()?.question).toEqual({ text: 'Pick a workspace', options: ['Personal', 'Acme'] }));
+    expect(got).toEqual([]);
+    expect(() => accounts.signInAnswer(id, 5)).toThrow(/has gone/);
+    accounts.signInAnswer(id, 1);
+    expect(got).toEqual(['\x1b[B\r']);
+    await vi.waitFor(() => expect(run()).toEqual({ mode: 'login', running: true, ok: false, note: '', url: 'https://auth.openai.com/codex/device', deviceCode: 'B0VZ-0ZW5L' }));
+    accounts.terminal(id)!.dispose();
   });
 
   it('keeps an API key out of the registry, the views and events; the session gets it through apiKeyHelper only', async () => {

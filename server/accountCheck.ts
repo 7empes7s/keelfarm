@@ -3,7 +3,7 @@
 // header and nowhere else, and errors never carry the request.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { checkUsage, oauthReadings } from './usagePoll.ts';
+import { checkUsage, loginPlan, oauthReadings, type UsageCheck } from './usagePoll.ts';
 import { readCodexLimits } from './codexLimits.ts';
 import { codexReadings } from '../shared/usageSources.ts';
 import type { AccountCli, AccountKind, UsageReading } from '../shared/types.ts';
@@ -12,6 +12,8 @@ export interface AccountCheck {
   signedIn: boolean; // a login on file, or a key the provider accepts
   readings: UsageReading[];
   note: string; // one line for the manager
+  refresh?: boolean; // a Claude login whose access token expired: its next session refreshes it (#442)
+  plan?: string | null; // the plan a Claude login really has, from its .credentials.json ("Max 20x")
 }
 
 export interface CheckTarget {
@@ -34,6 +36,17 @@ const keyNote = (status: number, who: string): AccountCheck =>
       ? { signedIn: false, readings: [], note: `${who} turned the key away (${status}): paste a new one.` }
       : { signedIn: true, readings: [], note: `Couldn't reach ${who}${status ? ` (${status})` : ''}: try again in a minute.` };
 
+/**
+ * A Claude login's Test from its usage check (pure). An expired access token with a refresh token on file is signed in:
+ * the office never refreshes it (a running session may rotate the refresh token), its next session does (#442).
+ */
+export function claudeLoginCheck(res: UsageCheck): AccountCheck {
+  if ('readings' in res) return { signedIn: true, readings: res.readings, note: '✓ Signed in; usage read.' };
+  if (res.error === 'failed') return { signedIn: true, readings: [], note: "Signed in, but its usage couldn't be read just now." };
+  if (res.error === 'expired' && res.refresh) return { signedIn: true, readings: [], refresh: true, note: '✓ Signed in; its token refreshes on its next session.' };
+  return { signedIn: false, readings: [], note: res.error === 'expired' ? 'Its sign-in expired: tap Sign in again.' : 'Not signed in yet: tap Sign in.' };
+}
+
 /** Test an account: `dir` is its login folder, `secret` its key or token ('' for a login). Never throws. */
 export async function checkAccount(a: CheckTarget, dir: string, secret: string): Promise<AccountCheck> {
   if (a.kind === 'subscription-login') {
@@ -43,10 +56,8 @@ export async function checkAccount(a: CheckTarget, dir: string, secret: string):
       const readings = codexReadings(await readCodexLimits(dir), Date.now());
       return { signedIn: true, readings, note: readings.length ? '✓ Signed in; usage read.' : '✓ Signed in.' };
     }
-    const res = await checkUsage({ CLAUDE_CONFIG_DIR: dir });
-    if ('readings' in res) return { signedIn: true, readings: res.readings, note: '✓ Signed in; usage read.' };
-    if (res.error === 'failed') return { signedIn: true, readings: [], note: "Signed in, but its usage couldn't be read just now." };
-    return { signedIn: false, readings: [], note: res.error === 'expired' ? 'Its sign-in expired: tap Sign in again.' : 'Not signed in yet: tap Sign in.' };
+    const raw = await fs.readFile(path.join(dir, '.credentials.json'), 'utf8').catch(() => '');
+    return { ...claudeLoginCheck(await checkUsage({ CLAUDE_CONFIG_DIR: dir })), plan: raw ? loginPlan(raw) : null };
   }
   if (!secret) return { signedIn: false, readings: [], note: 'No key saved yet.' };
   if (a.cli === 'codex') return keyNote(await get('https://api.openai.com/v1/models', { Authorization: `Bearer ${secret}` }), 'OpenAI');

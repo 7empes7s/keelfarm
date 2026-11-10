@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { HttpError } from './httpError.ts';
+import { builtInPrefs, prepareLogin } from './cliSetup.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
@@ -27,6 +28,7 @@ import {
   newAccountId,
   normaliseAccounts,
   pinnedTo,
+  planWarning,
   recentHits,
   removal,
   resolveAccount,
@@ -35,7 +37,7 @@ import {
 } from '../shared/accounts.ts';
 import { addSpan, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
 import { mergeReadings } from '../shared/usage.ts';
-import { inputShape, signInEnd } from '../shared/signIn.ts';
+import { codeProblem, inputShape, menuKeys, signInCode, signInEnd, signInScreen } from '../shared/signIn.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
 import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
@@ -89,6 +91,9 @@ export class Accounts {
   private secrets = new Map<string, string>();
   private usage = new Map<string, UsageReading[]>();
   private signedIn = new Map<string, boolean>();
+  private sessionOut = new Set<string>(); // a session found it signed out: a poll's expired-but-refreshable token doesn't put it back (#442)
+  private refresh = new Set<string>(); // Claude logins whose access token expired, for their next session to refresh (#442)
+  private plans = new Map<string, string | null>(); // the plan each Claude login really has (#442)
   private running = new Map<string, number>();
   private terms = new Map<string, AgentTerminal>();
   private signIns = new Map<string, BoxSignIn>();
@@ -189,6 +194,8 @@ export class Accounts {
         .sort((x, y) => x.account.cli.localeCompare(y.account.cli) || x.account.priority - y.account.priority)
         .map(({ account: a, signedIn, usage, todayUsd, sessions }): AccountView => {
           const secret = this.secretOf(a);
+          const plan = this.plans.get(a.id);
+          const warning = planWarning(a, plan);
           return {
             ...a,
             ...accountStatus({ account: a, signedIn, usage, todayUsd, now }),
@@ -201,6 +208,9 @@ export class Accounts {
             agents: agents.filter((x) => pinnedTo(a, x.account)).map((x) => x.id),
             running: this.running.get(a.id) ?? 0,
             signIn: this.runs.get(a.id) ?? null,
+            ...(plan ? { loginPlan: plan } : {}),
+            ...(warning ? { planWarning: warning } : {}),
+            ...(this.refresh.has(a.id) && signedIn ? { tokenRefresh: true } : {}),
           };
         }),
       rotation: rotationStats(this.switches, now),
@@ -278,6 +288,7 @@ export class Accounts {
   /** A session on an account reported its usage. */
   readings(id: string, readings: UsageReading[]) {
     this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], readings));
+    this.refresh.delete(id); // its session ran, so its token is fresh again
     this.emit();
   }
 
@@ -292,6 +303,8 @@ export class Accounts {
   /** A session on an account found its login expired or its key turned away: out of the rotation until a Test or sign-in says otherwise. */
   signedOut(id: string) {
     this.signedIn.set(id, false);
+    this.sessionOut.add(id);
+    this.refresh.delete(id);
     this.emit();
   }
 
@@ -397,14 +410,20 @@ export class Accounts {
   async test(id: string): Promise<string> {
     const a = this.find(id);
     const r = await this.deps.check(a, this.dirOf(a), this.secretOf(a));
-    this.signedIn.set(id, r.signedIn);
+    // An expired token to refresh counts as signed in (#442), unless a session already failed to sign in with it.
+    const out = !!r.refresh && this.sessionOut.has(id);
+    if (r.signedIn && !r.refresh) this.sessionOut.delete(id);
+    this.signedIn.set(id, r.signedIn && !out);
+    if (r.refresh && !out) this.refresh.add(id);
+    else this.refresh.delete(id);
+    if (r.plan !== undefined) this.plans.set(id, r.plan);
     if (r.readings.length) this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], r.readings));
     // A limit a session hit is over once the poll shows room again (#248).
     const now = Date.now();
     const cur = this.list().find((x) => x.id === id);
     if (cur?.limitedUntil && cur.limitedUntil > now && r.readings.length && r.readings.every((x) => x.pct < NEAR_OUT_PCT)) this.replace({ ...cur, limitedUntil: null });
     this.emit();
-    return r.note;
+    return out ? "Its last session couldn't sign in: tap Sign in again." : r.note;
   }
 
   private async pollAll() {
@@ -462,13 +481,21 @@ export class Accounts {
     this.signIns.get(id)?.stop();
     const dir = this.dirOf(a);
     const env: Record<string, string> = a.builtIn ? {} : a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir };
+    // A new login starts with the built-in one's theme and its onboarding done, so its sign-in opens on the sign-in (#360).
+    if (!a.builtIn && a.cli === 'claude') {
+      try {
+        prepareLogin('claude', dir, [], { prefs: builtInPrefs() });
+      } catch (err) {
+        console.warn(`account ${id}: couldn't set up its login folder: ${(err as Error).message}`);
+      }
+    }
     const term = this.terminal(id)!;
     const run = this.deps.signIn({ cli: a.cli, env, term, mode }, (code) => {
       if (this.signIns.get(id) !== run) return; // replaced by a newer one
       this.signIns.delete(id);
       void term.flush().then(() => {
         if (this.signIns.has(id)) return;
-        const end = signInEnd(mode, code, term.tail(8));
+        const end = signInEnd(mode, code, term.unwrapped().split('\n')); // joined: a narrow phone's terminal wraps the reason (#350)
         this.runs.set(id, { mode, running: false, ...end });
         if (!end.ok) term.note(end.note);
         this.emit();
@@ -477,7 +504,73 @@ export class Accounts {
     });
     this.signIns.set(id, run);
     this.runs.set(id, { mode, running: true, ok: false, note: '' });
+    this.watchSignIn(id, term, run);
     this.emit();
+  }
+
+  /**
+   * The guided sign-in (#350): its screen read as it changes, for the link, Codex's code and whether the prompt waits,
+   * and the menus the sign-in needs answered (login method, theme, folder trust) answered by the office itself.
+   */
+  private watchSignIn(id: string, term: AgentTerminal, run: BoxSignIn) {
+    let queued = false;
+    let answered = '';
+    let answeredAt = 0;
+    term.onOutput = () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        void term.flush().then(() => {
+          queued = false;
+          const was = this.runs.get(id);
+          if (this.signIns.get(id) !== run || !was?.running) return;
+          const s = signInScreen(term.unwrapped());
+          const menu = s.menu && `${s.menu.text}|${s.menu.at}`;
+          if (s.menu && s.pick !== null && (menu !== answered || Date.now() - answeredAt > 3000)) {
+            answered = menu!;
+            answeredAt = Date.now();
+            term.input(menuKeys(s.menu.at, s.pick, term.appCursor), false);
+          }
+          const next: SignInRun = { mode: was.mode, running: true, ok: false, note: '' };
+          if (s.url) next.url = s.url;
+          if (s.deviceCode) next.deviceCode = s.deviceCode;
+          if (s.waiting) next.waiting = true;
+          if (s.menu && s.pick === null) next.question = { text: s.menu.text, options: s.menu.options };
+          if (JSON.stringify(next) === JSON.stringify(was)) return;
+          this.runs.set(id, next);
+          this.emit();
+        });
+      }, 100);
+    };
+    term.onOutput(); // what it printed as it started
+  }
+
+  /** POST /api/accounts/:id/signin/code: the guided sign-in's pasted code to its prompt, exactly, then Enter (#350). */
+  signInCodeIn(id: string, raw: unknown): void {
+    const term = this.runningSignIn(id);
+    const text = typeof raw === 'string' ? raw : '';
+    const problem = codeProblem(text);
+    if (problem) throw new HttpError(400, problem);
+    const code = signInCode(text);
+    // As xterm's paste sends it (#302's path): wrapped when the prompt asked for bracketed paste.
+    term.input(term.bracketedPaste ? `\x1b[200~${code}\x1b[201~` : code);
+    term.input('\r');
+  }
+
+  /** POST /api/accounts/:id/signin/answer: an option of the menu the sign-in shows, chosen in the guide (#350). */
+  signInAnswer(id: string, option: unknown): void {
+    const term = this.runningSignIn(id);
+    const menu = signInScreen(term.unwrapped()).menu;
+    const n = Number(option);
+    if (!menu || !Number.isInteger(n) || n < 0 || n >= menu.options.length) throw new HttpError(409, 'That question has gone: look at the terminal for what it asks now.');
+    term.input(menuKeys(menu.at, n, term.appCursor), false);
+  }
+
+  private runningSignIn(id: string): AgentTerminal {
+    this.find(id);
+    const term = this.terms.get(id);
+    if (!this.signIns.has(id) || !term?.live) throw new HttpError(409, 'This sign-in has ended: tap Try again for a new one.');
+    return term;
   }
 
   /** DELETE /api/accounts/:id: at once, or once the sessions on it finish (paused meanwhile). */
@@ -501,6 +594,9 @@ export class Accounts {
     this.secrets.delete(a.id);
     this.usage.delete(a.id);
     this.signedIn.delete(a.id);
+    this.sessionOut.delete(a.id);
+    this.refresh.delete(a.id);
+    this.plans.delete(a.id);
     this.running.delete(a.id);
     this.save(this.list().filter((x) => x.id !== a.id));
     await mergeSecrets(this.deps.secretsFile, { [secretKey(a.id)]: undefined });

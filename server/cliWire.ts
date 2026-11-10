@@ -1,4 +1,5 @@
 // Terminal wiring shared by keeper, fallback and Box PTYs. Consume program status before mirroring output.
+import type { Response } from 'express';
 import type { AgentTerminal } from './terminal.ts';
 import type { Pty } from './ptyClient.ts';
 import type { OfficeTools } from './ceo.ts';
@@ -12,6 +13,15 @@ interface WiredCli {
   lastHook?: number;
   programStatus?: ProgramStatus & { at: number };
   session: { hook(b: Record<string, unknown>): Record<string, unknown>; exited(code: number): void } | null;
+}
+
+/**
+ * An MCP call that found no tools. A CLI the terminal keeper held through an office restart is still routed while the
+ * office picks its session up again (#333): it is told to call again, not that its session ended.
+ */
+export function mcpGone(res: Pick<Response, 'status'>, kept: boolean) {
+  const message = kept ? 'The office restarted and is picking this session up again: make the same call again in a few seconds.' : 'This session has ended.';
+  res.status(kept ? 503 : 404).json({ jsonrpc: '2.0', error: { code: -32001, message }, id: null });
 }
 
 /** A CLI is running in its terminal: its output, its keys and its hooks are connected. */

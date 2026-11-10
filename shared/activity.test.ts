@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIVITY_ICONS, DETAIL_MAX, actionSummary, agentActivity, fileLabel, lineActivity, recentActions, redact, shellActivity, splitCommand, toolActivity, type ActivityInput } from './activity.ts';
+import { ACTIVITY_ICONS, DETAIL_MAX, actionSummary, agentActivity, fileLabel, lineActivity, recentActions, redact, shellActivity, splitCommand, stuckSign, toolActivity, type ActivityInput } from './activity.ts';
 import { INSTALL_STEP, type LogLine } from './types.ts';
 
 const tool = (name: string, text: string) => toolActivity(name, `⏺ ${text}`);
@@ -206,5 +206,13 @@ describe('agentActivity', () => {
   it('talking to the manager wins', () => {
     expect(agentActivity({ ...base, task: 'qa' }, seen('talk', 'your message'))).toEqual({ kind: 'talk', detail: 'your message' });
     expect(agentActivity({ ...base, task: null }, seen('read', 'company status'), true)).toEqual({ kind: 'talk', detail: 'company status' });
+  });
+});
+
+describe('stuckSign', () => {
+  it("says what a blocked agent's sign is blocked on, never the reason (#359)", () => {
+    expect(stuckSign('sign-in')).toBe('sign-in');
+    expect(stuckSign('not-started')).toBe('starting');
+    expect(stuckSign(undefined)).toBe('a prompt');
   });
 });

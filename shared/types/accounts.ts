@@ -44,6 +44,9 @@ export interface AccountView extends ProviderAccount {
   agents: string[]; // ids of the agents (and the CEO) pinned to it, or to one of its tags
   running: number; // sessions on it right now
   signIn: SignInRun | null; // its last sign-in in its terminal since the office started (#302)
+  loginPlan?: string; // the plan a Claude login really has, from its .credentials.json ("Max 20x"), never a token (#442)
+  planWarning?: string; // that plan isn't the one its name, plan field or tags say
+  tokenRefresh?: boolean; // its access token expired: still signed in, its next session refreshes it
 }
 
 /** A login's sign-in: `claude auth login` / `codex login`, or `claude setup-token` in its folder. */
@@ -55,6 +58,11 @@ export interface SignInRun {
   running: boolean;
   ok: boolean;
   note: string; // when it's over: "Sign-in failed (400). Try again…", never anything typed
+  // What its terminal shows, for the guided sign-in (#350):
+  url?: string; // the sign-in page it printed
+  deviceCode?: string; // Codex's one-time code for that page
+  waiting?: boolean; // Claude Code's prompt waits for the code
+  question?: { text: string; options: string[] }; // a menu the office didn't answer by itself
 }
 
 export interface AccountsView {

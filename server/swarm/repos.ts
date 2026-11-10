@@ -9,6 +9,7 @@ import { clip } from '../notify.ts';
 import { managerCloseComment } from '../../shared/issues.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
 import { floorOverrides } from '../../shared/practices.ts';
+import { cleanFloorTheme } from '../../shared/floorThemes.ts';
 import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveStatus, MISSION_MAX, newRecord, noteObjectives, withChange, withNote, type Charter } from '../../shared/charter.ts';
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
@@ -156,9 +157,16 @@ export abstract class SwarmRepos extends SwarmCore {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown; theme?: unknown },
   ) {
     const repo = this.repo(id);
+    if (patch.theme !== undefined) {
+      try {
+        repo.theme = cleanFloorTheme(patch.theme);
+      } catch (err) {
+        throw new HttpError(400, (err as Error).message);
+      }
+    }
     if (patch.trustedAuthors !== undefined) {
       try {
         repo.trustedAuthors = cleanTrustedAuthors(patch.trustedAuthors);
@@ -330,7 +338,7 @@ export abstract class SwarmRepos extends SwarmCore {
     await this.writeState().catch((err) => console.warn('could not save the state', err));
     await this.journal.close().catch((err) => console.warn('could not write the journal', err));
     await this.telegram.stop();
-    await this.closeTestLab();
+    await this.closeTestLab(restart);
     await this.backend.releaseClis(restart); // before the terminals are saved: whatever they print next waits in the keeper
     await this.saveTerminals(true);
     await this.previews.stopAll(this.state.repos);

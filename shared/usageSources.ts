@@ -1,6 +1,6 @@
 // Usage for every account and provider (#361), pure: each provider's answer as windows, an account as a source, the
 // worst row first, the CEO's one line, the 90% notifications (once per window) and "resets in 3h".
-import { barName, readingOf } from './usage.ts';
+import { barName, isReset, livePct, readingOf } from './usage.ts';
 import type { AccountView, UsageReading, UsageSource, UsageSourceStatus, UsageWindow } from './types.ts';
 
 const HOUR = 60 * 60_000;
@@ -140,10 +140,18 @@ export function accountSource(a: AccountView, spendUsd7d: number, now: number): 
   const api = a.kind === 'api-key';
   const windows: UsageWindow[] = api
     ? [{ name: 'Today', usedPct: a.dailyCostCap ? pctOf(a.todayUsd, a.dailyCostCap) : null, used: a.todayUsd, ...(a.dailyCostCap ? { limit: a.dailyCostCap } : {}), unit: '$', resetsAt: nextMidnight(now) }]
-    : a.usage.map((r) => ({ name: barName(r.type), usedPct: r.pct, resetsAt: r.resetsAt }));
+    : a.usage.map((r) => ({ name: barName(r.type), usedPct: livePct(r, now), resetsAt: r.resetsAt }));
   const status: UsageSourceStatus = a.status === 'paused' ? 'ready' : a.status;
   const newest = a.usage.length ? Math.max(...a.usage.map((r) => r.at)) : null;
-  const note = api ? "From the office's cost ledger" : !a.usage.length ? (a.status === 'signed-out' ? 'Not signed in' : 'No reading yet: it updates while an agent works on it') : undefined;
+  const note = api
+    ? "From the office's cost ledger"
+    : !a.usage.length
+      ? a.status === 'signed-out'
+        ? 'Not signed in'
+        : 'No reading yet: it updates while an agent works on it'
+      : a.usage.some((r) => isReset(r, now))
+        ? 'Reset, waiting for a new reading'
+        : undefined;
   return {
     id: a.id,
     provider: a.cli,
@@ -200,9 +208,10 @@ export function resetsIn(at: number | null, now: number): string | null {
 const compact = (n: number) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}k` : `${Math.round(n)}`);
 const SHORT: Record<string, string> = { '5-hour': '5h', Weekly: 'week', 'Weekly Opus': 'week Opus', 'Weekly Sonnet': 'week Sonnet' };
 
-/** A window in a few words: "week 98%", "61% of 100k chars", "$3.20 today of $20", "4 of 10 Boxes". */
+/** A window in a few words: "week 98%", "61% of 100k chars", "$3.20 today of $20", "4 of 10 Boxes", "1.3k credits left". */
 export function windowWords(w: UsageWindow): string {
   if (w.unit === '$') return `$${(w.used ?? 0).toFixed(2)} ${w.name.toLowerCase()}${w.limit ? ` of $${w.limit}` : ''}`;
+  if (w.unit && w.limit === undefined && w.usedPct === null) return `${compact(w.used ?? 0)} ${w.unit} left`;
   if (w.unit && w.limit !== undefined) return w.unit === 'chars' ? `${w.usedPct ?? 0}% of ${compact(w.limit)} chars` : `${w.used ?? 0} of ${w.limit} ${w.unit}`;
   return `${SHORT[w.name] ?? w.name} ${w.usedPct ?? 0}%`;
 }
