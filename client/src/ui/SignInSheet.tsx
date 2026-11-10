@@ -53,7 +53,7 @@ function Copy({ text, label, onCopy }: { text: string; label: string; onCopy?: (
 }
 
 /** Step 2 for Claude Code: the code from the page, checked before it goes to the terminal's prompt. */
-function CodeForm({ id, waiting }: { id: string; waiting: boolean }) {
+function CodeForm({ id, waiting, onSend }: { id: string; waiting: boolean; onSend: () => void }) {
   const [raw, setRaw] = useState('');
   const [editing, setEditing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -70,6 +70,7 @@ function CodeForm({ id, waiting }: { id: string; waiting: boolean }) {
     setProblem(why);
     if (why) return;
     setBusy(true);
+    onSend();
     api.signInCode(id, raw).then(
       () => setBusy(false),
       () => setBusy(false),
@@ -174,7 +175,7 @@ export function SignInSheet({ a, close }: { a: AccountView; close: () => void })
           <p className="muted small">{codex ? 'Sign in to ChatGPT there and enter the code above. This page moves on by itself.' : 'Sign in there and approve: the page then shows a code to copy.'}</p>
         </div>
       )}
-      {run?.running && run.url && !codex && <CodeForm key={tries} id={a.id} waiting={!!run.waiting} />}
+      {run?.running && run.url && !codex && <CodeForm key={tries} id={a.id} waiting={!!run.waiting} onSend={() => setOpened(true)} />}
       {run?.running && run.url && codex && (
         <div className="sig-card sig-center" role="status">
           <span className="sig-spin" aria-hidden="true" /> Waiting for you to enter the code…

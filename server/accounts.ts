@@ -486,7 +486,7 @@ export class Accounts {
       this.signIns.delete(id);
       void term.flush().then(() => {
         if (this.signIns.has(id)) return;
-        const end = signInEnd(mode, code, term.tail(8));
+        const end = signInEnd(mode, code, term.unwrapped().split('\n')); // joined: a narrow phone's terminal wraps the reason (#350)
         this.runs.set(id, { mode, running: false, ...end });
         if (!end.ok) term.note(end.note);
         this.emit();

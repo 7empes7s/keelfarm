@@ -194,6 +194,31 @@ describe('Accounts', () => {
     term.dispose();
   });
 
+  it('a failed sign-in names the CLI’s status even when a phone narrowed its terminal and the line wrapped (#350)', async () => {
+    const { accounts } = await office({
+      signIn: (o, exited) => {
+        o.term.write('Paste code here if prompted > ');
+        o.term.bind({
+          write: () => {
+            o.term.write('\r\nLogin failed: Request failed with status code 400\r\n');
+            o.term.bind(null);
+            exited(1);
+          },
+          resize: () => undefined,
+        });
+        return { stop: () => o.term.bind(null) };
+      },
+    });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    accounts.terminal(id)!.resize(40, 20);
+    accounts.signIn(id);
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    accounts.signInCodeIn(id, 'abc#1');
+    spy.mockRestore();
+    await vi.waitFor(() => expect(accounts.view().accounts.find((a) => a.id === id)?.signIn).toMatchObject({ running: false, note: expect.stringMatching(/^Sign-in failed \(400\)/) }));
+    accounts.terminal(id)!.dispose();
+  });
+
   it('the guided sign-in (#350): answers the login menu, reads the link off the real output, sends exactly the pasted code', async () => {
     const URL_ = 'https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile&code_challenge=hhuUE_dFmZsg-B2VkqAw6DsYoqxyL71ICyyl2k7uhcw&code_challenge_method=S256&state=JqzKsMJrwWFRbVCJe098AtKRjuOp4eNrchRoSyEHvaI';
     const got: string[] = [];
