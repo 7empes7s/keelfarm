@@ -48,6 +48,9 @@ const CODEX_IDLE = `• Opened https://github.com/acme/app/pull/344
 
 const REPORT = { verdict: 'pass', summary: 'Works on desktop and at 390px; all tests pass.', checks: [{ name: 'Unit tests', result: 'pass', details: '41 passed' }], commands: [], screenshots: [] };
 
+const CURL_401 = '● Bash(curl -i http://localhost:5224/api/me)\n  ⎿  HTTP/1.1 401 Unauthorized\n\n✻ Thinking… (12s · esc to interrupt)';
+const SIGN_IN_DIFF = "● Update(server/liveState.ts)\n  ⎿  29 + const SIGN_IN = /Select login method|Not logged in|run \\/login/i;\n\n✻ Editing… (4s · esc to interrupt)";
+
 describe('classifyScreen', () => {
   it('reads the theme, trust, sign-in and Codex session-ended screens', () => {
     expect(classifyScreen(THEME)).toEqual({ state: 'setup', reason: 'needs setup (the theme screen)' });
@@ -62,6 +65,11 @@ describe('classifyScreen', () => {
     expect(classifyScreen('Credit balance is too low').reason).toBe('out of credit');
     expect(classifyScreen(`API Error: 429 rate limit · retrying\n${WORKING}`).state).toBe('working'); // retrying, not stuck
     expect(classifyScreen(CODEX_IDLE).state).toBe('idle');
+  });
+
+  it('reads sign-in words above a working indicator as work', () => {
+    expect(classifyScreen(CURL_401).state).toBe('working');
+    expect(classifyScreen(SIGN_IN_DIFF).state).toBe('working');
   });
 });
 
@@ -89,6 +97,7 @@ describe('printedResult', () => {
   it("needs every key the report's schema requires", () => {
     expect(printedResult(['{"verdict": "pass"}'], qa)).toBeNull();
     expect(printedResult(['Summary so far: {"verdict": "pass", "summary": "x"', '... still testing'], qa)).toBeNull();
+    expect(printedResult([JSON.stringify(QA_SCHEMA)], qa)).toBeNull(); // the schema's own properties object
   });
 
   it('reads a pull request opened, or a session that ended, for a build', () => {
@@ -108,6 +117,13 @@ describe('SessionWatch', () => {
     expect(tick(w, 8_000, SIGN_IN)).toEqual({ do: 'blocked', stuck: { kind: 'sign-in', reason: 'needs sign-in' } });
     expect(tick(w, 10_000, SIGN_IN)).toEqual({ do: 'none' }); // said once
     expect(tick(w, 12_000, WORKING, { begun: true })).toEqual({ do: 'clear' });
+  });
+
+  it('never marks a busy agent blocked for sign-in words on its screen', () => {
+    for (const screen of [CURL_401, SIGN_IN_DIFF]) {
+      const w = new SessionWatch(t0);
+      for (let at = 0; at <= 20_000; at += 2_000) expect(tick(w, at, screen, { begun: true, quietMs: 0 }).do).not.toBe('blocked');
+    }
   });
 
   it('gives the office a moment to answer a folder-trust screen itself', () => {

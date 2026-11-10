@@ -24,8 +24,8 @@ export interface Stuck {
 
 export type ScreenState = 'sign-in' | 'setup' | 'menu' | 'error' | 'ended' | 'working' | 'idle';
 
-// What each screen says, checked in this order: a sign-in or setup screen fills the terminal; a working indicator
-// means an old error line or a list above it is history.
+// What each screen says, checked in this order: a working indicator means any sign-in words, error line or list above
+// it are history (a curl's 401, a diff of this file), since a sign-in or setup screen never shows one.
 const SIGN_IN = /Select login method|Not logged in|run \/login|Sign in with ChatGPT|Please login|Invalid API key|OAuth token has expired|Paste code here if prompted|401 Unauthorized/i;
 const SETUP: [RegExp, string][] = [
   [/Choose the text style/i, 'the theme screen'],
@@ -46,9 +46,9 @@ const menuOnScreen = (screen: string) => /^\s*[❯›]\s*1\.\s+\S/m.test(screen)
 /** What a CLI's visible screen shows. reason: the words for a stuck state. */
 export function classifyScreen(screen: string): { state: ScreenState; reason: string } {
   if (ENDED.test(screen)) return { state: 'ended', reason: 'the session ended' };
+  if (WORKING.test(screen)) return { state: 'working', reason: '' };
   if (SIGN_IN.test(screen)) return { state: 'sign-in', reason: 'needs sign-in' };
   for (const [re, what] of SETUP) if (re.test(screen)) return { state: 'setup', reason: `needs setup (${what})` };
-  if (WORKING.test(screen)) return { state: 'working', reason: '' };
   if (menuOnScreen(screen)) return { state: 'menu', reason: 'a menu on screen' };
   for (const [re, what] of ERRORS) if (re.test(screen)) return { state: 'error', reason: what };
   return { state: 'idle', reason: '' };
@@ -61,6 +61,9 @@ export function canNudge(screen: string, tail: readonly string[] = [], required:
   const { state } = classifyScreen(screen);
   return (state === 'working' || state === 'idle' || state === 'error') && !printedResult(tail, required);
 }
+
+/** A schema's own `properties` object has every key too, but a report's verdict is a string. */
+const isReport = (obj: object) => !('verdict' in obj) || typeof obj.verdict === 'string';
 
 const PR_URL = /https:\/\/github\.com\/[^\s/]+\/[^\s/]+\/pull\/\d+/;
 
@@ -95,7 +98,7 @@ export function printedResult(tail: readonly string[], required: readonly string
       if (end < 0) continue;
       try {
         const obj = JSON.parse(flat.slice(i, end + 1)) as unknown;
-        if (obj && typeof obj === 'object' && !Array.isArray(obj) && required.every((k) => k in obj)) return { text: `\`\`\`json\n${JSON.stringify(obj)}\n\`\`\`` };
+        if (obj && typeof obj === 'object' && !Array.isArray(obj) && required.every((k) => k in obj) && isReport(obj)) return { text: `\`\`\`json\n${JSON.stringify(obj)}\n\`\`\`` };
       } catch {
         // not this brace: an inner or partial object
       }
