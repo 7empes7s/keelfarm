@@ -12,6 +12,7 @@ import { copyText } from './clipboard';
 import { canPickWork, taskLine, taskSteps } from './agentWindow';
 import { Actions, Chip, DetailsHeader, LinkButton, Section, Stat, StatStrip } from './DetailsPage';
 import { CloseButton, Icon } from './Icon';
+import { TabBoundary } from './TabBoundary';
 
 export type DetailsTab = 'now' | 'profile' | 'setup';
 
@@ -59,16 +60,18 @@ export function AgentDetails(p: Props) {
         <CloseButton className="aw-details-x" label="Close the details" onClick={p.onClose} />
       </div>
       <div className="aw-tab-body" role="tabpanel" aria-label={TABS.find(([id]) => id === p.tab)![1]}>
-        {p.tab === 'now' && <NowTab {...p} />}
-        {p.tab === 'profile' && <AgentProfile agent={agent} />}
-        {p.tab === 'setup' && (
-          <>
-            <p className="muted small aw-explain">
-              <b>Coding agent</b> is the program they work in, <b>model</b> the AI behind it (bigger is smarter and costs more), <b>effort</b> how long it thinks on each step. Tools switch skills and plugins on or off for them alone.
-            </p>
-            <AgentSetup agent={agent} />
-          </>
-        )}
+        <TabBoundary key={p.tab}>
+          {p.tab === 'now' && <NowTab {...p} />}
+          {p.tab === 'profile' && <AgentProfile agent={agent} />}
+          {p.tab === 'setup' && (
+            <>
+              <p className="muted small aw-explain">
+                <b>Coding agent</b> is the program they work in, <b>model</b> the AI behind it (bigger is smarter and costs more), <b>effort</b> how long it thinks on each step. Tools switch skills and plugins on or off for them alone.
+              </p>
+              <AgentSetup agent={agent} />
+            </>
+          )}
+        </TabBoundary>
       </div>
     </div>
   );
