@@ -6,6 +6,7 @@ import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
 import type { CeoJob } from '../ceo.ts';
+import type { CeoHandover, CeoJobNote } from '../ceoDigest.ts';
 import type { LearnedPull } from '../closeCleanup.ts';
 import type { PreQa } from '../qaOutcome.ts';
 import type { RestartCounts } from '../reconcile.ts';
@@ -186,6 +187,8 @@ interface CeoState {
   chats: ChatsState; // the chat's conversations; state.messages is the current one's thread (shared/conversations.ts)
   remember: MemoryNote[]; // the manager's pinned notes, in every CEO job's prompt (shared/ceoMemory.ts)
   kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null; model?: string }; // its kept session (#28) and the model it started on (#331)
+  handover?: CeoHandover | null; // what the full chat session left the next one, until a fresh session gets it (#330)
+  lastJob?: CeoJobNote | null; // the latest background job's reply and issues, for the digest (#330)
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

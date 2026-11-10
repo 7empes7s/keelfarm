@@ -4,6 +4,7 @@ import { ceoModelSettings, DEFAULT_CEO_MODELS, type CeoModelSettings } from './c
 
 export interface CeoAwakeSettings {
   keepAlive: boolean; // jobs carry on in the CEO's last session instead of starting cold
+  freshJobs: boolean; // reviews, follow-ups, triage, research and plans start fresh with the office's digest; only chat carries on (#330)
   restartTurns: number; // a fresh session once the kept one has taken this many turns (its context fills up)
   idleHours: number; // … or after this long without a job
   maxWaitMin: number; // the longest wait_for (ask_manager waits up to 2 hours whatever this says)
@@ -12,7 +13,7 @@ export interface CeoAwakeSettings {
   models: CeoModelSettings; // the model per kind of job (#331): a session can't change model, so these decide what carries on too
 }
 
-export const DEFAULT_CEO_AWAKE: CeoAwakeSettings = { keepAlive: true, restartTurns: 300, idleHours: 8, maxWaitMin: 30, consultMin: 10, consultMax: 3, models: DEFAULT_CEO_MODELS };
+export const DEFAULT_CEO_AWAKE: CeoAwakeSettings = { keepAlive: true, freshJobs: true, restartTurns: 300, idleHours: 8, maxWaitMin: 30, consultMin: 10, consultMax: 3, models: DEFAULT_CEO_MODELS };
 
 /** The CEO tab's view of its session: how full its context is, what it cost, and what it waits on. */
 export interface CeoSessionView {
@@ -32,9 +33,10 @@ const clampInt = (v: unknown, lo: number, hi: number, d: number) => {
 export function ceoAwakeSettings(base: Partial<CeoAwakeSettings> | undefined, patch: unknown): CeoAwakeSettings {
   const b = { ...DEFAULT_CEO_AWAKE, ...base };
   const p = (patch && typeof patch === 'object' ? patch : {}) as Partial<Record<keyof CeoAwakeSettings, unknown>>;
-  const int = (k: Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'models'>, lo: number, hi: number) => (p[k] === undefined ? b[k] : clampInt(p[k], lo, hi, b[k]));
+  const int = (k: Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'freshJobs' | 'models'>, lo: number, hi: number) => (p[k] === undefined ? b[k] : clampInt(p[k], lo, hi, b[k]));
   return {
     keepAlive: typeof p.keepAlive === 'boolean' ? p.keepAlive : b.keepAlive,
+    freshJobs: typeof p.freshJobs === 'boolean' ? p.freshJobs : b.freshJobs,
     restartTurns: int('restartTurns', 20, 5000),
     idleHours: int('idleHours', 1, 168),
     maxWaitMin: int('maxWaitMin', 1, 30),

@@ -38,7 +38,7 @@ import { withVisualsText } from '../../shared/chatVisuals.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
 import { quickPicks } from '../ceoFiles.ts';
-import { ceoSessionStep } from '../ceoWaits.ts';
+import { BACKGROUND_KINDS, jobNote } from '../ceoDigest.ts';
 import type { AgentStatus, CeoInfo, PhoneMessage, RefFileView } from '../../shared/types.ts';
 import { memoryPrompt } from '../../shared/ceoMemory.ts';
 import { conversationsView, projectLine, touchConversation } from '../../shared/conversations.ts';
@@ -59,9 +59,9 @@ import {
   QA_SHOTS_DIR,
 } from './model.ts';
 import { SKIN, lookFor, pick } from './flavour.ts';
-import { SwarmCeoModels } from './ceoModels.ts';
+import { SwarmCeoFresh } from './ceoFresh.ts';
 
-export abstract class SwarmCeo extends SwarmCeoModels {
+export abstract class SwarmCeo extends SwarmCeoFresh {
   protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
   // ---------- the CEO ----------
 
@@ -257,6 +257,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
     this.save();
     await fs.mkdir(CEO_DIR, { recursive: true }).catch(() => undefined);
     const triage = job.kind === 'triage' ? await this.triagePr(job) : null;
+    const plan = await this.ceoSessionPlan(a, job); // fresh, or the kept session (#28, #330)
     if (a.status !== 'working') {
       // stopped before the session started
       this.state.ceo.job = null;
@@ -264,16 +265,12 @@ export abstract class SwarmCeo extends SwarmCeoModels {
       this.emitCeo();
       return;
     }
-    // A chat carries on from the CEO's last session, so "why did you propose that?" has an answer; with keep-alive on,
-    // every job does until its context fills up or it sat idle too long (#28).
-    const awake = this.state.settings.ceoAwake;
-    const step = ceoSessionStep(awake, { sessionId: a.sessionId, turns: this.state.ceo.kept.turns, lastEndedAt: this.state.ceo.kept.lastEndedAt }, Date.now());
-    const resume = this.ceoResume(a, { resume: step.resume || (job.kind === 'chat' && !step.why), why: step.why }, model);
-    const how = this.sessionRuntime(a, resume ? (a.sessionId ?? undefined) : undefined);
+    const open = this.ceoOpening(a, job, plan, model);
+    const how = this.sessionRuntime(a, open.resumeId);
     const kind: TaskKind = `ceo-${job.kind}`;
-    const prompt = ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + memoryPrompt(this.state.ceo.remember) + this.takeChanges(job);
+    const prompt = open.start + ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + open.since + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + (open.start ? '' : memoryPrompt(this.state.ceo.remember)) + this.takeChanges(job);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
-    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label });
+    const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label, resumed: !!open.resumeId });
     rt.session = this.startOnAccount(a,
       {
         cwd: CEO_DIR,
@@ -288,7 +285,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
         office: this.officeTools(),
         tools: this.sessionToolsFor(a, 'claude'),
         stream: true,
-        keepAlive: awake.keepAlive,
+        keepAlive: this.state.settings.ceoAwake.keepAlive && !plan.fresh,
         ...how,
       },
       {
@@ -305,8 +302,7 @@ export abstract class SwarmCeo extends SwarmCeoModels {
           this.emitAgent(a);
         },
         sessionId: (id) => {
-          a.sessionId = id;
-          a.sessionCli = id ? 'claude' : null;
+          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? 'claude' : null }); // a fresh job's session isn't the chat's
           if (id) run.sessionId = id;
         },
         browserUrl: () => undefined,
@@ -340,13 +336,14 @@ export abstract class SwarmCeo extends SwarmCeoModels {
     recordCost(this.state.ops, '', result.costUsd, a.endedAt);
     this.cancelHolds('The job ended.');
     const kept = this.state.ceo.kept;
-    Object.assign(kept, { turns: kept.turns + result.turns, costUsd: kept.costUsd + result.costUsd, lastEndedAt: a.endedAt });
+    if (!this.ceoFresh) Object.assign(kept, { turns: kept.turns + result.turns, costUsd: kept.costUsd + result.costUsd, lastEndedAt: a.endedAt }); // a fresh job's session isn't the kept one
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
     this.researchGuard.clear();
     const preempted = !!job && job === this.ceoPreempted;
     this.ceoPreempted = null;
     const retry = this.retryOnCeoModel(a, job, result, preempted);
+    this.ceoFresh = false;
     if (this.settleChanges(preempted || retry) && job) this.state.ceo.queue.push(job); // a preempted or retried job hears its changes again
     else if (job?.kind === 'triage') this.endTriage(job);
     if (this.ceoFiles.pending()) this.postCeoReply(''); // files attached after its last reply still reach the phone
@@ -702,7 +699,9 @@ export abstract class SwarmCeo extends SwarmCeoModels {
   /** A CEO reply on the phone, with the files it attached and what it used since its last one. */
   protected postCeoReply(raw: string) {
     const text = stripHarness(raw); // harness output it echoed stays backend (#193)
-    const extra = { ...this.ceoFiles.takeReply(), ...researchRef(this.state.ceo.job), ...this.ceoChat.finishTurn(text) };
+    const job = this.state.ceo.job;
+    const extra = { ...this.ceoFiles.takeReply(), ...researchRef(job), ...this.ceoChat.finishTurn(text) };
+    if (job && BACKGROUND_KINDS.includes(job.kind) && text.trim()) this.state.ceo.lastJob = jobNote(job.kind, jobLabel(job, this.ceoFloor(job.repoId)), text, extra, Date.now()); // for the chat's digest (#330)
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
     if (turnEnding(text, extra) === 'reply') this.postMessage('ceo', text, undefined, { ...extra, ...(replyTo !== undefined && { replyTo }), closing: true }); // else a reaction said it, or nothing needed saying: no blank bubble, no push
   }

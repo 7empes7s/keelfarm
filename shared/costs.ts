@@ -79,6 +79,7 @@ export interface CostSession {
   cheap?: boolean; // a conflict-only fix that ran on Settings' cheaper model (#256, shared/conflicts.ts)
   startup?: StartupContext; // what its first turn loaded (shared/startup.ts), when the CLI reported it
   account?: string; // the account it ran on (#247, shared/accounts.ts)
+  resumed?: boolean; // a CEO job: it carried on in the kept session; false: it started fresh (#330), so input per kind compares
   /** A CLI session that reports its running total (#254): its id and that total when this run ended; `usd` is this run's part. */
   sid?: string;
   total?: number;

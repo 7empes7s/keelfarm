@@ -8,6 +8,7 @@ import { SwarmReactions } from './reactions.ts';
 
 export abstract class SwarmCeoModels extends SwarmReactions {
   protected ceoRunModel = ''; // the model the CEO's current job runs on
+  protected ceoFresh = false; // the current job runs in a fresh session of its own, apart from the chat's kept one (#330)
 
   /** The model `job` runs on: its kind's (CEO settings), or the CEO's own for a retry. */
   protected ceoJobModel(a: PersistedAgent, job: CeoJob): string {
@@ -31,7 +32,7 @@ export abstract class SwarmCeoModels extends SwarmReactions {
     const ceoModel = a.model || CEO_MODEL;
     if (!job || preempted || a.status === 'stopped' || !ceoModelRetry({ ok: result.ok, errors: result.errors, model: this.ceoRunModel, ceoModel, retried: !!job.onCeoModel })) return false;
     job.onCeoModel = true;
-    a.sessionId = null; // the failed session was on the other model
+    if (!this.ceoFresh) a.sessionId = null; // the failed session was on the other model (a fresh job's never was the chat's)
     this.postMessage('office', `⚠️ ${a.name} couldn't use ${this.ceoRunModel} (${result.errors.join('; ').slice(0, 160)}), so this job runs again on ${ceoModel}. Change it in CEO settings → Model per job.`);
     return true;
   }

@@ -15,6 +15,8 @@ import { parseForwarded } from '../../shared/chat.ts';
 import { parseCeoMessage } from '../../shared/chatParts.ts';
 import { briefSpeech, spokenLine } from '../../shared/speech.ts';
 import { ceoReply } from './registry.ts';
+import { DEMO_HANDOVER, demoJobReply } from './ceoDigest.ts';
+import { HANDOVER_PROMPT, splitFreshStart } from '../ceoDigest.ts';
 
 interface Profile {
   summary: string;
@@ -334,6 +336,8 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       await think('Reading your message.');
       const quick = await demoReactions(text, use); // several messages at once, "ok thanks", "go ahead" (#118)
       if (quick !== null) return quick;
+      const job = demoJobReply(text, opts.prompt); // "what did the review do?": from the digest or the since-last-chat line (#330)
+      if (job) return job;
       const kit = { text, s, use, detail, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
       const early = await ceoReply(kit, true); // "assign #3 to Ada" (#265): a command, even with the seeded chat's attachment
       if (early !== null) return early;
@@ -397,11 +401,13 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     },
   };
 
-  const [asked, changed = ''] = opts.prompt.split("\n\nYour changes since last time"); // the manager's changes (#207), after the rest
+  const [asked, changed = ''] = splitFreshStart(opts.prompt).job.split("\n\nYour changes since last time"); // a fresh session's digest (#330) first // the manager's changes (#207), after the rest
   const prompt = asked.split('\n\nSince you last looked:')[0].split('\n\nOpen decisions from the last 24 h')[0].replace(/\n\nThe manager asked you to always remember:[\s\S]*$/, ''); // the manager's answers to agents (ceo.ts toldCeo), open decisions (#208) and pinned notes (ceoMemory.ts)
   const where = prompt.match(/[Ff]loor (\d+) \(([^,)]+)/);
   const triage = prompt.match(/^Triage: pull request #(\d+) on floor (\d+)/);
-  const run = triage
+  const run = opts.prompt === HANDOVER_PROMPT
+    ? async () => DEMO_HANDOVER
+    : triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
     : prompt.startsWith('Research for the manager:')
       ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)

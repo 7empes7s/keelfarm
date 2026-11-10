@@ -124,7 +124,7 @@ export function CeoMandates() {
   );
 }
 
-type AwakeNumber = Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'models'>;
+type AwakeNumber = Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'freshJobs' | 'models'>;
 const AWAKE_FIELDS: [AwakeNumber, string, number, number][] = [
   ['restartTurns', 'Fresh session after (turns)', 20, 5000],
   ['idleHours', '… or after idle for (hours)', 1, 168],
@@ -144,6 +144,10 @@ export function AwakeSettings() {
       <label className="toggle block">
         <input type="checkbox" checked={w.keepAlive} onChange={(e) => set({ keepAlive: e.target.checked })} />
         <span>Keep the CEO's session between jobs, so follow-ups and chat reuse its context</span>
+      </label>
+      <label className="toggle block">
+        <input type="checkbox" checked={w.freshJobs} onChange={(e) => set({ freshJobs: e.target.checked })} />
+        <span>Start reviews, follow-ups, triage, research and plans fresh, with a short digest of the chat: only chat carries on</span>
       </label>
       {AWAKE_FIELDS.map(([k, label, min, max]) => (
         <label key={k} className="field">

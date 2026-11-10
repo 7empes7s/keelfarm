@@ -345,6 +345,7 @@ export interface CostRun {
   sessionId?: string | null;
   title?: string;
   account?: string; // the account it ran on (#247)
+  resumed?: boolean; // a CEO job carried on in its kept session (#330)
 }
 
 /** The agent fields a session's line is made from. */
@@ -467,6 +468,7 @@ export class SessionCosts {
       ...(cause ? { cause } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
       ...(run?.account ? { account: run.account } : {}),
+      ...(run?.resumed !== undefined ? { resumed: run.resumed } : {}),
       ...(result.sid && result.total !== undefined ? { sid: result.sid, total: result.total } : {}),
     };
     this.onSession({ type: 'session', ...line }, run);
