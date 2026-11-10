@@ -149,7 +149,13 @@ function CardRow({ c, onWho }: { c: ProviderCard; onWho: (id: string) => void })
           ]}
         />
       </div>
+      {c.warning && (
+        <div className="pv-warning" role="status">
+          <Icon name="triangle-alert" /> {c.warning}
+        </div>
+      )}
       {source?.windows.map((w) => <WindowBar key={w.name} w={w} now={now} />)}
+      {source?.note && source.windows.length > 0 && <div className="ds-row-meta">{source.note}</div>}
       <div className="ds-row-meta">What uses it: {c.uses.length ? c.uses.join(', ') : 'nothing yet'}</div>
     </div>
   );

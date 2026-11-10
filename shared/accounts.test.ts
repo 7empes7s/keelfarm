@@ -11,7 +11,9 @@ import {
   checkBinding,
   cleanTags,
   moveAccount,
+  loginPlanName,
   normaliseAccounts,
+  planWarning,
   removal,
   resolveAccount,
 } from './accounts';
@@ -86,6 +88,29 @@ describe('accountStatus', () => {
     const r = accountStatus({ ...base, account: acc({ id: 'a', kind: 'api-key', dailyCostCap: 5 }), todayUsd: 5.2 });
     expect(r.status).toBe('limited');
     expect(new Date(r.until!).getHours()).toBe(0);
+  });
+  it('counts a full window whose reset has passed as ready, not near or limited (#442)', () => {
+    const week = { type: 'seven_day', pct: 100, resetsAt: now - 2 * 3600_000, at: now - 30 * 3600_000 };
+    expect(accountStatus({ ...base, usage: [week] })).toEqual({ status: 'ready', until: null });
+    expect(accountStatus({ ...base, usage: [{ ...week, resetsAt: now + 3600_000 }] }).status).toBe('limited');
+  });
+});
+
+describe('the plan a login really has (#442)', () => {
+  it('reads it from .credentials.json fields', () => {
+    expect(loginPlanName('max', 'default_claude_max_20x')).toBe('Max 20x');
+    expect(loginPlanName('pro', 'default_claude_ai')).toBe('Pro');
+    expect(loginPlanName(undefined, 'x')).toBeNull();
+  });
+  it('warns when it is not the plan the label, plan field or tags say', () => {
+    const ultra = { label: 'Claude Ultra', tags: [] as string[] };
+    expect(planWarning(ultra, 'Pro')).toBe('This login is Pro, not Ultra: sign in with the Ultra account.');
+    expect(planWarning({ label: 'Backup', plan: 'Max', tags: [] }, 'Pro')).toBe('This login is Pro, not Max: sign in with the Max account.');
+    expect(planWarning({ label: 'Backup', tags: ['max'] }, 'Pro 5x')).toMatch(/^This login is Pro 5x, not Max/);
+    expect(planWarning(ultra, 'Max 20x')).toBeNull();
+    expect(planWarning({ label: 'Max · keelops', tags: ['backup'] }, 'Max 5x')).toBeNull();
+    expect(planWarning({ label: 'Second login', tags: [] }, 'Pro')).toBeNull();
+    expect(planWarning(ultra, null)).toBeNull();
   });
 });
 

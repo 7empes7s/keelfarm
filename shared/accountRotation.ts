@@ -34,8 +34,10 @@ export type LimitHit = { kind: 'limited'; until: number } | { kind: 'signed-out'
 
 const USAGE_LIMIT = [
   /usage limit reached/i, // Claude Code: "Claude AI usage limit reached|1730000000", "Claude usage limit reached. Your limit will reset at 3pm"
-  /\b(?:5-hour|five-hour|weekly|opus weekly|session) limit reached/i, // Claude Code: "5-hour limit reached ∙ resets 3pm"
-  /you've hit your (?:usage )?limit/i, // Claude Code and Codex: "You've hit your limit · resets 4pm", "You've hit your usage limit. … try again in 2 hours"
+  /\b(?:5-hour|five-hour|weekly|opus|opus weekly|weekly opus|session) limit reached/i, // Claude Code: "5-hour limit reached ∙ resets 3pm"
+  // Claude Code and Codex: "You've hit your limit · resets 4pm", "You’ve hit your weekly limit · resets Nov 13, 2pm (UTC)",
+  // "You've hit your Opus limit", "You've hit your usage limit. … try again in 2 hours"
+  /you['’]ve hit your (?:usage |weekly |(?:weekly )?opus |session |5-hour )?limit/i,
   /usage_limit_reached/i, // Codex
   /stopped: rate limit/i, // cliRunner's StopFailure line
 ];
@@ -66,10 +68,37 @@ export function detectLimit(text: string, now: number): LimitHit | null {
   return null;
 }
 
-/** The reset a limit message names: an epoch ("|1730000000"), "resets 4pm", "reset at 16:30", "try again in 2 hours 5 minutes", "try again at 3:15 PM". */
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/** A wall-clock time in an IANA time zone ("UTC", "Europe/Berlin") as epoch ms; the computer's own zone when it's unknown. */
+function zoned(y: number, mo: number, d: number, h: number, mi: number, zone: string | undefined): number {
+  const local = new Date(y, mo, d, h, mi).getTime();
+  if (!zone) return local;
+  const guess = Date.UTC(y, mo, d, h, mi);
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }).formatToParts(guess).map((x) => [x.type, Number(x.value)]));
+    return guess - (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - guess);
+  } catch {
+    return local;
+  }
+}
+
+/**
+ * The reset a limit message names: an epoch ("|1730000000"), "resets Nov 13, 2pm (UTC)", "resets Nov 13 at 2pm",
+ * "resets 4pm", "reset at 16:30", "try again in 2 hours 5 minutes", "try again at 3:15 PM".
+ */
 export function resetTime(text: string, now: number): number | null {
   const epoch = /limit reached\|(\d{10})\b/i.exec(text);
   if (epoch) return Number(epoch[1]) * 1000;
+  const date = /resets?\s+(?:on\s+)?([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,|\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(([^)\s]{1,40})\)|\s+(UTC|GMT)\b)?/i.exec(text);
+  const month = date ? MONTHS.indexOf(date[1].toLowerCase()) : -1;
+  if (date && month >= 0) {
+    const h = (Number(date[3]) % (date[5] ? 12 : 24)) + (date[5]?.toLowerCase() === 'pm' ? 12 : 0);
+    const year = new Date(now).getFullYear();
+    const zone = date[6] ?? date[7];
+    const at = zoned(year, month, Number(date[2]), h, Number(date[4] ?? 0), zone);
+    return at < now - DAY ? zoned(year + 1, month, Number(date[2]), h, Number(date[4] ?? 0), zone) : at; // "Jan 2" read in late December
+  }
   const rel = /try again in ((?:\s*\d+\s*(?:days?|hours?|hrs?|minutes?|mins?|seconds?|secs?)[\s,]*(?:and)?)+)/i.exec(text);
   if (rel) {
     let ms = 0;

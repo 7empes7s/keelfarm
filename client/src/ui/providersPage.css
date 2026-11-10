@@ -60,6 +60,21 @@
   align-items: flex-start;
   gap: var(--ds-space-1);
 }
+.pv-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  color: var(--ds-warn-text);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+.pv-warning svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.15em;
+}
 .pv-cat {
   display: flex;
   flex-direction: column;
