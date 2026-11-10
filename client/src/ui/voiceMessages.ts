@@ -67,6 +67,7 @@ let activeLine: VoiceLine | null = null;
 let replayNext: { message: PhoneMessage; kind: Replay } | null = null;
 let replaying = false;
 let cutShort = false; // the message being read was stopped, not finished
+let handoff = false; // a CEO reply ended by itself with an ack still to say: hands-free's mic opens once the queue is idle
 
 /** The phone's ▶: plays `message` again in this tab, stopping whatever is being read now. */
 export function replayMessage(message: PhoneMessage, kind: Replay) {
@@ -140,6 +141,10 @@ async function pump() {
       if (!next) break;
       await read(next.message);
     }
+    if (handoff) {
+      handoff = false;
+      replyEnded();
+    }
   } finally {
     busy = false;
     replaying = false;
@@ -158,6 +163,7 @@ async function read(m: PhoneMessage, replay?: Replay) {
   if (provider === 'off') return; // turned off while it waited
   const now: { rec: SpokenRecord | null; unduckMusic?: () => void } = { rec: null };
   cutShort = false;
+  handoff = false;
   const whole = replay === 'whole';
   const words = messageSpeech(m, { whole });
   /** `clipMs`: a recording's length (null for the browser's voice), and how many clips the message has. */
@@ -200,7 +206,10 @@ async function read(m: PhoneMessage, replay?: Replay) {
       duckOthers(false);
       now.unduckMusic?.();
       useStore.setState({ voiceSpeaking: null });
-      if (!replay && !cutShort && !call && m.from === 'ceo' && !queue.length && !replayNext && !pendingLine) replyEnded();
+      if (!replay && !cutShort && !call && m.from === 'ceo' && !queue.length && !replayNext) {
+        if (pendingLine) handoff = true;
+        else replyEnded();
+      }
     }
   }
 }
@@ -434,6 +443,7 @@ let lineStop: (() => void) | null = null;
 /** Stops the line being said and the one waiting: barge-in, the speaking indicator's stop. */
 export const stopLine = () => {
   pendingLine = null;
+  handoff = false;
   lineStop?.();
 };
 

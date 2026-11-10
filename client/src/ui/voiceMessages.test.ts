@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { PhoneMessage, VoiceLine } from '../../../shared/types';
+import { replyEnded } from './mic';
 import type * as VoiceMessages from './voiceMessages';
 
 const mocks = vi.hoisted(() => ({
@@ -44,6 +45,7 @@ beforeEach(async () => {
   mocks.state.voiceSpeaking = null;
   mocks.state.settings.voice.provider = 'browser';
   mocks.mic.state = 'idle';
+  vi.mocked(replyEnded).mockClear();
   leadMs = 0;
   durationMs = 1000;
   starts = [];
@@ -191,4 +193,37 @@ it("downloads a waiting ack's clip while the reply ahead of it is still being re
   expect(fetch).toHaveBeenCalledWith('/api/voice/talk/100');
   await vi.advanceTimersByTimeAsync(4000);
   expect(fetch).toHaveBeenCalledTimes(1); // its turn uses the same download
+});
+
+it("opens hands-free's mic once, after an ack queued behind the last reply has been said", async () => {
+  durationMs = 3000;
+  player.speakMessage(message(1, 'I am checking the tests.'), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(500);
+  player.speakLine(line(), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(4000); // the reply ended, the ack is being said
+  expect(starts).toEqual(['I am checking the tests.', 'Heard you, one moment.']);
+  expect(replyEnded).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(replyEnded).toHaveBeenCalledTimes(1);
+});
+
+it("doesn't open hands-free's mic after barge-in stops the ack behind the last reply", async () => {
+  durationMs = 3000;
+  player.speakMessage(message(1, 'I am checking the tests.'), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(500);
+  player.speakLine(line(), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(4000);
+  player.stopLine();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(replyEnded).not.toHaveBeenCalled();
+});
+
+it("opens hands-free's mic once when the ack behind the last reply expires unsaid", async () => {
+  durationMs = 30_000;
+  player.speakMessage(message(1, 'I am checking the tests.'), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(500);
+  player.speakLine(line(), Date.now(), 0);
+  await vi.advanceTimersByTimeAsync(31_000);
+  expect(starts).toEqual(['I am checking the tests.']);
+  expect(replyEnded).toHaveBeenCalledTimes(1);
 });
