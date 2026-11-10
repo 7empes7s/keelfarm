@@ -1,10 +1,19 @@
 // When the manager has stopped talking to the 🎙 (mic.ts). Speech shows up either as words the browser recognised or
 // as microphone levels (recording for ElevenLabs); a short quiet after it means "done", and a mic that never hears
-// anything closes. Pure, so it's tested without a microphone.
+// anything closes. A sentence left hanging ("…the, uh") waits longer. Pure, so it's tested without a microphone.
 import { CLIP_MAX_MS } from '../../../shared/clipLimits';
+import { unfinished } from './micText';
 
-/** Quiet after speech that means you've finished. */
-export const SILENCE_MS = 1200;
+/** Quiet after speech that means you've finished, unless this device picked another pause (micPause.ts). */
+export const SILENCE_MS = 3000;
+/** The pauses Settings → Voice offers ("Pause before I'm done"). */
+export const PAUSE_CHOICES = [1500, 3000, 5000, 8000] as const;
+/** A sentence left hanging waits this many times the pause… */
+const UNFINISHED_FACTOR = 3;
+/** …but never longer than this. */
+export const UNFINISHED_CAP_MS = 15_000;
+/** Quiet shorter than this is just a breath: the drain only shows after it. */
+export const DRAIN_SHOW_MS = 500;
 /** How long a tapped 🎙 or the hands-free phone waits for you to start talking. */
 export const NO_SPEECH_MS = 8000;
 /** Below this level (RMS, 0-1) nothing counts as speech, however quiet the room. */
@@ -57,9 +66,9 @@ export interface ListenRules {
  * A held 🎙 listens until you let go (with auto-send on, also until you stop talking); a tap and the hands-free phone
  * end on a short quiet and give up when nobody speaks. Nothing listens longer than a clip may be.
  */
-export function listenRules(mode: MicMode, autoSend: boolean): ListenRules {
+export function listenRules(mode: MicMode, autoSend: boolean, pauseMs: number = SILENCE_MS): ListenRules {
   return {
-    silenceMs: mode === 'hold' && !autoSend ? null : SILENCE_MS,
+    silenceMs: mode === 'hold' && !autoSend ? null : pauseMs,
     noSpeechMs: mode === 'hold' ? null : NO_SPEECH_MS,
     maxMs: CLIP_MAX_MS,
   };
@@ -70,9 +79,28 @@ export const sendsWhenDone = (mode: MicMode, autoSend: boolean) => mode === 'han
 
 export type Verdict = 'listening' | 'done' | 'no-speech' | 'too-long';
 
+/** The quiet that means "done" after `text` (what was heard so far; '' for a recording): longer while it's unfinished. */
+function quietNeeded(rules: ListenRules, text: string): number | null {
+  if (rules.silenceMs === null) return null;
+  return unfinished(text) ? Math.min(rules.silenceMs * UNFINISHED_FACTOR, UNFINISHED_CAP_MS) : rules.silenceMs;
+}
+
 /** Whether to keep listening at `now`: 'done' (you've stopped talking), 'no-speech' (nobody spoke) or 'too-long'. */
-export function verdict(e: Ears, now: number, rules: ListenRules): Verdict {
+export function verdict(e: Ears, now: number, rules: ListenRules, text = ''): Verdict {
   if (now - e.start >= rules.maxMs) return 'too-long';
   if (e.lastSpeech === null) return rules.noSpeechMs !== null && now - e.start >= rules.noSpeechMs ? 'no-speech' : 'listening';
-  return rules.silenceMs !== null && now - e.lastSpeech >= rules.silenceMs ? 'done' : 'listening';
+  const need = quietNeeded(rules, text);
+  return need !== null && now - e.lastSpeech >= need ? 'done' : 'listening';
+}
+
+/** The pause draining before "done", for the ring around the 🎙: from when, and how long in all; null while talking. */
+export interface Drain {
+  from: number;
+  ms: number;
+}
+
+export function drainOf(e: Ears | null, now: number, rules: ListenRules, text = ''): Drain | null {
+  if (!e || e.lastSpeech === null || now - e.lastSpeech < DRAIN_SHOW_MS) return null;
+  const need = quietNeeded(rules, text);
+  return need === null ? null : { from: e.lastSpeech, ms: need };
 }

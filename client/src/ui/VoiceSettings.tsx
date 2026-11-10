@@ -11,6 +11,8 @@ import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { micCaps, setHandsFree } from './mic';
+import { pauseLabel, useMicPause } from './micPause';
+import { PAUSE_CHOICES } from './micSilence';
 import { cantListen } from './micText';
 import { Key } from './Key';
 import { browserVoices, type BrowserVoice } from './voicePicker';
@@ -369,6 +371,25 @@ export function VoiceSettings() {
   );
 }
 
+/** How long a quiet after speech means you've finished, on this device (the 🎙, hands-free and calls). */
+function PauseChoice() {
+  const { ms, set } = useMicPause();
+  const label = useId();
+  return (
+    <div className="field">
+      <span id={label}>Pause before I'm done</span>
+      <div className="seg pause-seg" role="group" aria-labelledby={label}>
+        {PAUSE_CHOICES.map((v) => (
+          <button key={v} type="button" className={`seg-btn ${ms === v ? 'seg-on' : ''}`} aria-pressed={ms === v} onClick={() => set(v)}>
+            {pauseLabel(v)}
+          </button>
+        ))}
+      </div>
+      <span className="muted small">On this device. A sentence left on "uh", "and" or a comma waits up to 3 times longer.</span>
+    </div>
+  );
+}
+
 /** Talking instead of typing: who turns speech into text, sending when you stop talking, and the hands-free phone. */
 function Listening({ keyShown }: { keyShown: boolean }) {
   const listen = useStore((s) => s.settings.listen);
@@ -401,6 +422,7 @@ function Listening({ keyShown }: { keyShown: boolean }) {
         ))}
       </div>
       {why && <p className="term-error small">{why}</p>}
+      <PauseChoice />
       {listen.provider === 'elevenlabs' && (
         <>
           <p className="muted small">

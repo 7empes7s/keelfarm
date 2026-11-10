@@ -5,6 +5,8 @@ import path from 'node:path';
 import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
 import { actOn, requiredKeys, SessionWatch } from '../liveState.ts';
 import { CLIS } from '../clis.ts';
+import { screenStep, signInError } from '../cliScreens.ts';
+import { demoSignedIn } from '../demoAccounts.ts';
 import { HOME_DIR } from '../config.ts';
 import { withDemoChat } from '../demoAgentChat.ts';
 import { demoConsultSession } from '../demoAwake.ts';
@@ -24,7 +26,36 @@ import { DARK_MODE_TITLE } from './seedRepos.ts';
 import { fixPromptPull, fixScript, issueScript, qaScript, type Step } from './sessionScripts.ts';
 import { fakeSha, now, repos, runChecks, signOuts, stalls, takeNumber } from './world.ts';
 
+/** Claude Code's sign-in, as a session on a login nobody signed in yet opens on (the real one's words). */
+const SIGN_IN_SCREEN = ['Select login method:', '❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise', '  2. Anthropic Console account · API usage billing', "Browser didn't open? Use the url below to sign in:", 'Paste code here if prompted >'];
+
+/**
+ * A session on a login account the demo hasn't signed in (#360): it opens on the sign-in, which the office can't answer
+ * (cliScreens.ts reads it as one), so it ends signed out after a moment, the way cliRunner.ts ends a real one.
+ */
+function signInSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle | null {
+  const dir = opts.env?.CLAUDE_CONFIG_DIR ?? opts.env?.CODEX_HOME ?? '';
+  const id = /accounts[\\/]([^\\/]+)[\\/](?:claude|codex)$/.exec(dir)?.[1];
+  const cli = opts.cli ?? 'claude';
+  if (!id || demoSignedIn.has(id) || screenStep(SIGN_IN_SCREEN.join('\n'), cli)?.do !== 'sign-in') return null;
+  const label = CLIS.find((c) => c.id === cli)?.label ?? 'Claude Code';
+  cb.log(SIGN_IN_SCREEN.map((text) => ({ kind: 'system', text })));
+  const timer = setTimeout(() => {
+    cb.log([{ kind: 'error', text: `⚠ ${signInError(label, opts.account)}` }]);
+    cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: [signInError(label, opts.account)], signedOut: true });
+  }, 2500);
+  return {
+    send: () => undefined,
+    stop() {
+      clearTimeout(timer);
+      cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] });
+    },
+  };
+}
+
 function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
+  const unsigned = signInSession(opts, cb);
+  if (unsigned) return unsigned;
   const timers: NodeJS.Timeout[] = [];
   let stopped = false;
   let stalled = false; // stuck: no more output, and messages go unanswered

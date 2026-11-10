@@ -51,6 +51,8 @@ export interface SessionOptions {
   typed?: boolean;
   /** Whose terminal it is (the terminal keeper holds this, for the office that picks the CLI up after a restart). */
   agentId?: string;
+  /** The account it runs on (#247), for the log's count of screens answered on it (#360). */
+  account?: string;
   /** Follow the session of the CLI still running in the terminal after the office restarted; start nothing. */
   reattach?: boolean;
   /** A cloud agent's: the CLI runs in their Upstash Box (docs/cloud.md), always in the terminal runtime. */
@@ -80,7 +82,7 @@ export interface SessionResult {
   structured?: unknown;
   /** The manager interrupted the turn in the agent's terminal (Esc). */
   interrupted?: boolean;
-  /** A cloud agent's CLI isn't signed in, or its login expired: the task waits for the manager to sign it in again. */
+  /** Its CLI isn't signed in, or its login expired: a cloud agent's task waits for the manager to sign it in again; another goes back in line (#360). */
   signedOut?: boolean;
   /** A cloud agent's API key ran out of credit or was turned away (shared/keyTrouble.ts): they switch to their own login. */
   keyTrouble?: KeyTrouble;

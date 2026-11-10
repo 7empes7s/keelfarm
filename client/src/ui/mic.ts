@@ -13,8 +13,10 @@ import { isConfirmOpen } from './Confirm';
 import { bindings } from './controls';
 import { HANDS_FREE_IDLE, handsFree, type HandsFree, type HandsFreeEvent, type Room } from './handsFree';
 import { closesMic, HOLD_MS, isTalkKey, type KeyPlace } from './micKeys';
-import { freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, verdict, type Ears, type MicMode } from './micSilence';
-import { cantListen, micErrorLine, phrasesText, withTranscript, type MicCaps, type Phrase } from './micText';
+import { useMicPause } from './micPause';
+import { drainOf, freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, verdict, type Drain, type Ears, type MicMode } from './micSilence';
+import { cantListen, joinHeard, micErrorLine, phrasesText, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
+import { FakeRecognition, fakeLive, type Recognition, type RecognitionClass } from './micFake';
 import { holdMusicDuck } from './music';
 import { getAudioPrefs, listenChime, setMicOpen, subscribeAudio } from './sfx';
 
@@ -30,9 +32,11 @@ export interface MicView {
   live: boolean;
   /** The hands-free phone is chiming before it listens. */
   chiming: boolean;
+  /** The quiet after speech is draining towards "done" (the ring around the 🎙); null while you talk. */
+  drain: Drain | null;
 }
 
-export const useMic = create<MicView>(() => ({ state: 'idle', mode: null, target: null, live: false, chiming: false }));
+export const useMic = create<MicView>(() => ({ state: 'idle', mode: null, target: null, live: false, chiming: false, drain: null }));
 
 /** A message box with a 🎙. */
 export interface MicTarget {
@@ -60,24 +64,6 @@ export function registerTarget(t: MicTarget): () => void {
 }
 
 // ---------- what this browser can do ----------
-
-interface RecognitionResultLike {
-  isFinal: boolean;
-  0?: { transcript: string };
-}
-interface Recognition {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onstart: (() => void) | null;
-  onresult: ((e: { results: ArrayLike<RecognitionResultLike> }) => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-type RecognitionClass = new () => Recognition;
 
 let fakeOn = false;
 const browserRecognition = (): RecognitionClass | null => {
@@ -118,6 +104,8 @@ interface Session {
   /** The box's text before listening. */
   base: string;
   transcript: string;
+  /** What the browser's earlier recognitions heard, when it stopped by itself and listening went on. */
+  heardBefore: string;
   /** Null until the mic is live. */
   ears: Ears | null;
   hearing: Hearing | null;
@@ -168,6 +156,7 @@ export function listen(id: string, mode: MicMode) {
     provider,
     base: target.text(),
     transcript: '',
+    heardBefore: '',
     ears: null,
     hearing: null,
     began: performance.now(),
@@ -214,7 +203,11 @@ function check(n: number) {
     if (now - s.began > STARTUP_MS) cancel('stopped');
     return;
   }
-  const v = verdict(s.ears, now, listenRules(s.mode, listening().autoSend));
+  const rules = listenRules(s.mode, listening().autoSend, useMicPause.getState().ms);
+  const v = verdict(s.ears, now, rules, s.transcript);
+  const drain = drainOf(s.ears, now, rules, s.transcript);
+  const shown = useMic.getState().drain;
+  if (drain?.from !== shown?.from || drain?.ms !== shown?.ms) set({ drain });
   if (v === 'no-speech') cancel('nothing');
   else if (v !== 'listening') finish();
 }
@@ -234,6 +227,7 @@ function heard(n: number, text: string, speaking: boolean) {
   if (!s.ears) started(n);
   if (speaking && s.ears) s.ears = heardWords(s.ears, performance.now());
   if (speaking && s.mode === 'call') callEars?.speech(text);
+  text = joinHeard(s.heardBefore, text);
   s.transcript = text;
   if (record) record.transcript = text;
   lastTranscript = text;
@@ -256,7 +250,7 @@ function finish() {
 /** Listening is over: put the words in the box, and send them when the rules say so. */
 function deliver(s: Session) {
   if (session !== s) return;
-  const words = s.transcript.trim();
+  const words = withoutTrailingFillers(s.transcript);
   const text = withTranscript(s.base, words);
   if (words) s.target.setText(text);
   const send = !!words && sendsWhenDone(s.mode, listening().autoSend) && !s.target.disabled();
@@ -305,7 +299,7 @@ function close(outcome: NonNullable<MicRecord['outcome']>) {
     record.outcome = outcome;
     record = null;
   }
-  set({ state: 'idle', mode: null, target: null, live: false });
+  set({ state: 'idle', mode: null, target: null, live: false, drain: null });
   if (s.mode === 'call') callEars?.closed(outcome);
   if (s.mode === 'handsfree') {
     if (outcome !== 'sent') listenChime(false);
@@ -337,35 +331,54 @@ function quiet(mode: MicMode): () => void {
 
 // ---------- the browser's recognition ----------
 
+/** How often a session starts the browser's recognition again after it stopped by itself. */
+export const MAX_RESTARTS = 20;
+
 function recognise(n: number): Hearing | null {
   const R = recognitionClass();
   if (!R) {
     queueMicrotask(() => fail(n, micProblem() || micErrorLine('audio-capture')));
     return null;
   }
-  const r = new R();
-  r.lang = navigator.language || 'en-US';
-  r.continuous = true;
-  r.interimResults = true;
-  let error = '';
-  r.onstart = () => started(n);
-  r.onresult = (e) => {
-    const phrases: Phrase[] = Array.from(e.results, (x) => ({ transcript: x[0]?.transcript ?? '', final: x.isFinal }));
-    const { text, speaking } = phrasesText(phrases);
-    heard(n, text, speaking);
+  let r: Recognition;
+  let restarts = 0;
+  const begin = (): boolean => {
+    const cur = new R();
+    r = cur;
+    cur.lang = navigator.language || 'en-US';
+    cur.continuous = true;
+    cur.interimResults = true;
+    let error = '';
+    cur.onstart = () => started(n);
+    cur.onresult = (e) => {
+      if (r !== cur) return;
+      const phrases: Phrase[] = Array.from(e.results, (x) => ({ transcript: x[0]?.transcript ?? '', final: x.isFinal }));
+      const { text, speaking } = phrasesText(phrases);
+      heard(n, text, speaking);
+    };
+    cur.onerror = (e) => {
+      error = e.error;
+    };
+    cur.onend = () => {
+      const s = live(n);
+      if (!s || r !== cur) return;
+      if (error && error !== 'no-speech') return fail(n, micErrorLine(error));
+      // Mobile browsers stop by themselves after a short quiet, continuous or not: listen on until our rules say done.
+      if (!s.finishing && restarts < MAX_RESTARTS) {
+        restarts++;
+        s.heardBefore = s.transcript;
+        if (begin()) return;
+      }
+      deliver(s); // stopped by us, out of restarts, or it can't start again
+    };
+    try {
+      cur.start();
+      return true;
+    } catch {
+      return false;
+    }
   };
-  r.onerror = (e) => {
-    error = e.error;
-  };
-  r.onend = () => {
-    const s = live(n);
-    if (!s) return;
-    if (error) fail(n, micErrorLine(error));
-    else deliver(s); // stopped by us, or the browser stopped by itself after a quiet
-  };
-  try {
-    r.start();
-  } catch {
+  if (!begin()) {
     queueMicrotask(() => fail(n, micErrorLine('audio-capture')));
     return null;
   }
@@ -689,38 +702,6 @@ if (typeof window !== 'undefined') {
 
 // ---------- the probe ----------
 
-/** A stand-in for the browser's recognition (headless browsers have no mic): __swarmMic.say() is what it hears. */
-let fakeLive: FakeRecognition | null = null;
-class FakeRecognition implements Recognition {
-  lang = '';
-  continuous = false;
-  interimResults = false;
-  onstart: Recognition['onstart'] = null;
-  onresult: Recognition['onresult'] = null;
-  onerror: Recognition['onerror'] = null;
-  onend: Recognition['onend'] = null;
-  phrases: RecognitionResultLike[] = [];
-  start() {
-    fakeLive = this;
-    setTimeout(() => this.onstart?.(), 30);
-  }
-  stop() {
-    this.end();
-  }
-  abort() {
-    this.end();
-  }
-  private end() {
-    if (fakeLive !== this) return;
-    fakeLive = null;
-    setTimeout(() => this.onend?.(), 30);
-  }
-  say(text: string, final: boolean) {
-    this.phrases = [...this.phrases.filter((p) => p.isFinal), { isFinal: final, 0: { transcript: text } }];
-    this.onresult?.({ results: this.phrases });
-  }
-}
-
 const probe = {
   get state(): MicState {
     return useMic.getState().state;
@@ -755,6 +736,12 @@ const probe = {
     fakeOn = on;
     if (on) micAllowed = true;
   },
+  /** The (fake) browser stops recognising by itself, as phones do after a short quiet, or on an `error` ('not-allowed'). */
+  browserStops(error?: string) {
+    if (!fakeLive.now) return false;
+    fakeLive.now.ends(error);
+    return true;
+  },
   /** What the mic hears now: words for the (fake) recognition, `final` once they're settled; or speech for a recording. */
   say(text: string, final = true) {
     const s = session;
@@ -763,9 +750,9 @@ const probe = {
       if (s.ears) s.ears = heardWords(s.ears, performance.now());
       return true;
     }
-    if (!fakeLive) return false;
-    fakeLive.say(text, false);
-    if (final) fakeLive.say(text, true);
+    if (!fakeLive.now) return false;
+    fakeLive.now.say(text, false);
+    if (final) fakeLive.now.say(text, true);
     return true;
   },
 };

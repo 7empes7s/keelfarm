@@ -242,6 +242,7 @@
   font-weight: var(--ds-weight-strong);
 }
 .pk-ceo,
+.pk-map,
 .pk-floor-head,
 .pk-agent-head,
 .pk-pr-head {
@@ -251,6 +252,30 @@
 }
 .pk-pr-head {
   align-items: flex-start;
+}
+/* the memory map's card (#345): a glyph in a tinted circle, its name and what it holds */
+.pk-map {
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.pk-map:hover {
+  background: var(--ds-surface-hover);
+}
+.pk-map > .grow {
+  display: grid;
+  min-width: 0;
+}
+.pk-map-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border-radius: 50%;
+  background: var(--ds-surface-sunken);
+  --ds-icon: var(--ds-icon-md);
 }
 .pk-pr-head .grow {
   display: grid;
@@ -280,7 +305,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 2px;
+  padding: var(--ds-space-1) var(--ds-space-2);
   border: 2px solid rgba(31, 29, 43, 0.15);
   border-radius: 12px;
   background: var(--ds-surface-sunken);
@@ -325,6 +350,15 @@
   margin-left: auto;
 }
 /* one row, the people and backlog line on the left and Board · Team on the right, wrapping as a whole only on a narrow card */
+/* five chips with room inside down to 360px; tighter below: smaller number and label, less padding, never squeezed */
+@container pkfloor (max-width: 359px) {
+  .pk-stage {
+    padding-inline: var(--ds-space-1);
+  }
+  .pk-stage-n {
+    font-size: var(--ds-text-lg);
+  }
+}
 @container pkfloor (max-width: 300px) {
   .pk-pipeline {
     gap: var(--ds-space-1);

@@ -24,7 +24,7 @@ import { approvalsBadge, ceoChatHint, pipelineOf, POCKET_TABS, railTabs, waiting
 import { Approvals } from './PocketApprovals';
 import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
-import { UsageSources } from '../ui/UsageSources';
+import { CompanySummary } from './CompanySummary';
 import type { ConsoleSection } from './PocketConsole';
 import { parseHash, resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
@@ -171,11 +171,9 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
   const agents = useStore((s) => s.agents);
   const qa = useStore((s) => s.qa);
   const requests = useStore((s) => s.requests);
-  const ceoInfo = useStore((s) => s.ceo);
   const demo = useStore((s) => s.demo);
   const publicDemo = useStore((s) => s.publicDemo);
   const version = useStore((s) => s.version);
-  const ceo = agents[CEO_ID];
   const floors = useMemo(
     () =>
       repos.map((repo) => {
@@ -197,7 +195,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
     <div className="pk-page">
       <Banners settings={settings} />
       <div className="pk-company">
-      <div className="pk-company-side">
+      <CompanySummary go={go} settings={settings}>
       {waiting > 0 && (
         <button className="pk-callout" onClick={() => go('approvals')}>
           <span className="pk-callout-icon" aria-hidden>
@@ -213,35 +211,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       )}
       <TourInvite track={track} />
       <GuideCard />
-      <div className="pk-card pk-usage">
-        <button className="pk-usage-head" onClick={() => settings('ops')} title="Open Mission control">
-          <b className="small">
-            <Icon name="gauge" /> Usage
-          </b>
-          <span className="muted small">
-            Mission control <Icon name="chevron-right" />
-          </span>
-        </button>
-        <UsageSources limit={4} />
-      </div>
-      <button className="btn pk-wide" onClick={() => settings('map')}>
-        <Icon name="map" /> Memory map
-      </button>
-      {ceo && (
-        <div className="pk-card pk-ceo">
-          <span className="avatar" style={{ background: ceo.color }}>
-            {ceo.name[0]}
-          </span>
-          <div className="grow">
-            <b>{ceo.name}</b> <span className="muted small">CEO</span>
-            <div className="small">{ceo.status === 'working' ? (ceoInfo.job?.label ?? 'Working') : ceoInfo.queue.length ? `Next: ${ceoInfo.queue[0].label}` : 'Free'}</div>
-          </div>
-          <button className="btn btn-small" onClick={() => go('chat')}>
-            <Icon name="message-circle" /> Chat
-          </button>
-        </div>
-      )}
-      </div>
+      </CompanySummary>
       <div className="pk-company-floors" ref={measureFloors} style={{ '--pk-cols': floorColumns(floorsWidth, floors.length) } as CSSProperties}>
       {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
