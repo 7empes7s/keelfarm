@@ -16,7 +16,7 @@ import { drawSign } from './draw';
 import { useInteractable } from './interact';
 import { MEETING_CHAIRS, MEETING_HEAD, MEETING_ROOM } from './layout';
 import { glow } from './materials';
-import { ceoAtCall, chairLabel, chairPlan, chairView } from './meeting';
+import { ceoAtCall, chairLabel, chairPlan, chairView, demoMeeting } from './meeting';
 import { MeetingSet } from './MeetingSet';
 import { WallSign } from './OfficeFloor';
 import { bodyState, claimBody, onErrand, placeBody, seatBody, setBody } from './people';
@@ -156,7 +156,14 @@ export function MeetingRoom() {
   const on = useCall((s) => inCall(s.call));
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const label = chairLabel(on, ceo);
+  const demo = useStore((s) => s.demo);
+  const started = useStore((s) => s.started);
   useCeoAtTheTable();
+  useEffect(() => {
+    const want = demoMeeting(window.location.search, demo);
+    if (want.call && !callOn()) startCall();
+    if (want.seat && started) sitAtMeeting(0); // once you're in the office
+  }, [demo, started]);
   // leaving the lobby gets you up from the table
   useEffect(
     () => () => {

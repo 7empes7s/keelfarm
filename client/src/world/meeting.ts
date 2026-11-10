@@ -56,6 +56,12 @@ export function chairPlan(i: number, sitting: number | null, callOn: boolean, na
   return { sit: true, start: !callOn, fold: narrow };
 }
 
+/** The demo's look at a call (`?meeting=call` starts one, `?meeting=seat` also sits you at the far head); nothing elsewhere. */
+export function demoMeeting(search: string, demo: boolean): { call: boolean; seat: boolean } {
+  const v = demo ? new URLSearchParams(search).get('meeting') : null;
+  return { call: v === 'call' || v === 'seat', seat: v === 'seat' };
+}
+
 // ---------- the call window's view ----------
 
 /** The call window's view of the room draws at most this many frames a second: it's a video tile, not the game. */

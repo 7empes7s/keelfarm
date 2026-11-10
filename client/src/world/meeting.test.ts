@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NO_CALL, type Call } from '../ui/voiceCall';
 import { collide, lobbyColliders, MEETING_CHAIRS, MEETING_HEAD, MEETING_ROOM } from './layout';
-import { ceoAtCall, chairLabel, chairPlan, chairView, TILE_FPS, tileDue } from './meeting';
+import { ceoAtCall, chairLabel, chairPlan, chairView, demoMeeting, TILE_FPS, tileDue } from './meeting';
 import { findPath, spot, walkways } from './walkways';
 
 const call = (patch: Partial<Call>): Call => ({ ...NO_CALL, id: 1, startedAt: 1, ...patch });
@@ -90,5 +90,14 @@ describe("the call window's view of the room", () => {
     expect(tileDue(10_000, 0, { ...shown, folded: true })).toBe(false);
     expect(tileDue(10_000, 0, { ...shown, hidden: true })).toBe(false);
     expect(tileDue(10_000, 0, { ...shown, onScreen: false })).toBe(false);
+  });
+});
+
+describe("the demo's look at a call", () => {
+  it('starts a call, or seats you too, only in the demo office', () => {
+    expect(demoMeeting('?meeting=call', true)).toEqual({ call: true, seat: false });
+    expect(demoMeeting('?x=1&meeting=seat', true)).toEqual({ call: true, seat: true });
+    expect(demoMeeting('?meeting=seat', false)).toEqual({ call: false, seat: false });
+    expect(demoMeeting('', true)).toEqual({ call: false, seat: false });
   });
 });
