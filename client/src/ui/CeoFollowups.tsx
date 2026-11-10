@@ -124,7 +124,7 @@ export function CeoMandates() {
   );
 }
 
-type AwakeNumber = Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'freshJobs' | 'models'>;
+type AwakeNumber = Exclude<keyof CeoAwakeSettings, 'keepAlive' | 'freshJobs' | 'models' | 'automatedOnCeo'>;
 const AWAKE_FIELDS: [AwakeNumber, string, number, number][] = [
   ['restartTurns', 'Fresh session after (turns)', 20, 5000],
   ['idleHours', '… or after idle for (hours)', 1, 168],

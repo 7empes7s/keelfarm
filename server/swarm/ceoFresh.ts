@@ -23,7 +23,7 @@ export abstract class SwarmCeoFresh extends SwarmCeoModels {
     const awake = this.state.settings.ceoAwake;
     const kept = this.state.ceo.kept;
     const step = ceoSessionStep(awake, { sessionId: a.sessionId, turns: kept.turns, lastEndedAt: kept.lastEndedAt }, Date.now());
-    const plan = ceoJobSession(job.kind, awake, step);
+    const plan = ceoJobSession(job.kind, awake, step, !!job.redo);
     if (!plan.fresh && step.handover && !loadHandover(this.state.ceo.handover) && a.status === 'working') await this.ceoHandover(a);
     return plan;
   }

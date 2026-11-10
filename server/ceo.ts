@@ -39,14 +39,18 @@ export interface CeoJob {
   pick?: string; // plan: the option the manager picked from the CEO's research
   brief?: string; // plan: where that research brief was saved
   onCeoModel?: true; // its kind's model failed with a model error: the retry runs on the CEO's own (#331)
+  id?: number; // its number in the CEO jobs log, given when it first starts (#332)
+  by?: 'manager'; // a review the manager asked for (Review now), not the schedule's
+  redo?: { job: number; message: number | null }; // a redo on the CEO's model of this job, fresh, with its inputs (#332)
   at: number;
 }
 
-/** Queue a CEO job: one onboarding and one plan per floor, one review, one research per topic; chat messages and follow-up events merge. */
+/** Queue a CEO job: one onboarding and one plan per floor, one review, one research per topic; chat messages and follow-up events merge. A redo never merges. */
 export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   const same = q.findIndex(
     (j) =>
       j.kind === job.kind &&
+      !j.redo && !job.redo && // a redo runs on its own inputs
       (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || job.kind === 'changes' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
   );
   if (same < 0) q.push(job);

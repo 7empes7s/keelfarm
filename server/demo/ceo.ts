@@ -304,6 +304,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
         else if (/failed QA/.test(e) && pr) await use('qa_report', { floor, pr });
         else if (agent && / error | stalled /.test(e)) {
           await use('agent_log', { agent_id: agent, lines: 50 });
+          if (/ stalled /.test(e)) needs.push(`${e.replace(/^- \[e\d+\] /, '').split(' (')[0]} stalled on ${e.match(/stalled on (#\d+)/)?.[1] ?? 'their task'}: their log shows the tests were still running, so I left it with them.`); // a redo on Opus (#332) has something to say
           if (/ error /.test(e) && (await use('restart_agent', { agent_id: agent })).startsWith('Refused')) needs.push(`${e.split(' (')[0]} is still in an error and I couldn't restart them; reset them from their desk.`);
         } else if (!(await demoCeoAnswer(e, use, think))) await think('Nothing there needs me.'); // an agent's question: answered, or on the manager's phone
       }

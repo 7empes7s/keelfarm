@@ -7,6 +7,7 @@ import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
 import type { CeoJob } from '../ceo.ts';
 import type { CeoHandover, CeoJobNote } from '../ceoDigest.ts';
+import type { CeoJobRecord } from '../ceoRedo.ts';
 import type { LearnedPull } from '../closeCleanup.ts';
 import type { PreQa } from '../qaOutcome.ts';
 import type { RestartCounts } from '../reconcile.ts';
@@ -190,6 +191,8 @@ interface CeoState {
   kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null; model?: string }; // its kept session (#28) and the model it started on (#331)
   handover?: CeoHandover | null; // what the full chat session left the next one, until a fresh session gets it (#330)
   lastJob?: CeoJobNote | null; // the latest background job's reply and issues, for the digest (#330)
+  jobs?: CeoJobRecord[]; // finished jobs' inputs, for Redo on Opus (#332, server/ceoRedo.ts)
+  jobSeq?: number; // the last job's number
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

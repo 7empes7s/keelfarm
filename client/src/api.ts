@@ -183,6 +183,7 @@ export const api = {
   // The chat closer to Claude's (#51)
   ceoStop: () => call('POST', '/api/ceo/stop'),
   ceoRetry: () => call('POST', '/api/ceo/retry'),
+  redoCeoJob: (job: number) => call<{ job: number }>('POST', `/api/ceo/jobs/${job}/redo`),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
   chatMessages: (before: number) => call<ChatPage>('GET', `/api/ceo/messages?before=${before}`),

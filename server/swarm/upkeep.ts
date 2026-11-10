@@ -425,10 +425,11 @@ export abstract class SwarmUpkeep extends SwarmCeo {
     return careerTimeline({ entries: this.history.all(), costs: this.spend.ledger.all(), agent: a, rehired: this.state.progress.careers[a.id]?.rehired ?? [], now: Date.now() });
   }
 
-  /** A fresh demo office's made-up cost ledger, the session history it makes (timelines) and someone let go (#205). */
+  /** A fresh demo office's made-up cost ledger, the session history it makes (timelines), someone let go (#205) and the CEO's jobs (#332). */
   protected seedCareerPast(records: CostRecord[]) {
     Object.assign(this.state.progress.past, this.backend.seedPastCareers?.(Date.now()));
     if (!this.history.all().length) void this.history.seed(this.backend.seedHistory?.(records, this.state.repos, Date.now()) ?? []);
+    this.seedCeoJobs(Date.now()); // and the CEO jobs log's morning (#332)
     return this.spend.ledger.replace(records);
   }
 
