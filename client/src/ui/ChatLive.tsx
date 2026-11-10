@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { currentStep, liveText, type CeoLive, type LiveStep, type StepLog } from '../../../shared/ceoStream';
 import { usedLine, type UsedView } from '../../../shared/used';
 import { stepsSummary, stepTime } from './chatCardRules';
 import { Icon } from './Icon';
 import { iconFor } from './icons';
 import { Markdown } from './Markdown';
-import { isLong } from './longText';
+import { foldText } from './longText';
 import './chat.css';
 
 // The CEO chat closer to Claude's (#51): the reply streaming in with its live step line, each reply's step log (#150)
@@ -99,15 +99,16 @@ export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog
   );
 }
 
-/** A long message shows its start, with "Show more". */
-export function LongText({ text, children }: { text: string; children: ReactNode }) {
+/** A long message shows its whole first blocks (#339), with "Show more · 2 more code blocks". */
+export function LongText({ text, children }: { text: string; children: (text: string) => ReactNode }) {
   const [open, setOpen] = useState(false);
-  if (!isLong(text)) return children;
+  const fold = useMemo(() => foldText(text), [text]);
+  if (!fold) return children(text);
   return (
     <>
-      <div className={open ? undefined : 'long-folded'}>{children}</div>
+      {open ? children(text) : fold.shown === null ? <div className="long-folded">{children(text)}</div> : children(fold.shown)}
       <button type="button" className="long-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? 'Show less' : 'Show more'}
+        {open ? 'Show less' : fold.more}
       </button>
     </>
   );
