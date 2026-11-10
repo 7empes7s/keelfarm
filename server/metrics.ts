@@ -208,6 +208,22 @@ export function hourlyCounts(times: number[], now: number, hours = 24): number[]
 
 const share = (hits: number, n: number) => (n ? hits / n : null);
 
+/** Which of 7 days (0 oldest, 6 today) `at` fell on, by local midnight; outside the week: -1 or 7. */
+const dayIndex = (at: number, now: number) => 6 - Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
+
+/** The share of hits per day over the last 7 days, oldest first (today last); null on a day with none (#371). */
+export function dailyShare(entries: [at: number, hit: boolean][], now: number): (number | null)[] {
+  const hits = Array.from({ length: 7 }, () => 0);
+  const all = Array.from({ length: 7 }, () => 0);
+  for (const [at, hit] of entries) {
+    const i = dayIndex(at, now);
+    if (i < 0 || i > 6) continue;
+    all[i]++;
+    if (hit) hits[i]++;
+  }
+  return all.map((n, i) => share(hits[i], n));
+}
+
 /**
  * The average number of QA verdicts per PR merged in the history, over merges QA tested with their PR recorded. Rounds
  * failed by an outage or the lab aren't the PR's (#188) and are left out.
@@ -240,6 +256,7 @@ function flow(h: OpsHistory, mine: (repo: string) => boolean, now: number): Flow
     leadMs: median(merges.filter(day).flatMap((m) => (m[3] === null ? [] : [m[3]]))),
     qaWaitMs: median(qa.filter(day).flatMap((q) => (q[3] === null ? [] : [q[3]]))),
     qaPass: share(qa.filter((q) => q[2]).length, qa.length),
+    qaPassTrend: dailyShare(qa.map((q) => [q[0], q[2]]), now),
     qaFirstPass: share(qa.filter((q) => q[5] === 1 && q[2]).length, qa.filter((q) => q[5] === 1).length),
     qaRoundsPerMerge: qaRoundsPerMerge(merges, qa),
     qaLabErrors: tested.filter((q) => q[6] === 'lab-error').length,

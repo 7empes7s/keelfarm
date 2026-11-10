@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALARM_ERROR_MS,
+  dailyShare,
   DAY_MS,
   emptyHistory,
   floorAlarms,
@@ -280,6 +281,23 @@ describe('the needs-you wait (#275)', () => {
     recordWait(h, 'o/a', 5 * MIN, NOW - 8 * DAY_MS); // older than a week: out of the trend, and dropped on load
     expect(waitTrend(h.waits!, [10 * MIN], NOW)).toEqual([null, null, null, null, 3 * HOUR_MS, null, 10 * MIN]);
     expect(loadHistory(JSON.parse(JSON.stringify(h)), NOW).waits).toEqual(h.waits!.filter((w) => w[2] !== 5 * MIN));
+  });
+});
+
+describe('QA pass rate per day (#371)', () => {
+  it("shares each day's passing rounds over a week, oldest first, null on days without any", () => {
+    expect(dailyShare([[NOW - 3 * DAY_MS, true], [NOW - 3 * DAY_MS, false], [NOW - 8 * DAY_MS, true], [NOW - HOUR_MS, true]], NOW)).toEqual([null, null, null, 0.5, null, null, 1]);
+  });
+
+  it("is the floor's research-lab curve: its own verdicts, lab errors left out", () => {
+    const h = emptyHistory();
+    recordQa(h, 'r1', true, null, NOW - DAY_MS, 1, 1);
+    recordQa(h, 'r1', false, null, NOW - DAY_MS, 2, 1);
+    recordQa(h, 'r1', false, null, NOW - DAY_MS, 3, 1, 'lab-error');
+    recordQa(h, 'r2', false, null, NOW - DAY_MS, 4, 1);
+    const f = opsView([floor({ repoId: 'r1' })], h, NOW).floors[0];
+    expect(f.qaPassTrend).toEqual([null, null, null, null, null, 0.5, null]);
+    expect(opsView([floor({ repoId: 'r1' })], emptyHistory(), NOW).total.qaPassTrend).toEqual(Array.from({ length: 7 }, () => null));
   });
 });
 

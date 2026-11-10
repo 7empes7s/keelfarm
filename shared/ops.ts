@@ -46,6 +46,7 @@ export interface OpsNumbers {
   leadMs: number | null; // median issue → merge
   qaWaitMs: number | null; // median wait for an agent to start testing a PR
   qaPass: number | null; // share of QA rounds that passed over 7 days, 0-1
+  qaPassTrend: (number | null)[]; // that share per day over 7 days, oldest first (today last; null: no rounds that day) (#371)
   qaFirstPass: number | null; // share of PRs whose first QA round passed over 7 days, 0-1
   qaRoundsPerMerge: number | null; // average QA rounds per PR merged over 7 days
   qaLabErrors: number; // QA rounds the test lab failed over 7 days (#189): in none of the rates above

@@ -1,4 +1,4 @@
-// A themed floor's dressing (#370), the lazy chunk FloorThemeLayer.tsx loads only while a themed floor is on screen:
+// A themed floor's dressing (#370; #371's themes in studioScenes.tsx), the lazy chunk FloorThemeLayer.tsx loads only while a themed floor is on screen:
 // the pack's props in the free decoration slots, the extra monitors on working desks, and its own wall pieces (the
 // game studio's Playtest screen and neon, the trading floor's market board, world clocks and hanging ticker).
 // Repeated props are one InstancedMesh each; pictures are canvases drawn once (or when their numbers change).
@@ -24,6 +24,9 @@ import { glow } from '../materials';
 import { dayTime } from '../sky/useDayTime';
 import type { ThemePack, ThemeProp } from './packs';
 import { themeProps, type PlacedProp } from './placement';
+import { screenMat, staticTexture, WallPicture, WallScreen, type Pose } from './screenKit';
+import * as SD from './studioDraw';
+import { Calendar, Gallery, LossCurve, NocWall, OnAirSign, Pendants, StudioProps } from './studioScenes';
 import * as D from './themeDraw';
 import * as M from './themeModels';
 import { buildProgress, candles, marketOpen, tickerQuotes, worldClocks, type QuoteValues } from './ticker';
@@ -40,56 +43,6 @@ export interface SceneProps {
 }
 
 type Office = SceneProps['office'];
-
-type Pose = { x: number; y: number; z: number; rotY: number };
-
-// ---------- pictures drawn once ----------
-
-const statics = new Map<string, THREE.CanvasTexture>();
-
-/** A picture that never changes, drawn the first time it's asked for and kept for the session (shared by every copy). */
-function staticTexture(key: string, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void) {
-  let t = statics.get(key);
-  if (!t) {
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    draw(c.getContext('2d')!);
-    t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
-    statics.set(key, t);
-  }
-  return t;
-}
-
-const mats = new Map<THREE.Texture, THREE.MeshBasicMaterial>();
-
-/** The glowing material for a picture, made once per picture like the picture itself. */
-function screenMat(map: THREE.Texture, transparent = false) {
-  let m = mats.get(map);
-  if (!m) mats.set(map, (m = new THREE.MeshBasicMaterial({ map, toneMapped: false, transparent, userData: BLOOM })));
-  return m;
-}
-
-/** A plane on a wall prop's face, a little out from the wall. */
-function WallPicture({ at, w, h, map, transparent }: { at: PlacedProp; w: number; h: number; map: THREE.Texture; transparent?: boolean }) {
-  return (
-    <mesh position={[at.x + Math.sin(at.rotY) * 0.05, at.y, at.z + Math.cos(at.rotY) * 0.05]} rotation={[0, at.rotY, 0]} material={screenMat(map, transparent)}>
-      <planeGeometry args={[w, h]} />
-    </mesh>
-  );
-}
-
-/** A screen hung on the wall: its housing and its picture. */
-function WallScreen({ at, w, h, map }: { at: PlacedProp; w: number; h: number; map: THREE.Texture }) {
-  return (
-    <>
-      <mesh geometry={M.wallScreenModel(w, h)} material={vertexToon} position={[at.x, at.y, at.z]} rotation={[0, at.rotY, 0]} />
-      <WallPicture at={at} w={w} h={h} map={map} />
-    </>
-  );
-}
 
 const SCREEN_PX: [number, number] = [512, 288];
 
@@ -222,10 +175,21 @@ const SIDE = [
   { x: -0.82, z: -0.42, rotY: 0.38 },
 ];
 
+const DESK_PICTURES: Record<ThemePack['deskScreens'], (ctx: CanvasRenderingContext2D, w: number, h: number) => void> = {
+  engine: D.drawEngineViewport,
+  charts: (c, w, h) => D.drawChart(c, w, h, 'CFRM', 3),
+  canvas: SD.drawCanvasTool,
+  timeline: SD.drawTimeline,
+  plots: SD.drawPlots,
+  dashboards: SD.drawDashboards,
+};
+/** The desks with a monitor on each side: the trading floor's, the media studio's editing desks and the ops room's. */
+const TWO_SCREENS: readonly ThemePack['deskScreens'][] = ['charts', 'timeline', 'dashboards'];
+
 function DeskScreens({ kind, slots }: { kind: ThemePack['deskScreens']; slots: number[] }) {
   const bodies = useRef<THREE.InstancedMesh>(null);
   const faces = useRef<THREE.InstancedMesh>(null);
-  const mat = screenMat(kind === 'engine' ? staticTexture('engine', 384, 230, (c) => D.drawEngineViewport(c, 384, 230)) : staticTexture('desk-chart', 384, 230, (c) => D.drawChart(c, 384, 230, 'CFRM', 3)));
+  const mat = screenMat(staticTexture(kind === 'engine' ? 'engine' : `desk-${kind}`, 384, 230, (c) => DESK_PICTURES[kind](c, 384, 230)));
   const poses = useMemo(() => {
     const desk = new THREE.Object3D();
     const mon = new THREE.Object3D();
@@ -235,7 +199,7 @@ function DeskScreens({ kind, slots }: { kind: ThemePack['deskScreens']; slots: n
       const p = deskPosition(slot);
       desk.position.set(p.x, 0, p.z);
       desk.rotation.set(0, deskRotation(slot), 0);
-      for (const s of SIDE.slice(0, kind === 'charts' ? 2 : 1)) {
+      for (const s of SIDE.slice(0, TWO_SCREENS.includes(kind) ? 2 : 1)) {
         mon.position.set(s.x, 1.2, s.z);
         mon.rotation.set(-0.06, s.rotY, 0);
         desk.updateMatrixWorld(true);
@@ -433,9 +397,17 @@ export function ThemeScene({ pack, repo, agents, office }: SceneProps) {
     <group>
       <ThemeProps list={list} office={office} />
       <DeskScreens kind={pack.deskScreens} slots={slots} />
-      {pack.wallScreen === 'playtest' ? <Playtest repo={repo} agents={agents} office={office} /> : <MarketWall repo={repo} />}
+      <StudioProps list={list} office={office} agents={agents} />
+      {pack.wallScreen === 'playtest' && <Playtest repo={repo} agents={agents} office={office} />}
+      {pack.wallScreen === 'market' && <MarketWall repo={repo} />}
+      {pack.wallScreen === 'gallery' && <Gallery repo={repo} agents={agents} />}
+      {pack.wallScreen === 'calendar' && <Calendar repo={repo} agents={agents} />}
+      {pack.wallScreen === 'loss' && <LossCurve repo={repo} />}
+      {pack.wallScreen === 'noc' && <NocWall />}
       {pack.id === 'trading' && <Ticker repo={repo} />}
       {pack.id === 'game-studio' && <NeonStrips />}
+      {pack.id === 'design-studio' && <Pendants slots={slots} office={office} />}
+      {pack.id === 'media-studio' && <OnAirSign agents={agents} />}
     </group>
   );
 }

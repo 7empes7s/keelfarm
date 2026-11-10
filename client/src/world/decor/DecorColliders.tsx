@@ -5,7 +5,7 @@ import { CuboidCollider, RigidBody } from '@react-three/rapier';
 import { repoOnFloor, useStore } from '../../store';
 import { decorRects } from './decor';
 import { themePack } from '../floorThemes/packs';
-import { themePropRects } from '../floorThemes/placement';
+import { themePropRects, themeWallRects } from '../floorThemes/placement';
 
 export function DecorColliders({ groups }: { groups: number }) {
   const placed = useStore((s) => {
@@ -13,7 +13,7 @@ export function DecorColliders({ groups }: { groups: number }) {
     return repo ? s.progress.floors[repo.id]?.placed : undefined;
   });
   const pack = useStore((s) => themePack(repoOnFloor(s.repos, s.floor)?.theme)); // a floor theme's props (#370)
-  const rects = useMemo(() => [...decorRects(placed ?? {}), ...themePropRects(pack, placed)], [placed, pack]);
+  const rects = useMemo(() => [...decorRects(placed ?? {}), ...themePropRects(pack, placed), ...themeWallRects(pack)], [placed, pack]);
   const key = rects.map((r) => `${r.minX},${r.minZ},${r.maxX},${r.maxZ}`).join('|');
   if (!rects.length) return null;
   return (
