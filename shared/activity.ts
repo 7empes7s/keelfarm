@@ -38,6 +38,10 @@ export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   waiting: 'waiting for',
 };
 
+/** What a blocked agent's sign says it's blocked on, by why (server/liveState.ts StuckKind); the reason may name paths, so it stays off the sign. */
+export const stuckSign = (kind: string | undefined): string =>
+  ({ 'sign-in': 'sign-in', setup: 'a setup screen', menu: 'a menu', error: 'an error', 'not-started': 'starting', unregistered: 'its result' })[kind ?? ''] ?? 'a prompt';
+
 /** The longest detail shown over a head. */
 export const DETAIL_MAX = 24;
 

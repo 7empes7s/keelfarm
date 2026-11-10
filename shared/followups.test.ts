@@ -160,6 +160,13 @@ describe("the events' wording and the CEO tab's view", () => {
     expect(followupEvents.stalled({ id: 'a1', name: 'Ada' }, 'QA', 30).text).not.toContain(' on undefined');
     expect(followupEvents.agentError({ id: 'a1', name: 'Ada' }, 'k', 12, 'boom', 'r1', 'floor 1 (o/r)').key).toBe('error:k');
     expect(followupEvents.qaFailed('r1', 'floor 1 (o/r)', 7, 2, 3, 'broken.').label).toBe('#7 failed QA 2×');
+    // an agent blocked (#359): one event per agent and state, naming it and their last screen lines
+    const b = followupEvents.agentBlocked({ id: 'a1', name: 'Ken' }, 'sign-in', 'needs sign-in', 'Select login method: / ❯ 1. Claude account', 'r1', 'floor 1 (o/r)');
+    expect(b).toMatchObject({ kind: 'agentBlocked', key: 'blocked:a1:sign-in', label: 'Ken is blocked' });
+    expect(b.text).toContain('Select login method');
+    const s2 = emptyFollowups();
+    for (const at of [1000, 2000]) addFollowup(s2, { ...b, at }, DEFAULT_FOLLOWUPS);
+    expect(s2.pending).toHaveLength(1);
   });
 
   it('says when the waiting job starts, without changing the state', () => {

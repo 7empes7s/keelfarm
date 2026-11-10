@@ -553,7 +553,11 @@ export abstract class SwarmSessions extends SwarmRotation {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
+        blocked: (reason, kind) => {
+          rt.blocked = reason ? { reason, since: Date.now(), told: false, kind: kind ?? 'prompt' } : null;
+          this.emitAgent(a);
+          this.alertBlocked(a); // a sign-in, setup screen or the like: the manager and the CEO hear at once (#359)
+        },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
