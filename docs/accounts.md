@@ -14,11 +14,25 @@ It can be paused, so the others take its place, but not removed.
 
 | Kind | Coding agents | What it costs | How the office uses it |
 | --- | --- | --- | --- |
-| **Subscription login** | Claude Code (Pro/Max), Codex (ChatGPT plan) | The plan's usage limits. Nothing per token. | Signs in in its own folder, `<SWARM_HOME>/accounts/<id>/claude` (or `codex`), which its sessions get as `CLAUDE_CONFIG_DIR` / `CODEX_HOME`. Your first login is never signed out. |
+| **Subscription login** | Claude Code (Pro/Max), Codex (ChatGPT plan), Gemini CLI (Google AI plan) | The plan's usage limits. Nothing per token. | Signs in in its own folder, `<SWARM_HOME>/accounts/<id>/claude` (or `codex`), which its sessions get as `CLAUDE_CONFIG_DIR` / `CODEX_HOME`. Your first login is never signed out. |
 | **API key** | Claude Code (Anthropic), Codex (OpenAI) | Billed per token to that API account. It never uses or changes your subscription. | Saved in `<SWARM_HOME>/secrets.json` only (never in the state, the page, events or logs). Claude Code reads it through `apiKeyHelper`, so it is never written to a settings file or set as `ANTHROPIC_API_KEY`; Codex gets `OPENAI_API_KEY`. Its sessions keep your usual Claude Code setup (skills, plugins). |
 | **Setup token** | Claude Code | The subscription's limits, like its login. | `claude setup-token` prints a token that lasts a year. Put it in an environment variable of the office (the account names which, e.g. `CUBEFARM_CLAUDE_TOKEN_2`) and restart: Anthropic's terms keep apps like this one from storing Claude tokens, so the office never writes it down. |
 
 OpenCode runs on its own setup (`opencode auth login`); the office doesn't manage its accounts.
+
+### Gemini CLI (#365)
+
+Gemini CLI runs on a Google AI plan (Plus or Pro) through a **subscription login** only: its folder is
+`<SWARM_HOME>/accounts/<id>/gemini`, given to its sessions as `GEMINI_CLI_HOME` (Gemini keeps its files in `.gemini`
+under it). Before a sign-in or session the office fills in what that folder's `settings.json` lacks, keeping every key
+already there: the Google sign-in picked, auto-update off. Its sign-in runs one tiny prompt with `NO_BROWSER=true`:
+open the link, approve, paste the code. Each session gets `--approval-mode yolo --skip-trust`, the office's
+instructions as a `CUBEFARM.md` context file (it also reads `GEMINI.md`, `AGENTS.md` and `CLAUDE.md`), and its hooks
+through a session settings file (`GEMINI_CLI_SYSTEM_SETTINGS_PATH`). "Usage limit reached for …" on its screen marks
+the account Limited until "Access resets at …" and ends the session, so rotation carries on. Gemini CLI writes its
+quota nowhere, so its card shows no usage bars. Without an account it runs on your own `~/.gemini`, which the office
+never changes. It suits QA second opinions, docs, research, triage summaries and small fixes: it can't be the default
+coding agent, and agents never fall back to it.
 
 ## Adding one
 

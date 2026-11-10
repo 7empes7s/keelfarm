@@ -116,8 +116,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `unblock.ts`: nothing waits on a human (pure): each Claude Code session's worktree permission rules, every CLI's
   non-interactive environment (`cliEnv`), the answers to PermissionRequest / Elicitation / AskUserQuestion hooks, and
   the watchdog's steps for a prompt still on screen (answer it, else the agent is `blocked`, notified after 5 minutes).
-- `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode): detection, Windows `.cmd` shim
-  unwrapping, each one's command line, and the helper scripts they call back with.
+- `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode, Gemini CLI): detection, Windows `.cmd` shim
+  unwrapping, each one's command line, and the helper scripts they call back with. `geminiHome.ts`: a Gemini login
+  folder's first-run settings (#365); what each CLI suits is in `shared/cliNotes.ts`.
 - `terminal.ts`: `AgentTerminal`, a headless xterm mirror per agent (replay for late viewers, saved to disk), its
   `/ws/term` viewers, and keystrokes/resizes to the running CLI.
 - `ceo.ts`: the CEO's office MCP tools (`createOfficeTools`, zod-validated: `scale_team`, `configure_agent`, issues,

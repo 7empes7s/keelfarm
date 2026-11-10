@@ -80,8 +80,10 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /** One session on `use` (null: as before accounts). `ended`: the caller decides what its end means, given a limit it reported. */
   private onUse(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks, use: AccountUse | null, ended: ((r: SessionResult, hit: LimitHit | null) => void) | null): SessionHandle {
-    if (!use) return this.backend.startSession(opts, ended ? { ...cb, finished: (r) => ended(r, null) } : cb);
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
+    // Gemini CLI on the manager's own login: its limit is its own, not a pause for the office (paced on Claude's).
+    const own = cli === 'gemini' ? { ...cb, limited: undefined } : cb;
+    if (!use) return this.backend.startSession(opts, ended ? { ...own, finished: (r) => ended(r, null) } : own);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
     const env = { ...opts.env, ...use.env };
@@ -118,13 +120,14 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /**
    * Other coding agents a session may fall back to (terminal runtime only, installed here): the CEO's the manager
-   * allowed; an agent's, ones the office already uses (an agent runs it, or it has an account added). Consults never do.
+   * allowed; an agent's, ones the office already uses (an agent runs it, or it has an account added), never onto Gemini
+   * CLI, which isn't a builder (#365). Consults never do.
    */
   private fallbackClis(a: PersistedAgent, opts: SessionOptions): AccountCli[] {
     if (!opts.terminal || opts.readOnly) return [];
     const r = this.accounts.rotation();
     const inUse = (c: AccountCli) => this.state.agents.some((x) => x.host !== 'box' && x.role !== 'ceo' && (x.cli || this.state.settings.defaultCli) === c) || this.accounts.list().some((x) => x.cli === c && !x.builtIn);
-    const allowed = a.role === 'ceo' ? r.ceoClis : r.agentsSwitchCli ? ACCOUNT_CLIS.filter(inUse) : [];
+    const allowed = a.role === 'ceo' ? r.ceoClis : r.agentsSwitchCli ? ACCOUNT_CLIS.filter((c) => c !== 'gemini' && inUse(c)) : [];
     return allowed.filter((c) => this.clis.some((x) => x.id === c && x.installed));
   }
 

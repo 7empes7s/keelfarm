@@ -53,7 +53,7 @@ export function AgentsSettings() {
         <label className="field">
           <span>Default coding agent</span>
           <select value={settings.defaultCli} onChange={(e) => set({ defaultCli: e.target.value as AgentCli })}>
-            <CliOptions clis={clis} />
+            <CliOptions clis={clis} builders />
           </select>
         </label>
       )}

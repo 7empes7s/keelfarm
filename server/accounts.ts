@@ -23,6 +23,7 @@ import {
   cleanTags,
   ENV_NAME,
   LABEL_MAX,
+  LOGIN_ENV,
   moveAccount,
   newAccountId,
   normaliseAccounts,
@@ -343,10 +344,12 @@ export class Accounts {
   async add(x: NewAccount): Promise<{ id: string; note: string }> {
     const cli = String(x.cli ?? '') as AccountCli;
     const kind = String(x.kind ?? '') as AccountKind;
-    if (!ACCOUNT_CLIS.includes(cli)) throw new HttpError(400, 'Pick Claude Code or Codex.');
+    if (!ACCOUNT_CLIS.includes(cli)) throw new HttpError(400, 'Pick Claude Code, Codex or Gemini CLI.');
+    if (cli === 'gemini' && kind !== 'subscription-login') throw new HttpError(400, 'Gemini CLI signs in with your Google account: pick a subscription login.');
     if (!ACCOUNT_KINDS.includes(kind) || (cli === 'codex' && kind === 'setup-token')) throw new HttpError(400, 'Pick a subscription login, an API key or (Claude) a setup token.');
     const list = this.list();
-    const label = String(x.label ?? '').trim().slice(0, LABEL_MAX) || (kind === 'api-key' ? `${cli === 'claude' ? 'Anthropic' : 'OpenAI'} API key` : `${cli === 'claude' ? 'Claude' : 'Codex'} account ${list.filter((a) => a.cli === cli).length + 1}`);
+    const name = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' }[cli];
+    const label = String(x.label ?? '').trim().slice(0, LABEL_MAX) || (kind === 'api-key' ? `${cli === 'claude' ? 'Anthropic' : 'OpenAI'} API key` : `${name} account ${list.filter((a) => a.cli === cli).length + 1}`);
     const a: ProviderAccount = {
       id: newAccountId(cli),
       cli,
@@ -479,7 +482,7 @@ export class Accounts {
     if (mode === 'setup-token' && a.cli !== 'claude') throw new HttpError(400, 'Setup tokens are for Claude Code only.');
     this.signIns.get(id)?.stop();
     const dir = this.dirOf(a);
-    const env: Record<string, string> = a.builtIn ? {} : a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir };
+    const env: Record<string, string> = a.builtIn ? {} : { [LOGIN_ENV[a.cli]]: dir };
     const term = this.terminal(id)!;
     const run = this.deps.signIn({ cli: a.cli, env, term, mode }, (code) => {
       if (this.signIns.get(id) !== run) return; // replaced by a newer one

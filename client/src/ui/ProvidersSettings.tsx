@@ -23,8 +23,10 @@ const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 const CLI_INFO: { id: AccountCli | 'opencode'; name: string; signs: string }[] = [
   { id: 'claude', name: 'Claude Code', signs: 'a Claude subscription login (Pro or Max), an Anthropic API key, or a setup token' },
   { id: 'codex', name: 'Codex', signs: 'a ChatGPT plan login or an OpenAI API key' },
+  { id: 'gemini', name: 'Gemini CLI', signs: 'a Google AI plan login (Plus or Pro), for QA second opinions, docs, research and small fixes' },
   { id: 'opencode', name: 'OpenCode', signs: 'its own setup (opencode auth login): the office runs it as it is' },
 ];
+const CLI_NAME: Record<AccountCli, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI' };
 
 const KIND_NAME: Record<AccountKind, string> = { 'subscription-login': 'Subscription login', 'api-key': 'API key', 'setup-token': 'Setup token' };
 
@@ -258,7 +260,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
   const [tokenEnv, setTokenEnv] = useState('CUBEFARM_CLAUDE_TOKEN_2');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const kinds: AccountKind[] = cli === 'claude' ? ['subscription-login', 'api-key', 'setup-token'] : ['subscription-login', 'api-key'];
+  const kinds: AccountKind[] = cli === 'claude' ? ['subscription-login', 'api-key', 'setup-token'] : cli === 'gemini' ? ['subscription-login'] : ['subscription-login', 'api-key'];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -275,7 +277,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
     }
   };
   return (
-    <Sheet title={`Add a ${cli === 'claude' ? 'Claude Code' : 'Codex'} account`} onClose={close}>
+    <Sheet title={`Add a ${CLI_NAME[cli]} account`} onClose={close}>
       <form className="acc-form" autoComplete="off" onSubmit={(e) => void submit(e)}>
         <div role="radiogroup" aria-label="Kind of account" className="acc-kinds">
           {kinds.map((k) => (
@@ -290,7 +292,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
         </div>
         <label className="field">
           <span>Name</span>
-          <input value={label} maxLength={40} placeholder={kind === 'api-key' ? 'Work API key' : 'Max · second seat'} onChange={(e) => setLabel(e.target.value)} />
+          <input value={label} maxLength={40} placeholder={kind === 'api-key' ? 'Work API key' : cli === 'gemini' ? 'Google AI Plus' : 'Max · second seat'} onChange={(e) => setLabel(e.target.value)} />
         </label>
         <label className="field">
           <span>Tags</span>

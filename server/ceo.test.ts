@@ -363,7 +363,7 @@ describe('office tools', () => {
     expect(await ok({ name: 'Test first', hypothesis: 'Fewer rounds', variants: [v('Current'), v('Test first', { prompt: 'Write the failing test first.', effort: 'high' })] })).toBe(true);
     expect(await ok({ name: 'One', hypothesis: 'h', variants: [v('Only')] })).toBe(false);
     expect(await ok({ name: 'CEO', hypothesis: 'h', kinds: ['ceo-chat'], variants: [v('A'), v('B')] })).toBe(false);
-    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'gemini' })] })).toBe(false);
+    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'aider' })] })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['define_experiment']);
   });
 

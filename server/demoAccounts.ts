@@ -1,5 +1,5 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Ultra login whose token
-// expired after its week reset, an Anthropic API key, an OpenAI key), a Test that never leaves the computer, and
+// expired after its week reset, an Anthropic API key, an OpenAI key, a Google AI Plus login), a Test that never leaves the computer, and
 // sign-ins drawn as the CLIs' own (demoSignIn.ts).
 import type { AccountsBackend } from './backend.ts';
 import type { AccountsDeps } from './accounts.ts';
@@ -17,10 +17,11 @@ const SEED: ProviderAccount[] = [
   { id: 'claude-ultra', cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra', tags: ['ultra'], priority: 3, enabled: true, plan: 'Ultra' },
   { id: 'claude-apikey', cli: 'claude', kind: 'api-key', label: 'Anthropic API', tags: ['api'], priority: 2, enabled: true, plan: 'API', dailyCostCap: 20 },
   { id: 'codex-apikey', cli: 'codex', kind: 'api-key', label: 'OpenAI API', tags: ['api'], priority: 1, enabled: false, plan: 'API' },
+  { id: 'gemini-plus', cli: 'gemini', kind: 'subscription-login', label: 'Google AI Plus', tags: ['gemini'], priority: 0, enabled: true, plan: 'Plus' }, // the demo's Gemini CLI agent runs on it (#365)
 ];
 
 export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
-  const signedIn = new Set<string>(['claude-keelop', 'claude-ultra']); // login folders the demo has "signed in"
+  const signedIn = new Set<string>(['claude-keelop', 'claude-ultra', 'gemini-plus']); // login folders the demo has "signed in"
   return {
     check: async (a) => {
       await new Promise((r) => setTimeout(r, 300));

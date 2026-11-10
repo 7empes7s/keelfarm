@@ -143,7 +143,7 @@ describe('cliEnv', () => {
   const wanted = nonInteractiveEnv({});
 
   it('gives every CLI, here and in a Box, an environment where nothing waits on a prompt', () => {
-    for (const cli of ['claude', 'codex', 'opencode'] as const) {
+    for (const cli of ['claude', 'codex', 'opencode', 'gemini'] as const) {
       const launch = launchArgs(cli, ctx).env;
       expect(cliEnv({ PATH: '/bin', GIT_EDITOR: 'vim' }, launch, { machine: { TMPDIR: '/t' } })).toMatchObject({ ...wanted, PATH: '/bin', TMPDIR: '/t' });
       expect(cliEnv({ PATH: '/bin' }, launch, { box: { CLAUDE_CODE_OAUTH_TOKEN: 'x' } })).toMatchObject(wanted);
