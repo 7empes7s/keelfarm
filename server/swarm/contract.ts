@@ -102,6 +102,7 @@ export abstract class SwarmContract {
   protected abstract progressTick(...a: Parameters<Swarm['progressTick']>): ReturnType<Swarm['progressTick']>;
   protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
   protected abstract restoreDesk(...a: Parameters<Swarm['restoreDesk']>): ReturnType<Swarm['restoreDesk']>;
+  protected abstract requeue(a: PersistedAgent, why: string): void; // protected there
 
   // team.ts
   protected abstract applyTeamChanges(...a: Parameters<Swarm['applyTeamChanges']>): ReturnType<Swarm['applyTeamChanges']>;

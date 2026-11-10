@@ -5,16 +5,19 @@
 import type { SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
 import type { AccountUse } from '../accounts.ts';
 import { HttpError } from '../httpError.ts';
+import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { allOutText, detectLimit, switchesForCeo, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS } from '../../shared/accounts.ts';
-import type { AccountCli, AccountSwitch, AccountsView } from '../../shared/types.ts';
+import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
 import { LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 /** The demo's "Simulate a limit": that long. */
 const DEMO_LIMIT_MS = 3 * 60_000;
+/** One sign-in notice per account this often (#360). */
+const SIGN_IN_NOTICE_MS = 60 * 60_000;
 /** What an agent's fresh session on the next account hears first: its worktree is as the last one left it. */
 const SWITCHED_NOTE = 'Your previous session on this task stopped at an account limit; this is a fresh session on another account. Your worktree and branch are as it left them: check git status and carry on.';
 
@@ -82,6 +85,7 @@ export abstract class SwarmRotation extends SwarmUsage {
   private onUse(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks, use: AccountUse | null, ended: ((r: SessionResult, hit: LimitHit | null) => void) | null): SessionHandle {
     if (!use) return this.backend.startSession(opts, ended ? { ...cb, finished: (r) => ended(r, null) } : cb);
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
+    this.readyLogin(a, use, cli, opts.cwd);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
     const env = { ...opts.env, ...use.env };
@@ -95,7 +99,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     };
     live.add(simulate);
     handle = this.backend.startSession(
-      { ...opts, ...(Object.keys(env).length ? { env } : {}), ...(use.keyEnv && cli === 'claude' ? { apiKeyEnv: use.keyEnv } : {}) },
+      { ...opts, account: use.id, ...(Object.keys(env).length ? { env } : {}), ...(use.keyEnv && cli === 'claude' ? { apiKeyEnv: use.keyEnv } : {}) },
       {
         ...cb,
         usage: (readings) => (use.builtIn ? cb.usage?.(readings) : this.accounts.readings(use.id, readings)),
@@ -108,12 +112,48 @@ export abstract class SwarmRotation extends SwarmUsage {
         finished: (result) => {
           live.delete(simulate);
           use.release();
+          if (result.signedOut) this.signInLost(a, use, cli);
           if (ended) ended(result, hit);
           else cb.finished(result);
         },
       },
     );
     return handle;
+  }
+
+  /**
+   * An account's own login folder, set up before a session starts in it (#360): onboarding done, the built-in login's
+   * theme, the worktree trusted, so the CLI opens on the task. The built-in login is the manager's own setup: untouched.
+   */
+  private readyLogin(a: PersistedAgent, use: AccountUse, cli: AgentCli, cwd: string) {
+    const dir = cli === 'claude' ? use.env.CLAUDE_CONFIG_DIR : use.env.CODEX_HOME;
+    if (use.builtIn || !dir || cli === 'opencode') return;
+    try {
+      const version = /\d+\.\d+\.\d+/.exec(this.clis.find((c) => c.id === cli)?.version ?? '')?.[0] ?? null;
+      if (prepareLogin(cli, dir, [cwd], { version, prefs: builtInPrefs() })) this.appendLog(a, [{ kind: 'system', text: `✓ Set up ${this.accounts.label(use.id)}'s login folder: onboarding done, this worktree trusted.` }]);
+    } catch (err) {
+      this.appendLog(a, [{ kind: 'error', text: `⚠ Couldn't set up ${this.accounts.label(use.id)}'s login folder: ${(err as Error).message}` }]);
+    }
+  }
+
+  /** Pinned to a login that's signed out, with rotation off: no work for them until it's signed in again (#360), rather than a sign-in screen per task. */
+  protected pinnedSignedOut(a: PersistedAgent): boolean {
+    if (!a.account || a.host === 'box' || this.accounts.rotation().on) return false;
+    return this.accounts.view().accounts.some((x) => x.id === a.account && x.status === 'signed-out');
+  }
+
+  /** Accounts whose sign-in the manager was told about, and when: one notice per account an hour, however many sessions hit it. */
+  private signInTold = new Map<string, number>();
+
+  /** A session showed its CLI's sign-in (cliRunner.ts): the account reads signed out, and the manager hears once. */
+  private signInLost(a: PersistedAgent, use: AccountUse, cli: AgentCli) {
+    if (!use.builtIn) this.accounts.signedOut(use.id);
+    const now = Date.now();
+    if (now - (this.signInTold.get(use.id) ?? 0) < SIGN_IN_NOTICE_MS) return;
+    this.signInTold.set(use.id, now);
+    const label = this.accounts.label(use.id);
+    const where = use.builtIn ? `run "${cli}" in a terminal on this computer and sign in` : 'sign it in from Settings → Providers';
+    this.notice({ kind: 'stuck', title: `${label} needs signing in`, text: `${a.name}'s session opened on ${cliLabel(cli)}'s sign-in, so it ended and the task went back in line. To use this account again, ${where}.`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal'] }, { event: 'agentError', line: a.name });
   }
 
   /**
