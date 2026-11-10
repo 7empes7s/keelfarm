@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPickWork, ringStatus, sheetAfterDrag, taskLine, taskSteps } from './agentWindow';
+import { canPickWork, ringStatus, sheetAfterDrag, showsTimer, taskLine, taskSteps } from './agentWindow';
 
 const agent = { status: 'working' as const, task: 'issue' as const, waiting: null, blocked: null, issueNumber: 1059, issueTitle: 'Access package assignment policy', prNumber: null };
 
@@ -26,6 +26,15 @@ describe('the agent window (#117)', () => {
     expect(taskLine({ ...agent, task: 'qa', prNumber: 12 })).toBe('Testing PR #12 · Access package assignment policy');
     expect(taskLine({ ...agent, task: 'fix', prNumber: 12, issueTitle: null })).toBe('Fixing PR #12');
     expect(taskLine({ ...agent, status: 'idle' })).toBe('Free · pick work in Details');
+  });
+
+  it('drops the task and the timer at once when stopped or free (#359)', () => {
+    const qa = { ...agent, task: 'qa' as const, prNumber: 344, startedAt: 1 };
+    expect(taskLine({ ...qa, status: 'stopped' })).toBe('Stopped · pick work in Details');
+    expect(taskLine({ ...qa, status: 'done' })).toBe('Free · pick work in Details');
+    expect(taskLine({ ...qa, status: 'error' })).toBe('Testing PR #344 · Access package assignment policy'); // needs help: the task stays
+    for (const status of ['stopped', 'done', 'idle', 'error'] as const) expect(showsTimer({ ...qa, status })).toBe(false);
+    expect(showsTimer({ ...qa, status: 'working' })).toBe(true);
   });
 
   it("lays out this task's steps, the current one marked", () => {

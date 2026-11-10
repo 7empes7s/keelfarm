@@ -56,11 +56,12 @@ export function assignChoices(cols: KanbanColumns | null): AssignChoice[] {
 
 /** One short line on what they're doing. */
 export function doing(a: Pick<Agent, 'status' | 'task' | 'issueNumber' | 'issueTitle' | 'prNumber'>): string {
-  if (a.status === 'idle') return 'Free';
+  if (a.status === 'idle' || a.status === 'done') return 'Free';
+  if (a.status === 'stopped') return 'Stopped';
   if (a.task === 'qa') return `Testing PR #${a.prNumber ?? '?'}${a.issueTitle ? `: ${a.issueTitle}` : ''}`;
   if (a.task === 'fix') return `Fixing PR #${a.prNumber ?? '?'}${a.issueTitle ? `: ${a.issueTitle}` : ''}`;
   if (a.issueNumber != null) return `#${a.issueNumber}${a.issueTitle ? ` ${a.issueTitle}` : ''}`;
-  return a.status === 'done' ? 'Finished' : '';
+  return '';
 }
 
 export interface Waiting {
