@@ -66,3 +66,30 @@
 .hands-free-on:hover {
   background: #c9f2d3;
 }
+/* the pause before "done" draining round the 🎙 while you're quiet */
+.mic-drain {
+  position: absolute;
+  inset: -5px;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  transform: rotate(-90deg);
+}
+.mic-drain circle {
+  fill: none;
+  stroke: var(--ds-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  animation-name: mic-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes mic-drain {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 100;
+  }
+}

@@ -168,3 +168,10 @@ html[data-reduce-motion] .voice-intro-wave {
     animation: none;
   }
 }
+.pause-seg {
+  align-self: flex-start;
+}
+.pause-seg .seg-btn {
+  min-width: 56px;
+  min-height: 44px;
+}
