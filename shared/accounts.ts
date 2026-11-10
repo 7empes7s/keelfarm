@@ -3,7 +3,7 @@
 import { livePct } from './usage.ts';
 import type { AccountCli, AccountKind, AccountStatus, ProviderAccount, UsageReading } from './types.ts';
 
-export const ACCOUNT_CLIS: AccountCli[] = ['claude', 'codex'];
+export const ACCOUNT_CLIS: AccountCli[] = ['claude', 'codex', 'gemini'];
 export const ACCOUNT_KINDS: AccountKind[] = ['subscription-login', 'api-key', 'setup-token'];
 /** The binding that means "whichever the rotation picks" (also '' or absent). */
 const ROTATION = 'rotation';
@@ -63,14 +63,18 @@ export const pinnedTo = (a: ProviderAccount, binding: string | undefined) => !!b
 
 // ---------- a session's environment ----------
 
-/** A subscription login's own folder: <SWARM_HOME>/accounts/<id>/<claude|codex>. */
+/** A subscription login's own folder: <SWARM_HOME>/accounts/<id>/<claude|codex|gemini>. Gemini CLI keeps its files in its .gemini. */
 export const accountDir = (join: (...p: string[]) => string, home: string, a: Pick<ProviderAccount, 'id' | 'cli'>) => join(home, 'accounts', a.id, a.cli);
 
-/** The login folder a built-in account is: what Claude Code and Codex use on their own. */
+/** The login folder a built-in account is: what Claude Code, Codex and Gemini CLI (GEMINI_CLI_HOME, its .gemini under it) use on their own. */
 export function builtInDir(join: (...p: string[]) => string, cli: AccountCli, env: Record<string, string | undefined>, homedir: string): string {
   if (cli === 'claude') return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir, '.claude');
+  if (cli === 'gemini') return env.GEMINI_CLI_HOME?.trim() || homedir;
   return env.CODEX_HOME?.trim() || join(homedir, '.codex');
 }
+
+/** The variable pointing each coding agent at a login's folder. */
+export const LOGIN_ENV: Record<AccountCli, string> = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', gemini: 'GEMINI_CLI_HOME' };
 
 /** What a session on an account adds to its environment. `keyEnv`: Claude Code reads its key from it through apiKeyHelper. */
 export interface AccountSetup {
@@ -82,10 +86,12 @@ export interface AccountSetup {
  * What a session on an account runs with. A built-in account changes nothing; another login points the CLI at its own
  * folder; a Claude API key goes through apiKeyHelper (never ANTHROPIC_API_KEY, never on disk); a setup token through
  * CLAUDE_CODE_OAUTH_TOKEN; an OpenAI key through OPENAI_API_KEY / CODEX_API_KEY. `secret` is the key ('' for logins).
+ * Gemini CLI has only logins (a Google AI plan): GEMINI_CLI_HOME.
  */
 export function accountSetup(a: ProviderAccount, dir: string, secret: string): AccountSetup {
   if (a.builtIn) return { env: {}, keyEnv: null };
-  if (a.kind === 'subscription-login') return { env: a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir }, keyEnv: null };
+  if (a.kind === 'subscription-login') return { env: { [LOGIN_ENV[a.cli]]: dir }, keyEnv: null };
+  if (a.cli === 'gemini') return { env: {}, keyEnv: null };
   if (a.cli === 'codex') return { env: secret ? { OPENAI_API_KEY: secret, CODEX_API_KEY: secret } : {}, keyEnv: null };
   if (a.kind === 'setup-token') return { env: secret ? { CLAUDE_CODE_OAUTH_TOKEN: secret } : {}, keyEnv: null };
   return secret ? { env: { [ACCOUNT_KEY_ENV]: secret }, keyEnv: ACCOUNT_KEY_ENV } : { env: {}, keyEnv: null };
@@ -221,11 +227,12 @@ export const newAccountId = (cli: AccountCli, rand: () => number = Math.random) 
 export const BILLING_LINKS: Record<AccountCli, Partial<Record<AccountKind, string>>> = {
   claude: { 'subscription-login': 'https://claude.ai/settings/usage', 'setup-token': 'https://claude.ai/settings/usage', 'api-key': 'https://console.anthropic.com/settings/billing' },
   codex: { 'subscription-login': 'https://chatgpt.com/codex/settings/usage', 'api-key': 'https://platform.openai.com/usage' },
+  gemini: { 'subscription-login': 'https://geminicli.com/docs/resources/quota-and-pricing/' },
 };
 
 /** One plain sentence per kind: what it's billed to and what it touches. */
 export function kindSentence(cli: AccountCli, kind: AccountKind): string {
-  const plan = cli === 'claude' ? 'Claude subscription (Pro or Max)' : 'ChatGPT plan';
+  const plan = cli === 'claude' ? 'Claude subscription (Pro or Max)' : cli === 'gemini' ? 'Google AI plan (Plus or Pro)' : 'ChatGPT plan';
   if (kind === 'subscription-login') return `Uses a ${plan}'s usage limits, signed in in its own folder. Nothing is billed per token.`;
   if (kind === 'setup-token') return `A year-long token from claude setup-token: uses that subscription's limits, like its login.`;
   return `Billed per token to that ${cli === 'claude' ? 'Anthropic' : 'OpenAI'} API account. It never uses or changes your subscription.`;

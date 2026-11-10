@@ -7,6 +7,7 @@ import { redact } from '../cloud.ts';
 import { HttpError } from '../httpError.ts';
 import { issueTaken } from '../issueClaims.ts';
 import { cliLabel, isCli } from '../clis.ts';
+import { boxCli } from '../../shared/cloud.ts';
 import { Accounts } from '../accounts.ts';
 import { checkBinding } from '../../shared/accounts.ts';
 import { HOME_DIR, MODELS_FILE } from '../config.ts';
@@ -168,8 +169,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (want === 'local') return 'local';
     const why = !this.cloud.boxApi()
       ? 'Cloud agents need your Upstash Box API key first: Settings → Cloud agents.'
-      : cli === 'opencode'
-        ? "OpenCode can't run in a cloud machine yet: give this agent Claude Code or Codex."
+      : !boxCli(cli)
+        ? `${cliLabel(cli)} can't run in a cloud machine yet: give this agent Claude Code or Codex.`
         : !this.boxRoom(moving)
           ? `Your Upstash plan's Box limit (${this.state.settings.cloud.boxLimit}) is reached. Raise it in Settings → Cloud agents if your plan allows more, or delete Boxes you don't need.`
           : null;
@@ -238,7 +239,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     const boxId = await this.boxMachines.ensure(machine, (text) => this.appendLog(a, [{ kind: 'system', text: `☁ ${text}` }]));
     const creds = await this.cloud.credentials(cli, this.offKey(a, cli));
     if (creds.missing.length) throw new Error(`Cloud agents can't sign in yet. Missing: ${creds.missing.join('; ')}.`);
-    if (check && creds.ownLogin && cli !== 'opencode' && (await this.boxMachines.signedIn(machine, cli).catch(() => null)) === false) throw new SignInNeeded(cli);
+    if (check && creds.ownLogin && boxCli(cli) && (await this.boxMachines.signedIn(machine, cli).catch(() => null)) === false) throw new SignInNeeded(cli);
     // The Box's own Chromium starts with a first tab; Playwright attaches to it.
     const browser = browserTesting ? await api.browser(boxId).catch(() => false) : false;
     return { api, boxId, env: creds.env, apiKeyHelper: creds.apiKeyHelper, browser, record: (rec) => this.boxCliRecord(a.id, rec), connection: (up) => this.boxMachines.connection(machine, up) };
@@ -348,7 +349,7 @@ export abstract class SwarmAgents extends SwarmMerge {
   protected async startSignIn(a: PersistedAgent) {
     const cli = a.cli || this.state.settings.defaultCli;
     const api = this.cloud.boxApi();
-    if (!a.needsSignIn || a.host !== 'box' || cli === 'opencode' || !api) return;
+    if (!a.needsSignIn || a.host !== 'box' || !boxCli(cli) || !api) return;
     const s = this.signInOf(a, cli);
     if (s.run || s.starting) return;
     s.starting = true;
@@ -424,7 +425,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       s?.run?.stop();
       if (s) s.run = null;
     }
-    if (cli === 'opencode') return this.signedIn(a);
+    if (!boxCli(cli)) return this.signedIn(a);
     const creds = await this.cloud.credentials(cli, this.offKey(a, cli)).catch(() => null);
     const ok = !creds ? null : creds.ownLogin ? await this.boxMachines.signedIn(this.machineOf(a), cli).catch(() => null) : true;
     if (!this.state.agents.includes(a) || a.host !== 'box') return;
@@ -493,7 +494,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (patch.host !== undefined && a.role !== 'ceo' && (patch.host === 'box' || patch.host === 'local')) this.moveAgent(a, patch.host);
     if (patch.cli !== undefined && a.role !== 'ceo') {
       const cli = isCli(patch.cli) ? patch.cli : '';
-      if (a.host === 'box' && (cli || this.state.settings.defaultCli) === 'opencode') throw new HttpError(400, `${a.name} works in the cloud, where OpenCode can't run yet: move them to this computer first.`);
+      if (a.host === 'box' && !boxCli(cli || this.state.settings.defaultCli)) throw new HttpError(400, `${a.name} works in the cloud, where ${cliLabel(cli || this.state.settings.defaultCli)} can't run yet: move them to this computer first.`);
       if (cli && a.host !== 'box' && !this.cliReady(cli)) throw new HttpError(400, `${cliLabel(cli)} isn't installed on this computer.`);
       const changed = cli !== a.cli;
       a.cli = cli;

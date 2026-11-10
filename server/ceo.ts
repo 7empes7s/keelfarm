@@ -232,7 +232,7 @@ export interface OfficeTools {
 }
 
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
-const CLI = z.enum(['claude', 'codex', 'opencode']);
+const CLI = z.enum(['claude', 'codex', 'opencode', 'gemini']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
@@ -321,7 +321,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       {
         agent_id: z.string(),
         account: z.string().max(40).optional().describe('An account id or tag (company_status lists them) to run on, or "rotation"'),
-        cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
+        cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default. gemini: QA second opinions, docs, research, small fixes; not a builder'),
         model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
         // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.

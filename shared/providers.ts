@@ -45,6 +45,7 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'claude', name: 'Claude Code', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://docs.claude.com/en/docs/claude-code', usage: 'claude', blurb: 'Claude subscription logins, Anthropic API keys and setup tokens for agents' },
   { id: 'codex', name: 'Codex', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://developers.openai.com/codex', usage: 'codex', blurb: 'ChatGPT plan logins and OpenAI API keys for agents' },
   { id: 'opencode', name: 'OpenCode', category: 'coding', auth: 'none', home: 'own-setup', docsUrl: 'https://opencode.ai/docs', blurb: 'Runs with its own setup (opencode auth login)' },
+  { id: 'gemini-cli', name: 'Gemini CLI', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://geminicli.com/docs', blurb: 'Google AI plan logins (Plus or Pro), for QA second opinions, docs, research and small fixes' },
   { id: 'anthropic', name: 'Anthropic API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'ANTHROPIC_API_KEY', placeholder: 'sk-ant-…', docsUrl: 'https://docs.claude.com/en/api/overview', usage: 'anthropic', blurb: 'Claude models over the API' },
   { id: 'openai', name: 'OpenAI API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/api-reference', usage: 'openai', blurb: 'GPT models over the API' },
   { id: 'gemini', name: 'Google Gemini API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs', usage: 'gemini', blurb: 'Gemini models over the API' },
@@ -283,10 +284,11 @@ export function providerCards(i: CardInput): ProviderCard[] {
   const out: ProviderCard[] = [];
   for (const a of i.accounts) {
     if (a.removing) continue;
-    const def = providerDef(a.cli)!;
+    const provider = a.cli === 'gemini' ? 'gemini-cli' : a.cli; // 'gemini' is the Gemini API's card
+    const def = providerDef(provider)!;
     out.push({
       key: `account:${a.id}`,
-      provider: a.cli,
+      provider,
       name: def.name,
       label: a.label,
       category: 'coding',
