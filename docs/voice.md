@@ -240,6 +240,25 @@ else it still closes what's open).
 - **No mic:** when the mic is refused or the browser can't listen, the call says why in one line and falls back to
   tap-to-talk: a **Talk** button (or Space) for each turn.
 
+### The meeting room (#369)
+
+Every call happens in the meeting room, the glass room in the lobby's west wing (south of the manager's office, round
+the west window). While a call is on the CEO walks over from the corner office and stands at the table's head in
+front of the wall screen, which shows the call's status and captions; they wave as it connects, nod while they listen,
+look down at the table while they think and talk with their hands while they speak, and walk back to their desk when
+it ends. The sign over the door says who's on the call and its light turns red.
+
+- **Join in person:** walk in and press **E** at any chair ("Join the call"; with no call on, "Sit down and call …"
+  starts one). You sit facing the CEO; on a narrow screen the call screen folds to its pill so the room shows. Walking,
+  Space or **E** gets you up: the call goes on. Leaving the lobby gets you up too.
+- **Join from the call window:** the phone's call screen and the desktop's call card show a live view of the room, the
+  CEO at the table, like a video call's tile (`world/MeetingTile.tsx`: a small renderer of its own, so it works on
+  any floor and in pocket mode). It draws 12 frames a second at most, and nothing while the window is folded to its
+  pill or orb, the tab is hidden, the tile is off screen or you sit in the room yourself.
+
+The rules are pure and tested in `client/src/world/meeting.ts` (the call's moments → where the CEO is and what they
+do, what E at a chair does and the view from it, the tile's frame throttle); the room's place is in `layout.ts`.
+
 Nothing else changed: the 🎧 hands-free switch, hold/tap/V to talk, saved clips, ▶ replay and the dips work as
 before, and with no call on nothing opens the mic or starts reading by itself unless those settings say so.
 

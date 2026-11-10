@@ -295,3 +295,22 @@
 .vcall-card-who .vcall-name {
   font-size: var(--ds-text-md);
 }
+/* the live view of the meeting room (world/MeetingTile.tsx): the call's video tile */
+.vcall-tile {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-sunken);
+}
+.vcall-middle .vcall-tile {
+  max-width: 420px;
+  flex-shrink: 1;
+}
+.vcall-tile canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
