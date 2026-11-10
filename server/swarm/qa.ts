@@ -7,7 +7,7 @@ import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
-import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaRoundResult, type QaNext } from '../qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaRoundResult, restartLossNext, type QaNext } from '../qaOutcome.ts';
 import { fullQualityLine, qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
@@ -312,6 +312,15 @@ export abstract class SwarmQa extends SwarmSessions {
       a.endedAt = null;
       this.appendLog(a, [{ kind: 'system', text: '↻ The session ended without a QA report. Resuming it once to finish.' }]);
       this.startAgentSession(a, repo, resume.cwd, QA_RESUME_PROMPT, resume.systemAppend, a.sessionId, QA_SCHEMA);
+      return;
+    }
+
+    // The office restarted under this round and its test lab went with it (#333): QA again by itself, once, nothing counted.
+    if (rec && restartLossNext({ acrossRestart: !!rt.acrossRestart, stopped: a.status === 'stopped', verdict: report?.verdict ?? null, cause: report?.cause, round: rec.round, restartRetryRound: rec.restartRetryRound ?? null }) === 'retry') {
+      a.status = 'done';
+      this.spend.outcome(a.id, 'done');
+      this.appendLog(a, [{ kind: 'system', text: `↻ The office restarted during QA of PR #${rec.prNumber} and took the test lab with it: QA runs this round again (not a failed round).` }]);
+      this.setQa(rec, { qaAgentId: null, restartRetryRound: rec.round, status: 'queued' });
       return;
     }
 
