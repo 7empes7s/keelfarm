@@ -153,7 +153,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     this.signInTold.set(use.id, now);
     const label = this.accounts.label(use.id);
     const where = use.builtIn ? `run "${cli}" in a terminal on this computer and sign in` : 'sign it in from Settings → Providers';
-    this.notice({ kind: 'stuck', title: `${label} needs signing in`, text: `${a.name}'s session opened on ${cliLabel(cli)}'s sign-in, so it ended and the task went back in line. To use this account again, ${where}.`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal'] }, { event: 'agentError', line: a.name });
+    this.notice({ kind: 'stuck', title: `${label} needs signing in`, text: `${a.name}'s session opened on ${cliLabel(cli)}'s sign-in, so it ended: the task carries on on another account, or waits in line. To use this account again, ${where}.`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal'] }, { event: 'agentError', line: a.name });
   }
 
   /**

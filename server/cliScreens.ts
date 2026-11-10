@@ -36,16 +36,16 @@ export function pick(screen: string, want: RegExp): ScreenKey | null {
 
 /** The screens the office answers, in the order they're looked for. */
 const KNOWN_SCREENS: readonly KnownScreen[] = [
-  { id: 'trust', clis: ['claude', 'codex'], what: 'the folder-trust question (trusted the worktree)', key: trustKey },
+  { id: 'trust', clis: ['claude', 'codex'], what: 'folder-trust question (trusted the worktree)', key: trustKey },
   // Claude Code's first run: the theme picker, whose default (Dark mode) is selected.
-  { id: 'theme', clis: ['claude'], what: 'the theme picker (kept the default)', key: (s) => (/Choose the text style/i.test(s) ? pick(s, /^Dark mode/i) : null) },
+  { id: 'theme', clis: ['claude'], what: 'theme picker (kept the default)', key: (s) => (/Choose the text style/i.test(s) ? pick(s, /^Dark mode/i) : null) },
   // The office chose this mode for its sessions (or the manager's own settings did): accepting it is the answer.
-  { id: 'bypass', clis: ['claude'], what: 'the Bypass Permissions warning (accepted the mode the session runs in)', key: (s) => (/Bypass Permissions mode/i.test(s) ? pick(s, /^Yes, I accept/i) : null) },
-  { id: 'terminal-setup', clis: ['claude'], what: 'the terminal setup offer (not now)', key: (s) => (/Use Claude Code's terminal setup\?/i.test(s) ? pick(s, /^No\b/i) : null) },
-  { id: 'notes', clis: ['claude'], what: 'the security notes (continued)', key: (s) => (/Security notes:/i.test(s) && /Press Enter to continue/i.test(s) ? 'enter' : null) },
-  { id: 'login-done', clis: ['claude'], what: 'the signed-in screen (continued)', key: (s) => (/Login successful/i.test(s) && /Press Enter to continue/i.test(s) ? 'enter' : null) },
-  { id: 'update', clis: ['codex'], what: 'the update offer (skipped: the office updates its CLIs)', key: (s) => (/Update available!?/i.test(s) ? pick(s, /^Skip$/i) : null) },
-  { id: 'hooks', clis: ['codex'], what: "the hooks review (went on without them: trusting them is the manager's call)", key: hookReviewKey },
+  { id: 'bypass', clis: ['claude'], what: 'Bypass Permissions warning (accepted the mode the session runs in)', key: (s) => (/Bypass Permissions mode/i.test(s) ? pick(s, /^Yes, I accept/i) : null) },
+  { id: 'terminal-setup', clis: ['claude'], what: 'terminal setup offer (not now)', key: (s) => (/Use Claude Code's terminal setup\?/i.test(s) ? pick(s, /^No\b/i) : null) },
+  { id: 'notes', clis: ['claude'], what: 'security notes (continued)', key: (s) => (/Security notes:/i.test(s) && /Press Enter to continue/i.test(s) ? 'enter' : null) },
+  { id: 'login-done', clis: ['claude'], what: 'signed-in screen (continued)', key: (s) => (/Login successful/i.test(s) && /Press Enter to continue/i.test(s) ? 'enter' : null) },
+  { id: 'update', clis: ['codex'], what: 'update offer (skipped: the office updates its CLIs)', key: (s) => (/Update available!?/i.test(s) ? pick(s, /^Skip$/i) : null) },
+  { id: 'hooks', clis: ['codex'], what: "hooks review (went on without them: trusting them is the manager's call)", key: hookReviewKey },
 ];
 
 /** A sign-in on screen: only the manager can do it (Settings → Providers, or the agent's terminal). */
