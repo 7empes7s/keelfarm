@@ -1,17 +1,42 @@
 // The demo's Settings → Providers (#362): test calls that never leave the computer (a key with "bad" in it is turned
-// away; OpenRouter tells a made-up credit), and a made-up key or server in every category for a fresh demo office.
+// away, "offline" unreachable; OpenRouter tells a made-up credit, none for "nocredit"), a made-up key or server in
+// every category for a fresh demo office, and the keys found on this computer from a made-up archive (#367).
 import type { ProbeRequest, ProbeResult } from '../../shared/providers.ts';
-import { registerDemo } from './registry.ts';
+import type { RawKey } from '../../shared/keyScan.ts';
+import { registerCeoReply, registerDemo } from './registry.ts';
+
+const LITELLM = 'LiteLLM litellm.env';
+/** The made-up archive's keys: one live, dead, out of credit or unreachable each, a duplicate, one already saved, one unknown. */
+export const DEMO_FOUND_KEYS: RawKey[] = [
+  { variable: 'LITELLM_MASTER_KEY', value: 'sk-demo-litellm-master-00000000', source: LITELLM },
+  { variable: 'GEMINI_API_KEY', value: 'AIzaSyDEMO-retired-gemini-00007q3k', source: LITELLM },
+  { variable: 'GOOGLE_API_KEY', value: 'AIzaSyDEMO-retired-gemini-00007q3k', source: 'NewsBites .env' },
+  { variable: 'OPENAI_API_KEY', value: 'sk-demo-openai-0000000000001a2b', source: LITELLM },
+  { variable: 'OPENROUTER_API_KEY', value: 'sk-or-v1-demo-retired-nocredit-0000m1x9', source: LITELLM },
+  { variable: 'GITHUB_TOKEN', value: 'ghp_demoBadRetiredToken00000t6y4', source: LITELLM },
+  { variable: 'GROQ_API_KEY', value: 'gsk_demo_bad_retired_00000g7r2', source: LITELLM },
+  { variable: 'CEREBRAS_API_KEY', value: 'csk-demo-retired-0000000c5b8', source: LITELLM },
+  { variable: 'CEREBRAS_API_KEY_PAID', value: 'csk-demo-paid-retired-00000p4d1', source: LITELLM },
+  { variable: 'CLOUDFLARE_API_TOKEN', value: 'demo-cf-token-retired-0000f2e6', source: 'Control Surface .env' },
+  { variable: 'NVIDIA_NIM_API_KEY', value: 'nvapi-demo-retired-offline-0000n8v3', source: LITELLM },
+  { variable: 'AIHUBMIX_API_KEY', value: 'sk-demo-aihubmix-retired-0000h3u5', source: 'Mimule config.json' },
+  { variable: 'VAST_API_KEY', value: 'demo-vast-retired-key-0000v9w2', source: LITELLM },
+];
 
 async function demoProbe(req: ProbeRequest): Promise<ProbeResult> {
   if (req.kind === 'command') return { status: /^(npx|node|uvx|docker)$/.test(req.command) ? 200 : 404 };
   if (Object.values(req.headers).some((v) => /bad/i.test(v))) return { status: 401 };
-  if (req.url.includes('openrouter.ai')) return { status: 200, body: { data: { label: 'demo', usage: 3.4, limit: 10 } } };
+  if (Object.values(req.headers).some((v) => /offline/i.test(v))) return { status: 0 };
+  if (req.url.includes('openrouter.ai')) return { status: 200, body: { data: { label: 'demo', usage: 3.4, limit: 10, limit_remaining: Object.values(req.headers).some((v) => /nocredit/i.test(v)) ? 0 : 6.6 } } };
   return { status: 200, body: {} };
 }
 
 registerDemo('providers', () => ({
   providerProbe: demoProbe,
+  scanForKeys: async () => {
+    await new Promise((r) => setTimeout(r, 400)); // long enough to see "Scanning…"
+    return DEMO_FOUND_KEYS.map((k) => ({ ...k }));
+  },
   demoProviders: () => ({
     keys: [
       { provider: 'openai', key: 'sk-demo-openai-0000000000001a2b', label: 'OpenAI API' },
@@ -26,3 +51,5 @@ registerDemo('providers', () => ({
     ],
   }),
 }));
+
+registerCeoReply('keys', async ({ text, use }) => (/\bkeys?\b/i.test(text) && /\b(scan|find|found|old|left|retired)\b/i.test(text) ? `Here's what the scan found, tested; you pick what to keep in Settings → Providers.\n\n${await use('scan_keys', {})}` : null));

@@ -2,11 +2,14 @@
 // text, audio, video, image, cloud, MCP servers): its status, plan, usage (#361's rows), what uses it, Test and Remove.
 // "+ Add provider" opens the catalogue. Claude and Codex accounts, the ElevenLabs key and the Upstash key are still
 // changed in their own sections (linked from their cards); keys added here and MCP servers are changed here.
+// "Keys found on this computer" (#367): Scan, then a review sheet of what the server found and tested, last 4 only.
 import { useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CATEGORIES, PROVIDERS, providerCards, type CardStatus, type ProviderCard, type ProviderDef } from '../../../shared/providers';
-import { CEO_ID, type ProviderCategory } from '../../../shared/types';
+import { CEO_ID, type FoundKeyView, type KeyCheck, type ProviderCategory } from '../../../shared/types';
+import { scanSummary } from '../../../shared/keyScan';
+import { useKeyReview } from './keyReview';
 import { Chip } from './DetailsPage';
 import type { ChipTone } from './detailsRules';
 import { Icon } from './Icon';
@@ -88,6 +91,7 @@ export function ProvidersPage() {
           </span>
         </div>
       </div>
+      <FoundKeysCard />
       {CATEGORIES.map((cat) => {
         const list = cards.filter((c) => c.category === cat.id);
         return (
@@ -345,6 +349,115 @@ function WhoSheet({ id, onClose }: { id: string; onClose: () => void }) {
           {a.name}
         </label>
       ))}
+    </Sheet>
+  );
+}
+
+// ---------- keys found on this computer (#367) ----------
+
+const CHECK: Record<KeyCheck, [string, ChipTone]> = { live: ['Live', 'good'], dead: ['Dead', 'bad'], 'no-credit': ['No credit', 'warn'], unknown: ['Not tested', 'plain'] };
+
+function FoundKeysCard() {
+  const scan = useStore((s) => s.keyScan);
+  const open = useKeyReview((s) => s.open);
+  const scanning = scan.state === 'scanning';
+  return (
+    <section className="card pv-group" aria-label="Keys found on this computer">
+      <div className="pv-top">
+        <h4>
+          <Icon name="key-round" /> Keys found on this computer
+        </h4>
+        <button className="btn" disabled={scanning} onClick={() => void api.scanKeys().catch(() => undefined)}>
+          <Icon name="search" /> {scanning ? 'Scanning…' : scan.state === 'idle' ? 'Scan' : 'Scan again'}
+        </button>
+      </div>
+      <p className="muted small">The shut-down projects (Mimule, Control Surface, NewsBites, LiteLLM…) left API keys on this computer. Scan finds them, tests each one with its provider, and shows only the last 4 characters. Nothing is saved until you import it.</p>
+      {scan.state === 'failed' && (
+        <p className="small" role="status">
+          The scan failed: {scan.note}
+        </p>
+      )}
+      {scan.state === 'done' && (
+        <div className="pv-top">
+          <span className="small">{scanSummary(scan.keys)}</span>
+          {scan.keys.length > 0 && (
+            <button className="btn btn-primary" onClick={() => useKeyReview.setState({ open: true })}>
+              Review
+            </button>
+          )}
+        </div>
+      )}
+      {open && <FoundKeysSheet key={scan.at ?? 0} keys={scan.keys} onClose={() => useKeyReview.setState({ open: false })} />}
+    </section>
+  );
+}
+
+function FoundKeysSheet({ keys, onClose }: { keys: FoundKeyView[]; onClose: () => void }) {
+  // Live ones ticked (the sheet starts afresh after each scan: its key is the scan's time).
+  const [picked, setPicked] = useState(() => new Set(keys.filter((k) => k.importable && k.check?.result === 'live').map((k) => k.id)));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const ids = keys.filter((k) => k.importable && picked.has(k.id)).map((k) => k.id);
+  const toggle = (id: string, on: boolean) => setPicked((p) => new Set([...p].filter((x) => x !== id).concat(on ? [id] : [])));
+  const importSelected = async () => {
+    setBusy(true);
+    try {
+      const r = await api.importKeys(ids);
+      setNote([`Imported ${r.imported}.`, ...r.skipped].join(' '));
+    } catch (err) {
+      setNote((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const forget = async () => {
+    const ok = await confirmDialog({ title: 'Forget this list?', body: "The keys leave the office's memory. The files they came from stay as they are; Scan finds them again.", icon: 'trash-2', confirm: 'Forget', tone: 'danger' });
+    if (!ok) return;
+    await api.dismissKeys().catch(() => undefined);
+    onClose();
+  };
+  return (
+    <Sheet title="Keys found on this computer" onClose={onClose} className="pv-sheet">
+      <div className="pv-top">
+        <span className="small">{scanSummary(keys)}</span>
+        <Menu
+          label="More for the keys found"
+          items={[
+            { label: 'Scan again', onSelect: () => void api.scanKeys().catch(() => undefined) },
+            { label: 'Forget this list', danger: true, onSelect: () => void forget() },
+          ]}
+        />
+      </div>
+      <p className="pv-warning small" role="note">
+        <Icon name="triangle-alert" /> These keys belonged to retired projects: once the ones you keep work here, think about rotating them at each provider.
+      </p>
+      {keys.map((k) => {
+        const def = PROVIDERS.find((p) => p.id === k.provider);
+        const [word, tone] = k.savedAs ? (['Saved', 'good'] as const) : CHECK[k.check?.result ?? 'unknown'];
+        const why = k.savedAs ? `Saved as ${k.savedAs}` : !k.importable ? 'No integration to import it into yet' : k.check?.note;
+        return (
+          <label key={k.id} className="pv-card pv-found">
+            <input type="checkbox" disabled={!k.importable} checked={k.importable && picked.has(k.id)} onChange={(e) => toggle(k.id, e.target.checked)} aria-label={`Import ${def?.name ?? k.variable} ••••${k.keyHint}`} />
+            <Icon name={def ? CATEGORY_ICON[def.category] : 'key-round'} />
+            <span className="ds-row-main">
+              <span className="ds-row-title">
+                {def?.name ?? 'Unknown provider'} ••••{k.keyHint}
+              </span>
+              <span className="ds-row-meta">{[k.variable, k.sources.join(' + ')].join(' · ')}</span>
+              {why && <span className="ds-row-meta">{why}</span>}
+            </span>
+            <Chip tone={tone}>{word}</Chip>
+          </label>
+        );
+      })}
+      <button className="btn btn-primary" disabled={busy || !ids.length} onClick={() => void importSelected()}>
+        {busy ? 'Importing…' : `Import selected (${ids.length})`}
+      </button>
+      {note && (
+        <p className="small" role="status">
+          {note}
+        </p>
+      )}
     </Sheet>
   );
 }
