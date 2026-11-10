@@ -19,7 +19,8 @@ import { glow } from './materials';
 import { ceoAtCall, chairLabel, chairPlan, chairView, demoMeeting } from './meeting';
 import { MeetingSet } from './MeetingSet';
 import { WallSign } from './OfficeFloor';
-import { bodyState, claimBody, onErrand, placeBody, seatBody, setBody } from './people';
+import type { BodyTarget } from './body';
+import { bodyState, bodyTarget, claimBody, onErrand, placeBody, seatBody, setBody } from './people';
 import { leavePerch, perch, setPerch } from './perch';
 import { GlassWall, Plant, Rug } from './Props';
 import { Box } from './Toon';
@@ -77,7 +78,12 @@ type Where = 'office' | 'going' | 'room' | 'back';
 
 /** Walks the CEO to the table's head while a call is on, and back to their desk after. */
 function useCeoAtTheTable() {
-  const run = useRef<{ where: Where; legs: Pt[]; leg: number; gesture: string }>({ where: 'office', legs: [], leg: 0, gesture: '' });
+  const run = useRef<{ where: Where; legs: Pt[]; leg: number; gesture: string; mine?: BodyTarget }>({ where: 'office', legs: [], leg: 0, gesture: '' });
+  /** Moves the CEO, remembering the target so another mover taking over shows. */
+  const move = (patch: Partial<Omit<BodyTarget, 'teleport'>>) => {
+    setBody(CEO_ID, patch);
+    run.current.mine = bodyTarget(CEO_ID);
+  };
 
   const route = (to: Pt, where: Where) => {
     const r = run.current;
@@ -89,13 +95,14 @@ function useCeoAtTheTable() {
     if (from && path?.length) {
       r.legs = [from, ...path];
       r.leg = 1;
-      setBody(CEO_ID, { mode: 'walking', x: r.legs[1].x, z: r.legs[1].z, speed: HURRY_SPEED, heading: 0, gesture: 'none' });
+      move({ mode: 'walking', x: r.legs[1].x, z: r.legs[1].z, speed: HURRY_SPEED, heading: 0, gesture: 'none' });
       return;
     }
     // not drawn yet, or no way through: they're there already
     r.legs = [];
     if (where === 'going') {
       placeBody(CEO_ID, MEETING_HEAD.x, MEETING_HEAD.z, HEAD_HEADING);
+      r.mine = bodyTarget(CEO_ID);
       r.where = 'room';
     } else {
       seatBody(CEO_ID);
@@ -107,6 +114,7 @@ function useCeoAtTheTable() {
     // arriving in the lobby mid-call: the CEO is at the table already
     if (ceoAtCall(useCall.getState().call).inRoom) {
       placeBody(CEO_ID, MEETING_HEAD.x, MEETING_HEAD.z, HEAD_HEADING);
+      run.current.mine = bodyTarget(CEO_ID);
       run.current.where = 'room';
     }
     const r = run.current;
@@ -126,8 +134,11 @@ function useCeoAtTheTable() {
       const home = spot(walkways('lobby'), 'ceo');
       if (home) route(home, 'back');
     }
+    // someone else moved them meanwhile (the CEO's walk round the floors, the probe): set off again from where they are
+    const taken = r.where !== 'office' && bodyTarget(CEO_ID) !== r.mine;
+    if (taken && (r.where === 'going' || r.where === 'room')) route(MEETING_HEAD, 'going');
     if (r.where === 'room') {
-      if (r.gesture !== want.gesture) setBody(CEO_ID, { mode: 'standing', x: MEETING_HEAD.x, z: MEETING_HEAD.z, heading: HEAD_HEADING, gesture: want.gesture });
+      if (r.gesture !== want.gesture) move({ mode: 'standing', x: MEETING_HEAD.x, z: MEETING_HEAD.z, heading: HEAD_HEADING, gesture: want.gesture });
       r.gesture = want.gesture;
       return;
     }
@@ -139,7 +150,7 @@ function useCeoAtTheTable() {
     if (!last) {
       r.leg++;
       const q = r.legs[r.leg];
-      setBody(CEO_ID, { mode: 'walking', x: q.x, z: q.z, speed: HURRY_SPEED, heading: 0, gesture: 'none' });
+      move({ mode: 'walking', x: q.x, z: q.z, speed: HURRY_SPEED, heading: 0, gesture: 'none' });
     } else if (r.where === 'going') {
       r.where = 'room'; // the gesture is set next frame
     } else {
