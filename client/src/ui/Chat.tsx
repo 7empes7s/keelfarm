@@ -22,6 +22,7 @@ import { DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
 import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
+import { openOnce } from './surfaces';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachTray, FileViewer, useDropZone, useSlash } from './ChatFiles';
@@ -434,7 +435,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
         )}
         {versions && <MessageVersions m={byId.get(versions.id) ?? versions} author={versions.from === 'manager' ? 'you' : ceo.name} onClose={() => setVersions(null)} />}
         {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
-        {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => setSheet('memory')} />}
+        {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => (setSheet(null), openOnce('memory', () => setSheet('memory')))} />}
         {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={artifact.doc ? undefined : replyAbout} onOpenInThread={seg === 'files' ? inThread(artifact.from, artifact.messageId) : undefined} onClose={() => setArtifact(null)} />

@@ -280,7 +280,7 @@ export abstract class SwarmCeoTools extends SwarmManagerAsks {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: `${usageLabel(this.usageNow(), Date.now())} · ${usageLine(this.usageSources())}`, // every account and provider (#361); pacing follows the agents' Claude login
+          usage: [usageLabel(this.usageNow(), Date.now()), this.nextUsage(), usageLine(this.usageSources())].filter(Boolean).join(' · '), // every account and provider (#361); the next session's account named (#383)
           experiments: this.lab.summary(), // run_experiment starts, stops and promotes one when the manager asks
           providers: this.providersLine(), // every connection on Settings → Providers (#362)
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),

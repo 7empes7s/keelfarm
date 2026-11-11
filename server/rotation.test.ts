@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from './agentRunner.ts';
 import type { AgentStatus, PhoneMessage, ServerEvent } from '../shared/types.ts';
+import { limitedBy } from '../shared/accounts.ts';
 
 // Its own folder: the accounts' limits are saved in the demo's accounts file.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-rotation-'));
@@ -209,6 +210,53 @@ describe('account rotation', { timeout: 30_000 }, () => {
     await wait(5_000);
     expect(runs.filter((r) => r.role !== 'ceo').length).toBeGreaterThan(0);
     expect(runs.filter((r) => r.cli === 'gemini')).toEqual([]);
+  });
+
+  // #383: limits are per account. A warning or a full window on one login rests that login, not the office.
+  /** The CEO's sessions report `report` as they start (the demo's own session runs on). */
+  function reporting(i: Internals, report: (cb: SessionCallbacks) => void) {
+    const start = i.backend.startSession.bind(i.backend);
+    i.backend.startSession = (opts, cb) => {
+      const h = start(opts, cb);
+      if (opts.role === 'ceo') report(cb);
+      return h;
+    };
+  }
+
+  it("a usage warning on one login doesn't pace the office while another has room (#383)", async () => {
+    const { swarm, i, runs } = await office([]);
+    reporting(i, (cb) => cb.usageWarning?.({ resetsAt: Date.now() + 3600_000, rateLimitType: 'five_hour', utilization: 0.96 }));
+    swarm.requestReview();
+    await wait(3_000);
+    expect(runs.filter((r) => r.role === 'ceo').map((r) => r.account)).toEqual(['claude-login']);
+    expect(i.usageNow().state).toBe('normal');
+    expect(i.state.messages.filter((m) => /usage is getting high/.test(m.text))).toHaveLength(0);
+    const login = swarm.accounts.view().accounts.find((a) => a.id === 'claude-login')!;
+    expect(login.usage).toContainEqual(expect.objectContaining({ type: 'five_hour', pct: 96 })); // on its own account
+    expect(swarm.accounts.view().next?.claude).toBe('claude-keelop'); // near out: new sessions move on
+  });
+
+  it('with rotation off, the same warning paces the office as before', async () => {
+    const { swarm, i } = await office([]);
+    swarm.updateSettings({ rotation: { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
+    reporting(i, (cb) => cb.usageWarning?.({ resetsAt: Date.now() + 3600_000, rateLimitType: 'five_hour', utilization: 0.96 }));
+    swarm.requestReview();
+    await wait(3_000);
+    expect(i.usageNow().state).toBe('pacing');
+  });
+
+  it("a login at 100% weekly rests only it: no pause, the next sessions on another account, its card says weekly, company.usage names the next (#383)", async () => {
+    const { swarm, i } = await office([]);
+    reporting(i, (cb) => cb.usage?.([{ type: 'five_hour', pct: 30, resetsAt: Date.now() + 3600_000, at: Date.now() }, { type: 'seven_day', pct: 100, resetsAt: Date.now() + 50 * 3600_000, at: Date.now() }]));
+    swarm.requestReview();
+    await wait(3_000);
+    expect(i.usageNow().state).toBe('normal');
+    const login = swarm.accounts.view().accounts.find((a) => a.id === 'claude-login')!;
+    expect(login.status).toBe('limited');
+    expect(limitedBy(login.usage, login.until, Date.now())).toBe('weekly');
+    expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')!.usage.map((r) => r.pct)).toEqual([18, 63]); // its own numbers, untouched
+    expect((i as unknown as { nextUsage(): string }).nextUsage()).toBe('next on Max · keelops: 5h 18% · week 63%');
+    expect(swarm.accounts.view().next).toEqual({ claude: 'claude-keelop', ceo: 'claude-keelop' });
   });
 
   it('with rotation off, a limit stays on its account as before', async () => {

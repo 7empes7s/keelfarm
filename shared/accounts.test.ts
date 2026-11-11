@@ -10,6 +10,7 @@ import {
   builtInDir,
   checkBinding,
   cleanTags,
+  limitedBy,
   moveAccount,
   loginPlanName,
   normaliseAccounts,
@@ -93,6 +94,13 @@ describe('accountStatus', () => {
     const week = { type: 'seven_day', pct: 100, resetsAt: now - 2 * 3600_000, at: now - 30 * 3600_000 };
     expect(accountStatus({ ...base, usage: [week] })).toEqual({ status: 'ready', until: null });
     expect(accountStatus({ ...base, usage: [{ ...week, resetsAt: now + 3600_000 }] }).status).toBe('limited');
+  });
+  it('says which limit holds a limited account (#383)', () => {
+    const week = { type: 'seven_day', pct: 100, resetsAt: now + 50 * 3600_000, at: now };
+    const five = { type: 'five_hour', pct: 100, resetsAt: now + 2 * 3600_000, at: now };
+    expect(limitedBy([week, five], accountStatus({ ...base, usage: [week, five] }).until, now)).toBe('weekly');
+    expect(limitedBy([five], accountStatus({ ...base, usage: [five] }).until, now)).toBe('5-hour');
+    expect(limitedBy([], now + 60_000, now)).toBeNull(); // a session's hit: no reading says
   });
 });
 
