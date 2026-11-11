@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEMORY, heldNote, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
-import { DEFAULT_DISK } from '../shared/disk.ts';
+import { DEFAULT_DISK, type DiskAlertMark } from '../shared/disk.ts';
 import { createDemoBackend } from './demo.ts';
 import { admission, checkRestart, heldMessage, heldPing, idlePreview, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryRelief, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
 import { Swarm } from './swarm.ts';
@@ -193,10 +193,11 @@ describe('OfficeHealth', () => {
     expect(settings.estimates.build).toBe(2268); // halfway from 1.5 GB to its 2.9 GB peak
   });
 
-  it('holds new builds, QA and previews below the disk threshold (not the CEO), warns once, and lets them go once there is room (#340)', async () => {
+  it('holds new builds, QA and previews below the disk threshold (not the CEO), warns once per level, and lets them go once there is room (#340)', async () => {
     const { health, out } = rig();
     const free = { gb: 40 };
-    health.useDisk({ read: async () => [{ label: 'Office data', path: '/srv', totalMb: 150 * 1024, freeMb: free.gb * 1024 }], settings: () => DEFAULT_DISK, alert: (title) => out.alerts.push(title), lastClean: () => null });
+    let mark: DiskAlertMark | null = null;
+    health.useDisk({ read: async () => [{ label: 'Office data', path: '/srv', totalMb: 150 * 1024, freeMb: free.gb * 1024 }], settings: () => DEFAULT_DISK, alert: (title) => out.alerts.push(title), lastClean: () => null, lastAlert: () => mark, setLastAlert: (m) => (mark = m) });
     await health.tick();
     expect(health.admit('build')).toBe(true);
     expect(health.view().disk?.level).toBe('ok');
@@ -211,11 +212,33 @@ describe('OfficeHealth', () => {
     expect(health.admit('build', 'o/a')).toBe(false);
     expect(health.view().held).toMatch(/^Waiting for disk space/);
     expect(health.view().heldWork).toBeNull(); // not "waiting for memory"
-    expect(out.alerts).toHaveLength(1); // once per low stretch
+    expect(out.alerts).toEqual(['Disk getting full: 12.0 GB left', 'Disk almost full: new work waits']); // again only when it got worse (#502)
+    await health.tick();
+    expect(out.alerts).toHaveLength(2);
     free.gb = 40;
     await health.tick();
     expect(health.view().held).toBeNull();
     expect(health.admit('build')).toBe(true);
+  });
+
+  it('keeps the last disk warning in the saved state: a restarted office at the same level sends nothing (#502)', async () => {
+    const saved = { mark: null as DiskAlertMark | null };
+    const free = { gb: 9 };
+    const boot = () => {
+      const { health, out } = rig();
+      health.useDisk({ read: async () => [{ label: 'Office data', path: '/srv', totalMb: 1000 * 1024, freeMb: free.gb * 1024 }], settings: () => DEFAULT_DISK, alert: (title) => out.alerts.push(title), lastClean: () => null, lastAlert: () => saved.mark, setLastAlert: (m) => (saved.mark = m) });
+      return { health, out };
+    };
+    const first = boot();
+    await first.health.tick();
+    expect(first.out.alerts).toEqual(['Disk getting full: 9.0 GB left']);
+    const second = boot(); // the office restarted
+    await second.health.tick();
+    expect(second.out.alerts).toEqual([]);
+    expect(second.health.view().disk?.level).toBe('warn'); // the strip still shows it
+    free.gb = 4;
+    await second.health.tick();
+    expect(second.out.alerts).toEqual(['Disk almost full: new work waits']);
   });
 
   it('holds new work while memory is short with a note, rings once after 15 minutes and not again within the hour', async () => {
