@@ -68,7 +68,10 @@ function Fields({ value, inherit, set }: { value: Practices; inherit?: { from: P
             </label>
           ) : (
             <label key={s.key} className="toggle" title={s.hint}>
-              <input type="checkbox" checked={value[s.key]} onChange={(e) => set({ [s.key]: e.target.checked })} /> <Icon name={s.icon} /> {s.label}
+              <input type="checkbox" checked={value[s.key]} onChange={(e) => set({ [s.key]: e.target.checked })} />
+              <span>
+                <Icon name={s.icon} /> {s.label}
+              </span>
             </label>
           ),
         )}
