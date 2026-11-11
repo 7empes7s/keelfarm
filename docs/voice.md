@@ -258,6 +258,8 @@ it ends. The sign over the door says who's on the call and its light turns red.
 
 The rules are pure and tested in `client/src/world/meeting.ts` (the call's moments → where the CEO is and what they
 do, what E at a chair does and the view from it, the tile's frame throttle); the room's place is in `layout.ts`.
+The demo office shows a call there with `?meeting=call` (a call on, the CEO at the table: the call card's live view)
+or `?meeting=seat` (you sat at the far head too); `e2e/meeting.spec.ts` walks it through.
 
 Nothing else changed: the 🎧 hands-free switch, hold/tap/V to talk, saved clips, ▶ replay and the dips work as
 before, and with no call on nothing opens the mic or starts reading by itself unless those settings say so.
