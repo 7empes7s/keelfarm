@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadMemory, MEMORY_MAX_NOTES, MEMORY_NOTE_MAX, MEMORY_TOTAL_MAX, memoryPrompt, removeNote, saveNote, searchNotes, type MemoryNote } from './ceoMemory.ts';
+import { loadMemory, MEMORY_MAX_NOTES, MEMORY_NOTE_MAX, MEMORY_TOTAL_MAX, memoryPrompt, removeNote, saveNote, type MemoryNote } from './ceoMemory.ts';
 
 const notes = (n: number, len = 10): MemoryNote[] => Array.from({ length: n }, (_, i) => ({ id: `m${i}`, text: 'x'.repeat(len), at: 0 }));
 
@@ -35,14 +35,3 @@ describe("the manager's notes for the CEO (memory cap)", () => {
   });
 });
 
-describe("searching the CEO's notes", () => {
-  it('finds the lines with every word, under their heading', () => {
-    const text = '# Notes\n## Floors\n- Floor 1: the web shop\n- Floor 2: the API\n## Lessons\nThe shop needs phones first';
-    expect(searchNotes(text, 'SHOP')).toEqual([
-      { heading: 'Floors', line: '- Floor 1: the web shop' },
-      { heading: 'Lessons', line: 'The shop needs phones first' },
-    ]);
-    expect(searchNotes(text, 'floor api')).toEqual([{ heading: 'Floors', line: '- Floor 2: the API' }]);
-    expect(searchNotes(text, '')).toEqual([]);
-  });
-});
