@@ -37,22 +37,55 @@
   opacity: 1;
   background: var(--accent);
 }
-/* the ring around the control a step is about: above everything, never in the way of a tap */
-.tour-ring {
+/* the ring around the control a step is about, the page dimmed around it (#408): above everything but the card, never
+   in the way of a tap */
+.tour-ring,
+.tour-dim {
   position: fixed;
-  z-index: var(--ds-z-tour);
+  z-index: calc(var(--ds-z-tour) - 1);
   pointer-events: none;
+}
+.tour-ring {
   border: 3px solid var(--ds-focus); /* not the accent: the pocket header is that colour */
   border-radius: 12px;
-  box-shadow: 0 0 0 3px var(--paper);
+  box-shadow:
+    0 0 0 3px var(--paper),
+    0 0 0 200vmax var(--ds-scrim);
+}
+.tour-dim {
+  inset: 0;
+  background: var(--ds-scrim);
 }
 .tour-ring-pulse {
   animation: tour-ring 1.6s ease-in-out infinite;
 }
 @keyframes tour-ring {
   50% {
-    box-shadow: 0 0 0 7px var(--paper);
+    box-shadow:
+      0 0 0 7px var(--paper),
+      0 0 0 200vmax var(--ds-scrim);
   }
+}
+/* the 3D office on a phone: under its full-screen panels, like the card */
+@media (max-width: 760px) {
+  html:not(.pocket-mode) :is(.tour-ring, .tour-dim) {
+    z-index: calc(var(--ds-z-base) + 9);
+  }
+}
+/* the card clear of its control: above one low on the screen, centred when it isn't on screen */
+body .tour.tour-at-top {
+  top: 16px;
+  bottom: auto;
+}
+:is(.pocket, .pocket.pk-railed) .tour.tour-at-top {
+  top: calc(72px + var(--ds-safe-top)); /* under the header */
+  bottom: auto;
+}
+:is(body, .pocket, .pocket.pk-railed) .tour.tour-at-center {
+  top: 50%;
+  bottom: auto;
+  left: 50%;
+  translate: -50% -50%;
 }
 /* pocket mode: over its panels and sheets (a Try it opens one), clear of the tab bar or beside the rail */
 html[data-ui-scale] .pocket .tour {

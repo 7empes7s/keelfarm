@@ -43,6 +43,7 @@ import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
+import { useTour } from '../ui/tour';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { pushLayer } from '../ui/backStack';
@@ -421,6 +422,24 @@ export default function Pocket() {
     else setTab('chat');
     focusChatBox();
   };
+  // The tour's way back from a page it opened (#408): the tab, the console's section, the chat beside, the pane.
+  const onScreen = useRef({ tab, settings, dock });
+  onScreen.current = { tab, settings, dock };
+  useEffect(() => {
+    useTour.setState({
+      keepPage: () => {
+        const was = { ...onScreen.current, overlay: useStore.getState().overlay, full: useChatFull.getState().on };
+        return () => {
+          useChatFull.getState().set(was.full);
+          setTab(was.tab);
+          setSettings(was.settings);
+          if (onScreen.current.dock !== was.dock) setDock(was.dock);
+          useStore.getState().openOverlay(was.overlay);
+        };
+      },
+    });
+    return () => useTour.setState({ keepPage: null });
+  }, [setDock]);
 
   // The panel manager (#212): the console and the pane in the order they were opened or touched, the top one in front.
   const order = usePanels();
