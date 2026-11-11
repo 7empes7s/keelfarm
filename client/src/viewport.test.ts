@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appViewport, blocksPinch, chatDock, insetsCovered, typing } from './viewport';
+import { appViewport, blocksPinch, chatDock, insetsCovered, revealDelta, typing } from './viewport';
 
 describe('appViewport', () => {
   it('is the visible part of the page: the keyboard and the browser bars taken off', () => {
@@ -38,6 +38,22 @@ describe('chatDock', () => {
   it('keeps the page size under pinch zoom and without a visual viewport', () => {
     expect(chatDock(844, vv(400, 100, 2), 1, false)).toEqual({ top: 0, height: 844, band: true });
     expect(chatDock(844, null, 1, false)).toEqual({ top: 0, height: 844, band: true });
+  });
+});
+
+describe('revealDelta', () => {
+  const view = { top: 60, bottom: 508 };
+  it('leaves a field that is already in view', () => {
+    expect(revealDelta({ top: 200, bottom: 240 }, view)).toBe(0);
+  });
+  it('scrolls a field under the keyboard up to just above it', () => {
+    expect(revealDelta({ top: 700, bottom: 740 }, view)).toBe(740 - 508 + 8);
+  });
+  it('scrolls a field above the visible part down into it', () => {
+    expect(revealDelta({ top: 20, bottom: 60 }, view)).toBe(20 - 60 - 8);
+  });
+  it('shows the top of a block taller than the visible part', () => {
+    expect(revealDelta({ top: 400, bottom: 1000 }, view)).toBe(400 - 60 - 8);
   });
 });
 

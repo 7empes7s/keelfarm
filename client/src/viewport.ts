@@ -57,16 +57,64 @@ export function typing(touch: boolean, innerHeight: number, visibleHeight: numbe
   return touch && (textFieldFocused || visibleHeight < innerHeight - 80);
 }
 
+/**
+ * How far to scroll a box so `target` (a field, or the field with its send button) sits inside `view`, the part of the
+ * box the keyboard leaves visible, `margin` px clear of its edges; a target taller than the view shows its top.
+ */
+export function revealDelta(target: { top: number; bottom: number }, view: { top: number; bottom: number }, margin = 8): number {
+  const top = view.top + margin;
+  const bottom = view.bottom - margin;
+  if (target.bottom > bottom) return Math.min(target.bottom - bottom, target.top - top);
+  if (target.top < top) return target.top - top;
+  return 0;
+}
+
+/** Re-checks after a field gains focus (ms): iOS's last resize can come before the keyboard settles, or never. */
+const SETTLE_MS = [100, 300, 600, 1000];
+
+/** The focused field, if it brings up the keyboard. */
+function focusedField(): HTMLElement | null {
+  const el = document.activeElement;
+  return el instanceof HTMLElement && isTextField(el) ? el : null;
+}
+
+/** The nearest box around `el` that scrolls (never the page itself). */
+function scrollBox(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    if (p.scrollHeight > p.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(p).overflowY)) return p;
+  }
+  return null;
+}
+
+/** Scrolls the focused field (with its form or message box, when they fit) into the visible part of its scrolling box. */
+function revealFocused() {
+  const field = focusedField();
+  const box = field && scrollBox(field);
+  if (!field || !box) return;
+  const vv = window.visualViewport;
+  const r = box.getBoundingClientRect();
+  const view = { top: Math.max(r.top, vv?.offsetTop ?? 0), bottom: Math.min(r.bottom, (vv?.offsetTop ?? 0) + (vv?.height ?? window.innerHeight)) };
+  const group = field.closest<HTMLElement>('form, .chat-input');
+  const block = group && box.contains(group) ? group.getBoundingClientRect() : null;
+  const delta = revealDelta(block && block.height <= view.bottom - view.top - 16 ? block : field.getBoundingClientRect(), view);
+  if (delta) box.scrollTop += delta;
+}
+
 /** Tells the full-screen views the viewport changed and stray scrolls were put back (the chat sticks to its end). */
 export const VIEWPORT_EVENT = 'cubefarm:viewport';
 
 /** Overflow-hidden boxes the browser may scroll to show a focused field, and leave scrolled after the keyboard closes. */
 const CLIPPED = '.pocket, .pk-main-chat, .phone-chat, .phone-screen';
 
-/** Puts the page back where it belongs: the window at the top, no hidden scroll in the shell. */
+/**
+ * Puts the page back where it belongs: the window at the top, no hidden scroll in the shell. Never while a field has
+ * focus (#494): that would undo the browser's scroll to it; its focusout puts things back.
+ */
 export function resetViewport() {
-  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-  for (const el of document.querySelectorAll<HTMLElement>(CLIPPED)) if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
+  if (!focusedField()) {
+    if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    for (const el of document.querySelectorAll<HTMLElement>(CLIPPED)) if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
+  }
   window.dispatchEvent(new Event(VIEWPORT_EVENT));
 }
 
@@ -82,9 +130,11 @@ export function watchViewport() {
   let frame = 0;
   let keyboard = false;
   const touch = matchMedia('(pointer: coarse)').matches;
+  let measured = -1;
   const update = () => {
     frame = 0;
     const { height, top } = appViewport(window.innerHeight, vv);
+    measured = height;
     root.style.setProperty('--app-height', `${height}px`);
     root.style.setProperty('--app-top', `${top}px`);
     const open = height < window.innerHeight - 80; // smaller differences are browser bars, not a keyboard
@@ -102,8 +152,22 @@ export function watchViewport() {
     update();
     resetViewport();
   };
+  // A field with the keyboard up (#494): measure again until the keyboard has settled, then bring the field into view.
+  let checks: number[] = [];
+  const check = (first: boolean) => {
+    const before = measured;
+    update();
+    if (measured !== before) window.dispatchEvent(new Event(VIEWPORT_EVENT));
+    if (first || measured !== before) revealFocused();
+  };
+  const settle = () => {
+    checks.forEach(clearTimeout);
+    checks = touch && focusedField() ? SETTLE_MS.map((ms, i) => window.setTimeout(() => check(i === 0), ms)) : [];
+  };
   update();
   vv?.addEventListener('resize', later);
+  vv?.addEventListener('resize', settle);
+  document.addEventListener('focusin', settle);
   vv?.addEventListener('scroll', later);
   window.addEventListener('resize', later);
   window.addEventListener('orientationchange', () => setTimeout(reset, 300)); // iOS reports the new size late

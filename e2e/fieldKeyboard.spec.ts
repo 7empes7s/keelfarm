@@ -27,8 +27,10 @@ async function keyboard(page: Page, px: number, resize: boolean) {
 /** The keyboard comes up as `how` says, with `field` focused. */
 async function typeIn(page: Page, field: Locator, how: 'no resize' | 'late resize') {
   await field.focus();
-  if (how === 'no resize') await keyboard(page, KEYBOARD, false);
-  else {
+  if (how === 'no resize') {
+    await page.waitForTimeout(150); // past the focus's own frame: the keyboard slides in after it
+    await keyboard(page, KEYBOARD, false);
+  } else {
     await keyboard(page, 200, true); // its first resize, mid-animation
     await page.waitForTimeout(300);
     await keyboard(page, KEYBOARD, false); // where it settles, never reported
