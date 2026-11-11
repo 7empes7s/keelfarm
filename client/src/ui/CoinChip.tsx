@@ -8,12 +8,8 @@ import { Icon } from './Icon';
 
 const SHOW_MS = 1800;
 
-export function CoinChip() {
-  const coins = useStore((s) => {
-    const repo = s.floor === 0 ? null : repoOnFloor(s.repos, s.floor);
-    return repo ? (s.progress.floors[repo.id]?.coins ?? 0) : Object.values(s.progress.floors).reduce((n, f) => n + f.coins, 0);
-  });
-  const openOverlay = useStore((s) => s.openOverlay);
+/** The coffees' and merges' plings, and the coins a merge just earned here: on while the chip is out of sight too (#406). */
+export function useCoinGain() {
   const [gain, setGain] = useState<{ n: number; at: number } | null>(null);
   useEffect(() => watchCoffees(), []);
   useEffect(
@@ -31,6 +27,16 @@ export function CoinChip() {
     const t = setTimeout(() => setGain(null), SHOW_MS);
     return () => clearTimeout(t);
   }, [gain]);
+  return gain;
+}
+
+export function CoinChip() {
+  const coins = useStore((s) => {
+    const repo = s.floor === 0 ? null : repoOnFloor(s.repos, s.floor);
+    return repo ? (s.progress.floors[repo.id]?.coins ?? 0) : Object.values(s.progress.floors).reduce((n, f) => n + f.coins, 0);
+  });
+  const openOverlay = useStore((s) => s.openOverlay);
+  const gain = useCoinGain();
   return (
     <button className="pill coin-pill" title="Coins: merges earn them, the lobby kiosk spends them on decorations" onClick={() => openOverlay({ kind: 'catalogue', repoId: repoOnFloor(useStore.getState().repos, useStore.getState().floor)?.id })}>
       <Icon name="coins" /> {coins}

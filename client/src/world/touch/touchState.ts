@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import type { Focus } from '../../store';
 import { cleanTouchPrefs, TOUCH_DEFAULTS, type TouchPrefs } from './thumbs';
+import { gateAllows } from '../../ui/tourGate';
 
 /** A touch-only screen (phones, tablets): the only devices that get the touch controls. */
 export const isTouch = typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
@@ -55,8 +56,9 @@ export function markUsed(what: 'walked' | 'looked' | 'tapped') {
 
 export const useHoldMenu = create<{ focus: Focus | null }>(() => ({ focus: null }));
 
-/** Opens the hold menu for `focus`, with a light buzz where the phone can. */
+/** Opens the hold menu for `focus`, with a light buzz where the phone can, unless the tour's step says no. */
 export function openHoldMenu(focus: Focus) {
+  if (!gateAllows({ kind: 'hold' })) return; // the tour owns the screen (#406)
   try {
     navigator.vibrate?.(12);
   } catch {
