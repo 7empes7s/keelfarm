@@ -43,6 +43,7 @@ export interface PreviewRow {
   led: ReturnType<typeof channelLed>;
   startedAt: number | null; // while running or starting
   stopsAt: number | null;
+  usedAt: number; // a PR preview's last use (viewedAt), 0 for main or none
   live: boolean; // in #204's live set (main always is)
   needsYou: boolean;
   mine: boolean; // passed QA on a floor that doesn't merge by itself: the manager's to check and merge
@@ -73,6 +74,7 @@ export interface ListInputs {
   now: number;
   recentHours: number;
   current: string | null; // the selected row's key keeps its place in the live set
+  first?: string | null; // what the page opened on: first in Running now (#414)
 }
 
 /** store.ts qaKey, which can't be imported here: the store needs a browser. */
@@ -102,6 +104,7 @@ export function previewLists(x: ListInputs, showOlder: boolean): PreviewLists {
       led: mainLed,
       startedAt: up(mainLed) ? repo.preview.startedAt : null,
       stopsAt: repo.preview.stopsAt ?? null,
+      usedAt: 0,
       live: true,
       needsYou: false,
       mine: false,
@@ -130,6 +133,7 @@ export function previewLists(x: ListInputs, showOlder: boolean): PreviewLists {
         led,
         startedAt: up(led) ? (p?.startedAt ?? null) : null,
         stopsAt: p?.stopsAt ?? null,
+        usedAt: p?.viewedAt ?? 0,
         live: live.includes(pull),
         needsYou: word === 'Waiting for you',
         mine: word === 'Ready' && !repo.autoMerge,
@@ -149,13 +153,17 @@ export function previewLists(x: ListInputs, showOlder: boolean): PreviewLists {
   }
   agents.sort((a, b) => a.name.localeCompare(b.name));
   return {
-    running: all.filter((r) => up(r.led)),
+    running: runningOrder(all.filter((r) => up(r.led)), x.first ?? null),
     projects,
     agents,
     prs: all.filter((r) => r.pr != null).sort((a, b) => (b.pr ?? 0) - (a.pr ?? 0)),
     older,
   };
 }
+
+/** Running now, like the viewer's strip (#414): what the page opened on, the live apps, then PRs by last use. */
+const runningOrder = (rows: PreviewRow[], first: string | null) =>
+  rows.map((r, i) => ({ r, i })).sort((a, b) => Number(b.r.key === first) - Number(a.r.key === first) || Number(b.r.pr == null) - Number(a.r.pr == null) || b.r.usedAt - a.r.usedAt || a.i - b.i).map(({ r }) => r);
 
 // ---------- search and filters ----------
 

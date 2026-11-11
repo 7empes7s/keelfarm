@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrPreviewView, PullInfo } from '../../../shared/types';
-import { atPath, busyPrs, channelLabel, channelLed, channelPulls, liveChannels, pinLabel, previewingPrs, standLabel, stopsLabel, watchSays, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
+import { atPath, busyPrs, channelLabel, channelLed, channelOrder, channelPulls, keepOrder, liveChannels, pinLabel, previewingPrs, standLabel, stopsLabel, watchSays, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
 
 const pull = (number: number, state: PullInfo['state'] = 'OPEN', title = `Change ${number}`) => ({ number, state, title }) as PullInfo;
 
@@ -134,6 +134,28 @@ describe('live channels (#204)', () => {
   it('reads a PR without an update time by when it was opened', () => {
     const old = { ...pull(9), createdAt: at(60) } as PullInfo;
     expect(liveChannels([old], base).older.map((p) => p.number)).toEqual([9]);
+  });
+
+  it('orders the strip: the one on screen, main, running by last use, then Recent; the rest under More (#414)', () => {
+    // 280, 385, 394 stopped and recent; 395 on screen; 401 and 402 running, 402 used last; 300 old
+    const pulls = [pr(280, 1), pr(300, 90), pr(385, 3), pr(394, 2), pr(395, 1), pr(401, 5), pr(402, 6), pr(403, 4), pr(404, 7)];
+    const used = new Map([[401, now - 60_000], [402, now - 1000], [385, now - 5000], [395, now]]);
+    const order = channelOrder(pulls, { ...base, previewing: new Set([395, 401, 402]), current: 395, used });
+    expect(order.chips.map((c) => c.channel)).toEqual([395, null, 402, 401, 385, 280, 394, 403]);
+    expect(order.chips.filter((c) => c.recent).map((c) => c.channel)).toEqual([385, 280, 394, 403]);
+    expect(order.more.map((p) => p.number)).toEqual([404, 300]);
+    // on main, main comes first; a PR not open (or not live) on screen falls back to main
+    expect(channelOrder(pulls, { ...base, previewing: new Set([401]), used }).chips.slice(0, 2).map((c) => c.channel)).toEqual([null, 401]);
+    expect(channelOrder([pr(1, 1, 'MERGED')], { ...base, current: 1, used }).chips).toEqual([{ channel: null, recent: false }]);
+  });
+
+  it('keeps chips in place while the viewer stays open: new ones at the end, gone ones leave (#414)', () => {
+    const prev = [{ channel: 5, recent: false }, { channel: null, recent: false }, { channel: 7, recent: true }, { channel: 8, recent: true }];
+    const next = { chips: [{ channel: 7, recent: false }, { channel: null, recent: false }, { channel: 9, recent: true }], more: [pr(8, 90)] };
+    const kept = keepOrder(prev, next);
+    expect(kept.chips.map((c) => c.channel)).toEqual([null, 7, 8, 9]);
+    expect(kept.more).toEqual([]);
+    expect(keepOrder(null, next)).toBe(next);
   });
 
   it("knows the floor's PRs agents are on and those with a preview up", () => {

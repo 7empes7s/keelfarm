@@ -232,3 +232,14 @@
 .app-bare.panel-app-immersive .app-bare-head {
   display: none;
 }
+/* a phone's switcher shows what's on stage (#414): its name shortens, the chevron stays */
+.pv-open-list {
+  max-width: 100%;
+  min-width: 0;
+}
+.pv-open-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

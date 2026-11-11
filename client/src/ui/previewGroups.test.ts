@@ -78,6 +78,13 @@ describe('previewLists', () => {
     expect(previewLists({ ...input, current: 'web:pr-203' }, false).projects[0].rows.map((r) => r.pr)).toEqual([null, 202, 203]);
   });
 
+  it('puts what the page opened on first in Running now, then the live apps, then PRs by last use (#414)', () => {
+    const prPreviews = { 'api#7': { ...prPreview('api', 7, 'running'), viewedAt: NOW - 60_000 }, 'api#8': { ...prPreview('api', 8, 'running'), viewedAt: NOW - 1000 } };
+    const keys = (first: string | null) => previewLists({ ...input, prPreviews, first }, false).running.map((r) => r.key);
+    expect(keys(null)).toEqual(['web:main', 'api:pr-8', 'api:pr-7']);
+    expect(keys('api:pr-7')).toEqual(['api:pr-7', 'web:main', 'api:pr-8']);
+  });
+
   it('lists running previews: main apps and PRs that are up, with when they started', () => {
     const running = previewLists(input, false).running;
     expect(running.map((r) => r.key)).toEqual(['web:main', 'api:pr-7']);
