@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TICKER_KEEP, Ticker, agentTicks, qaTicks, repoFacts, repoTicks, type AgentFacts } from './ticker.ts';
-import type { AgentView, IssueInfo, PullInfo, QaView, RepoView } from '../shared/types.ts';
+import { OPEN_PULLS_LISTED, type AgentView, type IssueInfo, type PullInfo, type QaView, type RepoView } from '../shared/types.ts';
 
 const R = 'acme/app';
 const dev = (patch: Partial<AgentFacts> = {}): AgentFacts => ({ name: 'Ken', repoId: R, role: 'agent', status: 'idle', task: null, issueNumber: null, prNumber: null, ...patch });
@@ -87,7 +87,7 @@ describe('repoTicks', () => {
   });
 
   it("doesn't call something closed when a full list may have pushed it off", () => {
-    const many = Array.from({ length: 50 }, (_, i) => pull(100 + i));
+    const many = Array.from({ length: OPEN_PULLS_LISTED }, (_, i) => pull(100 + i));
     expect(repoTicks(repoFacts(repo([pull(1), ...many])), repo(many), nobody)).toEqual([]);
   });
 
