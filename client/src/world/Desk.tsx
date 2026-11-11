@@ -23,6 +23,7 @@ import { deskMug, subscribeMugs } from './people';
 import { MUG_SIZE, MugLook, mugColor } from './toys/mugLook';
 import { useKeyName } from '../ui/controls';
 import { signInFor } from '../ui/floorRows';
+import { runLabel } from '../../../shared/sessionRun';
 
 const SCREEN = { w: 1.0, h: 0.6, px: 896, py: 538 };
 const WOOD = '#f1d19b';
@@ -413,11 +414,11 @@ export const Desk = memo(function Desk({
       ? {
           id: `agent-${agent.id}`,
           label:
-            agent.role === 'ceo'
+            (agent.role === 'ceo'
               ? `Open ${agent.name}'s desk (CEO) · P texts them from anywhere`
               : signIn
                 ? `Sign ${agent.name}'s ${signIn} in, in their terminal`
-                : `View ${agent.name}'s terminal · Setup inside`,
+                : `View ${agent.name}'s terminal · Setup inside`) + (agent.run ? ` · on ${runLabel(agent.run)}` : ''),
           action: { kind: 'terminal', agentId: agent.id },
         }
       : full || spare

@@ -29,6 +29,7 @@ import { HistoryButton } from './HistoryTab';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
+import { RunChip } from './RunChip';
 import { Icon } from './Icon';
 import { copySignInLink, SignInSteps } from './SignInCard';
 import { troubleLine } from '../../../shared/keyTrouble';
@@ -387,6 +388,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
           {time && <span className="aw-time"> · {time}</span>}
         </span>
         <span className="aw-task">{taskLine(agent)}</span>
+        <RunChip run={agent.run} className="aw-run" />
       </button>
       {working && (
         <button type="button" className="aw-icon aw-stop" aria-label={`Stop ${agent.name}…`} title={`Stop ${agent.name} (asks first)`} disabled={busy} onClick={() => void stop()}>

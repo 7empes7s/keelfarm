@@ -1,0 +1,26 @@
+/* What a session really runs on (#376): one line, cut with an ellipsis rather than pushing its row wider. */
+.run-chip {
+  max-width: 100%;
+  min-width: 0;
+  font-weight: var(--ds-weight);
+  vertical-align: middle;
+}
+.run-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-chip-moved {
+  border-color: var(--ds-warn-text);
+}
+.run-chip-pin {
+  color: var(--ds-warn-text);
+}
+.aw-run {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.pk-run {
+  margin: 0 0 var(--ds-space-2);
+}

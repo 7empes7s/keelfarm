@@ -9,7 +9,8 @@ import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { allOutText, detectLimit, switchesForCeo, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
-import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
+import { sessionRun } from '../../shared/sessionRun.ts';
+import type { AccountCli, AccountSwitch, AccountsView, AgentCli, SessionRun } from '../../shared/types.ts';
 import { LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
 
@@ -33,7 +34,10 @@ export abstract class SwarmRotation extends SwarmUsage {
    */
   protected startOnAccount(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
-    if (a.host === 'box' || cli === 'opencode') return this.backend.startSession(opts, cb);
+    if (a.host === 'box' || cli === 'opencode') {
+      const done = this.ranOn(a, opts, null, a.host === 'box' ? 'Cloud agent' : undefined);
+      return this.backend.startSession(opts, { ...cb, finished: (r) => (done(), cb.finished(r)) });
+    }
     const others = this.fallbackClis(a, opts);
     if (!this.accounts.canRotate(cli, others)) return this.onUse(a, opts, cb, this.accounts.use(a.account, cli), null); // one account: as before rotation
     const tried: string[] = [];
@@ -86,7 +90,8 @@ export abstract class SwarmRotation extends SwarmUsage {
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
     // Gemini CLI on the manager's own login: its limit is its own, not a pause for the office (paced on Claude's).
     const own = cli === 'gemini' ? { ...cb, limited: undefined } : cb;
-    if (!use) return this.backend.startSession(opts, ended ? { ...own, finished: (r) => ended(r, null) } : own);
+    const done = this.ranOn(a, opts, use?.id ?? null);
+    if (!use) return this.backend.startSession(opts, { ...own, finished: (r) => (done(), ended ? ended(r, null) : own.finished(r)) });
     this.readyLogin(a, use, cli, opts.cwd);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
@@ -114,6 +119,7 @@ export abstract class SwarmRotation extends SwarmUsage {
         finished: (result) => {
           live.delete(simulate);
           use.release();
+          done();
           if (result.signedOut) this.signInLost(a, use, cli);
           if (ended) ended(result, hit);
           else cb.finished(result);
@@ -122,6 +128,25 @@ export abstract class SwarmRotation extends SwarmUsage {
     );
     return handle;
   }
+
+  /**
+   * The session starting now runs on account `id` (null: on none, `instead` says what): its chip on the agent, and on the
+   * CEO's thread, until the returned `done` (#376). A switch's next session takes over the chip.
+   */
+  private ranOn(a: PersistedAgent, opts: SessionOptions, id: string | null, instead?: string): () => void {
+    const rt = this.agentRt.get(a.id);
+    if (!rt) return () => undefined;
+    const run = sessionRun(a.account, id, this.accounts.view().accounts, { cli: opts.terminal ? (opts.cli ?? 'claude') : 'claude', model: opts.model ?? '', effort: opts.effort ?? '', at: Date.now(), instead });
+    rt.run = run;
+    this.sessionRan(a, run);
+    this.emitAgent(a);
+    return () => {
+      if (rt.run === run) rt.run = null;
+    };
+  }
+
+  /** A session's run, for the layers above: the CEO's goes on the thread it answers in. */
+  protected sessionRan(_a: PersistedAgent, _run: SessionRun) {}
 
   /**
    * An account's own login folder, set up before a session starts in it (#360): onboarding done, the built-in login's

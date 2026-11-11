@@ -32,6 +32,7 @@ import { FloorThemePicker } from './FloorThemePicker';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
 import { flashInto } from './jumpFlash';
+import { RunChip } from './RunChip';
 import { Icon } from './Icon';
 
 // The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
@@ -541,6 +542,7 @@ export function TeamTab({ focusRepo }: { focusRepo?: string }) {
                       <td className="small ds-cell-full roster-doing">
                         <div className="roster-line">
                           {setupLine(a, settings, clis, models)} <ModelMissing model={a.model} cli={workerCli(a, settings)} />
+                          <RunChip run={a.run} />
                         </div>
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
                         {a.career && <div className="aw-stats-line">{keyStats(a.career, Date.now())}</div>}

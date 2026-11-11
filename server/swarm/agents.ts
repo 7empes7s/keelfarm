@@ -78,7 +78,8 @@ export abstract class SwarmAgents extends SwarmMerge {
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
-    const v = { ...super.agentView(a, withLog), ...(a.account ? { account: a.account } : {}) };
+    const run = this.agentRt.get(a.id)?.run;
+    const v = { ...super.agentView(a, withLog), ...(a.account ? { account: a.account } : {}), run: run ?? null }; // null, not absent, so a patch clears the chip
     return this.consulting(a) ? { ...v, status: 'working', issueTitle: `Consult for ${this.ceo().name}` } : v;
   }
 

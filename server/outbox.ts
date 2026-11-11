@@ -13,8 +13,8 @@ export type Agent = Omit<AgentView, 'log'>;
 
 /** Optional empty defaults need no bytes in a full snapshot. Patches still send them to clear previous values. */
 export function snapshotAgent(agent: AgentView): AgentView {
-  const { waiting, reviewedBy, tools, ...rest } = agent;
-  return { ...rest, ...(waiting && { waiting }), ...(reviewedBy && { reviewedBy }), ...(tools && Object.keys(tools).length > 0 && { tools }) };
+  const { waiting, reviewedBy, tools, run, ...rest } = agent;
+  return { ...rest, ...(waiting && { waiting }), ...(reviewedBy && { reviewedBy }), ...(tools && Object.keys(tools).length > 0 && { tools }), ...(run && { run }) };
 }
 
 /** A connected tab: the websocket's send and readyState are all it needs. */

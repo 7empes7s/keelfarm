@@ -2,7 +2,7 @@
 // project or the Company) or carry on an old one, the list with titles, pins, archive, the floors each named, its
 // unread dot, Today / This week / Older groups and search. Each keeps its own thread and CEO session; the CEO's notes
 // are shared by all. Pure.
-import type { PhoneMessage } from './types.ts';
+import type { PhoneMessage, SessionRun } from './types.ts';
 
 export interface Conversation {
   id: string;
@@ -17,6 +17,7 @@ export interface Conversation {
   archived?: boolean; // out of the list until "Archived" is shown
   ceoAt?: number; // the CEO's latest message in it, for the unread dot (0: none)
   files?: number; // its artifacts and attachments
+  run?: SessionRun; // the CEO session that last answered in it: account, model, effort (#376)
 }
 
 type Saved = Conversation & Required<Pick<Conversation, 'repoId' | 'floors' | 'archived' | 'ceoAt' | 'files'>> & { sessionId: string | null };
@@ -87,6 +88,7 @@ export function loadChats(raw: unknown, messages: readonly PhoneMessage[], now: 
     archived: c.archived === true,
     ceoAt: Number(c.ceoAt) || 0,
     files: Number(c.files) || 0,
+    ...(c.run && typeof c.run.label === 'string' && { run: c.run }),
   }));
   if (r && typeof r.current === 'string' && list.some((c) => c.id === r.current)) {
     const cur = list.find((c) => c.id === r.current)!;
@@ -193,7 +195,7 @@ export const conversationsView = (s: ChatsState): Conversation[] =>
   [...s.list]
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
     // in every snapshot: the defaults (a Company thread, no floors or files, not archived) are left out
-    .map(({ id, title, startedAt, updatedAt, pinned, count, repoId, floors, archived, ceoAt, files }) => ({ id, title, startedAt, updatedAt, pinned, count, ...(repoId && { repoId }), ...(floors.length && { floors }), ...(archived && { archived }), ...(ceoAt && { ceoAt }), ...(files && { files }) }));
+    .map(({ id, title, startedAt, updatedAt, pinned, count, repoId, floors, archived, ceoAt, files, run }) => ({ id, title, startedAt, updatedAt, pinned, count, ...(repoId && { repoId }), ...(floors.length && { floors }), ...(archived && { archived }), ...(ceoAt && { ceoAt }), ...(files && { files }), ...(run && { run }) }));
 
 /** The thread has a CEO message the manager hasn't read (`readAt`: the phone's read time). */
 export const unreadThread = (c: Pick<Conversation, 'ceoAt'>, readAt: number) => (c.ceoAt ?? 0) > readAt;

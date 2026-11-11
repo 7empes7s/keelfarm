@@ -108,6 +108,17 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(JSON.stringify(events)).not.toContain(KEY);
   });
 
+  it("shows the account a session really started on, apart from its pin, on the agent and the CEO's thread (#376)", async () => {
+    const { swarm, ceo } = await office(['claude-login']);
+    (ceo() as { account?: string }).account = 'claude-login';
+    await swarm.messageCeo('Which account are you on?'); // a chat: the thread's own session
+    await wait(3_000);
+    const run = swarm.snapshot().agents.find((a) => a.id === 'ceo')!.run;
+    expect(run).toMatchObject({ account: 'claude-keelop', label: 'Max · keelops', pinned: 'Claude login on this computer', why: 'limited' });
+    const thread = swarm.snapshot().chat?.conversations.find((c) => c.id === swarm.snapshot().chat?.current);
+    expect(thread?.run).toMatchObject({ account: 'claude-keelop', pinned: 'Claude login on this computer' });
+  });
+
   it('posts one message when every account is out, pauses, and keeps the job without looping', async () => {
     const { swarm, runs, ceo, i } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
     swarm.requestReview();

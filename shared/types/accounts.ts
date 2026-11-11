@@ -2,6 +2,7 @@
 // on. The registry holds no secret: API keys and setup tokens stay in secrets.json on the server.
 import type { UsageReading } from './office.ts';
 import type { UsageSource } from './usage.ts';
+import type { AgentCli, EffortLevel } from './agents.ts';
 
 /** The coding agents an account can be for. */
 export type AccountCli = 'claude' | 'codex' | 'gemini';
@@ -26,6 +27,21 @@ export interface ProviderAccount {
   limitHits?: number[]; // when it hit its usage limit, the last 7 days
   limitedUntil?: number | null; // a session hit its limit: until then
   limitSpans?: [number, number][]; // when it was limited (from, until), the last 7 days: its timeline bar (#248)
+}
+
+/**
+ * What a session really runs on (#376): the account it started on (rotation can move it off its pin, #357), its coding
+ * agent, model and effort. On an agent while their session is live, and on the CEO thread its session last answered in.
+ */
+export interface SessionRun {
+  account: string; // the account's id; '' when it runs on no account of the registry (a cloud agent's, OpenCode's own setup)
+  label: string; // that account's label, or what it runs on instead
+  cli: AgentCli;
+  model: string; // '' = the coding agent's default
+  effort: EffortLevel | '';
+  at: number; // when it started
+  pinned?: string; // the pin's label (an account's, or the tag) when it isn't on its pin
+  why?: string; // why it's off its pin: "limited", "signed out", "paused"
 }
 
 /** Ready / Near limit / Limited until … / Signed out / Paused, for the chip on its card. */
