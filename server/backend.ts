@@ -253,6 +253,8 @@ export interface AccountsBackend {
   signIn: AccountsDeps['signIn'];
   /** The demo only: its made-up accounts and keys, added to a registry that has only the built-in ones. */
   seed?(): { accounts: ProviderAccount[]; keys: Record<string, string> };
+  /** The demo only: a made-up built-in login folder its accounts share (#377), never the real ~/.claude. */
+  shareFrom?(): string;
 }
 
 /** The real cloud: Upstash, the manager's gh and git. */

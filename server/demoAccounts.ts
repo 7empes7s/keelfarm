@@ -1,7 +1,10 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Ultra login whose token
 // expired after its week reset, an Anthropic API key, an OpenAI key, a Google AI Plus login), a Test that never leaves the computer, and
 // sign-ins drawn as the CLIs' own (demoSignIn.ts).
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AccountsBackend } from './backend.ts';
+import { HOME_DIR } from './config.ts';
 import type { AccountsDeps } from './accounts.ts';
 import type { UsageApi } from './usageSources.ts';
 import { codexReadings } from '../shared/usageSources.ts';
@@ -46,8 +49,22 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
         exited(code);
       });
     },
+    shareFrom: demoClaudeHome,
     seed: () => ({ accounts: SEED.map((a) => ({ ...a, tags: [...a.tags] })), keys: { 'claude-apikey': 'sk-ant-demo-0000000000000000demo', 'codex-apikey': 'sk-demo-00000000000000000000demo' } }),
   };
+}
+
+/** The demo's "built-in login folder" (#377): a memory file, settings and a CLAUDE.md the seeded logins share. */
+function demoClaudeHome(): string {
+  const dir = path.join(HOME_DIR, 'demo-claude');
+  const memory = path.join(dir, 'projects', 'demo-ceo', 'memory');
+  fs.mkdirSync(memory, { recursive: true });
+  const seed = (file: string, text: string) => fs.existsSync(file) || fs.writeFileSync(file, text);
+  seed(path.join(memory, 'MEMORY.md'), '- [Manager prefers short replies](short-replies.md)\n');
+  seed(path.join(memory, 'short-replies.md'), '---\nname: short-replies\ndescription: The manager reads on a phone\n---\nKeep replies short.\n');
+  seed(path.join(dir, 'CLAUDE.md'), '# Demo user instructions\n');
+  seed(path.join(dir, 'settings.json'), '{}\n');
+  return dir;
 }
 
 // ---------- usage for every provider (#361) ----------

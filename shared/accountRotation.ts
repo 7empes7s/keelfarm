@@ -3,7 +3,7 @@
 // numbers Providers & accounts shows.
 import { accountStatus, type StatusInput } from './accounts.ts';
 import { keyTrouble } from './keyTrouble.ts';
-import type { AccountCli, AccountSwitch, ProviderAccount, RotationSettings, RotationStats, UsageReading } from './types.ts';
+import type { AccountCli, AccountSwitch, PhoneMessage, ProviderAccount, RotationSettings, RotationStats, UsageReading } from './types.ts';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -167,8 +167,29 @@ export function pickAccount(binding: string | undefined, candidates: readonly Ca
 /** "Main Max is limited until 16:00" / "Main Max is signed out". */
 const outLine = (label: string, why: AccountSwitch['why'], until: number | null, clock: (t: number) => string) => (why === 'signed-out' ? `${label} is signed out` : `${label} is limited${until ? ` until ${clock(until)}` : ''}`);
 
-/** The chat pill: "Switched to Backup Max: Main Max is limited until 16:00". */
-export const switchText = (s: Pick<AccountSwitch, 'from' | 'to' | 'why' | 'until'>, clock: (t: number) => string) => `🔀 Switched to ${s.to}: ${outLine(s.from, s.why, s.until, clock)}.`;
+const CARRIED: Record<NonNullable<AccountSwitch['carried']>, string> = {
+  conversation: ' Memory and conversation carried over.',
+  handover: ' Picked up from a handover: the latest messages, the notes and memory.',
+};
+
+/** The chat pill: "Switched to Backup Max: Main Max is limited until 16:00. Memory and conversation carried over." */
+export const switchText = (s: Pick<AccountSwitch, 'from' | 'to' | 'why' | 'until' | 'carried'>, clock: (t: number) => string) => `🔀 Switched to ${s.to}: ${outLine(s.from, s.why, s.until, clock)}.${s.carried ? CARRIED[s.carried] : ''}`;
+
+const HANDOVER_MESSAGES = 6;
+const HANDOVER_CHARS = 400;
+
+/**
+ * What a fresh CEO session starts with when its conversation couldn't come along (another coding agent): the chat's
+ * latest messages, clipped, and where its notes are. No model call.
+ */
+export function switchHandover(messages: readonly Pick<PhoneMessage, 'from' | 'text'>[], notesFile: string): string {
+  const who = { ceo: 'You', manager: 'Manager', office: 'Office' } as const;
+  const lines = messages
+    .filter((m) => m.text.trim())
+    .slice(-HANDOVER_MESSAGES)
+    .map((m) => `${who[m.from]}: ${m.text.length > HANDOVER_CHARS ? `${m.text.slice(0, HANDOVER_CHARS)}…` : m.text}`);
+  return `Your previous session hit an account limit and its conversation couldn't come along, so this is a fresh session. Your notes are in ${notesFile}. The chat's latest messages:\n${lines.join('\n') || '(none)'}`;
+}
 
 /** The one message when every account is out: when the first is back, and the API key the manager can turn on. */
 export function allOutText(cliName: string, first: number | null, clock: (t: number) => string, key: string | null): string {
