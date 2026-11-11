@@ -56,6 +56,17 @@ export interface PullInfo {
 }
 
 export const PR_FILES_MAX = 30;
+/** The sync lists every open PR up to this many, and the latest MERGED_LISTED merges: the Merged column's first page (#411). */
+export const OPEN_PULLS_LISTED = 100;
+export const MERGED_LISTED = 20;
+
+/** One page of a floor's merged PRs, newest first, fetched on demand for the Merged column's page 2+ (#411). */
+export interface MergedPage {
+  page: number;
+  /** Every merged PR on GitHub (its search caps paging at 1000). */
+  total: number;
+  pulls: { number: number; title: string; url: string; mergedAt: string | null; author: string | null }[];
+}
 
 /** A "Try this" step (#381): what to do in the preview, its page, and QA's result and note when QA followed it. */
 export interface TryStep {

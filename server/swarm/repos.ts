@@ -14,15 +14,17 @@ import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveSt
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import { cleanTrustedAuthors, markTrust, trustContext, TRUST_LABEL, type TrustContext } from '../../shared/trust.ts';
-import type { ManagerChangeKind, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
+import type { ManagerChangeKind, MergedPage, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { recordChange } from '../../shared/managerChanges.ts';
 import { takeSteps, tryThis, type TryThis } from '../../shared/tryIt.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
+import { MergedPages } from '../mergedPages.ts';
 import { type PersistedRepo, type FloorOptions, type RepoRuntime, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { FLOOR_COLORS } from './flavour.ts';
 import { SwarmCore } from './core.ts';
 
 export abstract class SwarmRepos extends SwarmCore {
+  private readonly mergedPages = new MergedPages();
   // ---------- GitHub / repos ----------
 
   listGithubRepos(owner?: string) {
@@ -518,6 +520,17 @@ export abstract class SwarmRepos extends SwarmCore {
     await this.closeResolvedIssues(repo, number, pr);
     await this.syncRepo(repo.id);
     setTimeout(() => this.schedule(), 200);
+  }
+
+  /** A page of the floor's merged PRs for the Kanban's Merged column (#411): fetched once per page until the next merge. */
+  async mergedPage(repoId: string, page: number): Promise<MergedPage> {
+    const repo = this.repo(repoId);
+    const latest = Math.max(0, ...(this.repoRt.get(repo.id)?.pulls ?? []).filter((p) => p.state === 'MERGED').map((p) => p.number));
+    try {
+      return await this.mergedPages.get(repo.id, latest, page, (n) => this.backend.listMergedPage(repo.fullName, n));
+    } catch (err) {
+      throw new HttpError(502, `Couldn't load older merged PRs from GitHub: ${clip(err instanceof Error ? err.message : String(err), 200)}`);
+    }
   }
 
   /** The manager's Close on a PR: closed on GitHub; whoever still works on it carries on until the CEO decides (#207). */

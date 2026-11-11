@@ -7,14 +7,18 @@ import { tryItSteps } from '../../shared/tryIt.ts';
 import { stalePulls } from '../demoPreviewDesks.ts';
 import { CI_DOWN_REPO, closedFiled, fakeSha, issue, nextRunId, refusedChecks, repos, type FakeRepo } from './world.ts';
 
-function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false) {
+function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false, archive = 0) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
   for (const [title, body] of titles) r.issues.push(issue(r.nextNumber++, title, body, fullName));
+  // Merges from before the memory map's history, so the Kanban's Merged column has pages to go through (#411).
+  for (let i = archive; i > 0; i--) r.pulls.push(shippedPull(fullName, r.nextNumber++, `${ARCHIVE[i % ARCHIVE.length]} (${archive - i + 1})`, (21 + i / 2) * 86_400_000));
   if (past) r.pulls.push(...pastPulls(fullName, () => r.nextNumber++)); // the memory map's history (#136)
   // What the floor shipped lately: the "What's new" cards' history (#129).
   for (const [i, title] of shipped.entries()) r.pulls.push(shippedPull(fullName, r.nextNumber++, title, (i + 1) * 5 * 3_600_000));
   repos.set(fullName, r);
 }
+
+const ARCHIVE = ['Tidy the footer', 'Faster first paint', 'Bump dependencies', 'Fix a typo in the help', 'Smaller bundle', 'Sharper icons', 'Better empty list copy', 'Steadier tests'];
 
 function shippedPull(fullName: string, number: number, title: string, agoMs: number): PullInfo {
   return {
@@ -77,7 +81,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help. The help overlay touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
-], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
+], ['Confetti when the list is cleared', 'Undo for deleted todos'], true, 64);
 strangers('demo-co/pixel-todo');
 repos.get('demo-co/pixel-todo')!.pulls.push(...stalePulls(['Try a darker theme', 'Experiment: drag to reorder', 'Spike: offline mode'], (title) => shippedPull('demo-co/pixel-todo', repos.get('demo-co/pixel-todo')!.nextNumber++, title, 0)));
 seed('demo-co/weather-api', 'Tiny weather REST API', [
