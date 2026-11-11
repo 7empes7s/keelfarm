@@ -336,6 +336,11 @@ export class Accounts {
     return r.on && !!pickAccount(undefined, this.candidates(now), now, { cli, apiLast: r.apiLast });
   }
 
+  /** Whether a session pinned to `binding` (or the rotation's) would start on an account of `cli` with room now: the CEO's own pick runs through the office's pause (#418). */
+  ready(binding: string | undefined, cli: AccountCli, now = Date.now()): boolean {
+    return !!pickAccount(binding, this.candidates(now), now, { cli, apiLast: this.rotation().apiLast });
+  }
+
   rotation(): RotationSettings {
     return this.deps.rotation?.() ?? { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false };
   }

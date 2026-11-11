@@ -672,8 +672,8 @@ export abstract class SwarmAgents extends SwarmMerge {
   protected sessionRuntime(a: PersistedAgent, resume?: string): { terminal?: AgentTerminal; cli?: AgentCli; label?: string; resumeSessionId?: string } {
     // A cloud agent's CLI always runs in a terminal: their Box's, which needs nothing from this computer.
     const inTerminal = a.host === 'box' || (this.state.settings.runtime === 'terminal' && this.backend.terminals);
-    let cli: AgentCli = a.role === 'ceo' ? 'claude' : a.cli || this.state.settings.defaultCli;
-    if (resume && a.sessionCli && a.sessionCli !== cli) {
+    let cli: AgentCli = a.role === 'ceo' ? this.ceoCliOf(a) : a.cli || this.state.settings.defaultCli;
+    if (resume && a.sessionCli && a.sessionCli !== cli && a.role !== 'ceo') {
       if (inTerminal) cli = a.sessionCli;
       else if (a.sessionCli !== 'claude') resume = undefined;
     }

@@ -9,9 +9,11 @@ import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { workerCli } from './floorRows';
 import { builderCli, CLI_NOTES } from '../../../shared/cliNotes';
 import { boxCli } from '../../../shared/cloud';
+import { ceoModelOn } from '../../../shared/ceoRunsOn';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { AgentTools } from './ToolsSettings';
+import { CeoCliField } from './CeoRunsOn';
 
 // One agent's setup (name, look, coding agent, model, effort), edited in place: the Team tab's row cells and the
 // ⚙️ Setup section of their panel share these. Every change is a PATCH; the `agent` event updates all views.
@@ -129,7 +131,7 @@ export function HostSelect({ agent, id, style }: FieldProps) {
 export function ModelInput({ agent, id }: FieldProps) {
   const settings = useStore((s) => s.settings);
   const cli = workerCli(agent, settings);
-  const resolved = agent.role === 'ceo' ? CLAUDE_MODELS[0] : effectiveModel('', cli, settings, CLAUDE_MODELS[0]);
+  const resolved = agent.role === 'ceo' ? ceoModelOn(cli, '', settings, CLAUDE_MODELS[0]) : effectiveModel('', cli, settings, CLAUDE_MODELS[0]);
   return <ModelPicker id={id} cli={cli} value={agent.model} resolvedDefault={resolved} label={agent.role === 'ceo' ? "The CEO's model" : 'Model'} onChange={(model) => void save(agent.id, { model })} />;
 }
 
@@ -342,7 +344,7 @@ export function PromptPreview({ agent }: { agent: Agent }) {
   );
 }
 
-/** The ⚙️ Setup section of an agent's panel. The CEO always runs Claude Code, so they only get model and effort. */
+/** The ⚙️ Setup section of an agent's panel. The CEO gets its coding agent (#418), account, model and effort. */
 export function AgentSetup({ agent }: { agent: Agent }) {
   const settings = useStore((s) => s.settings);
   const terminal = settings.runtime === 'terminal';
@@ -388,6 +390,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
             <HostSelect agent={agent} id={`${id}-host`} />
           </label>
         )}
+        {ceo && <CeoCliField ceo={agent} />}
         {agent.host !== 'box' && (
           <label className="field" htmlFor={`${id}-account`}>
             <span>Account</span>

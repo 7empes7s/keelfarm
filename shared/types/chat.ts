@@ -1,6 +1,7 @@
 // The phone chat between the manager and the CEO, and the CEO's job queue. Imported through shared/types.ts.
 import type { ChatAction } from '../ceoActions.ts';
 import type { CeoSessionView } from '../ceoAwake.ts';
+import type { CeoRunsOn } from '../ceoRunsOn.ts';
 import type { MemoryNote } from '../ceoMemory.ts';
 import type { CeoLive, StepLog } from '../ceoStream.ts';
 import type { ChatVisual } from '../chatVisuals.ts';
@@ -56,6 +57,7 @@ export interface PhoneMessage {
   hidden?: true; // the CEO's, hidden by the manager (#145): kept for the CEO, never sent to a phone (shared/chatPage.ts)
   signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
   switch?: ChatSwitch; // the office's: the CEO moved to another account (#248), shown as a pill
+  ceoRuns?: { back: CeoRunsOn }; // the office's: the manager moved the CEO to another coding agent (#418), a pill with Undo to `back`
   ceoStuck?: ChatCeoStuck; // the office's: the CEO's session is stuck (#375), as a card with Open terminal, Sign in and Switch back
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
   ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
