@@ -211,7 +211,7 @@ const share = (hits: number, n: number) => (n ? hits / n : null);
 /** Which of 7 days (0 oldest, 6 today) `at` fell on, by local midnight; outside the week: -1 or 7. */
 const dayIndex = (at: number, now: number) => 6 - Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
 
-/** The share of hits per day over the last 7 days, oldest first (today last); null on a day with none (#371). */
+/** The share of hits per day over the last 7 days, oldest first (today last), to the percent; null on a day with none, [] for a week with none (ops goes out often, #371). */
 export function dailyShare(entries: [at: number, hit: boolean][], now: number): (number | null)[] {
   const hits = Array.from({ length: 7 }, () => 0);
   const all = Array.from({ length: 7 }, () => 0);
@@ -221,7 +221,7 @@ export function dailyShare(entries: [at: number, hit: boolean][], now: number): 
     all[i]++;
     if (hit) hits[i]++;
   }
-  return all.map((n, i) => share(hits[i], n));
+  return all.some((n) => n) ? all.map((n, i) => (n ? Math.round((hits[i] / n) * 100) / 100 : null)) : [];
 }
 
 /**

@@ -16,7 +16,7 @@ const { Swarm } = await import('./swarm.ts');
 // the company (terminal lines in the snapshot, every agent change sent in full) fails here, not in someone's office.
 
 const SNAPSHOT_BUDGET = 620_000; // bytes; it was 2 MB and growing with every log line before #228; +15 KB for what each busy agent's session runs on (#376); +5 KB for who spent each account's window (#409)
-const TRAFFIC_BUDGET = 80_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before
+const TRAFFIC_BUDGET = 85_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before; 80 KB/s until runs reached 82 KB/s, +1 KB/s for each floor's 7-day QA curve (#371)
 
 afterAll(() => {
   vi.useRealTimers();

@@ -289,6 +289,10 @@ describe('QA pass rate per day (#371)', () => {
     expect(dailyShare([[NOW - 3 * DAY_MS, true], [NOW - 3 * DAY_MS, false], [NOW - 8 * DAY_MS, true], [NOW - HOUR_MS, true]], NOW)).toEqual([null, null, null, 0.5, null, null, 1]);
   });
 
+  it('rounds each day to the percent: it is only drawn, and ops goes out to every tab often', () => {
+    expect(dailyShare([[NOW, true], [NOW, false], [NOW, false]], NOW)[6]).toBe(0.33);
+  });
+
   it("is the floor's research-lab curve: its own verdicts, lab errors left out", () => {
     const h = emptyHistory();
     recordQa(h, 'r1', true, null, NOW - DAY_MS, 1, 1);
@@ -297,7 +301,7 @@ describe('QA pass rate per day (#371)', () => {
     recordQa(h, 'r2', false, null, NOW - DAY_MS, 4, 1);
     const f = opsView([floor({ repoId: 'r1' })], h, NOW).floors[0];
     expect(f.qaPassTrend).toEqual([null, null, null, null, null, 0.5, null]);
-    expect(opsView([floor({ repoId: 'r1' })], emptyHistory(), NOW).total.qaPassTrend).toEqual(Array.from({ length: 7 }, () => null));
+    expect(opsView([floor({ repoId: 'r1' })], emptyHistory(), NOW).total.qaPassTrend).toEqual([]); // a week without rounds: nothing to send
   });
 });
 
