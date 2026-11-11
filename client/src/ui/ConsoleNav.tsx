@@ -61,7 +61,7 @@ function useCardFocus(card: string | undefined) {
 /** One section's content. */
 export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: Where; focus?: SectionFocus }) {
   useCardFocus(id === 'ops' ? undefined : focus.card);
-  const one =(body: ReactNode) => <div className="cn-one">{body}</div>;
+  const one = (body: ReactNode) => <div className="cn-one">{body}</div>;
   switch (id) {
     case 'floors':
       return <FloorsTab />;
