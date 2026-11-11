@@ -69,7 +69,10 @@ function basics(argv: readonly string[]): string | null {
 
 const nice = (argv: string[], linux: boolean, seconds: number) => (linux ? ['timeout', '-k', '5', String(seconds), 'nice', '-n', '19', 'ionice', '-c3', ...argv] : argv);
 
-const first = (args: readonly string[]) => args.find((a) => !a.startsWith('-'));
+/** The verb (or subcommand) is the word right after the program: an option before it could take a word as its value
+ * (`systemctl -p status restart x`, `docker --config ps run …`) and leave the real verb further on. */
+const verbOf = (args: readonly string[], n = 1) => (args.slice(0, n).every((a) => !a.startsWith('-')) ? args.slice(0, n).join(' ') : null);
+const OPTION_FIRST = (program: string) => ({ refused: `Put ${program}'s verb first, before any option (e.g. "${program} status x -n 50"). ${PROPOSE}` });
 
 /** it_run's command: the argv to run, or why not (pointing to it_propose for changes). */
 export function readOnlyPlan(argv: readonly string[], o: { linux: boolean }): ReadPlan | Refusal {
@@ -99,25 +102,27 @@ export function readOnlyPlan(argv: readonly string[], o: { linux: boolean }): Re
       return { argv: nice([...argv], o.linux, READ_TIMEOUT_MS / 1000), timeoutMs: READ_TIMEOUT_MS + 10_000 };
     }
     case 'systemctl': {
-      const verb = first(args);
+      if (args[0]?.startsWith('-')) return OPTION_FIRST('systemctl');
+      const verb = verbOf(args);
       if (!verb || !['status', 'is-active', 'is-enabled', 'list-units', 'list-timers', 'cat'].includes(verb)) return changes(`systemctl ${verb ?? ''}`.trim());
       return { argv: ['systemctl', '--no-pager', ...args], timeoutMs: READ_TIMEOUT_MS };
     }
     case 'journalctl': {
-      const act = args.find((a) => /^--(vacuum|rotate|flush|sync|relinquish|setup-keys|update-catalog)/.test(a));
+      const act = args.find((a) => /^--(vacuum|rotate|flush|sync|relinquish|setup-keys|update-catalog|cursor-file)/.test(a));
       if (act) return changes(`journalctl ${act.split('=')[0]}`);
       if (args.some((a) => a === '-f' || a === '--follow')) return { refused: "journalctl --follow never ends: ask for the last lines with -n." };
       const lines = args.includes('--disk-usage') || args.some((a) => a === '-n' || a.startsWith('--lines') || /^-n\d+$/.test(a)) ? [] : ['-n', '200'];
       return { argv: ['journalctl', '--no-pager', ...args, ...lines], timeoutMs: READ_TIMEOUT_MS };
     }
     case 'docker': {
-      const words = args.filter((a) => !a.startsWith('-'));
-      const sub = words.slice(0, 2).join(' ');
-      if (['ps', 'images'].includes(words[0]) || ['system df', 'volume ls', 'image ls', 'container ls'].includes(sub)) return plain;
-      return changes(`docker ${sub || ''}`.trim());
+      if (args[0]?.startsWith('-')) return OPTION_FIRST('docker');
+      const one = verbOf(args);
+      const two = verbOf(args, 2);
+      if ((one && ['ps', 'images'].includes(one)) || (two && ['system df', 'volume ls', 'image ls', 'container ls'].includes(two))) return plain;
+      return changes(`docker ${two ?? one ?? ''}`.trim());
     }
     case 'snap':
-      return first(args) === 'list' ? plain : changes(`snap ${first(args) ?? ''}`.trim());
+      return verbOf(args) === 'list' ? plain : changes(`snap ${args[0] ?? ''}`.trim());
     case 'git':
       return gitPlan(argv);
     default:

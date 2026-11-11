@@ -29,6 +29,8 @@ describe('readOnlyPlan (it_run)', () => {
     expect(plan('df -h')).toEqual({ argv: ['df', '-h'], timeoutMs: expect.any(Number) });
     expect(plan('systemctl status keel-portal')).toMatchObject({ argv: ['systemctl', '--no-pager', 'status', 'keel-portal'] });
     expect(plan('docker system df')).toMatchObject({ argv: ['docker', 'system', 'df'] });
+    expect(plan('docker ps -a --format {{.Names}}')).toMatchObject({ argv: ['docker', 'ps', '-a', '--format', '{{.Names}}'] });
+    expect(plan('systemctl list-units --state=failed -t service')).toMatchObject({ argv: ['systemctl', '--no-pager', 'list-units', '--state=failed', '-t', 'service'] });
     expect(plan('git -C /opt/keel branch -vv')).toMatchObject({ argv: ['git', '--no-pager', '-C', '/opt/keel', 'branch', '-vv'] });
   });
 
@@ -42,7 +44,7 @@ describe('readOnlyPlan (it_run)', () => {
     expect(plan('journalctl --disk-usage')).toMatchObject({ argv: ['journalctl', '--no-pager', '--disk-usage'] });
   });
 
-  it.each(['rm -rf /tmp/x', 'systemctl restart caddy', 'docker image prune', 'journalctl --vacuum-size=500M', 'find /tmp -delete', 'find / -exec rm {} +', 'snap remove x', 'git push', 'git branch new', 'git remote add x y', 'mount /dev/sdb1 /mnt'])(
+  it.each(['rm -rf /tmp/x', 'systemctl restart caddy', 'docker image prune', 'journalctl --vacuum-size=500M', 'find /tmp -delete', 'find / -exec rm {} +', 'snap remove x', 'git push', 'git branch new', 'git remote add x y', 'mount /dev/sdb1 /mnt', 'systemctl -p status restart cubefarm.service', 'systemctl --property status stop x', 'docker --config ps run alpine true', 'docker --context images rm keel-postgres', 'docker system --log-level df prune', 'snap --color list remove x', 'journalctl --cursor-file=/root/newfile -n 1'])(
     'refuses a change and points to it_propose: %s',
     (line) => expect(refusedWhy(line)).toMatch(/it_propose/),
   );
