@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountSource, anthropicCosts, boxSource, codexPlan, codexReadings, elevenLabsSource, openaiCosts, resetsIn, usageAlerts, usageLine, windowWords, worstFirst } from './usageSources';
+import { accountSource, anthropicCosts, backAlerts, boxSource, codexPlan, codexReadings, elevenLabsSource, openaiCosts, resetsIn, usageAlerts, usageLine, windowWords, worstFirst } from './usageSources';
 import type { AccountView, UsageSource } from './types';
 
 const NOW = Date.UTC(2026, 10, 8, 12, 0, 0);
@@ -140,6 +140,14 @@ describe('notifications', () => {
     const limited = usageAlerts([src('codex-login', 40, { status: 'limited' })], [], NOW);
     expect(limited.alerts.map((a) => a.title)).toEqual(['codex-login is at its limit']);
     expect(usageAlerts([src('codex-login', 40, { status: 'limited' })], limited.sent, NOW).alerts).toEqual([]);
+  });
+
+  it("tells the manager once when a watched limited source is back (#404), and drops a watch whose row is gone", () => {
+    const still = backAlerts([src('claude-ultra', 100)], ['claude-ultra', 'gone']);
+    expect(still).toEqual({ alerts: [], watching: ['claude-ultra'] });
+    const back = backAlerts([src('claude-ultra', 20)], still.watching);
+    expect(back.alerts.map((a) => a.title)).toEqual(['claude-ultra is back']);
+    expect(back.watching).toEqual([]);
   });
 });
 

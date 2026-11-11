@@ -134,7 +134,7 @@ function CardRow({ c, onWho }: { c: ProviderCard; onWho: (id: string) => void })
   const docs = PROVIDERS.find((p) => p.id === c.provider)?.docsUrl;
   const on = c.status !== 'off';
   return (
-    <div className="pv-card">
+    <div id={c.usageId && `pv-usage-${c.usageId}`} className="pv-card">
       <div className="ds-card-head">
         <div className="ds-row-main">
           <div className="ds-row-title">{c.label}</div>

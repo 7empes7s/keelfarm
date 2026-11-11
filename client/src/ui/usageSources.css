@@ -7,6 +7,7 @@
   min-inline-size: 0;
 }
 .us-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-1);
@@ -18,16 +19,72 @@
   border-radius: var(--ds-radius-md);
   background: var(--ds-surface-raised);
   color: var(--ds-text);
-  font: inherit;
   text-align: start;
-  cursor: pointer;
 }
-.us-row:hover {
+.us-row:has(.us-open:hover) {
   background: var(--ds-surface-hover);
 }
-.us-row:focus-visible {
+/* The whole card opens its detail (#404): a button under its content; the chip and the action sit above it. */
+.us-open {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+.us-open:focus-visible {
   outline: var(--ds-border) solid var(--ds-focus);
   outline-offset: 1px;
+}
+.us-chip,
+.us-row-actions {
+  position: relative;
+}
+/* A chip-sized look with a full-size target. */
+.us-chip {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-inline-size: var(--ds-target);
+  min-block-size: var(--ds-target);
+  margin-block: calc((1.75rem - var(--ds-target)) / 2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.us-chip:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+  border-radius: var(--ds-radius-pill);
+}
+.us-row-actions,
+.us-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.us-action {
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.us-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.us-agent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.us-agent-actions {
+  display: flex;
+  gap: var(--ds-space-2);
 }
 .us-head {
   display: flex;

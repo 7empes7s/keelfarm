@@ -10,7 +10,7 @@ import { HostBadge } from './HostBadge';
 import { CloseButton, Icon } from './Icon';
 import { iconFor, type IconName } from './icons';
 import { isTouch, openHoldMenu } from '../world/touch/touchState';
-import { agentTask, TaskBar, taskSince } from './TaskProgress';
+import { agentTask, agentWorking, TaskBar, taskSince } from './TaskProgress';
 import { Avatar } from './phoneParts';
 import { aimProgress, aimStatus, prLabel, type PrMark } from './aimCardRules';
 import { tourAllows, useTourGate } from './tourGate';
@@ -154,7 +154,7 @@ export function AgentCard() {
       )}
       {on && <div className="ac-on">{clipText(redact(on), 64)}</div>}
       <div className="ac-stage">
-        <TaskBar input={agentTask(agent, qa)} repoId={agent.repoId} since={taskSince(repo, agent.issueNumber, agent.prNumber)} name={`${agent.name}'s task`} compact />
+        <TaskBar input={agentTask(agent, qa)} repoId={agent.repoId} since={taskSince(repo, agent.issueNumber, agent.prNumber)} working={agentWorking(agent)} name={`${agent.name}'s task`} compact />
       </div>
       {act && (
         <div className="ac-now">
