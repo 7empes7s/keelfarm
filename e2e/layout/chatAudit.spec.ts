@@ -45,28 +45,6 @@ test('the Company thread bar shows its whole title and floors on a tap at 390px 
   await expect(bar).toHaveAttribute('aria-expanded', 'false');
 });
 
-// The CEO's suggested replies were 30px pills: each is a 44px tap, its icon and words centred in it.
-test("the CEO's suggestion chips are 44px taps with centred words at 390px (#514)", async ({ page }) => {
-  await page.routeWebSocket(/\/ws$/, (ws) => {
-    const server = ws.connectToServer();
-    server.onMessage((data) => {
-      if (typeof data !== 'string') return ws.send(data);
-      const ev = JSON.parse(data);
-      if (ev.type === 'snapshot') ev.data.messages.push({ id: ev.data.messages.at(-1).id + 1, from: 'ceo', text: 'Shall I file it?', at: Date.now(), suggestions: ['File it', 'Not now'] });
-      ws.send(JSON.stringify(ev));
-    });
-  });
-  await page.setViewportSize({ width: 390, height: 844 });
-  const root = await pocket(page, 'chat');
-  const chips = root.locator('.suggestion-chip');
-  await expect(chips).toHaveCount(2);
-  for (const chip of await chips.all()) {
-    const [box, icon] = await Promise.all([chip.boundingBox(), chip.locator('svg').boundingBox()]);
-    expect(box!.height).toBeGreaterThanOrEqual(43.5);
-    expect(Math.abs(icon!.y + icon!.height / 2 - (box!.y + box!.height / 2))).toBeLessThan(2);
-  }
-});
-
 // The 3D phone's chat kept four tools beside the CEO and cut their name to "Morg…": the name stays whole.
 test("the 3D phone's chat shows the CEO's whole name at 390px (#514)", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

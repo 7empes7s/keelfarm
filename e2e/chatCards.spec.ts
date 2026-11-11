@@ -31,7 +31,7 @@ test('a CEO message with every card type renders at 390px without overflow (#514
       { kind: 'dashboard', title: 'This week', tiles: [{ label: 'Merged', value: 12, unit: 'count', delta: 20 }, { label: 'Spend', value: 41.5, unit: 'usd' }], charts: [] },
     ],
     attachments: [file],
-    actions: [{ tool: 'set_floor_profile', icon: '🏢', text: "Saved floor 2's profile.", ref: { kind: 'section', section: 'ceo', repoId: 'demo-co/weather-api' } }],
+    actions: [{ tool: 'set_floor_profile', icon: '🏢', text: "Saved the every-card profile.", ref: { kind: 'section', section: 'ceo', repoId: 'demo-co/weather-api' } }],
     idea: { kind: 'objective', title: 'Add an objective: first-round QA pass above 70%', message: 'Add the objective' },
     log: { steps: [{ label: 'Checking the floors', icon: '🏢', state: 'done', ms: 1234 }], count: 1, ms: 1234 },
     used: { skills: [], connectors: [{ name: 'Office', tools: 1 }], tools: [{ name: 'Read', count: 1 }] },
@@ -52,16 +52,16 @@ test('a CEO message with every card type renders at 390px without overflow (#514
   const log = page.locator('.pocket .chat-log');
   for (const shown of [
     row.getByRole('button', { name: /copy/i }),
-    log.getByText('Merged by floor'),
-    log.getByText('A wide table'),
-    log.getByText('This week'),
-    log.getByText('Milestone plan'),
-    log.getByText('notes.txt'),
-    log.getByText("Saved floor 2's profile."),
+    log.getByText('Merged by floor', { exact: true }),
+    log.getByText('A wide table', { exact: true }),
+    log.getByText('This week', { exact: true }),
+    log.getByText('Milestone plan', { exact: true }),
+    log.getByText('notes.txt', { exact: true }),
+    log.getByText("Saved the every-card profile.", { exact: true }),
     log.locator('.idea-card'),
     log.locator('.suggestion-chip').first(),
     log.locator('.steps-row').last(),
-    log.getByRole('button', { name: /Redo on/ }),
+    row.getByRole('button', { name: /Redo on/ }),
   ])
     await expect(shown).toBeVisible();
   expect(await overflowProblems(page.locator('.pocket'))).toEqual([]);
