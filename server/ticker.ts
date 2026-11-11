@@ -3,7 +3,7 @@
 // before it. Kept in memory, the last few per floor: a restart starts a fresh tape.
 
 import { clipText, redact } from '../shared/activity.ts';
-import type { AgentView, PullInfo, QaStatus, QaView, RepoView, ServerEvent, TickerItem } from '../shared/types.ts';
+import { OPEN_PULLS_LISTED, type AgentView, type PullInfo, type QaStatus, type QaView, type RepoView, type ServerEvent, type TickerItem } from '../shared/types.ts';
 
 /** A ticker line before it's numbered and timed. `key` marks news told once (a PR opening, seen two ways). */
 export interface Tick {
@@ -24,8 +24,7 @@ export interface RepoFacts {
 export const TICKER_KEEP = 20;
 const MERGED_NEWS_MS = 10 * 60_000; // a merge first seen this long after it happened is old news
 const MAX_NEW_ISSUES = 3; // a batch of filed issues: this many lines, then "+n more"
-const OPEN_PULLS_LISTED = 50; // github.ts's --limit for open PRs
-const OPEN_ISSUES_LISTED = 100; // and for open issues
+const OPEN_ISSUES_LISTED = 100; // github.ts's --limit for open issues
 
 const busy = (s: AgentView['status']) => s === 'working' || s === 'preparing';
 const opened = (repoId: string, pr: number) => `opened:${repoId}#${pr}`;
