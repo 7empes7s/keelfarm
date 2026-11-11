@@ -7,16 +7,25 @@
   width: min(100%, 30rem);
   min-width: 0;
 }
-/* in the chat it gives way first: it shrinks down to its header (the chat's other trays don't), scrolling inside */
-.phone-chat > .it-desk.it-desk-chat {
-  flex: 0 1 auto;
-  min-height: calc(var(--ds-target) + 2 * var(--ds-space-1));
-  max-height: 40dvh;
-  overflow-y: auto;
-  padding: var(--ds-space-1) var(--ds-space-2);
-  overscroll-behavior: contain;
+/* in the chat: one row above the message box; Review opens the cards in a sheet */
+.it-desk-chat {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-1) 10px;
+  border-top: var(--ds-border) solid var(--ds-line);
+  background: var(--ds-surface-raised);
+  font-size: var(--ds-text-sm);
 }
-.it-desk-chat > .it-desk-head {
+.it-desk.artifact-body {
+  align-self: stretch;
+  width: auto;
+}
+.it-run-all {
+  align-self: flex-start;
+}
+.it-desk-head {
   position: sticky;
   top: 0;
   z-index: 1;

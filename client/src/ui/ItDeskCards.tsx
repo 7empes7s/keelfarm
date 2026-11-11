@@ -1,11 +1,12 @@
 // The IT desk's cards (#506): the commands the CEO proposed, each with what it's for, what it frees, how to undo it and
 // its risk, and Run / Not now; Run all for several. Shown in the CEO chat and on Mission control. Also Settings → CEO
 // settings' IT desk: on/off, the read-only list and the commands run.
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { argvLine, IT_READ_ONLY, type ItProposal, type ItRisk } from '../../../shared/itDesk';
+import { Sheet } from './ChatArtifacts';
 import { Icon } from './Icon';
 import './itDesk.css';
 
@@ -39,43 +40,54 @@ function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (id
 }
 
 /**
- * The CEO's proposed commands waiting for the manager; nothing while there are none. `inChat`: above the message box,
- * shrinking and scrolling inside itself so the message box and the other trays stay on screen; its header folds it to
- * one row, as it does while the manager types (`typing`).
+ * The CEO's proposed commands waiting for the manager; nothing while there are none. `inChat`: one row above the message
+ * box whose Review opens the cards in a sheet, so they never take the room of the message box or the other trays.
  */
-export function ItDeskCards({ inChat = false, typing = false }: { inChat?: boolean; typing?: boolean }) {
+export function ItDeskCards({ inChat = false }: { inChat?: boolean }) {
   const waiting = useStore((s) => s.itDesk?.waiting ?? NONE);
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'The CEO');
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(true);
-  useEffect(() => {
-    if (typing) setOpen(false);
-  }, [typing]);
+  const [open, setOpen] = useState(false);
   if (!waiting.length) return null;
-  const shown = !inChat || open;
   const act = (ids: string[], run: boolean) => {
     setBusy(true);
     void (run ? api.itRun(ids) : api.itDismiss(ids)).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
   };
+  const asks = `${ceo} asks to run ${waiting.length === 1 ? 'a command' : `${waiting.length} commands`}`;
+  const cards = (
+    <>
+      {waiting.length > 1 && (
+        <button type="button" className="btn btn-good it-run-all" disabled={busy} onClick={() => act(waiting.map((p) => p.id), true)}>
+          Run all {waiting.length}
+        </button>
+      )}
+      {waiting.map((p) => (
+        <ProposalCard key={p.id} p={p} busy={busy} act={act} />
+      ))}
+    </>
+  );
+  if (inChat)
+    return (
+      <section className="it-desk-chat" aria-label="IT desk: commands waiting for you">
+        <Icon name="terminal" />
+        <b className="grow">{asks}</b>
+        <button type="button" className="btn btn-good" onClick={() => setOpen(true)}>
+          Review
+        </button>
+        {open && (
+          <Sheet label={<><Icon name="terminal" /> {asks}</>} onClose={() => setOpen(false)}>
+            <div className="artifact-body it-desk">{cards}</div>
+          </Sheet>
+        )}
+      </section>
+    );
   return (
-    <section className={`it-desk${inChat ? ' it-desk-chat' : ''}`} aria-label="IT desk: commands waiting for you">
+    <section className="it-desk" aria-label="IT desk: commands waiting for you">
       <div className="it-desk-head">
         <Icon name="terminal" />
-        <b className="grow">
-          {ceo} asks to run {waiting.length === 1 ? 'a command' : `${waiting.length} commands`}
-        </b>
-        {shown && waiting.length > 1 && (
-          <button type="button" className="btn btn-good" disabled={busy} onClick={() => act(waiting.map((p) => p.id), true)}>
-            Run all {waiting.length}
-          </button>
-        )}
-        {inChat && (
-          <button type="button" className="decision-collapse" aria-expanded={open} aria-label={open ? 'Hide the commands' : 'Show the commands'} onClick={() => setOpen(!open)}>
-            <Icon name={open ? 'chevron-down' : 'chevron-up'} />
-          </button>
-        )}
+        <b className="grow">{asks}</b>
       </div>
-      {shown && waiting.map((p) => <ProposalCard key={p.id} p={p} busy={busy} act={act} />)}
+      {cards}
     </section>
   );
 }
