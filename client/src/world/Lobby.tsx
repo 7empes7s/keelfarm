@@ -13,6 +13,7 @@ import { ErrandDirector } from './ErrandDirector';
 import { useCanvasTexture, useInteractable } from './interact';
 import { Jukebox } from './Jukebox';
 import { MapTable } from './MapTable';
+import { MeetingRoom } from './MeetingRoom';
 import { MissionControl } from './MissionControl';
 import { CEO_DESK, CEO_ROOM, COFFEE_CORNER, HALF_D, HALF_W, JUKEBOX, LOBBY_RUG, LOBBY_SCREENS, MANAGER_DESK, MANAGER_ROOM, MANAGER_WORKSTATION, RECEPTION } from './layout';
 import { glow, shade } from './materials';
@@ -381,6 +382,7 @@ export function Lobby() {
 
       <MissionControl />
       <CeoOffice />
+      <MeetingRoom />
       <WaitingRoom />
       <Elevator floorLabel="▲ G · Lobby" accent={ACCENT} />
       <Toys floor="lobby" />

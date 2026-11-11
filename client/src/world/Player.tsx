@@ -37,6 +37,7 @@ import { lookCurve, pad, padName, pollPad, wasPressed, wasReleased, watchPads } 
 import { arriveOnFloor, cameraMode, exitView, homeSpot, lookAllowed, playerAt, rigInput, rigOwnsCamera, rotateView, setHomeLook, stepRig, tapView } from './camera/rig';
 import { leavePerch, perch, takePerchTurn, type Perch } from './perch';
 import { roofAction } from './roof/roofState';
+import { sitAtMeeting } from './MeetingRoom';
 import { sayHi, speakOwnLine } from './Chatter';
 import { findPath, walkways } from './walkways';
 import { recordHitch } from '../hitches';
@@ -134,6 +135,10 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
   }
   if (focus.action.kind === 'roof') {
     roofAction(focus.action.op);
+    return;
+  }
+  if (focus.action.kind === 'meeting') {
+    sitAtMeeting(focus.action.seat);
     return;
   }
   if (focus.action.kind === 'channel') {
