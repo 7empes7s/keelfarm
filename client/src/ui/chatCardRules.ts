@@ -80,11 +80,16 @@ export function replyLog(m: Pick<PhoneMessage, 'log' | 'steps'>): StepLog | null
   return { steps, count: steps.length, ms: 0 };
 }
 
+/** The steps row's log: a stripped older one (#378: kept count and time, no steps) still sums the round up. */
+export function rowLog(m: Pick<PhoneMessage, 'log' | 'steps'>): StepLog | null {
+  return replyLog(m) ?? m.log ?? null;
+}
+
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-/** The reply's one-line steps row: "6 steps · 1 action · 42 s" (no time for an untimed one). */
+/** The reply's one-line steps row: "6 steps · 1 action · 42 s" (no time for an untimed one; "Summary" with no log). */
 export function stepsSummary(log: StepLog | null, actions: number): string {
-  const parts = [plural(log?.count ?? 0, 'step')];
+  const parts = [log ? plural(log.count, 'step') : 'Summary'];
   if (actions) parts.push(plural(actions, 'action'));
   if (log?.ms) parts.push(shortDuration(log.ms));
   return parts.join(' · ');

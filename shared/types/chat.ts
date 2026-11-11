@@ -44,6 +44,7 @@ export interface PhoneMessage {
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
   steps?: string[]; // the CEO's, before #150: the steps it took for this reply, as labels
   log?: StepLog; // the CEO's: the steps it took for this reply, timed (shared/ceoStream.ts)
+  summary?: string; // the CEO's: its turn's closing text after this reply, folded into the steps row (#378, shared/reactions.ts)
   actions?: ChatAction[]; // the CEO's: what its office tools changed for this reply, as cards (shared/ceoActions.ts)
   idea?: ChatIdea; // the CEO's: a suggestion about the office's structure, as a card with Accept (shared/chatParts.ts)
   edited?: number; // when its sender last edited it (#125: anyone's, shared/messageEdits.ts)

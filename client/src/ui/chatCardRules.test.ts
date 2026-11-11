@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionStatus, continuesGroup, daySeparator, elapsed, matchCommands, replyLog, slashItems, starterChips, stepsSummary, stepTime, workingLine } from './chatCardRules';
+import { actionStatus, continuesGroup, daySeparator, elapsed, matchCommands, replyLog, rowLog, slashItems, starterChips, stepsSummary, stepTime, workingLine } from './chatCardRules';
 import type { RefWorld } from './chatRefs';
 import type { PullInfo } from '../../../shared/types';
 
@@ -96,6 +96,14 @@ describe("a reply's steps row (#150)", () => {
   it('sums the round up in one line', () => {
     expect(stepsSummary(log, 1)).toBe('6 steps · 1 action · 42 s');
     expect(stepsSummary({ ...log, count: 1, ms: 0 }, 0)).toBe('1 step');
+  });
+
+  it("keeps an older reply's count and time after a reload stripped its steps, never '0 steps' (#378)", () => {
+    const stripped = { steps: [], count: 4, ms: 7944 };
+    expect(stepsSummary(rowLog({ log: stripped }), 0)).toBe('4 steps · 7.9 s');
+    expect(rowLog({ log })).toBe(log);
+    expect(stepsSummary(rowLog({}), 0)).toBe('Summary');
+    expect(stepsSummary(rowLog({}), 2)).toBe('Summary · 2 actions');
   });
 
   it("reads a reply's own log, else the labels an older reply kept, a failed one marked", () => {
