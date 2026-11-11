@@ -6,10 +6,10 @@ export type ChatToolId = 'search' | 'charts' | 'full' | 'files' | 'text' | 'call
 /** Most used first: the last ones fold first as the header narrows. */
 export const TOOL_ORDER: readonly ChatToolId[] = ['search', 'charts', 'full', 'files', 'text', 'call', 'handsFree'];
 
-/** A tool button (44 px) and its gap. */
-export const TOOL_SLOT = 50;
-/** What the CEO's avatar and name keep before tools take the room. */
-export const NAME_ROOM = 80;
+/** A tool button (44 px) and its gap (8 px). */
+export const TOOL_SLOT = 52;
+/** What the CEO's avatar (28 px and its gap) and a short name keep before tools take the room. */
+export const NAME_ROOM = 100;
 
 /**
  * The header row's tools at `width` px (the row the name and tools share; 0 before it's measured): the tools there are

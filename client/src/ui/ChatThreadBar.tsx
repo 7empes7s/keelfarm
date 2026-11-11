@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from '../store';
 import './threads.css';
 import { Icon } from './Icon';
@@ -21,6 +22,7 @@ export function ThreadBar({ thread, seg, onSeg, files, onFloor }: Props) {
   const repos = useStore((s) => s.repos);
   const repo = thread?.repoId ? repos.find((r) => r.id === thread.repoId) : undefined;
   const named = (thread?.floors ?? []).flatMap((id) => repos.find((r) => r.id === id) ?? []);
+  const [whole, setWhole] = useState(false); // the Company thread's title and floors, cut to a line until tapped (#514)
   return (
     <div className="thread-bar">
       {repo ? (
@@ -35,12 +37,12 @@ export function ThreadBar({ thread, seg, onSeg, files, onFloor }: Props) {
           <RunChip run={thread?.run} />
         </button>
       ) : (
-        <div className="thread-project">
+        <button type="button" className={`thread-project ${whole ? 'thread-project-whole' : ''}`} aria-expanded={whole} onClick={() => setWhole(!whole)} title={whole ? 'Show it on one line' : 'Show the whole title and floors'}>
           <b className="thread-project-name">
             <Icon name="message-circle" /> {thread?.title && thread.title !== UNTITLED ? thread.title : 'Company thread'}</b>
           <span className="small muted thread-project-meta">{named.length ? `Company · ${named.map((r) => `floor ${r.floor}`).join(', ')}` : 'Company: across every floor'}</span>
           <RunChip run={thread?.run} />
-        </div>
+        </button>
       )}
       <div className="seg thread-seg" role="tablist" aria-label="Chat or files">
         {(['chat', 'files'] as const).map((s) => (
