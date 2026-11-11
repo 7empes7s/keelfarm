@@ -437,6 +437,11 @@ export async function commentPull(fullName: string, number: number, body: string
   return out.match(/https:\/\/github\.com\/\S+/)?.[0] ?? '';
 }
 
+export async function commentIssue(fullName: string, number: number, body: string): Promise<string> {
+  const out = await gh(['issue', 'comment', String(number), '-R', fullName, '--body-file', '-'], { input: body });
+  return out.match(/https:\/\/github\.com\/\S+/)?.[0] ?? '';
+}
+
 // QA screenshots live on an orphan branch so evidence never lands in the default branch when a PR is merged.
 export const EVIDENCE_BRANCH = 'swarm-qa-evidence';
 const evidenceReady = new Set<string>();
