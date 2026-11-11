@@ -53,8 +53,8 @@ for (const width of [390, 1280]) {
   });
 }
 
-// One card anatomy (#232): nothing past the card's box, no two cards over each other, the action row one line with ⋯
-// last, its buttons one height. Wide, with the CEO chat open beside the board too.
+// One card anatomy (#232, #410): nothing past the card's box, no two cards over each other, the title its own line of at
+// most 3, the action bar Open · GitHub first and ⋯ last, its buttons one height. Wide, with the CEO chat open too.
 for (const [width, chat] of [[390, false], [1280, false], [1280, true], [1920, false], [1920, true]] as const) {
   test(`Kanban cards keep one anatomy at ${width}px${chat ? ', chat open' : ''}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -62,7 +62,7 @@ for (const [width, chat] of [[390, false], [1280, false], [1280, true], [1920, f
     const dock = root.locator('.pk-dock');
     if (chat && !(await dock.isVisible())) await root.locator('.pk-chat-btn').click();
     if (!chat && (await dock.isVisible())) await dock.getByRole('button', { name: 'Hide the chat' }).click();
-    await expect(page.locator('.kcol-qa .kcard-actions').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.kcol-qa .kbar').first()).toBeVisible({ timeout: 30_000 });
     // a folded column's cards are clipped to nothing, not hidden from checkVisibility(): open them all, let the folds settle
     const shut = page.locator('.kcol-shut .kcol-head');
     for (let n = await shut.count(); n > 0; n--) await shut.first().click();
@@ -75,7 +75,7 @@ for (const [width, chat] of [[390, false], [1280, false], [1280, true], [1920, f
       cards.forEach((card, i) => {
         const r = boxes[i];
         const name = card.querySelector('.kcard-title')?.textContent?.trim().slice(0, 30);
-        for (const el of card.querySelectorAll<HTMLElement>(':scope > *, .agent-chip, .kcard-who-text, .kcard-actions > *')) {
+        for (const el of card.querySelectorAll<HTMLElement>(':scope > *, .agent-chip, .kcard-who-text, .kbar > *')) {
           const b = el.getBoundingClientRect();
           if (b.width && (b.left < r.left - 1 || b.right > r.right + 1 || b.bottom > r.bottom + 1)) out.push(`"${name}": .${el.className.split(' ')[0]} runs out of the card`);
         }
@@ -83,15 +83,21 @@ for (const [width, chat] of [[390, false], [1280, false], [1280, true], [1920, f
           const o = boxes[j];
           if (r.left < o.right - 1 && o.left < r.right - 1 && r.top < o.bottom - 1 && o.top < r.bottom - 1) out.push(`"${name}" overlaps another card`);
         }
-        const row = card.querySelector<HTMLElement>('.kcard-actions');
-        if (!row || !card.closest('.kcol-qa, .kcol-review')) return;
+        const title = card.querySelector<HTMLElement>('.kcard-title')!;
+        const lh = parseFloat(getComputedStyle(title).lineHeight);
+        if (title.getBoundingClientRect().height > lh * 3 + 2) out.push(`"${name}": its title runs past 3 lines`);
+        if (title.querySelector('a, button')) out.push(`"${name}": a link inside its title`);
+        const row = card.querySelector<HTMLElement>('.kbar');
+        if (!row) {
+          out.push(`"${name}" has no action bar`);
+          return;
+        }
         const items = [...row.children] as HTMLElement[];
-        if (items.length > 3) out.push(`"${name}" shows ${items.length - 1} buttons`);
-        const last = items.at(-1)!;
-        if (!last.classList.contains('ds-menu-wrap')) out.push(`"${name}": ⋯ isn't last in its action row`);
-        const tops = new Set(items.map((x) => Math.round(x.getBoundingClientRect().top / 4)));
-        if (tops.size > 1) out.push(`"${name}": its action row wraps`);
-        if (items.some((x) => x.getBoundingClientRect().right > last.getBoundingClientRect().right + 1)) out.push(`"${name}": ⋯ isn't at the right end`);
+        if (!(items[0]?.getAttribute('aria-label') ?? '').startsWith('Open') || !(items[1]?.getAttribute('aria-label') ?? '').startsWith('GitHub')) out.push(`"${name}": its bar doesn't start Open, GitHub`);
+        if (items.length > 5) out.push(`"${name}" shows ${items.length} items on its bar`);
+        if (card.closest('.kcol-qa, .kcol-review') && !items.at(-1)!.classList.contains('ds-menu-wrap')) out.push(`"${name}": ⋯ isn't last in its action bar`);
+        const heights = new Set(items.map((x) => Math.round(x.getBoundingClientRect().height)));
+        if (heights.size > 1) out.push(`"${name}": its bar's buttons differ in height`);
       });
       return out;
     });
