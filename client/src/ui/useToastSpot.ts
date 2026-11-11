@@ -1,11 +1,12 @@
 // Measures what the toasts must not cover (#230) and places them with toastPlace.ts: panel headers, tab rows, the
-// app's header, the composer and the tab bar, beside a CEO chat docked on the right, inside the safe areas. Only while
-// toasts show, on their changes, a resize and a short tick (panels open and close under them).
+// app's header, the composer, the tab bar and the 3D office's What's new card, beside a CEO chat docked on the right,
+// inside the safe areas. Only while toasts show, on their changes, a resize and a short tick (panels open and close
+// under them).
 import { useLayoutEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { placeToasts, toastsFrom, type Box } from './toastPlace';
 
 /** What a toast never covers. */
-const TOAST_AVOID = '.panel-head, [role="tablist"], .pk-head, .pk-tabs, .hud-status, .hud-banner, .chat-input, .term-input';
+const TOAST_AVOID = '.panel-head, [role="tablist"], .pk-head, .pk-tabs, .hud-status, .hud-banner, .chat-input, .term-input, .tour-invite-float';
 /** Columns docked on the right (pocket's CEO chat, the 3D office's phone): the toasts stay left of them. */
 const DOCKS = '.pk-dock, .phone';
 const TICK_MS = 500;

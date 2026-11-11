@@ -85,6 +85,11 @@
   pointer-events: auto;
 }
 @media (hover: none) {
+  /* the stand-in below stays in its row: placed against a box outside the log, it hung thousands of px under it, and
+     the 3D phone's screen scrolled down to it, blank (#516) */
+  .bubble-row {
+    position: relative;
+  }
   /* Touch keeps hold/swipe; keyboard focus still reveals the same tools. */
   .bubble-tools:not(:focus-within) {
     position: absolute;

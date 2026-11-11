@@ -5,7 +5,7 @@
   flex-direction: column;
   gap: var(--ds-space-2);
   padding: var(--ds-space-2) var(--ds-space-2) var(--ds-space-2) var(--ds-space-3);
-  width: min(400px, calc(100vw - 32px));
+  width: min(400px, calc(100vw / var(--ui-scale, 1) - 32px)); /* the HUD's zoom (a phone's 115%) would widen it off screen */
   cursor: default;
   touch-action: pan-y;
   transition: transform var(--ds-dur-fast) var(--ds-ease);
