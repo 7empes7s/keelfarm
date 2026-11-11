@@ -32,7 +32,7 @@ export function OnItNow({ accountId, pinned, now, close }: { accountId: string; 
           const task = taskOf(agent);
           return (
             <div key={agent.id} className="us-who">
-              <button type="button" className="us-who-main" onClick={() => open({ kind: 'terminal', agentId: agent.id })} aria-label={`${agent.name}: ${runWords(cli, run)}, since ${ago(run.since, now)}. Open their window`}>
+              <button type="button" className="us-who-main" onClick={() => open({ kind: 'terminal', agentId: agent.id })} title={`Open ${agent.name}'s window`}>
                 <Avatar name={agent.name} color={agent.color} size={32} />
                 <span className="us-who-text">
                   <b>{agent.name}</b>
@@ -61,7 +61,7 @@ export function OnItNow({ accountId, pinned, now, close }: { accountId: string; 
           <b className="small">Pinned</b> <span className="muted small">their next session starts here while it has room</span>
           <span className="us-who-chips">
             {who.pinned.map((a) => (
-              <button key={a.id} type="button" className="ds-btn us-chip" onClick={() => open({ kind: 'terminal', agentId: a.id })} aria-label={`${a.name}, pinned: open their window`}>
+              <button key={a.id} type="button" className="ds-btn us-chip" onClick={() => open({ kind: 'terminal', agentId: a.id })} title={`Open ${a.name}'s window`}>
                 <span className="dot" style={{ background: a.color }} aria-hidden /> {a.name}
                 {a.role === 'ceo' ? ' (CEO)' : ''}
               </button>
@@ -100,7 +100,7 @@ export function WindowSplit({ split, close }: { split: UsageSplit | undefined; c
           {fmtUsd(split.usd)} · {sessions(split.sessions)} by the office
         </span>
       </span>
-      <ProgressBar compact label="By kind" parts={split.kinds.map((k) => ({ key: k.key, label: `${KIND_GROUP_LABELS[k.key as KindGroup] ?? k.key} ${k.pct}%`, value: k.usd }))} aria={`By kind: ${split.kinds.map((k) => `${KIND_GROUP_LABELS[k.key as KindGroup] ?? k.key} ${fmtUsd(k.usd)}`).join(', ')}`} />
+      <ProgressBar label="By kind" parts={split.kinds.map((k) => ({ key: k.key, label: `${KIND_GROUP_LABELS[k.key as KindGroup] ?? k.key} ${k.pct}%`, value: k.usd }))} aria={`By kind: ${split.kinds.map((k) => `${KIND_GROUP_LABELS[k.key as KindGroup] ?? k.key} ${fmtUsd(k.usd)}`).join(', ')}`} />
       {split.tasks.length > 0 && (
         <div className="us-tasks">
           {split.tasks.map((t) => (
@@ -128,7 +128,7 @@ function TaskCard({ t, open }: { t: UsageTaskCost; open: (o: Overlay) => void })
   const title = pull?.title ?? repo?.issues.find((i) => i.number === t.issue)?.title ?? '';
   const key = t.pr === null ? `i-${n}` : pull?.state === 'MERGED' ? `m-${n}` : `pr-${n}`;
   return (
-    <button type="button" className="us-task" disabled={!repo} onClick={() => repo && open({ kind: 'card', repoId: repo.id, key, number: n, pr: t.pr !== null })} aria-label={`${t.pr === null ? 'Issue' : 'PR'} #${n}${title ? ` ${title}` : ''}: ${fmtUsd(t.usd)} over ${sessions(t.sessions)}`}>
+    <button type="button" className="us-task" disabled={!repo} onClick={() => repo && open({ kind: 'card', repoId: repo.id, key, number: n, pr: t.pr !== null })}>
       <b>
         {t.pr === null ? '' : 'PR '}#{n} · {fmtUsd(t.usd)}
       </b>
