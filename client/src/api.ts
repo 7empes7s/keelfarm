@@ -195,6 +195,7 @@ export const api = {
   redoCeoJob: (job: number) => call<{ job: number }>('POST', `/api/ceo/jobs/${job}/redo`),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
+  undoCeoAction: (id: number, index: number) => call('POST', `/api/ceo/messages/${id}/actions/${index}/undo`),
   chatMessages: (before: number) => call<ChatPage>('GET', `/api/ceo/messages?before=${before}`),
   removeMessage: (id: number) => call('DELETE', `/api/ceo/messages/${id}`),
   newConversation: (repoId: string | null = null) => call<{ id: string }>('POST', '/api/ceo/conversations', { repoId }),
