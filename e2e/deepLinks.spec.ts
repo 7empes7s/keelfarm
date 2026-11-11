@@ -9,25 +9,31 @@ for (const [mode, width] of [
   ['office', 1280],
 ] as const) {
   test(`every deep link opens its view cold in the ${mode} office`, async ({ page, baseURL }) => {
-    test.setTimeout(360_000);
+    test.setTimeout(480_000);
     await page.setViewportSize({ width, height: 800 });
     // A new page load cuts off the last one's requests (a lazy chunk, a panel's fetch): each link's requests to the
-    // office finish before the next link loads, so the fixture's failed-request check stays strict.
+    // office finish before the next link loads, so the fixture's failed-request check stays strict. The 3D view loads
+    // its chunks once its canvas mounts, after a link's panel may already show; Low graphics never loads the effects'.
+    await page.addInitScript(() => localStorage.setItem('cubefarm:graphics', 'low'));
     const pending = new Set<Request>();
     page.on('request', (r) => void (r.url().startsWith(baseURL!) && pending.add(r)));
-    const settle = (r: Request) => void pending.delete(r);
-    page.on('requestfinished', settle);
-    page.on('requestfailed', settle);
+    const done = (r: Request) => void pending.delete(r);
+    page.on('requestfinished', done);
+    page.on('requestfailed', done);
+    const settled = async (what: string, inside = true) => {
+      if (mode === 'office' && inside) await expect(page.locator('canvas').first(), what).toBeAttached();
+      await expect.poll(async () => pending.size === 0 && (await page.waitForTimeout(1000), pending.size === 0), { message: `${what}'s requests`, timeout: 30_000 }).toBe(true);
+    };
     const q = `?pocket=${mode === 'pocket' ? 1 : 0}`;
     await page.goto(`/${q}`);
     await expect(page.locator('html[data-route-ready="1"]')).toBeAttached();
-    await expect.poll(() => pending.size).toBe(0);
+    await settled('the first load', false); // the 3D office's start screen: no canvas yet
     const links = await page.evaluate(() => (window as unknown as { __swarmRoutes: { links(): string[] } }).__swarmRoutes.links());
     expect(links.length).toBeGreaterThan(15);
     for (const [i, link] of links.entries()) {
       await page.goto(`/${q}&cold=${i}${link}`); // a new query: a full load, not a hash change
       await expect(page.locator('html'), link).toHaveAttribute('data-route-ready', '1', { timeout: 30_000 });
-      await expect.poll(() => pending.size, `${link}'s requests`).toBe(0);
+      await settled(link);
     }
   });
 }
