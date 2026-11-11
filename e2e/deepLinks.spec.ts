@@ -15,7 +15,9 @@ for (const [mode, width] of [
     // requests finish before the next link loads, so the fixture's failed-request check stays strict.
     const pending = new Set<Request>();
     page.on('request', (r) => void pending.add(r));
-    for (const done of ['requestfinished', 'requestfailed'] as const) page.on(done, (r) => void pending.delete(r));
+    const settle = (r: Request) => void pending.delete(r);
+    page.on('requestfinished', settle);
+    page.on('requestfailed', settle);
     const q = `?pocket=${mode === 'pocket' ? 1 : 0}`;
     await page.goto(`/${q}`);
     await expect(page.locator('html[data-route-ready="1"]')).toBeAttached();
