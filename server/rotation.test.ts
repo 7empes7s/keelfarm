@@ -81,6 +81,7 @@ async function office(out: string[]) {
     const account = accountOf(opts);
     runs.push({ account, role: opts.role, resume: opts.resumeSessionId, cli: opts.cli });
     if (!out.includes(account)) return start(opts, cb);
+    cb.sessionId(opts.resumeSessionId ?? 'conversation-1'); // a conversation the next account can resume (#377)
     const t = setTimeout(() => cb.finished({ ok: false, text: '', costUsd: 0.01, turns: 0, errors: [LIMIT] }), 10);
     return { send: () => undefined, stop: () => clearTimeout(t) };
   };
@@ -117,6 +118,33 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(run).toMatchObject({ account: 'claude-keelop', label: 'Max · keelops', pinned: 'Claude login on this computer', why: 'limited' });
     const thread = swarm.snapshot().chat?.conversations.find((c) => c.id === swarm.snapshot().chat?.current);
     expect(thread?.run).toMatchObject({ account: 'claude-keelop', pinned: 'Claude login on this computer' });
+  });
+
+  it("the CEO's next Claude login resumes the same conversation, and sees the shared memory (#377)", async () => {
+    const { swarm, runs, i } = await office(['claude-login']);
+    swarm.requestReview();
+    await wait(3_000);
+    expect(runs.filter((r) => r.role === 'ceo')).toMatchObject([
+      { account: 'claude-login', role: 'ceo', resume: undefined },
+      { account: 'claude-keelop', role: 'ceo', resume: 'conversation-1' },
+    ]);
+    const pill = i.state.messages.find((m) => m.switch)!;
+    expect(pill.text).toMatch(/Memory and conversation carried over\.$/);
+    const memory = path.join(home, 'accounts', 'claude-keelop', 'claude', 'projects', 'demo-ceo', 'memory', 'MEMORY.md');
+    expect(fs.readFileSync(memory, 'utf8')).toContain('Manager prefers short replies');
+    expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.shareMissing).toEqual([]);
+  });
+
+  it("in the demo, the CEO on a second login moves to the next one mid-job and resumes the same conversation (#377)", async () => {
+    const { swarm, runs, ceo, i } = await office([]);
+    (ceo() as { account?: string }).account = 'claude-keelop';
+    swarm.requestReview();
+    await wait(1_500);
+    expect(runs.filter((r) => r.role === 'ceo').map((r) => r.account)).toEqual(['claude-keelop']);
+    swarm.simulateAccountLimit('claude-keelop');
+    await wait(1_000);
+    expect(runs.filter((r) => r.role === 'ceo').at(-1)).toMatchObject({ account: 'claude-login', resume: expect.stringMatching(/^demo-ceo-/) });
+    expect(i.state.messages.find((m) => m.switch)?.text).toMatch(/Memory and conversation carried over\.$/);
   });
 
   it('posts one message when every account is out, pauses, and keeps the job without looping', async () => {

@@ -63,6 +63,7 @@ export interface AccountView extends ProviderAccount {
   loginPlan?: string; // the plan a Claude login really has, from its .credentials.json ("Max 20x"), never a token (#442)
   planWarning?: string; // that plan isn't the one its name, plan field or tags say
   tokenRefresh?: boolean; // its access token expired: still signed in, its next session refreshes it
+  shareMissing?: string[]; // a Claude login with its own folder (#377): what it doesn't share yet with this computer's login ([] all)
 }
 
 /** A login's sign-in: `claude auth login` / `codex login`, or `claude setup-token` in its folder. */
@@ -108,6 +109,7 @@ export interface AccountSwitch {
   until: number | null; // when the account it left is back, if known
   api: boolean; // it went to an API key
   usd: number; // what its session cost on that API key
+  carried?: 'conversation' | 'handover'; // #377: the same conversation resumed, or a fresh session told where things stand
 }
 
 /** Rotation's numbers for Providers & accounts and Mission control. */

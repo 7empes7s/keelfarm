@@ -166,7 +166,7 @@ app.post(
     number: await swarm.createIssue(repoId(req), str(req.body.title), str(req.body.body), str(req.body.assignTo) || undefined),
   })),
 );
-app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n))));
+app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n), undefined, str(req.body?.reason))));
 app.post('/api/repos/:repo/issues/:n/assign', route((req) => swarm.assignIssue(repoId(req), num(req.params.n), str(req.body?.agentId))));
 app.post('/api/repos/:repo/issues/:n/trust', route((req) => swarm.trustIssue(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
@@ -346,6 +346,7 @@ app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
 app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
 app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
+app.post('/api/accounts/:id/share', route((req) => ({ note: swarm.accounts.repairShare(String(req.params.id)) })));
 app.post('/api/accounts/:id/test', route(async (req) => ({ note: await swarm.accounts.test(String(req.params.id)) })));
 app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id), (req.body ?? {}).mode === 'setup-token' ? 'setup-token' : 'login')));
 app.post('/api/accounts/:id/signin/code', route((req) => swarm.accounts.signInCodeIn(String(req.params.id), (req.body ?? {}).code)));
