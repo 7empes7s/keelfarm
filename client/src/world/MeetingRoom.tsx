@@ -100,23 +100,22 @@ function useCeoAtTheTable() {
     }
     // not drawn yet, or no way through: they're there already
     r.legs = [];
-    if (where === 'going') {
-      placeBody(CEO_ID, MEETING_HEAD.x, MEETING_HEAD.z, HEAD_HEADING);
-      r.mine = bodyTarget(CEO_ID);
-      r.where = 'room';
-    } else {
-      seatBody(CEO_ID);
-      r.where = 'office';
-    }
+    if (where === 'going') return appear();
+    seatBody(CEO_ID);
+    r.where = 'office';
+  };
+
+  /** Puts the CEO at the table's head straight away. */
+  const appear = () => {
+    placeBody(CEO_ID, MEETING_HEAD.x, MEETING_HEAD.z, HEAD_HEADING);
+    run.current.mine = bodyTarget(CEO_ID);
+    run.current.where = 'room';
+    run.current.gesture = '';
   };
 
   useEffect(() => {
     // arriving in the lobby mid-call: the CEO is at the table already
-    if (ceoAtCall(useCall.getState().call).inRoom) {
-      placeBody(CEO_ID, MEETING_HEAD.x, MEETING_HEAD.z, HEAD_HEADING);
-      run.current.mine = bodyTarget(CEO_ID);
-      run.current.where = 'room';
-    }
+    if (ceoAtCall(useCall.getState().call).inRoom) appear();
     const r = run.current;
     return () => {
       if (r.where !== 'office') seatBody(CEO_ID);
@@ -158,6 +157,7 @@ function useCeoAtTheTable() {
       r.where = 'office';
     }
   });
+  return appear;
 }
 
 // ---------- the room ----------
@@ -169,11 +169,15 @@ export function MeetingRoom() {
   const label = chairLabel(on, ceo);
   const demo = useStore((s) => s.demo);
   const started = useStore((s) => s.started);
-  useCeoAtTheTable();
+  const appear = useCeoAtTheTable();
   useEffect(() => {
     const want = demoMeeting(window.location.search, demo);
-    if (want.call && !callOn()) startCall();
+    if (want.call && !callOn()) {
+      startCall();
+      appear(); // the demo's CEO is at the table already
+    }
     if (want.seat && started) sitAtMeeting(0); // once you're in the office
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- appear only touches the CEO's body and the hook's ref
   }, [demo, started]);
   // leaving the lobby gets you up from the table
   useEffect(
