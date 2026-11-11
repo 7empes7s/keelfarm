@@ -317,7 +317,7 @@ describe('the CEO on a second account', { timeout: 30_000 }, () => {
     await wait(20_000);
     expect(runs.filter((r) => r.role === 'ceo').at(-1)?.account).toBe('claude-login');
     expect(ceo().status).not.toBe('error');
-    const asked = i.state.messages.filter((m) => m.from === 'manager' && /there\?$/.test(m.text));
+    const asked = i.state.messages.filter((m) => m.from === 'manager' && m.text.endsWith('there?'));
     expect(asked.map((m) => m.status)).toEqual(['done', 'done']); // both stuck messages answered after Switch back
   });
 
