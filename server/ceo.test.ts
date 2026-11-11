@@ -162,6 +162,7 @@ describe('office tools', () => {
       worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
+      scanKeys: async () => '',
       editMessage: async () => '',
       waitFor: async (a) => (calls.push(['wait_for', a]), 'PR #7 on floor 1 merged.'),
       askManager: async (a) => (calls.push(['ask_manager', a]), 'The manager answered: yes'),
@@ -213,6 +214,7 @@ describe('office tools', () => {
       'restart_agent',
       'retry_qa',
       'scale_team',
+      'scan_keys',
       'send_back',
       'send_telegram',
       'session_history',
@@ -269,6 +271,7 @@ describe('office tools', () => {
       answer_agent: { ...agent, text: 't' },
       ask_manager_choice: { ...agent, question: 'q' },
       send_telegram: { text: 't' },
+      scan_keys: {},
       wait_for: { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }] },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
@@ -366,7 +369,7 @@ describe('office tools', () => {
     expect(await ok({ name: 'Test first', hypothesis: 'Fewer rounds', variants: [v('Current'), v('Test first', { prompt: 'Write the failing test first.', effort: 'high' })] })).toBe(true);
     expect(await ok({ name: 'One', hypothesis: 'h', variants: [v('Only')] })).toBe(false);
     expect(await ok({ name: 'CEO', hypothesis: 'h', kinds: ['ceo-chat'], variants: [v('A'), v('B')] })).toBe(false);
-    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'gemini' })] })).toBe(false);
+    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'aider' })] })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['define_experiment']);
   });
 
@@ -692,7 +695,7 @@ describe('follow-ups (#27)', () => {
         {
           companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, applySetup: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
-          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
+          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
         },

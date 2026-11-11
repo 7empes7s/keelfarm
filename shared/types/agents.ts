@@ -67,7 +67,7 @@ export type AgentTask = 'issue' | 'qa' | 'fix';
 export type AgentRuntime = 'terminal' | 'sdk';
 
 /** The coding-agent CLI an agent runs in its terminal. The CEO is always Claude Code. */
-export type AgentCli = 'claude' | 'codex' | 'opencode';
+export type AgentCli = 'claude' | 'codex' | 'opencode' | 'gemini';
 
 /** Where an agent's machine is (docs/cloud.md): a folder on this computer, or an Upstash Box in the cloud. */
 export type MachineHost = 'local' | 'box';

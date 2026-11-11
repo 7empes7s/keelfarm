@@ -4,7 +4,7 @@
 import type { OfficeCall } from './ceoStream.ts';
 
 /** A console section an action card opens (ids from client/src/ui/consoleNavRules.ts). */
-type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications';
+type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers';
 
 /** What an action card opens, and whose live status it shows. */
 export type ActionRef =
@@ -55,6 +55,7 @@ const ACTS: Record<string, string> = {
   set_office_playbook: '📘',
   apply_setup: '🧭',
   send_telegram: '✈️',
+  scan_keys: '🔑',
   wait_for: '⏳',
 };
 
@@ -70,6 +71,7 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   define_experiment: 'ops',
   set_office_playbook: 'projects',
   send_telegram: 'notifications',
+  scan_keys: 'providers',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };
 

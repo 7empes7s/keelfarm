@@ -83,6 +83,17 @@ const addProvider: View = {
   },
 };
 
+/** Settings → Providers' keys found on this computer: Scan, then the review sheet (#367). */
+const foundKeys: View = {
+  name: 'Providers: Keys found',
+  go: async (root) => {
+    await pocketSection(root, 'Providers');
+    await root.getByRole('button', { name: /^Scan/ }).click();
+    await root.getByRole('button', { name: 'Review' }).click();
+    await expect(root.page().locator('.pv-sheet')).toBeVisible();
+  },
+};
+
 /** Charter, then its editor (#105). */
 const charterEditor: View = {
   name: 'Charter editor',
@@ -139,6 +150,7 @@ const SCREENS: Screen[] = [
   { name: 'pocket usage detail', widths: [390, 1280], open: pocketSettings, tabs: [usageDetail('pocket')] }, // a screen of its own: the sheet stays open
   { name: 'pocket add provider', widths: [390, 1280], open: pocketSettings, tabs: [addProvider] }, // a screen of its own: the sheet stays open
   { name: 'setup checklist', widths: [390, 1280], open: setupChecklist, tabs: [''] }, // the three.js game moving in (#366)
+  { name: 'pocket found keys', widths: [390, 1280], open: pocketSettings, tabs: [foundKeys] },
   { name: 'pocket memory map in 3D', widths: [390, 1280], open: pocketSettings, tabs: [mapIn3d('pocket')] },
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)
 ];

@@ -56,6 +56,11 @@ export async function checkAccount(a: CheckTarget, dir: string, secret: string):
       const readings = codexReadings(await readCodexLimits(dir), Date.now());
       return { signedIn: true, readings, note: readings.length ? '✓ Signed in; usage read.' : '✓ Signed in.' };
     }
+    if (a.cli === 'gemini') {
+      // Its Google sign-in, in <GEMINI_CLI_HOME>/.gemini. Gemini CLI writes its quota nowhere: limits come from its sessions.
+      const ok = !!(await fs.stat(path.join(dir, '.gemini', 'oauth_creds.json')).catch(() => null));
+      return ok ? { signedIn: true, readings: [], note: '✓ Signed in.' } : { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
+    }
     const raw = await fs.readFile(path.join(dir, '.credentials.json'), 'utf8').catch(() => '');
     return { ...claudeLoginCheck(await checkUsage({ CLAUDE_CONFIG_DIR: dir })), plan: raw ? loginPlan(raw) : null };
   }

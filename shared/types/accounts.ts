@@ -4,7 +4,7 @@ import type { UsageReading } from './office.ts';
 import type { UsageSource } from './usage.ts';
 
 /** The coding agents an account can be for. */
-export type AccountCli = 'claude' | 'codex';
+export type AccountCli = 'claude' | 'codex' | 'gemini';
 /** A subscription signed in in its own config folder, an API key billed per token, or a `claude setup-token` token. */
 export type AccountKind = 'subscription-login' | 'api-key' | 'setup-token';
 

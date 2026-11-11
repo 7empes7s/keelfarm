@@ -17,7 +17,7 @@ import { mergeRows, stateChip, type ChipTone } from './detailsRules';
 import { go } from './goTo';
 import { acceptanceProgress, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
 import { Key } from './Key';
-import { AssignButton } from './AssignSheet';
+import { IssueActions } from './IssueActions';
 import { Markdown } from './Markdown';
 import { Panel } from './Panel';
 import { ProgressBar } from './ProgressBar';
@@ -238,7 +238,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </>
         }
       >
-        {issue && !pull && col === 'backlog' && !card.untrusted && <AssignButton repoId={repo.id} number={issue.number} title={issue.title} />}
+        {!card.prNumber && <IssueActions repo={repo} number={card.number} />}
         {url && <LinkButton href={url}>Open on GitHub <Icon name="external-link" /></LinkButton>}
         {q?.commentUrl && <LinkButton href={q.commentUrl}>QA report <Icon name="external-link" /></LinkButton>}
         <button type="button" className="ds-btn" onClick={() => go({ kind: 'ceo', text: ask })}>

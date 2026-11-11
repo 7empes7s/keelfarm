@@ -62,7 +62,7 @@ export interface ExperimentInput {
 }
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const CLIS: AgentCli[] = ['claude', 'codex', 'opencode'];
+const CLIS: AgentCli[] = ['claude', 'codex', 'opencode', 'gemini'];
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 function cleanByKind<T extends string>(raw: unknown, ok: (v: unknown) => v is T, what: string): Partial<Record<TaskKind, T>> | undefined {

@@ -25,6 +25,10 @@ describe('noticeJump', () => {
     expect(noticeStep('setup', setup, 'pocket', world)).toEqual(card);
     expect(noticeStep('setup', { target: { kind: 'floor', repoId: 'gone' } }, 'office', world)).toBeNull();
   });
+  it("opens the found keys' review, from the notice and its Review button (#367)", () => {
+    expect(noticeJump({ kind: 'keys' }, 'pocket', world)).toEqual({ kind: 'keys' });
+    expect(noticeStep('reviewKeys', {}, 'office', world)).toEqual({ kind: 'keys' });
+  });
 });
 
 describe('noticeStep', () => {

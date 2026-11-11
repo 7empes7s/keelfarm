@@ -120,6 +120,7 @@ const OFFICE: Record<string, [string, Words]> = {
   pr_diff: ['🔀', (t) => `Reading ${pr(t)}'s changes${onFloor(t)}`],
   session_history: ['🕘', () => 'Reading past sessions'],
   send_telegram: ['✈️', () => 'Sending to Telegram'],
+  scan_keys: ['🔑', () => 'Looking for keys left on this computer'],
   edit_message: ['✏️', () => 'Correcting an earlier reply'],
   react: ['👍', () => 'Reacting to your message'],
   reply: ['↩️', () => 'Answering a message'],

@@ -8,7 +8,7 @@ import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
 import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord } from './boxCli.ts';
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
-import { cliLabel, CLIS, CODEX_HOOK_SOURCE, codexThread, commandFor, interruptions, isCli, launchArgs, lostLogin, NOTIFY_SOURCE, OPENCODE_PLUGIN_SOURCE, STATUSLINE_SOURCE } from './clis.ts';
+import { cliLabel, CLIS, codexThread, commandFor, geminiLimit, interruptions, isCli, launchArgs, lostLogin, prepareLaunch, writeHelperFiles } from './clis.ts';
 import { answerNote, countAnswer, keyBytes, screenStep, signInError } from './cliScreens.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
@@ -114,11 +114,7 @@ let helpersWritten = false;
 /** The status line, notify and plugin scripts the CLIs run. Rewritten once per office start, so updates reach them. */
 function writeHelpers() {
   if (helpersWritten) return;
-  fs.mkdirSync(BIN_DIR, { recursive: true });
-  fs.writeFileSync(path.join(BIN_DIR, 'statusline.cjs'), STATUSLINE_SOURCE);
-  fs.writeFileSync(path.join(BIN_DIR, 'notify.cjs'), NOTIFY_SOURCE);
-  fs.writeFileSync(path.join(BIN_DIR, 'codex-hook.cjs'), CODEX_HOOK_SOURCE);
-  fs.writeFileSync(path.join(BIN_DIR, 'opencode-plugin.mjs'), OPENCODE_PLUGIN_SOURCE);
+  writeHelperFiles(BIN_DIR);
   helpersWritten = true;
 }
 
@@ -674,6 +670,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     if (!onScreen && begun && cli === 'claude' && now - (l.lastData ?? now) >= STALL_MS && permissionScreen(term.screen())) {
       onScreen = { kind: 'permission', since: now, ...lastCall, tries: 0, blocked: false };
     }
+    const limit = cli === 'gemini' ? geminiLimit(term.screen(), now) : null; // its Switch / Stop menu would wait forever
+    if (limit) cb.limited?.(limit.until); // the account is limited, and rotation takes the task on
+    if (limit) return finish({ ok: false, text: lastText, errors: [`${label} stopped: ${limit.line}`] });
     if (!onScreen) return;
     // A permission dialog that's gone was answered (by the manager, or by the keys sent), even before a hook says so.
     if (onScreen.kind === 'permission' && now - onScreen.since >= ANSWER_AFTER_MS && !permissionScreen(term.screen())) return answered();
@@ -998,6 +997,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     if (done) return; // stopped while its thread was being unarchived
     let pty: Pty;
     try {
+      prepareLaunch(launch);
       pty = spawnPty(cmd!.file, [...cmd!.args, ...launch.args], { cols: term.cols, rows: term.rows, cwd: opts.cwd, env }, metaOf(l));
     } catch (err) {
       setTimeout(() => finish({ ok: false, text: '', errors: [`Could not start ${label}: ${(err as Error).message}`] }), 0);
@@ -1014,7 +1014,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   /** The same in the agent's Box: the session's files go there first, then the CLI starts under tmux. */
   const beginInBox = async (b: NonNullable<typeof box>) => {
     try {
-      boxFiles.push([`${dir}/launch.json`, JSON.stringify({ file: cmd!.file, args: [...cmd!.args, ...launch.args], cwd: opts.cwd, events })]);
+      boxFiles.push([`${dir}/launch.json`, JSON.stringify({ file: cmd!.file, args: [...cmd!.args, ...launch.args], cwd: opts.cwd, events })], ...(launch.write ?? []));
       for (const [file, text] of boxFiles) await b.api.write(b.boxId, file, text);
       if (done) return;
       const pty = boxPty(l, b, term.cols, term.rows, 0, env);

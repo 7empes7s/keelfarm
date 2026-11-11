@@ -120,8 +120,9 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   `cliScreens.ts` (#360) is the table of first-run and warning screens answered at start-up (theme, trust, warnings),
   and the sign-in that ends a session instead; `cliSetup.ts` sets up an account's login folder before each session
   (onboarding, theme, the worktree trusted; the Box seed applies the same), never the built-in login's.
-- `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode): detection, Windows `.cmd` shim
-  unwrapping, each one's command line, and the helper scripts they call back with.
+- `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode, Gemini CLI): detection, Windows `.cmd` shim
+  unwrapping, each one's command line, and the helper scripts they call back with. `geminiHome.ts`: a Gemini login
+  folder's first-run settings (#365); what each CLI suits is in `shared/cliNotes.ts`.
 - `terminal.ts`: `AgentTerminal`, a headless xterm mirror per agent (replay for late viewers, saved to disk), its
   `/ws/term` viewers, and keystrokes/resizes to the running CLI.
 - `ceo.ts`: the CEO's office MCP tools (`createOfficeTools`, zod-validated: `scale_team`, `configure_agent`, issues,

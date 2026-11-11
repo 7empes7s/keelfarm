@@ -39,7 +39,8 @@ import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
 import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
 import { modelAfterCliChange, modelProblem } from '../../shared/models.ts';
-import { isCli } from '../clis.ts';
+import { cliLabel, isCli } from '../clis.ts';
+import { CLI_NOTES } from '../../shared/cliNotes.ts';
 import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../../shared/types.ts';
 import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
@@ -99,6 +100,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      scanKeys: (a) => this.keyScanForCeo(!!a.rescan),
       editMessage: async (a) => this.editCeoMessage(a),
       waitFor: (a) => this.waitFor(a),
       askManager: (a) => this.askManager(a),
@@ -357,7 +359,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const setup = [this.setupLabel(a) || 'the office defaults', x.account !== undefined ? `on ${account ?? 'the rotation'}` : ''].filter(Boolean).join(' ');
     const tools = picked.map(({ item, on }) => `${item.name} ${on === null ? 'as the office has it' : on ? 'on' : 'off'}`).join(', ');
     this.appendLog(a, [{ kind: 'system', text: `⚙️ ${this.ceo().name} set ${a.name} up with ${setup}${tools ? `; ${tools}` : ''}.` }]);
-    return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.`;
+    const note = x.cli !== undefined && CLI_NOTES[cli] ? ` ${cliLabel(cli)}: ${CLI_NOTES[cli]}` : '';
+    return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.${note}`;
   }
 
   protected async fileIssue(x: { floor: number; title: string; body: string }) {

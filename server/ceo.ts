@@ -191,6 +191,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandle
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+  scanKeys(a: { rescan?: boolean }): Promise<string>;
   editMessage(a: { id?: number; text: string; reason?: string }): Promise<string>;
   sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
@@ -232,7 +233,7 @@ export interface OfficeTools {
 }
 
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
-const CLI = z.enum(['claude', 'codex', 'opencode']);
+const CLI = z.enum(['claude', 'codex', 'opencode', 'gemini']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
@@ -321,7 +322,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       {
         agent_id: z.string(),
         account: z.string().max(40).optional().describe('An account id or tag (company_status lists them) to run on, or "rotation"'),
-        cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
+        cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default. gemini: QA second opinions, docs, research, small fixes; not a builder'),
         model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
         // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.
@@ -503,6 +504,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
       (a) => run(() => h.sendTelegram(a)),
     ),
+    tool('scan_keys', "Find the API keys the retired Mulinux projects left on this computer (their archive, OpenCode's config), test each with its provider, and list them for the manager to review and import in Settings → Providers. You see the provider, where it was, its last 4 characters and the test result, never a value. The last scan unless rescan.", { rescan: z.boolean().optional() }, (a) => run(() => h.scanKeys(a))),
     tool('edit_message', "Correct one of your earlier replies to the manager (#N from the chat; default your latest): its text is replaced, and the manager sees your old words struck through next to the new ones, marked edited. Their Telegram copy follows. For a real mistake only; new information goes in a new message.", { id: z.number().int().optional(), text: z.string().min(1).max(6000).describe('The whole corrected message'), reason: z.string().max(200).optional().describe('Why, in a few words') }, (a) => run(() => h.editMessage(a))),
     ...waitTools(h, run),
     ...reactTools(h, run),
