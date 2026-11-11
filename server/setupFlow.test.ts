@@ -122,6 +122,24 @@ describe('the setup advisor in the office', () => {
     expect(inside.isFree(a)).toBe(true);
   });
 
+  it('a Gemini CLI agent runs on their Google login, not the Gemini API key: signed out only when that login is', async () => {
+    const { swarm, inside, id, setup } = await office();
+    const a = inside.state.agents.find((x) => x.repoId === id)!;
+    Object.assign(a, { cli: 'gemini', model: 'gemini-3-pro', account: undefined, status: 'idle' });
+    const real = swarm.accounts.view();
+    const view = { ...real, accounts: [{ ...real.accounts[0], id: 'google', cli: 'gemini', label: 'google', tags: [], priority: 0, enabled: true, removing: false, status: 'ready' } as never] };
+    swarm.accounts.view = () => view;
+    inside.refreshFloorSetup(); // the demo's Gemini API key fails its test (401)
+    expect(setup().gaps.map((g) => g.id)).not.toContain(`signin:${a.id}`);
+    expect(inside.isFree(a)).toBe(true);
+    view.accounts[0] = { ...view.accounts[0], status: 'signed-out' };
+    inside.refreshFloorSetup();
+    const card = setup().gaps.find((g) => g.id === `signin:${a.id}`)!;
+    expect(card.why).toMatch(/^Their Gemini login "google" is signed out\./);
+    expect(card.actions[0]).toEqual({ label: 'Sign in', open: 'accounts', agentId: a.id });
+    expect(inside.isFree(a)).toBe(false);
+  });
+
   it("the CEO sets a floor's use case and applies a recommendation, and sees it in company_status", async () => {
     const { swarm, inside, id, repo } = await office();
     inside.ensureCeo([]);

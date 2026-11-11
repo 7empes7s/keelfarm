@@ -13,6 +13,7 @@ import type { FloorSetupRecord, PersistedAgent, PersistedRepo } from './model.ts
 import { SwarmDisk } from './disk.ts';
 
 const REFRESH_MS = 30_000;
+const CLI_NAME = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' } as const;
 /** An opencode model's provider, by its prefix, for the key it needs. */
 const MODEL_PROVIDER: [RegExp, string][] = [[/^(google\/|gemini)/i, 'gemini'], [/^openai\//i, 'openai'], [/^anthropic\//i, 'anthropic'], [/^openrouter\//i, 'openrouter']];
 
@@ -98,13 +99,14 @@ export abstract class SwarmSetup extends SwarmDisk {
   private signedOut(a: PersistedAgent, accounts: AccountView[]): SetupAgent['signedOut'] {
     if (a.host === 'box' && a.needsSignIn) return { why: 'Their cloud machine waits for a sign-in.', fix: 'terminal' };
     const cli = a.cli || this.state.settings.defaultCli;
-    if (cli === 'claude' || cli === 'codex') {
+    if (cli === 'claude' || cli === 'codex' || cli === 'gemini') {
       // With the rotation on, only when every enabled login of theirs is out (another one runs it, pinned or not, #360).
       const acc = resolveAccount(accounts, a.account, cli);
       const runsOn = rotationSettings(this.state.settings.rotation, undefined).on ? accounts.filter((x) => x.cli === cli && x.enabled && !x.removing) : accounts.filter((x) => x.id === acc?.id);
       const out = runsOn.length > 0 && runsOn.every((x) => x.status === 'signed-out');
-      return out ? { why: `Their ${cli === 'claude' ? 'Claude' : 'Codex'} login${runsOn.length > 1 ? 's are' : ` "${runsOn[0].label}" is`} signed out.`, fix: 'accounts' } : null;
+      return out ? { why: `Their ${CLI_NAME[cli]} login${runsOn.length > 1 ? 's are' : ` "${runsOn[0].label}" is`} signed out.`, fix: 'accounts' } : null;
     }
+    if (cli !== 'opencode') return null;
     const provider = MODEL_PROVIDER.find(([re]) => re.test(a.model))?.[1];
     if (!provider) return null;
     const name = providerDef(provider)?.name ?? provider;
