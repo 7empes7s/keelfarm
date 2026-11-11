@@ -18,7 +18,14 @@ It can be paused, so the others take its place, but not removed.
 | **API key** | Claude Code (Anthropic), Codex (OpenAI) | Billed per token to that API account. It never uses or changes your subscription. | Saved in `<SWARM_HOME>/secrets.json` only (never in the state, the page, events or logs). Claude Code reads it through `apiKeyHelper`, so it is never written to a settings file or set as `ANTHROPIC_API_KEY`; Codex gets `OPENAI_API_KEY`. Its sessions keep your usual Claude Code setup (skills, plugins). |
 | **Setup token** | Claude Code | The subscription's limits, like its login. | `claude setup-token` prints a token that lasts a year. Put it in an environment variable of the office (the account names which, e.g. `CUBEFARM_CLAUDE_TOKEN_2`) and restart: Anthropic's terms keep apps like this one from storing Claude tokens, so the office never writes it down. |
 
-OpenCode runs on its own setup (`opencode auth login`); the office doesn't manage its accounts.
+OpenCode runs on its own setup (`opencode auth login`); the office doesn't manage its accounts. Its card shows the
+version and the providers `opencode auth list` names, and **Sign in** runs `opencode auth login` in a terminal sheet.
+
+A coding agent whose CLI isn't on this computer shows **Not installed on this computer** with **Install** (#493): its
+official npm package at the version the office was tested with, into `<SWARM_HOME>/cli` (looked in before PATH), one
+install at a time. The office then looks for the CLIs again, so the card turns usable without a restart; **Check again**
+does the same after installing one yourself. Sign in and Add account stay disabled until it's there. In the demo,
+`SWARM_DEMO_MISSING=gemini,opencode` picks the missing ones (default OpenCode) and `SWARM_DEMO_INSTALL=fail` fails the install.
 
 ### Gemini CLI (#365)
 

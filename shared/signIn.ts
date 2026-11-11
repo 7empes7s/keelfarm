@@ -33,6 +33,8 @@ export function inputShape(line: string): string {
 /** The verdict shown under a finished sign-in, from its exit code and the terminal's last lines. */
 export function signInEnd(mode: SignInMode, code: number, tail: readonly string[]): { ok: boolean; note: string } {
   if (code === 0) return { ok: true, note: mode === 'setup-token' ? 'Token made: copy it from the terminal before you close this.' : 'Signed in.' };
+  const missing = code < 0 && [...tail].reverse().map((l) => /(Claude Code|Codex|Gemini CLI|OpenCode) isn't installed/.exec(l)?.[1]).find(Boolean);
+  if (missing) return { ok: false, note: `${missing} isn't installed. Tap Install.` }; // #493
   const said = [...tail].reverse().find((l) => /fail|error|invalid|expired/i.test(l))?.trim();
   const status = said && /status code (\d{3})/.exec(said)?.[1];
   const what = mode === 'setup-token' ? 'Making a token failed' : 'Sign-in failed';
