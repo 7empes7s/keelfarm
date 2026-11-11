@@ -63,7 +63,7 @@ test('pocket mode: the message box above the keyboard, full screen filling the s
   await root.locator('.chat-input textarea').blur();
   await keyboard(page, 0);
 
-  await root.getByRole('button', { name: 'Full screen', exact: true }).click();
+  await root.getByRole('button', { name: 'Full screen chat', exact: true }).click();
   await expect(root).toHaveClass(/pk-chat-full/);
   await fillsScreen(page, root);
   await root.locator('.chat-input textarea').focus();
@@ -93,7 +93,7 @@ test("the 3D office's phone: the message box above the keyboard, full screen fil
   await keyboard(page, 0);
   await expect(phone.getByRole('tab', { name: 'Team' })).toBeVisible(); // the phone's tabs are back
 
-  await phone.getByRole('button', { name: 'Full screen', exact: true }).tap();
+  await phone.getByRole('button', { name: 'Full screen chat', exact: true }).tap();
   await expect(phone).toHaveClass(/phone-full/);
   await fillsScreen(page, phone);
   await phone.locator('.chat-input textarea').focus();

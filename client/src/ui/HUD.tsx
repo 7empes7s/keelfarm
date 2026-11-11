@@ -37,6 +37,7 @@ import { useChatMode } from './chatMode';
 import { SessionsButton, SettingsButton } from './HudSettings';
 import { useLayout } from '../pocket/mode';
 import { PhoneHud } from './PhoneHud';
+import { BrowserFullButton } from './BrowserFullButton';
 import { useAimCard } from './AgentCard';
 import { touchHelpShows, tourAllows, useTourGate } from './tourGate';
 
@@ -282,6 +283,7 @@ export function HUD() {
               </span>
             )}
             <PhotoButton />
+            <BrowserFullButton className="pill" />
             <SearchButton />
             <GuideButton />
             <ChatModeButton />
