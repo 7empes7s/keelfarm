@@ -31,6 +31,7 @@ import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
+import * as liveDiff from './liveDiff.ts';
 import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
@@ -89,6 +90,12 @@ export interface Backend {
   prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
   /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
   readWorktree(r: WorktreeRead): Promise<string>;
+  /** Live leases (#398, liveDiff.ts): the files an agent's worktree changed since its merge-base with origin/<base>, and that merge-base. Read-only. */
+  worktreeChanges(dir: string, base: string): Promise<{ files: string[]; base: string }>;
+  /** The default branch's head in the floor's clone, as its last sync fetched it. */
+  mainHead(fullName: string, base: string): Promise<string>;
+  /** The files the default branch changed between two of its commits; null when unknown. */
+  mainFilesSince(fullName: string, from: string, to: string): Promise<string[] | null>;
   /** Chat file refs (repoFile.ts): the floor's main checkout has this plain file. */
   hasRepoFile(fullName: string, rel: string): boolean;
   /** A chat file ref's text on the floor's default branch; throws with what the viewer says. */
@@ -312,6 +319,9 @@ export const realBackend: Backend = {
   prDetails: github.prDetails,
   prDiff: github.prDiff,
   readWorktree,
+  worktreeChanges: liveDiff.worktreeChanges,
+  mainHead: (fullName, base) => liveDiff.mainHead(workspace.mainDir(fullName), base),
+  mainFilesSince: (fullName, from, to) => liveDiff.mainFilesSince(workspace.mainDir(fullName), from, to),
   hasRepoFile: (fullName, rel) => checkoutFile(workspace.mainDir(fullName), rel) !== null,
   readRepoFile: (fullName, branch, rel) => readRepoFile(workspace.mainDir(fullName), `origin/${branch}`, rel),
   issueDetails: github.issueDetails,

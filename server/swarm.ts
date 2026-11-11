@@ -68,7 +68,7 @@ import {
 } from './swarm/model.ts';
 import { FLOOR_THEMES, lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmSetup } from './swarm/setup.ts';
+import { SwarmLiveLeases } from './swarm/liveLeases.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -76,7 +76,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmSetup {
+export class Swarm extends SwarmLiveLeases {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null);
 
   // ---------- lifecycle ----------
@@ -280,7 +280,7 @@ export class Swarm extends SwarmSetup {
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
         for (let i = 1; i < size; i++) this.hireAgent(repo.id, repo.floor === 1 && i === size - 1 ? { cli: 'gemini' } : {}); // connecting hired the first; floor 1's last runs Gemini CLI (#365)
-        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256); floors 1-3 a floor theme each (#370)
+        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true, liveLeases: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256) and live leases (#398); floors 1-3 a floor theme each (#370)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
       }
@@ -606,7 +606,7 @@ export class Swarm extends SwarmSetup {
   /** The phone shows another conversation's thread, and the CEO carries on that conversation's session (null: a fresh one). */
   private switchThread(messages: PhoneMessage[], sessionId: string | null) {
     this.state.messages = messages;
-    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
+    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null, sessionAccount: undefined });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
     this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();

@@ -185,7 +185,7 @@ export class Lab {
   }
 
   /** Whether a running experiment covering the floor has a variant that turns this practice on. */
-  tries(repoId: string, key: 'leases' | 'upToDate' | 'autoRebase' | 'busyFiles'): boolean {
+  tries(repoId: string, key: 'leases' | 'upToDate' | 'autoRebase' | 'busyFiles' | 'liveLeases'): boolean {
     return this.experiments.some((e) => e.status === 'running' && (!e.floors.length || e.floors.includes(repoId)) && e.variants.some((v) => v.settings.practices?.[key] === true));
   }
 

@@ -88,6 +88,8 @@ export interface SessionResult {
   keyTrouble?: KeyTrouble;
   /** Every account it could run on is out (#248): the office pauses until the first is back; nothing counts against the task. */
   outOfAccounts?: boolean;
+  /** It was to resume a session its CLI doesn't have (#401): the next session starts fresh on the same task. */
+  lostSession?: boolean;
 }
 
 export interface SessionCallbacks {
