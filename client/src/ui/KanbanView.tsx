@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { LabChip } from './ExperimentsSection';
 import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
-import { agentsOnRepo, kanbanFor, useStore, type Agent, type KanbanCard } from '../store';
+import { agentsOnRepo, kanbanFor, qaKey, useStore, type Agent, type KanbanCard } from '../store';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -23,14 +23,15 @@ import { KanbanPager, useMergedPage } from './KanbanPager';
 import './kanbanFold.css';
 import './kanbanCard.css';
 import './kanbanHeader.css';
-import { TaskBar, taskSince } from './TaskProgress';
+import { agentWorking, TaskBar, taskSince } from './TaskProgress';
 import { CiOutageBanner } from './CiOutageBanner';
 import { TRUST_LABEL } from '../../../shared/trust';
 import { HoverCard } from './HoverCard';
 import { useMinute } from './Decisions';
 import { prWaitLine } from '../../../shared/approvals';
+import type { PreviewStatus } from '../../../shared/types';
 import { AgentPeek, WorkPeek } from './Peeks';
-import { cardActions, cardState, DANGER, whoPhrase, type CardAction } from './cardActions';
+import { cardActions, cardState, DANGER, STATE_LABEL, whoPhrase, type CardAction, type CardState } from './cardActions';
 
 /** Who has the card; "QA" while they're testing it. With `note`, the who row (#232): one line, the long form in its tooltip. */
 function AgentChip({ agent, card, note }: { agent?: Agent; card: KanbanCard; note?: string }) {
@@ -104,6 +105,8 @@ function Frame({ embedded, ...props }: Parameters<typeof Panel>[0] & { embedded?
 }
 
 const FOLD_KEY = 'cubefarm:kanban-fold';
+/** A PR's preview that is up, or on its way up: Preview goes on its card's bar. */
+const RUNNING: ReadonlySet<PreviewStatus> = new Set(['preparing', 'installing', 'starting', 'running']);
 const SHORT: Record<ColumnId, string> = { backlog: 'Backlog', progress: 'In progress', qa: 'In QA', ready: 'Ready', merged: 'Merged' };
 
 function loadFolds(): FoldMap {
@@ -145,6 +148,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const allAgents = useStore((s) => s.agents);
   const qaRecords = useStore((s) => s.qa);
+  const prPreviews = useStore((s) => s.prPreviews);
   const usageState = useStore((s) => s.usage.state);
   const now = useMinute(); // the cards' wait lines (#275)
   const openOverlay = useStore((s) => s.openOverlay);
@@ -255,6 +259,10 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     const pr = repo.pulls.find((p) => p.number === c.prNumber);
     const open = (url?: string | null) => () => void (url && window.open(url, '_blank', 'noopener,noreferrer'));
     switch (a) {
+      case 'open':
+        return { label: 'Open', icon: 'maximize-2', title: `${c.prNumber ? 'PR' : 'Issue'} #${c.number} up close in the office`, run: () => openCard(c) };
+      case 'github':
+        return { label: 'GitHub', icon: 'external-link', title: c.url ? `${c.prNumber ? 'PR' : 'Issue'} #${c.number} on GitHub` : 'Not on GitHub yet', disabled: !c.url, run: open(c.url) };
       case 'preview':
         return { label: 'Preview', icon: 'monitor', title: `Run PR #${c.number} beside ${repo.defaultBranch} and open it in the app viewer`, run: () => openOverlay({ kind: 'app', repoId: repo.id, pr: c.number }) };
       case 'terminal':
@@ -273,36 +281,58 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         return { label: 'Merge', icon: 'git-merge', good: true, disabled: busy || pr?.isDraft, run: () => void merge(c) };
       case 'merge-anyway':
         return { label: 'Merge anyway', icon: 'git-merge', hint: 'Without passing QA', disabled: busy, run: () => void merge(c) };
-      case 'review':
-        return { label: 'Review on GitHub', icon: 'external-link', run: open(c.url) };
       case 'close':
         return { label: 'Close PR…', icon: 'x', hint: 'Closed without merging; the branch stays', disabled: busy, run: () => void closePr(c) };
     }
   };
-  // the label hides on a narrow card, leaving the icon with the label as its tooltip (kanbanCard.css)
-  const actionButton = (c: KanbanCard, a: CardAction) => {
+  // the action bar's buttons: icon over label; on a narrow card the icon alone, its label the tooltip (kanbanCard.css)
+  const barButton = (c: KanbanCard, a: CardAction) => {
     const x = actionSpec(c, a);
-    return (
-      <button key={a} className={`btn btn-small ${x.good ? 'btn-good' : ''}`} title={x.title ?? x.label} aria-label={x.label} disabled={x.disabled} onClick={x.run}>
+    const face = (
+      <span className="kbar-face">
         <Icon name={x.icon} />
-        <span className="kcard-act-label">{x.label}</span>
+        <span className="kbar-label">{x.label}</span>
+      </span>
+    );
+    if (a === 'github')
+      return (
+        <a key={a} className="ds-btn" href={c.url} target="_blank" rel="noreferrer" title={x.title} aria-label={x.label} aria-disabled={x.disabled || undefined}>
+          {face}
+        </a>
+      );
+    return (
+      <button key={a} type="button" className="ds-btn" title={x.title ?? x.label} aria-label={x.label} disabled={x.disabled} onClick={x.run}>
+        {face}
       </button>
     );
   };
-  const actionRow = (c: KanbanCard, col: 'qa' | 'ready') => {
+  /** A card's foot (#410): its primary button (or `primary`, e.g. Assign), then Open · GitHub · Terminal · Preview · ⋯. */
+  const actionBar = (c: KanbanCard, state: CardState, primary?: React.ReactNode, agent = !!c.agent) => {
     const st = c.qa?.status;
-    const { visible, menu } = cardActions(cardState(col, st, c.untrusted), { agent: !!c.agent, qaReport: !!c.qa?.commentUrl, untested: !st, status: st });
+    const preview = c.prNumber != null ? prPreviews[qaKey(repo.id, c.prNumber)] : undefined;
+    const acts = cardActions(state, { agent, previewing: !!preview && RUNNING.has(preview.status), qaReport: !!c.qa?.commentUrl, untested: !st, status: st });
+    const main = acts.primary && actionSpec(c, acts.primary);
     return (
-      <div className="kcard-actions">
-        {visible.map((a) => actionButton(c, a))}
-        <Menu
-          label={`More for PR #${c.number}`}
-          title={`PR #${c.number} ${c.title}`}
-          items={menu.map((a) => {
-            const x = actionSpec(c, a);
-            return { label: x.label, hint: x.hint, danger: DANGER.has(a), disabled: x.disabled, onSelect: x.run };
-          })}
-        />
+      <div className="kcard-foot">
+        {primary}
+        {main && (
+          <button type="button" className={`btn ${main.good ? 'btn-good' : ''}`} title={main.title ?? main.label} disabled={main.disabled} onClick={main.run}>
+            <Icon name={main.icon} /> {main.label}
+          </button>
+        )}
+        <div className="kbar" role="group" aria-label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}>
+          {acts.bar.map((a) => barButton(c, a))}
+          {acts.menu.length > 0 && (
+            <Menu
+              label={`More for PR #${c.number}`}
+              title={`PR #${c.number} ${c.title}`}
+              items={acts.menu.map((a) => {
+                const x = actionSpec(c, a);
+                return { label: x.label, hint: x.hint, danger: DANGER.has(a), disabled: x.disabled, onSelect: x.run };
+              })}
+            />
+          )}
+        </div>
       </div>
     );
   };
@@ -319,6 +349,22 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     openOverlay({ kind: 'card', repoId: repo.id, key: c.key, number: c.number, pr: !!c.prNumber });
     useStore.setState({ back });
   };
+  // the header's status chip: a PR's state; an issue shows none
+  const state = (c: KanbanCard, id: ColumnId): CardState | null => (c.prNumber != null && (id === 'qa' || id === 'ready') ? cardState(id, c.qa?.status, c.untrusted) : null);
+  // the checks and merge status, in its own box (#410)
+  const statusBox = (c: KanbanCard, wait?: string | null) =>
+    c.untrusted ? null : (
+      <div className="kcard-box kcard-status">
+        <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
+        {wait && <div className="small kcard-wait">{wait}</div>}
+      </div>
+    );
+  const whoBox = (c: KanbanCard, note?: string) =>
+    (c.agent && !c.untrusted) || note ? (
+      <div className="kcard-box kcard-who">
+        <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={note} />
+      </div>
+    ) : null;
   const folded = (id: ColumnId) => isFolded(folds, repo.id, id, phone);
   const fold = (id: ColumnId, shut: boolean) => {
     const next = withFold(folds, repo.id, id, shut);
@@ -365,33 +411,43 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 <EmptyState kind={id} compact {...emptyAction[id]} />
               </div>
             )}
-            {cards.map((c) => (
-              <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
-                <div className="kcard-title">
-                  <HoverCard label={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
-                    <button className="linkish" title="Open the card" onClick={() => openCard(c)}>
-                      {c.prNumber ? 'PR ' : ''}#{c.number}
+            {cards.map((c) => {
+              const kind = c.prNumber ? 'PR' : 'Issue';
+              const st = state(c, id);
+              return (
+                <div key={c.key} className={`kcard ${c.tone ? `kcard-${c.tone}` : ''}`}>
+                  <div className="kcard-head">
+                    <button type="button" className="kcard-num" title={`${kind} #${c.number} up close`} onClick={() => openCard(c)}>
+                      <span className="kcard-pill">
+                        <Icon name={c.prNumber ? 'git-pull-request' : 'circle-dot'} /> {kind} {c.number}
+                      </span>
                     </button>
-                  </HoverCard>{' '}
-                  {c.title} <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
-                  {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
+                    {st && <span className="kcard-state" data-state={st}>{STATE_LABEL[st]}</span>}
+                    <LabChip repoId={repo.id} issue={c.prNumber ? null : c.number} pr={c.prNumber ?? null} />
+                    {!c.prNumber && <LeaseChip repo={repo} issue={c.number} />}
+                  </div>
+                  <HoverCard label={`${kind} #${c.number}`} peek={<WorkPeek repo={repo} n={c.number} />}>
+                    <div className="kcard-title" tabIndex={0} title={c.title}>
+                      {c.title}
+                    </div>
+                  </HoverCard>
+                  {id !== 'merged' && id !== 'backlog' && (
+                    <div className="kcard-box">
+                      <TaskBar
+                        input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
+                        repoId={repo.id}
+                        since={taskSince(repo, c.number, c.prNumber ?? null)}
+                        working={agentWorking(c.untrusted ? undefined : c.agent, { issue: c.prNumber != null ? null : c.number, pr: c.prNumber ?? null })}
+                        name={`${kind} #${c.number}`}
+                        compact
+                        {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
+                      />
+                    </div>
+                  )}
+                  {render(c)}
                 </div>
-                {cls !== 'kcol-merged' && cls !== 'kcol-backlog' && (
-                  <TaskBar
-                    input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
-                    repoId={repo.id}
-                    since={taskSince(repo, c.number, c.prNumber ?? null)}
-                    name={`${c.prNumber ? 'PR' : 'Issue'} #${c.number}`}
-                    compact
-                    {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}
-                  />
-                )}
-                {c.prNumber != null && cls !== 'kcol-merged' && !c.untrusted && (
-                  <div className="muted small kcard-phrase">{cardPhrase(c.qa, repo.pulls.find((p) => p.number === c.prNumber), repo.autoMerge, nameOf)}</div>
-                )}
-                {render(c)}
-              </div>
-            ))}
+              );
+            })}
             {total > PAGE_SIZE && <KanbanPager label={SHORT[id]} page={page} total={total} onPage={(n) => setPage(id, n)} />}
           </div>
         </div>
@@ -476,21 +532,25 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           </>,
           'kcol-backlog',
           cols.backlog,
-          (c) =>
-            c.untrusted ? (
-              <div className="kcard-foot">
-                <span className="muted small">{c.note}</span>
-                <span className="spacer" />
-                <button className="btn btn-small" disabled={pending === c.key} onClick={() => void trust(c)}>
-                  Trust this issue
-                </button>
-              </div>
-            ) : (
-            <div className="kcard-foot">
-              {c.note && <span className="muted small">{c.note}</span>}
-              <span className="spacer" />
-              <AssignButton repoId={repo.id} number={c.number} title={c.title} small />
-            </div>
+          (c) => (
+            <>
+              {c.note && (
+                <div className="kcard-box">
+                  <span className="muted small">{c.note}</span>
+                </div>
+              )}
+              {actionBar(
+                c,
+                'issue',
+                c.untrusted ? (
+                  <button type="button" className="btn" disabled={pending === c.key} onClick={() => void trust(c)}>
+                    <Icon name="shield" /> Trust issue
+                  </button>
+                ) : (
+                  <AssignButton repoId={repo.id} number={c.number} title={c.title} small />
+                ),
+              )}
+            </>
           ),
           'backlog',
         )}
@@ -502,10 +562,8 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           cols.progress,
           (c) => (
             <>
-              <div className="kcard-who">
-                <AgentChip agent={c.agent} card={c} note={c.note} />
-              </div>
-              {c.agent && <div className="kcard-actions">{actionButton(c, 'terminal')}</div>}
+              {whoBox(c, c.note)}
+              {actionBar(c, 'issue')}
             </>
           ),
           'progress',
@@ -520,11 +578,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
             const wait = c.qa && !c.untrusted ? prWaitLine(c.qa, repo.defaultBranch, now) : null;
             return (
               <>
-                <div className="kcard-who">
-                  <AgentChip agent={c.untrusted ? undefined : c.agent} card={c} note={c.note} />
-                </div>
-                {wait && <div className="small kcard-wait">{wait}</div>}
-                {actionRow(c, 'qa')}
+                {whoBox(c, c.note)}
+                {statusBox(c, wait)}
+                {actionBar(c, cardState('qa', c.qa?.status, c.untrusted))}
               </>
             );
           },
@@ -540,10 +596,9 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
             const pr = repo.pulls.find((p) => p.number === c.prNumber);
             return (
               <>
-                <div className="kcard-who">
-                  <AgentChip agent={c.agent} card={c} note={`${c.note ?? ''}${pr ? ` · +${pr.additions} −${pr.deletions}` : ''}`} />
-                </div>
-                {actionRow(c, 'ready')}
+                {whoBox(c, `${c.note ?? ''}${pr ? ` · +${pr.additions} −${pr.deletions}` : ''}`)}
+                {statusBox(c)}
+                {actionBar(c, cardState('ready', c.qa?.status, c.untrusted))}
               </>
             );
           },
@@ -556,9 +611,10 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           'kcol-merged',
           cols.merged,
           (c) => (
-            <div className="kcard-who">
-              <AgentChip agent={c.agent} card={c} />
-            </div>
+            <>
+              {whoBox(c)}
+              {actionBar(c, 'issue', null, false)}
+            </>
           ),
           'merged',
         )}

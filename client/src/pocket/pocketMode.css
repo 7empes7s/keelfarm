@@ -381,28 +381,6 @@
 .pk-center {
   text-align: center;
 }
-.pk-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.pk-chip {
-  max-width: 100%;
-  padding: 4px 10px;
-  border: 2px solid var(--ds-outline);
-  border-radius: 999px;
-  background: var(--ds-surface-raised);
-  font-weight: 600;
-  font-size: 0.82rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.pk-chip-on {
-  background: var(--accent);
-  color: var(--ink);
-}
 .pk-h {
   display: flex;
   align-items: center;

@@ -29,6 +29,7 @@ export interface HistoryEntry {
   tokens: number | null;
   model: string;
   effort: string;
+  account?: string; // the account (id) it ran on, when it ran on one (#376)
   sessionId: string | null;
   transcript: string | null; // the kept copy, relative to the history folder ('/'-separated), when there was one
   ceo?: CeoJobInfo; // a CEO job's: what started it and came of it, for the CEO jobs log (#332)

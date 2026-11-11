@@ -35,7 +35,7 @@ describe('HUD text against what is behind it', () => {
   });
 
   it('keeps the active tab and the floor number readable on the accent colour', () => {
-    expect(contrastRatio(INK, '#ff8a5b')).toBeGreaterThanOrEqual(4.5); // .tab-on, .picker-tab-on, .pk-chip-on
+    expect(contrastRatio(INK, '#ff8a5b')).toBeGreaterThanOrEqual(4.5); // .tab-on, .picker-tab-on
     expect(contrastRatio('#ffffff', '#ff8a5b')).toBeLessThan(3); // why they no longer use white
   });
 });

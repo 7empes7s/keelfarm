@@ -1,0 +1,64 @@
+/* Mission control's "Who runs on what" card (ui/WhoRunsCard.tsx, #376): a group per account, a row per session. */
+.who-runs {
+  min-width: 0;
+}
+.who-runs-group {
+  min-width: 0; /* a grid item: a long title truncates instead of widening it */
+}
+.who-runs-group + .who-runs-group {
+  margin-top: var(--ds-space-3);
+}
+.who-runs-account {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  margin: 0 0 var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+}
+.who-runs-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-runs-account .chip {
+  flex: none;
+}
+.who-runs-hot {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.who-runs-rows {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.who-runs-row {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--ds-target);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.who-runs-rows li + li .who-runs-row {
+  border-top: 1px solid var(--ds-line);
+  border-radius: 0;
+}
+.who-runs-row:hover {
+  background: var(--ds-surface-hover);
+}
+.who-runs-row .ds-row-title,
+.who-runs-row .ds-row-meta {
+  display: block;
+}
+.who-runs-row > svg {
+  flex: none;
+}

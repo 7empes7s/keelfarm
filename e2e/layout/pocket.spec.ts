@@ -7,9 +7,22 @@ import { agentTab, checkScreens, dialog, PHONES, pocket, POCKET, type Screen } f
 const SCREENS: Screen[] = [
   { name: 'pocket company', widths: POCKET, open: (page) => pocket(page, 'company'), tabs: [] },
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
+  {
+    // a working agent's window: what their session runs on, on its own line under the header (#376)
+    name: 'agent window run chip (#376)',
+    widths: [360, 390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'team');
+      await root.locator('.pk-agent:has(.pk-run) .pk-agent-open').first().click({ timeout: 90_000 });
+      const win = page.locator('.aw');
+      await expect(win.locator('.aw-run')).toBeVisible({ timeout: 30_000 });
+      return win;
+    },
+    tabs: [],
+  },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
   // the demo's stuck PR (#155): its details page, opened from its Kanban card
-  { name: 'pocket PR details (#155)', widths: [360, 390, 430], open: async (page) => (await (await pocket(page, 'kanban')).locator('.kcard', { hasText: 'sticky action bar' }).first().locator('button.linkish').click(), dialog(page, /PR #/)), tabs: [] },
+  { name: 'pocket PR details (#155)', widths: [360, 390, 430], open: async (page) => (await (await pocket(page, 'kanban')).locator('.kcard', { hasText: 'sticky action bar' }).first().locator('button.kcard-num').click(), dialog(page, /PR #/)), tabs: [] },
   {
     name: 'approvals: a design proposal (#209)',
     widths: POCKET,
