@@ -67,7 +67,7 @@ export const SECTIONS: Section[] = [
   { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Disk', 'Free up space', 'Test lab', 'Who runs on what'] },
   { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
   { id: 'map', group: 'company', icon: 'map', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
-  { id: 'ceo', group: 'ceo', icon: 'brain', label: 'The CEO', find: ['Message the CEO', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
+  { id: 'ceo', group: 'ceo', icon: 'brain', label: 'The CEO', find: ['Message the CEO', 'CEO coding agent', 'CEO runs on', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
   { id: 'ceo-settings', group: 'ceo', icon: 'sliders-horizontal', label: 'CEO settings', find: ['Team changes from the CEO', 'I approve each one', 'Apply straight away', 'Company review every', 'Model per job', 'Run all automated jobs on', 'Research time budget', 'Follow-ups', 'Staying awake, waits and consults'] },
   { id: 'tools', group: 'ceo', icon: 'toolbox', label: 'Tools & skills', find: ['Plugins', 'Skills', 'MCP servers', 'Switches for', 'Lean sessions'] },
   { id: 'history', group: 'history', icon: 'scroll-text', label: 'Sessions', find: ['Session history', 'Transcripts', 'Daily log entries', 'CEO jobs', 'Redo on Opus'] },

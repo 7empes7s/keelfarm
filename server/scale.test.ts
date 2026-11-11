@@ -15,7 +15,7 @@ const { Swarm } = await import('./swarm.ts');
 // must fit the snapshot a tab loads and the traffic one tab gets into budgets, so a change that makes either grow with
 // the company (terminal lines in the snapshot, every agent change sent in full) fails here, not in someone's office.
 
-const SNAPSHOT_BUDGET = 625_000; // bytes; it was 2 MB and growing with every log line before #228; +15 KB for what each busy agent's session runs on (#376); +5 KB for who spent each account's window (#409); +5 KB for every floor's theme and 7-day QA curve (#371), Windows' longer paths at the edge
+const SNAPSHOT_BUDGET = 626_000; // bytes; it was 2 MB and growing with every log line before #228; +15 KB for what each busy agent's session runs on (#376); +5 KB for who spent each account's window (#409); +1 KB: main sat within CI's run-to-run noise when the disk settings gained rearmGb (#502); +5 KB for every floor's theme and 7-day QA curve (#371), Windows' longer paths at the edge
 const TRAFFIC_BUDGET = 70_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before #228, 78-85 before #491
 
 afterAll(() => {

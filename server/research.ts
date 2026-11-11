@@ -4,9 +4,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { researchTopic } from '../shared/chat.ts';
+import type { HistoryEntry } from '../shared/history.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import type { SessionHandle } from './agentRunner.ts';
 import type { CeoJob, OfficeHandlers } from './ceo.ts';
+import type { CeoJobRecord } from './ceoRedo.ts';
 
 export const DEFAULT_RESEARCH_MIN = 20;
 /** Minutes past the budget before the office stops a research session that didn't wrap up. */
@@ -109,6 +111,15 @@ async function saveBrief(file: string, artifacts: NonNullable<PhoneMessage['arti
 /** What a CEO reply posted during `job` carries: the research it answers, so a reply to it hands off. */
 export function researchRef(job: CeoJob | null): Pick<PhoneMessage, 'research'> {
   return job?.kind === 'research' ? { research: { topic: job.topic ?? '', ...(job.repoId && { repoId: job.repoId }) } } : {};
+}
+
+/**
+ * When the latest research finished, from what the office kept before it recorded that (#496): the CEO jobs log, the
+ * kept job records and research replies in the chat. Undefined when there was none.
+ */
+export function pastResearch(o: { history: readonly Pick<HistoryEntry, 'at' | 'ceo'>[]; jobs: readonly Pick<CeoJobRecord, 'at' | 'kind'>[]; messages: readonly Pick<PhoneMessage, 'at' | 'research'>[] }): number | undefined {
+  const ats = [...o.history.filter((e) => e.ceo?.kind === 'research'), ...o.jobs.filter((j) => j.kind === 'research'), ...o.messages.filter((m) => m.research)].map((x) => x.at);
+  return ats.length ? Math.max(...ats) : undefined;
 }
 
 /**

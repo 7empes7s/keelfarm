@@ -241,43 +241,34 @@
   border-radius: var(--ds-radius-pill);
   background: var(--ds-line-strong);
 }
-/* the lowered sheet keeps clear of the preview's bottom */
+/* the lowered sheet (#382): a one-line pill under the app, so it never covers the app's own bottom controls */
 .app-body:has(> .prc-peek) > .app-main {
-  padding-bottom: 60px;
+  padding-bottom: calc(var(--ds-target) + var(--ds-space-2));
 }
 .prc-peek {
   position: absolute;
-  min-height: 56px;
-  gap: 0;
-  padding-top: var(--ds-space-4);
-  align-items: flex-start;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-.prc-peek .prc-grip {
-  top: var(--ds-space-2);
-}
-.prc-peek .muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-/* nothing to look at yet (#294): a slim one-line handle */
-.app-body:has(> .prc-peek-slim) > .app-main {
-  padding-bottom: 48px;
-}
-.prc-peek-slim {
+  left: 50%;
+  right: auto;
+  bottom: var(--ds-space-1);
+  transform: translateX(-50%);
+  max-width: calc(100% - 2 * var(--ds-space-2));
+  height: var(--ds-target);
+  min-height: 0;
   flex-direction: row;
   align-items: center;
   gap: var(--ds-space-2);
-  min-height: var(--ds-target);
-  padding-top: var(--ds-space-3);
+  padding: 0 var(--ds-space-4);
+  border-radius: var(--ds-radius-pill);
+  border-bottom: var(--ds-border) solid var(--ds-outline);
+  white-space: nowrap;
+  font: inherit;
+  cursor: pointer;
 }
-.prc-peek-slim b {
+.prc-peek b {
   flex: none;
 }
-.prc-peek-slim .prc-grip {
-  top: var(--ds-space-1);
+.prc-peek .muted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

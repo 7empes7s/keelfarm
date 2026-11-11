@@ -1,6 +1,5 @@
-// The demo's coding agents, models and Tools & skills (#257): every CLI installed, a made-up model catalog and setup.
+// The demo's coding agents' models and Tools & skills (#257): a made-up model catalog and setup (its CLIs: demo/clis.ts).
 import path from 'node:path';
-import { CLIS } from '../clis.ts';
 import { HOME_DIR } from '../config.ts';
 import { DEMO_PICKS } from '../demoFiles.ts';
 import { buildInventory, memoryFs } from '../tooling.ts';
@@ -62,8 +61,6 @@ export function demoCatalog(now: number) {
 }
 
 registerDemo('tools', () => ({
-  detectClis: async () =>
-    CLIS.map((c) => ({ id: c.id, label: c.label, installed: true, version: 'demo', integrated: c.integrated })),
   quickPicks: async () => DEMO_PICKS,
   toolInventory: async (projects) => demoTooling(projects),
   modelCatalog: async () => demoCatalog(Date.now()),

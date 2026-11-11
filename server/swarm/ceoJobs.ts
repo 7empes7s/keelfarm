@@ -7,6 +7,7 @@ import { askedFor, ceoJobPrompt, ceoSystemPrompt, IssueCap, jobLabel, nextCeoJob
 import { ceoHeld, ceoStep, messageGoesIn, type CeoLaneInput } from '../ceoLane.ts';
 import { HttpError } from '../httpError.ts';
 import { triageStep, type TriagePr } from '../triage.ts';
+import { cliLabel } from '../clis.ts';
 import { heardAtStart, HEARD_MAX } from '../managerAsks.ts';
 import { recordCost } from '../metrics.ts';
 import { resolveEffort, type TaskKind } from '../../shared/costs.ts';
@@ -144,8 +145,9 @@ export abstract class SwarmCeo extends SwarmCeoLog {
       nextReviewAt: min > 0 && c.lastReviewAt ? c.lastReviewAt + min * 60_000 : null,
       followups: this.followupView(),
       session: { turns: c.kept.turns, costUsd: Math.round(c.kept.costUsd * 100) / 100, startedAt: c.kept.startedAt, waiting: this.holds.waiting(), consults: this.consults.length },
-      held: ceoHeld({ now: Date.now(), pausedUntil: this.pausedUntil, chatQueued: c.queue.some((j) => j.kind === 'chat') }),
+      held: ceoHeld({ now: Date.now(), pausedUntil: this.ceoPausedUntil(), chatQueued: c.queue.some((j) => j.kind === 'chat') }),
       questions: this.state.questions,
+      researchedAt: c.researchedAt ?? null,
     };
   }
 
@@ -161,13 +163,21 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     setTimeout(() => this.schedule(), 150);
   }
 
+  /** Claude's usage pause holds the CEO, unless the manager put it on another coding agent or an account of its own that has room (#418). */
+  protected ceoPausedUntil(): number {
+    const a = this.state.agents.find((x) => x.id === CEO_ID);
+    const cli = a ? this.ceoCliOf(a) : 'claude';
+    if (!a || this.pausedUntil <= Date.now() || (cli === 'claude' && !a.account)) return this.pausedUntil;
+    return cli === 'opencode' || this.accounts.ready(a.account, cli) ? 0 : this.pausedUntil;
+  }
+
   /** What ceoStep (server/ceoLane.ts) sees now. */
   protected ceoLane(draining: boolean): CeoLaneInput {
     const a = this.state.agents.find((x) => x.id === CEO_ID);
     const c = this.state.ceo;
     return {
       now: Date.now(),
-      pausedUntil: this.pausedUntil,
+      pausedUntil: this.ceoPausedUntil(),
       draining,
       handingOver: this.officeUpdate.sent && draining,
       busy: !!a && BUSY.includes(a.status),
@@ -242,7 +252,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     Object.assign(a, { status: 'working' as AgentStatus, task: null, issueNumber: null, issueTitle: label, startedAt: Date.now(), endedAt: null, costUsd: 0, turns: 0, lastError: null });
     this.appendLog(a, [
       { kind: 'system', text: '' },
-      { kind: 'system', text: `━━━ ${label} · ${model} ━━━` },
+      { kind: 'system', text: `━━━ ${label} · ${model || `${cliLabel(this.ceoCliOf(a))}'s default model`} ━━━` },
     ]);
     if (job.kind === 'chat') this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${job.text}` }]);
     if (job.messageIds?.length) this.markDelivery(job.messageIds, 'read');
@@ -287,7 +297,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
         additionalDirectories: [...this.state.repos.filter((r) => this.repoRt.get(r.id)?.cloneStatus === 'ready').map((r) => this.backend.mainDir(r.fullName)), QA_SHOTS_DIR],
         role: 'ceo',
         office: this.officeTools(),
-        tools: this.sessionToolsFor(a, 'claude'),
+        tools: this.sessionToolsFor(a, how.cli),
         stream: true,
         keepAlive: this.state.settings.ceoAwake.keepAlive && !plan.fresh,
         ...how,
@@ -306,7 +316,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
           this.emitAgent(a);
         },
         sessionId: (id) => {
-          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? 'claude' : null, sessionAccount: id ? this.sessionOn.get(a.id) : undefined }); // a fresh job's session isn't the chat's
+          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? (how.cli ?? 'claude') : null, sessionAccount: id ? this.sessionOn.get(a.id) : undefined }); // a fresh job's session isn't the chat's
           if (id) run.sessionId = id;
         },
         browserUrl: () => undefined,
@@ -409,7 +419,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     }
     const research = await researchJob({ text: t, quoted, forward, id: m.id, dir: path.join(CEO_DIR, 'research'), onlyRepo: this.state.repos.length === 1 ? this.state.repos[0].id : undefined });
     const rt = this.agentRt.get(a.id)!;
-    if (rt.session && !research && messageGoesIn({ now: Date.now(), pausedUntil: this.pausedUntil, job: this.state.ceo.job?.kind ?? null, session: true })) {
+    if (rt.session && !research && messageGoesIn({ now: Date.now(), pausedUntil: this.ceoPausedUntil(), job: this.state.ceo.job?.kind ?? null, session: true })) {
       this.appendLog(a, [{ kind: 'manager', text: `▶ Manager: ${forward}` }]);
       this.ceoIssues.managerMessage(); // a new request: the issue cap counts from here
       this.ceoAsked = true;
@@ -584,7 +594,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'pacing' | 'ceoJob'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'ceoRuns' | 'pacing' | 'ceoJob'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
     const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);

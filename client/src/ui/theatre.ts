@@ -53,10 +53,15 @@ export function useWatch(repoId: string, pr: Channel) {
     };
     say();
     const t = setInterval(() => document.visibilityState === 'visible' && say(), WATCH_EVERY_MS);
-    document.addEventListener('visibilitychange', say);
+    // Hidden, it says so a tick later, which a page being left never reaches (its request would only be cut off):
+    // the office forgets a viewer that stops saying anything (WATCH_MS).
+    let later = 0;
+    const onVisibility = () => (document.visibilityState === 'visible' ? say() : void (later = window.setTimeout(say)));
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       clearInterval(t);
-      document.removeEventListener('visibilitychange', say);
+      clearTimeout(later);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [repoId, pr]);
   useEffect(() => () => void api.watchPreview(VIEWER, null, null).catch(() => undefined), []);

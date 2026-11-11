@@ -29,6 +29,7 @@ import { CHAT_KEEP } from '../../shared/chatPage.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { UseCase } from '../../shared/types/setup.ts';
+import type { DiskAlertMark } from '../../shared/disk.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
 import type { TaskAccounts } from '../../shared/accountDefault.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
@@ -211,6 +212,7 @@ interface CeoState {
   lastJob?: CeoJobNote | null; // the latest background job's reply and issues, for the digest (#330)
   jobs?: CeoJobRecord[]; // finished jobs' inputs, for Redo on Opus (#332, server/ceoRedo.ts)
   jobSeq?: number; // the last job's number
+  researchedAt?: number; // when the latest research job finished (#496), for the guide
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */
@@ -239,6 +241,7 @@ export interface Persisted {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
+  diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)

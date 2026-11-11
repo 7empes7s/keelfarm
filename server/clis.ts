@@ -6,6 +6,7 @@ import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel, KeyTrouble } from '../shared/types.ts';
 import { keyTrouble } from '../shared/keyTrouble.ts';
 import { resetTime } from '../shared/accountRotation.ts';
+import { opencodeProviders } from '../shared/cliInstall.ts';
 import type { BoxVersions } from './boxScripts.ts';
 import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 
@@ -36,10 +37,13 @@ export const cliLabel = (id: AgentCli) => CLIS.find((c) => c.id === id)?.label ?
 
 const WIN = process.platform === 'win32';
 
-/** The executable for a command name on PATH: on Windows only .exe/.cmd/.bat/.com, never an extensionless sh shim. */
-export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+/**
+ * The executable for a command name in `first` (the office's own CLI folder) or on PATH: on Windows only
+ * .exe/.cmd/.bat/.com, never an extensionless sh shim.
+ */
+export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env, first: string[] = []): string | null {
   const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-  const dirs = (env[key] ?? '').split(path.delimiter).filter(Boolean);
+  const dirs = [...first, ...(env[key] ?? '').split(path.delimiter).filter(Boolean)];
   const exts = WIN ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => /^\.(exe|cmd|bat|com)$/i.test(e)) : [''];
   for (const dir of dirs) {
     for (const ext of exts) {
@@ -107,12 +111,16 @@ function bundledClaude(): string | null {
   return null;
 }
 
+/** The office's own CLI folder (<SWARM_HOME>/cli, #493): CLIs installed from Settings, looked in before PATH. */
+let officeBin: string[] = [];
+export const useOfficeCliBin = (dir: string) => void (officeBin = [dir]);
+
 /** How to start a CLI: the program and the arguments that come before the office's own. */
 export function commandFor(id: AgentCli): { file: string; args: string[] } | null {
   const bundled = id === 'claude' ? bundledClaude() : null;
   if (bundled) return { file: bundled, args: [] };
   const def = CLIS.find((c) => c.id === id);
-  const found = def && resolveCommand(def.command);
+  const found = def && resolveCommand(def.command, process.env, officeBin);
   if (!found) return null;
   if (WIN && /\.(cmd|bat)$/i.test(found)) {
     try {
@@ -124,13 +132,14 @@ export function commandFor(id: AgentCli): { file: string; args: string[] } | nul
   return { file: found, args: [] };
 }
 
-/** Which CLIs this machine has, with their versions. */
+/** Which CLIs this machine has, with their versions; OpenCode's signed-in providers from `opencode auth list` (#493). */
 export async function detectClis(): Promise<CliView[]> {
   return Promise.all(
     CLIS.map(async (c) => {
       const cmd = commandFor(c.id);
       const version = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
-      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated };
+      const auth = cmd && c.id === 'opencode' ? await run(cmd.file, [...cmd.args, 'auth', 'list'], { timeoutMs: 20_000 }).catch(() => null) : null;
+      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated, ...(auth !== null && { providers: opencodeProviders(auth) }) };
     }),
   );
 }
@@ -156,6 +165,8 @@ export interface LaunchContext {
   plugin: string; // file URL of the OpenCode plugin
   /** The Playwright MCP server, when the floor tests in a browser. Claude Code gets it through its MCP config file. */
   browser: { command: string; args: string[] } | null;
+  /** The CEO's office tools' MCP address (Streamable HTTP). Claude Code gets it through its MCP config file, the others here (#418). */
+  office?: string;
   /** The manager's Tools & skills switches for this session (Claude Code only): more disallowed tools. */
   tools?: SessionTools;
   /** The node that runs the office's helper scripts where the CLI runs (default: the office's own). */
@@ -294,6 +305,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         ...codexLocal(ctx.model, toml),
         ...(ctx.effort ? ['-c', `model_reasoning_effort=${toml(EFFORT_CODEX[ctx.effort])}`] : []),
         ...(ctx.browser ? ['-c', `mcp_servers.playwright={command=${toml(ctx.browser.command)},args=[${ctx.browser.args.map(toml).join(',')}]}`] : []),
+        ...(ctx.office ? ['-c', `mcp_servers.office={url=${toml(ctx.office)}}`] : []),
         ...CODEX_HOOK_EVENTS.flatMap((e) => ['-c', `hooks.${e}=[{hooks=[{type="command",command=${toml(codexHookCommand(ctx.node ?? process.execPath, ctx.codexHook, ctx.posix ? false : WIN))},timeout=10}]}]`]),
         // Like the manager's own Codex, but it can't stop to ask: no approvals and no sandbox (its sandbox can't reach
         // the credential store, so git and gh fail in it).
@@ -309,7 +321,9 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         autoupdate: false, // several agents starting at once must not each reinstall it
         permission: { edit: 'allow', bash: 'allow', webfetch: 'allow', doom_loop: 'allow', external_directory: 'allow' }, // it can't stop to ask either
         ...opencodeLocal(local),
-        ...(ctx.browser ? { mcp: { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } } } : {}),
+        ...(ctx.browser || ctx.office
+          ? { mcp: { ...(ctx.browser && { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } }), ...(ctx.office && { office: { type: 'remote', url: ctx.office, enabled: true } }) } }
+          : {}),
       };
       // No project argument: it starts in its terminal's folder, and a desk path in its command line would make the
       // desk clean-up take it for a leftover.
@@ -333,7 +347,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         hooks: Object.fromEntries(GEMINI_HOOK_EVENTS.map((e) => [e, hook])),
         context: { fileName: [...GEMINI_CONTEXT_NAMES, GEMINI_CONTEXT_FILE], includeDirectories: [dir, ...ctx.additionalDirectories], loadMemoryFromIncludeDirectories: true },
         general: { enableAutoUpdate: false, enableAutoUpdateNotification: false }, // several agents starting at once
-        ...(ctx.browser ? { mcpServers: { playwright: { command: ctx.browser.command, args: ctx.browser.args } } } : {}),
+        ...(ctx.browser || ctx.office ? { mcpServers: { ...(ctx.browser && { playwright: { command: ctx.browser.command, args: ctx.browser.args } }), ...(ctx.office && { office: { httpUrl: ctx.office } }) } } : {}),
       };
       // It can't stop to ask: yolo approves every tool call, --skip-trust trusts the worktree for this session.
       const args = [

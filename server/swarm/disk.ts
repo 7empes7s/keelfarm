@@ -24,7 +24,17 @@ export abstract class SwarmDisk extends SwarmServerLoad {
   /** Started with the usage readings, once from init. */
   protected override async startUsage() {
     this.backend.disk.setWorkRoot(this.disk.workRoot);
-    this.health.useDisk({ read: () => this.backend.disk.read(this.diskDirs()), settings: () => this.disk, alert: (title, body) => this.notifier.notify('disk', title, body), lastClean: () => this.lastClean });
+    this.health.useDisk({
+      read: () => this.backend.disk.read(this.diskDirs()),
+      settings: () => this.disk,
+      alert: (title, body) => this.notifier.notify('disk', title, body),
+      lastClean: () => this.lastClean,
+      lastAlert: () => this.state.diskAlert ?? null,
+      setLastAlert: (mark) => {
+        this.state.diskAlert = mark;
+        this.save();
+      },
+    });
     setInterval(() => void this.diskTick(), DISK_TICK_MS).unref();
     await super.startUsage();
   }

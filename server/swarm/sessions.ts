@@ -85,12 +85,13 @@ export abstract class SwarmSessions extends SwarmRotation {
     }
   }
 
-  /** A browser opened an agent's terminal (/ws/term?agent=<id>), or an account's sign-in (agent=account:<id>, #247). */
+  /** A browser opened an agent's terminal (/ws/term?agent=<id>), or an account's sign-in (agent=account:<id>, #247; OpenCode's: cli:opencode). */
   attachTerminal(agentId: string, ws: WebSocket) {
     if (agentId.startsWith('account:')) {
       const t = this.accounts.terminal(agentId.slice('account:'.length));
       return t ? t.attach(ws) : ws.close(4404, 'No such account');
     }
+    if (agentId === 'cli:opencode') return this.cliSetup.terminal.attach(ws); // OpenCode's own sign-in (#493)
     const a = this.state.agents.find((x) => x.id === agentId);
     // Opening the terminal of a cloud agent who waits for a sign-in (at their desk, or 🔑 Sign in) starts one if none runs.
     if (a?.needsSignIn && a.host === 'box') {

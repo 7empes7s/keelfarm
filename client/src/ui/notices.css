@@ -93,6 +93,12 @@
   position: relative;
   cursor: pointer;
 }
+/* the count stays on the bell (#499): the shared -14px offset put it under the Sound button beside it */
+.notice-bell .badge-dot {
+  top: calc(-1 * var(--ds-space-2));
+  right: calc(-1 * var(--ds-space-2));
+  z-index: 1;
+}
 .pill.notice-bell {
   min-width: var(--ds-target);
   min-height: var(--ds-target);

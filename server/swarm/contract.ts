@@ -3,7 +3,7 @@
 import type { Swarm } from '../swarm.ts';
 import type { CeoChat } from '../ceoChat.ts';
 import type { VoiceKeyView } from '../voice.ts';
-import type { UseCase } from '../../shared/types.ts';
+import type { AgentCli, UseCase } from '../../shared/types.ts';
 import type { PersistedAgent, PersistedRepo } from './model.ts';
 
 export abstract class SwarmContract {
@@ -28,6 +28,9 @@ export abstract class SwarmContract {
   protected abstract ensureAgent(...a: Parameters<Swarm['ensureAgent']>): ReturnType<Swarm['ensureAgent']>;
   protected abstract fireAgent(...a: Parameters<Swarm['fireAgent']>): ReturnType<Swarm['fireAgent']>;
   protected abstract port(...a: Parameters<Swarm['port']>): ReturnType<Swarm['port']>;
+
+  // providers.ts
+  protected abstract recheckClis(): void;
 
   // cloudCredit.ts
   protected abstract creditSignIn(...a: Parameters<Swarm['creditSignIn']>): ReturnType<Swarm['creditSignIn']>;
@@ -79,6 +82,9 @@ export abstract class SwarmContract {
   protected abstract voiceKeyChanged(view: VoiceKeyView): void;
   protected abstract voiceEveryone(): Promise<void>;
   protected abstract setAgentVoice(a: PersistedAgent, patch: { voiceId?: unknown; voiceName?: unknown }): void;
+
+  // ceoModels.ts (protected there)
+  protected abstract ceoCliOf(a: PersistedAgent): AgentCli;
 
   // ceoJobs.ts
   protected abstract ceoTold: string[]; // for the CEO's next job

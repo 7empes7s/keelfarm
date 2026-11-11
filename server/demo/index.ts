@@ -4,6 +4,7 @@ import './projects.ts';
 import './desks.ts';
 import './sessions.ts';
 import './tools.ts';
+import './clis.ts';
 import './ceoReplies.ts';
 import './managerAsks.ts';
 import './charts.ts';

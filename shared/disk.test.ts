@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTotals, DEFAULT_DISK, diskAlert, diskHold, diskLevel, diskSettings, pickCleanup, uniqueDisks, workRootProblem, worstLevel, type MachineFacts, type WorkRootFacts } from './disk.ts';
+import { cleanTotals, DEFAULT_DISK, DISK_REMIND_MS, diskAlert, loadDiskAlert, diskHold, diskLevel, diskSettings, pickCleanup, uniqueDisks, workRootProblem, worstLevel, type MachineFacts, type WorkRootFacts } from './disk.ts';
 
 const GB = 1024;
 const DAY = 86_400_000;
@@ -21,15 +21,43 @@ describe('disk thresholds', () => {
     expect(worstLevel([disk(60), disk(12)], DEFAULT_DISK)).toBe('warn');
   });
 
-  it('rings once per low stretch, again only after it recovered', () => {
-    let told = false;
-    const seen: boolean[] = [];
-    for (const level of ['ok', 'warn', 'warn', 'hold', 'ok', 'warn'] as const) {
-      const r = diskAlert(level, told);
-      told = r.told;
-      seen.push(r.send);
-    }
-    expect(seen).toEqual([false, true, false, false, false, true]);
+  // Free space in GB at each reading, an hour apart; what rings, and the mark kept in the state file (#502).
+  function ring(readings: number[], last: ReturnType<typeof diskAlert>['last'] = null, stepMs = 3_600_000) {
+    const sent: number[] = [];
+    readings.forEach((freeGb, i) => {
+      const r = diskAlert([disk(freeGb, 50)], DEFAULT_DISK, last, i * stepMs);
+      last = r.last;
+      if (r.send) sent.push(freeGb);
+    });
+    return { sent, last };
+  }
+
+  it('rings once while free space hovers at the warning line (#502)', () => {
+    expect(ring(Array.from({ length: 20 }, (_, i) => (i % 2 ? 10.1 : 9.9))).sent).toEqual([9.9]);
+  });
+
+  it('rings again when it gets worse, not when it gets better, and re-arms only past the margin (#502)', () => {
+    expect(ring([40, 9, 9, 4, 4, 9, 4]).sent).toEqual([9, 4]); // warn, then hold; hold → warn → hold again is quiet
+    expect(ring([9, 12, 9]).sent).toEqual([9]); // 12 GB is above the 10 GB warning, but not by the 3 GB margin
+    expect(ring([9, 13, 9]).sent).toEqual([9, 9]); // recovered past the margin: the next low stretch rings
+    expect(ring([9, 13, 9], null, 0).last).toMatchObject({ level: 'warn', freeMb: 9 * GB });
+  });
+
+  it('remembers the last warning: the same level after a restart sends nothing (#502)', () => {
+    const saved = { level: 'warn' as const, at: 0, freeMb: 9 * GB };
+    expect(ring([9.5, 8, 9], saved).sent).toEqual([]);
+    expect(ring([4], saved).sent).toEqual([4]);
+    expect(diskAlert([], DEFAULT_DISK, saved, 0)).toEqual({ send: false, last: saved }); // nothing read yet: keep it
+    expect(loadDiskAlert(JSON.parse(JSON.stringify(saved)))).toEqual(saved); // through the state file
+    expect(loadDiskAlert({ level: 'ok', at: 0, freeMb: 1 })).toBeNull();
+    expect(loadDiskAlert(undefined)).toBeNull();
+  });
+
+  it('reminds at most once a day while a disk stays low (#502)', () => {
+    const hourly = Array.from({ length: 25 }, () => 9);
+    expect(ring(hourly).sent).toHaveLength(2); // hour 0, then hour 24
+    expect(ring(hourly.slice(0, 24)).sent).toHaveLength(1);
+    expect(DISK_REMIND_MS).toBe(24 * 3_600_000);
   });
 
   it('takes valid settings and keeps the rest', () => {

@@ -120,8 +120,8 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
 
   if (sheet && !open) {
     return (
-      <button className={`prc prc-sheet prc-peek ${pages.length || steps ? '' : 'prc-peek-slim'}`} onClick={() => setOpen(true)} aria-expanded={false}>
-        <span className="prc-grip" aria-hidden />
+      <button className="prc prc-sheet prc-peek" onClick={() => setOpen(true)} aria-expanded={false}>
+        <Icon name="clipboard-list" />
         <b>{steps ? tryThisLabel(steps) : title}</b>
         <span className="muted small">
           {steps ? `${title} · ` : ''}

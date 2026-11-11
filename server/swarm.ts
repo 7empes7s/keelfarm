@@ -14,6 +14,7 @@ import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { keptWaiver, mergeReadings } from '../shared/usage.ts';
+import { loadDiskAlert } from '../shared/disk.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
@@ -43,7 +44,7 @@ import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { loadTaskAccounts, rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
-import { clampResearchMin } from './research.ts';
+import { clampResearchMin, pastResearch } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
@@ -151,6 +152,7 @@ export class Swarm extends SwarmLiveLeases {
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
+        diskAlert: loadDiskAlert(loaded.diskAlert),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
@@ -360,17 +362,12 @@ export class Swarm extends SwarmLiveLeases {
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
-    void this.backend
-      .detectClis()
-      .then((clis) => {
-        this.clis = clis;
-        this.broadcast({ type: 'clis', clis });
-      })
-      .catch((err) => console.warn('could not look for agent CLIs', err));
+    this.recheckClis();
     void Promise.all([this.refreshTooling(), this.startModels()]); // Tools & skills, and the model catalog (#198)
     await this.journal.start();
     await this.spend.ledger.load().then(() => backfillWork(this.state.progress, this.spend.ledger.all(), this.state.agents)); // careers from before #205
     await this.history.load();
+    this.state.ceo.researchedAt ??= pastResearch({ history: this.history.all(), jobs: this.state.ceo.jobs ?? [], messages: this.state.messages }); // research from before #496
     void this.sweepHistory();
     // A fresh demo office has a month of spending to look at (the first sync may have written its merges already).
     if (this.backend.demo && !this.spend.ledger.all().some((r) => r.type === 'session') && this.backend.seedCosts) {
