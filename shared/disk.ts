@@ -87,6 +87,12 @@ export interface DiskAlertMark {
   freeMb: number;
 }
 
+/** The mark from a saved state, if it is one. */
+export function loadDiskAlert(raw: unknown): DiskAlertMark | null {
+  const m = (raw && typeof raw === 'object' ? raw : {}) as Partial<DiskAlertMark>;
+  return (m.level === 'warn' || m.level === 'hold') && Number.isFinite(m.at) && Number.isFinite(m.freeMb) ? { level: m.level, at: m.at!, freeMb: m.freeMb! } : null;
+}
+
 /** While a disk stays low, a reminder at most this often. */
 export const DISK_REMIND_MS = 24 * 3_600_000;
 /** The share of the disk free, above the warning's, that counts as recovered (rearmGb is the GB margin). */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTotals, DEFAULT_DISK, DISK_REMIND_MS, diskAlert, diskHold, diskLevel, diskSettings, pickCleanup, uniqueDisks, workRootProblem, worstLevel, type MachineFacts, type WorkRootFacts } from './disk.ts';
+import { cleanTotals, DEFAULT_DISK, DISK_REMIND_MS, diskAlert, loadDiskAlert, diskHold, diskLevel, diskSettings, pickCleanup, uniqueDisks, workRootProblem, worstLevel, type MachineFacts, type WorkRootFacts } from './disk.ts';
 
 const GB = 1024;
 const DAY = 86_400_000;
@@ -48,6 +48,9 @@ describe('disk thresholds', () => {
     expect(ring([9.5, 8, 9], saved).sent).toEqual([]);
     expect(ring([4], saved).sent).toEqual([4]);
     expect(diskAlert([], DEFAULT_DISK, saved, 0)).toEqual({ send: false, last: saved }); // nothing read yet: keep it
+    expect(loadDiskAlert(JSON.parse(JSON.stringify(saved)))).toEqual(saved); // through the state file
+    expect(loadDiskAlert({ level: 'ok', at: 0, freeMb: 1 })).toBeNull();
+    expect(loadDiskAlert(undefined)).toBeNull();
   });
 
   it('reminds at most once a day while a disk stays low (#502)', () => {

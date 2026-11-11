@@ -14,6 +14,7 @@ import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { keptWaiver, mergeReadings } from '../shared/usage.ts';
+import { loadDiskAlert } from '../shared/disk.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
@@ -151,6 +152,7 @@ export class Swarm extends SwarmLiveLeases {
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
+        diskAlert: loadDiskAlert(loaded.diskAlert),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
