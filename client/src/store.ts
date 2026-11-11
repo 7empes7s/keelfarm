@@ -10,6 +10,7 @@ import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
 import type { ServerNow } from '../../shared/serverLoad';
 import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
+import type { ItDeskView } from '../../shared/itDesk';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
@@ -152,6 +153,7 @@ export interface State {
   health: HealthView | null; // memory, load and sessions for the health strip (null: a server without it, or a replay)
   serverLoad: ServerNow | null; // the server's latest reading by program (#271)
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
+  itDesk: ItDeskView | null; // the CEO's IT desk (#506); null: a server without it, or a replay
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
   claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
@@ -322,6 +324,7 @@ export const useStore = create<State>((set, get) => ({
   health: null,
   serverLoad: null,
   testLab: null,
+  itDesk: null,
   claudeUsage: [],
   claudeUsageCheck: null,
   claudeUsageShares: [],

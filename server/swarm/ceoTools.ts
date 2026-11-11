@@ -45,7 +45,7 @@ import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../..
 import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
-import { SwarmManagerAsks } from './managerAsks.ts';
+import { SwarmItDesk } from './itDesk.ts';
 import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
 import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
@@ -57,7 +57,7 @@ import { compactStatus, floorDetail, type FullStatus } from '../statusViews.ts';
 /** An agent's status in company_status (#307): "needs you" is the manager (waitsForManager says what for); finished agents are free, not "done". */
 const SHOWN_WORD: Record<ShownState, string> = { 'needs-you': 'needs you', 'waiting-ceo': 'waiting for your answer', free: 'free', preparing: 'preparing', working: 'working', error: 'error', stopped: 'stopped' };
 
-export abstract class SwarmCeoTools extends SwarmManagerAsks {
+export abstract class SwarmCeoTools extends SwarmItDesk {
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
    * a shared one left the next session connected but without any tools while an earlier session still held it.
@@ -115,6 +115,8 @@ export abstract class SwarmCeoTools extends SwarmManagerAsks {
       setCeoSetup: acts((a) => this.askCeoSetup(a)),
       applyCharter: acts((a) => this.askApplyCharter(a)),
       mergePull: acts((a) => this.askMergePull(a)),
+      itRun: (a) => this.itRun(a),
+      itPropose: acts((a) => this.itPropose(a)),
     }, () => this.state.ceo.job?.kind === 'research')));
   }
 
