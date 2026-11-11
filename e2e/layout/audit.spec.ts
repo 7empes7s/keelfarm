@@ -34,7 +34,9 @@ test("a usage card's plan warning opens the card like the rest of it", async ({ 
   const root = await pocket(page, 'company');
   const warning = root.locator('.us-row .plan-flag-warn').first();
   await warning.scrollIntoViewIfNeeded();
-  await warning.click();
+  // The warning lets taps fall through to the card's button: tap the spot, as a finger would.
+  const b = (await warning.boundingBox())!;
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await expect(page.locator('.us-sheet')).toBeVisible();
 });
 
