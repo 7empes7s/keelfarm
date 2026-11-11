@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CEO_ID } from '../../../shared/types';
 import { openHoldMenu, useHoldMenu } from '../world/touch/touchState';
 import { stepsFor } from './tourSteps';
-import { touchHelpShows, tourAllows, useTourGate, type Gated } from './tourGate';
+import { gateSays, touchHelpShows, tourAllows, useTourGate, type Gated } from './tourGate';
 
 const notices: Gated = { kind: 'overlay', overlay: { kind: 'notices' } };
 const phone: Gated = { kind: 'overlay', overlay: { kind: 'phone' } };
@@ -11,8 +11,14 @@ const others: Gated[] = [notices, phone, terminal('ada'), { kind: 'card' }, { ki
 
 describe('the tour owns the screen (#406)', () => {
   afterEach(() => {
-    useTourGate.setState({ step: null });
+    useTourGate.setState({ step: null, held: false });
     useHoldMenu.setState({ focus: null });
+  });
+
+  it("steps aside while a deep link's view is open (#413)", () => {
+    const kanban: Gated = { kind: 'overlay', overlay: { kind: 'kanban', repoId: 'r1' } };
+    expect(gateSays({ step: 'phone', held: false }, kanban)).toBe(false);
+    for (const g of [kanban, ...others]) expect(gateSays({ step: 'phone', held: true }, g)).toBe(true);
   });
 
   it('lets everything open when no tour runs', () => {
