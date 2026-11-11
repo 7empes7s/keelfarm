@@ -1,13 +1,15 @@
 import type { AgentPatch, AgentView, ClientEvent, LogLine, RepoPatch, RepoView, ServerEvent } from '../shared/types.ts';
 import type { ChatItem } from '../shared/agentChat.ts';
 import { catchUp, latestListed, NO_WATCH, parseWatch, sameWatch, seesAll, type Watch } from '../shared/watch.ts';
+import { same, viewPatch } from '../shared/viewPatch.ts';
 
 // What the office sends its tabs over /ws, made to scale (#228). Most events go out as they happen, but those that come
 // many times a second with a big company are batched on one short tick: agents' changes (their tool, their activity)
 // and floors' (every sync and merge resends a floor's issues and PRs) go out as patches of just the fields that
 // changed, and terminal lines go only to the tabs that show them (shared/watch.ts): every line for agents on the tab's
 // floor or with their panel open, the latest one for the workers list, nothing otherwise. Chat items (#120) go only to
-// the tabs with that agent's window open.
+// the tabs with that agent's window open. The CEO's, the test lab's and the accounts' views (#491) wait for the tick too,
+// and go out as their top-level fields that changed (shared/viewPatch.ts).
 
 export type Agent = Omit<AgentView, 'log'>;
 
@@ -46,8 +48,6 @@ export function isResync(raw: unknown): boolean {
     return false;
   }
 }
-
-const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
 
 type Patch<T> = Partial<T> & { id: string };
 
@@ -99,12 +99,16 @@ class Patches<T extends { id: string }> {
   }
 }
 
+type Views = Omit<Extract<ServerEvent, { type: 'views' }>, 'type'>;
+type ViewKey = keyof Views;
+
 export class Outbox {
   private tabs = new Map<Tab, Watch>();
   private agents = new Patches<Agent>();
   private repos = new Patches<RepoView>();
   private lines = new Map<string, LogLine[]>();
   private chats = new Map<string, Map<number, ChatItem>>();
+  private views: { sent: Partial<Record<ViewKey, object>>; queued: Partial<Record<ViewKey, object>> } = { sent: {}, queued: {} };
   private timer: NodeJS.Timeout | null = null;
   /** Bytes and messages sent, for the scale test and the benchmark. */
   readonly stats = { bytes: 0, messages: 0 };
@@ -177,8 +181,13 @@ export class Outbox {
     }
   }
 
-  /** Sends to every tab now. An agent or floor sent in full is remembered; a removed one forgotten. */
+  /** Sends to every tab now, but a whole view (#491) with the next batch. An agent or floor sent in full is remembered; a removed one forgotten. */
   broadcast(ev: ServerEvent) {
+    if (ev.type === 'ceo' || ev.type === 'testLab' || ev.type === 'accounts') {
+      this.views.queued[ev.type] = ev.type === 'ceo' ? ev.ceo : ev.type === 'testLab' ? ev.testLab : ev.accounts;
+      this.soon();
+      return;
+    }
     if (ev.type === 'agent') this.agents.have(ev.agent);
     if (ev.type === 'repo') this.repos.have(ev.repo);
     if (ev.type === 'agentRemoved') {
@@ -234,6 +243,8 @@ export class Outbox {
     if (agents.length) this.broadcast({ type: 'agents', agents });
     const repos: RepoPatch[] = this.repos.take();
     if (repos.length) this.broadcast({ type: 'repos', repos });
+    const views = this.takeViews();
+    if (Object.keys(views).length) this.broadcast({ type: 'views', ...views });
     const chats = this.chats;
     this.chats = new Map();
     for (const [tab, w] of this.tabs) {
@@ -263,6 +274,18 @@ export class Outbox {
       if (anyTail) this.send(tab, { type: 'logs', tails });
       if (anyLatest) this.send(tab, { type: 'latest', lines: latest });
     }
+  }
+
+  /** The queued views as patches on what was sent, which they then become. */
+  private takeViews(): Views {
+    const out: Views = {};
+    const { sent, queued } = this.views;
+    for (const key of Object.keys(queued) as ViewKey[]) {
+      const patch = viewPatch(sent[key], queued[key]!);
+      if (patch) Object.assign(out, { [key]: patch });
+    }
+    this.views = { sent: { ...sent, ...queued }, queued: {} };
+    return out;
   }
 
   /** Stops the tick (the office is shutting down). */

@@ -1,4 +1,5 @@
 // The office itself: its version and updates, Claude's usage, health and the server's load, the test lab, mission control and the doctor.
+import { applyViewPatch } from '../../../../shared/viewPatch';
 import { EMPTY_OPS, newAlarms } from '../../ops';
 import { alarm } from '../../ui/sfx';
 import type { ApplyHandlers, SnapshotPart } from './types';
@@ -9,6 +10,15 @@ export const handlers = {
   health: (ev, { set }) => set({ health: ev.health }),
   serverLoad: (ev, { set }) => set({ serverLoad: ev.serverLoad }),
   testLab: (ev, { set }) => set({ testLab: ev.testLab }),
+  // The CEO's, the test lab's and the accounts' changes as the outbox batches them (#491).
+  views: (ev, { set, get }) => {
+    const s = get();
+    set({
+      ...(ev.ceo && { ceo: applyViewPatch(s.ceo, ev.ceo) }),
+      ...(ev.testLab && { testLab: applyViewPatch(s.testLab, ev.testLab) }),
+      ...(ev.accounts && { accounts: applyViewPatch(s.accounts, ev.accounts) }),
+    });
+  },
   claudeUsage: (ev, { set }) => set({ claudeUsage: ev.readings, claudeUsageCheck: ev.check ?? null, claudeUsageShares: ev.shares ?? [] }),
   ops: (ev, { set, get, cues }) => {
     // A new alarm sounds once (rate-limited); the beacons spin until it's handled.
