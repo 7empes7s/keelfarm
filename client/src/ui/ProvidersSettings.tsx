@@ -4,8 +4,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { BILLING_LINKS, kindSentence } from '../../../shared/accounts';
-import { clock, isReset, usageBars } from '../../../shared/usage';
+import { BILLING_LINKS, kindSentence, limitedBy } from '../../../shared/accounts';
+import { clock, isReset, readingsNote, usageBars } from '../../../shared/usage';
 import type { AccountCli, AccountKind, AccountView } from '../../../shared/types';
 import { Menu } from './Menu';
 import { Sheet } from './Sheet';
@@ -37,8 +37,10 @@ function statusChip(a: AccountView, now: number): { text: string; tone: string }
       return { text: 'Ready', tone: 'good' };
     case 'near':
       return { text: 'Near limit', tone: 'warn' };
-    case 'limited':
-      return { text: a.until ? `Limited until ${clock(a.until, now)}` : 'Limited', tone: 'bad' };
+    case 'limited': {
+      const by = limitedBy(a.usage, a.until, now);
+      return { text: `${a.until ? `Limited until ${clock(a.until, now)}` : 'Limited'}${by ? ` (${by})` : ''}`, tone: 'bad' };
+    }
     case 'signed-out':
       return { text: a.kind === 'api-key' ? 'No key' : 'Signed out', tone: 'bad' };
     default:
@@ -89,6 +91,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const chip = statusChip(a, now);
+  const asOf = a.usage.length ? (readingsNote(a.usage, now) ?? (a.usage.some((r) => isReset(r, now)) ? 'Reset, waiting for a new reading' : null)) : null;
   const names = a.agents.map((id) => agents[id]?.name ?? id);
   const billing = BILLING_LINKS[a.cli][a.kind];
   const test = async () => {
@@ -184,7 +187,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
       {usageBars(a.usage, now).map((b) => (
         <ProgressBar key={b.type} label={b.name} value={`${b.pct}%${b.resets ? `, ${b.resets}` : ''}`} pct={b.pct / 100} tone={b.tone} aria={`${a.label}: ${b.name} ${b.pct}%`} />
       ))}
-      {a.usage.some((r) => isReset(r, now)) && <div className="ds-row-meta">Reset, waiting for a new reading</div>}
+      {asOf && <div className="ds-row-meta">{asOf}</div>}
       {a.dailyCostCap ? (
         <ProgressBar label="Today" value={`${usd(a.todayUsd)} of ${usd(a.dailyCostCap)}`} pct={Math.min(1, a.todayUsd / a.dailyCostCap)} tone={a.todayUsd >= a.dailyCostCap ? 'bad' : a.todayUsd >= a.dailyCostCap * 0.75 ? 'warn' : 'good'} aria={`${a.label}: ${usd(a.todayUsd)} of a ${usd(a.dailyCostCap)} daily cap`} />
       ) : null}
@@ -363,6 +366,8 @@ export function ProvidersSettings() {
   };
   const onRotation = agents.filter((x) => x.host !== 'box' && !x.account).length;
   const find = (id: string | null) => list.find((a) => a.id === id);
+  const nextId = useStore((s) => s.accounts.next?.claude ?? null);
+  const nextOn = find(nextId);
   return (
     <div className="card acc-page">
       <h3>
@@ -370,7 +375,7 @@ export function ProvidersSettings() {
       </h3>
       <p className="muted small">
         Every login and API key the coding agents on this computer run on. Agents and the CEO use the rotation (the first ready account, top first) unless you pin them to an account or a tag in their
-        setup; when one is out, they move to the next. {onRotation} on the rotation now. Every other provider (text, audio, cloud, MCP servers) is in <a href="#settings/providers">Providers</a>.
+        setup; when one is out, they move to the next. {onRotation} on the rotation now.{nextOn && ` The next Claude session starts on ${nextOn.label}.`} Every other provider (text, audio, cloud, MCP servers) is in <a href="#settings/providers">Providers</a>.
       </p>
       <Stats list={list} />
       <RotationCard />

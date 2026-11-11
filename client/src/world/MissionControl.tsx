@@ -4,7 +4,7 @@ import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OpsAlarm } from '../../../shared/types';
 import { usageMeter } from '../ops';
-import { readingsNote, usageBars } from '../../../shared/usage';
+import { readingsNote, usageBars, usageMeters } from '../../../shared/usage';
 import { officeNow } from '../officeTime';
 import { useStore, type Focus } from '../store';
 import { useKeyName } from '../ui/controls';
@@ -125,6 +125,7 @@ export function MissionControl() {
   const repos = useStore((s) => s.repos);
   const usage = useStore((s) => s.usage);
   const readings = useStore((s) => s.claudeUsage);
+  const accounts = useStore((s) => s.accounts);
   const check = useStore((s) => s.claudeUsageCheck);
 
   const tags = useMemo(
@@ -163,11 +164,15 @@ export function MissionControl() {
   );
   const now = officeNow();
   const m = usageMeter(usage, now);
+  // The wall shows the login the next session starts on (#383); the console's card has every login.
+  const meters = usageMeters(accounts, readings);
+  const next = meters[0];
   const meterData: UsageScreen = {
     state: m.state,
     tone: m.tone,
-    bars: usageBars(readings, now),
-    note: readingsNote(readings, now, check),
+    who: meters.length > 1 ? next.name : null,
+    bars: usageBars(next.readings, now),
+    note: readingsNote(next.readings, now, next.builtIn ? check : null),
     hint: usage.state === 'pacing' ? `Press ${use} to resume full speed` : usage.state === 'paused' ? "A pause at the limit can't be cleared early" : 'New work starts at full speed',
   };
   const meter = useScreen('usage', BOTTOM_PX, meterData, drawUsage);

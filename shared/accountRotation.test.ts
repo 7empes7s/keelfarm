@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, hasRoom, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -104,6 +104,21 @@ describe('pickAccount', () => {
     const limited = { ...main, limitedUntil: at(14) };
     expect(pick(undefined, [cand(limited), cand(backup)], { now: at(13, 59) })).toBe('backup');
     expect(pick(undefined, [cand(limited), cand(backup)], { now: at(14, 1) })).toBe('main');
+  });
+});
+
+describe('hasRoom (#383)', () => {
+  const ultra = acc('ultra', { priority: 0 });
+  const pro = acc('pro', { priority: 1 });
+  const near = [{ type: 'five_hour', pct: 96, resetsAt: NOW + 3600_000, at: NOW }];
+  const room = (list: Candidate[], skip: string[]) => hasRoom(list, NOW, { cli: 'claude', apiLast: true, skip });
+  it('finds another account with room besides the warned one', () => {
+    expect(room([cand(ultra, { usage: near }), cand(pro)], ['ultra'])).toBe(true);
+  });
+  it('has none when the rest are near out, limited or another coding agent’s', () => {
+    expect(room([cand(ultra), cand(pro, { usage: near })], ['ultra'])).toBe(false);
+    expect(room([cand(ultra), cand(pro, { account: { ...pro, limitedUntil: NOW + 60_000 } })], ['ultra'])).toBe(false);
+    expect(room([cand(ultra), cand(acc('cx', { cli: 'codex' }))], ['ultra'])).toBe(false);
   });
 });
 

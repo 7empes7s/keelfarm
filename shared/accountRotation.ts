@@ -162,6 +162,16 @@ export function pickAccount(binding: string | undefined, candidates: readonly Ca
   return (order.find((c) => free(c) && !nearOut(c.usage, now)) ?? order.find(free))?.account ?? null;
 }
 
+/**
+ * Whether rotation has an account of `o.cli` with room to start a session now (ready or near its limit, not near out),
+ * skipping `o.skip`: a usage warning on one account then paces only that one, not the office (#383).
+ */
+export function hasRoom(candidates: readonly Candidate[], now: number, o: PickOptions): boolean {
+  const a = pickAccount(undefined, candidates, now, o);
+  const c = a && candidates.find((x) => x.account.id === a.id);
+  return !!c && !nearOut(c.usage, now);
+}
+
 // ---------- words ----------
 
 /** "Main Max is limited until 16:00" / "Main Max is signed out". */

@@ -37,7 +37,7 @@ import {
   type AccountPatch,
   type AccountSetup,
 } from '../shared/accounts.ts';
-import { addSpan, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
+import { addSpan, hasRoom, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
 import { mergeReadings } from '../shared/usage.ts';
 import { codeProblem, inputShape, menuKeys, signInCode, signInEnd, signInScreen } from '../shared/signIn.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
@@ -63,6 +63,8 @@ export interface AccountsDeps {
   agents: () => { id: string; account?: string }[];
   /** The built-in Claude login's readings: the office already keeps them (claudeUsage). */
   builtInUsage: () => UsageReading[];
+  /** What the CEO is pinned to, for the account its next session starts on (#383). */
+  ceoBinding?: () => string | undefined;
   changed: (view: AccountsView) => void;
   /** The demo's made-up accounts, for a registry with only the built-in ones. */
   seed?: () => { accounts: ProviderAccount[]; keys: Record<string, string> };
@@ -261,6 +263,7 @@ export class Accounts {
           };
         }),
       rotation: rotationStats(this.switches, now),
+      next: { claude: this.pick(undefined, 'claude', now)?.id ?? null, ceo: this.pick(this.deps.ceoBinding?.(), 'claude', now)?.id ?? null },
     };
   }
 
@@ -283,10 +286,27 @@ export class Accounts {
    * environment; null: it runs as before accounts. Its running count goes up until release().
    */
   use(binding: string | undefined, cli: AccountCli): AccountUse | null {
-    const now = Date.now();
-    const r = this.rotation();
-    const a = (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast }) : null) ?? resolveAccount(this.list(), binding, cli);
+    const a = this.pick(binding, cli, Date.now());
     return a ? this.take(a) : null;
+  }
+
+  /** The account a new session pinned to `binding` would start on (rotation's pick, else the binding's), without starting one. */
+  private pick(binding: string | undefined, cli: AccountCli, now: number): ProviderAccount | null {
+    const r = this.rotation();
+    return (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast }) : null) ?? resolveAccount(this.list(), binding, cli);
+  }
+
+  /** The account the next unpinned session of `cli` would start on, with its readings: what pacing and company.usage name (#383). */
+  upNext(cli: AccountCli, now = Date.now()): { id: string; label: string; usage: UsageReading[] } | null {
+    const a = this.pick(undefined, cli, now);
+    const c = a && this.candidates(now).find((x) => x.account.id === a.id);
+    return c ? { id: c.account.id, label: c.account.label, usage: [...c.usage] } : null;
+  }
+
+  /** Whether rotation has another account of `cli` with room, besides `except`: a warning on that one then paces only it (#383). */
+  hasRoom(cli: AccountCli, except: string, now = Date.now()): boolean {
+    const r = this.rotation();
+    return r.on && hasRoom(this.candidates(now), now, { cli, apiLast: r.apiLast, skip: [except] });
   }
 
   /** Rotation's next account for a session whose account was out (#248), skipping the ones it tried; null: none is left. */

@@ -10,6 +10,7 @@ import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { allOutText, detectLimit, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
+import { readingOf, usedPercent } from '../../shared/usage.ts';
 import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
 import { CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
@@ -128,11 +129,19 @@ export abstract class SwarmRotation extends SwarmUsage {
       {
         ...cb,
         usage: (readings) => (use.builtIn ? cb.usage?.(readings) : this.accounts.readings(use.id, readings)),
+        usageWarning: (info) => {
+          // The warning's number goes on its account; it paces the office only when rotation has no other account with room (#383).
+          const r = readingOf({ type: info.rateLimitType ?? '', percent: info.utilization === null ? null : usedPercent(info.utilization), resetsAt: info.resetsAt }, Date.now());
+          if (r && use.builtIn) cb.usage?.([r]);
+          else if (r) this.accounts.readings(use.id, [r]);
+          if (cli === 'claude' && this.accounts.hasRoom(cli, use.id)) return this.appendLog(a, [{ kind: 'system', text: `🐢 ${this.accounts.label(use.id)} is getting near its usage limit: new sessions move to another account as it fills, the office keeps its pace.` }]);
+          own.usageWarning?.(info);
+        },
         limited: (at) => {
           this.accounts.limited(use.id, at);
           if (ended) hit = { kind: 'limited', until: at ?? Date.now() + 60 * 60_000 };
           // Only the login everyone shared stops the whole office: another account's limit is that account's.
-          else if (use.builtIn) cb.limited?.(at);
+          else if (use.builtIn) own.limited?.(at);
         },
         finished: (result) => {
           live.delete(simulate);
