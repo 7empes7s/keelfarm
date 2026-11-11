@@ -13,7 +13,7 @@ import { ArtifactCard } from './ChatArtifacts';
 import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
-import { replyLog } from './chatCardRules';
+import { replyLog, rowLog } from './chatCardRules';
 import { ActionCards, CeoStuckCard, NoticeCard, NoticePill, PacingCard, UseKeyCard } from './ChatCards';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
@@ -263,12 +263,12 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} />}
-        {m && log && <StepsRow log={log} actions={m.actions?.length ?? 0} used={m.used} linked={linked} onFloor={onFloor} />}
+        {m && (log || m.summary) && <StepsRow log={rowLog(m)} actions={m.actions?.length ?? 0} used={m.used} summary={m.summary} linked={linked} onFloor={onFloor} />}
         {m?.ceoJob && <CeoJobLine tag={m.ceoJob} onJump={onQuote} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         {/* one compact meta row (#215): Used (when there's no steps row to carry it) folds open across it, the time on its right */}
         <div className="bubble-meta">
-          {!log && m?.used && <UsedLine used={m.used} />}
+          {!log && !m?.summary && m?.used && <UsedLine used={m.used} />}
           <div className="bubble-time">
             {m && !mine && <ReplayButton m={m} />}
             {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}
