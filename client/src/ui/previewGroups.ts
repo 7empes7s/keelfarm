@@ -223,9 +223,9 @@ export function parsePreviewsHash(hash: string): { floor: number | null; pr: num
 export const previewsHash = (floor: number | null, pr: number | null) => (floor == null ? '#previews' : `#previews/${floor}/${pr == null ? 'main' : `pr-${pr}`}`);
 
 /** A phone's switcher (#382): what is really on stage, first so a narrow chip keeps it (main when the PR asked for is merged or gone), and its light. */
-export function stageName(repo: Pick<RepoView, 'id' | 'fullName' | 'defaultBranch' | 'pulls' | 'preview'>, pr: number | null, prPreviews: Record<string, Pick<PrPreviewView, 'status'>>): { name: string; led: ReturnType<typeof channelLed> } {
+export function stageName(repo: Pick<RepoView, 'id' | 'fullName' | 'defaultBranch' | 'pulls' | 'preview'>, pr: number | null, prPreviews: Record<string, Pick<PrPreviewView, 'status'>>): { name: string; channel: string; project: string; led: ReturnType<typeof channelLed> } {
   const project = repo.fullName.split('/')[1];
   const on = currentChannel(pr ?? undefined, repo.pulls);
-  if (on == null) return { name: `${repo.defaultBranch} · ${project}`, led: channelLed(repo.preview.status) };
-  return { name: `PR #${on} · ${project}`, led: channelLed(prPreviews[`${repo.id}#${on}`]?.status) };
+  const channel = on == null ? repo.defaultBranch : `PR #${on}`;
+  return { name: `${channel} · ${project}`, channel, project, led: channelLed(on == null ? repo.preview.status : prPreviews[`${repo.id}#${on}`]?.status) };
 }

@@ -245,6 +245,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* only the project shortens: the channel (PR #89, main) always shows in full */
+.pv-open-name:has(> .pv-open-channel) {
+  display: flex;
+  text-overflow: clip;
+}
+.pv-open-channel {
+  flex: none;
+}
+.pv-open-project {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---------- a phone (#382): one slim bar, the app edge to edge ---------- */
 

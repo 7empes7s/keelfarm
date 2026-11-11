@@ -173,7 +173,6 @@ export function UseNote({ preview, repo, chip }: { preview: PreviewView; repo: R
   );
 }
 
-/** The ⋯ menu's 📌 items for a running preview the manager may stop: keep it an hour, until stopped, or let it go again. */
 /** A phone's slim bar (#382): when it stops on its own, as a small timer chip; the full words on hover and for screen readers. */
 export function UseChip({ preview }: { preview: PreviewView }) {
   const settings = useStore((s) => s.settings);
@@ -190,6 +189,7 @@ export function UseChip({ preview }: { preview: PreviewView }) {
   );
 }
 
+/** The ⋯ menu's 📌 items for a running preview the manager may stop: keep it an hour, until stopped, or let it go again. */
 export function keepItems(repo: RepoView, preview: PreviewView) {
   if (preview.status !== 'running' || preview.heldBy) return [];
   const pin = (how: 'hour' | 'forever' | 'off') => void api.keepPreview(repo.id, preview.pr, how).catch(() => undefined);
