@@ -108,6 +108,14 @@ export function sampleChat(now: number, first = 1, cards?: SampleFloor): PhoneMe
       '',
       'After A, tell me the top three and I\'ll say which are safe to stop. Nothing here needs a restart.',
     ].join('\n'), 7.5),
+    msg('manager', 'How do I sign the second account in?', 7.3, done),
+    // inline commands in a list (#438): each gets a Copy chip, and the message's ⋯ has Copy all commands
+    msg('ceo', [
+      'Three steps, from the chat box (the `!` runs it in my session):',
+      '1. Sign in: `! claude /login --account work`',
+      '2. Check it took: `! claude auth status`',
+      '3. Restart its agents\' sessions: `npx cubefarm doctor --fix`',
+    ].join('\n'), 7.2),
     msg('manager', 'Restart the stuck preview on floor 2', 7, { delivery: 'replied', status: 'failed' }),
     msg('office', "⚠️ The CEO hit a problem while replying to you: floor 2's preview didn't answer.", 6.8),
     msg('manager', 'What did the nightly review find?', 3, { delivery: 'read', status: 'working' }),

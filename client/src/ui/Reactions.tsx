@@ -47,7 +47,7 @@ export function Reactable({ picked, onPick, label, children }: { picked: readonl
     <div
       className={`rx-wrap ${open ? 'rx-open' : ''}`}
       onPointerDown={(e) => {
-        if (e.pointerType !== 'touch') return;
+        if (e.pointerType !== 'touch' || (e.target as HTMLElement).closest('code, pre')) return; // a press on code selects it (#438)
         cancel();
         timer.current = setTimeout(() => setOpen(true), HOLD_MS);
       }}
