@@ -62,7 +62,12 @@ for (const where of ['pocket', 'office'] as const)
       test(`${where} at ${width}px: the bell's count of ${shown} isn't under its neighbour (#499)`, async ({ page }) => {
         await page.routeWebSocket(/\/ws$/, (ws) => {
           const server = ws.connectToServer();
-          server.onMessage((data) => ws.send(typeof data === 'string' && data.startsWith('{"type":"snapshot"') ? unread(count)(data) : data));
+          server.onMessage((data) => {
+            if (typeof data !== 'string') return ws.send(data);
+            const ev = JSON.parse(data);
+            if (ev.type === 'toast' && ev.id) return; // the demo's new notices would change the count
+            ws.send(ev.type === 'snapshot' ? unread(count)(data) : data);
+          });
         });
         await page.setViewportSize({ width, height: 844 });
         if (where === 'pocket') await pocket(page, 'company');
