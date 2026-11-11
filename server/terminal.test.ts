@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws';
 import type { TermServerMessage } from '../shared/types.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentTerminal } from './terminal.ts';
+import { detectLimit, endedText, LIMIT_TAIL_LINES } from '../shared/accountRotation.ts';
 
 describe('AgentTerminal', () => {
   it('keeps what was printed, so a late viewer sees the same screen', async () => {
@@ -30,6 +31,19 @@ describe('AgentTerminal', () => {
     expect(t.live).toBe(false);
     t.dispose();
   });
+});
+
+it("joins rows a narrow terminal wrapped, so a Codex limit and its reset read whole (#400)", async () => {
+  const t = new AgentTerminal();
+  t.resize(40, 24);
+  t.write('■ You’ve hit your usage limit.\r\nUpgrade to Pro (https://chatgpt.com/explore/pro),\r\nvisit https://chatgpt.com/settings/usage to\r\npurchase more credits or try again at\r\n9:08 PM.\r\n\r\n› Ask Codex to do anything\r\n\r\n── Codex session ended ──\r\n\r\n');
+  await t.flush();
+  expect(t.tail(8)).not.toContain('Upgrade to Pro (https://chatgpt.com/explore/pro),');
+  const lines = t.tail(LIMIT_TAIL_LINES, true);
+  expect(lines).toContain('Upgrade to Pro (https://chatgpt.com/explore/pro),');
+  const now = new Date(2026, 10, 8, 20, 40).getTime();
+  expect(detectLimit(endedText([], lines), now)).toEqual({ kind: 'limited', until: new Date(2026, 10, 8, 21, 8).getTime() });
+  t.dispose();
 });
 
 // The viewer socket is local; the real AgentTerminal routes input into a recording fake PTY.

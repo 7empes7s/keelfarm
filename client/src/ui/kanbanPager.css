@@ -1,0 +1,45 @@
+/* A Kanban column's pager (#411, KanbanPager.tsx): at the column's bottom, the numbers it has room for over the count */
+.kpager {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding-top: var(--ds-space-2);
+  border-top: var(--ds-border) dashed var(--ds-line-strong);
+}
+.kpager-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-1);
+  max-width: 100%;
+}
+.kpager-btn {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  font-variant-numeric: tabular-nums;
+}
+.kpager-num[aria-current='page'] {
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+  font-weight: var(--ds-weight-strong);
+}
+.kpager-gap {
+  color: var(--ds-text-muted);
+}
+.kpager-count {
+  font-variant-numeric: tabular-nums;
+}
+/* a narrow column keeps this page and its neighbours; a strip of one, only the arrows (the count says where) */
+@container (max-width: 419px) {
+  .kpager-far,
+  .kpager-gap {
+    display: none;
+  }
+}
+@container (max-width: 239px) {
+  .kpager-num {
+    display: none;
+  }
+}

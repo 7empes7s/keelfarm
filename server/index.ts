@@ -232,6 +232,7 @@ app.get('/api/repos/:repo/pulls/:n/qa-shots/:i', async (req, res, next) => {
     next(err);
   }
 });
+app.get('/api/repos/:repo/merged', route((req) => swarm.mergedPage(repoId(req), num(req.query.page))));
 app.post('/api/repos/:repo/pulls/:n/merge', route((req) => swarm.mergePull(repoId(req), num(req.params.n), req.body?.method ?? 'squash')));
 app.post('/api/repos/:repo/pulls/:n/close', route((req) => swarm.closePull(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/pulls/:n/qa', route((req) => swarm.sendToQa(repoId(req), num(req.params.n), str(req.body?.agentId) || undefined)));
@@ -320,6 +321,7 @@ app.put(
     return swarm.setUsageAdminKey(body.provider, body.key);
   }),
 );
+app.post('/api/usage/:id/notify-back', route((req) => swarm.watchUsageBack(String(req.params.id), parse(z.object({ on: z.boolean() }), req.body).on)));
 // Settings → Providers (#362): keys and MCP servers' secrets come in here and never go back out.
 app.post(
   '/api/providers',
@@ -477,6 +479,7 @@ app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(r
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
 app.get('/api/ceo/messages', route((req) => swarm.chatMessages(Number(req.query.before), Number(req.query.limit))));
 app.delete('/api/ceo/messages/:id', route((req) => swarm.removeChatMessage(Number(req.params.id))));
+app.post('/api/ceo/messages/:id/actions/:index/undo', route((req) => swarm.undoCeoAction(Number(req.params.id), Number(req.params.index))));
 app.post('/api/ceo/conversations', route((req) => swarm.newConversation(req.body?.repoId ?? null)));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));

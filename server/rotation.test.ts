@@ -56,7 +56,7 @@ async function wait(ms: number) {
 }
 
 /** The account a session ran on, from its environment: a login's folder, the API key, or the built-in login. */
-const accountOf = (o: SessionOptions) => (o.env?.CLAUDE_CONFIG_DIR?.includes('claude-keelop') ? 'claude-keelop' : o.apiKeyEnv ? 'claude-apikey' : 'claude-login');
+const accountOf = (o: SessionOptions) => (o.cli === 'codex' ? 'codex-login' : o.env?.CLAUDE_CONFIG_DIR?.includes('claude-keelop') ? 'claude-keelop' : o.apiKeyEnv ? 'claude-apikey' : 'claude-login');
 
 /** A demo office whose Claude sessions on the accounts in `out` end at once on a usage limit. */
 async function office(out: string[]) {
@@ -109,6 +109,17 @@ describe('account rotation', { timeout: 30_000 }, () => {
     // The next session on the rotation skips the limited login.
     await wait(60_000);
     expect(JSON.stringify(events)).not.toContain(KEY);
+  });
+
+  it("shows the account a session really started on, apart from its pin, on the agent and the CEO's thread (#376)", async () => {
+    const { swarm, ceo } = await office(['claude-login']);
+    (ceo() as { account?: string }).account = 'claude-login';
+    await swarm.messageCeo('Which account are you on?'); // a chat: the thread's own session
+    await wait(3_000);
+    const run = swarm.snapshot().agents.find((a) => a.id === 'ceo')!.run;
+    expect(run).toMatchObject({ account: 'claude-keelop', label: 'Max · keelops', pinned: 'Claude login on this computer', why: 'limited' });
+    const thread = swarm.snapshot().chat?.conversations.find((c) => c.id === swarm.snapshot().chat?.current);
+    expect(thread?.run).toMatchObject({ account: 'claude-keelop', pinned: 'Claude login on this computer' });
   });
 
   it("the CEO's next Claude login resumes the same conversation, and sees the shared memory (#377)", async () => {
@@ -196,6 +207,25 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(i.state.messages.filter((m) => m.switch)).toHaveLength(0); // an agent's switch isn't a chat pill
   });
 
+  it("an agent configured as Claude on a Codex fallback is on the Codex login's On it now, not Claude's (#409)", async () => {
+    const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
+    swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
+    await wait(10_000);
+    const [issue] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(swarm.snapshot().agents.find((a) => a.id === ada.id)).toMatchObject({ cli: '', status: 'working' }); // still configured as Claude Code
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)).toMatchObject({ cli: 'codex', account: 'codex-login' });
+    // The usage sheets list a session under the account its agent's view says it runs on (client/src/ui/usageWhoRules.ts).
+    const live = () => swarm.snapshot().agents.find((a) => a.id === ada.id)!.run;
+    expect(live()).toMatchObject({ account: 'codex-login', cli: 'codex', at: expect.any(Number) });
+    swarm.stopAgent(ada.id);
+    await wait(1_000);
+    expect(live() ?? null).toBeNull();
+  });
+
   it("never moves an agent's task onto Gemini CLI, which isn't a builder (#365)", async () => {
     const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
     const testing = swarm.accounts.test('gemini-plus'); // signed in, and ready
@@ -210,6 +240,31 @@ describe('account rotation', { timeout: 30_000 }, () => {
     await wait(5_000);
     expect(runs.filter((r) => r.role !== 'ceo').length).toBeGreaterThan(0);
     expect(runs.filter((r) => r.cli === 'gemini')).toEqual([]);
+  });
+
+  it("a Codex limit as its narrow terminal shows it rests the Codex login until the time it names; new Codex tasks start on the next coding agent (#400)", async () => {
+    const { swarm, repo, i, runs } = await office([]);
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', cli: 'codex', strict: true });
+    const bob = swarm.hireAgent(repo.id, { name: 'Bob', cli: 'codex', strict: true });
+    await wait(10_000);
+    const [first, second] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, first.number);
+    await wait(5_000);
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)).toMatchObject({ cli: 'codex' });
+
+    swarm.simulateAccountLimit('codex-login');
+    await wait(1_000);
+    const reset = new Date(Date.now() + 3 * 60_000 - 1_000).setSeconds(0, 0); // "try again at" names the minute
+    expect(swarm.accounts.view().accounts.find((a) => a.id === 'codex-login')).toMatchObject({ status: 'limited', until: reset });
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)).toMatchObject({ cli: 'claude' });
+    expect(swarm.snapshot().agents.find((a) => a.id === ada.id)).toMatchObject({ status: 'working', issueNumber: first.number, lastError: null });
+    expect(i.issueFailures.size).toBe(0);
+
+    const before = runs.length;
+    void swarm.assign(bob.id, second.number);
+    await wait(5_000);
+    expect(runs.slice(before).filter((r) => r.role !== 'ceo').map((r) => r.cli)).toEqual(['claude']);
   });
 
   // #383: limits are per account. A warning or a full window on one login rests that login, not the office.

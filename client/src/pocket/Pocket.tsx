@@ -10,6 +10,7 @@ import { UpdatePill } from '../ui/UpdatePill';
 import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
+import { FloorPicker } from '../ui/FloorPicker';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
@@ -36,6 +37,7 @@ import { SearchButton, SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
+import { BrowserFullButton } from '../ui/BrowserFullButton';
 import { QuickToggles } from '../ui/QuickToggles';
 import { useChatMode } from '../ui/chatMode';
 import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
@@ -43,6 +45,7 @@ import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
+import { useTour } from '../ui/tour';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { pushLayer } from '../ui/backStack';
@@ -287,15 +290,7 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
     );
   return (
     <div className="pk-page">
-      {repos.length > 1 && (
-        <div className="pk-chips" role="tablist" aria-label="Floor">
-          {repos.map((r) => (
-            <button key={r.id} role="tab" aria-selected={r.id === id} className={`pk-chip ${r.id === id ? 'pk-chip-on' : ''}`} style={{ ['--accent' as string]: r.color }} onClick={() => pick(r.id)}>
-              {r.floor} · {name(r.fullName)}
-            </button>
-          ))}
-        </div>
-      )}
+      {repos.length > 1 && <FloorPicker repos={repos} value={id} onPick={pick} />}
       <KanbanView key={id} repoId={id} embedded />
     </div>
   );
@@ -356,7 +351,7 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {
+function Settings({ section, pick, onClose, history, repoId, card, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; card?: string; wide: boolean }) {
   return (
     <Panel
       title={
@@ -368,7 +363,7 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
       className="pk-settings ds-console"
     >
       <Suspense fallback={<p className="muted">Loading…</p>}>
-        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} wide={wide} />
+        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} card={card} wide={wide} />
       </Suspense>
     </Panel>
   );
@@ -421,6 +416,24 @@ export default function Pocket() {
     else setTab('chat');
     focusChatBox();
   };
+  // The tour's way back from a page it opened (#408): the tab, the console's section, the chat beside, the pane.
+  const onScreen = useRef({ tab, settings, dock });
+  onScreen.current = { tab, settings, dock };
+  useEffect(() => {
+    useTour.setState({
+      keepPage: () => {
+        const was = { ...onScreen.current, overlay: useStore.getState().overlay, full: useChatFull.getState().on };
+        return () => {
+          useChatFull.getState().set(was.full);
+          setTab(was.tab);
+          setSettings(was.settings);
+          if (onScreen.current.dock !== was.dock) setDock(was.dock);
+          useStore.getState().openOverlay(was.overlay);
+        };
+      },
+    });
+    return () => useTour.setState({ keepPage: null });
+  }, [setDock]);
 
   // The panel manager (#212): the console and the pane in the order they were opened or touched, the top one in front.
   const order = usePanels();
@@ -505,6 +518,7 @@ export default function Pocket() {
   // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
   const [focusRepo, setFocusRepo] = useState<string | undefined>();
+  const [focusCard, setFocusCard] = useState<string | undefined>(); // the card to scroll to (#404: a usage row's account)
   const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
   // A floor's team asked for (a chat link, #151) is the Team tab here, at that floor; from the Chat tab, with a Back to it.
   const [teamJump, setTeamJump] = useState(0);
@@ -526,6 +540,7 @@ export default function Pocket() {
     }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
+    setFocusCard(wantsSection.card);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
     panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
@@ -630,6 +645,7 @@ export default function Pocket() {
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
         <QuickToggles className="pk-icon-btn" compact={!wide} />
+        {wide && <BrowserFullButton className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
         {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
         {!wide && tab === 'chat' && <FullButton />}
@@ -726,7 +742,7 @@ export default function Pocket() {
           </main>
           {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
           <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
-            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
+            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} card={focusCard} wide={wide} />}
           </div>
           {/* the Previews page takes everything beside the chat, over the console it may have been opened from */}
           <div className="pk-page-host">

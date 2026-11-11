@@ -35,6 +35,11 @@ import { switchOffice } from '../pocket/switchOffice';
 import { Icon, IconText } from './Icon';
 import { useChatMode } from './chatMode';
 import { SessionsButton, SettingsButton } from './HudSettings';
+import { useLayout } from '../pocket/mode';
+import { PhoneHud } from './PhoneHud';
+import { BrowserFullButton } from './BrowserFullButton';
+import { useAimCard } from './AgentCard';
+import { touchHelpShows, tourAllows, useTourGate } from './tourGate';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -213,66 +218,82 @@ export function HUD() {
   const qa = useStore((s) => s.qa);
   const prs = useMemo(() => (repo ? floorPrCounts(repo, qa) : null), [repo, qa]);
 
+  const compact = useLayout() === 'compact';
+  const tourStep = useTourGate((s) => s.step);
+  const cardOpen = useAimCard((s) => s.open);
+  const accent = roof ? '#7cc6fe' : (repo?.color ?? '#ff8a5b');
+  const floorName = roof ? `${settings.companyName || 'cubefarm'} · Roof terrace` : repo ? repo.fullName : `${settings.companyName || 'cubefarm'} · Lobby`;
+  const floorSub = roof
+    ? 'deck chairs, the barbecue and the telescope'
+    : repo && prs
+      ? `${floorAgents.length} agents · ${floorAgents.filter((a) => a.status === 'working' || a.status === 'preparing').length} working · ${prs.inQa} in QA · ${prs.ready} ready to merge${prs.needsYou ? ` · ${prs.needsYou} need${prs.needsYou === 1 ? 's' : ''} you` : ''}`
+      : `${repos.length} floor${repos.length === 1 ? '' : 's'} connected`;
+  const chips = (
+    <>
+      <OfficeUpdateChip />
+      <UpdatePill className="office-chip update-pill" />
+      <UsageChip />
+      <MemoryChip />
+      <DoctorChip />
+    </>
+  );
+
   return (
     <div className="hud ds-screen">
-      <div className="hud-floor" style={{ ['--accent' as string]: roof ? '#7cc6fe' : (repo?.color ?? '#ff8a5b') }}>
-        <div className="floor-num">{roof ? 'R' : repo ? repo.floor : 'G'}</div>
-        <div>
-          <div className="floor-name">{roof ? `${settings.companyName || 'cubefarm'} · Roof terrace` : repo ? repo.fullName : `${settings.companyName || 'cubefarm'} · Lobby`}</div>
-          <div className="floor-sub">
-            {roof
-              ? 'deck chairs, the barbecue and the telescope'
-              : repo && prs
-                ? `${floorAgents.length} agents · ${floorAgents.filter((a) => a.status === 'working' || a.status === 'preparing').length} working · ${prs.inQa} in QA · ${prs.ready} ready to merge${prs.needsYou ? ` · ${prs.needsYou} need${prs.needsYou === 1 ? 's' : ''} you` : ''}`
-                : `${repos.length} floor${repos.length === 1 ? '' : 's'} connected`}
+      {compact ? (
+        // a phone: one row of four controls; the rest is in Options (#406)
+        <PhoneHud num={roof ? 'R' : repo ? String(repo.floor) : 'G'} title={floorName} sub={floorSub} accent={accent} phone={<PhoneButton />} chips={chips} />
+      ) : (
+        <>
+          <div className="hud-floor" style={{ ['--accent' as string]: accent }}>
+            <div className="floor-num">{roof ? 'R' : repo ? repo.floor : 'G'}</div>
+            <div>
+              <div className="floor-name">{floorName}</div>
+              <div className="floor-sub">{floorSub}</div>
+            </div>
+            <OverviewButton />
           </div>
-        </div>
-        <OverviewButton />
-      </div>
 
-      {/* the bell and Settings first: when the row wraps, its last pills go under the workers list, never these */}
-      <div className="hud-status">
-        <NoticeBell className="pill" />
-        <SettingsButton />
-        <QuickToggles className="pill" />
-        {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
-        <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>
-          {replaying ? (
-            <>
-              <Icon name="play" /> replay
-            </>
-          ) : connected ? (
-            <>
-              <Icon name="circle-dot" /> live
-            </>
-          ) : (
-            <>
-              <Icon name="circle" /> {restarting ? 'restarting' : 'reconnecting'}
-            </>
-          )}
-        </span>
-        <SessionsButton running={running} limit={settings.sessionLimit} />
-        <CoinChip />
-        {user && (
-          <span className="pill">
-            <Icon name="git-branch" /> {user}
-          </span>
-        )}
-        <PhotoButton />
-        <SearchButton />
-        <GuideButton />
-        <ChatModeButton />
-        <SwitchButton />
-      </div>
+          {/* the bell and Settings first: when the row wraps, its last pills go under the workers list, never these */}
+          <div className="hud-status">
+            <NoticeBell className="pill" />
+            <SettingsButton />
+            <QuickToggles className="pill" />
+            {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
+            <span className={`pill ${replaying ? 'pill-replay' : connected ? 'pill-ok' : restarting ? 'pill-demo' : 'pill-bad'}`}>
+              {replaying ? (
+                <>
+                  <Icon name="play" /> replay
+                </>
+              ) : connected ? (
+                <>
+                  <Icon name="circle-dot" /> live
+                </>
+              ) : (
+                <>
+                  <Icon name="circle" /> {restarting ? 'restarting' : 'reconnecting'}
+                </>
+              )}
+            </span>
+            <SessionsButton running={running} limit={settings.sessionLimit} />
+            <CoinChip />
+            {user && (
+              <span className="pill">
+                <Icon name="git-branch" /> {user}
+              </span>
+            )}
+            <PhotoButton />
+            <BrowserFullButton className="pill" />
+            <SearchButton />
+            <GuideButton />
+            <ChatModeButton />
+            <SwitchButton />
+          </div>
 
-      <WorkersPanel />
-      <div className="hud-chips">
-        <OfficeUpdateChip />
-        <UpdatePill className="office-chip update-pill" />
-        <UsageChip />
-        <MemoryChip />
-        <DoctorChip />
-      </div>
+          <WorkersPanel />
+          <div className="hud-chips">{chips}</div>
+        </>
+      )}
 
       {!ghReady && ghError && (
         <div className="hud-banner">
@@ -286,9 +307,11 @@ export function HUD() {
       {/* the cards for whoever you're looking at, docked at the left edge: the middle is their screen */}
       <div className="aim-cards">
         <AgentCard />
-        {started && !overlay && !travel && onFoot && <CareerPeek />}
+        {/* on a touch screen the career peek is part of the expanded card; the tour may hold it back (#406) */}
+        {started && !overlay && !travel && onFoot && (!isTouch || cardOpen) && tourAllows(tourStep, { kind: 'card' }) && <CareerPeek />}
       </div>
-      {started && !overlay && onFoot && (focus || sip) && (
+      {/* one card at a time on a touch screen: aiming at someone, their card has the ⋯ (#406) */}
+      {started && !overlay && onFoot && (focus || sip) && !(isTouch && !sip && focus?.action.kind === 'terminal') && (
         <div className="hud-hint">
           {isTouch ? <kbd>Tap</kbd> : <Key action="interact" />} {!held && !isTouch && <>/ <kbd>Click</kbd> </>}
           {sip ? sipLabel(held) : (dropLabel ?? focus?.label)}
@@ -314,7 +337,7 @@ export function HUD() {
       {started && !overlay && !travel && onFoot && <HeldHint />}
       {started && !overlay && !locked && !travel && onFoot && !isTouch && <div className="hud-resume">Click to look around</div>}
       {started && !overlay && !travel && onFoot && isTouch && <TouchZoneHints walked={walked} looked={looked} />}
-      {started && !(settings.setupDone && settings.tutorialStep >= 0) && isTouch && (
+      {started && isTouch && touchHelpShows(tourStep) && (
         <div className="hud-help">
           {touchClassic ? 'Drag low to walk (far to run) · drag high to look' : 'Thumb on the ghost stick walks (far to run) · the other bottom corner looks · tap things to go there'} · hold, then let go, for more ·{' '}
           <Icon name="smartphone" /> for the phone
@@ -333,9 +356,10 @@ export function HUD() {
 
       <CameraHud />
       <PresenceHud />
-      <PhoneButton />
+      {!compact && <PhoneButton />}
       <VoiceIndicator />
-      <NoticeToasts max={3} />
+      {/* the tour owns the screen: toasts wait in the store until it's over (#406) */}
+      {tourAllows(tourStep, { kind: 'toast' }) && <NoticeToasts max={3} />}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { MessageBox } from '../ui/MessageBox';
 import { badgeStatus, StatusPill as Status } from '../ui/StatusPill';
 import { agentPhrase } from '../ui/statusPhrase';
 import { AgentRing } from '../ui/AgentRing';
+import { RunChip } from '../ui/RunChip';
 import { speakAgent, useLineVoice } from '../ui/agentSpeech';
 import { HoverCard } from '../ui/HoverCard';
 import { AgentPeek } from '../ui/Peeks';
@@ -103,6 +104,7 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
         <Status status={badgeStatus(agent)} />
       </button>
       <div className="small muted pk-phrase">{agentPhrase(agent, { autoAssign: repo.autoAssign })}</div>
+      {agent.run && <RunChip run={agent.run} className="pk-run" />}
       {agent.lastError && !working && (
         <div className="term-error small pk-error">
           <Icon name="triangle-alert" /> {agent.lastError}

@@ -29,4 +29,36 @@ export interface UsageSource {
   accountId?: string; // a Claude or Codex account's row: its id in Providers & accounts, whose readings it shows
   agents?: string[]; // ids of the agents (and the CEO) pinned to it
   history?: [number, number][]; // [at, worst window %], the last day, for its detail
+  split?: UsageSplit; // a Claude or Codex account's: who spent its window, from the cost ledger (#409)
+  watchBack?: boolean; // limited, and the manager asked to be told when it's back (#404)
+}
+
+/** One row of a split: a floor ('' the CEO), an agent or a kind of task, by spend. */
+export interface UsageSlice {
+  key: string; // the repoId, agentId or 'build' | 'qa' | 'fix' | 'ceo'
+  label?: string; // an agent's name, from the ledger
+  usd: number;
+  sessions: number;
+  pct: number; // whole percent of the window's spend
+}
+
+/** An issue or PR among the account's most expensive in the window. */
+export interface UsageTaskCost {
+  repoId: string;
+  issue: number | null;
+  pr: number | null;
+  usd: number;
+  sessions: number;
+}
+
+/** Who spent an account's window (#409): the office's own sessions on it, by floor, agent and kind, and the top tasks. */
+export interface UsageSplit {
+  label: string; // "This week", "Last 5 hours", "Last 7 days"
+  since: number;
+  usd: number;
+  sessions: number;
+  floors: UsageSlice[];
+  agents: UsageSlice[];
+  kinds: UsageSlice[];
+  tasks: UsageTaskCost[];
 }

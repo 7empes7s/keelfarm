@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { BILLBOARD } from './viewTags';
 import * as THREE from 'three';
-import { useStore, type Agent } from '../store';
+import { qaKey, useStore, type Agent } from '../store';
 import { loadScreenshot } from '../screenshot';
 import { look, type Look } from './batch';
 import { Part } from './Batched';
@@ -14,7 +14,8 @@ import { Character } from './Character';
 import { greetPick } from './Chatter';
 import { drawSign, drawTag, drawTerminal } from './draw';
 import { needsYou } from '../../../shared/needsYou';
-import { useCanvasTexture, useInteractable } from './interact';
+import { useCanvasTexture, useInteractable, type Pick } from './interact';
+import { prLabel, TAG_PR_SPLIT } from '../ui/aimCardRules';
 import { PaintedTexture } from './paint/painter';
 import { BLOOM } from './gfx/bloomMarks';
 import { DeskGlow } from './gfx/ScreenGlow';
@@ -23,6 +24,7 @@ import { deskMug, subscribeMugs } from './people';
 import { MUG_SIZE, MugLook, mugColor } from './toys/mugLook';
 import { useKeyName } from '../ui/controls';
 import { signInFor } from '../ui/floorRows';
+import { runLabel } from '../../../shared/sessionRun';
 
 const SCREEN = { w: 1.0, h: 0.6, px: 896, py: 538 };
 const WOOD = '#f1d19b';
@@ -98,22 +100,36 @@ function useTerminalTexture(agent: Agent, anchor: React.RefObject<THREE.Object3D
 // A tag's change of tool waits to be painted while it's further than this (too small to read from there).
 const TAG_RANGE = 18;
 
+const TAG_W = 1.15;
+
 export function NameTag({ agent }: { agent: Agent }) {
   const palette = useA11y((s) => s.prefs.palette);
   const shapes = useA11y((s) => showsShapes(s.prefs));
-  const anchor = useRef<THREE.Mesh>(null);
+  const qa = useStore((s) => (agent.prNumber ? s.qa[qaKey(agent.repoId, agent.prNumber)]?.status : undefined));
+  const pr = prLabel(agent, qa);
+  const prText = pr?.text;
+  // A tap (or aim) on the tag: its PR chip opens the PR's card, the name the agent's window, as the person does (#406).
+  const pick = useMemo<Pick>(
+    () => (point, root) => {
+      const u = root.worldToLocal(point.clone()).x / TAG_W + 0.5;
+      if (!prText || agent.prNumber == null || u < TAG_PR_SPLIT) return null;
+      return { id: `tag-pr-${agent.id}`, label: `Open ${prText}`, action: { kind: 'card', repoId: agent.repoId, key: `pr-${agent.prNumber}`, number: agent.prNumber, pr: true } };
+    },
+    [prText, agent.id, agent.repoId, agent.prNumber],
+  );
+  const anchor = useInteractable<THREE.Mesh>({ id: `tag-${agent.id}`, label: `View ${agent.name}'s terminal`, action: { kind: 'terminal', agentId: agent.id } }, 6, pick);
   const tex = useCanvasTexture(
     512,
     96,
-    (ctx) => drawTag(ctx, 512, 96, agent, { palette, shapes }),
-    [agent.name, agent.status, agent.issueNumber, agent.currentTool, agent.color, needsYou(agent), palette, shapes],
+    (ctx) => drawTag(ctx, 512, 96, agent, { palette, shapes }, pr),
+    [agent.name, agent.status, agent.issueNumber, agent.currentTool, agent.color, needsYou(agent), palette, shapes, pr?.text, pr?.mark],
     { anchor, range: TAG_RANGE },
   );
   return (
     // placed by Character, which carries it about with the person
     <Billboard userData={BILLBOARD}>
       <mesh ref={anchor}>
-        <planeGeometry args={[1.15, 0.216]} />
+        <planeGeometry args={[TAG_W, 0.216]} />
         <meshBasicMaterial map={tex} transparent toneMapped={false} depthWrite={false} />
       </mesh>
     </Billboard>
@@ -413,11 +429,11 @@ export const Desk = memo(function Desk({
       ? {
           id: `agent-${agent.id}`,
           label:
-            agent.role === 'ceo'
+            (agent.role === 'ceo'
               ? `Open ${agent.name}'s desk (CEO) · P texts them from anywhere`
               : signIn
                 ? `Sign ${agent.name}'s ${signIn} in, in their terminal`
-                : `View ${agent.name}'s terminal · Setup inside`,
+                : `View ${agent.name}'s terminal · Setup inside`) + (agent.run ? ` · on ${runLabel(agent.run)}` : ''),
           action: { kind: 'terminal', agentId: agent.id },
         }
       : full || spare

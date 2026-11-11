@@ -18,6 +18,70 @@
     width: auto;
   }
 }
+/* a touch screen (#406): one card just above the thumbs' zones (world/touch/thumbs.ts: the bottom 45% upright, 60% on
+   its side), never over the stick or the look corner; the hint for things sits there too */
+html[data-touch] :is(.aim-cards, .hud-hint) {
+  top: auto;
+  bottom: calc(45% + var(--ds-space-2));
+}
+html[data-touch] .aim-cards {
+  left: var(--ds-space-4);
+  right: var(--ds-space-4);
+  width: auto;
+  max-width: 480px;
+  margin: 0 auto;
+}
+@media (orientation: landscape) {
+  html[data-touch] :is(.aim-cards, .hud-hint) {
+    bottom: calc(60% + var(--ds-space-2));
+  }
+}
+.ac-compact {
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2);
+  pointer-events: auto;
+}
+.ac-open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ac-line {
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-pr {
+  flex: none;
+}
+.ac-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.ac-bar span {
+  display: block;
+  height: 100%;
+  background: var(--who, var(--ds-accent));
+}
+/* expanded: everything the card has, scrolling inside the space above the thumbs */
+.ac-full {
+  max-height: 40vh;
+  overflow-y: auto;
+  pointer-events: auto;
+}
 .agent-card {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkRunOf, issueOf, neverStartedCheck, readTwice } from './github.ts';
+import { checkRunOf, issueOf, mergedPageArgs, mergedPageOf, neverStartedCheck, readTwice } from './github.ts';
 
 describe('readTwice', () => {
   it('tries a failed read once more', async () => {
@@ -72,5 +72,38 @@ describe('issueOf', () => {
     });
     expect(i).toMatchObject({ number: 7, body: '', labels: ['office-trusted'], author: 'stranger', authorAssociation: 'NONE', trustedBy: 'stranger' });
     expect(issueOf({ ...i, body: '', author: null, labels: null, timelineItems: null } as never)).toMatchObject({ author: null, labels: [], trustedBy: null });
+  });
+});
+
+describe('merged PRs by the page (#411)', () => {
+  it('asks the search for one page of 20 merged PRs, newest first', () => {
+    const args = mergedPageArgs('o/r', 3);
+    expect(args.slice(0, 4)).toEqual(['api', '-X', 'GET', 'search/issues']);
+    expect(args).toContain('q=repo:o/r is:pr is:merged');
+    expect(args).toContain('sort=created');
+    expect(args).toContain('order=desc');
+    expect(args).toContain('per_page=20');
+    expect(args).toContain('page=3');
+  });
+
+  it('reads the total and each PR from the answer', () => {
+    const page = mergedPageOf(
+      {
+        total_count: 312,
+        items: [
+          { number: 40, title: 'B', html_url: 'https://github.com/o/r/pull/40', user: { login: 'margaret' }, pull_request: { merged_at: '2026-11-01T00:00:00Z' } },
+          { number: 39, title: 'A', html_url: 'https://github.com/o/r/pull/39', user: null },
+        ],
+      },
+      2,
+    );
+    expect(page).toEqual({
+      page: 2,
+      total: 312,
+      pulls: [
+        { number: 40, title: 'B', url: 'https://github.com/o/r/pull/40', mergedAt: '2026-11-01T00:00:00Z', author: 'margaret' },
+        { number: 39, title: 'A', url: 'https://github.com/o/r/pull/39', mergedAt: null, author: null },
+      ],
+    });
   });
 });

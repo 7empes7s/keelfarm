@@ -48,7 +48,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, MergedPage, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
 import { realKeyScan } from './keyScan.ts';
@@ -63,6 +63,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** One page of merged PRs, newest first, for the Merged column's older pages (#411). */
+  listMergedPage(fullName: string, page: number): Promise<MergedPage>;
   /** The logins of collaborators with write access, for trust (#185). */
   writers(fullName: string): Promise<string[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
@@ -197,7 +199,7 @@ export interface Backend {
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
-  seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
+  seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string; cli?: string; account?: string }[], now: number): CostRecord[];
   /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
   seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
   /** The demo only: someone let go, under the Team tab's Past agents (#205). */
@@ -301,6 +303,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  listMergedPage: github.listMergedPage,
   writers: github.writers,
   createIssue: github.createIssue,
   exportCharter: github.exportCharter,

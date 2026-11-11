@@ -24,6 +24,7 @@ import { EMPTY_OPS } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
+import { gateAllows } from './ui/tourGate';
 import { APPLY, snapshotState } from './store/apply';
 import type { ApplyCtx } from './store/apply/types';
 import type { SnackId } from './world/fridge';
@@ -384,6 +385,8 @@ export const useStore = create<State>((set, get) => ({
   setRestarting: (restarting) => set({ restarting }),
   setOfficeUpdate: (officeUpdate) => set({ officeUpdate }),
   openOverlay(overlay) {
+    // While the tour shows a step, only what that step asks for opens (#406).
+    if (overlay && !gateAllows({ kind: 'overlay', overlay })) return;
     // Terminals and the floor's app are live, whatever the time-lapse shows.
     if (overlay && get().replaying && (overlay.kind === 'terminal' || overlay.kind === 'app' || overlay.kind === 'previews')) {
       get().pushToast('info', 'That shows the live office: press Esc to leave the replay first.');
@@ -516,6 +519,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       key: `a-${a.id}`,
       number: a.issueNumber,
       title: a.issueTitle ?? '',
+      url: repo.issues.find((i) => i.number === a.issueNumber)?.url,
       agent: a,
       note,
       tone: a.status === 'error' ? 'bad' : a.status === 'stopped' || a.status === 'done' ? 'warn' : undefined,

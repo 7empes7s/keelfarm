@@ -1,7 +1,7 @@
 // Usage for every account and provider (#361), pure: each provider's answer as windows, an account as a source, the
 // worst row first, the CEO's one line, the 90% notifications (once per window) and "resets in 3h".
 import { barName, isReset, livePct, readingOf } from './usage.ts';
-import type { AccountView, UsageReading, UsageSource, UsageSourceStatus, UsageWindow } from './types.ts';
+import type { AccountView, UsageReading, UsageSource, UsageSourceStatus, UsageSplit, UsageWindow } from './types.ts';
 
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
@@ -135,8 +135,8 @@ const nextMidnight = (now: number) => {
   return d.getTime();
 };
 
-/** A Claude or Codex account from Providers & accounts: its 5-hour and weekly readings, or an API key's spend against its cap. */
-export function accountSource(a: AccountView, spendUsd7d: number, now: number): UsageSource {
+/** A Claude or Codex account from Providers & accounts: its 5-hour and weekly readings, or an API key's spend against its cap; `split`: who spent its window (#409). */
+export function accountSource(a: AccountView, spendUsd7d: number, now: number, split?: UsageSplit | null): UsageSource {
   const api = a.kind === 'api-key';
   const windows: UsageWindow[] = api
     ? [{ name: 'Today', usedPct: a.dailyCostCap ? pctOf(a.todayUsd, a.dailyCostCap) : null, used: a.todayUsd, ...(a.dailyCostCap ? { limit: a.dailyCostCap } : {}), unit: '$', resetsAt: nextMidnight(now) }]
@@ -165,6 +165,7 @@ export function accountSource(a: AccountView, spendUsd7d: number, now: number): 
     ...(note ? { note } : {}),
     accountId: a.id,
     agents: a.agents,
+    ...(split ? { split } : {}),
   };
 }
 
@@ -236,6 +237,21 @@ export interface UsageAlert {
   key: string;
   title: string;
   text: string;
+}
+
+/**
+ * "Notify me when it's back" (#404): the sources watched that aren't limited any more, as notifications, and the
+ * watches left (a source gone from the card is dropped without one).
+ */
+export function backAlerts(list: readonly UsageSource[], watching: readonly string[]): { alerts: Omit<UsageAlert, 'key'>[]; watching: string[] } {
+  const alerts: Omit<UsageAlert, 'key'>[] = [];
+  const left = watching.filter((id) => {
+    const s = list.find((x) => x.id === id);
+    if (s?.status === 'limited') return true;
+    if (s) alerts.push({ title: `${s.label} is back`, text: 'Its limit has reset: agents can work on it again.' });
+    return false;
+  });
+  return { alerts, watching: left };
 }
 
 /** A window's key for "already told": the source, the window and its reset (to the hour, as readings jitter). */

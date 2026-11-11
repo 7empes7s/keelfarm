@@ -14,20 +14,20 @@ import { Icon } from '../ui/Icon';
 /** A section, or 'menu': the list of them. */
 export type ConsoleSection = SectionId | 'menu';
 
-type Props = { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus; repoId?: string };
+type Props = { section: ConsoleSection; pick: (s: ConsoleSection) => void; history?: HistoryFocus; repoId?: string; card?: string };
 
 /** The console on a desktop: the menu opens at the section last shown. */
-function WideConsole({ section, pick, history, repoId }: Props) {
+function WideConsole({ section, pick, history, repoId, card }: Props) {
   const open = (section === 'menu' ? null : sectionById(section)) ?? opening(undefined, '', 'pocket', loadRemembered());
   useSectionAddress(open);
-  return <ConsoleSplit where="pocket" section={open} pick={(s) => pick(s.id)} focus={{ history, repoId }} />;
+  return <ConsoleSplit where="pocket" section={open} pick={(s) => pick(s.id)} focus={{ history, repoId, card }} />;
 }
 
 export function PocketConsole({ wide, ...props }: Props & { wide?: boolean }) {
   return wide ? <WideConsole {...props} /> : <PhoneConsole {...props} />;
 }
 
-function PhoneConsole({ section, pick, history, repoId }: Props) {
+function PhoneConsole({ section, pick, history, repoId, card }: Props) {
   const open = section === 'menu' ? null : (sectionById(section) ?? null);
   const [query, setQuery] = useState('');
   const body = useRef<HTMLDivElement>(null);
@@ -52,7 +52,7 @@ function PhoneConsole({ section, pick, history, repoId }: Props) {
           <InfoButton screen={open.id} className="ds-btn ds-btn-icon" />
         </div>
         <div className="ds-stack-scope" role="region" aria-label={open.label}>
-          <SectionBody id={open.id} where="pocket" focus={{ history, repoId }} />
+          <SectionBody id={open.id} where="pocket" focus={{ history, repoId, card }} />
         </div>
       </div>
     );

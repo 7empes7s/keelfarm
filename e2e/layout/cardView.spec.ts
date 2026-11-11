@@ -9,7 +9,7 @@ const CARD = 'Add dark mode toggle'; // the demo's long issue: sections, a check
 
 /** The demo's long issue from its Kanban card (its PR's card once it has one). */
 async function openCard(page: Page, board: Locator) {
-  await board.locator('.kcard', { hasText: CARD }).first().locator('button.linkish').click();
+  await board.locator('.kcard', { hasText: CARD }).first().locator('button.kcard-num').click();
   return page.locator('.cardview');
 }
 
@@ -18,7 +18,7 @@ const SCREENS: Screen[] = [
     name: 'PR card actions', widths: [390, 1280], tabs: [],
     open: async (page) => {
       const board = await pocket(page, 'kanban');
-      await board.locator('.kcard', { hasText: 'Checkout steps on a phone' }).first().locator('button.linkish').click();
+      await board.locator('.kcard', { hasText: 'Checkout steps on a phone' }).first().locator('button.kcard-num').click();
       return page.locator('.cardview');
     },
   },

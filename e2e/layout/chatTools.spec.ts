@@ -12,7 +12,7 @@ async function chat(page: Page, width: number, full: boolean) {
   const root = await pocket(page, 'chat');
   if (width >= 1024 && !(await root.locator('.pk-dock').isVisible())) await root.locator('.pk-chat-btn').click();
   if (full) {
-    await root.getByRole('button', { name: 'Full screen', exact: true }).click();
+    await root.getByRole('button', { name: 'Full screen chat', exact: true }).click();
     await expect(root).toHaveClass(/pk-chat-full/);
   }
   // notices pop up over everything, the chat included: out of the way of the hit tests

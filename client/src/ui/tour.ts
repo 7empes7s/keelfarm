@@ -23,9 +23,13 @@ interface TourState {
   replay: { ids: string[]; at: number } | null;
   /** Pocket mode only starts the full tour when asked (its invite card, Settings). */
   pocketTour: boolean;
+  /** The tour or What's new is on screen: toasts wait behind it (#408). */
+  on: boolean;
+  /** Pocket mode's way back from a page the tour opened (#408): remembers what's on screen, returns its restore. */
+  keepPage: (() => () => void) | null;
 }
 
-export const useTour = create<TourState>(() => ({ raw: typeof window === 'undefined' ? null : readSeen(), track: 'office', replay: null, pocketTour: false }));
+export const useTour = create<TourState>(() => ({ raw: typeof window === 'undefined' ? null : readSeen(), track: 'office', replay: null, pocketTour: false, on: false, keepPage: null }));
 
 /** The steps this device has seen. */
 export const seenNow = (raw: string | null) => seenIds(raw, useStore.getState().settings.tutorialStep === -1);
