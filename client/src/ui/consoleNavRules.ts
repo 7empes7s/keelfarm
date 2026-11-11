@@ -24,6 +24,7 @@ export type SectionId =
   | 'office'
   | 'profile'
   | 'providers'
+  | 'guides'
   | 'accounts'
   | 'cloud-agents'
   | 'voice'
@@ -60,7 +61,7 @@ export const GROUPS: Group[] = [
 ];
 
 export const SECTIONS: Section[] = [
-  { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices'] },
+  { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices', 'Setup', 'Not now', 'Kind of project'] },
   { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
   { id: 'team', group: 'work', icon: 'laptop', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
   { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'Disk', 'Free up space', 'Test lab'] },
@@ -78,6 +79,7 @@ export const SECTIONS: Section[] = [
   { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Previews', 'Stop a PR preview after no use', 'Max lifetime', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
   { id: 'providers', group: 'settings', icon: 'plug', label: 'Providers', find: ['Add provider', 'MCP servers', 'What uses it', 'Keys found on this computer', 'Scan', 'OpenAI API', 'Anthropic API', 'Gemini', 'OpenRouter', 'Hetzner', 'ElevenLabs', 'Upstash', 'Runway', 'Luma', 'Kling', 'Video', 'Nano Banana', 'OpenAI Images', 'Image', 'Test'] },
+  { id: 'guides', group: 'settings', icon: 'book-open', label: 'Guides', find: ['Guides', 'Use case', 'What the company mainly makes', 'Recommended setup', 'Web app', 'API', '3D / browser game', 'Static site', 'CLI or library', 'Mobile app', 'What each coding agent is good at'] },
   { id: 'accounts', group: 'settings', icon: 'key-round', label: 'Providers & accounts', find: ['Add account', 'API key', 'Subscription login', 'Setup token', 'Sign in again', 'Daily cost cap', 'Tags', 'Rotation', 'API keys only as a last resort', 'Simulate a limit', 'Billing'] },
   { id: 'cloud-agents', group: 'settings', icon: 'cloud', label: 'Cloud agents', find: ['Upstash Box API key', 'Where new agents work', 'Box size', "Your plan's Box limit"] },
   { id: 'voice', group: 'settings', icon: 'volume-2', label: 'Voice', find: ['ElevenLabs API key', 'Browser voice', 'Keep voice clips for', 'Speech to Text', 'Speed', 'Favourite voices', 'Model'] },

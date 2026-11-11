@@ -3,6 +3,7 @@ import { useMode } from './pocket/mode';
 import { installSwitchKey } from './pocket/switchOffice';
 import { Captions, LiveRegions } from './ui/CaptionStrip';
 import { ConfirmDialog } from './ui/Confirm';
+import { SetupChecklist } from './ui/FloorSetup';
 import { OfficeBoundary } from './ui/OfficeBoundary';
 import { installQuickKeys } from './ui/QuickToggles';
 import { useCall } from './ui/voiceCallStore';
@@ -37,6 +38,7 @@ export function App() {
           <CallScreens />
         </Suspense>
       )}
+      <SetupChecklist />
       <ConfirmDialog />
       <Captions />
       <LiveRegions />

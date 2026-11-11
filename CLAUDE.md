@@ -99,6 +99,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
   | `disk.ts` | the disk (#340): free space on the health strip and its hold, the hourly cleanup and "Free up space", the working copies' disk |
+  | `setup.ts` | the setup advisor (#366): each floor's use case (guessed from its repo's top files), its gaps against `shared/useCases.ts`' recommendations (rules pure in `shared/setup.ts`), one notification per gap, Not now, the fixes, the CEO's `apply_setup` |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.

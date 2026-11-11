@@ -70,6 +70,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       floorDetail: (a) => JSON.stringify(floorDetail(this.fullStatus(), a.floor), null, 1),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
+      applySetup: acts((a) => this.ceoApplySetup(a)),
       setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
       scaleTeam: acts((a) => this.didFor(this.scaleTeam(a), a.floor, [], a.reason, `floor ${a.floor}'s team set to ${a.size}`)),
       configureAgent: acts((a) => this.didForAgent(this.configureAgent(a), a.agent_id)),
@@ -203,6 +204,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           charter: renderCharter(charterOf(r.mission, r.charter)) || null,
           charterProposalWaiting: !!r.charter.proposal,
           profile: r.summary || null,
+          setup: this.floorSetupLine(r), // its use case and setup gaps (#366)
           qaBrief: r.qaBrief || null,
           playbook: r.playbook || null,
           preview: { command: r.preview.command, env: r.preview.env, status: this.previews.view(r).status },

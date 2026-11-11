@@ -30,6 +30,7 @@ import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
 import { FloorThemePicker } from './FloorThemePicker';
+import { FloorSetupCard } from './FloorSetup';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
 import { flashInto } from './jumpFlash';
@@ -188,6 +189,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
       </details>
       {repo.cloneError && <div className="term-error small">clone failed: {repo.cloneError}</div>}
       {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
+      <FloorSetupCard repo={repo} />
       <div className="ds-switches">
         <label className="toggle floor-colour">
           <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} aria-label={`Floor ${repo.floor} colour`} /> <Icon name="palette" /> Floor colour
