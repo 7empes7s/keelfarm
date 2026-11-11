@@ -3,7 +3,8 @@
 import type { Swarm } from '../swarm.ts';
 import type { CeoChat } from '../ceoChat.ts';
 import type { VoiceKeyView } from '../voice.ts';
-import type { PersistedAgent } from './model.ts';
+import type { UseCase } from '../../shared/types.ts';
+import type { PersistedAgent, PersistedRepo } from './model.ts';
 
 export abstract class SwarmContract {
   protected abstract ceoChat: CeoChat; // the CEO chat's live reply, office calls and threads (swarm.ts)
@@ -63,6 +64,11 @@ export abstract class SwarmContract {
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
 
+  // setup.ts (protected there)
+  protected abstract setupBlocks(agentId: string): boolean;
+  protected abstract floorSetupLine(r: PersistedRepo): string;
+  protected abstract ceoApplySetup(x: { floor: number; use_case?: UseCase; gap?: string }): string;
+
   // reactions.ts (protected there)
   protected abstract markQuiet(messageIds: number[]): void;
 
@@ -94,6 +100,9 @@ export abstract class SwarmContract {
   protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
   protected abstract stuckRecord(...a: Parameters<Swarm['stuckRecord']>): ReturnType<Swarm['stuckRecord']>;
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
+
+  // ceoStuck.ts
+  protected abstract startCeoSession(...a: Parameters<Swarm['startCeoSession']>): ReturnType<Swarm['startCeoSession']>;
 
   // upkeep.ts
   protected abstract alertBlocked(...a: Parameters<Swarm['alertBlocked']>): ReturnType<Swarm['alertBlocked']>;

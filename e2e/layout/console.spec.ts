@@ -103,6 +103,13 @@ const charterEditor: View = {
   },
 };
 
+/** The demo's three.js game moved in: its setup checklist sheet (#366), once the clone is read. */
+async function setupChecklist(page: Page) {
+  await page.request.post('/api/repos', { data: { fullName: 'demo-co/star-hopper' } });
+  await page.goto('/?pocket=1');
+  return dialog(page, /Set up floor/);
+}
+
 /** Pocket mode's Settings. */
 async function pocketSettings(page: Page) {
   await page.goto('/?pocket=1');
@@ -142,6 +149,7 @@ const SCREENS: Screen[] = [
   },
   { name: 'pocket usage detail', widths: [390, 1280], open: pocketSettings, tabs: [usageDetail('pocket')] }, // a screen of its own: the sheet stays open
   { name: 'pocket add provider', widths: [390, 1280], open: pocketSettings, tabs: [addProvider] }, // a screen of its own: the sheet stays open
+  { name: 'setup checklist', widths: [390, 1280], open: setupChecklist, tabs: [''] }, // the three.js game moving in (#366)
   { name: 'pocket found keys', widths: [390, 1280], open: pocketSettings, tabs: [foundKeys] },
   { name: 'pocket memory map in 3D', widths: [390, 1280], open: pocketSettings, tabs: [mapIn3d('pocket')] },
   { name: 'pocket charter', widths: [390, 1280, 1920], open: pocketSettings, tabs: [charterDrift('pocket')] }, // the demo's first floor has an objective with 20+ PRs (#240)

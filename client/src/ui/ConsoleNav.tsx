@@ -15,6 +15,7 @@ import { ProfileSettings } from './ProfileSettings';
 import { CloudSettings } from './CloudSettings';
 import { ProvidersSettings } from './ProvidersSettings';
 import { ProvidersPage } from './ProvidersPage';
+import { GuidesPage } from './GuidesPage';
 import { VoiceSettings } from './VoiceSettings';
 import { OutsideSettings } from './OutsideSettings';
 import { NotifySettings } from './NotifySettings';
@@ -95,6 +96,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return one(<ProfileSettings />);
     case 'providers':
       return one(<ProvidersPage />);
+    case 'guides':
+      return one(<GuidesPage />);
     case 'accounts':
       return one(<ProvidersSettings />);
     case 'cloud-agents':

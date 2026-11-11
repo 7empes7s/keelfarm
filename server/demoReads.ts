@@ -4,6 +4,14 @@ import type { DemoFloor } from './demo.ts';
 import type { PrDiff } from './github.ts';
 import { guardPath, type WorktreeRead } from './worktreeRead.ts';
 
+/** The demo repos' dependencies, for the setup advisor's guess (#366): two web apps, an API and the three.js game left to move in. */
+const DEMO_DEPS: Record<string, string[]> = {
+  'demo-co/pixel-todo': ['react', 'react-dom', 'vite'],
+  'demo-co/weather-api': ['express', 'zod'],
+  'demo-co/recipe-box': ['next', 'react', 'react-dom'],
+  'demo-co/star-hopper': ['three', 'vite'],
+};
+
 /** A small made-up diff for the CEO's pr_diff and worktree_file. */
 const demoDiff = (what: string) =>
   [
@@ -62,6 +70,7 @@ const DEMO_REF_FILES = ['src/App.tsx', 'README.md'];
 /** A demo floor's file: made up from its path, or null for one it doesn't have. */
 export function demoRepoFile(fullName: string, rel: string): string | null {
   const p = rel.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (p === 'package.json' && DEMO_DEPS[fullName]) return JSON.stringify({ name: fullName.split('/')[1], private: true, scripts: { dev: 'vite' }, dependencies: Object.fromEntries(DEMO_DEPS[fullName].map((d) => [d, '*'])) }, null, 2);
   if (p === 'README.md') return [`# ${fullName.split('/')[1]}`, '', 'A demo project: the office makes up its files.', '', '## Run it', '', '```bash', 'npm install', 'npm run dev', '```', ''].join('\n');
   if (p !== 'src/App.tsx') return null;
   return [

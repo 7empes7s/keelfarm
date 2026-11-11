@@ -14,6 +14,7 @@ export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
   { id: 'disk', label: 'The disk is getting full (once, until it has room again)' },
   { id: 'merge', label: 'Every merge' },
   { id: 'decisions', label: 'A daily digest of decisions waiting on me' },
+  { id: 'setup', label: "A floor's setup is missing something its kind of project needs" },
 ];
 
 export const NOTIFY_WEBHOOKS: NotifyWebhook[] = ['ntfy'];
@@ -21,7 +22,7 @@ export const NOTIFY_CHANNELS: NotifyChannel[] = ['desktop', 'push', ...NOTIFY_WE
 
 /** Merges are optional: on a busy office they're the noisiest event. The decisions digest is opt-in (#114). */
 export const DEFAULT_NOTIFY: NotifySettings = {
-  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, disk: true, merge: false, decisions: false },
+  events: { needsHuman: true, question: true, ceoMessage: true, hire: true, agentError: true, usage: true, memory: true, disk: true, merge: false, decisions: false, setup: true },
   channels: { desktop: true, push: true, ntfy: true, telegram: true },
   officeUrl: '',
   telegramMirror: false,
