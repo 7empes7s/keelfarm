@@ -20,3 +20,4 @@ import './doctor.ts';
 import './disk.ts';
 import './setup.ts';
 import './liveLeases.ts';
+import './itDesk.ts';

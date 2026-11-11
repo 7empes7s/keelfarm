@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canListen } from './handsFree';
-import { BARGE_MS, bargesIn, callClock, callStep, callStatus, inCall, isBackchannel, NO_CALL, sentenceAt, sentenceFraction, sentenceStarts, splitSentences, wantsMic, type Call, type CallEvent } from './voiceCall';
+import { BARGE_MS, bargesIn, callClock, captionLine, callStep, callStatus, inCall, isBackchannel, NO_CALL, sentenceAt, sentenceFraction, sentenceStarts, splitSentences, wantsMic, type Call, type CallEvent } from './voiceCall';
 
 /** Runs events from no call, returning the last step and every effect along the way. */
 function run(events: CallEvent[], from: Call = NO_CALL) {
@@ -206,5 +206,11 @@ describe('the call screen', () => {
     expect(callStatus(speaking, 'Mimoun')).toBe('Mimoun is talking');
     expect(callStatus(run([{ type: 'pause' }], speaking).call, 'Mimoun')).toBe('Paused');
     expect(callStatus(run([{ type: 'mute' }], started).call, 'Mimoun')).toBe('Muted');
+  });
+
+  it("captions the CEO's sentence while they talk, else what you said", () => {
+    expect(captionLine(speaking, 'Mimoun', 'All green.', 'how are we')).toBe('Mimoun: All green.');
+    expect(captionLine(started, 'Mimoun', 'All green.', 'how are we')).toBe('You: how are we');
+    expect(captionLine(speaking, 'Mimoun', '', '')).toBe('');
   });
 });

@@ -3,7 +3,7 @@
   margin: 6px 0 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 138, 91, 0.08);
+  background: color-mix(in srgb, var(--ds-accent) 8%, transparent);
 }
 .guide-steps {
   list-style: none;
@@ -25,14 +25,14 @@
   place-items: center;
   font-weight: 700;
   font-size: 0.8rem;
-  color: #fff;
-  background: #9a96a8;
+  color: var(--ds-surface-raised);
+  background: var(--ds-text-muted);
 }
 .guide-done .guide-mark {
-  background: #1b873a;
+  background: color-mix(in srgb, var(--ds-good-fill) 35%, var(--ds-text));
 }
 .guide-todo .guide-mark {
-  background: #e0662f;
+  background: var(--ds-warn-text);
 }
 .guide-waiting {
   color: var(--ds-text-muted); /* not opacity: faded text fails contrast */
@@ -79,6 +79,6 @@
 }
 .notify-health li {
   padding: 6px 0;
-  border-top: 1px dashed rgba(31, 29, 43, 0.15);
+  border-top: 1px dashed var(--ds-line);
   overflow-wrap: anywhere;
 }

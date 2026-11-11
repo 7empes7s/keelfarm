@@ -3,8 +3,8 @@
   flex: none;
 }
 .setup-toggle-on {
-  background: var(--ink);
-  color: #fff;
+  background: var(--ds-outline);
+  color: var(--ds-surface-raised);
 }
 .setup-wrap {
   flex: none;

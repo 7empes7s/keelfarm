@@ -15,7 +15,7 @@ import { CUT_PLANES } from './camera/rig';
 import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
 import { decorRects } from './decor/decor';
 import { themePack } from './floorThemes/packs';
-import { themePropRects } from './floorThemes/placement';
+import { themePropRects, themeWallRects } from './floorThemes/placement';
 import { LAB_GFX, LAB_GFX_LIMITS } from './gfx/device';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
@@ -109,7 +109,7 @@ export function Game() {
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {}), ...themePropRects(pack, placed)] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {}), ...themePropRects(pack, placed), ...themeWallRects(pack)] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
     [onRoof, isOffice, placed, theme, pack],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);

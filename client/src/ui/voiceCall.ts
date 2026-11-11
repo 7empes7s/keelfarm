@@ -186,6 +186,12 @@ export function callClock(ms: number): string {
   return h ? `${h}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
 }
 
+/** The captions' line: the CEO's sentence while they talk, else what you said (or are saying), else ''. */
+export function captionLine(c: Pick<Call, 'phase'>, ceoName: string, saying: string, heard: string): string {
+  if (c.phase === 'speaking' && saying) return `${ceoName}: ${saying}`;
+  return heard ? `You: ${heard}` : '';
+}
+
 /** What the call screen says under the name. */
 export function callStatus(c: Call, ceoName: string): string {
   if (c.phase === 'connecting') return 'Connecting…';
