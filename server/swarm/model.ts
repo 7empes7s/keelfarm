@@ -146,6 +146,7 @@ export interface PersistedAgent {
   prNumber: number | null;
   prUrl: string | null;
   nextIssue?: number | null; // Assign to… while they were busy (#265, shared/assignIssue.ts): starts when they're free
+  answeredAt?: number | null; // when the latest answer to their question reached them (#508): their card says so
   startedAt: number | null;
   endedAt: number | null;
   costUsd: number;

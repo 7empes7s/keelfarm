@@ -23,7 +23,7 @@ import type { CharterProposalArgs } from '../charterTool.ts';
 import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
-import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
+import { answerComment, answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
 import { usageLine } from '../../shared/usageSources.ts';
 import { needsYou, needsYouTodo, shownState, type ShownState } from '../../shared/needsYou.ts';
 import { checkBinding } from '../../shared/accounts.ts';
@@ -553,11 +553,13 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
     const v = super.agentView(a, withLog);
     const waiting = waitingOn(this.state.questions, a.id);
     const reviewedBy = BUSY.includes(a.status) && reviewing(this.state.ceo.changes, a) ? this.ceo().name : null;
-    return { ...v, waiting, reviewedBy, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
+    // answered: only for agents ever answered (a big company's snapshot budget), then always, as a patch can't drop it
+    return { ...v, waiting, reviewedBy, ...(a.answeredAt !== undefined && { answered: waiting ? null : a.answeredAt }), ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
   }
 
   protected clearTask(a: PersistedAgent) {
     this.dropQuestion(a.id); // their task is gone: so is what they asked about it
+    if (a.answeredAt) a.answeredAt = null;
     super.clearTask(a);
   }
 
@@ -602,8 +604,11 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
     this.notice({ kind: 'needsYou', title, text, target: { kind: 'agent', agentId: q.agentId }, actions: ['reply'] }, { event: 'question', line: `${q.agentName} (floor ${q.floor}): ${clip(q.text, 120)}` });
   }
 
-  /** An answer typed into the agent's session as their next message; the question closes first. */
-  protected async answerQuestion(q: AgentQuestion, text: string, who: string) {
+  /**
+   * An answer typed into the agent's session as their next message, or a session that ended resumed with it; the
+   * question closes first. The manager's also goes on the issue (or PR) they asked about (#508), where agents look.
+   */
+  protected async answerQuestion(q: AgentQuestion, text: string, who: string, manager = false) {
     this.setQuestions(this.state.questions.filter((x) => x.id !== q.id));
     try {
       await this.message(q.agentId, answerPrompt(q, text, who), false, who);
@@ -611,13 +616,30 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
       if (this.state.agents.some((a) => a.id === q.agentId)) this.setQuestions([...this.state.questions, q]);
       throw err;
     }
+    const now = Date.now();
+    const a = this.state.agents.find((x) => x.id === q.agentId);
+    if (a) {
+      a.answeredAt = now;
+      this.emitAgent(a);
+    }
+    const m = q.messageId === null ? undefined : this.state.messages.find((x) => x.id === q.messageId);
+    if (m) {
+      m.answered = now;
+      this.broadcast({ type: 'ceoChat', message: m });
+    }
+    this.save();
+    const repo = this.state.repos.find((r) => r.id === q.repoId);
+    if (manager && repo && (q.issue || q.pr)) {
+      const post = q.issue ? this.backend.commentIssue(repo.fullName, q.issue, answerComment(q, text)) : this.backend.commentPull(repo.fullName, q.pr!, answerComment(q, text));
+      void post.catch((err) => console.warn(`could not post the answer to ${q.agentName}'s question on GitHub`, err));
+    }
   }
 
   /** The manager answered a question (tapped an option, or replied to its message): to the agent, and the CEO hears. */
   protected async managerAnswer(q: AgentQuestion, text: string, replyTo: number, via?: 'telegram') {
     const m = this.postMessage('manager', text, undefined, { replyTo, delivery: 'read', ...(via && { telegram: 'in' as const }) });
     try {
-      await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager');
+      await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager', true);
       this.ceoTold.push(`The manager answered ${q.agentName}'s question "${clip(q.text, 120)}": ${clip(text, 200)}`);
       this.postMessage('office', `↪ Sent to ${q.agentName}: they carry on with your answer.`);
     } catch (err) {
@@ -626,12 +648,15 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
     return { id: m.id };
   }
 
-  protected async answerAgent(x: { agent_id: string; text: string }) {
+  /** answer_agent; with asked_in, the manager's answer in their words in chat, even to a question that is theirs (#508). */
+  protected async answerAgent(x: { agent_id: string; text: string; asked_in?: number }) {
     const a = this.agentByRef(x.agent_id);
     const q = questionOf(this.state.questions, a.id);
     if (!q) throw new Error(`${a.name} has no open question. Use message_agent to guide them.`);
-    if (q.to === 'manager') throw new Error(`${a.name}'s question is with the manager already; their answer goes straight to ${a.name}.`);
-    await this.answerQuestion(q, x.text, `${this.ceo().name} (CEO)`);
+    const asked = x.asked_in !== undefined;
+    if (asked) this.checkAsked(x);
+    else if (q.to === 'manager') throw new Error(`${a.name}'s question is with the manager. If they answered it in chat, pass asked_in (their message's number); else their answer goes straight to ${a.name}.`);
+    await this.answerQuestion(q, x.text, asked ? `${this.managerLabel()}, through ${this.ceo().name} (CEO)` : `${this.ceo().name} (CEO)`, asked);
     return `Sent: ${a.name} carries on with your answer.`;
   }
 

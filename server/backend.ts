@@ -107,6 +107,8 @@ export interface Backend {
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
+  /** A comment on an issue (#508: the manager's answer where the agent asked); returns its URL. */
+  commentIssue(fullName: string, number: number, body: string): Promise<string>;
   /** The charter's Export (#48): docs/CHARTER.md on the office's charter branch, with a pull request; returns its URL. */
   exportCharter(fullName: string, base: string, markdown: string): Promise<string>;
   uploadEvidence(fullName: string, filePath: string, data: Buffer): Promise<string>;
@@ -339,6 +341,7 @@ export const realBackend: Backend = {
   readRepoFile: (fullName, branch, rel) => readRepoFile(workspace.mainDir(fullName), `origin/${branch}`, rel),
   issueDetails: github.issueDetails,
   commentPull: github.commentPull,
+  commentIssue: github.commentIssue,
   uploadEvidence: github.uploadEvidence,
   ensureClone: workspace.ensureClone,
   syncMain: workspace.syncMain,

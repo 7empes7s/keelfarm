@@ -172,5 +172,6 @@ registerDemo('github', ({ scale }) => ({
     return { title: i?.title ?? `Issue #${number}`, body: i?.body ?? '', createdAt: i?.createdAt ?? closedFiled.get(`${fullName}#${number}`) };
   },
   commentPull: async (fullName, number) => `https://github.com/${fullName}/pull/${number}#issuecomment-${Date.now()}`,
+  commentIssue: async (fullName, number) => `https://github.com/${fullName}/issues/${number}#issuecomment-${Date.now()}`,
   uploadEvidence: async (fullName, filePath) => `https://github.com/${fullName}/raw/swarm-qa-evidence/${filePath}`,
 }));

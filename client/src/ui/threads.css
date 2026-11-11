@@ -29,6 +29,10 @@
 button.thread-project {
   cursor: pointer;
 }
+.thread-project-whole :is(.thread-project-name, .thread-project-meta) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .thread-project-name,
 .thread-project-meta,
 .lib-title,
