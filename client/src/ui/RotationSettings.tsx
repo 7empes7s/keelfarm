@@ -3,9 +3,11 @@
 import { api } from '../api';
 import { useStore } from '../store';
 import { rotationSettings, spanBars } from '../../../shared/accountRotation';
+import { switchingText } from '../../../shared/accountDefault';
 import { clock } from '../../../shared/usage';
 import type { AccountView, RotationSettings, RotationStats } from '../../../shared/types';
 import { Icon } from './Icon';
+import './accounts.css';
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const minutes = (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n}m`);
@@ -33,12 +35,18 @@ function RotationTiles({ stats }: { stats: RotationStats | undefined }) {
 /** Mission control → Where the plan goes: the rotation's day, with the way to Providers & accounts. */
 export function RotationOps() {
   const stats = useStore((s) => s.accounts.rotation);
+  const switching = useStore((s) => s.accounts.switching);
   return (
     <section id="ops-card-rotation" aria-labelledby="rotation-title">
       <h3 id="rotation-title" className="section">
         <Icon name="shuffle" /> Account rotation
       </h3>
       <RotationTiles stats={stats} />
+      {switching?.map((x) => (
+        <p key={x.cli} className="acc-flag" role="status">
+          <Icon name="shuffle" /> {x.to} is the default, {switchingText(x.left)}
+        </p>
+      ))}
       <a className="small" href="#settings/accounts">
         Providers & accounts
       </a>

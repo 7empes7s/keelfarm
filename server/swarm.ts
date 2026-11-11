@@ -40,7 +40,7 @@ import { CeoChat } from './ceoChat.ts';
 import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
-import { rotationSettings } from '../shared/accountRotation.ts';
+import { loadTaskAccounts, rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
@@ -152,7 +152,7 @@ export class Swarm extends SwarmLiveLeases {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
-        experiments: loadLab(loaded.experiments, Date.now()),
+        experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
@@ -356,7 +356,7 @@ export class Swarm extends SwarmLiveLeases {
     setTimeout(() => this.greet(), 5000);
     setInterval(() => void this.files.sweep(), SWEEP_MS).unref();
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
-    setInterval(() => this.notifyStuck(), 60_000);
+    setInterval(() => (this.notifyStuck(), this.watchDefaults()), 60_000); // watchDefaults: a default back from its limit (#390)
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);

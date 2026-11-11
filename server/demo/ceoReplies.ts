@@ -106,3 +106,11 @@ registerCeoReply('scale_team', ({ text, s, scale }) => {
 
 // "How much of the server is used, and by what?": its live sources (#271). Last, so a plan or a hire about a server isn't taken for it.
 registerCeoReply('server', ({ text }) => (/\b(how much|by what|which programs?)\b.*\b(server|memory|ram|cpu)\b|\b(server|memory|cpu) (use|usage|load)\b/i.test(text) ? demoServerAnswer() : null));
+
+// "make Ultra the default": the demo's Ultra login first through the real tool (#390); "switch now" moves open tasks too.
+registerCeoReply('make_default_account', async ({ text, use }) => {
+  if (!/\bdefault\b/i.test(text) || !/\b(make|set|switch)\b/i.test(text)) return null;
+  const account = /\bultra\b/i.test(text) ? 'claude-ultra' : /\b(keelops|max)\b/i.test(text) ? 'claude-keelop' : 'claude-login';
+  const out = await use('make_default_account', { account, switch_now: /\bnow\b/i.test(text) });
+  return out.startsWith('Refused') ? `I couldn't: ${refused(out)}` : `Done. ${out}`;
+});
