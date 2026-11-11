@@ -350,7 +350,7 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {
+function Settings({ section, pick, onClose, history, repoId, card, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; card?: string; wide: boolean }) {
   return (
     <Panel
       title={
@@ -362,7 +362,7 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
       className="pk-settings ds-console"
     >
       <Suspense fallback={<p className="muted">Loading…</p>}>
-        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} wide={wide} />
+        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} card={card} wide={wide} />
       </Suspense>
     </Panel>
   );
@@ -517,6 +517,7 @@ export default function Pocket() {
   // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
   const [focusRepo, setFocusRepo] = useState<string | undefined>();
+  const [focusCard, setFocusCard] = useState<string | undefined>(); // the card to scroll to (#404: a usage row's account)
   const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
   // A floor's team asked for (a chat link, #151) is the Team tab here, at that floor; from the Chat tab, with a Back to it.
   const [teamJump, setTeamJump] = useState(0);
@@ -538,6 +539,7 @@ export default function Pocket() {
     }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
+    setFocusCard(wantsSection.card);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
     panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
@@ -738,7 +740,7 @@ export default function Pocket() {
           </main>
           {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
           <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
-            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
+            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} card={focusCard} wide={wide} />}
           </div>
           {/* the Previews page takes everything beside the chat, over the console it may have been opened from */}
           <div className="pk-page-host">

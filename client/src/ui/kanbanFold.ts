@@ -49,8 +49,8 @@ const counts = (parts: [number, string][]) =>
     .map(([n, label]) => `${n} ${label}`)
     .join(' · ');
 
-/** A folded column's stats, e.g. "28 ready · 2 waiting · next #112"; '' when it's empty. */
-export function foldSummary(id: ColumnId, cards: KanbanCard[]): string {
+/** A folded column's stats, e.g. "28 ready · 2 waiting · next #112"; '' when it's empty. `total`: every merge, not just the listed ones. */
+export function foldSummary(id: ColumnId, cards: KanbanCard[], total = cards.length): string {
   if (!cards.length) return '';
   const where = (f: (c: KanbanCard) => boolean) => cards.filter(f).length;
   switch (id) {
@@ -77,6 +77,6 @@ export function foldSummary(id: ColumnId, cards: KanbanCard[]): string {
     case 'ready':
       return counts([[cards.length, 'passed QA']]);
     case 'merged':
-      return `${counts([[cards.length, 'merged']])} · latest #${cards[0].number}`;
+      return `${counts([[total, 'merged']])} · latest #${cards[0].number}`;
   }
 }

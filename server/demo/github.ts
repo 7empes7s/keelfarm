@@ -1,11 +1,13 @@
 // The demo's GitHub calls (#257): issues, PRs, merges, checks and reads, answered from the fake repos (world.ts).
-import type { GhRepoSummary } from '../../shared/types.ts';
+import { MERGED_LISTED, type GhRepoSummary } from '../../shared/types.ts';
 import { TRUST_LABEL } from '../../shared/trust.ts';
 import { demoDesign } from '../demoDesign.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from '../demoReads.ts';
 import { registerDemo } from './registry.ts';
 import { CI_ONLY_PR, CI_ONLY_REPO, CI_ONLY_SUMMARY, topUp } from './seedRepos.ts';
 import { CI_DOWN_NOTE, CI_DOWN_REPO, ciDown, closedFiled, closedIssues, fakeSha, forgotten, issue, mergedSinceSync, now, repos, runChecks, takeNumber } from './world.ts';
+
+const mergedOf = (fullName: string) => (repos.get(fullName)?.pulls ?? []).filter((p) => p.state === 'MERGED').sort((a, b) => b.number - a.number);
 
 registerDemo('github', ({ scale }) => ({
   user: async () => 'demo-manager',
@@ -23,11 +25,16 @@ registerDemo('github', ({ scale }) => ({
     for (const i of r?.issues ?? []) i.authorAssociation ??= 'OWNER';
     return [...(r?.issues ?? [])];
   },
-  // Like GitHub's list: the open PRs and the 8 latest merges, never closed ones, so the office asks about those.
+  // Like GitHub's list: the open PRs and the latest merges (newest PR first), never closed ones, so the office asks about those.
   listPulls: async (fullName) => {
     const pulls = repos.get(fullName)?.pulls ?? [];
     for (const p of pulls) Object.assign(p, { author: p.author ?? 'demo-manager', isCrossRepository: p.isCrossRepository ?? false });
-    return [...pulls.filter((p) => p.state === 'OPEN'), ...pulls.filter((p) => p.state === 'MERGED').slice(0, 8)];
+    return [...pulls.filter((p) => p.state === 'OPEN'), ...mergedOf(fullName).slice(0, MERGED_LISTED)];
+  },
+  listMergedPage: async (fullName, page) => {
+    const merged = mergedOf(fullName);
+    const pulls = merged.slice((page - 1) * MERGED_LISTED, page * MERGED_LISTED);
+    return { page, total: merged.length, pulls: pulls.map((p) => ({ number: p.number, title: p.title, url: p.url, mergedAt: p.mergedAt, author: p.author ?? null })) };
   },
   writers: async () => ['demo-manager'],
   exportCharter: async (fullName) => {

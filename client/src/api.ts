@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, KeyScanView, UseCase } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, KeyScanView, UseCase } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { ServerPoint } from '../../shared/serverLoad';
@@ -110,6 +110,7 @@ export const api = {
   previewSync: (repoId: string, pr: number | null) => call<{ url: string }>('POST', `${r(repoId)}/preview/sync`, { pr }),
   disconnectRepo: (repoId: string) => call('DELETE', r(repoId)),
   syncRepo: (repoId: string) => call('POST', `${r(repoId)}/sync`),
+  mergedPage: (repoId: string, page: number) => call<MergedPage>('GET', `${r(repoId)}/merged?page=${page}`, undefined, false),
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
   closeIssue: (repoId: string, n: number, reason?: string) => call('POST', `${r(repoId)}/issues/${n}/close`, { reason }),
@@ -231,6 +232,7 @@ export const api = {
   setMcpServer: (id: string, patch: { on?: boolean; agents?: string[] }) => call<McpServerConfig>('PATCH', `/api/providers/mcp/${encodeURIComponent(id)}`, patch),
   testMcpServer: (id: string) => call<McpServerConfig>('POST', `/api/providers/mcp/${encodeURIComponent(id)}/test`),
   removeMcpServer: (id: string) => call('DELETE', `/api/providers/mcp/${encodeURIComponent(id)}`),
+  notifyUsageBack: (id: string, on: boolean) => call<{ watching: boolean }>('POST', `/api/usage/${encodeURIComponent(id)}/notify-back`, { on }),
   setUsageAdminKey: (provider: 'anthropic' | 'openai', key: string) => call<{ set: boolean }>('PUT', '/api/usage/admin-key', { provider, key }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),

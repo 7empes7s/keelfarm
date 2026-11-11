@@ -162,6 +162,10 @@ html[data-reduce-motion] {
 .ds-btn:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--ds-surface-hover);
 }
+.ds-btn.btn-good, .ds-btn.btn-good:hover:not(:disabled, [aria-disabled='true']) { /* the recommended action (#404) */
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
 /* primary actions lift and glow a little under a pointer (#213) */
 @media (hover: hover) {
   .btn.btn-good:hover:not(:disabled, [aria-disabled='true']) {
