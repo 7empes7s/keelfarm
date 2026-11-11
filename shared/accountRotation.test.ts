@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, hasRoom, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, endedText, hasRoom, LIMIT_TAIL_LINES, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -33,6 +33,13 @@ describe('detectLimit', () => {
     expect(detectLimit(text, NOW)).toEqual({ kind: 'limited', until: NOW + (2 * 60 + 15) * 60_000 });
     expect(detectLimit("You've hit your usage limit. Try again at 3:15 PM.", NOW)).toEqual({ kind: 'limited', until: at(15, 15) });
     expect(detectLimit('stream error: exceeded retry limit, last status: 429 Too Many Requests', NOW)).toEqual({ kind: 'limited', until: NOW + 5 * 60_000 });
+  });
+
+  it("reads Codex's limit wrapped in a narrow terminal, with its prompt and the session's end below (#400)", () => {
+    const message = ['■ You’ve hit your usage limit.', 'Upgrade to Pro (https://chatgpt.com/explore/pro),', 'visit https://chatgpt.com/settings/usage to', 'purchase more credits or try again at', '9:08 PM.'];
+    const rows = [...message.flatMap((l) => l.match(/.{1,40}/gu) ?? []), '', '› Ask Codex to do anything', '', '── Codex session ended ──'];
+    expect(detectLimit(endedText(['Codex exited with code 1 before finishing'], rows), NOW)).toEqual({ kind: 'limited', until: at(21, 8) });
+    expect(endedText([], [...Array(40).keys()].map(String)).split('\n')).toHaveLength(LIMIT_TAIL_LINES);
   });
 
   it('reads 429s and an overloaded API as a short limit', () => {
