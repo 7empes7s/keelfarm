@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -113,6 +113,8 @@ describe('words and numbers', () => {
   it('says the switch, the way the chat pill shows it', () => {
     expect(switchText({ from: 'Main Max', to: 'Backup Max', why: 'limited', until: Date.UTC(2026, 10, 7, 16) }, clock)).toBe('🔀 Switched to Backup Max: Main Max is limited until 16:00.');
     expect(switchText({ from: 'Main Max', to: 'Backup Max', why: 'signed-out', until: null }, clock)).toBe('🔀 Switched to Backup Max: Main Max is signed out.');
+    expect(switchText({ from: 'Main Max', to: 'Pro', why: 'signed-out', until: null, carried: 'conversation' }, clock)).toBe('🔀 Switched to Pro: Main Max is signed out. Memory and conversation carried over.');
+    expect(switchText({ from: 'Main Max', to: 'Codex', why: 'signed-out', until: null, carried: 'handover' }, clock)).toMatch(/Picked up from a handover/);
   });
 
   it('says when every account is out, with the API key to turn on', () => {
@@ -136,5 +138,17 @@ describe('words and numbers', () => {
   it('checks the settings', () => {
     expect(rotationSettings(undefined, undefined)).toEqual({ on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true });
     expect(rotationSettings(undefined, { on: false, ceoClis: ['codex', 'opencode', 'codex'] })).toMatchObject({ on: false, ceoClis: ['codex'] });
+  });
+});
+
+describe('switchHandover (#377)', () => {
+  it("a fresh CEO session hears the chat's latest messages, clipped, and where its notes are", () => {
+    const msgs = [...Array.from({ length: 8 }, (_, n) => ({ from: 'manager' as const, text: `m${n}` })), { from: 'ceo' as const, text: 'x'.repeat(500) }, { from: 'office' as const, text: ' ' }];
+    const h = switchHandover(msgs, '/office/ceo/NOTES.md');
+    expect(h).toContain('/office/ceo/NOTES.md');
+    expect(h).not.toContain('m2');
+    expect(h).toContain('Manager: m3');
+    expect(h).toContain(`You: ${'x'.repeat(400)}…`);
+    expect(switchHandover([], 'N')).toContain('(none)');
   });
 });

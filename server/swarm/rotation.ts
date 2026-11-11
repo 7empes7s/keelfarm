@@ -2,15 +2,16 @@
 // that ends on a usage limit, a 429 or an expired login starts again straight away on the next account (then, if the
 // manager allows it, another coding agent's), with nothing counted against its task. The CEO's switches show in the
 // chat as a pill, agents' go to the CEO's next job; when every account is out the office pauses until the first is back.
+import path from 'node:path';
 import type { SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
 import type { AccountUse } from '../accounts.ts';
 import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
-import { allOutText, detectLimit, switchesForCeo, switchText, type LimitHit } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
-import { LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
+import { CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -20,6 +21,8 @@ const DEMO_LIMIT_MS = 3 * 60_000;
 const SIGN_IN_NOTICE_MS = 60 * 60_000;
 /** What an agent's fresh session on the next account hears first: its worktree is as the last one left it. */
 const SWITCHED_NOTE = 'Your previous session on this task stopped at an account limit; this is a fresh session on another account. Your worktree and branch are as it left them: check git status and carry on.';
+/** What an agent's session resumed on the next account hears: the task is already above. */
+const RESUMED_NOTE = 'Your session stopped at an account limit and now continues on another account. Carry on with the task from where you stopped.';
 
 export abstract class SwarmRotation extends SwarmUsage {
   /** Sessions running on each account: what the demo's "Simulate a limit" ends. */
@@ -39,9 +42,17 @@ export abstract class SwarmRotation extends SwarmUsage {
     const tried: string[] = [];
     let current: SessionHandle;
     let stopped = false;
+    let conversation = opts.resumeSessionId; // the session's conversation so far, for the next account to resume (#377)
     const attempt = (o: SessionOptions, oc: AccountCli, c: SessionCallbacks, use: AccountUse | null, sw: AccountSwitch | null) => {
       if (use) tried.push(use.id);
-      current = this.onUse(a, o, c, use, (result, hit) => {
+      const tracked: SessionCallbacks = {
+        ...c,
+        sessionId: (id) => {
+          conversation = id ?? undefined;
+          c.sessionId(id);
+        },
+      };
+      current = this.onUse(a, o, tracked, use, (result, hit) => {
         const why = result.ok || stopped || result.interrupted ? null : (hit ?? detectLimit([...result.errors, ...(o.terminal?.tail(8) ?? [])].join('\n'), Date.now()));
         if (sw?.api) sw.usd += result.costUsd;
         if (!use || !why) return cb.finished(result);
@@ -52,11 +63,13 @@ export abstract class SwarmRotation extends SwarmUsage {
         const until = why.kind === 'limited' ? why.until : null;
         const next = this.nextUse(a, oc, others, tried);
         if (!next) return this.allOut(cli, use.id, cb, result);
-        const s = this.accounts.switched({ at: Date.now(), agentId: a.id, agentName: a.name, fromId: use.id, from: this.accounts.label(use.id), toId: next.use.id, to: this.accounts.label(next.use.id), why: why.kind, until, api: next.api, usd: 0 });
-        this.tellSwitch(a, s);
-        // A fresh session (another account can't resume this one's conversation); on another coding agent, its model and tools.
+        // Claude logins share their conversations (#377), so the next one resumes this one's; else a fresh session with a
+        // handover, and on another coding agent its model and tools.
         const crossed = next.cli !== oc;
-        const retry: SessionOptions = { ...o, resumeSessionId: undefined, typed: false, reattach: false, ...(a.role === 'ceo' || o.readOnly || o.prompt.startsWith(SWITCHED_NOTE) ? {} : { prompt: `${SWITCHED_NOTE}\n\n${o.prompt}` }) };
+        const resumeId = !crossed && oc === 'claude' && conversation && this.accounts.sharesConversations(use.id) && this.accounts.sharesConversations(next.use.id) ? conversation : undefined;
+        const s = this.accounts.switched({ at: Date.now(), agentId: a.id, agentName: a.name, fromId: use.id, from: this.accounts.label(use.id), toId: next.use.id, to: this.accounts.label(next.use.id), why: why.kind, until, api: next.api, usd: 0, carried: resumeId ? 'conversation' : 'handover' });
+        this.tellSwitch(a, s);
+        const retry: SessionOptions = { ...o, resumeSessionId: resumeId, typed: false, reattach: false, prompt: resumeId ? (a.role === 'ceo' || opts.readOnly ? opts.prompt : RESUMED_NOTE) : this.freshPrompt(a, opts) };
         if (!crossed) return attempt(retry, oc, c, next.use, s);
         const onCli: SessionCallbacks = {
           ...c,
@@ -79,6 +92,13 @@ export abstract class SwarmRotation extends SwarmUsage {
         return current.kept;
       },
     };
+  }
+
+  /** A fresh session's prompt after a switch: an agent hears its worktree is as it was, a CEO that was mid-conversation gets a handover. */
+  private freshPrompt(a: PersistedAgent, opts: SessionOptions): string {
+    if (opts.readOnly) return opts.prompt;
+    if (a.role !== 'ceo') return `${SWITCHED_NOTE}\n\n${opts.prompt}`;
+    return opts.resumeSessionId ? `${switchHandover(this.state.messages, path.join(CEO_DIR, 'NOTES.md'))}\n\n${opts.prompt}` : opts.prompt;
   }
 
   /** One session on `use` (null: as before accounts). `ended`: the caller decides what its end means, given a limit it reported. */
@@ -125,7 +145,7 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /**
    * An account's own login folder, set up before a session starts in it (#360): onboarding done, the built-in login's
-   * theme, the worktree trusted, so the CLI opens on the task. The built-in login is the manager's own setup: untouched.
+   * theme, the worktree trusted, so the CLI opens on the task; a Claude login's linked to the shared set (#377). The built-in login is the manager's own setup: untouched.
    */
   private readyLogin(a: PersistedAgent, use: AccountUse, cli: AgentCli, cwd: string) {
     if (use.builtIn || cli === 'opencode') return;
@@ -134,6 +154,8 @@ export abstract class SwarmRotation extends SwarmUsage {
     try {
       const version = /\d+\.\d+\.\d+/.exec(this.clis.find((c) => c.id === cli)?.version ?? '')?.[0] ?? null;
       if (prepareLogin(cli, dir, [cwd], { version, prefs: builtInPrefs() })) this.appendLog(a, [{ kind: 'system', text: `✓ Set up ${this.accounts.label(use.id)}'s login folder: onboarding done, this worktree trusted.` }]);
+      const missing = cli === 'claude' ? this.accounts.share(use.id) : [];
+      if (missing.length) this.appendLog(a, [{ kind: 'error', text: `⚠ ${this.accounts.label(use.id)} doesn't share ${missing.join(', ')} with this computer's login: Repair it in Settings → Providers.` }]);
     } catch (err) {
       this.appendLog(a, [{ kind: 'error', text: `⚠ Couldn't set up ${this.accounts.label(use.id)}'s login folder: ${(err as Error).message}` }]);
     }
