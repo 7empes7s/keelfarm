@@ -211,6 +211,7 @@ interface CeoState {
   lastJob?: CeoJobNote | null; // the latest background job's reply and issues, for the digest (#330)
   jobs?: CeoJobRecord[]; // finished jobs' inputs, for Redo on Opus (#332, server/ceoRedo.ts)
   jobSeq?: number; // the last job's number
+  researchedAt?: number; // when the latest research job finished (#496), for the guide
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */

@@ -43,7 +43,7 @@ import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
 import { loadTaskAccounts, rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
-import { clampResearchMin } from './research.ts';
+import { clampResearchMin, pastResearch } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
@@ -365,6 +365,7 @@ export class Swarm extends SwarmLiveLeases {
     await this.journal.start();
     await this.spend.ledger.load().then(() => backfillWork(this.state.progress, this.spend.ledger.all(), this.state.agents)); // careers from before #205
     await this.history.load();
+    this.state.ceo.researchedAt ??= pastResearch({ history: this.history.all(), jobs: this.state.ceo.jobs ?? [], messages: this.state.messages }); // research from before #496
     void this.sweepHistory();
     // A fresh demo office has a month of spending to look at (the first sync may have written its merges already).
     if (this.backend.demo && !this.spend.ledger.all().some((r) => r.type === 'session') && this.backend.seedCosts) {

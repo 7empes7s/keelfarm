@@ -71,6 +71,7 @@ export abstract class SwarmCeoLog extends SwarmCeoFresh {
     if (run) run.ceo = { job: job.id, kind: job.kind, trigger: jobTrigger(job), fresh: !run.resumed, reply: jobReply(result.ok, this.jobMessage), message: this.jobMessage, tools: { ...this.ceoChat.tools }, issues, inputTokens: null, outputTokens: null, ...(job.redo && { redoOf: job.redo.job }) };
     if (again) return;
     const c = this.state.ceo;
+    if (job.kind === 'research' && (result.ok || this.jobMessage !== null)) c.researchedAt = Date.now(); // the guide's tick (#496)
     c.jobs = keepJob(c.jobs ?? [], { id: job.id, kind: job.kind, model: this.ceoRunModel, at: Date.now(), usd: result.costUsd, message: this.jobMessage, inputs: job });
     this.retag(this.jobMessage, { usd: Math.round(result.costUsd * 100) / 100 });
   }
