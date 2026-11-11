@@ -25,6 +25,7 @@ describe("the tour's spotlight (#408)", () => {
   it('moves the card clear of a target low on the screen, and centres it when its target is nowhere', () => {
     expect(cardPlace(box(0, 760, 390, 84), true, 844)).toBe('top');
     expect(cardPlace(box(300, 10, 44, 44), true, 844)).toBe('bottom');
+    expect(cardPlace(box(16, 90, 358, 1400), true, 844)).toBe('bottom'); // a charter page: its top stays in view
     expect(cardPlace(null, true, 844)).toBe('center');
     expect(cardPlace(null, false, 844)).toBe('bottom'); // a step about no control (the 3D walk-through)
   });

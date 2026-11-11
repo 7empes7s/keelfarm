@@ -27,9 +27,13 @@ export function pickSpot(candidates: readonly { box: Box; inCard: boolean; cover
   return candidates.find((c) => c.box.width > 0 && c.box.height > 0 && !c.inCard && !c.covered)?.box ?? null;
 }
 
-/** The card's place: clear of its target (above one low on the screen), centred when its target isn't on screen. */
+/**
+ * The card's place: clear of its target (above one low on the screen; below a page taller than half the screen, whose
+ * top says what it is), centred when its target isn't on screen.
+ */
 export function cardPlace(target: Box | null, pointsSomewhere: boolean, viewHeight: number): 'top' | 'bottom' | 'center' {
   if (!target) return pointsSomewhere ? 'center' : 'bottom';
+  if (target.height > viewHeight / 2) return 'bottom';
   return target.top + target.height / 2 > viewHeight * 0.55 ? 'top' : 'bottom';
 }
 
