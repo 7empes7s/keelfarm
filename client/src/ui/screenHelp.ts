@@ -148,6 +148,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Add a provider with its key, or sign in.', 'Test a key or an MCP server with one cheap call.', 'Pick which agents get an MCP server.'],
     docs: `${DOCS}accounts.md`,
   },
+  guides: {
+    title: 'Guides',
+    shows: 'The best setup for each kind of project: which coding agent does which job, the QA checks, the preview, the skills and providers it needs.',
+    actions: ['Pick what the company mainly makes.', 'Open a guide for a kind of project.', 'Search for an agent, check or provider.'],
+    docs: `${DOCS}guides/README.md`,
+  },
   accounts: {
     title: 'Providers & accounts',
     shows: 'Every login and API key the coding agents on this computer run on, with usage, status and cost.',

@@ -43,7 +43,7 @@ describe('every demo module is loaded', () => {
 const NOT_SHOWN = ['agent_detail', 'close_pull', 'configure_agent', 'define_experiment', 'session_history', 'set_dependencies', 'set_mandate'];
 
 describe('the demo CEO shows every CEO tool', () => {
-  const tools = ['ceo.ts', 'ceoWaitTools.ts', 'ceoReactTools.ts'].flatMap((f) => [...read(path.join(server, f)).matchAll(/\btool\(\s*'([a-z_]+)'/g)].map((m) => m[1]));
+  const tools = ['ceo.ts', 'ceoWaitTools.ts', 'ceoReactTools.ts', 'ceoSetupTool.ts'].flatMap((f) => [...read(path.join(server, f)).matchAll(/\btool\(\s*'([a-z_]+)'/g)].map((m) => m[1]));
   const demoFiles = [...fs.readdirSync(here).map((f) => path.join(here, f)), ...fs.readdirSync(server).filter((f) => /^demo[A-Z]\w*\.ts$/.test(f)).map((f) => path.join(server, f))].filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
   const demoCode = demoFiles.map(read).join('\n');
 

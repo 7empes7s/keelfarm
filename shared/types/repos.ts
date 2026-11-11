@@ -2,6 +2,7 @@
 import type { CharterView } from '../charter.ts';
 import type { FloorTheme } from '../floorThemes.ts';
 import type { FloorPracticeView } from '../practices.ts';
+import type { FloorSetupView } from './setup.ts';
 
 export interface IssueInfo {
   number: number;
@@ -86,6 +87,7 @@ export interface RepoView extends FloorPracticeView {
   preview: PreviewView;
   charter: CharterView; // the rest of the floor's charter (#48); `mission` above is its mission
   ciOutage?: CiOutageView | null; // GitHub won't run the floor's checks: QA-passed PRs wait for it, not for fixes (#191)
+  setup?: FloorSetupView; // its use case and setup gaps (#366); absent in an old journal
 }
 
 /** A floor's CI outage (#191): why, since when, and the QA-passed PRs parked until CI runs again. */
