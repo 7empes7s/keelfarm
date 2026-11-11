@@ -84,6 +84,14 @@ export class Lab {
     return e;
   }
 
+  /** An experiment by its id or name, for the CEO's run_experiment (#403). */
+  byRef(ref: string): Experiment {
+    const r = ref.trim().toLowerCase();
+    const e = this.experiments.find((x) => x.id.toLowerCase() === r) ?? this.experiments.find((x) => x.name.toLowerCase() === r);
+    if (!e) throw new HttpError(404, `No experiment "${ref}". There are: ${this.experiments.map((x) => `${x.name} [${x.id}]`).join(', ') || 'none'}.`);
+    return e;
+  }
+
   view(now = Date.now()): LabView {
     const { experiments, assignments } = this.st();
     const running = new Set(experiments.filter((e) => e.status === 'running').map((e) => e.id));
@@ -253,15 +261,15 @@ export class Lab {
     }
   }
 
-  /** company_status's line per experiment that runs or has results: the plain verdict and a winner to suggest. */
+  /** company_status's line per experiment, with its id: drafts, and the plain verdict and a winner to suggest for the rest. */
   summary(now = Date.now()): string[] {
     const { assignments } = this.st();
     return this.experiments
-      .filter((e) => e.status !== 'draft')
       .map((e) => {
+        if (e.status === 'draft') return `${e.name} (draft) [${e.id}]`;
         const r = experimentResult(e, assignments, now);
         const winner = r.winner && !e.promoted ? `; ${e.variants.find((v) => v.id === r.winner)?.name} looks like a winner: suggest the manager promotes it` : '';
-        return `${e.name} (${e.status}${e.promoted ? `, ${e.promoted.toUpperCase()} promoted` : ''}, ${r.variants.map((v) => `${v.id.toUpperCase()} n=${v.n}`).join(' ')}): ${r.summary}${winner}`;
+        return `${e.name} (${e.status}${e.promoted ? `, ${e.promoted.toUpperCase()} promoted` : ''}, ${r.variants.map((v) => `${v.id.toUpperCase()} n=${v.n}`).join(' ')}): ${r.summary}${winner} [${e.id}]`;
       });
   }
 }
