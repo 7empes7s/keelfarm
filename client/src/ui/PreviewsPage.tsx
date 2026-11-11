@@ -204,7 +204,8 @@ export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string
   const switcher = narrow && (
     <button className="btn btn-small pv-open-list" aria-haspopup="dialog" aria-label={name ? `All previews (showing ${name})` : 'All previews'} onClick={() => setSheet(true)}>
       {stage && <span className={`led led-${stage.led}`} aria-hidden />}
-      <span className="pv-open-name">{name ?? 'All previews'}</span> <Icon name="chevron-down" />
+      <span className="pv-open-name">{name ?? 'All previews'}</span>
+      <Icon name="chevron-down" />
     </button>
   );
   return (

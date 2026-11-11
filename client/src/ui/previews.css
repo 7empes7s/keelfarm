@@ -238,7 +238,9 @@
   min-width: 0;
 }
 .pv-open-name {
+  flex: 1;
   min-width: 0;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -264,7 +266,7 @@
 .app-toolbar.app-slim > .pv-open-list {
   flex: 1;
   justify-content: flex-start;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
 }
 .app-slim > .btn,
 .app-slim .ds-menu-wrap > .ds-btn {

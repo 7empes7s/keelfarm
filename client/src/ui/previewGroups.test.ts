@@ -151,11 +151,11 @@ describe('the deep link', () => {
 describe('the phone switcher (#382)', () => {
   const r = repo('todo', 1, [pull(23, 'Dark mode'), pull(20, 'Old one', { state: 'MERGED' })], { preview: preview('running') });
   it('names the PR on stage, with its light', () => {
-    expect(stageName(r, 23, { 'todo#23': prPreview('todo', 23, 'starting') })).toEqual({ name: 'todo · PR #23', led: 'busy' });
+    expect(stageName(r, 23, { 'todo#23': prPreview('todo', 23, 'starting') })).toEqual({ name: 'PR #23 · todo', led: 'busy' });
   });
   it('names main when the PR asked for is merged or missing', () => {
-    expect(stageName(r, 20, {})).toEqual({ name: 'todo · live app', led: 'live' });
-    expect(stageName(r, 99, {})).toEqual({ name: 'todo · live app', led: 'live' });
-    expect(stageName(r, null, {})).toEqual({ name: 'todo · live app', led: 'live' });
+    expect(stageName(r, 20, {})).toEqual({ name: 'main · todo', led: 'live' });
+    expect(stageName(r, 99, {})).toEqual({ name: 'main · todo', led: 'live' });
+    expect(stageName(r, null, {})).toEqual({ name: 'main · todo', led: 'live' });
   });
 });
