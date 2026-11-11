@@ -17,8 +17,8 @@ function tourTargets(): Set<string> {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) walk(p);
       else if (e.name.endsWith('.tsx') && !e.name.endsWith('.test.tsx'))
-        // data-tour="x", or data-tour={k === 'chat' ? 'chat' : undefined}: its last quoted word
-        for (const m of fs.readFileSync(p, 'utf8').matchAll(/data-tour=(?:"([a-z-]+)"|\{[^}]*'([a-z-]+)'[^}']*\})/g)) found.add(m[1] ?? m[2]);
+        // data-tour="x", a Menu's tour="x", or data-tour={k === 'chat' ? 'chat' : undefined}: its last quoted word
+        for (const m of fs.readFileSync(p, 'utf8').matchAll(/\b(?:data-)?tour=(?:"([a-z-]+)"|\{[^}]*'([a-z-]+)'[^}']*\})/g)) found.add(m[1] ?? m[2]);
     }
   };
   walk(src);
