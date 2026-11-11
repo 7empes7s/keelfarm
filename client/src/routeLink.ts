@@ -50,7 +50,10 @@ async function open(mode: Mode, hash: string, cold: boolean, stand?: (s: Stand) 
     await until(() => useStore.getState().floor === to && !useStore.getState().travel, READY_MS);
     await frame();
     await frame(); // the player has arrived on the floor (its spawn) before it's moved
-    if (mine !== seq || !(await until(() => stand(t.stand!), 5000))) return mine === seq && mark(hash, 'missing');
+    // a cold link's 3D view mounts the player only once its chunks load and the scene builds: give it the full wait
+    const stood = mine === seq && (await until(() => mine !== seq || stand(t.stand!), READY_MS));
+    if (mine !== seq) return;
+    if (!stood) return mark(hash, 'missing');
   }
   if (t.overlay && !(cold && t.native)) useStore.getState().openOverlay(t.overlay);
   const ok = await until(() => mine !== seq || !t.ready || !!document.querySelector(t.ready), READY_MS);

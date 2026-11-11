@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overlayRoute, parseRoute, routeHash, routeKind, routeTarget, ROUTES, sampleLinks, type Mode, type World } from './routes';
+import { linkedSection, overlayRoute, parseRoute, routeHash, routeKind, routeTarget, ROUTES, sampleLinks, type Mode, type World } from './routes';
 import { standPose, yawFor } from './world/routeStand';
 
 const world: World = {
@@ -81,6 +81,15 @@ describe('the route table (#413)', () => {
     expect(routeTarget(parseRoute('#agent/nobody/chat')!, world, 'office')).toBeNull();
     expect(routeTarget(parseRoute('#floor/9/kanban')!, world, 'pocket')).toBeNull();
     expect(routeTarget(parseRoute('#3d/lobby')!, world, 'pocket')).toBeNull();
+  });
+
+  it("pocket mode starts on every spelling of a console link it leaves to itself (native)", () => {
+    for (const h of ['#settings/providers', '#console/settings/providers', '#console/providers']) {
+      expect(routeTarget(parseRoute(h)!, world, 'pocket')?.native, h).toBe(true);
+      expect(linkedSection(h, 'pocket'), h).toBe('providers');
+    }
+    expect(linkedSection('#settings/timelapse', 'pocket')).toBeNull(); // the 3D office's only
+    expect(linkedSection('#tab/chat', 'pocket')).toBeNull();
   });
 });
 

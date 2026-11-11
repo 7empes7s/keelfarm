@@ -108,6 +108,14 @@ export function parseRoute(hash: string): Route | null {
   return null;
 }
 
+/** The console section a hash opens in `mode`, in any of its forms (#settings/providers, #console/providers…): pocket
+ * mode starts on it, so its cold console links open natively. */
+export function linkedSection(hash: string, mode: Mode): SectionId | null {
+  const r = parseRoute(hash);
+  const s = r?.to === 'console' ? sectionById(r.section) : undefined;
+  return s && (!s.only || s.only === mode) ? s.id : null;
+}
+
 /** A route's hash: the one link for it (parseRoute(routeHash(r)) is r). */
 export function routeHash(r: Route): string {
   switch (r.to) {
