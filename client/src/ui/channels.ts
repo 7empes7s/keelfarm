@@ -44,7 +44,7 @@ export interface LiveInputs {
 
 /**
  * The chips: main, then the open PRs an agent works on now, that have a preview starting or running, are on screen,
- * or were updated in the last `recentHours`. Every other open PR folds under one "Older (N)" chip. Merged or closed
+ * or were updated in the last `recentHours`. Every other open PR folds under the strip's More chip. Merged or closed
  * PRs never show (channelPulls).
  */
 export function liveChannels(pulls: PullInfo[], x: LiveInputs): { live: PullInfo[]; older: PullInfo[] } {
@@ -53,6 +53,47 @@ export function liveChannels(pulls: PullInfo[], x: LiveInputs): { live: PullInfo
   const older: PullInfo[] = [];
   for (const p of channelPulls(pulls)) (x.busy.has(p.number) || x.previewing.has(p.number) || x.current === p.number || recent(p) ? live : older).push(p);
   return { live, older };
+}
+
+/** A chip in the viewer's strip (#414): main (null) or a PR, `recent` when it's drawn in the Recent group. */
+export interface Chip {
+  channel: Channel;
+  recent: boolean;
+}
+
+/** Stopped PRs with a chip of their own in the Recent group; the rest go under More. */
+const RECENT_CHIPS = 4;
+
+/**
+ * The strip's order (#414): the one on screen, main, the other running previews by last use (`used`: a PR preview's
+ * viewedAt), then the last few live PRs in a Recent group; every other open PR goes under More.
+ */
+export function channelOrder(pulls: PullInfo[], x: LiveInputs & { used: Map<number, number> }): { chips: Chip[]; more: PullInfo[] } {
+  const { live, older } = liveChannels(pulls, x);
+  const updated = (p: PullInfo) => Date.parse(p.updatedAt ?? p.createdAt) || 0;
+  const byUse = (a: PullInfo, b: PullInfo) => (x.used.get(b.number) ?? 0) - (x.used.get(a.number) ?? 0) || updated(b) - updated(a) || b.number - a.number;
+  const current = x.current != null && live.some((p) => p.number === x.current) ? x.current : null;
+  const others = live.filter((p) => p.number !== current);
+  const running = others.filter((p) => x.previewing.has(p.number)).sort(byUse);
+  const rest = others.filter((p) => !x.previewing.has(p.number)).sort(byUse);
+  const chips: Chip[] = [{ channel: current, recent: false }];
+  if (current != null) chips.push({ channel: null, recent: false });
+  chips.push(...running.map((p) => ({ channel: p.number, recent: false })), ...rest.slice(0, RECENT_CHIPS).map((p) => ({ channel: p.number, recent: true })));
+  return { chips, more: [...rest.slice(RECENT_CHIPS), ...older] };
+}
+
+/**
+ * The strip while the viewer stays open: chips keep the places they had (`prev`), so picking one highlights it in
+ * place and nothing jumps under the pointer; chips that appear go at the end, those gone leave.
+ */
+export function keepOrder(prev: Chip[] | null, next: { chips: Chip[]; more: PullInfo[] }): { chips: Chip[]; more: PullInfo[] } {
+  if (!prev) return next;
+  const known = new Set<Channel>([...next.chips.map((c) => c.channel), ...next.more.map((p) => p.number)]);
+  const kept = prev.filter((c) => known.has(c.channel));
+  const had = new Set(kept.map((c) => c.channel));
+  const chips = [...kept, ...next.chips.filter((c) => !had.has(c.channel))];
+  const shown = new Set(chips.map((c) => c.channel));
+  return { chips, more: next.more.filter((p) => !shown.has(p.number)) };
 }
 
 /** The floor's PRs an agent is on now (preparing or working on a task that has a PR). */
@@ -98,6 +139,11 @@ export function standLabel(p: Pick<PreviewView, 'status' | 'heldBy' | 'pinned' |
   if (p.usedIn === 'app') return idleMin > 0 ? `Stops ${clockLeft(Math.max(idleMin, 1) * 60_000)} after you leave` : 'Never stops by itself';
   const stops = stopsLabel(p.stopsAt, now);
   return stops ? stops[0].toUpperCase() + stops.slice(1) : '';
+}
+
+/** The time in a stand label, for a phone's timer chip (#382): "1:00", "12 min"; '' when it has none (pinned, in use). */
+export function chipTime(label: string): string {
+  return /\d+:\d\d|\d+ min/.exec(label)?.[0] ?? '';
 }
 
 /** The channel on screen: the picked PR while it's still open, otherwise main. */

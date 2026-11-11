@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PreviewView, PrPreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
 import type { Agent } from '../store';
-import { ago, parsePreviewsHash, plainTitle, previewLists, previewsHash, previewsStats, rowMatches, statusWord, type ListInputs } from './previewGroups';
+import { ago, parsePreviewsHash, plainTitle, previewLists, previewsHash, previewsStats, rowMatches, stageName, statusWord, type ListInputs } from './previewGroups';
 
 const NOW = Date.parse('2026-11-07T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString();
@@ -78,6 +78,13 @@ describe('previewLists', () => {
     expect(previewLists({ ...input, current: 'web:pr-203' }, false).projects[0].rows.map((r) => r.pr)).toEqual([null, 202, 203]);
   });
 
+  it('puts what the page opened on first in Running now, then the live apps, then PRs by last use (#414)', () => {
+    const prPreviews = { 'api#7': { ...prPreview('api', 7, 'running'), viewedAt: NOW - 60_000 }, 'api#8': { ...prPreview('api', 8, 'running'), viewedAt: NOW - 1000 } };
+    const keys = (first: string | null) => previewLists({ ...input, prPreviews, first }, false).running.map((r) => r.key);
+    expect(keys(null)).toEqual(['web:main', 'api:pr-8', 'api:pr-7']);
+    expect(keys('api:pr-7')).toEqual(['api:pr-7', 'web:main', 'api:pr-8']);
+  });
+
   it('lists running previews: main apps and PRs that are up, with when they started', () => {
     const running = previewLists(input, false).running;
     expect(running.map((r) => r.key)).toEqual(['web:main', 'api:pr-7']);
@@ -138,5 +145,17 @@ describe('the deep link', () => {
     expect(previewsHash(3, null)).toBe('#previews/3/main');
     expect(previewsHash(null, null)).toBe('#previews');
     expect(parsePreviewsHash(previewsHash(4, 9))).toEqual({ floor: 4, pr: 9 });
+  });
+});
+
+describe('the phone switcher (#382)', () => {
+  const r = repo('todo', 1, [pull(23, 'Dark mode'), pull(20, 'Old one', { state: 'MERGED' })], { preview: preview('running') });
+  it('names the PR on stage, with its light', () => {
+    expect(stageName(r, 23, { 'todo#23': prPreview('todo', 23, 'starting') })).toEqual({ name: 'PR #23 · todo', channel: 'PR #23', project: 'todo', led: 'busy' });
+  });
+  it('names main when the PR asked for is merged or missing', () => {
+    expect(stageName(r, 20, {})).toEqual({ name: 'main · todo', channel: 'main', project: 'todo', led: 'live' });
+    expect(stageName(r, 99, {})).toEqual({ name: 'main · todo', channel: 'main', project: 'todo', led: 'live' });
+    expect(stageName(r, null, {})).toEqual({ name: 'main · todo', channel: 'main', project: 'todo', led: 'live' });
   });
 });

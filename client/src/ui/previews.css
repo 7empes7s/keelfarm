@@ -232,3 +232,85 @@
 .app-bare.panel-app-immersive .app-bare-head {
   display: none;
 }
+/* a phone's switcher shows what's on stage (#414): its name shortens, the chevron stays */
+.pv-open-list {
+  max-width: 100%;
+  min-width: 0;
+}
+.pv-open-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* only the project shortens: the channel (PR #89, main) always shows in full */
+.pv-open-name:has(> .pv-open-channel) {
+  display: flex;
+}
+.pv-open-channel,
+.pv-open-list > .led,
+.pv-open-list > svg {
+  flex: none;
+}
+.pv-open-project {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- a phone (#382): one slim bar, the app edge to edge ---------- */
+
+.panel-previews-phone > .panel-head {
+  display: none;
+}
+.panel-previews.panel-previews-phone > .panel-body {
+  padding: 0;
+}
+.panel-previews-phone .pv {
+  gap: 0;
+}
+.app-slim {
+  max-height: 52px;
+  margin: 0;
+  padding: var(--ds-space-1) max(var(--ds-space-1), env(safe-area-inset-right)) var(--ds-space-1) max(var(--ds-space-1), env(safe-area-inset-left));
+  gap: var(--ds-space-1);
+}
+.app-toolbar.app-slim > .pv-open-list {
+  flex: 1 0 auto;
+  justify-content: flex-start;
+  gap: var(--ds-space-1);
+  padding-inline: var(--ds-space-2);
+}
+/* the slim bar has room for the channel only (PR #485 beside a 📌 chip at 390 px): it never shortens there */
+.app-slim .pv-open-project {
+  display: none;
+}
+.app-slim .pv-open-name {
+  flex: none;
+  overflow: visible;
+}
+/* the chip, Full screen and ⋯ keep their size beside it */
+.app-slim > :not(.pv-open-list) {
+  flex-shrink: 0;
+}
+.app-slim > .btn,
+.app-slim .ds-menu-wrap > .ds-btn {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+}
+.use-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.app-bare:has(> .panel-body > div > .app-slim) .app-stage {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.app-bare:has(> .panel-body > div > .app-slim) .app-body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
