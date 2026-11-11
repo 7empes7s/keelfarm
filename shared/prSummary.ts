@@ -4,7 +4,7 @@
 const SUMMARY_MAX = 240;
 
 /** Markdown to plain text, one line: links keep their words, code and emphasis lose their marks. */
-function plain(md: string): string {
+export function plain(md: string): string {
   return md
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')

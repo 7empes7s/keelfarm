@@ -10,7 +10,7 @@ import { demoSignedIn } from '../demoAccounts.ts';
 import { HOME_DIR } from '../config.ts';
 import { withDemoChat } from '../demoAgentChat.ts';
 import { demoConsultSession } from '../demoAwake.ts';
-import { demoPrFiles, demoPrSummary } from '../demoMap.ts';
+import { demoPrFiles, demoPrSummary, demoTryIt } from '../demoMap.ts';
 import { demoAsked, demoAsks } from '../demoPrompts.ts';
 import { withLab } from '../demoTestLab.ts';
 import { demoTranscript } from '../historySample.ts';
@@ -173,6 +173,12 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
           ],
           screenshots: ['Home page', 'The changed page at 375px', ...(full ? ['Full quality · the changed scene at 1280px'] : [])],
           fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
+          // QA's version of the PR's steps: the last one fails with the toolbar on a phone
+          tryIt: (repos.get(fullName)?.pulls.find((p) => p.number === number)?.tryIt ?? []).map((s, i, all) => ({
+            step: s.path ? s.text.replace(s.path, `\`${s.path}\``) : s.text,
+            result: pass || i < all.length - 1 ? 'pass' : 'fail',
+            ...(!pass && i === all.length - 1 && { note: 'At 375 px the toolbar overflows and the new button is cut off' }),
+          })),
         },
       });
       return;
@@ -220,6 +226,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
         pendingChecks: [],
         files: demoPrFiles(fullName, repo.issues.find((i) => i.number === number), number),
         summary: demoPrSummary(repo.issues.find((i) => i.number === number)),
+        tryIt: demoTryIt(title, n),
       });
       runChecks(repo.pulls[0]);
       cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);

@@ -47,6 +47,8 @@ export interface PullInfo {
   files?: string[];
   /** Its body's first paragraph as plain text (shared/prSummary.ts), for the app viewer's "What this PR changes" (#203). */
   summary?: string;
+  /** Its body's "## Try it" steps (shared/tryIt.ts, #381), open ones only. The sync takes them off (takeSteps), so the snapshot never carries them; GET …/try-it reads them. */
+  tryIt?: TryStep[];
   author?: string | null;
   isCrossRepository?: boolean;
   /** From a fork or an untrusted author: never QA'd, fixed, previewed or merged by the office (set by the sync, #185). */
@@ -64,6 +66,14 @@ export interface MergedPage {
   /** Every merged PR on GitHub (its search caps paging at 1000). */
   total: number;
   pulls: { number: number; title: string; url: string; mergedAt: string | null; author: string | null }[];
+}
+
+/** A "Try this" step (#381): what to do in the preview, its page, and QA's result and note when QA followed it. */
+export interface TryStep {
+  text: string;
+  path?: string; // the page to open in the preview
+  result?: 'pass' | 'fail' | 'skip';
+  note?: string;
 }
 
 export interface RepoView extends FloorPracticeView {

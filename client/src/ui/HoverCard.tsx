@@ -4,6 +4,7 @@ import { createPeek, placePeek, type Box, type PeekController, type PeekMode } f
 import { pushLayer } from './backStack';
 import './hoverCard.css';
 import { Icon } from './Icon';
+import { useAnchored } from './Popover';
 
 // Hover cards (#213): explain or preview a thing in place. A card after 350 ms of hover or keyboard focus, beside its
 // trigger and never over the CEO chat; a small sheet after a long-press on touch, while a tap still does the trigger's
@@ -61,18 +62,22 @@ export function usePeek() {
   return { mode, ctl: c, anchor, card, id, trigger };
 }
 
-/** The card (or sheet) itself, drawn into the page's body. */
-export function Peek({ peek, label, children }: { peek: ReturnType<typeof usePeek>; label: string; children: ReactNode }) {
+/**
+ * The card (or sheet) itself, drawn into the page's body. `anchored`: a header button's (#416), the card goes under it
+ * on the header popovers' layer with an arrow at it (Popover.tsx), never moved off the CEO chat.
+ */
+export function Peek({ peek, label, anchored, children }: { peek: ReturnType<typeof usePeek>; label: string; anchored?: 'center' | 'end'; children: ReactNode }) {
   const { mode, ctl, anchor, card, id } = peek;
   const [pos, setPos] = useState<{ left: number; top: number; side: string } | null>(null);
+  const header = useAnchored(!!anchored && mode === 'card', anchor, card, anchored);
   useLayoutEffect(() => {
-    if (mode !== 'card') return setPos(null);
+    if (mode !== 'card' || anchored) return setPos(null);
     const a = anchor.current?.getBoundingClientRect();
     const el = card.current;
     if (!a || !el) return;
     const avoid = [...document.querySelectorAll(AVOID)].filter((x) => !x.contains(anchor.current)).map((x) => toBox(x.getBoundingClientRect())).filter((b) => b.right > b.left);
     setPos(placePeek(toBox(a), el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight, avoid));
-  }, [mode, anchor, card]);
+  }, [mode, anchor, card, anchored]);
   useEffect(() => {
     if (!mode) return;
     const inside = (t: EventTarget | null) => !!t && (card.current?.contains(t as Node) || anchor.current?.contains(t as Node));
@@ -108,8 +113,8 @@ export function Peek({ peek, label, children }: { peek: ReturnType<typeof usePee
         id={id}
         role={sheet ? 'dialog' : 'tooltip'}
         aria-label={label}
-        className={`peek ${sheet ? 'peek-sheet' : `peek-card peek-${pos?.side ?? 'bottom'}`}`}
-        style={sheet ? undefined : pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }}
+        className={`peek ${sheet ? 'peek-sheet' : `peek-card peek-${anchored ? `${header.side} peek-anchored` : (pos?.side ?? 'bottom')}`}`}
+        style={sheet ? undefined : anchored ? header.style : pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }}
         onPointerEnter={(e) => e.pointerType === 'mouse' && ctl.hoverIn()}
         onPointerLeave={(e) => e.pointerType === 'mouse' && ctl.hoverOut()}
         onBlur={(e) => !card.current?.contains(e.relatedTarget as Node) && e.relatedTarget !== anchor.current && ctl.close()}
@@ -119,6 +124,7 @@ export function Peek({ peek, label, children }: { peek: ReturnType<typeof usePee
           if ((e.target as Element).closest('button, a')) ctl.close();
         }}
       >
+        {anchored && !sheet && <i className="pop-arrow" aria-hidden />}
         {sheet && (
           <button type="button" className="peek-x" aria-label="Close" onClick={() => ctl.close()}>
             <Icon name="x" />

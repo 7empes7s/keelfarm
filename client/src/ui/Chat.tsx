@@ -15,6 +15,8 @@ import { itemOf, MessageActions, who, type Item } from './ChatActions';
 import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
 import { firstPaintFrom, firstUnread as firstUnreadId } from '../../../shared/chatPage';
 import { messageActions } from './chatMessageActions';
+import { messageCommands } from './codeBlock';
+import { copyText } from './clipboard';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
 import { DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
@@ -294,6 +296,8 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
       removal: removals.action(m),
       // The voice reads the CEO's short summary (#282); this reads all of it.
       readWhole: useStore.getState().settings.voice.provider !== 'off' ? () => void import('./voiceMessages').then((v) => v.replayMessage(m, 'whole')) : undefined,
+      commands: messageCommands(m.text),
+      copy: (t) => void copyText(t).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied all commands' : "Couldn't reach the clipboard")),
     });
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
