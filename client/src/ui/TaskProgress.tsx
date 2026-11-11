@@ -5,6 +5,7 @@ import { leadPace, STAGE_LABELS, TASK_STAGES, taskStage, type TaskInput } from '
 import type { QaView, RepoView } from '../../../shared/types';
 import { qaKey, useStore, type Agent } from '../store';
 import { ProgressBar, ProgressRing } from './ProgressBar';
+import { prPage } from './prNav';
 
 const LABELS = TASK_STAGES.map((s) => STAGE_LABELS[s]);
 
@@ -49,13 +50,22 @@ export function TaskBar({ input, repoId, since, name, compact, onClick, href, ta
   );
 }
 
-/** The ring form, for an avatar or a tight card: the agent's task stage; with `link`, a 44 px link to their PR. */
+/** The ring form, for an avatar or a tight card: the agent's task stage; with `link`, a 44 px tap to their PR's page (#407), else GitHub. */
 export function TaskRing({ agent, link }: { agent: Agent; link?: boolean }) {
   const qa = useStore((s) => (agent.prNumber ? s.qa[qaKey(agent.repoId, agent.prNumber)] : undefined));
+  const repo = useStore((s) => s.repos.find((r) => r.id === agent.repoId));
   const st = taskStage(agentTask(agent, qa));
   if (!st) return null;
   const aria = `${agent.name}'s task: ${st.label}, stage ${Math.min(st.at + 1, LABELS.length)} of ${LABELS.length}`;
   const ring = <ProgressRing steps={{ labels: LABELS, at: st.at }} tone={st.tone} aria={aria} />;
+  const page = link && repo && agent.prNumber ? prPage(repo, agent.prNumber) : null;
+  if (page) {
+    return (
+      <button type="button" className="pr-link" onClick={() => useStore.getState().openOverlay(page)} aria-label={`${aria}. Open PR #${agent.prNumber}'s page`} title={`${st.label}: open PR #${agent.prNumber}`}>
+        {ring}
+      </button>
+    );
+  }
   if (!link || !agent.prUrl) return ring;
   return (
     <a className="pr-link" href={agent.prUrl} target="_blank" rel="noreferrer" aria-label={`${aria}. Open PR #${agent.prNumber} on GitHub`} title={`${st.label}: open PR #${agent.prNumber}`}>
