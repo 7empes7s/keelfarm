@@ -12,6 +12,10 @@ export interface RefContext {
   agents: readonly { id: string; name: string }[]; // who can be @named (not the CEO)
   /** The file is a plain file on the floor's main checkout: refs to missing ones stay text. */
   hasFile: (repoId: string, path: string) => boolean;
+  /** Whether issue or PR `n` is on that floor's board, for a bare `#N` (#505). */
+  hasNumber?: (repoId: string, n: number) => boolean;
+  /** The floor the message is from (an agent's question): a bare `#N` means it there, unless a floor is named before it. */
+  home?: string;
 }
 
 /** A repo-relative path as refs keep it (forward slashes), or null: absolute, climbing out, under .git or a .env file. */
@@ -92,12 +96,18 @@ export function parseRefs(text: string, ctx: RefContext): ChatRef[] {
     add(m.index, m.index + m[0].length, repoId ? { kind: 'floor', repoId } : null);
   }
 
-  // #N on its own: the nearest floor named before it, else the first one the message names, else the only floor.
+  // #N on its own: the nearest floor named before it, else the sender's floor, else the first one the message names, else
+  // the only floor. A guess that isn't on its board gives way to the floors whose boards have it (more than one: `alts`).
   for (const m of text.matchAll(ISSUE)) {
     const at = m.index + m[1].length;
-    const before = mentions.filter((f) => f.index < at).pop() ?? mentions[0];
-    const repoId = before ? repoOf(before[1]) : ctx.floors.length === 1 ? ctx.floors[0].repoId : undefined;
-    add(at, at + 1 + m[2].length, repoId ? { kind: 'issue', repoId, number: Number(m[2]) } : null);
+    const n = Number(m[2]);
+    const before = mentions.filter((f) => f.index < at).pop();
+    const guess = before ? repoOf(before[1]) : (ctx.home ?? (mentions[0] ? repoOf(mentions[0][1]) : ctx.floors.length === 1 ? ctx.floors[0].repoId : undefined));
+    const boards = !before && ctx.hasNumber ? ctx.floors.filter((f) => ctx.hasNumber!(f.repoId, n)).map((f) => f.repoId) : [];
+    const onBoards = boards.length > 0 && !(guess && boards.includes(guess));
+    const repoId = onBoards ? boards[0] : guess;
+    const alts = onBoards ? boards.slice(1) : [];
+    add(at, at + 1 + m[2].length, repoId ? { kind: 'issue', repoId, number: n, ...(alts.length && { alts }) } : null);
   }
   return found.sort((a, b) => a.start - b.start).slice(0, MAX_REFS);
 }

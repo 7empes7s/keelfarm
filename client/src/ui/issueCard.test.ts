@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryEntry } from '../../../shared/history';
-import { acceptanceProgress, checklist, issueCost, issueTimeline, splitSections, stageAt } from './issueCard';
+import { acceptanceProgress, checklist, goneCard, issueCost, issueTimeline, splitSections, stageAt } from './issueCard';
 
 const BODY = [
   'Objective: O1',
@@ -135,5 +135,19 @@ describe('issueCost', () => {
 
   it('has no median with too little to compare', () => {
     expect(issueCost(mine, mine, work, '#7').median).toBeNull();
+  });
+});
+
+describe('goneCard', () => {
+  const pull = { number: 1084, title: 'Fix it', url: 'https://github.com/o/r/pull/1084', state: 'MERGED' as const, closesIssues: [1083], mergedAt: '2026-11-10T10:00:00Z', createdAt: '2026-11-09T10:00:00Z' };
+  it('says what a merged or closed card was, from its PR, with both links (#505)', () => {
+    const merged = { title: 'Fix it', state: 'merged', at: '2026-11-10T10:00:00Z', issueUrl: 'https://github.com/o/r/issues/1083', prUrl: pull.url };
+    expect(goneCard('o/r', [pull], 1083, false)).toEqual(merged);
+    expect(goneCard('o/r', [pull], 1084, true)).toEqual(merged);
+    expect(goneCard('o/r', [{ ...pull, state: 'CLOSED', mergedAt: null, updatedAt: '2026-11-11T00:00:00Z' }], 1084, true)).toMatchObject({ state: 'closed', at: '2026-11-11T00:00:00Z' });
+  });
+  it('links to GitHub when the floor no longer knows it', () => {
+    expect(goneCard('o/r', [], 7, false)).toEqual({ title: null, state: null, at: null, issueUrl: 'https://github.com/o/r/issues/7', prUrl: null });
+    expect(goneCard('o/r', [], 8, true)).toMatchObject({ issueUrl: 'https://github.com/o/r/issues/8', prUrl: 'https://github.com/o/r/pull/8' });
   });
 });

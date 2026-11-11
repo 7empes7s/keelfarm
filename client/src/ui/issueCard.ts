@@ -174,3 +174,31 @@ export function issueCost(mine: readonly HistoryEntry[], floor: readonly History
     median: totals.size >= 3 ? median([...totals.values()]) : null,
   };
 }
+
+// ---------- a card that's gone ----------
+
+export interface GoneCard {
+  title: string | null;
+  /** 'merged' or 'closed' when the office still knows its PR, else null (closed, or not on this floor). */
+  state: 'merged' | 'closed' | null;
+  /** When it merged or was last touched, as GitHub said. */
+  at: string | null;
+  issueUrl: string;
+  prUrl: string | null;
+}
+
+type GonePull = { number: number; title: string; url: string; state: 'OPEN' | 'CLOSED' | 'MERGED'; closesIssues: number[]; mergedAt: string | null; updatedAt?: string; createdAt: string };
+
+/** What a card no longer on the board was (#505): its PR (by number, or the one that closed the issue) if the floor still knows it, and its GitHub links. */
+export function goneCard(fullName: string, pulls: readonly GonePull[], number: number, pr: boolean): GoneCard {
+  const pull = pulls.find((p) => p.number === number) ?? (pr ? undefined : pulls.find((p) => p.closesIssues.includes(number)));
+  const done = pull && pull.state !== 'OPEN' ? pull : undefined;
+  const issue = pull?.number === number ? pull.closesIssues[0] : number; // GitHub sends /issues/<a PR> on to the PR
+  return {
+    title: pull?.title ?? null,
+    state: done ? (done.state === 'MERGED' ? 'merged' : 'closed') : null,
+    at: done ? (done.mergedAt ?? done.updatedAt ?? done.createdAt) : null,
+    issueUrl: `https://github.com/${fullName}/issues/${issue ?? number}`,
+    prUrl: pull?.url ?? (pr ? `https://github.com/${fullName}/pull/${number}` : null),
+  };
+}
