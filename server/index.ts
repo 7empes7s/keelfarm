@@ -350,6 +350,7 @@ app.delete('/api/providers/mcp/:id', route(async (req) => ({ removed: await swar
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
+app.post('/api/accounts/:id/default', route((req) => ({ note: swarm.makeDefaultAccount(String(req.params.id), (req.body ?? {}).now === true) })));
 app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
 app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
 app.post('/api/accounts/:id/share', route((req) => ({ note: swarm.accounts.repairShare(String(req.params.id)) })));
