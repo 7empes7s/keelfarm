@@ -6,6 +6,10 @@
   margin: 2px 0 6px 6px;
 }
 .suggestion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-target); /* a 44px tap, its words centred (#514) */
   font-size: 0.8rem;
   font-weight: 600;
   padding: 5px 11px;
@@ -17,7 +21,7 @@
   text-align: left;
 }
 .suggestion-chip:hover {
-  background: #ffe2cf;
+  background: color-mix(in srgb, var(--accent) 22%, var(--ds-surface-raised));
 }
 .artifact-card {
   display: flex;
