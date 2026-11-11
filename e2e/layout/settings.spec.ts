@@ -7,6 +7,14 @@ import { dialog, pocketSection } from './helpers';
 
 const LONG_NAME = 'OpenRouter key for the whole company team, production use'; // 57 of the 60 a name may have
 
+/** A Settings section from the phone's list, by its row in the Settings group (Work has a Team too). */
+async function settingsSection(root: Locator, label: string) {
+  const back = root.getByRole('button', { name: 'Back to settings' });
+  if (await back.isVisible()) await back.click();
+  await root.getByRole('region', { name: 'Settings', exact: true }).getByRole('button', { name: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?! &)`) }).click();
+  await expect(root.getByRole('region', { name: label, exact: true })).toBeVisible();
+}
+
 async function pocketSettings(page: Page, width = 390) {
   await page.setViewportSize({ width, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -39,7 +47,7 @@ test('every Settings section fits a 390px phone, reads in order and says nothing
   const problems: string[] = [];
   for (const s of sectionsIn('settings', 'pocket')) {
     for (const x of await page.locator('.toasts .notice-x').all()) if (await x.isVisible()) await x.click(); // demo toasts over Back
-    await pocketSection(root, s.label);
+    await settingsSection(root, s.label);
     await page.waitForTimeout(300); // lazy sections and settled layout
     for (const p of [...(await overflowProblems(root)), ...(await sectionProblems(root))]) problems.push(`${s.label}: ${p}`);
   }
