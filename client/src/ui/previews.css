@@ -278,17 +278,20 @@
   gap: var(--ds-space-1);
 }
 .app-toolbar.app-slim > .pv-open-list {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
+  flex: 1 0 auto;
   justify-content: flex-start;
   gap: var(--ds-space-1);
+  padding-inline: var(--ds-space-2);
 }
-/* beside the timer chip there's room for the channel only (PR #123 and a 📌 chip at 390 px) */
-.app-slim:has(> .use-chip) .pv-open-project {
+/* the slim bar has room for the channel only (PR #485 beside a 📌 chip at 390 px): it never shortens there */
+.app-slim .pv-open-project {
   display: none;
 }
-/* only the switcher gives way in the slim bar: the chip, Full screen and ⋯ keep their size */
+.app-slim .pv-open-name {
+  flex: none;
+  overflow: visible;
+}
+/* the chip, Full screen and ⋯ keep their size beside it */
 .app-slim > :not(.pv-open-list) {
   flex-shrink: 0;
 }

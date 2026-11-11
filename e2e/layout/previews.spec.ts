@@ -82,22 +82,31 @@ test('the deep link opens the right preview, and picking one updates the address
   expect(new URL(page.url()).hash).toBe('');
 });
 
-test('at 390px with a PR running, the slim bar shows its whole PR number inside the switcher, beside the timer chip', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/?pocket=1&tab=company#previews/1/main');
-  const dialog = page.getByRole('dialog', { name: /Previews/ });
-  await dialog.locator('.pv-open-list').click();
-  const pr = page.locator('.pv-list .pv-row', { hasText: /PR #\d+/, has: page.locator('.led-live') }).first();
-  test.skip(!(await pr.count()), 'no PR preview running in the demo yet');
-  const n = (await pr.locator('.pv-row-meta').innerText()).match(/PR #(\d+)/)![1];
-  await pr.click();
-  const bar = dialog.locator('.app-slim');
-  await expect(bar.locator('.use-chip')).toBeVisible();
-  await expect(bar.locator('.pv-open-channel')).toHaveText(`PR #${n}`);
-  const fit = await bar.evaluate((el) => {
-    const box = (s: string) => el.querySelector(s)!.getBoundingClientRect();
-    const [btn, channel, chevron, chip] = [box('.pv-open-list'), box('.pv-open-channel'), box('.pv-open-list > svg:last-child'), box('.use-chip')];
-    return { channelInside: channel.right <= chevron.left, chevronInside: chevron.width > 0 && chevron.right <= btn.right, clearOfChip: btn.right <= chip.left, rowWidth: el.scrollWidth <= el.clientWidth };
+for (const pinned of [false, true]) {
+  test(`at 390px with a PR running${pinned ? ' and kept an hour' : ''}, the switcher shows a whole 3-digit PR number beside the chip`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/?pocket=1&tab=company#previews/3/pr-9');
+    const bar = page.getByRole('dialog', { name: /Previews/ }).locator('.app-slim');
+    await expect(bar.locator('.use-chip')).toBeVisible();
+    await expect(bar.locator('.pv-open-channel')).toHaveText('PR #9');
+    if (pinned) {
+      const before = await bar.locator('.use-chip').getAttribute('aria-label');
+      await bar.getByRole('button', { name: /More for the app/ }).click();
+      await page.getByRole('menuitem', { name: /^Keep running 1 h/ }).click();
+      await expect(bar.locator('.use-chip')).not.toHaveAttribute('aria-label', before ?? '');
+    }
+    const fit = await bar.evaluate((el) => {
+      el.querySelector('.pv-open-channel')!.textContent = 'PR #485'; // real repos' numbers are three digits
+      const get = (s: string) => el.querySelector(s)!;
+      const box = (s: string) => get(s).getBoundingClientRect();
+      const [btn, name, channel, chevron, chip] = [box('.pv-open-list'), box('.pv-open-name'), box('.pv-open-channel'), box('.pv-open-list > svg:last-child'), box('.use-chip')];
+      return {
+        channelWhole: channel.right <= name.right + 0.5 && get('.pv-open-name').scrollWidth <= get('.pv-open-name').clientWidth + 1,
+        nameInside: name.right <= chevron.left && chevron.width > 0 && chevron.right <= btn.right,
+        clearOfChip: btn.right <= chip.left,
+        rowWidth: el.scrollWidth <= el.clientWidth,
+      };
+    });
+    expect(fit).toEqual({ channelWhole: true, nameInside: true, clearOfChip: true, rowWidth: true });
   });
-  expect(fit).toEqual({ channelInside: true, chevronInside: true, clearOfChip: true, rowWidth: true });
-});
+}
