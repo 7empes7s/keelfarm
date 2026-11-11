@@ -514,6 +514,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       key: `a-${a.id}`,
       number: a.issueNumber,
       title: a.issueTitle ?? '',
+      url: repo.issues.find((i) => i.number === a.issueNumber)?.url,
       agent: a,
       note,
       tone: a.status === 'error' ? 'bad' : a.status === 'stopped' || a.status === 'done' ? 'warn' : undefined,

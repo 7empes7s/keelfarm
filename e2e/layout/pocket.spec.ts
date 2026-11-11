@@ -9,7 +9,7 @@ const SCREENS: Screen[] = [
   { name: 'pocket team', widths: POCKET, open: (page) => pocket(page, 'team'), tabs: [] },
   { name: 'pocket approvals', widths: POCKET, open: (page) => pocket(page, 'approvals'), tabs: [] },
   // the demo's stuck PR (#155): its details page, opened from its Kanban card
-  { name: 'pocket PR details (#155)', widths: [360, 390, 430], open: async (page) => (await (await pocket(page, 'kanban')).locator('.kcard', { hasText: 'sticky action bar' }).first().locator('button.linkish').click(), dialog(page, /PR #/)), tabs: [] },
+  { name: 'pocket PR details (#155)', widths: [360, 390, 430], open: async (page) => (await (await pocket(page, 'kanban')).locator('.kcard', { hasText: 'sticky action bar' }).first().locator('button.kcard-num').click(), dialog(page, /PR #/)), tabs: [] },
   {
     name: 'approvals: a design proposal (#209)',
     widths: POCKET,
