@@ -40,7 +40,7 @@ import { CeoChat } from './ceoChat.ts';
 import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
-import { rotationSettings } from '../shared/accountRotation.ts';
+import { loadTaskAccounts, rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
 import { clampResearchMin } from './research.ts';
@@ -68,7 +68,7 @@ import {
 } from './swarm/model.ts';
 import { FLOOR_THEMES, lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmDisk } from './swarm/disk.ts';
+import { SwarmSetup } from './swarm/setup.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -76,7 +76,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmDisk {
+export class Swarm extends SwarmSetup {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null);
 
   // ---------- lifecycle ----------
@@ -152,7 +152,7 @@ export class Swarm extends SwarmDisk {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
-        experiments: loadLab(loaded.experiments, Date.now()),
+        experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
@@ -275,7 +275,7 @@ export class Swarm extends SwarmDisk {
     if (seeded) {
       // The demo opens on a busy office; the tutorial still runs so it can be tried.
       Object.assign(this.state.settings, { setupDone: true, managerName: 'Demo Manager', companyName: 'Demo Co.' });
-      for (const r of await this.backend.listMyRepos()) {
+      for (const r of (await this.backend.listMyRepos()).filter((x) => !this.backend.demoSetup?.().spare.includes(x.nameWithOwner))) { // the spare one waits to be moved in by hand (#366)
         const repo = await this.connectRepo(r.nameWithOwner);
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
@@ -356,7 +356,7 @@ export class Swarm extends SwarmDisk {
     setTimeout(() => this.greet(), 5000);
     setInterval(() => void this.files.sweep(), SWEEP_MS).unref();
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
-    setInterval(() => this.notifyStuck(), 60_000);
+    setInterval(() => (this.notifyStuck(), this.watchDefaults()), 60_000); // watchDefaults: a default back from its limit (#390)
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);

@@ -10,6 +10,7 @@ import type { TestLabSettings } from '../testLab.ts';
 import type { ThemeSettings } from '../themes.ts';
 import type { ToolSettings } from '../tooling.ts';
 import type { RotationSettings } from './accounts.ts';
+import type { UseCase } from './setup.ts';
 import type { AgentCli, AgentRuntime, CloudSettings, EffortLevel } from './agents.ts';
 import type { NotifySettings } from './notify.ts';
 import type { UsageWarningChoice } from './office.ts';
@@ -33,6 +34,7 @@ export interface SwarmSettings {
   ceoAwake: CeoAwakeSettings; // Settings → The CEO: its kept session, waits and consults (shared/ceoAwake.ts)
   managerName: string; // what the office calls you
   companyName: string;
+  companyUseCases?: UseCase[]; // what the company mainly makes (#366): floors of another kind get a setup checklist
   dogName: string; // the office dog's name, on its tag and in the hint when you aim at it
   projectsDir: string; // where your project folders live; new projects are created here
   setupDone: boolean; // the first-run setup wizard has been completed or skipped

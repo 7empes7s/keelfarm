@@ -3,7 +3,8 @@
 import type { Swarm } from '../swarm.ts';
 import type { CeoChat } from '../ceoChat.ts';
 import type { VoiceKeyView } from '../voice.ts';
-import type { PersistedAgent } from './model.ts';
+import type { UseCase } from '../../shared/types.ts';
+import type { PersistedAgent, PersistedRepo } from './model.ts';
 
 export abstract class SwarmContract {
   protected abstract ceoChat: CeoChat; // the CEO chat's live reply, office calls and threads (swarm.ts)
@@ -31,6 +32,9 @@ export abstract class SwarmContract {
   // cloudCredit.ts
   protected abstract creditSignIn(...a: Parameters<Swarm['creditSignIn']>): ReturnType<Swarm['creditSignIn']>;
   protected abstract offKey(...a: Parameters<Swarm['offKey']>): ReturnType<Swarm['offKey']>;
+
+  // rotation.ts (protected there)
+  protected abstract runningTaskAccounts(): string[];
 
   // sessions.ts
   protected abstract clearPrepStrikes(...a: Parameters<Swarm['clearPrepStrikes']>): ReturnType<Swarm['clearPrepStrikes']>;
@@ -62,6 +66,11 @@ export abstract class SwarmContract {
   protected abstract officeUpdateTick(...a: Parameters<Swarm['officeUpdateTick']>): ReturnType<Swarm['officeUpdateTick']>;
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
+
+  // setup.ts (protected there)
+  protected abstract setupBlocks(agentId: string): boolean;
+  protected abstract floorSetupLine(r: PersistedRepo): string;
+  protected abstract ceoApplySetup(x: { floor: number; use_case?: UseCase; gap?: string }): string;
 
   // reactions.ts (protected there)
   protected abstract markQuiet(messageIds: number[]): void;

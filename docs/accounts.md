@@ -55,8 +55,25 @@ coding agent, and agents never fall back to it.
 Agents and the CEO run on the **rotation** by default: the first account of their coding agent that isn't paused, top
 first (⋯ → Move up / down). Pin one to an account or a **tag** ("max", "api", "backup") in their setup (Team, or the
 CEO's card), or ask the CEO (`configure_agent` with `account`). A pinned account runs them even while it's paused.
-A session that resumes on a different account than it started on can't find its conversation: keep an agent on one
-account while a task is open.
+
+## Make default, Switch now and task stickiness (#390)
+
+A build or fix task stays on the account its first session started on: its resumes, QA fix rounds and follow-ups run
+there while that account is usable (not paused, Limited, Signed out or at 95%). When it's out, rotation's fallback
+applies (a fresh session on the next account, told its worktree is as it was) and the task stays on the new one. QA
+runs are fresh sessions each round and follow the rotation.
+
+- **Make default** (⋯ on an account, or the CEO's `make_default_account`) puts it first of its coding agent's. New
+  tasks start on it; agents in the middle of a task finish it where they are. The chat says so ("Ultra is the default
+  now: new tasks start on it; 3 agents finish their current task on Pro first.") and Mission control → Account rotation
+  and Providers & accounts show "switching: 3 tasks left on Pro" until they're done.
+- **Switch now** (⋯, after a confirmation; `switch_now` for the CEO) also moves open tasks, at their next session: a
+  fresh session on the default in the same worktree, without its conversation. For when the old account must stop.
+- **The CEO** follows the default for each job: a kept session on another account starts again at the next job, never
+  mid-reply (a kept CLI is only picked up again on the account it runs on).
+- **Coming back**: fallback never reorders accounts, so a default that was Limited (5-hour or weekly) is first again at
+  its reset, with one chat line ("Ultra is back: new tasks start on it again."). Open tasks on the fallback finish
+  where they are. No pins needed either way.
 
 ## Automatic fallback
 
@@ -90,7 +107,7 @@ limit** on an account limits it for 3 minutes and switches the sessions running 
 Each card shows a status chip (Ready, Near limit at 80%, Limited until …, Signed out or No key, Paused), the 5-hour and
 weekly bars for Claude subscriptions (read every 12 minutes, as the idle meter does), today's sessions and cost from
 the cost ledger, limit hits in the last 7 days, and who is pinned to it. API keys can have a daily cost cap: over it,
-the account shows Limited until midnight. The ⋯ menu has Sign in again, Test, Pause/Resume, Move up/down, Rename and
+the account shows Limited until midnight. The ⋯ menu has Sign in again, Test, Pause/Resume, Make default, Switch now, Move up/down, Rename and
 tags, daily cap, the billing page (claude.ai, console.anthropic.com, platform.openai.com) and Remove. Removing waits:
 sessions running on the account finish first, and no new ones start on it meanwhile.
 

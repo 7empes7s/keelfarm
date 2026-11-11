@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, KeyScanView } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, KeyScanView, UseCase } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { ServerPoint } from '../../shared/serverLoad';
@@ -124,6 +124,12 @@ export const api = {
   /** The manager's word on an objective (#105); null clears it. */
   setObjectiveStatus: (repoId: string, objective: string, status: ObjectiveStatus | null) => call<RepoView>('PUT', `${r(repoId)}/charter/status`, { objective, status }),
   exportCharter: (repoId: string) => call<{ url: string }>('POST', `${r(repoId)}/charter/export`),
+  /** The setup advisor (#366): the floor's use case, a gap's fix (by its action's index), Not now, the checklist closed. */
+  setUseCase: (repoId: string, useCase: UseCase) => call<RepoView>('PUT', `${r(repoId)}/setup/use-case`, { useCase }),
+  applySetup: (repoId: string, gap: string, action: number) => call<RepoView>('POST', `${r(repoId)}/setup/apply`, { gap, action }),
+  snoozeSetup: (repoId: string, gap: string) => call<RepoView>('POST', `${r(repoId)}/setup/snooze`, { gap }),
+  closeSetupReview: (repoId: string) => call<RepoView>('POST', `${r(repoId)}/setup/review`),
+  setCompanyUseCases: (useCases: UseCase[]) => call<UseCase[]>('PUT', '/api/company/use-cases', { useCases }),
   mergePull: (repoId: string, n: number, method: 'squash' | 'merge' | 'rebase' = 'squash') => call('POST', `${r(repoId)}/pulls/${n}/merge`, { method }),
   closePull: (repoId: string, n: number) => call('POST', `${r(repoId)}/pulls/${n}/close`),
   /** Queues the PR for QA; with `agentId`, that (free) agent tests it now. */
@@ -259,6 +265,7 @@ export const api = {
   // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
   addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
   updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),
+  makeDefaultAccount: (id: string, now: boolean) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/default`, { now }),
   moveAccount: (id: string, by: -1 | 1) => call('POST', `/api/accounts/${encodeURIComponent(id)}/move`, { by }),
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
   repairShare: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/share`),

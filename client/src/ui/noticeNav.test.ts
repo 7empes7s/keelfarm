@@ -18,6 +18,13 @@ describe('noticeJump', () => {
     expect(noticeJump({ kind: 'approval', target: { kind: 'floor', repoId: 'r1' }, requestId: 'q1' }, 'office', world)).toEqual({ kind: 'approvals', requestId: 'q1' });
     expect(noticeJump({ kind: 'usage' }, 'office', world)).toBeNull();
   });
+  it("opens a setup gap's floor card in Floors & repos, not the 3D floor (#366)", () => {
+    const setup = { kind: 'setup' as const, target: { kind: 'floor' as const, repoId: 'r1' } };
+    const card = { kind: 'overlay', overlay: { kind: 'manager', tab: 'floors', repoId: 'r1' } };
+    expect(noticeJump(setup, 'office', world)).toEqual(card);
+    expect(noticeStep('setup', setup, 'pocket', world)).toEqual(card);
+    expect(noticeStep('setup', { target: { kind: 'floor', repoId: 'gone' } }, 'office', world)).toBeNull();
+  });
   it("opens the found keys' review, from the notice and its Review button (#367)", () => {
     expect(noticeJump({ kind: 'keys' }, 'pocket', world)).toEqual({ kind: 'keys' });
     expect(noticeStep('reviewKeys', {}, 'office', world)).toEqual({ kind: 'keys' });
