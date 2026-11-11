@@ -113,3 +113,22 @@
   gap: var(--ds-space-2);
   min-height: var(--ds-target);
 }
+.pv-found {
+  flex-direction: row;
+  align-items: center;
+  min-height: var(--ds-target);
+  cursor: pointer;
+}
+.pv-found input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.pv-found > svg {
+  flex: none;
+  color: var(--ds-text-muted);
+}
+.pv-found .ds-row-main {
+  flex: 1;
+  min-width: 0;
+}

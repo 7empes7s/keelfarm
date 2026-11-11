@@ -2,7 +2,10 @@
 // (they start the issue now), then busy ones (it waits as their next task, after the one they're on: nothing stops).
 // The server decides (shared/assignIssue.ts); the CEO hears of it as one of the manager's changes (#207).
 import { useMemo, useState } from 'react';
-import { assignOrder } from '../../../shared/assignIssue';
+import { blockers } from '../../../shared/issues';
+import { confirmDialog } from './Confirm';
+import { issueActions } from './issueActionRules';
+import { NEXT_FREE, assignOrder } from '../../../shared/assignIssue';
 import { api } from '../api';
 import { agentsOnRepo, useStore, type Agent } from '../store';
 import { AgentRing } from './AgentRing';
@@ -14,13 +17,13 @@ import './assignSheet.css';
 /** Can they start an issue right now (the server's startable(), as far as a tab can tell)? */
 const startable = (a: Agent) => a.status !== 'working' && a.status !== 'preparing' && !a.needsSignIn && !a.waiting;
 
-export function AssignButton({ repoId, number, title, small }: { repoId: string; number: number; title: string; small?: boolean }) {
+export function AssignButton({ repoId, number, title, small, primary }: { repoId: string; number: number; title: string; small?: boolean; primary?: boolean }) {
   const [open, setOpen] = useState(false);
   const next = useStore((s) => Object.values(s.agents).find((a) => a.repoId === repoId && a.nextIssue === number));
   return (
     <>
-      <button type="button" className={small ? 'btn btn-small' : 'ds-btn'} aria-haspopup="dialog" aria-label={`Assign issue #${number}${next ? `: next for ${next.name}` : ''}`} onClick={() => setOpen(true)}>
-        <Icon name="user" /> {next ? `Next for ${next.name}` : 'Assign to…'}
+      <button type="button" className={small ? 'btn btn-small' : primary ? 'btn btn-good' : 'ds-btn'} aria-haspopup="dialog" aria-label={`Assign issue #${number}${next ? `: next for ${next.name}` : ''}`} onClick={() => setOpen(true)}>
+        <Icon name="user" /> {next ? `Next for ${next.name}` : 'Assign to an agent'}
       </button>
       {open && <AssignSheet repoId={repoId} number={number} title={title} onClose={() => setOpen(false)} />}
     </>
@@ -31,10 +34,15 @@ function AssignSheet({ repoId, number, title, onClose }: { repoId: string; numbe
   const all = useStore((s) => s.agents);
   const team = useMemo(() => assignOrder(agentsOnRepo(all, repoId).filter((a) => a.role !== 'ceo').map((a) => ({ ...a, free: startable(a) }))), [all, repoId]);
   const [busy, setBusy] = useState<string | null>(null);
-  const pick = async (a: Agent) => {
-    setBusy(a.id);
+  const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
+  const pick = async (agentId: string) => {
+    const issue = repo?.issues.find((i) => i.number === number);
+    const waits = issue && repo ? blockers(issue.body, new Set(repo.issues.map((i) => i.number))) : [];
+    const actions = issueActions({ open: !!issue, pr: false, waits });
+    if (actions.confirmAssignment && !await confirmDialog({ tone: 'warn', title: `Start #${number} before its dependencies?`, body: `It still waits for ${waits.map((n) => `#${n}`).join(', ')}. Assigning by hand overrides that wait.`, confirm: 'Assign anyway' })) return;
+    setBusy(agentId);
     try {
-      const out = await api.assignIssue(repoId, number, a.id);
+      const out = await api.assignIssue(repoId, number, agentId);
       useStore.getState().pushToast('success', out.text);
       onClose();
     } catch {
@@ -45,7 +53,7 @@ function AssignSheet({ repoId, number, title, onClose }: { repoId: string; numbe
   const rest = team.filter((a) => !a.free);
   const row = (a: (typeof team)[number]) => (
     <li key={a.id}>
-      <button type="button" className="assign-row" disabled={!!busy} onClick={() => void pick(a)}>
+      <button type="button" className="assign-row" disabled={!!busy} onClick={() => void pick(a.id)}>
         <AgentRing agent={a} size="sm" />
         <span className="assign-text">
           <span className="assign-name">
@@ -65,6 +73,7 @@ function AssignSheet({ repoId, number, title, onClose }: { repoId: string; numbe
     <Sheet title={`Assign #${number}`} onClose={onClose} className="assign-sheet">
       <p className="assign-issue muted small">{title}</p>
       {team.length === 0 && <p className="muted">This floor has no agents yet: add one in Team.</p>}
+      {team.length > 0 && <button type="button" className="btn btn-good" disabled={!!busy} onClick={() => void pick(NEXT_FREE)}>Next free agent</button>}
       {free.length > 0 && (
         <section aria-label="Free now">
           <h3 className="assign-group">Free now</h3>

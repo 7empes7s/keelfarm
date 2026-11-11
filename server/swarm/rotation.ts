@@ -8,7 +8,7 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { allOutText, detectLimit, switchesForCeo, switchText, type LimitHit } from '../../shared/accountRotation.ts';
-import { ACCOUNT_CLIS } from '../../shared/accounts.ts';
+import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
 import { LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
@@ -85,8 +85,10 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /** One session on `use` (null: as before accounts). `ended`: the caller decides what its end means, given a limit it reported. */
   private onUse(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks, use: AccountUse | null, ended: ((r: SessionResult, hit: LimitHit | null) => void) | null): SessionHandle {
-    if (!use) return this.backend.startSession(opts, ended ? { ...cb, finished: (r) => ended(r, null) } : cb);
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
+    // Gemini CLI on the manager's own login: its limit is its own, not a pause for the office (paced on Claude's).
+    const own = cli === 'gemini' ? { ...cb, limited: undefined } : cb;
+    if (!use) return this.backend.startSession(opts, ended ? { ...own, finished: (r) => ended(r, null) } : own);
     this.readyLogin(a, use, cli, opts.cwd);
     this.sessionAccount.set(a.id, use.builtIn ? null : use.id);
     this.spend.account(a.id, use.id);
@@ -129,8 +131,9 @@ export abstract class SwarmRotation extends SwarmUsage {
    * theme, the worktree trusted, so the CLI opens on the task. The built-in login is the manager's own setup: untouched.
    */
   private readyLogin(a: PersistedAgent, use: AccountUse, cli: AgentCli, cwd: string) {
-    const dir = cli === 'claude' ? use.env.CLAUDE_CONFIG_DIR : use.env.CODEX_HOME;
-    if (use.builtIn || !dir || cli === 'opencode') return;
+    if (use.builtIn || cli === 'opencode') return;
+    const dir = use.env[LOGIN_ENV[cli]];
+    if (!dir) return;
     try {
       const version = /\d+\.\d+\.\d+/.exec(this.clis.find((c) => c.id === cli)?.version ?? '')?.[0] ?? null;
       if (prepareLogin(cli, dir, [cwd], { version, prefs: builtInPrefs() })) this.appendLog(a, [{ kind: 'system', text: `✓ Set up ${this.accounts.label(use.id)}'s login folder: onboarding done, this worktree trusted.` }]);
@@ -161,13 +164,14 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /**
    * Other coding agents a session may fall back to (terminal runtime only, installed here): the CEO's the manager
-   * allowed; an agent's, ones the office already uses (an agent runs it, or it has an account added). Consults never do.
+   * allowed; an agent's, ones the office already uses (an agent runs it, or it has an account added), never onto Gemini
+   * CLI, which isn't a builder (#365). Consults never do.
    */
   private fallbackClis(a: PersistedAgent, opts: SessionOptions): AccountCli[] {
     if (!opts.terminal || opts.readOnly) return [];
     const r = this.accounts.rotation();
     const inUse = (c: AccountCli) => this.state.agents.some((x) => x.host !== 'box' && x.role !== 'ceo' && (x.cli || this.state.settings.defaultCli) === c) || this.accounts.list().some((x) => x.cli === c && !x.builtIn);
-    const allowed = a.role === 'ceo' ? r.ceoClis : r.agentsSwitchCli ? ACCOUNT_CLIS.filter(inUse) : [];
+    const allowed = a.role === 'ceo' ? r.ceoClis : r.agentsSwitchCli ? ACCOUNT_CLIS.filter((c) => c !== 'gemini' && inUse(c)) : [];
     return allowed.filter((c) => this.clis.some((x) => x.id === c && x.installed));
   }
 

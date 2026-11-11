@@ -17,7 +17,7 @@ import { keptWaiver, mergeReadings } from '../shared/usage.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
-import { isCli } from './clis.ts';
+import { builderCli, isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
 import { loadLab } from './experiments.ts';
@@ -158,7 +158,7 @@ export class Swarm extends SwarmDisk {
       void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
-      if (!isCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
+      if (!isCli(this.state.settings.defaultCli) || !builderCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
       this.state.settings.trimIdleDesksMin = clampTrimIdleMin(this.state.settings.trimIdleDesksMin);
       this.state.settings.stuckRecheckMin = clampStuckRecheckMin(this.state.settings.stuckRecheckMin);
       this.state.settings.historyDays = clampHistoryDays(this.state.settings.historyDays);
@@ -279,7 +279,7 @@ export class Swarm extends SwarmDisk {
         const repo = await this.connectRepo(r.nameWithOwner);
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
-        for (let i = 1; i < size; i++) this.hireAgent(repo.id, {}); // connecting hired the first
+        for (let i = 1; i < size; i++) this.hireAgent(repo.id, repo.floor === 1 && i === size - 1 ? { cli: 'gemini' } : {}); // connecting hired the first; floor 1's last runs Gemini CLI (#365)
         this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256); floors 1-3 a floor theme each (#370)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
@@ -678,7 +678,7 @@ export class Swarm extends SwarmDisk {
     if (patch.memory !== undefined) s.memory = memorySettings(s.memory, patch.memory);
     if (patch.testLab !== undefined) s.testLab = testLabSettings(s.testLab, patch.testLab);
     // The default model belongs to the default coding agent: a new agent starts on its own default.
-    if (isCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) {
+    if (isCli(patch.defaultCli) && builderCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) { // Gemini CLI isn't a builder (#365)
       s.defaultCli = patch.defaultCli;
       if (patch.defaultModel === undefined) s.defaultModel = s.defaultCli === 'claude' ? DEFAULT_MODEL : '';
     }

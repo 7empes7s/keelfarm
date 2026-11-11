@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CEO_ID, type ManagerChange } from '../shared/types.ts';
 import { CHANGES_DEBOUNCE_MS } from '../shared/managerChanges.ts';
 import { createDemoBackend } from './demo.ts';
@@ -24,7 +24,9 @@ afterEach(() => {
 });
 
 async function office() {
-  const swarm = new Swarm(createDemoBackend());
+  const backend = createDemoBackend();
+  const closeIssue = vi.spyOn(backend, 'closeIssue');
+  const swarm = new Swarm(backend);
   open.push(swarm);
   const repo = await swarm.connectRepo('demo-co/pixel-todo');
   const i = swarm as unknown as Internals;
@@ -35,10 +37,17 @@ async function office() {
   const [first, second] = rt.issues.map((x) => x.number).filter((n) => !rt.pulls.some((p) => p.state === 'OPEN' && p.closesIssues.includes(n)));
   const worker = i.state.agents.find((a) => a.role !== 'ceo')!;
   Object.assign(worker, { status: 'working', task: 'issue', issueNumber: first, prNumber: null, branch: `swarm/issue-${first}-x` });
-  return { swarm, i, repo, worker, first, second };
+  return { swarm, i, repo, worker, first, second, closeIssue };
 }
 
 describe("the manager's board actions", () => {
+  it('passes the manager reason through to the demo GitHub backend as not planned', async () => {
+    const { swarm, repo, second, closeIssue } = await office();
+    await swarm.closeIssueByManager(repo.id, second, undefined, 'Superseded by #42');
+    expect(closeIssue).toHaveBeenCalledWith('demo-co/pixel-todo', second, expect.stringContaining('\n\nSuperseded by #42'), 'not planned');
+    expect(swarm.snapshot().repos.find((r) => r.id === repo.id)?.issues.some((i) => i.number === second)).toBe(false);
+  });
+
   it("closing an issue someone is building doesn't stop them: a change with affects=[them] wakes the CEO", async () => {
     const { swarm, i, repo, worker, first } = await office();
     await swarm.closeIssueByManager(repo.id, first);
