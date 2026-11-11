@@ -155,14 +155,19 @@ export function watchViewport() {
     resetViewport();
   };
   // A field with the keyboard up (#494): measure again until the keyboard has settled, then bring the field into view.
+  // `told`: the size the views last heard of here, apart from `measured`: a frame's update() can measure the settled
+  // keyboard before a check runs, and the check must still tell them (#507)
   let checks: number[] = [];
+  let told = '';
   const check = (first: boolean) => {
-    const before = measured;
     update();
-    if (measured !== before) window.dispatchEvent(new Event(VIEWPORT_EVENT));
-    if (first || measured !== before) revealFocused();
+    const changed = measured !== told;
+    told = measured;
+    if (changed) window.dispatchEvent(new Event(VIEWPORT_EVENT));
+    if (first || changed) revealFocused();
   };
   const settle = () => {
+    told = measured;
     checks.forEach(clearTimeout);
     checks = touch && focusedField() ? SETTLE_MS.map((ms, i) => window.setTimeout(() => check(i === 0), ms)) : [];
   };
