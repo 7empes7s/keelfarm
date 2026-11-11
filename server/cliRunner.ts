@@ -40,6 +40,7 @@ import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
 import { envSecrets } from './journal.ts';
 import { mcpGone, wireCli } from './cliWire.ts';
+import { lostSession } from './sessionResume.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -456,9 +457,6 @@ function idleHook(live: LiveCli, b: Record<string, unknown>): Record<string, unk
 
 // ---------- the session ----------
 
-/** Claude Code was told to resume a conversation that isn't on disk (it says so and exits 1). */
-export const lostConversation = (screen: string) => /No conversation found with session ID/i.test(screen);
-
 export function startCliSession(opts: SessionOptions, callbacks: SessionCallbacks): SessionHandle {
   const term = opts.terminal!;
   // A follow-up to the session a CLI is still waiting in picks that CLI up again, and so does an office that restarted
@@ -821,9 +819,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
 
   /** The CLI quit on its own: /exit typed in the terminal, a crash, or it couldn't start (not signed in, bad flag…). */
   const exited = (exitCode: number) => {
-    if (cli === 'claude' && opts.resumeSessionId && !begun && lostConversation(term.screen())) {
+    if (opts.resumeSessionId && !begun && lostSession(cli, term.screen())) {
       cb.sessionId(null);
-      finish({ ok: false, text: '', errors: [`${label} couldn't find the conversation it was resuming, so the next session starts a new one.`] });
+      finish({ ok: false, text: '', errors: [`${label} couldn't find the session it was resuming.`], lostSession: true });
       return;
     }
     const ok = exitCode === 0 && (lastText !== '' || (cli !== 'claude' && Date.now() - started > 20_000));

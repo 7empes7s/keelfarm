@@ -301,7 +301,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
           this.emitAgent(a);
         },
         sessionId: (id) => {
-          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? 'claude' : null }); // a fresh job's session isn't the chat's
+          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? 'claude' : null, sessionAccount: id ? this.sessionOn.get(a.id) : undefined }); // a fresh job's session isn't the chat's
           if (id) run.sessionId = id;
         },
         browserUrl: () => undefined,

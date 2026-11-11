@@ -542,6 +542,7 @@ export abstract class SwarmSessions extends SwarmRotation {
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? (how.cli ?? 'claude') : null;
+          a.sessionAccount = id ? this.sessionOn.get(a.id) : undefined;
           if (id) run.sessionId = id;
         },
         browserUrl: (url) => {
@@ -640,7 +641,8 @@ export abstract class SwarmSessions extends SwarmRotation {
       // It opened on its CLI's sign-in (#360): no strike, the work goes back in line for an account that's signed in.
       a.status = 'idle';
       this.requeue(a, `${result.errors[0] ?? 'their coding agent needs signing in'}`.replace(/\.$/, ''));
-    } else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
+    } else if (result.lostSession && a.status !== 'stopped') this.dropTask(a, `↺ ${result.errors[0]}.`); // its session wasn't there and someone else has the task (#401): no strike
+    else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
     else if (a.task === 'qa') await this.onQaFinished(a, repo, result);
     else if (a.task === 'fix') await this.onFixFinished(a, repo, result);
     else await this.onIssueFinished(a, repo, result);
