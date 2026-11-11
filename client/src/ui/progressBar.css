@@ -264,6 +264,13 @@ html[data-reduce-motion] .pb-indeterminate .pb-fill {
   min-block-size: var(--ds-target);
   border-radius: var(--ds-radius-pill);
 }
+button.pr-link {
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
 .pr-link:focus-visible {
   outline: var(--ds-border) solid var(--ds-focus);
 }
