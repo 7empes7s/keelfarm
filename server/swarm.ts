@@ -360,13 +360,7 @@ export class Swarm extends SwarmLiveLeases {
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
-    void this.backend
-      .detectClis()
-      .then((clis) => {
-        this.clis = clis;
-        this.broadcast({ type: 'clis', clis });
-      })
-      .catch((err) => console.warn('could not look for agent CLIs', err));
+    this.recheckClis();
     void Promise.all([this.refreshTooling(), this.startModels()]); // Tools & skills, and the model catalog (#198)
     await this.journal.start();
     await this.spend.ledger.load().then(() => backfillWork(this.state.progress, this.spend.ledger.all(), this.state.agents)); // careers from before #205

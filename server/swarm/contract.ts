@@ -29,6 +29,9 @@ export abstract class SwarmContract {
   protected abstract fireAgent(...a: Parameters<Swarm['fireAgent']>): ReturnType<Swarm['fireAgent']>;
   protected abstract port(...a: Parameters<Swarm['port']>): ReturnType<Swarm['port']>;
 
+  // providers.ts
+  protected abstract recheckClis(): void;
+
   // cloudCredit.ts
   protected abstract creditSignIn(...a: Parameters<Swarm['creditSignIn']>): ReturnType<Swarm['creditSignIn']>;
   protected abstract offKey(...a: Parameters<Swarm['offKey']>): ReturnType<Swarm['offKey']>;

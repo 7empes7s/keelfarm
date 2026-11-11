@@ -60,7 +60,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     env: process.env,
     file: path.join(HOME_DIR, this.backend.demo ? 'demo-accounts.json' : 'accounts.json'),
     check: (a, dir, secret) => this.backend.accounts.check(a, dir, secret), login: (a, dir) => this.backend.accounts.login(a, dir),
-    signIn: (o, exited) => this.backend.accounts.signIn(o, exited),
+    signIn: (o, exited) => this.backend.accounts.signIn(o, (code) => (code < 0 && this.recheckClis(), exited(code))), // couldn't start: is its CLI here? (#493)
     spend: () => this.spend.ledger.all().filter((r) => r.type === 'session'),
     agents: () => this.state.agents,
     builtInUsage: () => this.state.claudeUsage,

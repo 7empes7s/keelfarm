@@ -15,6 +15,7 @@ import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, P
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
+import { isCli } from './clis.ts';
 import { createDemoBackend } from './demo.ts';
 import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
@@ -350,6 +351,14 @@ app.post(
 app.patch('/api/providers/mcp/:id', route((req) => swarm.providers.setMcp(String(req.params.id), parse(z.object({ on: z.boolean().optional(), agents: z.array(z.string().max(80)).max(200).optional() }), req.body))));
 app.post('/api/providers/mcp/:id/test', route((req) => swarm.providers.testMcp(String(req.params.id))));
 app.delete('/api/providers/mcp/:id', route(async (req) => ({ removed: await swarm.providers.removeMcp(String(req.params.id)).then(() => true) })));
+// Coding-agent CLIs (#493): look again, install a missing one, OpenCode's own sign-in.
+app.post('/api/clis/check', route(() => swarm.cliSetup.check()));
+app.post('/api/clis/opencode/signin', route(() => swarm.cliSetup.signIn()));
+app.post('/api/clis/:id/install', route((req) => {
+  const id = String(req.params.id);
+  if (!isCli(id)) throw new HttpError(400, 'Pick Claude Code, Codex, Gemini CLI or OpenCode.');
+  return swarm.cliSetup.install(id);
+}));
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
