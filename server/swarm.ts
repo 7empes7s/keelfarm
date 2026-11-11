@@ -606,7 +606,7 @@ export class Swarm extends SwarmSetup {
   /** The phone shows another conversation's thread, and the CEO carries on that conversation's session (null: a fresh one). */
   private switchThread(messages: PhoneMessage[], sessionId: string | null) {
     this.state.messages = messages;
-    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
+    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null, sessionAccount: undefined });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
     this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();
