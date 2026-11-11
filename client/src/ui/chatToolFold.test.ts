@@ -6,10 +6,16 @@ const ALL: ChatToolId[] = [...TOOL_ORDER];
 const docked = (dock: number) => dock - 72;
 
 describe("the chat header's folding (#270)", () => {
-  it('keeps 🔍, 📊 and ⛶ docked at 380 px, and only 🔍 and 📊 at the narrowest dock', () => {
+  it('keeps 🔍, 📊 and ⛶ docked at 380 px, and only 🔍 and 📊 on narrower docks', () => {
     expect(foldTools(docked(380), ALL)).toEqual({ shown: ['search', 'charts', 'full'], folded: ['files', 'text', 'call', 'handsFree'] });
-    expect(foldTools(docked(360), ALL).shown).toEqual(['search', 'charts', 'full']);
+    expect(foldTools(docked(360), ALL).shown).toEqual(['search', 'charts']);
     expect(foldTools(docked(330), ALL).shown).toEqual(['search', 'charts']);
+  });
+
+  it("leaves the CEO's avatar and a six-letter name whole beside the buttons and ⋯ (#514: the 3D phone cut it to Morg…)", () => {
+    const AVATAR = 28 + 8; // the avatar and its gap
+    const BUTTON = 44 + 8; // a tool or the ⋯, and its gap
+    for (let w = 260; w < 800; w += 2) expect(w - AVATAR - (foldTools(w, ALL).shown.length + 1) * BUTTON, `at ${w}px`).toBeGreaterThanOrEqual(64);
   });
 
   it('shows every tool on a wide dock (the threads column beside it)', () => {
