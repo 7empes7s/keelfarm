@@ -1,6 +1,6 @@
 // Providers & accounts (#247, docs/accounts.md), pure: the built-in accounts, which account a session runs on (pinned
 // id, tag, or the rotation), what that changes in its environment, the status chip and the manager's edits.
-import { livePct } from './usage.ts';
+import { barName, livePct } from './usage.ts';
 import type { AccountCli, AccountKind, AccountStatus, ProviderAccount, UsageReading } from './types.ts';
 
 export const ACCOUNT_CLIS: AccountCli[] = ['claude', 'codex', 'gemini'];
@@ -118,6 +118,12 @@ export function accountStatus(x: StatusInput): { status: AccountStatus; until: n
   if (full.length) return { status: 'limited', until: Math.max(...full) };
   if (x.usage.some((r) => livePct(r, now) >= NEAR_PCT)) return { status: 'near', until: null };
   return { status: 'ready', until: null };
+}
+
+/** Which limit holds a limited account until `until`: "weekly", "5-hour"; null when no reading says (a session's hit, a daily cap). */
+export function limitedBy(usage: readonly UsageReading[], until: number | null, now: number): string | null {
+  const r = until === null ? undefined : usage.find((x) => x.pct >= 100 && x.resetsAt === until && until > now);
+  return r ? barName(r.type).toLowerCase() : null;
 }
 
 // ---------- the plan a login really has (#442) ----------
