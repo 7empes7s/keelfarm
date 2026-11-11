@@ -3,7 +3,7 @@
 // so nothing that left the bar is more than a tap away. Pure.
 import type { IconName } from './icons';
 
-export type HudOptionId = 'overview' | 'photo' | 'mute' | 'captions' | 'sound-settings' | 'search' | 'guide' | 'chat-mode' | 'switch' | 'sessions' | 'coins' | 'settings';
+export type HudOptionId = 'overview' | 'photo' | 'browser-full' | 'mute' | 'captions' | 'sound-settings' | 'search' | 'guide' | 'chat-mode' | 'switch' | 'sessions' | 'coins' | 'settings';
 
 export interface HudOption {
   id: HudOptionId;
@@ -16,6 +16,7 @@ export const HUD_OPTIONS: readonly HudOption[] = [
   { id: 'overview', label: 'Overview', icon: 'map', group: 'View' },
   { id: 'photo', label: 'Photo mode', icon: 'camera', group: 'View' },
   { id: 'switch', label: '2D office', icon: 'layers', group: 'View' },
+  { id: 'browser-full', label: 'Full screen (browser)', icon: 'maximize', group: 'View' }, // only where the browser has it (#415)
   { id: 'mute', label: 'Sound', icon: 'volume-2', group: 'Sound' },
   { id: 'captions', label: 'Captions', icon: 'captions', group: 'Sound' },
   { id: 'sound-settings', label: 'Sound settings', icon: 'sliders-horizontal', group: 'Sound' },
