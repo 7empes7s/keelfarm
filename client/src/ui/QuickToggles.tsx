@@ -1,10 +1,9 @@
 // The top bar's Sound and CC buttons (#267), in pocket mode's header and the 3D office's HUD: a tap mutes or unmutes and
-// turns captions on or off; hover, keyboard focus or a long-press opens a small card with the volume, soundtrack and
-// chatter, or the caption size, and a link to the rest. On a phone one "Sound & captions" button opens a sheet with
+// turns captions on or off; hover, keyboard focus or a long-press opens a small card with the volume, soundtrack,
+// chatter and the voice (VoiceQuick.tsx, #500), or the caption size, and a link to the rest. On a phone one "Sound & captions" button opens a sheet with
 // both. They read the same stores as Settings (sfx.ts, a11y.ts), so a change anywhere shows here at once.
 import { useId, useSyncExternalStore } from 'react';
 import { useStore } from '../store';
-import { useMode } from '../pocket/mode';
 import { typingIn } from '../pocket/switchOffice';
 import { usePhotoGate } from '../photo/gate';
 import { CHATTER_LEVELS, type ChatterLevel } from './audioPrefs';
@@ -16,6 +15,8 @@ import { Peek, usePeek } from './HoverCard';
 import { Icon } from './Icon';
 import { flip, quickKey, setCaptions, setMuted, type QuickToggle } from './quickToggleRules';
 import { getAudioPrefs, setAudioPrefs, subscribeAudio } from './sfx';
+import { VoiceQuick } from './VoiceQuick';
+import { moreSettingsTarget } from './voiceQuickRules';
 import './quickToggles.css';
 
 const toast = (text: string | null) => text && useStore.getState().pushToast('info', text);
@@ -34,11 +35,8 @@ export function installQuickKeys(): () => void {
 
 const tap = (t: QuickToggle) => toast(flip(t, keyName('mute')));
 
-/** The rest of the settings: the sound's (the 3D office's Help, the 2D office's Voice) or Accessibility. */
-function more(what: 'sound' | 'access') {
-  const pocket = useMode.getState().mode === 'pocket';
-  useStore.getState().openOverlay(what === 'sound' && !pocket ? { kind: 'help' } : { kind: 'manager', tab: what === 'access' ? 'access' : 'voice' });
-}
+/** The rest of the settings: the sound's (Settings → Voice, in both offices) or Accessibility. */
+const more = (what: 'sound' | 'access') => useStore.getState().openOverlay(moreSettingsTarget(what));
 
 const CHATTER: Record<ChatterLevel, string> = { off: 'Off', quiet: 'Quiet', lively: 'Lively' };
 
@@ -70,6 +68,7 @@ function SoundSettings({ toggle }: { toggle?: boolean }) {
           </label>
         ))}
       </div>
+      <VoiceQuick />
       <button type="button" className="btn btn-ghost qt-more" onClick={() => more('sound')}>
         More sound settings <Icon name="chevron-right" />
       </button>
