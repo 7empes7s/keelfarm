@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { LabChip } from './ExperimentsSection';
 import { LeaseChip } from './PracticesSettings';
 import { api } from '../api';
@@ -18,6 +18,8 @@ import { FloorBuilds } from './FloorBuilds';
 import { COLUMN_IDS, foldSummary, isFolded, parseFolds, withFold, type ColumnId, type FoldMap } from './kanbanFold';
 import { useLayout } from '../pocket/mode';
 import { reduceMotion } from './a11y';
+import { clampPage, pageCount, pageSlice, PAGE_SIZE, parsePages, withPage, type PageMap } from './kanbanPages';
+import { KanbanPager, useMergedPage } from './KanbanPager';
 import './kanbanFold.css';
 import './kanbanCard.css';
 import './kanbanHeader.css';
@@ -123,6 +125,25 @@ function saveFolds(map: FoldMap) {
   }
 }
 
+// The page each column is on (#411), per floor, for the session.
+const PAGE_KEY = 'cubefarm:kanban-page';
+
+function loadPages(): PageMap {
+  try {
+    return parsePages(sessionStorage.getItem(PAGE_KEY));
+  } catch {
+    return {};
+  }
+}
+
+function savePages(map: PageMap) {
+  try {
+    sessionStorage.setItem(PAGE_KEY, JSON.stringify(map));
+  } catch {
+    // kept while the board is open
+  }
+}
+
 export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: boolean }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const allAgents = useStore((s) => s.agents);
@@ -143,6 +164,21 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
   const [folds, setFolds] = useState(loadFolds);
   const foldId = useId();
   const colEls = useRef<Partial<Record<ColumnId, HTMLDivElement | null>>>({});
+  const [pages, setPages] = useState(loadPages);
+  // The Merged column (#411): its first page is the sync's latest merges; the total and older pages come from the server.
+  const mergedWant = pages[repoId]?.merged ?? 1;
+  const latest = Math.max(0, ...(cols?.merged ?? []).map((c) => c.number));
+  const older = useMergedPage(repoId, latest, cols && cols.merged.length >= PAGE_SIZE ? mergedWant : null);
+  const mergedTotal = Math.max(cols?.merged.length ?? 0, older.data?.total ?? 0);
+  const setPage = (id: ColumnId, page: number) => {
+    const next = withPage(pages, repoId, id, page);
+    setPages(next);
+    savePages(next);
+  };
+  // a page past the end (fewer merges than when it was saved) goes back to the last one
+  useEffect(() => {
+    if (older.data && mergedWant > pageCount(older.data.total)) setPage('merged', pageCount(older.data.total));
+  });
 
   if (!repo || !cols) {
     return (
@@ -339,13 +375,29 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     fold(id, false);
     requestAnimationFrame(() => colEls.current[id]?.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' }));
   };
-  const column = (title: React.ReactNode, cls: string, cards: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, id: EmptyKind & ColumnId) => {
+  // Each column in pages of 20 (#411): the cards it has, or for Merged, the page asked of the server.
+  const paged = (id: ColumnId, cards: KanbanCard[]): { cards: KanbanCard[]; total: number; page: number; note?: string } => {
+    if (id !== 'merged' || mergedWant <= 1 || cards.length < PAGE_SIZE) {
+      const total = id === 'merged' ? mergedTotal : cards.length;
+      const page = clampPage(pages[repo.id]?.[id] ?? 1, cards.length);
+      return { cards: pageSlice(cards, page), total, page };
+    }
+    if (!older.data) return { cards: [], total: Math.max(mergedTotal, (mergedWant - 1) * PAGE_SIZE + 1), page: mergedWant, note: older.failed ?? 'Loading older merges…' };
+    const live = new Set(cards.map((c) => c.number));
+    const list = older.data.pulls
+      .filter((p) => !live.has(p.number))
+      .sort((a, b) => (b.mergedAt ?? '').localeCompare(a.mergedAt ?? ''))
+      .map((p): KanbanCard => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url }));
+    return { cards: list, total: mergedTotal, page: mergedWant };
+  };
+  const column = (title: React.ReactNode, cls: string, all: KanbanCard[], render: (c: KanbanCard) => React.ReactNode, id: EmptyKind & ColumnId) => {
     const shut = folded(id);
-    const summary = shut && foldSummary(id, cards);
+    const { cards, total, page, note } = paged(id, all);
+    const summary = shut && foldSummary(id, all, total);
     return (
       <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''}`} ref={(el) => void (colEls.current[id] = el)}>
         <button type="button" className="kcol-head" aria-expanded={!shut} aria-controls={`${foldId}-${id}`} onClick={() => fold(id, !shut)}>
-          <span className="kcol-name">{title}</span> <span className="count">{cards.length}</span>
+          <span className="kcol-name">{title}</span> <span className="count">{total}</span>
           {summary && <span className="kcol-summary">{summary}</span>}
           <span className="kcol-chev" aria-hidden="true">
             <Icon name="chevron-right" />
@@ -353,7 +405,8 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         </button>
         <div className="kcol-fold" id={`${foldId}-${id}`}>
           <div className="kcol-body">
-            {cards.length === 0 && (
+            {note && <p className="muted small kempty">{note}</p>}
+            {cards.length === 0 && !note && (
               <div className="kempty">
                 <EmptyState kind={id} compact {...emptyAction[id]} />
               </div>
@@ -395,6 +448,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 </div>
               );
             })}
+            {total > PAGE_SIZE && <KanbanPager label={SHORT[id]} page={page} total={total} onPage={(n) => setPage(id, n)} />}
           </div>
         </div>
       </div>
@@ -466,7 +520,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
         <nav className="kanban-jump" aria-label="Kanban columns">
           {COLUMN_IDS.map((id) => (
             <button key={id} type="button" className="kanban-jump-btn" onClick={() => jump(id)}>
-              {SHORT[id]} <span className="count">{cols[id].length}</span>
+              {SHORT[id]} <span className="count">{id === 'merged' ? mergedTotal : cols[id].length}</span>
             </button>
           ))}
         </nav>

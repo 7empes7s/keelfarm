@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CommandError, gh, ghJson } from './exec.ts';
 import { NEVER_STARTED_MS } from './mergeGate.ts';
-import { PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type PullInfo } from '../shared/types.ts';
+import { MERGED_LISTED, OPEN_PULLS_LISTED, PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type MergedPage, type PullInfo } from '../shared/types.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import { TRUST_LABEL } from '../shared/trust.ts';
 import { prSummary } from '../shared/prSummary.ts';
@@ -223,10 +223,36 @@ function toPull(p: RawPull): PullInfo {
 
 export async function listPulls(fullName: string): Promise<PullInfo[]> {
   const [open, merged] = await Promise.all([
-    readTwice(() => ghJson<RawPull[]>(['pr', 'list', '-R', fullName, '--state', 'open', '--limit', '50', '--json', PR_FIELDS], SYNC_READ)),
-    readTwice(() => ghJson<RawPull[]>(['pr', 'list', '-R', fullName, '--state', 'merged', '--limit', '8', '--json', PR_FIELDS], SYNC_READ)),
+    readTwice(() => ghJson<RawPull[]>(['pr', 'list', '-R', fullName, '--state', 'open', '--limit', String(OPEN_PULLS_LISTED), '--json', PR_FIELDS], SYNC_READ)),
+    readTwice(() => ghJson<RawPull[]>(['pr', 'list', '-R', fullName, '--state', 'merged', '--limit', String(MERGED_LISTED), '--json', PR_FIELDS], SYNC_READ)),
   ]);
   return [...open, ...merged].map(toPull);
+}
+
+interface RawSearch {
+  total_count: number;
+  items: { number: number; title: string; html_url: string; user?: { login: string } | null; pull_request?: { merged_at?: string | null } }[];
+}
+
+/**
+ * The search for one page of merged PRs (#411), newest first like `gh pr list --state merged` (by creation), so page 1
+ * is the sync's MERGED_LISTED and page N the ones after. One light call per page, instead of every PR's checks.
+ */
+export function mergedPageArgs(fullName: string, page: number): string[] {
+  const q = `repo:${fullName} is:pr is:merged`;
+  return ['api', '-X', 'GET', 'search/issues', '-f', `q=${q}`, '-f', 'sort=created', '-f', 'order=desc', '-f', `per_page=${MERGED_LISTED}`, '-f', `page=${page}`];
+}
+
+export function mergedPageOf(raw: RawSearch, page: number): MergedPage {
+  return {
+    page,
+    total: raw.total_count,
+    pulls: raw.items.map((i) => ({ number: i.number, title: i.title, url: i.html_url, mergedAt: i.pull_request?.merged_at ?? null, author: i.user?.login ?? null })),
+  };
+}
+
+export async function listMergedPage(fullName: string, page: number): Promise<MergedPage> {
+  return mergedPageOf(await readTwice(() => ghJson<RawSearch>(mergedPageArgs(fullName, page), SYNC_READ)), page);
 }
 
 // gh refuses labels a repository doesn't have, so the ones the office adds are created on first use. A label that

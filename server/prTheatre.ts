@@ -4,7 +4,7 @@
 // nor does one the manager keeps running (📌). Use is any real use (#252): the app viewer on screen, traffic or an open
 // socket through the preview gateway, or the heartbeat the gateway puts in its pages; idle time counts from the last.
 
-import type { PreviewPin } from '../shared/types.ts';
+import { OPEN_PULLS_LISTED, type PreviewPin } from '../shared/types.ts';
 
 /** PR previews at once, besides each floor's main preview. */
 export const MAX_PR_PREVIEWS = 2;
@@ -196,7 +196,7 @@ export function leftoverPrDesks(folders: string[], inUse: string[]): string[] {
  * The floor's PR previews whose PR merged or closed. A PR missing from the list counts as closed too (closed PRs
  * drop out of it), unless the open list was cut off at its limit.
  */
-export function closedPrs(runs: PrRunInfo[], repoId: string, pulls: { number: number; state: string }[], openLimit = 50): string[] {
+export function closedPrs(runs: PrRunInfo[], repoId: string, pulls: { number: number; state: string }[], openLimit = OPEN_PULLS_LISTED): string[] {
   const full = pulls.filter((p) => p.state === 'OPEN').length >= openLimit;
   return runs
     .filter((r) => r.repoId === repoId)
