@@ -5,7 +5,7 @@ import { modelLabel } from './models.ts';
 import type { AccountStatus, AgentCli, EffortLevel, ProviderAccount, SessionRun } from './types.ts';
 
 const ROTATION = 'rotation';
-const CLI_NAMES: Record<AgentCli, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', gemini: 'Gemini CLI' };
+export const CLI_NAMES: Record<AgentCli, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', gemini: 'Gemini CLI' };
 const WHY: Partial<Record<AccountStatus, string>> = { limited: 'limited', 'signed-out': 'signed out', paused: 'paused', near: 'near its limit' };
 
 type Account = Pick<ProviderAccount, 'id' | 'label' | 'tags'> & { status?: AccountStatus };

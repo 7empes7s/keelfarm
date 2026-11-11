@@ -179,6 +179,18 @@ describe('launchArgs', () => {
     expect(env.CUBEFARM_HOOK_URL).toBe('http://127.0.0.1:1/api/hooks/t');
   });
 
+  it("gives the CEO's office tools to Codex, Gemini CLI and OpenCode over MCP (#418), and nothing without them", () => {
+    const office = 'http://127.0.0.1:1/api/mcp/t';
+    expect(launchArgs('codex', ctx({ office })).args).toContain(`mcp_servers.office={url="${office}"}`);
+    expect(launchArgs('codex', ctx()).args.some((a) => a.startsWith('mcp_servers.office'))).toBe(false);
+    const gemini = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('gemini', ctx(patch)).write!.find(([f]) => f.endsWith('gemini-settings.json'))![1]);
+    expect(gemini({ office }).mcpServers).toEqual({ office: { httpUrl: office } });
+    expect(gemini({}).mcpServers).toBeUndefined();
+    const opencode = (patch: Partial<LaunchContext>) => JSON.parse(launchArgs('opencode', ctx(patch)).env.OPENCODE_CONFIG_CONTENT);
+    expect(opencode({ office }).mcp).toEqual({ office: { type: 'remote', url: office, enabled: true } });
+    expect(opencode({}).mcp).toBeUndefined();
+  });
+
   it('runs the hook program with a command that never starts with a quote on Windows', () => {
     expect(codexHookCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\Users\\A B\\.cubefarm\\bin\\codex-hook.cjs', true)).toBe('node "C:\\Users\\A B\\.cubefarm\\bin\\codex-hook.cjs"');
     expect(codexHookCommand('/usr/bin/node', "/home/o'neil/.cubefarm/bin/codex-hook.cjs", false)).toBe(`'/usr/bin/node' '/home/o'"'"'neil/.cubefarm/bin/codex-hook.cjs'`);

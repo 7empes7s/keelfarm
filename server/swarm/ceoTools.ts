@@ -43,7 +43,7 @@ import { cliLabel, isCli } from '../clis.ts';
 import { CLI_NOTES } from '../../shared/cliNotes.ts';
 import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../../shared/types.ts';
 import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
-import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
+import { type PersistedAgent, type PersistedRepo, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
@@ -176,10 +176,10 @@ export abstract class SwarmCeoTools extends SwarmManagerAsks {
   /** What an agent runs, defaults resolved, for the CEO. */
   protected agentSetup(a: PersistedAgent) {
     const ceo = a.role === 'ceo';
-    const cli = ceo ? 'claude' : a.cli || this.state.settings.defaultCli;
+    const cli = ceo ? this.ceoCliOf(a) : a.cli || this.state.settings.defaultCli;
     return {
       codingAgent: cli,
-      model: ceo ? a.model || CEO_MODEL : this.modelFor(a, cli) || 'the coding agent default',
+      model: (ceo ? this.ceoModel(a) : this.modelFor(a, cli)) || 'the coding agent default',
       effort: a.effort || (ceo ? CEO_EFFORT : this.state.settings.defaultEffort),
     };
   }

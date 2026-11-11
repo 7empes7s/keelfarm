@@ -156,6 +156,8 @@ export interface LaunchContext {
   plugin: string; // file URL of the OpenCode plugin
   /** The Playwright MCP server, when the floor tests in a browser. Claude Code gets it through its MCP config file. */
   browser: { command: string; args: string[] } | null;
+  /** The CEO's office tools' MCP address (Streamable HTTP). Claude Code gets it through its MCP config file, the others here (#418). */
+  office?: string;
   /** The manager's Tools & skills switches for this session (Claude Code only): more disallowed tools. */
   tools?: SessionTools;
   /** The node that runs the office's helper scripts where the CLI runs (default: the office's own). */
@@ -294,6 +296,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         ...codexLocal(ctx.model, toml),
         ...(ctx.effort ? ['-c', `model_reasoning_effort=${toml(EFFORT_CODEX[ctx.effort])}`] : []),
         ...(ctx.browser ? ['-c', `mcp_servers.playwright={command=${toml(ctx.browser.command)},args=[${ctx.browser.args.map(toml).join(',')}]}`] : []),
+        ...(ctx.office ? ['-c', `mcp_servers.office={url=${toml(ctx.office)}}`] : []),
         ...CODEX_HOOK_EVENTS.flatMap((e) => ['-c', `hooks.${e}=[{hooks=[{type="command",command=${toml(codexHookCommand(ctx.node ?? process.execPath, ctx.codexHook, ctx.posix ? false : WIN))},timeout=10}]}]`]),
         // Like the manager's own Codex, but it can't stop to ask: no approvals and no sandbox (its sandbox can't reach
         // the credential store, so git and gh fail in it).
@@ -309,7 +312,9 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         autoupdate: false, // several agents starting at once must not each reinstall it
         permission: { edit: 'allow', bash: 'allow', webfetch: 'allow', doom_loop: 'allow', external_directory: 'allow' }, // it can't stop to ask either
         ...opencodeLocal(local),
-        ...(ctx.browser ? { mcp: { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } } } : {}),
+        ...(ctx.browser || ctx.office
+          ? { mcp: { ...(ctx.browser && { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } }), ...(ctx.office && { office: { type: 'remote', url: ctx.office, enabled: true } }) } }
+          : {}),
       };
       // No project argument: it starts in its terminal's folder, and a desk path in its command line would make the
       // desk clean-up take it for a leftover.
@@ -333,7 +338,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         hooks: Object.fromEntries(GEMINI_HOOK_EVENTS.map((e) => [e, hook])),
         context: { fileName: [...GEMINI_CONTEXT_NAMES, GEMINI_CONTEXT_FILE], includeDirectories: [dir, ...ctx.additionalDirectories], loadMemoryFromIncludeDirectories: true },
         general: { enableAutoUpdate: false, enableAutoUpdateNotification: false }, // several agents starting at once
-        ...(ctx.browser ? { mcpServers: { playwright: { command: ctx.browser.command, args: ctx.browser.args } } } : {}),
+        ...(ctx.browser || ctx.office ? { mcpServers: { ...(ctx.browser && { playwright: { command: ctx.browser.command, args: ctx.browser.args } }), ...(ctx.office && { office: { httpUrl: ctx.office } }) } } : {}),
       };
       // It can't stop to ask: yolo approves every tool call, --skip-trust trusts the worktree for this session.
       const args = [

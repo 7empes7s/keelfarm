@@ -11,6 +11,7 @@ import { TeamCapacity } from './TeamCapacity';
 import { HostBadge } from './HostBadge';
 import { CEO_ID, PLAYBOOK_MAX, type OfficeUpdateView, type RepoView } from '../../../shared/types';
 import { ModelMissing } from './ModelPicker';
+import { CeoCliField } from './CeoRunsOn';
 import { AddAgentForm } from './AddAgentForm';
 import { AccountSelect, CliSelect, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
@@ -401,6 +402,7 @@ export function CeoTab({ focusRepo }: { focusRepo?: string }) {
             <StatusPill status={ceo.status} />
           </div>
           <div className="ds-fields">
+            <CeoCliField ceo={ceo} />
             <label className="field">
               <span>Model</span>
               <ModelInput agent={ceo} className="" />

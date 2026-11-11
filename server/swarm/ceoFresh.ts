@@ -9,7 +9,7 @@ import { liveMandates } from '../../shared/followups.ts';
 import { sameRun } from '../../shared/sessionRun.ts';
 import { conversationsView, currentConversation } from '../../shared/conversations.ts';
 import type { SessionRun } from '../../shared/types.ts';
-import { CEO_DIR, CEO_MODEL, type PersistedAgent } from './model.ts';
+import { CEO_DIR, type PersistedAgent } from './model.ts';
 import { SwarmCeoModels } from './ceoModels.ts';
 
 const HANDOVER_MS = 3 * 60_000; // a handover that takes longer is stopped: the digest alone then
@@ -34,7 +34,9 @@ export abstract class SwarmCeoFresh extends SwarmCeoModels {
   protected async ceoSessionPlan(a: PersistedAgent, job: CeoJob): Promise<SessionPlan> {
     const awake = this.state.settings.ceoAwake;
     const kept = this.state.ceo.kept;
-    const step = ceoSessionStep(awake, { sessionId: a.sessionId, turns: kept.turns, lastEndedAt: kept.lastEndedAt }, Date.now());
+    // The kept session carries on only on the coding agent that made it: moved to another (#418), a fresh one.
+    const sessionId = a.sessionCli && a.sessionCli !== this.ceoCliOf(a) ? null : a.sessionId;
+    const step = ceoSessionStep(awake, { sessionId, turns: kept.turns, lastEndedAt: kept.lastEndedAt }, Date.now());
     const plan = ceoJobSession(job.kind, awake, step, !!job.redo);
     if (!plan.fresh && step.handover && !loadHandover(this.state.ceo.handover) && a.status === 'working') await this.ceoHandover(a);
     return plan;
@@ -76,7 +78,7 @@ export abstract class SwarmCeoFresh extends SwarmCeoModels {
       const timer = setTimeout(() => rt.session?.stop(), HANDOVER_MS);
       rt.session = this.startOnAccount(
         a,
-        { cwd: CEO_DIR, prompt: HANDOVER_PROMPT, systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)), model: this.state.ceo.kept.model ?? (a.model || CEO_MODEL), effort: 'low', browserTesting: false, additionalDirectories: [], role: 'ceo', office: this.officeTools(), tools: this.sessionToolsFor(a, 'claude'), ...this.sessionRuntime(a, sid) },
+        { cwd: CEO_DIR, prompt: HANDOVER_PROMPT, systemAppend: ceoSystemPrompt(this.ceoPromptInput(a)), model: this.state.ceo.kept.model ?? this.ceoModel(a), effort: 'low', browserTesting: false, additionalDirectories: [], role: 'ceo', office: this.officeTools(), tools: this.sessionToolsFor(a, this.ceoCliOf(a)), ...this.sessionRuntime(a, sid) },
         {
           log: (entries) => this.appendLog(a, entries),
           tool: () => undefined,

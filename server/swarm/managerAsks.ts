@@ -172,9 +172,9 @@ export abstract class SwarmManagerAsks extends SwarmTeam {
   protected askCeoSetup(a: Args<'setCeoSetup'>) {
     this.checkAsked(a);
     if (a.account === undefined && a.model === undefined && a.effort === undefined) throw new HttpError(400, 'Nothing to change: pass account, model, effort or a mix.');
-    const bad = a.model ? modelProblem(a.model, 'claude', this.models) : null;
-    if (bad) throw new HttpError(400, bad);
     const ceo = this.ceo();
+    const bad = a.model ? modelProblem(a.model, this.ceoCliOf(ceo), this.models) : null;
+    if (bad) throw new HttpError(400, bad);
     this.updateAgent(ceo.id, { ...(a.model !== undefined && { model: a.model }), ...(a.effort !== undefined && { effort: a.effort }), ...(a.account !== undefined && { account: a.account }) });
     const words = [a.model !== undefined && `model ${a.model || 'the default'}`, a.effort !== undefined && `effort ${a.effort || 'the default'}`, a.account !== undefined && `account ${ceo.account ?? 'the rotation'}`].filter(Boolean);
     return this.askedDone(null, `${ceo.name} runs on ${words.join(', ')} from the next job`);
