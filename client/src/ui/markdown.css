@@ -77,6 +77,22 @@
   border-radius: 5px;
   padding: 0.1em 0.3em;
 }
+/* Code is for copying (#438): a long press selects it (the bubble's own menu skips it), never the callout's off-switch. */
+.md code,
+.md pre {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* A command and its Copy chip: a full target beside the text. */
+.md-cmd code {
+  overflow-wrap: anywhere;
+}
+.md-cmd-copy {
+  margin-inline-start: var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
 /* Scroll sideways instead of stretching: contain keeps their width out of the layout above
    (otherwise a long line widens the phone overlay's grid track past a 390px screen). */
 .md pre,
