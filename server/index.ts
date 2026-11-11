@@ -321,6 +321,7 @@ app.put(
     return swarm.setUsageAdminKey(body.provider, body.key);
   }),
 );
+app.post('/api/usage/:id/notify-back', route((req) => swarm.watchUsageBack(String(req.params.id), parse(z.object({ on: z.boolean() }), req.body).on)));
 // Settings → Providers (#362): keys and MCP servers' secrets come in here and never go back out.
 app.post(
   '/api/providers',

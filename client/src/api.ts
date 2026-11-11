@@ -232,6 +232,7 @@ export const api = {
   setMcpServer: (id: string, patch: { on?: boolean; agents?: string[] }) => call<McpServerConfig>('PATCH', `/api/providers/mcp/${encodeURIComponent(id)}`, patch),
   testMcpServer: (id: string) => call<McpServerConfig>('POST', `/api/providers/mcp/${encodeURIComponent(id)}/test`),
   removeMcpServer: (id: string) => call('DELETE', `/api/providers/mcp/${encodeURIComponent(id)}`),
+  notifyUsageBack: (id: string, on: boolean) => call<{ watching: boolean }>('POST', `/api/usage/${encodeURIComponent(id)}/notify-back`, { on }),
   setUsageAdminKey: (provider: 'anthropic' | 'openai', key: string) => call<{ set: boolean }>('PUT', '/api/usage/admin-key', { provider, key }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),

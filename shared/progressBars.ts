@@ -73,6 +73,49 @@ export function leadPace(sinceMs: number | null, now: number, medianMs: number |
   return { elapsedMs, medianMs, ratio, tone: ratio > 2 ? 'bad' : ratio > 1 ? 'warn' : 'neutral' };
 }
 
+/** A span on a card: "12m", "9h 31m", "3d". */
+function spanText(ms: number): string {
+  const m = Math.round(Math.max(0, ms) / 60_000);
+  return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.round(m / 1440)}d`;
+}
+
+const agoText = (ms: number) => {
+  const m = Math.floor(Math.max(0, ms) / 60_000);
+  return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 48 * 60 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`;
+};
+
+export interface TimesInput {
+  /** When it was asked for: the issue filed (a PR card: the PR opened). */
+  askedAt: number | null;
+  /** When the current agent started this step (build, QA or fix); null while nobody is on it. */
+  workingSince: number | null;
+  now: number;
+  medianMs: number | null;
+  pr?: boolean;
+  /** What the working part says: "working", "testing", "fixing". */
+  step?: string;
+}
+
+export interface TaskTimes {
+  /** "Asked 9h ago · working 12m", plus "· 1.4× median 2h 55m" once the working time is past the median; null with neither time. */
+  text: string | null;
+  aria: string | null;
+  /** Only ever from the working time, so time spent waiting never turns a card red. */
+  pace: Pace | null;
+}
+
+/** A card's two times (#349): when it was asked for, and how long the current agent has been on it, paced against the floor's median. */
+export function taskTimes(t: TimesInput): TaskTimes {
+  const asked = t.askedAt != null ? `${t.pr ? 'PR opened' : 'Asked'} ${agoText(t.now - t.askedAt)}` : null;
+  const step = t.step ?? 'working';
+  const working = t.workingSince != null ? spanText(t.now - t.workingSince) : null;
+  const pace = leadPace(t.workingSince, t.now, t.medianMs);
+  const over = pace && pace.ratio > 1 ? pace : null;
+  const parts = [asked, working && `${step} ${working}`, over && `${over.ratio.toFixed(1)}× median ${spanText(over.medianMs)}`].filter(Boolean);
+  const words = [asked, working && `${step} for ${working}`, over && `${over.ratio.toFixed(1)} times the floor's median of ${spanText(over.medianMs)}`].filter(Boolean);
+  return { text: parts.length ? parts.join(' · ') : null, aria: words.length ? words.join(', ') : null, pace };
+}
+
 // ---------- a floor's backlog ----------
 
 export interface BacklogInput {
@@ -98,6 +141,10 @@ const SKIP = /^(swarm:skip|wontfix|question)$/i;
 /** The issues a floor's agents are building that have no PR yet (BacklogInput.building). */
 export const buildingOf = (agents: { role: string; task: AgentTask | null; status: AgentStatus; issueNumber: number | null; prNumber: number | null }[]) =>
   agents.filter((a) => a.role !== 'ceo' && a.task === 'issue' && a.status !== 'idle' && a.issueNumber != null && a.prNumber == null).map((a) => a.issueNumber!);
+
+/** Whether an agent's current step is a card's: its PR (fixers and testers carry it), or its issue before a PR. */
+export const onCard = (a: { issueNumber: number | null; prNumber: number | null }, card: { issue: number | null; pr: number | null }) =>
+  card.pr != null ? a.prNumber === card.pr : a.issueNumber === card.issue && a.prNumber == null;
 
 /** A floor's work as done / in progress / ready / waiting, with merges per day for the week. */
 export function backlogSplit(b: BacklogInput): BacklogSplit {

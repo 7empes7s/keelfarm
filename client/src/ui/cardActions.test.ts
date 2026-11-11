@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cardActions, cardState, whoPhrase } from './cardActions';
 
-describe('a Kanban PR card’s action row (#232)', () => {
+describe('a Kanban card’s actions (#232, #410)', () => {
   it('reads the state from the column and QA', () => {
     expect(cardState('qa', 'testing')).toBe('testing');
     expect(cardState('qa', 'fixing')).toBe('fixing');
@@ -13,31 +13,41 @@ describe('a Kanban PR card’s action row (#232)', () => {
     expect(cardState('qa', 'testing', true)).toBe('untrusted');
   });
 
-  it('shows two buttons per state, the primary first, and puts the rest in the ⋯ with Close last', () => {
+  it('gives each state its primary, Open and GitHub always on the bar, Terminal while someone is on it, the rest in the ⋯ with Close last', () => {
     const all = { agent: true, qaReport: true };
-    expect(cardActions('testing', all)).toEqual({ visible: ['preview', 'terminal'], menu: ['qa-report', 'history', 'close'] });
-    expect(cardActions('fixing', { ...all, status: 'fixing' })).toEqual({ visible: ['terminal', 'preview'], menu: ['qa-report', 'history', 'close'] });
+    expect(cardActions('testing', all)).toEqual({ primary: null, bar: ['open', 'github', 'terminal'], menu: ['preview', 'qa-report', 'history', 'close'] });
+    expect(cardActions('fixing', { ...all, status: 'fixing' })).toEqual({ primary: null, bar: ['open', 'github', 'terminal'], menu: ['preview', 'qa-report', 'history', 'close'] });
     expect(cardActions('needs-you', { ...all, status: 'needs-human' })).toEqual({
-      visible: ['retry-qa', 'preview'],
-      menu: ['send-back', 'qa-report', 'history', 'merge-anyway', 'close'],
+      primary: 'retry-qa',
+      bar: ['open', 'github', 'terminal'],
+      menu: ['send-back', 'preview', 'qa-report', 'history', 'merge-anyway', 'close'],
     });
-    expect(cardActions('waiting', { agent: true })).toEqual({ visible: ['preview', 'history'], menu: ['close'] });
-    expect(cardActions('waiting', { untested: true })).toEqual({ visible: ['preview', 'history'], menu: ['send-to-qa', 'close'] });
-    expect(cardActions('ready', all)).toEqual({ visible: ['merge', 'preview'], menu: ['qa-report', 'history', 'close'] });
-    expect(cardActions('untrusted', all)).toEqual({ visible: ['review'], menu: ['close'] });
+    expect(cardActions('waiting', { agent: true })).toEqual({ primary: null, bar: ['open', 'github', 'terminal'], menu: ['preview', 'history', 'close'] });
+    expect(cardActions('waiting', { untested: true })).toEqual({ primary: 'send-to-qa', bar: ['open', 'github'], menu: ['preview', 'history', 'close'] });
+    expect(cardActions('ready', all)).toEqual({ primary: 'merge', bar: ['open', 'github', 'terminal'], menu: ['preview', 'qa-report', 'history', 'close'] });
+    expect(cardActions('untrusted', all)).toEqual({ primary: null, bar: ['open', 'github'], menu: ['close'] });
   });
 
-  it('drops what a card can’t do: no terminal without an agent, send back only once QA failed', () => {
-    expect(cardActions('fixing', { status: 'failed' })).toEqual({ visible: ['preview', 'send-back'], menu: ['history', 'close'] });
+  it('moves Preview onto the bar while its preview runs', () => {
+    expect(cardActions('testing', { agent: true, previewing: true })).toEqual({ primary: null, bar: ['open', 'github', 'terminal', 'preview'], menu: ['history', 'close'] });
+  });
+
+  it('gives an issue card the bar only, with no ⋯', () => {
+    expect(cardActions('issue', { agent: true, previewing: true })).toEqual({ primary: null, bar: ['open', 'github', 'terminal'], menu: [] });
+    expect(cardActions('issue')).toEqual({ primary: null, bar: ['open', 'github'], menu: [] });
+  });
+
+  it('drops what a card can’t do: send back only once QA failed', () => {
+    expect(cardActions('fixing', { status: 'failed' }).menu).toEqual(['send-back', 'preview', 'history', 'close']);
     expect(cardActions('fixing', { agent: true, status: 'fixing' }).menu).not.toContain('send-back');
   });
 
-  it('never shows more than two buttons, and Close is always in the menu, last', () => {
+  it('keeps every PR action reachable, the bar at most four, Close last in the menu', () => {
     for (const s of ['testing', 'fixing', 'needs-you', 'waiting', 'ready', 'untrusted'] as const) {
-      const r = cardActions(s, { agent: true, qaReport: true, untested: true, status: 'failed' });
-      expect(r.visible.length).toBeLessThanOrEqual(2);
+      const r = cardActions(s, { agent: true, qaReport: true, untested: true, previewing: true, status: 'failed' });
+      expect(r.bar.length).toBeLessThanOrEqual(4);
       expect(r.menu.at(-1)).toBe('close');
-      expect(r.visible).not.toContain('close');
+      expect(new Set([...r.bar, ...r.menu, r.primary]).size).toBe(r.bar.length + r.menu.length + 1);
     }
   });
 });

@@ -10,7 +10,7 @@ test.describe('the PR details page on a phone', () => {
   test('wraps the title, orders the checks and hides keyboard hints at 390px', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/?pocket=1&tab=kanban');
-    await page.locator('.pocket .kcard', { hasText: 'sticky action bar' }).first().locator('button.linkish').click();
+    await page.locator('.pocket .kcard', { hasText: 'sticky action bar' }).first().locator('button.kcard-num').click();
     const details = page.getByRole('dialog', { name: /PR #/ });
     const title = details.locator('.dp-title');
     const lines = await title.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
