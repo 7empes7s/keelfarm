@@ -160,4 +160,12 @@ describe('reading a card', () => {
     expect(locateCard(cols, 'm-12', 12, true)).toMatchObject({ col: 'qa' });
     expect(locateCard(cols, 'i-13', 13, false)).toBeNull();
   });
+
+  it('finds an issue on the card of the PR that closes it, and the PR by either number (#505)', () => {
+    expect(locateCard(board({ qa: [{ key: 'pr-1084', number: 1083, prNumber: 1084, title: 'x' }] }), 'i-1083', 1083, false)).toMatchObject({ col: 'qa' });
+    const cols = board({ qa: [{ key: 'pr-1084', number: 1084, prNumber: 1084, closes: [1083], title: 'x' }] });
+    expect(locateCard(cols, 'i-1083', 1083, false)).toMatchObject({ card: { prNumber: 1084 } });
+    expect(locateCard(cols, 'pr-1084', 1084, true)).toMatchObject({ card: { prNumber: 1084 } });
+    expect(locateCard(cols, 'i-1085', 1085, false)).toBeNull();
+  });
 });

@@ -602,7 +602,8 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     const artifacts = makeArtifacts(id, parts.artifacts);
     const body = parts.text.trim().slice(0, 6000);
     // The agents, floors, issues and files it names become chips (shared/chatRefs.ts).
-    const refs = from === 'office' ? [] : parseRefs(body, this.refContext());
+    const home = extra.question ? this.state.questions.find((q) => q.id === extra.question)?.repoId : undefined;
+    const refs = from === 'office' ? [] : parseRefs(body, { ...this.refContext(), ...(home && { home }) });
     const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.ask && { ask: parts.ask }), ...(from === 'ceo' && this.ceoSpoken(parts, closing)), ...(parts.idea && { idea: parts.idea }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }), ...(refs.length && { refs }) };
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
@@ -632,6 +633,10 @@ export abstract class SwarmCeo extends SwarmCeoLog {
       hasFile: (repoId, rel) => {
         const repo = this.state.repos.find((r) => r.id === repoId);
         return !!repo && this.backend.hasRepoFile(repo.fullName, rel);
+      },
+      hasNumber: (repoId, n) => {
+        const rt = this.repoRt.get(repoId);
+        return !!rt && (rt.issues.some((i) => i.number === n) || rt.pulls.some((p) => p.number === n && p.state !== 'CLOSED'));
       },
     };
   }

@@ -59,9 +59,11 @@ const useWorld = (): RefWorld => ({ repos: useStore((s) => s.repos), agents: use
 export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (floor: number) => void) {
   const pocket = useMode((s) => s.mode) === 'pocket';
   const [file, setFile] = useState<{ messageId: number; index: number } | null>(null);
+  const [pick, setPick] = useState<{ options: { label: string; jump: Jump }[]; at: { messageId: number; index: number } } | null>(null);
   const nav: RefNav = {
     go: (j, at) => {
-      if (j.kind === 'url') window.open(j.url, '_blank', 'noopener,noreferrer');
+      if (j.kind === 'pick') setPick({ options: j.options, at });
+      else if (j.kind === 'url') window.open(j.url, '_blank', 'noopener,noreferrer');
       else if (j.kind === 'file') setFile(at);
       else if (j.kind === 'floor') onFloor(j.floor);
       else if (j.kind === 'decisions') {
@@ -77,7 +79,30 @@ export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (flo
     },
   };
   const wrap = (children: ReactNode) => <NavContext.Provider value={nav}>{children}</NavContext.Provider>;
-  const viewer = file && <RefFileViewer {...file} onClose={() => setFile(null)} />;
+  const viewer = (
+    <>
+      {file && <RefFileViewer {...file} onClose={() => setFile(null)} />}
+      {pick && (
+        <Sheet label="Which floor?" className="ref-pick" onClose={() => setPick(null)}>
+          <div className="ref-pick-list">
+            {pick.options.map((o) => (
+              <button
+                key={o.label}
+                type="button"
+                className="ds-btn"
+                onClick={() => {
+                  setPick(null);
+                  nav.go(o.jump, pick.at);
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+    </>
+  );
   return { wrap, viewer, mode: pocket ? ('pocket' as const) : ('office' as const) };
 }
 

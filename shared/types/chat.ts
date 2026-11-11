@@ -130,7 +130,7 @@ export interface CeoChatView {
 export type ChatRef = { start: number; end: number } & (
   | { kind: 'agent'; agentId: string; terminal?: true }
   | { kind: 'floor'; repoId: string }
-  | { kind: 'issue'; repoId: string; number: number } // an issue or a pull request
+  | { kind: 'issue'; repoId: string; number: number; alts?: string[] } // an issue or a pull request; alts: other floors whose boards have a bare #N too (#505)
   | { kind: 'file'; repoId: string; path: string; line?: number }
   | { kind: 'qa'; repoId: string; number: number }
   | { kind: 'preview'; repoId: string; number?: number } // a PR's in the PR theatre, else the floor's app

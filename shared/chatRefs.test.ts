@@ -45,6 +45,19 @@ describe('parseRefs', () => {
     expect(kinds('a&#39; b/#3 c#4 floor 1')).toHaveLength(1);
   });
 
+  it("puts a bare #N on the sender's floor, else on the floor whose board has it, with a pick when several do (#505)", () => {
+    const boards = new Set(['o/web#1083', 'o/web#7', 'o/api#7']);
+    const c = { ...ctx, hasNumber: (repoId: string, n: number) => boards.has(`${repoId}#${n}`) };
+    // a floor 1 agent's question that mentions floor 3 after its #N: floor 1's card
+    expect(kinds("Should #1083 wait for floor 3's deploy?", { ...ctx, home: 'o/web' })[0]).toMatchObject({ repoId: 'o/web', number: 1083 });
+    // no sender: the first floor named (3) doesn't have it, floor 1's board does
+    expect(kinds('#1083 waits; floor 3 is idle', c)[0]).toMatchObject({ repoId: 'o/web', number: 1083 });
+    expect(kinds('#1083 alone', c)[0]).toMatchObject({ repoId: 'o/web', number: 1083 });
+    expect(kinds('#7 alone', c)[0]).toMatchObject({ repoId: 'o/web', number: 7, alts: ['o/api'] });
+    // a floor named before it still wins
+    expect(kinds('floor 3: #1083', c)[1]).toMatchObject({ repoId: 'o/api', number: 1083 });
+  });
+
   it('finds QA reports and previews', () => {
     expect(kinds('See qa: floor 3 #13. And preview: floor 1, preview: Floor 3 #7.').map((r) => [r.kind, r.text, 'number' in r ? r.number : undefined])).toEqual([
       ['qa', 'qa: floor 3 #13', 13],
