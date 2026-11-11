@@ -1,0 +1,93 @@
+/* "Try this" (#381): numbered steps, each ticked off with a 44px tap; a step QA failed carries its note. */
+
+.try {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.try-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-2);
+}
+.try-title {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-strong);
+}
+.try-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.try-step {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+}
+.try-step-fail {
+  border-color: var(--ds-danger-text);
+}
+.try-tick {
+  flex: none;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--ds-text);
+  font: inherit;
+  cursor: pointer;
+}
+.try-tick:focus-visible {
+  outline: 2px solid var(--ds-focus);
+}
+.try-tick svg {
+  width: var(--ds-icon-md);
+  height: var(--ds-icon-md);
+  color: var(--ds-good-fill);
+}
+.try-num {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: var(--ds-border-strong) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+}
+.try-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading);
+  overflow-wrap: anywhere;
+}
+.try-step-done .try-text > span:first-child {
+  color: var(--ds-text-muted);
+  text-decoration: line-through;
+}
+.try-qa {
+  color: var(--ds-danger-text);
+}
+.try-step > .btn {
+  flex: none;
+}

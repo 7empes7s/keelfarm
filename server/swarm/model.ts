@@ -55,6 +55,7 @@ import type {
   RepoView,
   ServerEvent,
   SwarmSettings,
+  TryStep,
   UsageReading,
 } from '../../shared/types.ts';
 
@@ -167,6 +168,7 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   restartRetryRound?: number | null; // the round QA already re-ran by itself after losing its lab to an office restart (#333)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
+  tryIt?: TryStep[]; // the "Try this" steps as QA followed and corrected them in its latest round (#381); read on demand, not in the view
   cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
 }
 
@@ -266,6 +268,7 @@ export interface RepoRuntime {
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
   insights?: CharterInsights; // the Charter tab's numbers, worked out at each sync and charter change (refreshInsights)
   writers?: { logins: string[]; at: number }; // collaborators with write access, as last asked (#185)
+  steps?: Map<number, TryStep[]>; // open PRs' "Try this" steps from their bodies (#381): kept off rt.pulls, so out of the snapshot
 }
 
 /** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */

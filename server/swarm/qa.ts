@@ -111,6 +111,7 @@ export abstract class SwarmQa extends SwarmSessions {
         issueNumber: pr.closesIssues[0] ?? null,
         devSessionId: null,
         fixInstructions: seed.fixInstructions,
+        tryIt: seed.tryIt,
         sessionFailures: 0,
         mergeNote: null,
         testedSha: pr.headSha,
@@ -404,6 +405,7 @@ export abstract class SwarmQa extends SwarmSessions {
         alerted: false,
         qaChecks: pull?.checks ?? null,
         shots,
+        tryIt: report.tryIt,
       });
       // qaRoundResult already charged this failed test; sending its findings with the conflict must not charge twice.
       if (next === 'conflict') this.sendBack(repo, rec, 'conflict', conflictFixInstructions(fixInstructions, repo.defaultBranch), false, false);
@@ -460,6 +462,7 @@ export abstract class SwarmQa extends SwarmSessions {
     if (report.commands.length) {
       lines.push('', '<details><summary>🧪 Commands run</summary>', '', '| Command | Result |', '|---|---|', ...report.commands.map((c) => `| \`${cell(c.command)}\` | ${cell(c.result)} |`), '', '</details>');
     }
+    if (report.tryIt) lines.push('', '### 👆 Try it', '', ...report.tryIt.map((s, i) => `${i + 1}. ${s.result ? `${ICON[s.result]} ` : ''}${s.text}${s.note ? ` _(${s.note})_` : ''}`));
     if (!pass && report.fixInstructions) lines.push('', '### 🔧 What needs fixing', '', report.fixInstructions);
     if (images.length) lines.push('', '### 📸 Evidence', '', ...images.flatMap((img) => [img, '']));
     else lines.push('', '_No browser screenshots were taken in this round._');

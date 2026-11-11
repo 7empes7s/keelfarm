@@ -16,6 +16,7 @@ import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import { cleanTrustedAuthors, markTrust, trustContext, TRUST_LABEL, type TrustContext } from '../../shared/trust.ts';
 import type { ManagerChangeKind, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { recordChange } from '../../shared/managerChanges.ts';
+import { takeSteps, tryThis, type TryThis } from '../../shared/tryIt.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
 import { type PersistedRepo, type FloorOptions, type RepoRuntime, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { FLOOR_COLORS } from './flavour.ts';
@@ -329,6 +330,16 @@ export abstract class SwarmRepos extends SwarmCore {
     return data && { data, mime: shot.mime };
   }
 
+  /** A PR's "Try this" (#381): QA's steps, its body's, else its issue's acceptance. Read when a card opens: never in the snapshot. */
+  tryThisOf(repoId: string, pr: number): { tryThis: TryThis | null } {
+    const rt = this.repoRt.get(repoId);
+    const pull = rt?.pulls.find((p) => p.number === pr);
+    if (!rt || !pull) throw new HttpError(404, `No PR #${pr} on ${repoId}`);
+    const rec = this.state.qa.find((q) => q.repoId === repoId && q.prNumber === pr);
+    const issue = rt.issues.find((i) => pull.closesIssues.includes(i.number));
+    return { tryThis: tryThis(rt.steps?.get(pr), rec?.tryIt, issue?.body) };
+  }
+
   /**
    * Server shutdown: stop every floor's app so nothing is left holding a preview port. Agents' CLIs keep working
    * through a restart (the terminal keeper holds them for the next start) and stop when the office quits.
@@ -378,6 +389,7 @@ export abstract class SwarmRepos extends SwarmCore {
       for (const i of before ? unblockedIssues(before, issues) : []) {
         this.followup({ kind: 'unblocked', key: `unblocked:${repo.id}#${i.number}`, label: `#${i.number} unblocked`, text: `#${i.number} "${clip(i.title, 100)}" on ${this.floorName(repo)} can start: what it waited for has closed.`, repoId: repo.id });
       }
+      rt.steps = takeSteps(pulls);
       rt.pulls = pulls;
       if (noteObjectives(repo.charter.log, issues, pulls, Date.now())) this.save();
       this.issueAges.learn(repo.id, issues);

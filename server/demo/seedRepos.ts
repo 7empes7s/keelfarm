@@ -2,7 +2,8 @@
 // and PR, a CI outage and a CI-only stuck PR; or the big company (--floors / --agents).
 import { FLOOR_SEATS, type PullInfo } from '../../shared/types.ts';
 import type { DemoScale } from '../config.ts';
-import { pastPulls } from '../demoMap.ts';
+import { demoTryIt, pastPulls } from '../demoMap.ts';
+import { tryItSteps } from '../../shared/tryIt.ts';
 import { stalePulls } from '../demoPreviewDesks.ts';
 import { CI_DOWN_REPO, closedFiled, fakeSha, issue, nextRunId, refusedChecks, repos, type FakeRepo } from './world.ts';
 
@@ -93,7 +94,7 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
 {
   const r = repos.get(CI_DOWN_REPO)!;
   const n = r.nextNumber++;
-  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.' };
+  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.', tryIt: demoTryIt('Recipe page on a phone', n) };
   r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
 }
 
@@ -106,7 +107,7 @@ export const CI_ONLY_PR = (() => {
   const url = `https://github.com/${CI_ONLY_REPO}/pull/${n}`;
   const failedChecks = [{ name: 'CI / windows', url: `https://github.com/${CI_ONLY_REPO}/actions/runs/${nextRunId()}/job/1` }];
   const files = ['src/forecast.ts', 'src/units.ts', 'src/units.test.ts', 'package.json', 'README.md'];
-  r.pulls.unshift({ ...shippedPull(CI_ONLY_REPO, n, 'Forecast in °F on request', 0), url, state: 'OPEN', mergedAt: null, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), headRefName: 'swarm/units-f-demo', summary: 'Adds ?units=f to /forecast and /now; °C stays the default.', additions: 86, deletions: 12, files, checks: 'failing', failedChecks });
+  r.pulls.unshift({ ...shippedPull(CI_ONLY_REPO, n, 'Forecast in °F on request', 0), url, state: 'OPEN', mergedAt: null, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), headRefName: 'swarm/units-f-demo', summary: 'Adds ?units=f to /forecast and /now; °C stays the default.', tryIt: tryItSteps('## Try it\n1. Open `/forecast?city=Paris&units=f`.\n2. You should see every temperature in °F.\n3. Open `/forecast?city=Paris`: still °C, as before.'), additions: 86, deletions: 12, files, checks: 'failing', failedChecks });
   return n;
 })();
 

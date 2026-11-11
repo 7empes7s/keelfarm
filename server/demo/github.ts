@@ -1,11 +1,13 @@
 // The demo's GitHub calls (#257): issues, PRs, merges, checks and reads, answered from the fake repos (world.ts).
-import type { GhRepoSummary } from '../../shared/types.ts';
+import type { GhRepoSummary, PullInfo, TryStep } from '../../shared/types.ts';
 import { TRUST_LABEL } from '../../shared/trust.ts';
 import { demoDesign } from '../demoDesign.ts';
 import { demoMerged, demoPractices, demoPrDiff, demoReadWorktree, demoRepoFile } from '../demoReads.ts';
 import { registerDemo } from './registry.ts';
 import { CI_ONLY_PR, CI_ONLY_REPO, CI_ONLY_SUMMARY, topUp } from './seedRepos.ts';
 import { CI_DOWN_NOTE, CI_DOWN_REPO, ciDown, closedFiled, closedIssues, fakeSha, forgotten, issue, mergedSinceSync, now, repos, runChecks, takeNumber } from './world.ts';
+
+const bodySteps = new WeakMap<PullInfo, TryStep[]>(); // the fake PRs' bodies' steps
 
 registerDemo('github', ({ scale }) => ({
   user: async () => 'demo-manager',
@@ -27,6 +29,11 @@ registerDemo('github', ({ scale }) => ({
   listPulls: async (fullName) => {
     const pulls = repos.get(fullName)?.pulls ?? [];
     for (const p of pulls) Object.assign(p, { author: p.author ?? 'demo-manager', isCrossRepository: p.isCrossRepository ?? false });
+    // The open ones' "Try it" steps, read from their bodies each time as GitHub's would be: the sync takes them off (#381).
+    for (const p of pulls) {
+      if (p.tryIt) bodySteps.set(p, p.tryIt);
+      else if (p.state === 'OPEN' && bodySteps.has(p)) p.tryIt = bodySteps.get(p);
+    }
     return [...pulls.filter((p) => p.state === 'OPEN'), ...pulls.filter((p) => p.state === 'MERGED').slice(0, 8)];
   },
   writers: async () => ['demo-manager'],

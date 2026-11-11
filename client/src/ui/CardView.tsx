@@ -20,6 +20,7 @@ import { Key } from './Key';
 import { IssueActions } from './IssueActions';
 import { Markdown } from './Markdown';
 import { Panel } from './Panel';
+import { TryThisList, useTryThis } from './TryThis';
 import { ProgressBar } from './ProgressBar';
 import './cardView.css';
 
@@ -336,8 +337,14 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
   const rows = pull ? mergeRows(pull, repo.defaultBranch) : [];
   const blocked = rows.some((r) => r.tone === 'bad');
   const opened = age(pull?.createdAt);
+  const steps = useTryThis(repo.id, pull, q);
   return (
     <>
+      {pull && steps && (
+        <Section title="Try this">
+          <TryThisList repoId={repo.id} pull={pull} steps={steps} titled={false} onOpen={pull.untrusted ? undefined : (path) => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number, path } })} />
+        </Section>
+      )}
       {q && pull?.state === 'OPEN' && (
         <Section title="The decision">
           <p>{q.status === 'testing' ? 'QA is running.' : q.status === 'fixing' ? 'An agent is fixing it.' : q.status === 'queued' ? 'Waiting for a free agent to test it.' : q.status === 'passed' && repo.autoMerge ? (q.mergeNote ?? 'QA passed. Waiting for automatic merge.') : prDecision(prWhy(q, pull), q.round, repo.autoMerge, pull.checks).text}</p>

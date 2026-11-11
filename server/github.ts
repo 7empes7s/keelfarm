@@ -5,6 +5,7 @@ import { PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type PullInfo } from 
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import { TRUST_LABEL } from '../shared/trust.ts';
 import { prSummary } from '../shared/prSummary.ts';
+import { tryItField } from '../shared/tryIt.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
 
@@ -216,6 +217,7 @@ function toPull(p: RawPull): PullInfo {
     checkRun: checkRunOf(p.statusCheckRollup),
     files: (p.files ?? []).slice(0, PR_FILES_MAX).map((f) => f.path),
     summary: p.state === 'OPEN' ? prSummary(p.body) : undefined, // the open ones' only: a short line in the snapshot
+    ...(p.state === 'OPEN' && tryItField(p.body)), // the snapshot carries the steps, never the body
     author: p.author?.login ?? null,
     isCrossRepository: p.isCrossRepository ?? true, // unknown: treated as a fork's
   };

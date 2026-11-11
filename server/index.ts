@@ -226,6 +226,7 @@ app.get('/api/repos/:repo/pulls/:n/qa-shots/:i', async (req, res, next) => {
     next(err);
   }
 });
+app.get('/api/repos/:repo/pulls/:n/try-it', route((req) => swarm.tryThisOf(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/pulls/:n/merge', route((req) => swarm.mergePull(repoId(req), num(req.params.n), req.body?.method ?? 'squash')));
 app.post('/api/repos/:repo/pulls/:n/close', route((req) => swarm.closePull(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/pulls/:n/qa', route((req) => swarm.sendToQa(repoId(req), num(req.params.n), str(req.body?.agentId) || undefined)));

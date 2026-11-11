@@ -516,7 +516,7 @@ export abstract class SwarmCore extends SwarmContract {
       mergeNote: q.mergeNote,
       ceoLooking: q.status === 'needs-human' && !q.escalated && this.triageJob(q) != null,
       updatedAt: q.updatedAt,
-      shots: q.shots ?? [], ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }), ...((q.status === 'failed' || q.status === 'fixing') && { fixReason: q.fixReason }),
+      shots: q.shots ?? [], ...(q.status === 'needs-human' && { stuckAt: q.stuckAt ?? null, stuckWhy: q.stuckWhy, ceoNote: q.ceoNote ?? null }), ...((q.status === 'failed' || q.status === 'fixing') && { fixReason: q.fixReason }), 
     };
   }
 
