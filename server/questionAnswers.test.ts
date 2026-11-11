@@ -110,6 +110,13 @@ describe('a draft PR whose agent waits on an answer', () => {
     expect(qa).toHaveBeenCalledTimes(1);
   });
 
+  it("is not held by another floor's question about its own PR with the same number", async () => {
+    const { x, repo, qa } = await waitingPr();
+    Object.assign(x.state.questions[0], { repoId: 'other/repo', agentId: 'someone-else' });
+    expect(x.startPipelineWork(repo)).toBe(true);
+    expect(qa).toHaveBeenCalledTimes(1);
+  });
+
   it('is tested as before once it is ready for review, question or not', async () => {
     const { x, repo, pull, qa } = await waitingPr();
     pull.isDraft = false;

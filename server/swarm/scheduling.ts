@@ -119,7 +119,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const now = Date.now();
     const rt = this.repoRt.get(repo.id)!;
     const floor = this.floorState(rt);
-    const asking = (q: QaRecord) => waitsOnAnswer(this.state.questions, rt.pulls.find((p) => p.number === q.prNumber), [q.devAgentId, ...this.state.agents.filter((a) => a.repoId === repo.id && a.prNumber === q.prNumber).map((a) => a.id)]);
+    const asking = (q: QaRecord) => waitsOnAnswer(this.state.questions, repo.id, rt.pulls.find((p) => p.number === q.prNumber), [q.devAgentId, ...this.state.agents.filter((a) => a.repoId === repo.id && a.prNumber === q.prNumber).map((a) => a.id)]);
     const queue = pipelineQueue(this.state.qa.filter((q) => q.repoId === repo.id && stillOpen({ kind: 'pr', number: q.prNumber }, floor) && !this.outsidePull(repo.id, q.prNumber) && !asking(q))).filter(
       ({ rec, task }) => !prepHeld(this.prepStrikes.get(prepKey(repo.id, rec.prNumber, task)), now),
     );
