@@ -76,7 +76,7 @@ export function AgentsSettings() {
       <ConflictFixFields />
       <p className="muted small">
         {terminal
-          ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
+          ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO picks its own on its card in The CEO. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
           : 'The Agent SDK runs Claude Code. Each agent can use their own model and effort (Team tab).'}
       </p>
       <label className="field">

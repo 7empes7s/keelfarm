@@ -15,6 +15,7 @@ import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
 import { replyLog, rowLog } from './chatCardRules';
 import { ActionCards, CeoStuckCard, NoticeCard, NoticePill, PacingCard, UseKeyCard } from './ChatCards';
+import { CeoRunsPill } from './CeoRunsOn';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
@@ -195,6 +196,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
           : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
           : m.pacing ? <PacingCard text={officeText(m.text)} />
           : m.ceoStuck ? <CeoStuckCard text={officeText(m.text)} stuck={m.ceoStuck} />
+          : m.ceoRuns ? <CeoRunsPill text={officeText(m.text)} back={m.ceoRuns.back} />
           : <NoticePill text={officeText(m.text)} />}
       </div>
     );
