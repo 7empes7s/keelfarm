@@ -491,7 +491,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
           <Icon name="pause" /> {heldBanner(info.held)}
         </div>
       )}
-      <ItDeskCards inChat />
+      <ItDeskCards inChat typing={!!text.trim()} />
       <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
       <AttachTray pending={att.pending} onRemove={att.remove} onRetry={att.retry} />
       {mention.picks}

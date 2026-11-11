@@ -1,7 +1,7 @@
 // The IT desk's cards (#506): the commands the CEO proposed, each with what it's for, what it frees, how to undo it and
 // its risk, and Run / Not now; Run all for several. Shown in the CEO chat and on Mission control. Also Settings → CEO
 // settings' IT desk: on/off, the read-only list and the commands run.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
@@ -37,12 +37,21 @@ function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (id
   );
 }
 
-/** The CEO's proposed commands waiting for the manager; nothing while there are none. `inChat`: above the message box, scrolling past half the screen. */
-export function ItDeskCards({ inChat = false }: { inChat?: boolean }) {
+/**
+ * The CEO's proposed commands waiting for the manager; nothing while there are none. `inChat`: above the message box,
+ * shrinking and scrolling inside itself so the message box and the other trays stay on screen; its header folds it to
+ * one row, as it does while the manager types (`typing`).
+ */
+export function ItDeskCards({ inChat = false, typing = false }: { inChat?: boolean; typing?: boolean }) {
   const waiting = useStore((s) => s.itDesk?.waiting ?? []);
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'The CEO');
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (typing) setOpen(false);
+  }, [typing]);
   if (!waiting.length) return null;
+  const shown = !inChat || open;
   const act = (ids: string[], run: boolean) => {
     setBusy(true);
     void (run ? api.itRun(ids) : api.itDismiss(ids)).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
@@ -54,15 +63,18 @@ export function ItDeskCards({ inChat = false }: { inChat?: boolean }) {
         <b className="grow">
           {ceo} asks to run {waiting.length === 1 ? 'a command' : `${waiting.length} commands`}
         </b>
-        {waiting.length > 1 && (
+        {shown && waiting.length > 1 && (
           <button type="button" className="btn btn-good" disabled={busy} onClick={() => act(waiting.map((p) => p.id), true)}>
             Run all {waiting.length}
           </button>
         )}
+        {inChat && (
+          <button type="button" className="decision-collapse" aria-expanded={open} aria-label={open ? 'Hide the commands' : 'Show the commands'} onClick={() => setOpen(!open)}>
+            <Icon name={open ? 'chevron-down' : 'chevron-up'} />
+          </button>
+        )}
       </div>
-      {waiting.map((p) => (
-        <ProposalCard key={p.id} p={p} busy={busy} act={act} />
-      ))}
+      {shown && waiting.map((p) => <ProposalCard key={p.id} p={p} busy={busy} act={act} />)}
     </section>
   );
 }
