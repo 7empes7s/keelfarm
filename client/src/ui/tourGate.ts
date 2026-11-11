@@ -54,7 +54,16 @@ export function tourAllows(step: string | null, g: Gated): boolean {
 /** The touch help line ("Thumb on the ghost stick…") shows only during the tour's first step, never after it. */
 export const touchHelpShows = (step: string | null) => step === 'look';
 
-/** The 3D office's tour step on screen now, or null; set by Tutorial.tsx. */
-export const useTourGate = create<{ step: string | null }>(() => ({ step: null }));
+interface Gate {
+  /** The 3D office's tour step on screen now, or null; set by Tutorial.tsx. */
+  step: string | null;
+  /** A deep link's view is open (#413, routeLink.ts): the tour steps aside until it closes. */
+  held: boolean;
+}
 
-export const gateAllows = (g: Gated) => tourAllows(useTourGate.getState().step, g);
+/** Whether `g` may open: always while a deep link holds the tour, else as the step on screen says. */
+export const gateSays = (s: Gate, g: Gated) => s.held || tourAllows(s.step, g);
+
+export const useTourGate = create<Gate>(() => ({ step: null, held: false }));
+
+export const gateAllows = (g: Gated) => gateSays(useTourGate.getState(), g);

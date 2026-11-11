@@ -11,6 +11,7 @@ import type { OpsView } from '../ops.ts';
 import type { WeatherView } from '../outside.ts';
 import type { ProgressView, RewardView } from '../progress.ts';
 import type { TestLabView } from '../testLab.ts';
+import type { ViewPatch } from '../viewPatch.ts';
 import type { ToolInventory } from '../tooling.ts';
 import type { AgentView, CliView, CloudView, HireRequestView, LogLine, ModelCatalogView } from './agents.ts';
 import type { CeoChatView, CeoInfo, PhoneMessage, ServerDelivery, StatusReaction } from './chat.ts';
@@ -136,6 +137,8 @@ export type ServerEvent =
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }
   | { type: 'cloud'; cloud: CloudView }
   | { type: 'accounts'; accounts: AccountsView } // without `sources`: they come in usageSources
+  /** The ceo, testLab and accounts events as the outbox sends them (#491): batched on its tick, only what changed. */
+  | { type: 'views'; ceo?: ViewPatch<CeoInfo>; testLab?: ViewPatch<TestLabView>; accounts?: ViewPatch<AccountsView> }
   | { type: 'usageSources'; sources: UsageSource[] } // the usage card's rows (#361), only when they changed
   | { type: 'providers'; providers: ProvidersView } // a key or MCP server added, changed, tested or removed (#362)
   | { type: 'keyScan'; keyScan: KeyScanView } // the scan for keys on this computer started, finished, imported (#367)

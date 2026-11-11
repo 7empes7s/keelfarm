@@ -28,7 +28,7 @@ import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
 import { CompanySummary } from './CompanySummary';
 import type { ConsoleSection } from './PocketConsole';
-import { parseHash, resolve } from '../ui/consoleNavRules';
+import { resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import { EmptyState } from '../ui/EmptyState';
 import { GuideCard } from '../ui/GuideCard';
@@ -46,6 +46,8 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { useTour } from '../ui/tour';
+import { showTab, useRouteLink } from '../routeLink';
+import { linkedSection } from '../routes';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { pushLayer } from '../ui/backStack';
@@ -374,7 +376,7 @@ export default function Pocket() {
   // a tab change is a safe moment for the office's new client (#216): it opens on the tab picked
   useEffect(() => void loadUpdate({ kind: 'nav' }, () => window.history.replaceState(window.history.state, '', `?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), tab })}`)), [tab]);
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
+  const [settings, setSettings] = useState<ConsoleSection | null>(() => linkedSection(location.hash, 'pocket')); // #settings/cloud-agents (or #console/…) opens that section
   const company = useStore((s) => s.settings.companyName);
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
@@ -594,6 +596,8 @@ export default function Pocket() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  useEffect(() => showTab(tab), [tab]);
+  useRouteLink('pocket'); // deep links (#413), after the listeners above
   // pocket.css's icons and look apply to the whole page while pocket mode is on (dialogs and toasts included).
   useEffect(() => {
     document.documentElement.classList.add('pocket-mode');
@@ -700,7 +704,7 @@ export default function Pocket() {
           )}
         </nav>
         <div className={`pk-work ${settings ? 'pk-work-console' : ''}`}>
-          <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`}>
+          <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`} data-tab={tab}>
             {loaded && !setupDone ? (
               <div className="pk-page">
                 <p>The office isn't set up yet. Finish the setup in the 3D office (on a computer is easiest), then come back.</p>
