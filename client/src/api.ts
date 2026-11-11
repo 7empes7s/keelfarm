@@ -175,6 +175,8 @@ export const api = {
   /** The disk (#340): "Free up space"'s preview and run, the disk settings, the demo's low disk. */
   diskPlan: () => call<CleanPlan>('GET', '/api/disk/plan'),
   cleanDisk: () => call<CleanResult>('POST', '/api/disk/clean'),
+  itRun: (ids: string[]) => call('POST', '/api/it/run', { ids }),
+  itDismiss: (ids: string[]) => call('POST', '/api/it/dismiss', { ids }),
   diskSettings: (patch: Partial<DiskSettings>) => call<DiskSettings>('PATCH', '/api/disk/settings', patch),
   simulateDisk: (low: boolean) => call<HealthView>('POST', '/api/disk/simulate', { low }),
   /** The office doctor: a finding's one-click fix, or Ignore. */

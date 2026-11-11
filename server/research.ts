@@ -20,7 +20,7 @@ export const RESEARCH_NO_FILING = 'Research files nothing. Put the options in yo
 /** Refused office tools during research, which reads untrusted pages and so acts on nothing. */
 export const RESEARCH_READ_ONLY = 'Research only reads: it changes nothing in the office and sends nothing. Put what you would change in your final message; the manager decides.';
 /** The office tools research may use: the read-only ones, and attach_file to hand the manager a file. */
-const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'floorDetail', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'sessionHistory', 'attachFile']);
+const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'floorDetail', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'sessionHistory', 'attachFile', 'itRun']);
 
 /** `h` with every tool but RESEARCH_TOOLS refused while `researching()` (file_issue with RESEARCH_NO_FILING). */
 export function researchReadOnly(h: OfficeHandlers, researching: () => boolean): OfficeHandlers {

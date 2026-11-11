@@ -20,6 +20,7 @@ import { copyText } from './clipboard';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
 import { DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
+import { ItDeskCards } from './ItDeskCards';
 import { DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
 import { keepsFollowing } from './chatFollow';
@@ -490,6 +491,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
           <Icon name="pause" /> {heldBanner(info.held)}
         </div>
       )}
+      <ItDeskCards inChat />
       <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
       <AttachTray pending={att.pending} onRemove={att.remove} onRetry={att.retry} />
       {mention.picks}

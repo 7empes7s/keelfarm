@@ -440,6 +440,14 @@ app.post('/api/health/simulate', route((req) => swarm.health.simulate(req.body?.
 app.get('/api/disk/plan', route(() => swarm.diskPlan()));
 app.post('/api/disk/clean', route(() => swarm.cleanDisk()));
 app.patch('/api/disk/settings', route((req) => swarm.setDiskSettings(req.body)));
+// The IT desk (#506): the manager's Run (one card, or Run all) and Not now on the CEO's proposed commands.
+const itIds = (body: unknown) => {
+  const ids = (body as { ids?: unknown } | undefined)?.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.some((x) => typeof x !== 'string')) throw new HttpError(400, 'Pass ids: the cards to act on.');
+  return ids as string[];
+};
+app.post('/api/it/run', route((req) => swarm.itRunProposals(itIds(req.body))));
+app.post('/api/it/dismiss', route((req) => swarm.itDismiss(itIds(req.body))));
 app.post('/api/disk/simulate', route((req) => swarm.simulateDisk(req.body?.low === true)));
 // The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
 app.get('/api/server/trend', route(() => swarm.serverTrend()));

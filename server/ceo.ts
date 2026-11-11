@@ -21,6 +21,7 @@ import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
 import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
 import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
+import { itTools, type ItHandlers } from './ceoItTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -158,7 +159,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, ItHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -515,6 +516,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...reactTools(h, run),
     ...setupTools(h, run),
     ...askTools(h, run),
+    ...itTools(h, run),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -604,7 +606,7 @@ export function ceoSystemPrompt(o: {
     '',
     'How you work:',
     "- Call mcp__office__company_status first (floors, clone paths, teams, backlogs, PRs), and floor_detail before planning a floor's issues, QA brief or charter.",
-    '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
+    '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands. On this machine, it_run reads (df, du, ps, systemctl status…) and it_propose puts a change on a card the manager runs.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
     "- wait_for a PR, issue, agent or preview instead of ending the job; ask_manager for answers you need; consult a floor's agent about its code.",

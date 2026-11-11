@@ -95,6 +95,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `ceoStuck.ts` | a stuck CEO (#375): its sessions' blocked screens and a minute's silence as a chat card (Open terminal, Sign in, Switch back) and one notification (words in `server/ceoStuck.ts`) |
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
+  | `itDesk.ts` | the IT desk (#506): it_run's read-only commands, it_propose's cards with Run / Not now, the never-list again at Run, the log (rules pure in `server/itDesk.ts`, runner `server/itExec.ts`) |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
