@@ -10,6 +10,7 @@ import { UpdatePill } from '../ui/UpdatePill';
 import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
+import { FloorPicker } from '../ui/FloorPicker';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
@@ -288,15 +289,7 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
     );
   return (
     <div className="pk-page">
-      {repos.length > 1 && (
-        <div className="pk-chips" role="tablist" aria-label="Floor">
-          {repos.map((r) => (
-            <button key={r.id} role="tab" aria-selected={r.id === id} className={`pk-chip ${r.id === id ? 'pk-chip-on' : ''}`} style={{ ['--accent' as string]: r.color }} onClick={() => pick(r.id)}>
-              {r.floor} · {name(r.fullName)}
-            </button>
-          ))}
-        </div>
-      )}
+      {repos.length > 1 && <FloorPicker repos={repos} value={id} onPick={pick} />}
       <KanbanView key={id} repoId={id} embedded />
     </div>
   );
