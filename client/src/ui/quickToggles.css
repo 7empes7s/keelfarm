@@ -62,3 +62,46 @@
   align-self: flex-start;
   min-height: var(--ds-target);
 }
+/* the voice block (VoiceQuick.tsx, #500): under the sound's rows; the card scrolls when it's taller than the screen */
+.qt-voice {
+  margin-top: var(--ds-space-2);
+  padding-top: var(--ds-space-2);
+  border-top: 1px solid var(--ds-line);
+}
+.peek-card:has(.qt-voice) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.qt-who {
+  row-gap: 0;
+}
+.qt-who .qt-name {
+  flex-basis: 100%;
+}
+.qt-voice-name {
+  flex: 1 1 6em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.qt-browser {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+}
+.qt-browser .field,
+.qt-browser select {
+  width: 100%;
+  min-width: 0;
+}
+.qt-voice .field input[type='range'] {
+  width: 100%;
+  min-height: var(--ds-target);
+  accent-color: var(--ds-accent);
+}
+.qt-picker .voice-list {
+  max-height: 220px;
+}
+.qt-key code {
+  font-size: var(--ds-text-xs);
+}

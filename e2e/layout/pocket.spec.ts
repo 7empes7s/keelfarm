@@ -267,3 +267,18 @@ for (const width of [390, 768, 1280]) {
     });
   }
 }
+
+test('at 390px the Sound & captions sheet has Sound, Voice and Captions, scrolling inside it (#500)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await pocket(page, 'company');
+  await root.locator('.pk-head').getByRole('button', { name: /^Sound & captions/ }).click();
+  const sheet = dialog(page, /Sound & captions/);
+  await expect(sheet.getByRole('button', { name: 'Close' })).toBeVisible();
+  for (const part of [sheet.getByRole('checkbox', { name: 'Sound', exact: true }), sheet.getByRole('group', { name: 'Voice' }), sheet.getByRole('checkbox', { name: 'Captions', exact: true })]) {
+    await part.scrollIntoViewIfNeeded();
+    await expect(part).toBeInViewport();
+  }
+  await expect(sheet.getByRole('checkbox', { name: 'Read messages aloud' })).toBeVisible();
+  expect(await sheet.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

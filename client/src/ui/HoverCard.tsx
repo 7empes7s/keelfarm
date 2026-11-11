@@ -120,8 +120,9 @@ export function Peek({ peek, label, anchored, children }: { peek: ReturnType<typ
         onBlur={(e) => !card.current?.contains(e.relatedTarget as Node) && e.relatedTarget !== anchor.current && ctl.close()}
         onClick={(e) => {
           e.stopPropagation();
-          // An action in it was taken: the peek's done.
-          if ((e.target as Element).closest('button, a')) ctl.close();
+          // An action in it was taken: the peek's done (not one inside a [data-peek-keep], like a voice preview).
+          const action = (e.target as Element).closest('button, a');
+          if (action && !action.closest('[data-peek-keep]')) ctl.close();
         }}
       >
         {anchored && !sheet && <i className="pop-arrow" aria-hidden />}
