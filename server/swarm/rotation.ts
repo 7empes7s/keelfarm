@@ -24,6 +24,8 @@ const SWITCHED_NOTE = 'Your previous session on this task stopped at an account 
 export abstract class SwarmRotation extends SwarmUsage {
   /** Sessions running on each account: what the demo's "Simulate a limit" ends. */
   private onAccount = new Map<string, Set<(hit: LimitHit) => void>>();
+  /** The account each agent's latest session started on (null: the built-in login): where a stuck CEO is (#375). */
+  protected sessionAccount = new Map<string, string | null>();
 
   /**
    * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
@@ -86,6 +88,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     if (!use) return this.backend.startSession(opts, ended ? { ...cb, finished: (r) => ended(r, null) } : cb);
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
     this.readyLogin(a, use, cli, opts.cwd);
+    this.sessionAccount.set(a.id, use.builtIn ? null : use.id);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
     const env = { ...opts.env, ...use.env };

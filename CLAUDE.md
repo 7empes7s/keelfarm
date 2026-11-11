@@ -92,6 +92,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `ceoFresh.ts` | background jobs in fresh sessions with the office's digest, a full chat session's handover (#330; rules in `server/ceoDigest.ts`) |
   | `ceoLog.ts` | the CEO jobs log and Redo on Opus (#332): each job's number, log row and kept inputs, the redo on the CEO's model (rules in `server/ceoRedo.ts`, `shared/ceoJobLog.ts`; the demo's in `server/ceoJobSample.ts`) |
   | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
+  | `ceoStuck.ts` | a stuck CEO (#375): its sessions' blocked screens and a minute's silence as a chat card (Open terminal, Sign in, Switch back) and one notification (words in `server/ceoStuck.ts`) |
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
