@@ -55,16 +55,3 @@ export function memoryPrompt(notes: readonly MemoryNote[]): string {
   return `\n\nThe manager asked you to always remember:\n${notes.map((n) => `- ${n.text}`).join('\n')}`;
 }
 
-/** The lines of the CEO's notes holding every word of `q` (any case), with the heading each is under. */
-export function searchNotes(text: string, q: string): { heading: string; line: string }[] {
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  let heading = '';
-  const out: { heading: string; line: string }[] = [];
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (/^#{1,6}\s/.test(line)) heading = line.replace(/^#+\s*/, '');
-    if (line && words.every((w) => line.toLowerCase().includes(w))) out.push({ heading, line });
-  }
-  return out;
-}

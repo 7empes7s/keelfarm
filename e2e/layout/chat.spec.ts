@@ -77,6 +77,18 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    // what the CEO remembers (#417): NOTES.md as section cards with chips, then searched into the folded archive
+    name: 'pocket chat memory',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      if ((page.viewportSize()?.width ?? 0) < 1200) await root.getByRole('button', { name: 'Threads and search' }).click();
+      await page.getByRole('button', { name: /remembers/ }).click();
+      return dialog(page, /remembers/);
+    },
+    tabs: ['', { name: 'search', go: (root) => root.getByRole('searchbox', { name: /notes/ }).fill('hiring') }],
+  },
+  {
     // the Chat | Files segment, its cards, and the reader opened from one (#132)
     name: 'pocket chat files',
     widths: [390, 1280],
