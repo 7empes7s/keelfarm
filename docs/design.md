@@ -71,7 +71,7 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 | 📜 History | Sessions, Daily log, Time-lapse (3D only) |
 | ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Providers, Guides, Providers & accounts, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
 
-- Each section links as `#<tab>/<section>` (e.g. `#settings/cloud-agents`), and each tab remembers its last section in this browser.
+- Each section links as `#<tab>/<section>` (e.g. `#settings/cloud-agents`; every other link is in docs/deep-links.md), and each tab remembers its last section in this browser.
 - The search at the top of the side menu finds sections and settings by label. A new setting adds its label to its
   section's `find` list.
 - Progressive disclosure: diagnostics (versions, paths, storage, transcript counts) never sit in a section's main flow.

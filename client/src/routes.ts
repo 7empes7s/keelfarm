@@ -14,7 +14,7 @@ import { TOUR } from './ui/tourSteps';
 
 export type Mode = 'pocket' | 'office';
 type PocketTab = (typeof POCKET_TABS)[number];
-export type AgentTab = 'chat' | 'terminal' | 'now' | 'profile' | 'setup';
+type AgentTab = 'chat' | 'terminal' | 'now' | 'profile' | 'setup';
 type Sheet = 'usage' | 'notices' | 'elevator' | 'catalogue' | 'floor-list' | 'sound';
 type Place = 'manager' | 'ceo' | 'maproom' | 'lobby' | 'screens';
 
@@ -181,7 +181,7 @@ const CHAT = '.pocket .phone-chat'; // the Chat tab, or the chat docked beside t
 const lobby = (at: Spot): Stand => ({ floor: 0, at });
 
 /** An agent by name (any case), or the CEO by 'ceo'. */
-export const agentNamed = (w: World, name: string) => {
+const agentNamed = (w: World, name: string) => {
   const n = name.toLowerCase();
   return Object.values(w.agents).find((a) => a.name.toLowerCase() === n || (n === CEO_ID && a.id === CEO_ID));
 };
