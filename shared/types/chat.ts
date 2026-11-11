@@ -170,6 +170,7 @@ export interface CeoInfo {
   session?: CeoSessionView; // its kept session (#28; absent in old journals)
   held?: CeoHeld | null; // why the manager's queued message can't start a CEO turn (server/ceoLane.ts)
   questions?: AgentQuestion[]; // agents waiting on an answer, oldest first (shared/questions.ts; absent in old journals)
+  researchedAt?: number | null; // when the latest research job finished (#496): the guide's tick
 }
 
 /** Only Claude's usage limit holds the CEO's chat (#46): the phone shows it above the composer, with the reset time. */

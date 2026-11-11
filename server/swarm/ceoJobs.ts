@@ -147,6 +147,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
       session: { turns: c.kept.turns, costUsd: Math.round(c.kept.costUsd * 100) / 100, startedAt: c.kept.startedAt, waiting: this.holds.waiting(), consults: this.consults.length },
       held: ceoHeld({ now: Date.now(), pausedUntil: this.ceoPausedUntil(), chatQueued: c.queue.some((j) => j.kind === 'chat') }),
       questions: this.state.questions,
+      researchedAt: c.researchedAt ?? null,
     };
   }
 

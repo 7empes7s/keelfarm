@@ -3,7 +3,7 @@
 // draws it (pocket's Company tab, and a HUD button in the 3D office).
 import type { CeoMandate } from '../../../shared/followups';
 import type { LabView } from '../../../shared/experiments';
-import type { NotifyChannelsView, PhoneMessage, RepoView, SwarmSettings } from '../../../shared/types';
+import type { CeoInfo, NotifyChannelsView, RepoView, SwarmSettings } from '../../../shared/types';
 import { DOCS } from './emptyStates';
 import type { Target } from './goTo';
 
@@ -12,7 +12,8 @@ export interface GuideInput {
   settings: Pick<SwarmSettings, 'notify'> & { ceoMandates: CeoMandate[] };
   notifyChannels: Pick<NotifyChannelsView, 'pushDevices' | 'webhooks' | 'telegram'>;
   experiments: Pick<LabView, 'experiments'>;
-  messages: Pick<PhoneMessage, 'research'>[];
+  /** The CEO's jobs: research done (kept by the server, #496) or under way. */
+  ceo: Pick<CeoInfo, 'job' | 'queue' | 'researchedAt'>;
   /** This browser runs the office as an installed app (display-mode: standalone). */
   installed: boolean;
 }
@@ -22,6 +23,8 @@ export interface GuideItem {
   title: string;
   why: string;
   done: boolean;
+  /** Under way: "In progress" instead of Do it. */
+  busy?: boolean;
   target: Target;
 }
 
@@ -31,6 +34,7 @@ export function guideItems(s: GuideInput): GuideItem[] {
   const noCharter = missing((r) => r.charter.objectives.length > 0);
   const noBrief = missing((r) => r.qaBrief.trim() !== '');
   const c = s.notifyChannels;
+  const researched = !!s.ceo.researchedAt;
   return [
     {
       id: 'charter',
@@ -85,8 +89,9 @@ export function guideItems(s: GuideInput): GuideItem[] {
       id: 'research',
       title: 'The CEO researched before planning',
       why: 'A plan built on sources and the code beats one from memory.',
-      done: s.messages.some((m) => m.research),
-      target: { kind: 'ceo', text: 'Research how comparable projects solve our biggest open problem, then propose a plan.' },
+      done: researched,
+      busy: !researched && [s.ceo.job, ...s.ceo.queue].some((j) => j?.kind === 'research'),
+      target: { kind: 'ceo', text: 'Research: how comparable projects solve our biggest open problem, then propose a plan' }, // "Research:" makes it a research job (server/research.ts)
     },
   ];
 }

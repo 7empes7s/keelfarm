@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PhoneMessage } from '../shared/types.ts';
 import type { SessionHandle } from './agentRunner.ts';
 import { ceoJobPrompt, jobLabel, nextCeoJob, queueCeoJob, type CeoJob } from './ceo.ts';
-import { clampResearchMin, ResearchGuard, researchHandoff, researchJob, researchPrompt, researchRef, researchWrapUp } from './research.ts';
+import { guideItems } from '../client/src/ui/guide.ts';
+import { clampResearchMin, pastResearch, ResearchGuard, researchHandoff, researchJob, researchPrompt, researchRef, researchWrapUp } from './research.ts';
 
 const floor = { floor: 2, fullName: 'acme/shop', clone: '/clones/acme/shop/main', mission: 'Sell socks', backlog: 5 };
 
@@ -154,5 +155,24 @@ describe('research time budget', () => {
     vi.advanceTimersByTime(30 * 60_000);
     expect(session.send).not.toHaveBeenCalled();
     expect(session.stop).not.toHaveBeenCalled();
+  });
+});
+
+describe('research for the guide (#496)', () => {
+  it("the guide's Do it starts a research job", async () => {
+    const office = { repos: [], settings: { notify: { channels: {} }, ceoMandates: [] }, notifyChannels: { pushDevices: 0, webhooks: { ntfy: { set: false } }, telegram: { linked: false } }, experiments: { experiments: [] }, ceo: { job: null, queue: [], researchedAt: null }, installed: false } as unknown as Parameters<typeof guideItems>[0];
+    const target = guideItems(office).find((i) => i.id === 'research')!.target;
+    const text = target.kind === 'ceo' ? (target.text ?? '') : '';
+    const job = await researchJob({ text, forward: text, id: 7, dir: os.tmpdir() });
+    expect(job).toMatchObject({ kind: 'research', messageIds: [7] });
+    expect(job?.topic).toMatch(/^how comparable projects/);
+  });
+
+  it('backfills the latest research from the jobs log, kept jobs and research replies', () => {
+    const none = { history: [], jobs: [], messages: [] };
+    expect(pastResearch(none)).toBeUndefined();
+    expect(pastResearch({ ...none, history: [{ at: 4, ceo: { kind: 'chat' } as never }], jobs: [{ at: 5, kind: 'plan' }], messages: [{ at: 6 }] })).toBeUndefined();
+    expect(pastResearch({ history: [{ at: 4, ceo: { kind: 'research' } as never }], jobs: [{ at: 9, kind: 'research' }], messages: [{ at: 6, research: { topic: 'x' } }] })).toBe(9);
+    expect(pastResearch({ ...none, messages: [{ at: 6, research: { topic: 'x' } }] })).toBe(6);
   });
 });
