@@ -246,9 +246,13 @@
   white-space: nowrap;
 }
 /* only the project shortens: the channel (PR #89, main) always shows in full */
+.pv-open-list:has(.pv-open-channel),
+.pv-open-name:has(> .pv-open-channel) {
+  min-width: auto;
+}
 .pv-open-name:has(> .pv-open-channel) {
   display: flex;
-  text-overflow: clip;
+  overflow: visible;
 }
 .pv-open-channel {
   flex: none;
