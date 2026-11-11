@@ -9,7 +9,7 @@ const wide = Array.from({ length: 8 }, (_, i) => `Column ${i + 1}`);
 
 test('a CEO message with every card type renders at 390px without overflow (#514)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const file = await (await page.request.post('/api/files', { headers: { 'Content-Type': 'text/plain', 'X-File-Name': 'notes.txt' }, data: 'hello' })).json();
+  const file = { id: 'e2e-every-card', name: 'notes.txt', type: 'text/plain', size: 5, from: 'ceo', at: Date.now(), keep: false }; // in the snapshot's files, no upload
   const message = {
     id: ID,
     from: 'ceo',
@@ -42,7 +42,10 @@ test('a CEO message with every card type renders at 390px without overflow (#514
     server.onMessage((data) => {
       if (typeof data !== 'string') return ws.send(data);
       const ev = JSON.parse(data);
-      if (ev.type === 'snapshot') ev.data.messages.push(message);
+      if (ev.type === 'snapshot') {
+        ev.data.messages.push(message);
+        ev.data.files = [...(ev.data.files ?? []), file];
+      }
       ws.send(JSON.stringify(ev));
     });
   });
