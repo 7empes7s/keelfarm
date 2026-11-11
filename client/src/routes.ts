@@ -210,9 +210,11 @@ export function routeTarget(r: Route, w: World, mode: Mode): Target | null {
       }
       return { overlay: { kind: 'manager', tab: r.tab === 'team' ? 'team' : 'ops' }, ready: PANEL };
     }
-    case 'console':
-      if (!sectionById(r.section) || (sectionById(r.section)!.only && sectionById(r.section)!.only !== mode)) return null;
+    case 'console': {
+      const section = sectionById(r.section);
+      if (!section || (section.only && section.only !== mode)) return null;
       return { overlay: { kind: 'manager', tab: r.section }, native: !office, ready: office ? PANEL : '.pk-settings' };
+    }
     case 'previews': {
       const repo = r.floor == null ? undefined : repoAt(r.floor);
       if (r.floor != null && !repo) return null;
