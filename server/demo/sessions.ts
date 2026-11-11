@@ -450,7 +450,7 @@ registerDemo('sessions', ({ scale, deskRepo }) => ({
     if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
     const fake = !opts.readOnly && opts.role !== 'ceo';
     const stuck = fake && !scale && !opts.box && !opts.resumeSessionId && opts.terminal ? demoStuck(opts.task) : null; // a cloud agent's sign-in is the office's own (docs/cloud.md)
-    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
+    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? ceoSession(opts, c)) : fakeSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
   },
   sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
   terminals: true,

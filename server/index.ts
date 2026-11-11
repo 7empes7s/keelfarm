@@ -464,6 +464,7 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 // The chat closer to Claude's (#51): stop, edit and retry, conversations, and what the CEO remembers
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
+app.post('/api/ceo/switch-back', route((req) => swarm.ceoSwitchBack(req.body?.account)));
 app.post('/api/ceo/jobs/:id/redo', route((req) => swarm.redoCeoJob(Number(req.params.id))));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
