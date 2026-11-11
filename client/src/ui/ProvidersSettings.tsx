@@ -4,7 +4,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { BILLING_LINKS, kindSentence, limitedBy } from '../../../shared/accounts';
+import { BILLING_LINKS, cardPlan, kindSentence, limitedBy } from '../../../shared/accounts';
 import { switchingText } from '../../../shared/accountDefault';
 import { clock, isReset, readingsNote, usageBars } from '../../../shared/usage';
 import type { AccountCli, AccountKind, AccountView } from '../../../shared/types';
@@ -17,6 +17,7 @@ import { workerCli } from './floorRows';
 import './accounts.css';
 import { Icon } from './Icon';
 import { SecretInput } from './SecretInput';
+import { PlanFlag } from './PlanFlag';
 import { LimitTimeline, RotationCard } from './RotationSettings';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
@@ -145,8 +146,7 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: Acc
           <div className="ds-row-title">{a.label}</div>
           <div className="ds-row-meta">
             {KIND_NAME[a.kind]}
-            {a.plan ? ` · ${a.plan}` : ''}
-            {a.loginPlan ? ` · login is ${a.loginPlan}` : ''}
+            {cardPlan(a) ? ` · ${cardPlan(a)}` : ''}
             {a.keyHint ? ` · ••••${a.keyHint}` : ''}
             {a.builtIn ? ' · already here' : ''}
             {isDefault ? ' · default' : ''}
@@ -179,11 +179,7 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: Acc
           ))}
         </div>
       )}
-      {a.planWarning && (
-        <div className="acc-flag acc-flag-warn" role="status">
-          <Icon name="triangle-alert" /> {a.planWarning}
-        </div>
-      )}
+      <PlanFlag a={a} onSignIn={signIn} />
       {a.tokenRefresh && (
         <div className="acc-flag" role="status">
           <Icon name="refresh-cw" /> Token expired: it refreshes on its next session

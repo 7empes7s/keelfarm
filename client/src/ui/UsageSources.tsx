@@ -22,6 +22,7 @@ import { SignInSheet } from './SignInSheet';
 import { AgentsSheet, OnIt, UsageActionButton, runUsageAction, useUsageContext, type UsageHost } from './UsageActions';
 import { backAt, chipAction, rowAction, usageActions } from './usageActionRules';
 import { OnItNow, WindowSplit } from './UsageWho';
+import { PlanFlag } from './PlanFlag';
 import './usageSources.css';
 
 const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server', runway: 'clapperboard', luma: 'film', kling: 'video' };
@@ -110,6 +111,7 @@ function UsageRow({ s, now, host, onOpen }: { s: UsageSource; now: number; host:
         <WindowBar key={w.name} w={w} now={now} />
       ))}
       {!s.windows.length && s.note && <span className="muted small">{s.note}</span>}
+      {ctx.account && <PlanFlag a={ctx.account} onSignIn={() => host.signIn(ctx.account!.id)} />}
       {action && (
         <span className="us-row-actions">
           <UsageActionButton a={action} s={s} host={host} />
@@ -151,6 +153,7 @@ function UsageDetail({ s, now, host, onClose }: { s: UsageSource; now: number; h
           {s.plan && <Chip>{s.plan}</Chip>}
           <span className="muted small">{s.checkedAt ? `read ${ago(s.checkedAt, now)}` : 'not read yet'}</span>
         </span>
+        {ctx.account && <PlanFlag a={ctx.account} onSignIn={() => host.signIn(ctx.account!.id)} />}
         {s.status === 'limited' && <p className="small">{back ? <>Back <b>{back}</b></> : "It's back when its limit resets."}</p>}
         {s.windows.map((w) => (
           <div key={w.name}>

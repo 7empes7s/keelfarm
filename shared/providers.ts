@@ -2,6 +2,7 @@
 // call, every connection as one card (Claude and Codex accounts, the ElevenLabs and Upstash keys from their own stores,
 // keys added here, MCP servers), the CEO's one line, and the MCP servers a session gets. Adding a provider = one entry
 // in PROVIDERS, plus a usage reader in testUsage when it has a usage API.
+import { cardPlan } from './accounts.ts';
 import { secretMismatch } from './secretFormats.ts';
 import type { AccountView, CloudView, CliView, McpServerConfig, ProviderAuth, ProviderCategory, ProvidersView, UsageProvider, UsageSource, UsageWindow } from './types.ts';
 
@@ -294,7 +295,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
       category: 'coding',
       status: ACCOUNT_STATUS[a.status],
       note: a.kind === 'api-key' ? 'API key' : a.kind === 'setup-token' ? 'Setup token' : 'Subscription login',
-      plan: [a.plan, a.loginPlan && `login is ${a.loginPlan}`, a.tokenRefresh && 'token refreshes on its next session'].filter(Boolean).join(' · '),
+      plan: [cardPlan(a), a.sameAs && `same subscription as ${a.sameAs}`, a.tokenRefresh && 'token refreshes on its next session'].filter(Boolean).join(' · '),
       keyHint: a.keyHint,
       uses: a.agents.length ? a.agents.map(i.agentName) : a.enabled ? ['Agents on the rotation'] : [],
       usageId: a.id,

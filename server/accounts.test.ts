@@ -58,13 +58,26 @@ describe('Accounts', () => {
     const ultra = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra' });
     await accounts.test(ultra.id);
     const card = () => accounts.view().accounts.find((a) => a.id === ultra.id)!;
-    expect(card()).toMatchObject({ status: 'ready', tokenRefresh: true, loginPlan: 'Pro', planWarning: 'This login is Pro, not Ultra: sign in with the Ultra account.' });
+    expect(card()).toMatchObject({ status: 'ready', tokenRefresh: true, loginPlan: 'Pro', planWarning: 'Signed in with a Pro account, not Ultra' });
     accounts.limited('claude-login', Date.now() + 3600_000);
     expect(accounts.use(undefined, 'claude')?.id).toBe(ultra.id);
     accounts.signedOut(ultra.id); // its session couldn't sign in
     expect(await accounts.test(ultra.id)).toMatch(/couldn't sign in/);
     expect(card().status).toBe('signed-out');
     expect(card().tokenRefresh).toBeUndefined();
+  });
+
+  it('notes two logins on the same subscription, never sending who owns them (#460)', async () => {
+    const { accounts } = await office({ check: async () => ({ signedIn: true, readings: [], plan: 'Pro', who: 'me@example.com', note: 'ok' }) });
+    const main = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Main login' });
+    const second = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro secondary' });
+    await accounts.test(main.id);
+    const card = (id: string) => accounts.view().accounts.find((a) => a.id === id)!;
+    expect(card(main.id).sameAs).toBeUndefined(); // the other one isn't read yet
+    await accounts.test(second.id);
+    expect(card(main.id).sameAs).toBe('Pro secondary');
+    expect(card(second.id).sameAs).toBe('Main login');
+    expect(JSON.stringify(accounts.view())).not.toContain('me@example.com');
   });
 
   it('rotation (#248): skips a limited login for the next one, API keys last, and takes the login back once its poll shows room', async () => {
