@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
 import { Icon } from './Icon';
+import { badgeCount } from './badgeCount';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 import { openTextPill } from './ChatZoom';
@@ -160,7 +161,7 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
         <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
           <Icon name="paperclip" />
           <XLabel text="Files" />
-          <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
+          <span className="badge badge-dot chat-tool-n" aria-hidden>{badgeCount(files)}</span>
         </button>
       )}
       {has('text') && (
