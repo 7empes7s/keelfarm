@@ -9,7 +9,7 @@ describe('floor themes', () => {
 
   it('refuses an unknown theme with the ones it could be', () => {
     expect(cleanFloorTheme('trading')).toBe('trading');
-    expect(() => cleanFloorTheme('casino')).toThrow(/office, game-studio, trading/);
+    expect(() => cleanFloorTheme('casino')).toThrow(/office, game-studio, trading, design-studio, media-studio, research-lab, ops-control/);
   });
 
   it('has a card for every theme', () => {

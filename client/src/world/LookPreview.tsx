@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type Ref, type RefObject } from 'react';
 import { createRoot, extend, useFrame, type ReconcilerRoot, type RootStore } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useStore } from '../store';
-import { appearanceFor } from './appearance';
+import { useStore, type Agent } from '../store';
+import { appearanceFor, type Appearance } from './appearance';
 import { PARTS } from './characterParts';
 import { blink, newFace, stepFace, type Expression } from './face';
 import { HeadParts, INK, Sleeve, TorsoWear, applyFace, torsoWidth } from './Figure';
@@ -17,7 +17,8 @@ import { hashString } from './typing';
 
 const SIZE = { width: 210, height: 280 };
 const HIP_Y = 0.815; // standing (Character.tsx HIP.standY)
-const HANG = { pitch: -1.42, yaw: 0.1 };
+/** The arms hanging at the sides, as the shoulders' turn. */
+export const HANG = { pitch: -1.42, yaw: 0.1 };
 /** Shown in turn, each for a moment between stretches of their resting face. */
 const SHOWN: Expression[] = ['joyful', 'puzzled', 'focused', 'surprised', 'sleepy', 'proud', 'stressed'];
 const CYCLE_S = 5.5;
@@ -58,36 +59,48 @@ function Person({ id }: { id: string }) {
     applyFace(faceMesh, face.s, blink(t, face.seed));
   });
   if (!agent || !look) return null;
-  const pants = toon('#3d4a6b');
   return (
     <>
       <hemisphereLight args={['#fffaf0', '#a48a6a', 0.95]} />
       <ambientLight intensity={0.2} />
       <directionalLight position={[1.5, 3, 4]} intensity={1.7} />
       <group ref={turn}>
-        {[-0.11, 0.11].map((x) => (
-          <group key={x} position={[x, HIP_Y, 0]}>
-            <mesh geometry={PARTS.thigh} material={pants}>
+        <StandingFigure agent={agent} look={look} face={faceMesh} />
+      </group>
+    </>
+  );
+}
+
+/**
+ * Someone standing, arms hanging, drawn with the desk's parts (Figure.tsx), facing -Z. `arm` gets the right arm's group
+ * and `head` the head's, for whoever animates them (the meeting room's view of the CEO, MeetingTile.tsx).
+ */
+export function StandingFigure({ agent, look, face, arm, head }: { agent: Agent; look: Appearance; face: RefObject<THREE.Mesh | null>; arm?: Ref<THREE.Group>; head?: Ref<THREE.Group> }) {
+  const pants = toon('#3d4a6b');
+  return (
+    <>
+      {[-0.11, 0.11].map((x) => (
+        <group key={x} position={[x, HIP_Y, 0]}>
+          <mesh geometry={PARTS.thigh} material={pants}>
+            <Outlines thickness={0.012} color={INK} angle={0} />
+          </mesh>
+          <group position={[0, -0.32, 0]}>
+            <mesh geometry={PARTS.shin} material={pants}>
               <Outlines thickness={0.012} color={INK} angle={0} />
             </mesh>
-            <group position={[0, -0.32, 0]}>
-              <mesh geometry={PARTS.shin} material={pants}>
-                <Outlines thickness={0.012} color={INK} angle={0} />
-              </mesh>
-              <mesh geometry={PARTS.shoe} material={toon(INK)} />
-            </group>
+            <mesh geometry={PARTS.shoe} material={toon(INK)} />
+          </group>
+        </group>
+      ))}
+      <group position={[0, HIP_Y, 0]} scale={look.height}>
+        <TorsoWear agent={agent} look={look} busy={false} />
+        {[-1, 1].map((s) => (
+          <group key={s} ref={s > 0 ? arm : undefined} position={[s * 0.25 * torsoWidth(look), 0.44, 0]} rotation={[HANG.pitch, -s * HANG.yaw, 0]}>
+            <Sleeve agent={agent} look={look} />
           </group>
         ))}
-        <group position={[0, HIP_Y, 0]} scale={look.height}>
-          <TorsoWear agent={agent} look={look} busy={false} />
-          {[-1, 1].map((s) => (
-            <group key={s} position={[s * 0.25 * torsoWidth(look), 0.44, 0]} rotation={[HANG.pitch, -s * HANG.yaw, 0]}>
-              <Sleeve agent={agent} look={look} />
-            </group>
-          ))}
-          <group position={[0, 0.66, 0]}>
-            <HeadParts agent={agent} look={look} busy={false} face={faceMesh} />
-          </group>
+        <group ref={head} position={[0, 0.66, 0]}>
+          <HeadParts agent={agent} look={look} busy={false} face={face} />
         </group>
       </group>
     </>

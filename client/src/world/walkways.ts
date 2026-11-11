@@ -1,5 +1,5 @@
 import { kanbanColumnSpan, KANBAN_KEYS } from './draw';
-import { BOARD, CEO_DESK, COFFEE_CORNER, GONG_SPOT, HALF_D, HALF_W, JUKEBOX, MANAGER_DESK, PLAYER_RADIUS, PONG_TABLE, RECEPTION, SEATS, deskPosition, isEastDesk } from './layout';
+import { BOARD, CEO_DESK, COFFEE_CORNER, GONG_SPOT, HALF_D, HALF_W, JUKEBOX, MANAGER_DESK, MEETING_HEAD, PLAYER_RADIUS, PONG_TABLE, RECEPTION, SEATS, deskPosition, isEastDesk } from './layout';
 import { hoopRim } from './toys/hoopScore';
 import { clear, makeNav, planPath, roombaRects, type Nav, type Pt } from './toys/roombaBrain';
 
@@ -129,6 +129,8 @@ function lobbySpots(): Spot[] {
     { id: 'ceo', x: CEO_DESK.x, z: CEO_DESK.z + STAND_BACK, facing: NORTH },
     { id: 'manager', x: MANAGER_DESK.x, z: MANAGER_DESK.z + MANAGER_DESK.d / 2 + 0.55, facing: NORTH }, // a visitor's spot
     { id: 'reception', x: RECEPTION.x, z: RECEPTION.z + RECEPTION.d / 2 + 0.6, facing: NORTH },
+    // the CEO's place for a call, at the meeting table's head (MeetingRoom.tsx)
+    { id: 'meeting', x: MEETING_HEAD.x, z: MEETING_HEAD.z, facing: WEST },
     // the sofa's seat faces south, towards its coffee table
     { id: 'couch', x: 10.2, z: 5.1, facing: NORTH, sit: { x: 10.6, z: 4.1, facing: SOUTH } },
     // the coffee corner's counter (Lobby.tsx) faces north from the south wall: the machine 0.3 m east of its middle,

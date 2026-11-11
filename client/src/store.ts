@@ -84,8 +84,12 @@ export interface Focus {
     | { kind: 'greet'; agentId: string }
     /** E on a holiday theme's thing (themes/active.ts). */
     | { kind: 'theme'; id: string }
+    /** Take the elevator to that floor (the lobby's directory, #371). */
+    | { kind: 'floor'; floor: number }
     /** Pick up a paddle at that end of the ping-pong table (toys/pongState.ts). */
-    | { kind: 'pong'; end: 'west' | 'east' };
+    | { kind: 'pong'; end: 'west' | 'east' }
+    /** Sit at the meeting room's table (world/MeetingRoom.tsx), joining or starting a call with the CEO. */
+    | { kind: 'meeting'; seat: number };
 }
 
 /** What the player is carrying. Other items (a blaster, say) join the union with their own kind. */
