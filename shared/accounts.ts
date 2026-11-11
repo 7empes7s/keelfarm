@@ -149,7 +149,26 @@ export function planWarning(a: Pick<ProviderAccount, 'label' | 'plan' | 'tags'>,
   const claimed = words.find((w) => PLAN_WORDS.includes(w));
   const real = loginPlan.split(' ')[0].toLowerCase();
   if (!claimed || claimed === real || (claimed === 'ultra' && real === 'max')) return null;
-  return `This login is ${loginPlan}, not ${cap(claimed)}: sign in with the ${cap(claimed)} account.`;
+  return `Signed in with a ${loginPlan} account, not ${cap(claimed)}`;
+}
+
+/** The plan a card shows (#460): the one read from its login, else the typed one. */
+export const cardPlan = (a: Pick<ProviderAccount, 'plan'> & { loginPlan?: string | null }) => a.loginPlan || a.plan || null;
+
+/** Rename to match (#460): the name and plan field from the login's plan ("Claude Max 20x" / "Max 20x"). */
+export const planRename = (loginPlan: string) => ({ label: `Claude ${loginPlan}`, plan: loginPlan });
+
+/**
+ * Logins on the same subscription (#460): each one's label of the first other with the same plan and the same owner
+ * (`who`: the login's account id or email, kept on the server), since they share one set of limits.
+ */
+export function sameSubscription(logins: readonly { id: string; label: string; plan?: string | null; who?: string | null }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const a of logins) {
+    const other = a.who && a.plan ? logins.find((b) => b.id !== a.id && b.who === a.who && b.plan === a.plan) : undefined;
+    if (other) out.set(a.id, other.label);
+  }
+  return out;
 }
 
 const startOfDay = (now: number) => {
