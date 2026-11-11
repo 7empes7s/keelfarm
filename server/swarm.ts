@@ -15,6 +15,7 @@ import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { keptWaiver, mergeReadings } from '../shared/usage.ts';
 import { loadDiskAlert } from '../shared/disk.ts';
+import { loadItDesk } from '../shared/itDesk.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
@@ -153,6 +154,7 @@ export class Swarm extends SwarmLiveLeases {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         diskAlert: loadDiskAlert(loaded.diskAlert),
+        itDesk: loadItDesk(loaded.itDesk),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
@@ -697,7 +699,7 @@ export class Swarm extends SwarmLiveLeases {
     if (typeof patch.projectsDir === 'string' && patch.projectsDir.trim()) s.projectsDir = path.resolve(patch.projectsDir.trim());
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
-    for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
+    for (const k of ['autoUpdate', 'statusReactions', 'itDesk'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     this.pacingSettings(patch);
     if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);

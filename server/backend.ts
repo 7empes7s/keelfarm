@@ -10,6 +10,7 @@ import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
 import { npmInstall } from './cliInstall.ts';
+import { itExec, type ItExecResult } from './itExec.ts';
 import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
@@ -159,6 +160,8 @@ export interface Backend {
   detectClis(): Promise<CliView[]>;
   /** Install a missing CLI's pinned npm package into `prefix` (#493). Never throws: how it went and its log's tail. */
   installCli(id: AgentCli, prefix: string): Promise<{ ok: boolean; tail: string[] }>;
+  /** The IT desk (#506): one command on this machine, as argv without a shell. Never throws. */
+  itExec(argv: string[], timeoutMs: number): Promise<ItExecResult>;
   /** OpenCode's own sign-in, `opencode auth login`, in `term` (#493). */
   opencodeSignIn(term: AgentTerminal, exited: (code: number) => void): BoxSignIn;
   /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
@@ -371,6 +374,7 @@ export const realBackend: Backend = {
   releaseClis,
   detectClis,
   installCli: (id, prefix) => npmInstall(id, { prefix }),
+  itExec,
   opencodeSignIn: (term, exited) => startLocalSignIn({ cli: 'opencode', env: {}, term }, exited),
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),

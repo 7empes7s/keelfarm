@@ -152,7 +152,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {},
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] },
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
