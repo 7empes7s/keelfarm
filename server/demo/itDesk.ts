@@ -88,19 +88,18 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
     cb.tool(null);
     cb.finished({ ok, text, costUsd: ok ? 0.03 : 0.01, turns: 3, errors: error ? [error] : [] });
   };
-  timers.push(
-    setTimeout(async () => {
-      try {
-        cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · IT` }]);
-        cb.sessionId(opts.resumeSessionId ?? `demo-it-${Date.now().toString(36)}`);
-        const reply = await run();
-        await writeReply(reply, opts, cb, () => stopped);
-        finish(true, reply);
-      } catch (err) {
-        finish(false, '', stopped ? 'Stopped by manager' : (err as Error).message);
-      }
-    }, 200),
-  );
+  const go = async () => {
+    try {
+      cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · IT` }]);
+      cb.sessionId(opts.resumeSessionId ?? `demo-it-${Date.now().toString(36)}`);
+      const reply = await run();
+      await writeReply(reply, opts, cb, () => stopped);
+      finish(true, reply);
+    } catch (err) {
+      finish(false, '', stopped ? 'Stopped by manager' : (err as Error).message);
+    }
+  };
+  timers.push(setTimeout(() => void go(), 200));
   return {
     send(text) {
       timers.push(setTimeout(() => !stopped && !done && cb.turn?.(`Noted: "${text.split('\n').at(-1)?.slice(0, 90)}". I'll take it into account.`), 600));
@@ -114,7 +113,7 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
 }
 
 registerCeoReply('it desk', async ({ text, use }) => {
-  if (!/\b(gain|free up|free)\b.*\bspace\b|\bcheck (the|this) machine\b|\bit desk\b|\bdisk\b/i.test(text)) return null;
+  if (!/\b(gain|free up|free)\b.*\bspace\b|\bcheck (the|this) machine\b|\bit desk\b/i.test(text)) return null;
   const out = await use('ask_it', { question: text });
   if (out.startsWith('Refused')) return `I can't hand that to IT right now: ${out.replace(/^Refused:\s*/, '')}`;
   return `That's the IT department's: I've asked them in the IT chat. They'll look, and any change comes to you on a card with Run / Not now.\n\`\`\`spoken\nI've passed that to IT. Their answer is in the IT chat.\n\`\`\``;

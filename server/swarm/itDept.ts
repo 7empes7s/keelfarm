@@ -5,7 +5,7 @@
 // shared/itDept.ts, prompts in server/itLead.ts.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { IT_ID, IT_MESSAGES_KEPT, IT_MESSAGES_SHOWN, itDeptSettings, nextItJob, queueItJob, viaCeoBot, type ItJob, type ItView } from '../../shared/itDept.ts';
+import { IT_ID, IT_MESSAGES_KEPT, IT_MESSAGES_SHOWN, itDeptSettings, loadIt, nextItJob, queueItJob, viaCeoBot, type ItJob, type ItView } from '../../shared/itDept.ts';
 import { argvLine, IT_LOG_SHOWN, type ItProposal } from '../../shared/itDesk.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { ceoModelOn } from '../../shared/ceoRunsOn.ts';
@@ -18,6 +18,7 @@ import type { OfficeTools } from '../ceo.ts';
 import { itJobPrompt, itSystemPrompt } from '../itLead.ts';
 import { recordCost } from '../metrics.ts';
 import { runKeyboard, type TgButton } from '../telegram.ts';
+import { TelegramBot } from '../telegramBot.ts';
 import { plainText } from '../notify.ts';
 import type { PersistedAgent } from './model.ts';
 import { SwarmSetup } from './setup.ts';
@@ -26,6 +27,18 @@ const IT_DIR = path.join(HOME_DIR, 'it');
 const OFF = 'The IT department is off: the manager turns it on in Settings → The IT department.';
 
 export abstract class SwarmItDept extends SwarmSetup {
+  /** IT's own bot, under "telegramIt" in the secrets file; on the same Telegram switch as the CEO's. */
+  readonly itBot = new TelegramBot({
+    api: this.backend.telegramIt,
+    secretsFile: path.join(HOME_DIR, this.backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+    key: 'telegramIt',
+    who: () => this.state.settings.itDept.name,
+    on: () => this.state.settings.notify.channels.telegram,
+    message: async (text, id) => void (await this.messageIt(text, 'telegram', id)),
+    decide: (verdict, id) => this.itDecide(verdict, id),
+    changed: () => this.itChanged(),
+    log: (line) => console.warn(`IT ${line}`),
+  });
   private itAgent: PersistedAgent | null = null;
   /** The manager's last IT message came from Telegram: IT's replies go back there too. */
   private itViaTelegram = false;
@@ -44,9 +57,29 @@ export abstract class SwarmItDept extends SwarmSetup {
     return a;
   }
 
-  /** Settings → The IT department: saved; the lead's next job starts on it. */
-  protected setItDept(raw: unknown) {
-    this.state.settings.itDept = itDeptSettings(this.state.settings.itDept, raw);
+  /** The saved IT department, from the state file (shared/itDept.ts loadIt). */
+  protected loadItState(raw: unknown) {
+    return loadIt(raw);
+  }
+
+  /** Started with the usage readings, once from init: IT's bot, and a job a restart cut off. */
+  protected override async startUsage() {
+    this.state.settings.itDept = itDeptSettings(undefined, this.state.settings.itDept); // as saved, checked
+    await this.itBot.init();
+    setTimeout(() => this.startItWork(), 3000);
+    await super.startUsage();
+  }
+
+  override async shutdown(restart = false): Promise<void> {
+    await super.shutdown(restart);
+    await this.itBot.stop();
+  }
+
+  /** updateSettings' part: Settings → The IT department (the lead's next job starts on it), and the Telegram switch for IT's bot. */
+  protected itSettings(patch: { itDept?: unknown; notify?: unknown }) {
+    if (patch.notify !== undefined) this.itBot.refresh();
+    if (patch.itDept === undefined) return;
+    this.state.settings.itDept = itDeptSettings(this.state.settings.itDept, patch.itDept);
     this.itChanged();
     setTimeout(() => this.startItWork(), 150);
   }
@@ -147,6 +180,11 @@ export abstract class SwarmItDept extends SwarmSetup {
     const job = nextItJob(it.queue)!;
     it.job = job;
     void this.runItJob(job);
+  }
+
+  /** The bot's token, for redacting (core.ts secrets; the bot doesn't exist yet while the office is being built). */
+  protected itBotSecret(): string | null {
+    return (this.itBot as TelegramBot | undefined)?.secret() ?? null;
   }
 
   /** IT's office tools: it_run, it_propose and it_health (server/ceoItTools.ts). */

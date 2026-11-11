@@ -18,7 +18,7 @@ export interface AskItHandlers {
 
 type Run = typeof runTool;
 
-export function itTools(h: ItHandlers, run: Run) {
+function itTools(h: ItHandlers, run: Run) {
   return [
     tool(
       'it_run',

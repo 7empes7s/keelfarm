@@ -220,8 +220,6 @@ export abstract class SwarmCore extends SwarmContract {
   readonly notifier: Notifier;
   /** The manager's own Telegram bot: notifications, the CEO chat both ways, team-change buttons. The demo's is fake. */
   readonly telegram: TelegramBot;
-  /** The IT department's own bot (#524), under "telegramIt" in the secrets file. */
-  readonly itBot: TelegramBot;
   /** Settings → Cloud agents: the Upstash account and what cloud agents sign in with (docs/cloud.md). The demo's is fake. */
   readonly cloud: Cloud;
   /** Cloud agents' machines: an Upstash Box each. */
@@ -293,17 +291,6 @@ export abstract class SwarmCore extends SwarmContract {
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
       log: (line) => console.warn(line),
-    });
-    this.itBot = new TelegramBot({
-      api: backend.telegramIt,
-      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
-      key: 'telegramIt',
-      who: () => this.state.settings.itDept.name,
-      on: () => this.state.settings.notify.channels.telegram,
-      message: async (text, id) => void (await this.messageIt(text, 'telegram', id)),
-      decide: (verdict, id) => this.itDecide(verdict, id),
-      changed: () => this.itChanged(),
-      log: (line) => console.warn(`IT ${line}`),
     });
     this.notifier = new Notifier({
       transport: backend.notify,
@@ -680,11 +667,9 @@ export abstract class SwarmCore extends SwarmContract {
     void this.history.record(entry, null).then((kept) => this.broadcast({ type: 'history', entry: kept }));
   }
 
-  /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */
+  /** Values the journal must never write: the ElevenLabs key, the Telegram bots' tokens and secret-looking environment variables. */
   protected secrets(): string[] {
-    const key = this.voice.secret();
-    const bots = [this.telegram.secret(), this.itBot.secret()].filter((b): b is string => !!b);
-    return [...this.envSecrets, ...(key ? [key] : []), ...bots, ...this.cloud.secretValues()];
+    return [...this.envSecrets, ...[this.voice.secret(), this.telegram.secret(), this.itBotSecret()].filter((v): v is string => !!v), ...this.cloud.secretValues()];
   }
 
   /** POST /api/journal/sample (demo only): writes a made-up working day as yesterday's journal, to replay. */

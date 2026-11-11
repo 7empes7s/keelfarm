@@ -351,7 +351,6 @@ export abstract class SwarmRepos extends SwarmCore {
     await this.writeState().catch((err) => console.warn('could not save the state', err));
     await this.journal.close().catch((err) => console.warn('could not write the journal', err));
     await this.telegram.stop();
-    await this.itBot.stop();
     await this.closeTestLab(restart);
     await this.backend.releaseClis(restart); // before the terminals are saved: whatever they print next waits in the keeper
     await this.saveTerminals(true);

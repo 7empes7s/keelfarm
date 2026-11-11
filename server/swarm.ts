@@ -16,7 +16,6 @@ import { reconcileStep, restartMessage, workState, type ReconcileStep, type Rest
 import { keptWaiver, mergeReadings } from '../shared/usage.ts';
 import { loadDiskAlert } from '../shared/disk.ts';
 import { loadItDesk } from '../shared/itDesk.ts';
-import { itDeptSettings, loadIt } from '../shared/itDept.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
@@ -155,8 +154,7 @@ export class Swarm extends SwarmLiveLeases {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         diskAlert: loadDiskAlert(loaded.diskAlert),
-        itDesk: loadItDesk(loaded.itDesk),
-        it: loadIt(loaded.it),
+        itDesk: loadItDesk(loaded.itDesk), it: this.loadItState(loaded.it),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
@@ -201,7 +199,6 @@ export class Swarm extends SwarmLiveLeases {
       this.state.settings.ceoFollowups = followupSettings(DEFAULT_FOLLOWUPS, loaded.settings?.ceoFollowups);
       this.state.settings.ceoMandates = mandateList(loaded.settings?.ceoMandates);
       this.state.settings.ceoAwake = ceoAwakeSettings(undefined, loaded.settings?.ceoAwake);
-      this.state.settings.itDept = itDeptSettings(undefined, loaded.settings?.itDept);
       this.state.settings.tools = toolSettings(DEFAULT_TOOL_SETTINGS, loaded.settings?.tools);
       try {
         this.state.settings.everyProject = everyProjectSettings(undefined, loaded.settings?.everyProject);
@@ -222,8 +219,6 @@ export class Swarm extends SwarmLiveLeases {
     await this.weather.init();
     await this.notifier.init();
     await this.telegram.init();
-    await this.itBot.init();
-    setTimeout(() => this.startItWork(), 3000); // a job a restart cut off
     await Promise.all([this.cloud.init(), this.accounts.init(), this.initProviders(), this.startUsage()]);
     if (this.state.settings.cloud.machineKind !== 'local' && !this.cloud.boxApi()) this.state.settings.cloud.machineKind = 'local';
     for (const r of this.state.repos) if (r.localPath) this.backend.setLocalPath(r.fullName, r.localPath);
@@ -697,7 +692,6 @@ export class Swarm extends SwarmLiveLeases {
     if (patch.ceoFollowups !== undefined) s.ceoFollowups = followupSettings(s.ceoFollowups, patch.ceoFollowups);
     if (patch.ceoMandates !== undefined) s.ceoMandates = mandateList(patch.ceoMandates);
     if (patch.ceoAwake !== undefined) s.ceoAwake = ceoAwakeSettings(s.ceoAwake, patch.ceoAwake);
-    if (patch.itDept !== undefined) this.setItDept(patch.itDept);
     if (patch.rotation !== undefined) s.rotation = rotationSettings(s.rotation, patch.rotation);
     if (typeof patch.managerName === 'string') s.managerName = patch.managerName.trim().slice(0, 40);
     if (typeof patch.companyName === 'string') s.companyName = patch.companyName.trim().slice(0, 60);
@@ -708,6 +702,7 @@ export class Swarm extends SwarmLiveLeases {
     for (const k of ['autoUpdate', 'statusReactions', 'itDesk'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     this.pacingSettings(patch);
+    this.itSettings(patch);
     if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
@@ -739,7 +734,6 @@ export class Swarm extends SwarmLiveLeases {
       if (url !== undefined && officeUrl(url) === null) throw new HttpError(400, 'The office URL must be an http(s) address, e.g. https://office.your-tailnet.ts.net');
       s.notify = notifySettings(s.notify, patch.notify);
       this.telegram.refresh(); // the switch: Off stops reading the bot at once, On resumes it
-      this.itBot.refresh();
     }
     if (patch.everyProject !== undefined) {
       try {
