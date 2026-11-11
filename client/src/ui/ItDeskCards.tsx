@@ -9,6 +9,7 @@ import { argvLine, IT_READ_ONLY, type ItProposal, type ItRisk } from '../../../s
 import { Icon } from './Icon';
 import './itDesk.css';
 
+const NONE: never[] = []; // one empty list: a fresh [] per read would re-render without end (the snapshot leaves itDesk out while empty)
 const RISK: Record<ItRisk, string> = { low: 'Low risk', medium: 'Medium risk', high: 'High risk' };
 
 function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (ids: string[], run: boolean) => void }) {
@@ -43,7 +44,7 @@ function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (id
  * one row, as it does while the manager types (`typing`).
  */
 export function ItDeskCards({ inChat = false, typing = false }: { inChat?: boolean; typing?: boolean }) {
-  const waiting = useStore((s) => s.itDesk?.waiting ?? []);
+  const waiting = useStore((s) => s.itDesk?.waiting ?? NONE);
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'The CEO');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(true);
@@ -82,7 +83,7 @@ export function ItDeskCards({ inChat = false, typing = false }: { inChat?: boole
 /** Settings → CEO settings: the IT desk's switch, what it reads without asking, and the commands run. */
 export function ItDeskSettings() {
   const on = useStore((s) => s.settings.itDesk !== false);
-  const log = useStore((s) => s.itDesk?.log ?? []);
+  const log = useStore((s) => s.itDesk?.log ?? NONE);
   return (
     <div className="card">
       <h3>
