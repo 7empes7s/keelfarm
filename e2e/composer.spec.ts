@@ -19,7 +19,7 @@ async function ceoWorking(page: Page) {
       if (ev.type === 'snapshot') {
         ev.data.ceo.job = job;
         for (const a of ev.data.agents) if (a.id === 'ceo') a.status = 'working';
-      } else if (ev.type === 'ceo') ev.ceo.job = job;
+      } else if (ev.type === 'views' && ev.ceo && 'job' in ev.ceo.set) ev.ceo.set.job = job;
       else if (ev.type === 'agent' && ev.agent.id === 'ceo') ev.agent.status = 'working';
       else if (ev.type === 'agents') for (const a of ev.agents) if (a.id === 'ceo' && 'status' in a) a.status = 'working';
       ws.send(JSON.stringify(ev));
