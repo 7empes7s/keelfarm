@@ -39,6 +39,8 @@ export interface IndexInput {
   qa: Record<string, Pick<QaView, 'repoId' | 'prNumber' | 'status' | 'summary' | 'round'>>;
   messages: Pick<PhoneMessage, 'id' | 'from' | 'text' | 'artifacts'>[];
   where: Where;
+  /** The browser has a Fullscreen API (not iPhones): the top bar's full screen is findable (#415). */
+  fullscreen?: boolean;
 }
 
 const short = (fullName: string) => fullName.split('/')[1] ?? fullName;
@@ -60,8 +62,9 @@ export function buildIndex(s: IndexInput): Item[] {
     { id: 'act:guide', kind: 'action', icon: 'circle-check', label: 'Get the most out of the office', sub: 'The setup checklist', target: { kind: 'guide' } },
     { id: 'act:previews', kind: 'action', icon: 'monitor', label: 'Previews', sub: 'Every live app and PR preview', target: { kind: 'overlay', overlay: { kind: 'previews' } } },
   );
-  // the 3D office's Options: what a phone's top bar leaves out (#406)
-  if (s.where === 'office') for (const o of HUD_OPTIONS) items.push({ id: `opt:${o.id}`, kind: 'action', icon: o.icon, label: o.label, sub: 'Options', target: { kind: 'option', id: o.id } });
+  if (s.fullscreen) items.push({ id: 'act:browser-full', kind: 'action', icon: 'maximize', label: 'Full screen (browser)', sub: 'Top bar · F11', target: { kind: 'fullscreen' } });
+  // the 3D office's Options: what a phone's top bar leaves out (#406); the browser's full screen is the action above
+  if (s.where === 'office') for (const o of HUD_OPTIONS.filter((x) => x.id !== 'browser-full')) items.push({ id: `opt:${o.id}`, kind: 'action', icon: o.icon, label: o.label, sub: 'Options', target: { kind: 'option', id: o.id } });
   for (const r of floors) {
     const n = `floor ${r.floor}`;
     items.push(

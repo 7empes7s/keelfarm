@@ -37,6 +37,7 @@ import { SearchButton, SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
+import { BrowserFullButton } from '../ui/BrowserFullButton';
 import { QuickToggles } from '../ui/QuickToggles';
 import { useChatMode } from '../ui/chatMode';
 import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
@@ -644,6 +645,7 @@ export default function Pocket() {
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" compact={!wide} />}
         <QuickToggles className="pk-icon-btn" compact={!wide} />
+        {wide && <BrowserFullButton className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
         {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
         {!wide && tab === 'chat' && <FullButton />}

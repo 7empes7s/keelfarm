@@ -3,6 +3,7 @@
 // Pocket mode turns a 'manager' overlay into its ⚙️ sheet and a 'phone' one into the Chat tab (Pocket.tsx).
 import { create } from 'zustand';
 import { useStore, type Overlay } from '../store';
+import { toggleBrowserFull } from './browserFull';
 import type { SectionId } from './consoleNavRules';
 import { gateAllows } from './tourGate';
 import type { HudOptionId } from './hudOptions';
@@ -16,7 +17,9 @@ export type Target =
   /** The guide checklist (GuideCard.tsx). */
   | { kind: 'guide' }
   /** One of the phone HUD's Options (hudOptions.ts), in the 3D office. */
-  | { kind: 'option'; id: HudOptionId };
+  | { kind: 'option'; id: HudOptionId }
+  /** The top bar's browser full screen, in or out (browserFull.ts, #415). */
+  | { kind: 'fullscreen' };
 
 /** A message for the CEO chat's box, and a message to scroll to, taken by the chat when it shows (Chat.tsx). */
 export const useCeoDraft = create<{ text: string | null; jump?: number | null }>(() => ({ text: null }));
@@ -54,5 +57,7 @@ export function go(t: Target) {
       return useFinder.setState({ guide: true });
     case 'option':
       return runOption?.(t.id);
+    case 'fullscreen':
+      return toggleBrowserFull();
   }
 }

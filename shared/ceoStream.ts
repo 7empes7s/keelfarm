@@ -2,6 +2,7 @@
 // finished reply keeps (#150), and what a stopped job says it did. Pure: the server folds, the phone draws.
 import { filedWords, stepNote, stepWords, type NameOf } from './ceoSteps.ts';
 import type { LogKind } from './types.ts';
+import type { ActionUndo } from './ceoActions.ts';
 
 export interface LiveStep {
   label: string; // in plain words (shared/ceoSteps.ts): "Reading PR #122's changes on floor 3"
@@ -84,6 +85,7 @@ export interface OfficeCall {
   out: string | null;
   args?: Record<string, unknown>; // its input, for the reply's action cards (shared/ceoActions.ts)
   messageId?: number; // the agent chat item it posted (message_agent, answer_agent): its card opens the chat there
+  undo?: ActionUndo; // how its card's Undo puts back what it changed (#403)
 }
 
 // The office tools that only read: a stopped job's reply leaves them out of what it did.

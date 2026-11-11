@@ -20,6 +20,7 @@ import { MAX_TRIAGES, type TriagePr } from './triage.ts';
 import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
 import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
+import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -157,7 +158,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -168,10 +169,11 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandle
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
   closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>;
-  retryQa(a: { floor: number; pr: number }): Promise<string>;
-  sendBack(a: { floor: number; pr: number; note: string }): Promise<string>;
-  rerunChecks(a: { floor: number; pr: number }): Promise<string>;
-  closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
+  // asked_in (#403): outside a triage job, the manager's message that asks for it
+  retryQa(a: { floor: number; pr: number; asked_in?: number }): Promise<string>;
+  sendBack(a: { floor: number; pr: number; note: string; asked_in?: number }): Promise<string>;
+  rerunChecks(a: { floor: number; pr: number; asked_in?: number }): Promise<string>;
+  closePull(a: { floor: number; pr: number; comment: string; asked_in?: number }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
   attachFile(a: { path: string }): Promise<string>;
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
@@ -236,6 +238,7 @@ export interface OfficeTools {
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 const CLI = z.enum(['claude', 'codex', 'opencode', 'gemini']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
+const TRIAGE_OR_ASKED = 'In a triage job (its stuck PR), or when the manager asks in a message to you now (pass asked_in): ';
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const run = async (fn: () => string | Promise<string>) => {
@@ -365,26 +368,26 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'retry_qa',
-      'Triage only: give a stuck pull request another QA round (a flaky session, or the problem has since been fixed).',
-      { floor: z.number().int(), pr: z.number().int().positive().describe('The pull request number') },
+      `${TRIAGE_OR_ASKED}give a pull request another QA round (a flaky session, or the problem has since been fixed); at the round cap, a full fresh test.`,
+      { floor: z.number().int(), pr: z.number().int().positive().describe('The pull request number'), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.retryQa(a)),
     ),
     tool(
       'send_back',
-      "Triage only: send a stuck pull request back to a developer with QA's findings plus your note, without another QA round first.",
-      { floor: z.number().int(), pr: z.number().int().positive(), note: z.string().min(1).max(1000).describe('What the developer should do, e.g. "Merge main and keep both toolbar changes."') },
+      `${TRIAGE_OR_ASKED}send a pull request back to a developer with QA's findings plus your note, without another QA round first.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), note: z.string().min(1).max(1000).describe('What the developer should do, e.g. "Merge main and keep both toolbar changes."'), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.sendBack(a)),
     ),
     tool(
       'rerun_checks',
-      "Triage only: re-run the failed GitHub Actions runs on a stuck pull request's head commit (a flaky check or an outage), then hand it back to the office.",
-      { floor: z.number().int(), pr: z.number().int().positive() },
+      `${TRIAGE_OR_ASKED}re-run the failed GitHub Actions runs on a pull request's head commit (a flaky check or an outage), then hand it back to the office.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.rerunChecks(a)),
     ),
     tool(
       'close_pull',
-      'Triage only: close a stuck pull request that is the wrong approach, with your comment on it. Its issue stays open so it is built again. No branch is deleted.',
-      { floor: z.number().int(), pr: z.number().int().positive(), comment: z.string().min(1).max(1000).describe('Posted on the PR: why it is closed') },
+      `${TRIAGE_OR_ASKED}close a pull request that is the wrong approach, with your comment on it. Its issue stays open so it is built again. No branch is deleted.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), comment: z.string().min(1).max(1000).describe('Posted on the PR: why it is closed'), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.closePull(a)),
     ),
     tool(
@@ -420,7 +423,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     tool('propose_design', PROPOSE_DESIGN_TEXT, PROPOSE_DESIGN, (a) => run(() => h.proposeDesign(a))),
     tool(
       'define_experiment',
-      "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
+      "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Start it with run_experiment only when the manager asks. The first variant is the control: usually no settings.",
       {
         name: z.string().min(1).max(80),
         hypothesis: z.string().min(1).max(600).describe('What you expect a variant to change, and on which numbers'),
@@ -511,6 +514,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...waitTools(h, run),
     ...reactTools(h, run),
     ...setupTools(h, run),
+    ...askTools(h, run),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -614,6 +618,7 @@ export function ceoSystemPrompt(o: {
     '- Issues: the same agents build and test, so PRs queued for QA (capacity.prsAwaitingQa) mean fewer, bigger issues, not more. Most briefs need 1 to 4 issues. Write "Depends on #N" only when an issue truly cannot start until #N\'s code is merged, because it waits until #N is closed. Keep dependency chains to two steps at most. The office starts the issues that hold up others first. Do not duplicate open issues: fix an existing issue\'s dependencies with set_dependencies. File at most 12 issues per job, or per message from the manager.',
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Charters: each issue names its objective ("Objective: O2"); ask the manager before filing a non-goal. Change charters only with propose_charter.',
+    '- When the manager asks you in chat to do something an office tool can do, do it (pass asked_in).',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- The manager's board actions never stop agents: you stop_agent, redirect or let finish the work they touched.",
