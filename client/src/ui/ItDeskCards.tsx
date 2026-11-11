@@ -53,7 +53,7 @@ export function ItDeskCards({ inChat = false }: { inChat?: boolean }) {
     setBusy(true);
     void (run ? api.itRun(ids) : api.itDismiss(ids)).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
   };
-  const asks = `${ceo} asks to run ${waiting.length === 1 ? 'a command' : `${waiting.length} commands`}`;
+  const asks = `${waiting[0].by ?? ceo} asks to run ${waiting.length === 1 ? 'a command' : `${waiting.length} commands`}`; // the IT lead's since #524
   const cards = (
     <>
       {waiting.length > 1 && (
