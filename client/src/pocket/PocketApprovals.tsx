@@ -149,7 +149,14 @@ function Summary({ items }: { items: Item[] }) {
       </div>
       <p className="small apr-wrap">
         <b>{s.total} need you</b>
-        {s.parts.map((p) => ` · ${p.n} ${WHY_LABELS[p.why].short}`).join('')}
+        {s.parts.map((p) => (
+          <Fragment key={p.why}>
+            {' · '}
+            <span className="nowrap">
+              {p.n} {WHY_LABELS[p.why].short}
+            </span>
+          </Fragment>
+        ))}
       </p>
     </div>
   );

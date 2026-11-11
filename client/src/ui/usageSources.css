@@ -42,6 +42,13 @@
 .us-row-actions {
   position: relative;
 }
+/* A plan flag (planFlag.css) sits above the card's button too: only its buttons take taps, its words open the card. */
+.us-row .plan-flag {
+  pointer-events: none;
+}
+.us-row .plan-flag button {
+  pointer-events: auto;
+}
 /* A chip-sized look with a full-size target. */
 .us-chip {
   display: inline-grid;
