@@ -78,7 +78,7 @@ export function IssueForm({ repoId, agents, onDone }: { repoId: string; agents: 
       <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Describe what you want. Acceptance criteria help the agent who builds it and the one who tests it a lot." aria-label="Issue description" rows={5} />
       <div className="row">
         <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)} aria-label="Who works on it">
-          <option value="">Leave in backlog (auto-assign picks it up if enabled)</option>
+          <option value="">Leave in backlog</option>
           {free.map((a) => (
             <option key={a.id} value={a.id}>
               Give it to {a.name} right away
@@ -489,7 +489,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     >
       <div className="kanban-toolbar">
         <div className="kanban-actions">
-          <button className="btn btn-small btn-good" aria-expanded={showForm} onClick={() => setShowForm((v) => !v)}>
+          <button className={`btn btn-small ${showForm ? '' : 'btn-good'}`} aria-expanded={showForm} onClick={() => setShowForm((v) => !v)}>
             {showForm ? 'Cancel' : '+ New issue'}
           </button>
           <button className="btn btn-small" onClick={() => openOverlay({ kind: 'app', repoId: repo.id })} title="Open this floor's running app">

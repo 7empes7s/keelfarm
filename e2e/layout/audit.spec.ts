@@ -70,3 +70,20 @@ test("a merged PR's card says where its QA went, with one Merged chip", async ({
   await expect(card).not.toContainText(/not sent yet|not in QA yet|Not sent to QA/);
   await expect(card.locator('.dp-chips').first().getByText('Merged', { exact: true })).toHaveCount(1);
 });
+
+test("Kanban's new issue form at 390px: the picker's choice shows whole, Cancel isn't the green go button", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const root = await pocket(page, 'kanban');
+  await root.getByRole('button', { name: '+ New issue' }).click();
+  const picker = root.getByRole('combobox', { name: 'Who works on it' });
+  await expect(picker).toBeVisible();
+  const { text, room } = await picker.evaluate((el: HTMLSelectElement) => {
+    const css = getComputedStyle(el);
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    ctx.font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
+    // the closed picker shows its choice between its padding and the arrow (about 24px)
+    return { text: ctx.measureText(el.selectedOptions[0].text).width, room: el.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - 24 };
+  });
+  expect(text, 'the choice fits the picker').toBeLessThanOrEqual(room);
+  await expect(root.getByRole('button', { name: 'Cancel' })).not.toHaveClass(/btn-good/);
+});
